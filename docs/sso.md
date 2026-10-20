@@ -59,9 +59,17 @@ Bearer tokens and the access-token cookie are accepted only when the local port 
 </auth>
 ```
 
-The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. After Helm, the package strategic-merges an init container onto the config, messaging, and API pods. That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes. The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
+The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. The `takserver-oidc` Pepr module in `pepr/` adds an init container to the config, messaging, API, and plugins pods when each pod is created, so no pod can start with the unrendered file. That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes. The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
 
 `trustAllCerts` is false. The API init container copies the JVM trust store and imports ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. `sso.<domain>` resolves to `127.0.0.1` in this dev DNS, including from inside a pod, where that address is the pod itself. The API pod gets a hostAlias to the tenant gateway ClusterIP. Public DNS for `sso.uds.dev` is also `127.0.0.1`.
+
+## Render at admission
+
+A TAK node that holds the unrendered `${TAK_OIDC_CLIENT_SECRET}` placeholder breaks logins for every node. TAK publishes a node's whole configuration to the Ignite cache when it generates a server ID or saves a change, and every other node then replaces its own copy. `cacheConfig="false"` only stops a node loading the cache when it starts. The runtime sync stays on. The plugins pod used to run without a render step, so it held the placeholder for its whole life.
+
+The `takserver-oidc` module is a Pepr mutating webhook. Its configuration is `pepr/`, and `pepr/build.sh` builds the chart when the package is created. It acts on pod creation for the four apps that read `CoreConfig.xml` (`takserver-config`, `takserver-messaging`, `takserver-api`, `takserver-plugins`) and adds the `render-oidc` init container, its volumes, the `/conf` mount, and the pod-reload label. Init containers cannot be added to a running pod, so a pod that has `render-oidc` has had it since its first start. The chart installs before the upstream chart, so the first pods are admitted through it.
+
+The webhook fails closed and is scoped to the `takserver` namespace and those four app labels. If the module is down, only those pods wait. Scoping it matters: a cluster-wide failing webhook blocks the Istio CNI pods the module needs after a node restart. `tests/oidc-render.sh` checks the webhook, that each pod completed `render-oidc`, and that each node's secret matches the cluster secret by length and hash.
 
 ## Groups
 

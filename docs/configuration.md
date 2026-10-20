@@ -53,7 +53,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 
 ## Single sign-on
 
-`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container, so after Helm the package strategic-merges one that runs `envsubst` into `/conf/CoreConfig.xml`. The browser UI is tenant-gateway host `takserver` on port 8447 (`tls="false"`). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used. Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
+`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container, so the `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` to each config, messaging, API, and plugins pod when the pod is created. The browser UI is tenant-gateway host `takserver` on port 8447 (`tls="false"`). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used. Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
 
 ## What the chart mounts
 

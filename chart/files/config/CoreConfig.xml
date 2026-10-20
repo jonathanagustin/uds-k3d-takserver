@@ -95,12 +95,13 @@
 	  </federation-server>
 	</federation>
 
-	<!-- cacheConfig="false": by default each node loads the CoreConfig that the first
-	     node put in the Ignite cache and saves it over its own file. The OIDC client
-	     secret is rendered into each pod's file by an init container, so a node whose
-	     copy won the race (still holding the unrendered template value) makes the API
-	     send that placeholder to Keycloak and every login fails. Each node keeps its
-	     own rendered file instead. -->
+	<!-- cacheConfig="false" stops a node loading the config another node put in the
+	     Ignite cache when it starts. It does not stop the runtime sync: each node
+	     still replaces its config when any node publishes one (see issue #3).
+	     Every TAK pod therefore needs its OIDC client secret rendered before it
+	     starts, because an unrendered copy that is published reaches every node.
+	     The takserver-oidc admission module adds the render init container when
+	     each pod is created. -->
 	<cluster enabled="true" cacheConfig="false" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
 
 </Configuration>

@@ -134,7 +134,7 @@ The operator wires the cluster from the UDS `Package` rendered by `chart/`:
   - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
   - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 - Ports 8444, 9000, and 9001 stay on the Services and are not given gateway hosts.
-- A Keycloak OIDC client, `uds-takserver`, Secret `takserver-sso`, redirect `https://takserver.uds.dev/login/redirect`. An init container writes the client secret into `CoreConfig.xml`. Authservice is not used.
+- A Keycloak OIDC client, `uds-takserver`, Secret `takserver-sso`, redirect `https://takserver.uds.dev/login/redirect`. The `takserver-oidc` Pepr module adds an init container to each TAK pod when the pod is created, and that container writes the client secret into `CoreConfig.xml`. Authservice is not used.
 - Default-deny with intra-namespace traffic (TAK processes, Postgres, Ignite, and NATS share the namespace), Kubernetes API egress for Ignite and the TAK clients that discover it, and tenant-gateway egress from the API selector for the Keycloak issuer.
 - A `uds-trust-bundle` ConfigMap. The upstream chart does not mount it.
 
@@ -201,12 +201,13 @@ Pull request titles use conventional commits. `.github/workflows/commitlint.yaml
 | `common/zarf.yaml` | Config chart plus the upstream git chart (tag `5.7-RELEASE-14`) |
 | `chart/files/` | CoreConfig and Ignite files the upstream chart mounts. Certificates are generated at deploy time |
 | `chart/` | Helm chart that renders the UDS `Package` |
-| `values/` | Overlay for the upstream chart, including `test-values.yaml` |
+| `values/` | Overlay for the upstream chart, including `test-values.yaml`, and `pepr-values.yaml` for the admission module |
+| `pepr/` | `takserver-oidc` Pepr module. It adds the OIDC render init container to the config, messaging, API, and plugins pods at admission. `pepr/build.sh` builds it when the package is created |
 | `bundle/uds-bundle.yaml` | Test bundle: passthrough gateway plus this package |
 | `bundle/uds-config.yaml` | Deploy-time `DOMAIN` and `TAK_IMAGE_TAG` |
 | `tasks.yaml` | `uds run` tasks. Shared tasks come from `defenseunicorns/uds-common` `v1.32.1` |
 | `tasks/test.yaml` | Health, mesh, policy, gateway, smoke, API smoke, and Playwright checks |
-| `tests/` | API smoke script and pnpm Playwright: Keycloak setup, Marti admin shell, 8443 and 8446 |
+| `tests/` | API smoke script, the OIDC render check, and pnpm Playwright: Keycloak setup, Marti admin shell, 8443 and 8446 |
 | `docs/` | Configuration, networking, SSO, and image build notes |
 | `adr/` | Architecture decision records |
 | `.github/workflows/lint.yaml` | `hk check` and shared `callable-lint` |

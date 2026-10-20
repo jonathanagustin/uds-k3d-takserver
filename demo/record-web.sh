@@ -30,3 +30,6 @@ if [ -z "${video}" ]; then
   exit 1
 fi
 cp "${video}" demo/out/06-web.webm
+if [ -f tests/.playwright/demo/events.json ]; then
+  cp tests/.playwright/demo/events.json demo/out/06-web-events.json
+fi

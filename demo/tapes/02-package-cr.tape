@@ -2,24 +2,28 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Chapter 2: platform integration through the UDS Package custom resource.
+# '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
 Output "demo/out/02-package-cr.mp4"
 Source "demo/settings.tape"
 
 Hide
-Type "source demo/shell.sh && clear"
+Type@5ms "source demo/shell.sh && clear"
 Enter
 Sleep 1s
 Show
 
-Type "# One Package CR asks UDS Core for SSO, ingress and network policy"
+Type@70ms "# One Package CR asks UDS Core for SSO, ingress and policy"
+Sleep 500ms
 Enter
-Sleep 600ms
-Type "kubectl get packages.uds.dev -A"
+Sleep 400ms
+# caption: Package CR reconciled by the UDS Operator
+# zoom: 0,0,1.6
+Type@85ms "kubectl get packages.uds.dev -A"
+Sleep 350ms
 Enter
-Sleep 3s
-Type "kubectl get package takserver -n takserver -o yaml | yq '.spec.network.expose[] | [.gateway, .host, .port] | @tsv'"
-Enter
-Sleep 3500ms
-Type "kubectl get package takserver -n takserver -o yaml | yq '.status | del(.conditions)'"
+Sleep 4500ms
+# caption: Operator status for the takserver Package
+Type@65ms "kubectl get package takserver -n takserver -o yaml | yq '.status | del(.conditions)'"
+Sleep 700ms
 Enter
 Sleep 5s

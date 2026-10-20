@@ -2,30 +2,37 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Chapter 4: running, clustered, and healthy.
+# '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
 Output "demo/out/04-running.mp4"
 Source "demo/settings.tape"
 
 Hide
-Type "source demo/shell.sh && clear"
+Type@5ms "source demo/shell.sh && clear"
 Enter
 Sleep 1s
 Show
 
-Type "# Clustered TAK: config, messaging, API, plugins, Ignite, Postgres, NATS"
+# caption: Clustered TAK services and their dependencies
+# zoom: 0,0,1.35
+Type@70ms "kubectl get pods -n takserver"
+Sleep 500ms
 Enter
-Sleep 600ms
-Type "kubectl get pods -n takserver"
+Sleep 5s
+Type@85ms "# Ignite cluster membership, from the logs"
+Sleep 350ms
 Enter
-Sleep 4s
-Type "# Ignite cluster membership, straight from the logs"
-Enter
-Sleep 600ms
-Type "kubectl logs sts/takserver-ignite -n takserver | grep -o 'Topology snapshot.*' | tail -1"
+Sleep 400ms
+# caption: Ignite cluster topology from the logs
+Type@65ms "kubectl logs sts/takserver-ignite -n takserver | grep -o 'Topology snapshot.*' | tail -1"
+Sleep 700ms
 Enter
 Sleep 3s
-Type "# Anonymous web request: TAK hands off to Keycloak"
+Type@90ms "# Anonymous request: TAK hands off to Keycloak"
+Sleep 450ms
 Enter
+Sleep 400ms
+# caption: Unauthenticated requests redirect to Keycloak
+Type@75ms "curl -sk -o /dev/null -w '%{http_code} -> %{redirect_url}' https://takserver.uds.dev/; echo"
 Sleep 600ms
-Type "curl -sk -o /dev/null -w '%{http_code} -> %{redirect_url}' https://takserver.uds.dev/; echo"
 Enter
 Sleep 3500ms

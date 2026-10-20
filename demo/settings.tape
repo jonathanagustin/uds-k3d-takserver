@@ -14,5 +14,5 @@ Set WindowBar Colorful
 Set BorderRadius 8
 Set Margin 0
 Set Framerate 24
-Set TypingSpeed 28ms
+Set TypingSpeed 75ms
 Set CursorBlink false

@@ -2,21 +2,26 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Chapter 5: other clusters. These are scaffolds and are labeled that way.
+# '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
 Output "demo/out/05-clusters.mp4"
 Source "demo/settings.tape"
 
 Hide
-Type "source demo/shell.sh && clear"
+Type@5ms "source demo/shell.sh && clear"
 Enter
 Sleep 1s
 Show
 
-Type "# EKS, RKE2 and AKS: OpenTofu scaffolds, manual and not yet tested"
+Type@70ms "# EKS, RKE2, AKS: OpenTofu scaffolds, manual, not yet tested"
+Sleep 500ms
 Enter
-Sleep 600ms
-Type "find .github/test-infra -name main.tf | sort"
+Sleep 400ms
+# caption: OpenTofu scaffolds for EKS, RKE2 and AKS (not yet tested)
+Type@85ms "find .github/test-infra -name main.tf | sort"
+Sleep 350ms
 Enter
 Sleep 2500ms
-Type "sed -n '4,6p' .github/test-infra/aws/rke2/main.tf"
+Type@65ms "sed -n '4,6p' .github/test-infra/aws/rke2/main.tf"
+Sleep 700ms
 Enter
-Sleep 4s
+Sleep 3500ms

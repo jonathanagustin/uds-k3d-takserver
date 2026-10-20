@@ -2,39 +2,45 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Chapter 3: secure by default.
+# '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
 Output "demo/out/03-secure.mp4"
 Source "demo/settings.tape"
 
 Hide
-Type "source demo/shell.sh && clear"
+Type@5ms "source demo/shell.sh && clear"
 Enter
 Sleep 1s
 Show
 
-Type "# Istio ambient mesh: mTLS for every pod, no sidecars"
+Type@70ms "# Ambient mesh: mTLS, no sidecars"
+Sleep 500ms
 Enter
-Sleep 600ms
-Type "kubectl get ns takserver -L istio.io/dataplane-mode"
+Sleep 400ms
+# caption: Namespace enrolled in the Istio ambient mesh
+Type@85ms "kubectl get ns takserver -L istio.io/dataplane-mode"
+Sleep 350ms
 Enter
 Sleep 2500ms
-Type "# Default deny. The operator generates each allow rule from the Package CR"
+Type@65ms "# Policies generated from the Package CR"
+Sleep 700ms
 Enter
+Sleep 400ms
+# caption: Network and authorization policies generated from the CR
+Type@90ms "kubectl get netpol,authorizationpolicy -n takserver | tail -8"
+Sleep 450ms
+Enter
+Sleep 4s
+Type@75ms "# SSO secret and TAK certs are made at deploy time"
 Sleep 600ms
-Type "kubectl get networkpolicies -n takserver --no-headers | wc -l"
 Enter
-Sleep 2s
-Type "kubectl get authorizationpolicies -n takserver"
+Sleep 400ms
+# caption: SSO client secret and TAK certs created at deploy time
+Type@80ms "kubectl get secrets,jobs -n takserver | grep -Ei 'NAME|sso|cert'"
+Sleep 400ms
 Enter
 Sleep 3500ms
-Type "# Keycloak client secret and TAK certificates are created at deploy time"
-Enter
-Sleep 600ms
-Type "kubectl get secrets,jobs -n takserver | grep -Ei 'NAME|sso|cert'"
-Enter
-Sleep 3500ms
-Type "# CI security gates on this repo"
-Enter
-Sleep 600ms
-Type "grep -h '^name:' .github/workflows/{codeql,dependency-review,scan,cosign,scorecard}.yaml"
+# caption: CI workflows include CodeQL, dependency review, scan, cosign, Scorecard
+Type@70ms "ls .github/workflows"
+Sleep 500ms
 Enter
 Sleep 3s

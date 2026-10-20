@@ -21,6 +21,8 @@ fg=0xcdd6f4
 accent=0xcba6f7
 title_font="$(fc-match -f '%{file}' 'DejaVu Sans:bold')"
 mono_font="$(fc-match -f '%{file}' 'JetBrains Mono')"
+# Playwright starts recording on a blank page before the first navigation.
+web_trim="${WEB_TRIM:-0.4}"
 
 # card NAME SECONDS TITLE SUBTITLE
 card() {
@@ -32,28 +34,37 @@ card() {
     -c:v libx264 -crf 16 -pix_fmt yuv420p "${work}/${name}.mp4"
 }
 
-# clip NAME SOURCE [TRIM_START]
+# clip NAME SOURCE MODE TIMELINE [TRIM_START]
+# MODE is terminal (TIMELINE is the tape) or web (TIMELINE is events.json).
 clip() {
-  local name="$1" src="$2" start="${3:-0}"
+  local name="$1" src="$2" mode="$3" timeline="$4" start="${5:-0}"
   ffmpeg -v error -y -ss "${start}" -i "${src}" -an \
     -vf "scale=${size}:force_original_aspect_ratio=decrease,pad=${size}:(ow-iw)/2:(oh-ih)/2:color=${bg},fps=${fps},format=yuv420p" \
-    -c:v libx264 -crf 16 "${work}/${name}.mp4"
+    -c:v libx264 -crf 16 "${work}/${name}-base.mp4"
+  local secs effects
+  secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${name}-base.mp4")"
+  effects="null"
+  if [ -f "${timeline}" ]; then
+    effects="$(python3 demo/filters.py "${mode}" "${timeline}" "${secs}" "${work}" "${title_font}" "${start}")"
+  fi
+  ffmpeg -v error -y -i "${work}/${name}-base.mp4" -an \
+    -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
 }
 
-card c00 3.5 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
-card c01 2.5 "1  Upstream app, packaged for UDS" "Zarf package + UDS bundle"
-clip t01 "${out}/01-package.mp4"
-card c02 2.5 "2  Platform integration" "the UDS Package custom resource"
-clip t02 "${out}/02-package-cr.mp4"
-card c03 2.5 "3  Secure by default" "mesh, generated policies, SSO, CI gates"
-clip t03 "${out}/03-secure.mp4"
-card c04 2.5 "4  Running and healthy" "clustered TAK on k3d"
-clip t04 "${out}/04-running.mp4"
-card c05 2.5 "5  Same package, other clusters" "EKS, RKE2 and AKS scaffolds"
-clip t05 "${out}/05-clusters.mp4"
-card c06 2.5 "6  Keycloak SSO to the TAK web UI" "recorded with Playwright"
-clip t06 "${out}/06-web.webm" 0.4
-card c99 4 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install"
+card c00 2.5 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
+card c01 1.8 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
+clip t01 "${out}/01-package.mp4" terminal demo/tapes/01-package.tape
+card c02 1.8 "Integrating with the platform" "the UDS Package custom resource"
+clip t02 "${out}/02-package-cr.mp4" terminal demo/tapes/02-package-cr.tape
+card c03 1.8 "Secure by default" "mesh, generated policies, SSO, CI checks"
+clip t03 "${out}/03-secure.mp4" terminal demo/tapes/03-secure.tape
+card c04 1.8 "Running and healthy" "clustered TAK on k3d"
+clip t04 "${out}/04-running.mp4" terminal demo/tapes/04-running.tape
+card c05 1.8 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
+clip t05 "${out}/05-clusters.mp4" terminal demo/tapes/05-clusters.tape
+card c06 1.8 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
+clip t06 "${out}/06-web.webm" web "${out}/06-web-events.json" "${web_trim}"
+card c99 3 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install"
 
 list="${work}/list.txt"
 : > "${list}"

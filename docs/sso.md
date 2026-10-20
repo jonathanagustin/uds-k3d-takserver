@@ -19,7 +19,7 @@ TAK Server 5.7 has its own OpenID Connect authorization-code flow. The Package r
 
 `GET /login/auth` redirects the browser to Keycloak. `GET /login/redirect` exchanges the code. `GET /login/refresh` refreshes the token (`com.bbn.marti.oauth.OAuthApi`). `useTakServerLoginPage` is false, so a 401 on the browser connector is sent to `/login/auth`.
 
-The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates TLS and forwards HTTP to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
+The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates browser TLS and opens a new TLS connection to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
 
 ## Connectors
 
@@ -27,10 +27,10 @@ The browser UI is `https://takserver.<domain>/` on the tenant gateway, which ter
 | --- | --- | --- | --- |
 | 8443 | on | required | unchanged cert-only connector |
 | 8446 | on, passthrough | off | admin UI and WebTAK off. Enrollment (`/Marti/api/tls/signClient/v2` with a bearer token) and `/login/.well-known/openid-configuration` |
-| 8447 | off | off | admin UI, WebTAK, and the non-admin UI |
+| 8447 | on | off | admin UI, WebTAK, and the non-admin UI |
 | 8089 | on | required | streaming, unchanged |
 
-Bearer tokens and the access-token cookie are accepted only when the local port is 8446 or 8447 (`AccessTokenResolver`). The stock API Service does not publish 8447. This chart adds Service `takserver-web` with port name `http` so the tenant gateway does not speak TLS to the plaintext connector.
+Bearer tokens and the access-token cookie are accepted only when the local port is 8446 or 8447 (`AccessTokenResolver`). The stock API Service does not publish 8447. This chart adds Service `takserver-web` with port name `https` and `appProtocol: https`, and DestinationRule `takserver-web`, so the tenant gateway speaks TLS to the connector. See [Networking](networking.md#tenant-gateway-to-8447).
 
 ## CoreConfig
 
@@ -91,7 +91,7 @@ TAK verifies the RS256 signature and nothing else about the token:
 - Logout clears the access-token cookie and redirects inside TAK (`AuthCookieUtils.logout`). It does not call the Keycloak end-session endpoint, so the Keycloak session stays logged in.
 - One IdP. A second `openIdDiscoveryConfiguration` is not a failover list. TAK picks one entry at random.
 - Port 8089 does not take a browser cookie. With `x509tokenAuth`, a certificate that was enrolled on 8446 with a bearer token is authenticated as that token's user.
-- Cookies set on 8447 are not marked Secure. `AuthCookieUtils` uses `request.isSecure()`, and `tls="false"` makes that false even though the browser reached TAK through the tenant gateway's HTTPS listener.
+- Cookies set on 8447 are marked Secure. `AuthCookieUtils` uses `request.isSecure()`, which is true because the gateway reaches 8447 over TLS. With `api.web.backendTLS.enabled=false` the connector is plaintext and the cookies are not Secure.
 
 ## Why not Authservice
 
@@ -117,4 +117,4 @@ Enrollment is `POST /Marti/api/tls/signClient/v2` on 8446 with the access-token 
 
 The same spec, and `tests/smoke.sh`, check that 8443 and 8089 reject a handshake with no client certificate. The 8443 Marti check still uses `admin.pem`. If `https://sso.<domain>` does not answer, the job skips the account-console setup and the OAuth spec and still runs the certificate checks.
 
-`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail. On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, and groups. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the user and mapped group are `ROLE_ADMIN` and `Operators`. A missing token must be 401 or a redirect. A token with a damaged signature must be 401. On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints. On 8089 that certificate must complete TLS, and a client with no certificate must be rejected.
+`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail. On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, groups, and `security/isSecure`, which must return `true`. The access-token cookies must be Secure. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the user and mapped group are `ROLE_ADMIN` and `Operators`. A missing token must be 401 or a redirect. A token with a damaged signature must be 401. On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints. On 8089 that certificate must complete TLS, and a client with no certificate must be rejected.

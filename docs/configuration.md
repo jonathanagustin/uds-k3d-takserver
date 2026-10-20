@@ -17,7 +17,7 @@ Postgres stays `docker.io/postgis/postgis:15-3.4`. NATS stays the images rendere
 
 The overlay turns the chart's nginx ingress off. The UDS Package in `chart/templates/uds-package.yaml` exposes the same ports through the passthrough gateway:
 
-- `https://takserver.uds.dev` on the tenant gateway to `takserver-web` port 8447, plaintext behind TLS
+- `https://takserver.uds.dev` on the tenant gateway to `takserver-web` port 8447. The gateway re-encrypts and verifies TAK's certificate.
 - `https://takserver.uds.dev` on the passthrough gateway to `takserver-api-service` port 8446
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
@@ -53,7 +53,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 
 ## Single sign-on
 
-`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container, so the `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` to each config, messaging, API, and plugins pod when the pod is created. The browser UI is tenant-gateway host `takserver` on port 8447 (`tls="false"`). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used. Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
+`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container, so the `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` to each config, messaging, API, and plugins pod when the pod is created. The browser UI is tenant-gateway host `takserver` on port 8447. 8447 is a TLS connector, and the gateway connects to it over TLS. `api.web.backendTLS.enabled` (default `true`) controls that. See [Networking](networking.md). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used. Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
 
 ## What the chart mounts
 

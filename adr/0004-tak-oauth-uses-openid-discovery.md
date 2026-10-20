@@ -4,7 +4,7 @@ Date: 2026-10-18
 
 ## Status
 
-Accepted
+Accepted. The 8447 connector is TLS since [ADR 0006](0006-re-encrypt-gateway-traffic-to-tak.md).
 
 ## Context
 

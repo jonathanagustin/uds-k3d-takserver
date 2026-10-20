@@ -62,7 +62,7 @@ Other tasks (run `uds run --list` for the full list):
 
 | Use | Host | Gateway | Service port |
 | --- | --- | --- | --- |
-| Browser UI (Keycloak SSO) | `takserver.<domain>` | tenant, 443 | 8447 |
+| Browser UI (Keycloak SSO) | `takserver.<domain>` | tenant, 443, re-encrypted to TAK | 8447 (TLS) |
 | Admin UI with a client certificate | `takserver-api.<domain>` | passthrough, SNI | 8443 |
 | Streaming (ATAK / WinTAK) | `takserver-stream.<domain>` | passthrough, SNI | 8089 |
 | Certificate enrollment | `takserver.<domain>` | passthrough, SNI | 8446 |
@@ -78,7 +78,7 @@ Other tasks (run `uds run --list` for the full list):
 ```text
 browser
   -> tenant gateway (HTTPS 443, takserver.<domain>)
-    -> Service/takserver-web:8447
+    -> Service/takserver-web:8447 (TLS, verified against the TAK CA)
 
 TAK client
   -> Istio passthrough gateway (SNI)
@@ -102,6 +102,7 @@ Design decisions are recorded in [`adr/`](adr/):
 3. [Do not add a Package monitor](adr/0003-no-prometheus-monitor.md)
 4. [TAK OAuth uses one OpenID discovery entry on port 8447](adr/0004-tak-oauth-uses-openid-discovery.md)
 5. [Stay inside what slim UDS Core and the stock chart provide](adr/0005-slim-core-boundaries.md)
+6. [Re-encrypt tenant gateway traffic to the TAK web UI](adr/0006-re-encrypt-gateway-traffic-to-tak.md)
 
 ## Documentation
 

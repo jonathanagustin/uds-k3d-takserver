@@ -9,8 +9,8 @@
 		<connector port="8444" useFederationTruststore="true" _name="fed_https"/>
 		<!-- Certificate enrollment and the OIDC discovery document. Not the browser UI. -->
 		<connector port="8446" clientAuth="false" enableAdminUI="false" enableWebtak="false" _name="cert_https"/>
-		<!-- Plain HTTP behind the tenant gateway. The gateway terminates TLS. -->
-		<connector port="8447" tls="false" clientAuth="false" enableAdminUI="true" enableWebtak="true" enableNonAdminUI="true" _name="web_http"/>
+		<!-- Browser UI behind the tenant gateway. chart/templates/_helpers.tpl renders it. -->
+<!-- TAK_WEB_CONNECTOR -->
 	</network>
 	<auth default="file" x509groups="true" x509tokenAuth="true">
 	        <File location="/opt/tak/UserAuthenticationFile.xml"/>

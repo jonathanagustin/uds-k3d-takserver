@@ -33,7 +33,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "create", "update"]
+    verbs: ["get", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -74,8 +74,22 @@ spec:
         - name: certs
           image: {{ .Values.certs.image | quote }}
           imagePullPolicy: IfNotPresent
+          {{- if .Values.api.web.backendTLS.enabled }}
+          # Then issue the 8447 server certificate the tenant gateway verifies.
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              /opt/tak/certs/publish-cert-configmap.sh
+              {{- .Files.Get "files/scripts/issue-web-cert.sh" | nindent 14 }}
+          {{- else }}
           command: ["/opt/tak/certs/publish-cert-configmap.sh"]
+          {{- end }}
           env:
+            - name: WEB_SERVICE
+              value: {{ .Values.api.web.service | quote }}
+            - name: WEB_KEYSTORE
+              value: {{ .Values.api.web.backendTLS.keystore | quote }}
             - name: CA_NAME
               value: {{ .Values.certs.caName | quote }}
             - name: STATE
@@ -95,6 +109,7 @@ spec:
               memory: 512Mi
 ---
 {{- $core := .Files.Get "files/config/CoreConfig.xml" }}
+{{- $core = replace "<!-- TAK_WEB_CONNECTOR -->" (include "takserver.webConnector" .) $core }}
 {{- if .Values.sso.enabled }}
 {{- $core = replace "<!-- TAK_OAUTH -->" (include "takserver.oauth" .) $core }}
 {{- else }}
@@ -201,8 +216,8 @@ spec:
 {{- if .Values.sso.enabled }}
 ---
 # The upstream API Service has no port 8447. This Service selects the same
-# pods. The port name is http so the tenant gateway speaks plaintext to the
-# connector, which sets tls=false.
+# pods. With backendTLS on, the connector serves TLS and the port is https.
+# With it off, the connector is plaintext and the port is http.
 apiVersion: v1
 kind: Service
 metadata:
@@ -211,10 +226,42 @@ spec:
   selector:
     {{- toYaml .Values.api.selector | nindent 4 }}
   ports:
+    {{- if .Values.api.web.backendTLS.enabled }}
+    - name: https
+      appProtocol: https
+    {{- else }}
     - name: http
+    {{- end }}
       port: {{ .Values.api.web.port }}
       targetPort: {{ .Values.api.web.port }}
       protocol: TCP
+{{- if .Values.api.web.backendTLS.enabled }}
+---
+# The Package CR has no setting for a TLS backend, so this is plain Istio.
+# The tenant gateway originates TLS to 8447 and verifies TAK's certificate
+# against the deploy-time CA. Istio still tunnels that TLS over the ambient
+# mesh (HBONE), so the hop is mTLS outside and TLS inside. The CA Secret lives
+# in the gateway namespace, because a gateway only reads credentialName
+# Secrets from its own namespace. zarf.yaml copies the CA certificate there.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: {{ .Values.api.web.service }}
+spec:
+  host: {{ printf "%s.%s.svc.cluster.local" .Values.api.web.service .Release.Namespace | quote }}
+  exportTo:
+    - {{ .Values.api.web.backendTLS.gatewayNamespace | quote }}
+  trafficPolicy:
+    portLevelSettings:
+      - port:
+          number: {{ .Values.api.web.port }}
+        tls:
+          mode: SIMPLE
+          credentialName: {{ .Values.api.web.backendTLS.caSecretName | quote }}
+          sni: {{ printf "%s.%s.svc.cluster.local" .Values.api.web.service .Release.Namespace | quote }}
+          subjectAltNames:
+            - {{ printf "%s.%s.svc.cluster.local" .Values.api.web.service .Release.Namespace | quote }}
+{{- end }}
 ---
 # Scripts for the init containers added after the upstream chart. The stock
 # Deployments have no initContainer value. onDeploy reads patch-oidc-pods.py

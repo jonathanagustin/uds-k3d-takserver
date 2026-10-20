@@ -36,6 +36,36 @@ components:
             cmd: ./build.sh
       onDeploy:
         after:
+          # The tenant gateway verifies 8447 against the deploy-time CA. A
+          # gateway reads credentialName Secrets only from its own namespace,
+          # so copy the CA certificate (never the key) there. Names come from
+          # the DestinationRule the chart renders when backendTLS is on.
+          - description: Copy the TAK CA certificate to the tenant gateway
+            cmd: |
+              set -eu
+              if command -v kubectl >/dev/null 2>&1; then
+                k() { kubectl "$@"; }
+              elif command -v zarf >/dev/null 2>&1; then
+                k() { zarf tools kubectl "$@"; }
+              elif [ -x ./zarf ]; then
+                k() { ./zarf tools kubectl "$@"; }
+              else
+                echo "kubectl is not available" >&2
+                exit 1
+              fi
+              if ! k get destinationrule.networking.istio.io takserver-web -n takserver >/dev/null 2>&1; then
+                echo "Backend TLS is off. Skipping."
+                exit 0
+              fi
+              gw_ns="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.exportTo[0]}')"
+              secret="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.trafficPolicy.portLevelSettings[0].tls.credentialName}')"
+              ca_b64="$(k get configmap cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}')"
+              if [ -z "${gw_ns}" ] || [ -z "${secret}" ] || [ -z "${ca_b64}" ]; then
+                echo "Missing gateway namespace, Secret name, or ca.pem" >&2
+                exit 1
+              fi
+              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","namespace":"%s","labels":{"app.kubernetes.io/part-of":"takserver"}},"type":"Opaque","data":{"cacert":"%s"}}' \
+                "${secret}" "${gw_ns}" "${ca_b64}" | k apply -f -
           # The upstream Deployments cannot grow an init container through
           # values. Helm has already created them. This reads the image names
           # from those Deployments and strategic-merges the envsubst init

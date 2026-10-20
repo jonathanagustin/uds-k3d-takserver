@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - takserver-scaffold
     paths-ignore:
       - ".github/container-and-chart/**"
 

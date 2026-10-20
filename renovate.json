@@ -1,0 +1,116 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>defenseunicorns/uds-common//config/renovate.json5",
+    ":semanticCommits",
+    ":semanticPrefixFixDepsChoreOthers",
+    "group:all",
+    "replacements:all",
+    "workarounds:all"
+  ],
+  "schedule": [
+    "after 7am and before 9am every weekday"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "mise.toml pins marked with a # renovate: comment",
+      "fileMatch": [
+        "(^|/)mise\\.toml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\n[^\\n]*?(?:=\\s*\"|version\\s*=\\s*\")(?<currentValue>[^\"]+)\""
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.*)${{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Concrete image tags in zarf.yaml. Zarf variables such as ###ZARF_VAR_TAK_IMAGE_TAG### do not match.",
+      "fileMatch": [
+        "(^|/)zarf\\.yaml$"
+      ],
+      "matchStrings": [
+        "-\\s+['\"]?(?<depName>[a-z0-9][a-z0-9._/-]*):(?<currentValue>\\d[^'\"\\s]*)['\"]?"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Public TAK-Product-Center/Server release tag",
+      "fileMatch": [
+        "(^|/)zarf\\.yaml$",
+        "(^|/)tasks\\.yaml$",
+        "(^|/)uds-config\\.yaml$",
+        "(^|/)version\\.txt$",
+        "(^|/)Dockerfile$",
+        "(^|/)README\\.md$",
+        "^docs/.+\\.md$",
+        "^values/.+\\.yaml$",
+        "^\\.github/workflows/.+\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "(?<currentValue>\\d+\\.\\d+-RELEASE-\\d+)"
+      ],
+      "datasourceTemplate": "git-tags",
+      "depNameTemplate": "https://github.com/TAK-Product-Center/Server",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-RELEASE-(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Image references pinned to a tag and a digest",
+      "fileMatch": [
+        "(^|/)Dockerfile$",
+        "^\\.github/workflows/.+\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "(?<depName>[a-z0-9][a-z0-9._/-]*):(?<currentValue>[A-Za-z0-9][A-Za-z0-9._-]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "GitHub Action SHAs pinned next to a version comment",
+      "fileMatch": [
+        "^\\.github/workflows/.+\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "uses:\\s*(?<depName>[\\w.-]+/[\\w.-]+)(?:/[\\w./-]+)?@(?<currentDigest>[0-9a-f]{40})\\s+#\\s*(?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "groupName": "TAK Server Support Dependencies",
+      "labels": [
+        "support-deps"
+      ],
+      "commitMessageTopic": "support-deps",
+      "matchPackageNames": [
+        "*"
+      ]
+    },
+    {
+      "groupName": "TAK Server Package Dependencies",
+      "labels": [
+        "package-deps"
+      ],
+      "commitMessageTopic": "package-deps",
+      "matchDatasources": [
+        "docker",
+        "helm",
+        "git-tags"
+      ]
+    },
+    {
+      "description": "These image tags are the Zarf variable TAK_IMAGE_TAG, not a registry tag.",
+      "matchPackageNames": [
+        "ghcr.io/jonathanagustin/uds-k3d-takserver/**"
+      ],
+      "enabled": false
+    }
+  ]
+}

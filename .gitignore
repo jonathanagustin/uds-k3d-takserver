@@ -1,0 +1,26 @@
+*.tar.zst
+*.tar.gz
+*.tar
+zarf-sbom/
+.zarf/
+
+# Local CLI copies. Shared tasks call uds and zarf by name; uds rewrites those.
+/uds
+/zarf
+
+tmp/
+build/
+.cache/
+*.log
+tests/.playwright/
+
+# TAK private keys and keystores. Generated at deploy time.
+*.key
+*.p12
+*.jks
+*.crl
+
+.DS_Store
+.idea/
+.vscode/
+node_modules/

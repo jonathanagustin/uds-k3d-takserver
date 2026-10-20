@@ -1,0 +1,75 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Inputs for chart/templates/uds-package.yaml.
+# Service names and pod labels match a render of the upstream chart
+# with release name takserver.
+
+domain: "###ZARF_VAR_DOMAIN###"
+
+api:
+  service: takserver-api-service
+  selector:
+    app: takserver-api
+  # Upstream ingress tak-api-https-ingress sends this host to port 8446.
+  https:
+    host: takserver
+    port: 8446
+  # Upstream ingress tak-api-cert-https-ingress sends this host to port 8443.
+  cert:
+    host: takserver-api
+    port: 8443
+  # Browser UI. The stock Service does not publish 8447; this chart does.
+  web:
+    service: takserver-web
+    host: takserver
+    port: 8447
+
+messaging:
+  service: takserver-messaging-service
+  selector:
+    app: takserver-messaging
+  # Upstream ingress tak-messaging-tls-ingress sends this host to port 8089.
+  streaming:
+    host: takserver-stream
+    port: 8089
+
+ignite:
+  selector:
+    app: takserver-ignite
+
+# Pods that call the Kubernetes API to discover Ignite. The upstream chart
+# sets serviceAccountName takserver-ignite on the Ignite StatefulSet and on
+# the API, messaging, config, and plugins Deployments. Each of those clients
+# uses TcpDiscoveryKubernetesIpFinder.
+kubeApi:
+  selectors:
+    - app: takserver-ignite
+    - app: takserver-api
+    - app: takserver-messaging
+    - app: takserver-config
+    - app: takserver-plugins
+
+sso:
+  # Registers Keycloak client uds-takserver and Secret takserver-sso.
+  # An init container envsubsts TAK_OIDC_CLIENT_SECRET into CoreConfig.
+  # Authservice is not used. TAK's own authorization-code flow is.
+  enabled: true
+  clientId: uds-takserver
+  secretName: takserver-sso
+  # Keycloak full group path. TAK grants ROLE_ADMIN when the groups claim
+  # contains this value. It does not match groupprefix /tak/, so it is not
+  # also a TAK group. /TAK/..._READ and _WRITE are the mapped groups.
+  adminGroup: "/UDS Core/Admin"
+
+additionalNetworkAllow: []
+
+# Subject fields for the deploy-time CA. The Job skips generation when
+# ConfigMap cert-migration already exists.
+certs:
+  image: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
+  caName: uds-tak-ca
+  state: VA
+  city: Arlington
+  organization: TAK
+  organizationalUnit: UDS

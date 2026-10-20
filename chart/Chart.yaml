@@ -1,0 +1,9 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+apiVersion: v2
+name: uds-takserver-config
+description: UDS Package configuration for TAK Server
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

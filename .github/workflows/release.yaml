@@ -1,0 +1,37 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - takserver-scaffold
+    paths-ignore:
+      - ".github/container-and-chart/**"
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  # publish-package creates the Zarf package without --skip-sbom, so the
+  # release artifact includes the Syft SBOM Zarf writes under zarf-sbom/.
+  publish:
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    strategy:
+      matrix:
+        flavor: [upstream]
+        architecture: [amd64]
+    uses: defenseunicorns/uds-common/.github/workflows/callable-publish.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+    with:
+      flavor: ${{ matrix.flavor }}
+      arch: ${{ matrix.architecture }}
+      runsOn: ubuntu-latest
+      options: --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
+    secrets: inherit

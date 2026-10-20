@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# The runtime stages stay root. Cert generation and the chart's entrypoints
+# write under /opt/tak and /, and the UID is not fixed by the stock chart.
+# Apt and microdnf packages float inside the digest-pinned builder and UBI
+# images. Pinning those package versions would churn on every base rebuild.
+failure-threshold: warning
+ignored:
+  - DL3002
+  - DL3008
+  - DL3041

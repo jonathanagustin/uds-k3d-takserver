@@ -1,0 +1,67 @@
+amends "package://github.com/jdx/hk/releases/download/v2.0.0/hk@2.0.0#/Config.pkl"
+
+// Pre-commit and CI. License headers are the shared lint:all task.
+steps {
+  ["yamllint"] {
+    check = "yamllint . -c .yamllint --no-warnings"
+    glob = List("**/*.yaml", "**/*.yml", ".yamllint")
+  }
+  ["shellcheck"] {
+    check = "shellcheck {{files}}"
+    glob = List("**/*.sh")
+  }
+  ["hadolint"] {
+    check = "hadolint --config .hadolint.yaml .github/container-and-chart/docker/Dockerfile"
+    glob = List("**/Dockerfile", ".hadolint.yaml")
+  }
+  ["shell"] {
+    check = "uds run lint:shell --no-progress --with exclusion=build"
+    glob = List("tasks.yaml", "tasks/**/*.yaml", ".github/workflows/**/*.yaml", "zarf.yaml", "common/zarf.yaml")
+  }
+  ["actionlint"] {
+    check = "actionlint"
+    glob = List(".github/workflows/*.{yml,yaml}")
+  }
+  ["codespell"] {
+    check = "codespell"
+    glob = List("**/*", ".codespellrc")
+    exclude = List(
+      "build/**",
+      "node_modules/**",
+      "tests/.playwright/**",
+      "tests/pnpm-lock.yaml",
+      "*.tar",
+      "*.tar.zst",
+      "zarf-sbom/**",
+      ".git/**"
+    )
+  }
+  ["renovate-config"] {
+    check = "uds run lint:renovate --no-progress"
+    glob = List("renovate.json")
+  }
+  ["helm"] {
+    check = "uds run lint:helm --no-progress --with paths=chart"
+    glob = List("chart/Chart.yaml", "chart/**/*.yaml", "chart/**/*.tpl")
+  }
+  ["helm-template"] {
+    check = "uds run lint:helm-template --no-progress --with paths=chart"
+    glob = List("chart/Chart.yaml", "chart/**/*.yaml", "chart/**/*.tpl")
+  }
+  ["zarf-tools"] {
+    check = "uds run lint:zarf-tools --no-progress"
+    glob = List("zarf.yaml", "common/zarf.yaml")
+  }
+  ["zarf-lint"] {
+    check = "uds zarf dev lint . --flavor upstream --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14"
+    glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml")
+  }
+  ["gitleaks"] {
+    check = "gitleaks detect --no-git --config .gitleaks.toml --source . --redact --exit-code 1"
+    glob = List("**/*", ".gitleaks.toml", ".gitignore")
+  }
+  ["key-material"] {
+    check = "bash .github/scripts/check-key-material.sh"
+    glob = List("**/*", ".gitignore", ".github/scripts/check-key-material.sh")
+  }
+}

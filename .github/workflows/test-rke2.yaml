@@ -1,0 +1,38 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: RKE2 Test
+
+# Manual only, and off unless enabled is set. Cloud credentials are not configured.
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: Create nothing. This only initializes OpenTofu for the RKE2 scaffold.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-rke2:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          # renovate: datasource=github-releases depName=opentofu/opentofu versioning=semver
+          tofu_version: v1.13.1
+          tofu_wrapper: false
+
+      - name: Validate the RKE2 scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          tofu -chdir=.github/test-infra/aws/rke2 init -backend=false
+          tofu -chdir=.github/test-infra/aws/rke2 validate

@@ -1,0 +1,171 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Values for the TAK Server chart at
+# https://github.com/TAK-Product-Center/Server tag 5.7-RELEASE-14,
+# path src/takserver-cluster/deployments/helm.
+# The chart is not copied into this repo.
+#
+# `###ZARF_VAR_TAK_IMAGE_TAG###` is replaced when the Zarf package is created.
+# Image build and publish are not part of this package.
+
+imagePullSecret: reg-cred
+certConfigMapName: cert-migration
+coreConfigMapName: core-config
+takIgniteConfigMapName: tak-ignite-config
+
+takserver:
+  ingress:
+    enabled: false
+  # Local sizes. The upstream developer example requests 1 CPU and 8Gi for
+  # messaging and api. These requests have not been scheduled on a cluster.
+  # The messaging Deployment copies the API CPU and memory limits. The API
+  # limit is 1536Mi so messaging can hold a 512m heap, the 128MB off-heap
+  # cap, and UserManager's 128m heap. A 1Gi cgroup was OOM-killed when
+  # UserManager started.
+  config:
+    image:
+      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config
+      tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  messaging:
+    image:
+      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging
+      tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        # Ignored by the template. Messaging copies the API limit below.
+        memory: 1536Mi
+  api:
+    image:
+      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api
+      tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+  plugins:
+    enabled: true
+    image:
+      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins
+      tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+    replicas: 1
+    resources:
+      requests:
+        cpu: "100m"
+      limits:
+        cpu: "500m"
+  takserverDatabaseSetup:
+    image:
+      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup
+      tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+  limits:
+    persistentVolumeClaims: "5"
+    requests:
+      storage: 100Gi
+    storage:
+      max: 50Gi
+      min: 1Gi
+
+global:
+  postgresql:
+    host: takserver-postgresql
+    port: "5432"
+    auth:
+      database: cot
+      username: postgres
+      password: postgres
+      postgresPassword: postgres
+      postgresqlUsername: postgres
+      postgresqlPassword: postgres
+      postgresqlDatabase: cot
+
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: postgis/postgis
+    tag: 15-3.4
+  configurationConfigMap: postgres-configuration
+  auth:
+    database: cot
+    username: postgres
+    password: postgres
+    postgresPassword: postgres
+
+ignite:
+  # Odd on purpose. floor(n/2)+1 is the disruption budget in the config chart.
+  replicaCount: 1
+  rbac:
+    create: true
+  image:
+    repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite
+    tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+  serviceAccount:
+    name: takserver-ignite
+  # The chart's default list includes ignite-rest-http. Messaging's plaintext
+  # 8080 is a different port. This drops the Ignite REST module.
+  # ignite.sh applies -Xms1g -Xmx1g only when JVM_OPTS is empty. The chart
+  # always sets JVM_OPTS, so without -Xmx the JVM sizes the heap from host
+  # RAM. UseContainerSupport can report the cgroup limit and still leave
+  # MaxHeapSize on that host figure. 512m fits the limit below.
+  env:
+    OPTION_LIBS: "ignite-kubernetes,ignite-json,ignite-slf4j,ignite-urideploy,ignite-web"
+    JVM_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseContainerSupport -Djava.net.preferIPv4Stack=true"
+  # Default data region max is a fraction of host RAM. Cap it so the region
+  # cannot grow past the container limit. 128 MiB matches the TAK off-heap cap.
+  dataStorage:
+    config: |
+      <property name="defaultDataRegionConfiguration">
+        <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
+          <property name="initialSize" value="#{64 * 1024 * 1024}"/>
+          <property name="maxSize" value="#{128 * 1024 * 1024}"/>
+        </bean>
+      </property>
+  resources:
+    requests:
+      cpu: "250m"
+      memory: 768Mi
+    limits:
+      cpu: "1"
+      memory: 1280Mi
+  extraVolumes:
+    - name: ignite-work
+      emptyDir: {}
+    - name: ignite-tmp
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: ignite-work
+      mountPath: /opt/ignite/work
+    - name: ignite-tmp
+      mountPath: /tmp
+
+# The upstream developer example runs a 3-replica NATS cluster. One replica
+# with clustering off is enough for a local render. The toolbox deployment
+# crash-loops here and blocks Helm, and TAK does not use it.
+nats:
+  replicaCount: 1
+  cluster:
+    enabled: false
+  config:
+    cluster:
+      enabled: false
+      replicas: 1
+  natsBox:
+    enabled: false

@@ -1,0 +1,362 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/tasks.schema.json
+tasks:
+  - name: all
+    actions:
+      - task: health-check
+      - task: startup
+      - task: mesh
+      - task: policies
+      - task: logs
+      - task: gateway
+      - task: smoke
+      - task: api-smoke
+      - task: ui
+
+  - name: health-check
+    description: Wait for TAK deployments, pods, and the Package CR
+    actions:
+      - description: Wait for TAK deployments
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          dump_tak() {
+            uds zarf tools kubectl get pods -n takserver -o wide || true
+            uds zarf tools kubectl get deploy,sts,job -n takserver || true
+          }
+          trap dump_tak ERR
+          for deploy in takserver-config takserver-messaging takserver-api takserver-plugins; do
+            uds zarf tools kubectl rollout status "deployment/${deploy}" -n takserver --timeout=600s
+          done
+          while read -r sts; do
+            [ -z "${sts}" ] && continue
+            uds zarf tools kubectl rollout status "${sts}" -n takserver --timeout=600s
+          done < <(uds zarf tools kubectl get statefulset -n takserver -o name)
+      - description: Wait for TAK pods
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          for app in takserver-config takserver-messaging takserver-api takserver-plugins takserver-ignite; do
+            uds zarf tools kubectl wait --for=condition=Ready "pod" -n takserver -l "app=${app}" --timeout=600s
+          done
+      - description: Wait for the UDS Package to be Ready
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            ready="$(uds zarf tools kubectl get package takserver -n takserver -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+            phase="$(uds zarf tools kubectl get package takserver -n takserver -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+            echo "Package Ready=${ready} phase=${phase}"
+            if [ "${ready}" = "True" ] || [ "${phase}" = "Ready" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Package takserver did not become Ready" >&2
+          uds zarf tools kubectl describe package takserver -n takserver || true
+          exit 1
+
+  - name: startup
+    description: Startup order, probes, Ignite, and the plaintext 8080 deny
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          init_name() {
+            k get deploy "$1" -n takserver -o jsonpath='{.spec.template.spec.initContainers[0].name}'
+          }
+          init_cmd() {
+            k get deploy "$1" -n takserver -o jsonpath='{.spec.template.spec.initContainers[0].command}'
+          }
+          [ "$(init_name takserver-config)" = "wait-deps" ]
+          [ "$(init_name takserver-messaging)" = "wait-deps" ]
+          [ "$(init_name takserver-api)" = "wait-deps" ]
+          [ "$(init_name takserver-plugins)" = "wait-deps" ]
+          config_cmd="$(init_cmd takserver-config)"
+          messaging_cmd="$(init_cmd takserver-messaging)"
+          plugin_cmd="$(init_cmd takserver-plugins)"
+          grep -q 'ignite' <<< "${config_cmd}"
+          grep -q 'config' <<< "${messaging_cmd}"
+          grep -q 'services' <<< "${plugin_cmd}"
+          api_port="$(k get deploy takserver-api -n takserver -o jsonpath='{.spec.template.spec.containers[0].startupProbe.tcpSocket.port}')"
+          msg_port="$(k get deploy takserver-messaging -n takserver -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.tcpSocket.port}')"
+          ready_timeout="$(k get deploy takserver-api -n takserver -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.timeoutSeconds}')"
+          [ "${api_port}" = "8443" ]
+          [ "${msg_port}" = "8089" ]
+          [ "${ready_timeout}" -gt 3 ]
+          cluster_ip="$(k get svc takserver-ignite -n takserver -o jsonpath='{.spec.clusterIP}')"
+          [ "${cluster_ip}" = "None" ]
+          replicas="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.replicas}')"
+          [ $((replicas % 2)) -eq 1 ]
+          min_available="$(k get pdb takserver-ignite -n takserver -o jsonpath='{.spec.minAvailable}')"
+          [ "${min_available}" = "$((replicas / 2 + 1))" ]
+          role="$(k get role takserver-ignite-discovery -n takserver -o yaml)"
+          grep -q 'pods' <<< "${role}"
+          grep -q 'endpoints' <<< "${role}"
+          grep -q 'deployments' <<< "${role}"
+          cluster_role="$(k get clusterrole takserver-ignite -o yaml)"
+          grep -q 'pods' <<< "${cluster_role}"
+          grep -q 'endpoints' <<< "${cluster_role}"
+          automount="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.automountServiceAccountToken}')"
+          [ "${automount}" = "true" ]
+          ignite_cfg="$(k get cm takserver-ignite-configmap -n takserver -o yaml)"
+          grep -q 'networkTimeout' <<< "${ignite_cfg}"
+          grep -q 'failureDetectionTimeout' <<< "${ignite_cfg}"
+          if grep -q 'localAddress' <<< "${ignite_cfg}"; then
+            echo "Ignite server config sets localAddress; unset binds all interfaces" >&2
+            exit 1
+          fi
+          grep -q 'defaultDataRegionConfiguration' <<< "${ignite_cfg}"
+          jvm="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="JVM_OPTS")].value}')"
+          grep -q -- '-Xmx512m' <<< "${jvm}"
+          ignite_limit="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
+          ignite_request="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
+          [ "${ignite_limit}" = "1280Mi" ]
+          [ "${ignite_request}" = "512Mi" ]
+          plugin_limit="$(k get deploy takserver-plugins -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
+          [ "${plugin_limit}" = "384Mi" ]
+          config_request="$(k get deploy takserver-config -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
+          [ "${config_request}" = "512Mi" ]
+          deny="$(k get authorizationpolicy takserver-deny-plaintext-8080 -n takserver -o yaml)"
+          grep -q '8080' <<< "${deny}"
+          services="$(k get svc takserver-messaging-service takserver-api-service -n takserver -o yaml)"
+          if grep -Eq 'port: 8080|port: "8080"' <<< "${services}"; then
+            echo "plaintext 8080 is published on a TAK Service" >&2
+            exit 1
+          fi
+          probe="$(k exec -n takserver deploy/takserver-messaging -c takserver-messaging -- cat /messaging-readiness.sh)"
+          core="$(k get cm core-config -n takserver -o jsonpath='{.data.CoreConfig\.xml}')"
+          grep -q '/opt/tak/UserAuthenticationFile.xml' <<< "${probe}"
+          grep -q '/opt/tak/UserAuthenticationFile.xml' <<< "${core}"
+          pkg="$(k get package takserver -n takserver -o yaml)"
+          grep -q 'Ingress 47500 to takserver-api from Ignite' <<< "${pkg}"
+          grep -q 'Egress 47100 from takserver-messaging to Ignite' <<< "${pkg}"
+          if grep -Eq 'port: 8444|port: 9000|port: 9001|port: 8080' <<< "${pkg}"; then
+            echo "8444, 9000, 9001, or 8080 is on the Package" >&2
+            exit 1
+          fi
+          echo "startup order and Ignite checks passed"
+
+  - name: mesh
+    description: Confirm ambient enrollment and that TAK pods have no Istio sidecar
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          mode="$(uds zarf tools kubectl get namespace takserver -o jsonpath='{.metadata.labels.istio\.io/dataplane-mode}')"
+          echo "namespace dataplane mode: ${mode:-unset}"
+          if [ "${mode}" != "ambient" ]; then
+            echo "namespace takserver is not enrolled in ambient" >&2
+            exit 1
+          fi
+          injection="$(uds zarf tools kubectl get namespace takserver -o jsonpath='{.metadata.labels.istio-injection}' 2>/dev/null || true)"
+          if [ "${injection}" = "enabled" ]; then
+            echo "namespace takserver is labeled istio-injection=enabled" >&2
+            exit 1
+          fi
+          # smoke and ui run after this and open 8447, 8446, 8443, and 8089.
+          uds zarf tools kubectl get pods -n takserver -o json | python3 -c '
+          import json, sys
+          pods = json.load(sys.stdin).get("items", [])
+          if not pods:
+              sys.exit("no pods in namespace takserver")
+          bad = []
+          for pod in pods:
+              meta = pod["metadata"]
+              name = meta["name"]
+              labels = meta.get("labels") or {}
+              annotations = meta.get("annotations") or {}
+              if labels.get("sidecar.istio.io/inject") == "true" or annotations.get("sidecar.istio.io/inject") == "true":
+                  bad.append(name + " has sidecar.istio.io/inject=true")
+              containers = [item["name"] for item in pod["spec"].get("containers", [])]
+              containers += [item["name"] for item in pod["spec"].get("initContainers", [])]
+              if "istio-proxy" in containers or "istio-validation" in containers:
+                  bad.append(name + " has a sidecar container")
+          if bad:
+              sys.stderr.write("\n".join(bad) + "\n")
+              sys.exit(1)
+          print(str(len(pods)) + " pods have no istio-proxy sidecar")
+          '
+
+  - name: policies
+    description: Confirm the Package created NetworkPolicy and AuthorizationPolicy objects
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          net_count="$(uds zarf tools kubectl get networkpolicy -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+          auth_count="$(uds zarf tools kubectl get authorizationpolicy -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+          echo "NetworkPolicy count: ${net_count}"
+          echo "AuthorizationPolicy count: ${auth_count}"
+          [ "${net_count}" -gt 0 ]
+          [ "${auth_count}" -gt 0 ]
+          spec="$(uds zarf tools kubectl get package takserver -n takserver -o yaml)"
+          # grep -q in a pipeline exits early. Under pipefail that is SIGPIPE, not a miss.
+          if ! grep -q 'Keycloak discovery, token, and JWKS' <<< "${spec}"; then
+            echo "Package allow list is missing the Keycloak rule" >&2
+            exit 1
+          fi
+          if grep -q 'remoteGenerated: Anywhere' <<< "${spec}"; then
+            echo "Package allow list contains remoteGenerated Anywhere" >&2
+            exit 1
+          fi
+          uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml | grep -q RestrictIstioSidecarOverrides
+          if uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q servicemonitors; then
+            monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+            echo "monitor count: ${monitors}"
+            [ "${monitors}" = "0" ]
+          else
+            echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
+          fi
+
+  - name: logs
+    description: Confirm TAK writes stdout logs for UDS Core logging
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          # Rollout is already finished. -l still follows the current pod, so
+          # poll. The stream is this container's stdout, which starts at launch.
+          # A pipe into grep -q exits early, and pipefail then reports a miss.
+          logs=""
+          found=0
+          for _ in $(seq 1 24); do
+            logs="$(uds zarf tools kubectl logs -n takserver -l app=takserver-api -c takserver-api --tail=-1 2>/dev/null || true)"
+            if grep -Eq 'Started TAK Server|TAK Server version|Tomcat started on port' <<< "${logs}"; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "${found}" -ne 1 ]; then
+            echo "API pod logs do not contain a TAK startup line" >&2
+            printf '%s\n' "${logs}" | tail -n 40 >&2
+            exit 1
+          fi
+          if grep -q 'error pulling auth file' <<< "${logs}"; then
+            echo "API could not write UserAuthenticationFile.xml" >&2
+            exit 1
+          fi
+          echo "API stdout has a TAK startup line"
+          if ! uds zarf tools kubectl get svc -A -o name 2>/dev/null | grep -qi loki; then
+            echo "k3d-core-slim-dev does not install Vector or Loki. Stdout is the stream the standard core logging package collects."
+            exit 0
+          fi
+          uds zarf tools kubectl port-forward -n loki svc/loki-gateway 3100:80 >/tmp/loki-pf.log 2>&1 &
+          pf_pid=$!
+          trap 'kill ${pf_pid} >/dev/null 2>&1 || true' EXIT
+          query='{namespace="takserver"}'
+          encoded="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' "${query}")"
+          found=0
+          for _ in $(seq 1 15); do
+            if curl -fsS --max-time 5 "http://127.0.0.1:3100/loki/api/v1/query?query=${encoded}" | grep -q 'takserver'; then
+              found=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "${found}" -ne 1 ]; then
+            echo "Loki did not return TAK logs" >&2
+            cat /tmp/loki-pf.log >&2 || true
+            exit 1
+          fi
+          echo "Loki returned TAK logs"
+
+  - name: gateway
+    description: Wait for the passthrough gateway selected by the test bundle
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          uds zarf tools kubectl get namespace istio-passthrough-gateway
+          uds zarf tools kubectl wait --for=condition=Ready pod --all -n istio-passthrough-gateway --timeout=300s
+          # k3d publishes host port 443 to the tenant gateway (*.uds.dev).
+          # The passthrough Service has its own load balancer, so SNI for
+          # takserver.uds.dev on 127.0.0.1:443 is an Istio 404.
+          port=18443
+          if ! curl -k -sS -o /dev/null --max-time 2 "https://127.0.0.1:${port}/" -H "Host: takserver.uds.dev"; then
+            setsid uds zarf tools kubectl port-forward -n istio-passthrough-gateway svc/passthrough-ingressgateway "${port}:443" >/tmp/tak-passthrough-pf.log 2>&1 < /dev/null &
+          fi
+          for _ in $(seq 1 30); do
+            if curl -k -sS -o /dev/null --max-time 2 --resolve "takserver.uds.dev:${port}:127.0.0.1" "https://takserver.uds.dev:${port}/"; then
+              echo "${port}" > /tmp/tak-gateway-port
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "passthrough gateway port-forward did not accept TLS" >&2
+          cat /tmp/tak-passthrough-pf.log >&2 || true
+          exit 1
+
+  - name: smoke
+    description: TLS handshake and HTTP status for the 8446 and 8443 gateway hosts
+    actions:
+      - cmd: ./tests/smoke.sh
+
+  - name: api-smoke
+    description: Marti API on 8443, 8447, 8446, and 8089 after install and upgrade
+    actions:
+      - cmd: ./tests/api-smoke.sh
+
+  - name: ui
+    description: Playwright checks for the TAK web UI and the gateway endpoints
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          port=443
+          if [ -f /tmp/tak-gateway-port ]; then
+            port="$(cat /tmp/tak-gateway-port)"
+          fi
+          cert_dir="$(./tests/extract-certs.sh)"
+          # Marti uses the admin client certificate. The Keycloak account page
+          # is on the tenant gateway. If that gateway cannot pull its image,
+          # still run the Marti checks.
+          skip_sso=0
+          if ! curl -k -sS -o /dev/null --max-time 15 --retry 5 --retry-delay 3 --retry-all-errors "https://sso.uds.dev/realms/uds/account/"; then
+            echo "Keycloak account page is not reachable. Skipping the SSO session."
+            skip_sso=1
+          fi
+          docker run --rm \
+            --network=host \
+            --shm-size=1g \
+            --security-opt seccomp=unconfined \
+            --user "$(id -u):$(id -g)" \
+            -e CI=true \
+            -e BASE_URL="https://takserver.uds.dev:${port}" \
+            -e TAK_HTTPS_URL="https://takserver.uds.dev:${port}/" \
+            -e TAK_CERT_URL="https://takserver-api.uds.dev:${port}/" \
+            -e TAK_STREAM_URL="https://takserver-stream.uds.dev:${port}/" \
+            -e TAK_SSO_URL="https://takserver.uds.dev/" \
+            -e TAK_CLIENT_CERT=/certs/admin.pem \
+            -e TAK_CLIENT_KEY=/certs/admin.key \
+            -e TAK_CLIENT_KEY_PASSPHRASE=atakatak \
+            -e SKIP_SSO_SETUP="${skip_sso}" \
+            -v "${cert_dir}:/certs:ro" \
+            -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
+            -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \
+            -v "$(pwd)/tests:/app" \
+            -w /app \
+            mcr.microsoft.com/playwright:v1.64.1 \
+            bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test'

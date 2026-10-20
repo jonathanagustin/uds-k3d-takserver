@@ -1,0 +1,68 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/uds.schema.json
+# Deploy this onto a cluster that already has k3d-core-slim-dev.
+# The slim bundle does not select istio-passthrough-gateway. core-base is
+# listed here so the test deploy upgrades that package and turns the gateway on.
+# Pepr and Istiod are pinned to the checkpoint requests. The chart defaults
+# are 200m and 500m, and those larger pods cannot schedule on a 2 CPU node.
+# `uds run test-install` and `uds run default` install the slim cluster first.
+kind: UDSBundle
+metadata:
+  name: takserver-dev
+  description: TAK Server layered onto a k3d-core-slim-dev cluster
+  version: dev
+
+packages:
+  # Same core version as the shared setup task's k3d-core-slim-dev default.
+  - name: core-base
+    repository: ghcr.io/defenseunicorns/packages/uds/core-base
+    ref: 1.15.0-upstream
+    optionalComponents:
+      - istio-passthrough-gateway
+    keylessVerification:
+      certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      certificateOIDCIssuer: https://token.actions.githubusercontent.com
+    # Match k3d-core-slim-dev so the upgrade does not enlarge Pepr or Istiod.
+    # Istiod replaces its one pod in place. A surge pod requests 500m and
+    # never schedules beside the checkpoint.
+    overrides:
+      pepr-uds-core:
+        module:
+          values:
+            - path: watcher.resources.requests.cpu
+              value: 100m
+            - path: watcher.resources.requests.memory
+              value: 64Mi
+            - path: admission.resources.requests.cpu
+              value: 100m
+            - path: admission.resources.requests.memory
+              value: 64Mi
+      istio-controlplane:
+        istiod:
+          values:
+            - path: resources.requests.cpu
+              value: 100m
+            - path: resources.requests.memory
+              value: 1024Mi
+            - path: rollingMaxSurge
+              value: "0%"
+            - path: rollingMaxUnavailable
+              value: "100%"
+      istio-passthrough-gateway:
+        gateway:
+          values:
+            - path: resources.requests.cpu
+              value: 50m
+            - path: autoscaling.enabled
+              value: false
+
+  - name: takserver
+    path: ../
+    ref: dev
+    overrides:
+      takserver:
+        takserver:
+          valuesFiles:
+            - ../values/test-values.yaml

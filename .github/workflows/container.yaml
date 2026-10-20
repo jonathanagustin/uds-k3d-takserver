@@ -1,0 +1,161 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Container
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: buildx platforms. Private ubuntu-latest runners are 2 vCPU and 8 GB, so the default is one architecture.
+        default: linux/amd64
+        type: string
+      push:
+        description: Push the tags to GHCR
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - .github/container-and-chart/**
+      - .github/workflows/container.yaml
+  push:
+    branches:
+      - takserver-scaffold
+      - main
+      - develop
+    paths:
+      - .github/container-and-chart/**
+      - .github/workflows/container.yaml
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'linux/amd64' }}
+      PUSH_IMAGES: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+      IMAGE_TAG: 5.7-RELEASE-14
+      IMAGE_REPO: ghcr.io/jonathanagustin/uds-k3d-takserver
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Free disk
+        run: ./.github/scripts/free-runner-disk.sh
+        env:
+          PRUNE_DOCKER: "true"
+
+      - name: Set up QEMU
+        if: contains(env.PLATFORMS, ',') || contains(env.PLATFORMS, 'arm64')
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        if: env.PUSH_IMAGES == 'true'
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A pull request retriggers this workflow for the whole diff. A later
+      # commit can cancel a build of an earlier Docker change, so skip only
+      # when a successful run already published this Docker tree.
+      - name: Decide whether to build
+        id: image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHECK_ONCE: "true"
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth=2 origin "${HEAD_SHA}"
+          if ! git diff --quiet "${HEAD_SHA}~1" "${HEAD_SHA}" -- .github/container-and-chart/docker; then
+            echo "build=true" >> "${GITHUB_OUTPUT}"
+            echo "Docker inputs changed."
+            exit 0
+          fi
+
+          tree="$(git rev-parse "${HEAD_SHA}:.github/container-and-chart/docker")"
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          published_json="$(gh run list \
+            --workflow container.yaml \
+            --branch "${branch}" \
+            --status success \
+            --limit 10 \
+            --json headSha)"
+          mapfile -t published < <(python3 -c 'import json,sys; [print(run["headSha"]) for run in json.load(sys.stdin)]' <<< "${published_json}")
+
+          matched=""
+          for sha in "${published[@]}"; do
+            if [ -z "${sha}" ]; then
+              continue
+            fi
+            git fetch --depth=1 origin "${sha}" || continue
+            if [ "$(git rev-parse "${sha}:.github/container-and-chart/docker")" = "${tree}" ]; then
+              matched="${sha}"
+              break
+            fi
+          done
+
+          if [ -n "${matched}" ] && ./.github/scripts/wait-for-tak-images.sh; then
+            echo "build=false" >> "${GITHUB_OUTPUT}"
+            echo "Docker inputs match the images built at ${matched}."
+            exit 0
+          fi
+          echo "build=true" >> "${GITHUB_OUTPUT}"
+          echo "No published images match the current Docker inputs."
+
+      - name: Restore the Gradle cache
+        if: steps.image.outputs.build == 'true'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/gradle-user-home
+          key: gradle-user-home-${{ runner.os }}-${{ runner.arch }}-5187abd46d827d37cfc5708805eced197a837e49
+
+      - name: Build images
+        if: steps.image.outputs.build == 'true'
+        run: ./.github/container-and-chart/docker/build.sh
+
+      - name: Scan the local images
+        if: steps.image.outputs.build == 'true' && (env.PLATFORMS == 'linux/amd64' || env.PLATFORMS == 'linux/arm64')
+        env:
+          GRYPE_IMAGE: anchore/grype:v0.120.1@sha256:e4a44ef45d285b829ce6efe2642980329661bd2d18eab5fc539138d4adaebbbe
+        run: ./.github/scripts/scan-local-images.sh
+
+      - name: Generate SBOMs from the local images
+        if: steps.image.outputs.build == 'true' && env.PUSH_IMAGES == 'true' && (env.PLATFORMS == 'linux/amd64' || env.PLATFORMS == 'linux/arm64')
+        env:
+          SYFT_IMAGE: anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/sbom
+          for name in takserver-api takserver-config takserver-messaging takserver-plugins takserver-database-setup takserver-ignite; do
+            docker image inspect "${IMAGE_REPO}/${name}:${IMAGE_TAG}" >/dev/null
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "${PWD}/build/sbom:/out" \
+              "${SYFT_IMAGE}" \
+              "docker:${IMAGE_REPO}/${name}:${IMAGE_TAG}" \
+              -o "spdx-json=/out/${name}.spdx.json"
+          done
+
+      - name: Upload SBOMs
+        if: steps.image.outputs.build == 'true' && env.PUSH_IMAGES == 'true' && (env.PLATFORMS == 'linux/amd64' || env.PLATFORMS == 'linux/arm64')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: takserver-sbom
+          path: build/sbom/**
+          if-no-files-found: error

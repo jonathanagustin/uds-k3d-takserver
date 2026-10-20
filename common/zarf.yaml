@@ -1,0 +1,31 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zarf-dev/zarf/main/zarf.schema.json
+kind: ZarfPackageConfig
+metadata:
+  name: takserver-common
+  description: Shared TAK Server charts imported by the root package
+
+components:
+  - name: takserver
+    required: true
+    charts:
+      # Installed first. It creates the Secret and ConfigMaps the upstream
+      # chart mounts. Zarf installs charts before manifests, so those objects
+      # live in this chart rather than a manifest.
+      - name: uds-takserver-config
+        namespace: takserver
+        version: 0.1.0
+        localPath: ../chart
+      # Upstream chart. Not vendored. `version` is the git tag Zarf clones.
+      # releaseName stays takserver so the Bitnami Postgres Service is
+      # takserver-postgresql, which is the host the chart's own example uses.
+      - name: takserver
+        namespace: takserver
+        releaseName: takserver
+        url: https://github.com/TAK-Product-Center/Server.git
+        gitPath: src/takserver-cluster/deployments/helm
+        version: 5.7-RELEASE-14
+        valuesFiles:
+          - ../values/common-values.yaml

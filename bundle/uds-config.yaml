@@ -1,0 +1,10 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Deploy-time Zarf variables. Do not put passwords in this file.
+# Applied by the shared deploy task via UDS_CONFIG.
+# Pepr and Istiod requests are set on the bundle, matching the checkpoint.
+variables:
+  takserver:
+    DOMAIN: uds.dev
+    TAK_IMAGE_TAG: 5.7-RELEASE-14

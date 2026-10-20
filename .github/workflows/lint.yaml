@@ -1,0 +1,43 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Lint
+
+on:
+  pull_request:
+    types: [milestoned, opened, reopened, synchronize]
+  push:
+    branches:
+      - main
+      - takserver-scaffold
+
+permissions:
+  contents: read
+
+jobs:
+  hk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install uv
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+        with:
+          install_args: uv
+          cache: true
+
+      - name: Install hk tools
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+        with:
+          # Names have to match mise.toml. yamllint and codespell are PyPI tools
+          # and need uv installed first. uds-cli is only in the aqua registry.
+          install_args: hk shellcheck actionlint helm node pypi:yamllint pypi:codespell aqua:defenseunicorns/uds-cli aqua:gitleaks/gitleaks aqua:hadolint/hadolint
+          cache: true
+
+      - name: hk check
+        run: hk check --all
+
+  validate:
+    uses: defenseunicorns/uds-common/.github/workflows/callable-lint.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+    secrets: inherit

@@ -1,0 +1,9 @@
+license: GPL-3.0-only
+copyright: uds-k3d-takserver authors
+ignore:
+  - "tests/pnpm-lock.yaml"
+  - "tests/.playwright/**"
+  - "chart/files/**"
+  - ".github/container-and-chart/docker/UserAuthenticationFile.xml"
+  - "**/*.jar"
+  - "LICENSE"

@@ -1,0 +1,70 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Scan
+
+on:
+  pull_request:
+    paths:
+      - "zarf.yaml"
+      - "common/zarf.yaml"
+      - "chart/**"
+      - "values/**"
+      - "bundle/**"
+      - ".github/container-and-chart/**"
+      - ".github/workflows/scan.yaml"
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check whether Docker inputs changed
+        id: docker
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set +e
+          ./.github/scripts/docker-inputs-changed.sh
+          code=$?
+          set -e
+          if [ "${code}" -eq 0 ]; then
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${code}" -eq 1 ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "docker-inputs-changed.sh failed (${code})." >&2
+            exit 1
+          fi
+
+      - name: Wait for the six TAK images
+        if: steps.docker.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Confirm the published TAK images
+        if: steps.docker.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHECK_ONCE: "true"
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+  scan:
+    needs: images
+    uses: defenseunicorns/uds-common/.github/workflows/callable-scan.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+    secrets: inherit

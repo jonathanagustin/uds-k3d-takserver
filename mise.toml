@@ -1,0 +1,48 @@
+# Local tools. Docker and Podman are not installed by mise.
+# Install with: mise install
+# The image build does not need a JDK on the host. The java pin matches the
+# Temurin 17.0.20 builder image in .github/container-and-chart/docker/Dockerfile.
+
+[tools]
+# renovate: datasource=node depName=node versioning=node
+node = "24.22.0"
+# renovate: datasource=github-releases depName=jdx/hk versioning=semver
+hk = "2.5.0"
+# renovate: datasource=github-releases depName=k3d-io/k3d versioning=semver-coerced
+k3d = "5.9.0"
+# renovate: datasource=github-releases depName=helm/helm versioning=semver
+helm = "3.22.1"
+# renovate: datasource=github-releases depName=jqlang/jq versioning=semver extractVersion=^jq-(?<version>\d+\.\d+\.\d+)$
+jq = "1.8.2"
+# renovate: datasource=github-releases depName=koalaman/shellcheck versioning=semver
+shellcheck = "0.11.0"
+# renovate: datasource=github-releases depName=hadolint/hadolint versioning=semver
+"aqua:hadolint/hadolint" = "2.14.0"
+# renovate: datasource=github-releases depName=rhysd/actionlint versioning=semver
+actionlint = "1.7.12"
+# renovate: datasource=github-releases depName=astral-sh/uv versioning=semver
+uv = "0.13.1"
+# renovate: datasource=adoptium depName=java versioning=regex:^temurin-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+(?<build>\d+)$
+java = "temurin-17.0.20+101"
+# renovate: datasource=github-releases depName=anchore/syft versioning=semver
+syft = "1.54.1"
+# renovate: datasource=github-releases depName=anchore/grype versioning=semver
+grype = "0.120.1"
+# renovate: datasource=github-releases depName=opentofu/opentofu versioning=semver
+opentofu = "1.13.1"
+# renovate: datasource=npm depName=pnpm
+pnpm = "10.33.4"
+# renovate: datasource=pypi depName=codespell versioning=pep440
+"pypi:codespell" = { version = "2.4.3", depends = "uv" }
+# renovate: datasource=github-releases depName=google/go-containerregistry versioning=semver
+crane = "0.22.1"
+# renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
+"aqua:defenseunicorns/uds-cli" = "0.39.0"
+# renovate: datasource=pypi depName=yamllint versioning=pep440
+"pypi:yamllint" = { version = "1.38.0", depends = "uv" }
+# renovate: datasource=github-releases depName=gitleaks/gitleaks versioning=semver
+"aqua:gitleaks/gitleaks" = "8.30.1"
+
+[tasks.build-image]
+description = "Build the six TAK Server images from the public 5.7-RELEASE-14 source"
+run = "./.github/container-and-chart/docker/build.sh"

@@ -1,0 +1,145 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/tasks.schema.json
+includes:
+  - test: ./tasks/test.yaml
+  # renovate: datasource=github-tags depName=defenseunicorns/uds-common versioning=semver
+  - create: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/create.yaml
+  - lint: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/lint.yaml
+  - pull: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/pull.yaml
+  - deploy: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/deploy.yaml
+  - setup: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/setup.yaml
+  - actions: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/actions.yaml
+  - upgrade: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/upgrade.yaml
+  - publish: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/publish.yaml
+
+variables:
+  - name: DOMAIN
+    default: uds.dev
+  - name: TAK_IMAGE_TAG
+    default: 5.7-RELEASE-14
+  - name: PACKAGE_NAME
+    default: takserver
+  - name: TARGET_REPO
+    default: ghcr.io/jonathanagustin/uds-k3d-takserver
+  # Shared lint:all checks SPDX headers when this is true.
+  - name: RUN_LICENSE_CHECKS
+    default: "true"
+
+tasks:
+  - name: create-dev-package
+    description: Create the package without an SBOM
+    actions:
+      - task: create:package
+        with:
+          options: "--skip-sbom --set DOMAIN=${{ .variables.DOMAIN }} --set TAK_IMAGE_TAG=${{ .variables.TAK_IMAGE_TAG }}"
+
+  - name: fit-runner
+    description: Free CPU on a 2 vCPU node before the slim core upgrade
+    actions:
+      - cmd: ./.github/scripts/fit-runner.sh
+
+  - name: create-deploy-test-bundle
+    description: Create the dev bundle, deploy it, and run validation
+    actions:
+      - task: create:test-bundle
+      - task: deploy:test-bundle
+        with:
+          options: "--force-conflicts"
+      - task: setup:keycloak-user
+        with:
+          group: "/UDS Core/Admin"
+      # setup:keycloak-user takes one group. Operators_READ is the TAK group
+      # the SSO test reads back from /Marti/api/groups/all.
+      - cmd: python3 ./tests/ensure-tak-group.py
+      - task: test:all
+
+  - name: default
+    description: Create the package and deploy it on a new k3d-core-slim-dev cluster
+    actions:
+      - task: create-dev-package
+      - task: deploy-slim-core
+      - task: fit-runner
+      - task: create-deploy-test-bundle
+
+  - name: dev
+    description: Create and deploy the bundle on an existing cluster
+    actions:
+      - task: create-dev-package
+      - task: create:test-bundle
+      - task: deploy:test-bundle
+        with:
+          options: "--force-conflicts"
+
+  - name: deploy-slim-core
+    description: Deploy k3d-core-slim-dev from the cached package when it is present
+    actions:
+      - description: Pull or reuse the slim checkpoint and deploy it
+        cmd: ./.github/scripts/deploy-slim-core.sh
+      - description: Validate Keycloak endpoint
+        wait:
+          network:
+            protocol: https
+            address: sso.uds.dev
+            code: 200
+
+  - name: test-install
+    description: Install the current branch on a new k3d-core-slim-dev cluster
+    actions:
+      - task: create-dev-package
+      - task: deploy-slim-core
+      - task: fit-runner
+      - task: create-deploy-test-bundle
+
+  - name: test-upgrade
+    description: Upgrade a cluster from the latest published package to this branch
+    actions:
+      - task: upgrade:create-latest-tag-bundle
+      - task: deploy-slim-core
+      - task: fit-runner
+      - task: deploy:test-bundle
+        with:
+          options: "--force-conflicts"
+      - task: create-dev-package
+      - task: create-deploy-test-bundle
+
+  - name: publish-package
+    description: Create the package with its Zarf Syft SBOM, test it, and publish it
+    actions:
+      - description: Create the package and the Syft SBOM Zarf writes under zarf-sbom
+        task: create:package
+        with:
+          options: "--set DOMAIN=${{ .variables.DOMAIN }} --set TAK_IMAGE_TAG=${{ .variables.TAK_IMAGE_TAG }}"
+      - description: Setup the cluster
+        task: deploy-slim-core
+      - description: Free CPU on a 2 vCPU node
+        task: fit-runner
+      - description: Create, deploy, and test the bundle
+        task: create-deploy-test-bundle
+      - description: Publish the package
+        task: publish:package
+
+  - name: build-image
+    description: Build the six TAK images from the public 5.7-RELEASE-14 source
+    actions:
+      - cmd: ./.github/container-and-chart/docker/build.sh
+
+  - name: cleanup
+    description: Delete the local k3d cluster and built artifacts
+    actions:
+      - description: Delete the uds k3d cluster and package tarballs
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          if command -v k3d >/dev/null 2>&1 && k3d cluster get uds >/dev/null 2>&1; then
+            k3d cluster delete uds
+          fi
+          if command -v docker >/dev/null 2>&1; then
+            docker volume rm k3s-airgap-images >/dev/null 2>&1 || true
+          fi
+          rm -f zarf-package-takserver-*.tar.zst
+          rm -f bundle/uds-bundle-takserver-dev-*.tar.zst
+          rm -rf zarf-sbom

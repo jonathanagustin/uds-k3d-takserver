@@ -1,0 +1,295 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Test
+
+on:
+  pull_request:
+    types: [milestoned, opened, reopened, synchronize]
+    # Doc-only and image-only changes skip this workflow.
+    paths-ignore:
+      - ".github/container-and-chart/**"
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "docs/**"
+      - "adr/**"
+      - ".gitignore"
+      - "LICENSE"
+      - "renovate.json"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
+      - "CODEOWNERS"
+      - "SECURITY.md"
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+  id-token: write
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether Docker inputs changed
+        id: docker
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set +e
+          ./.github/scripts/docker-inputs-changed.sh
+          code=$?
+          set -e
+          if [ "${code}" -eq 0 ]; then
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${code}" -eq 1 ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "docker-inputs-changed.sh failed (${code})." >&2
+            exit 1
+          fi
+
+      - name: Wait for the six TAK images
+        if: steps.docker.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "true"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Confirm the published TAK images
+        if: steps.docker.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHECK_ONCE: "true"
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+  check-flavor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: test-flavor
+        uses: defenseunicorns/uds-common/.github/actions/test-flavor@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+        id: test-flavor
+    outputs:
+      upgrade-flavors: ${{ steps.test-flavor.outputs.upgrade-flavors }}
+
+  # Install and upgrade do not need each other, so they run at the same time.
+  # Upgrade is skipped until a package tag exists for the upstream flavor.
+  validate-install:
+    needs: [check-flavor, images]
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+      pull-requests: read
+      id-token: write
+    env:
+      TEST_TYPE: install
+      TEST_FLAVOR: upstream
+    steps: &validate-steps
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Docker Compose
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.6.0
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.39.0
+
+      - name: Trim the runner
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest'
+        run: ./.github/scripts/trim-runner.sh
+
+      # Restore only. Install and upgrade run together, and a second save of
+      # the same key fails the job. Install saves after the deploy.
+      - name: Restore the slim core package
+        id: slim-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/k3d-core-slim-dev
+          key: k3d-core-slim-dev-1.15.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Restore the Zarf cache
+        id: zarf-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/zarf-cache
+          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
+          restore-keys: |
+            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Point Zarf at the restored cache
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
+          rm -rf "${HOME}/.zarf-cache"
+          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
+
+      - name: Environment setup
+        run: |
+          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "$GITHUB_ENV"
+          uds run actions:setup-environment \
+          --set REGISTRY1_USERNAME="${{ secrets.IRON_BANK_ROBOT_USERNAME }}" \
+          --set REGISTRY1_PASSWORD="${{ secrets.IRON_BANK_ROBOT_PASSWORD }}" \
+          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+          --set RAPIDFORT_USERNAME="${{ secrets.RAPIDFORT_USERNAME }}" \
+          --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
+          --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
+        shell: bash
+
+      - name: Test
+        run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
+        shell: bash
+
+      - name: Debug Output
+        if: always()
+        run: uds run actions:debug-output
+        shell: bash
+
+      - name: Note whether the slim package is complete
+        id: slim-file
+        if: always() && env.TEST_TYPE == 'install'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(.cache/k3d-core-slim-dev/zarf-package-k3d-core-slim-dev-*.tar.zst)
+          ok=false
+          if [ "${#files[@]}" -gt 0 ]; then
+            bytes="$(stat -c%s "${files[0]}")"
+            # The published checkpoint is about 5.5 GB. A smaller file is a
+            # partial pull and must not be reused on the next run.
+            if [ "${bytes}" -gt 4000000000 ]; then
+              ok=true
+            fi
+          fi
+          echo "ok=${ok}" >> "${GITHUB_OUTPUT}"
+
+      - name: Save the slim core package
+        if: always() && env.TEST_TYPE == 'install' && steps.slim-cache.outputs.cache-hit != 'true' && steps.slim-file.outputs.ok == 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/k3d-core-slim-dev
+          key: k3d-core-slim-dev-1.15.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Save the Zarf cache
+        if: success() && env.TEST_TYPE == 'install' && steps.zarf-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/zarf-cache
+          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
+
+      - name: Node memory
+        if: failure()
+        run: ./.github/scripts/dump-memory.sh
+
+      - name: Save logs
+        if: always()
+        run: uds run actions:save-logs
+        shell: bash
+        timeout-minutes: 2
+
+      - name: Generate unique suffix
+        id: uniq
+        if: always()
+        shell: bash
+        run: |
+          # shellcheck disable=SC3028
+          echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        timeout-minutes: 2
+        with:
+          name: debug-log-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
+          path: |
+            /tmp/zarf-*.log
+            /tmp/uds-*.log
+            /tmp/maru-*.log
+            /tmp/debug-*.log
+            /tmp/uds-containerd-logs
+            /tmp/k3d-uds-*.log
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: playwright-report-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
+          path: tests/.playwright/reports
+          retention-days: 30
+          if-no-files-found: ignore
+
+  validate-upgrade:
+    needs: [check-flavor, images]
+    if: contains(needs.check-flavor.outputs.upgrade-flavors, 'upstream')
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+      pull-requests: read
+      id-token: write
+    env:
+      TEST_TYPE: upgrade
+      TEST_FLAVOR: upstream
+    steps: *validate-steps
+
+  verify-test:
+    runs-on: ubuntu-latest
+    needs: [validate-install, validate-upgrade]
+    if: always()
+    steps:
+      - name: Check validate result
+        run: |
+          echo "install result: ${{ needs.validate-install.result }}"
+          echo "upgrade result: ${{ needs.validate-upgrade.result }}"
+
+          if [ "${{ needs.validate-install.result }}" != "success" ]; then
+            echo "Install failed."
+            exit 1
+          fi
+
+          if [ "${{ needs.validate-upgrade.result }}" != "success" ] && [ "${{ needs.validate-upgrade.result }}" != "skipped" ]; then
+            echo "Upgrade failed."
+            exit 1
+          fi
+
+          echo "All tests passed successfully!"

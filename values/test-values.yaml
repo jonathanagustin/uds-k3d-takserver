@@ -1,0 +1,89 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Applied only by bundle/uds-bundle.yaml.
+# Sized for a private ubuntu-latest runner (2 vCPU, 8 GB). The upstream
+# developer example requests 1 CPU and 8Gi for messaging and the API.
+# k3d-core-slim-dev still uses most of the runner.
+#
+# CPU requests stay small so the pods can schedule.
+# The image adds -Xms512m -Xmx512m on the api, messaging, and config
+# commands. MaxRAMPercentage alone followed host RAM. On OpenJDK 17.0.16 the
+# cgroup limit is visible and MaxHeapSize is still the host figure, so -Xmx
+# is the bound that fits. Ignite warns below a 512MB heap. UserManager stays
+# at 128m. A local Ignite start with -Xmx512m used 226MiB and reported a
+# 512MB heap.
+# The messaging Deployment copies the API memory limit. A 1Gi cgroup was
+# OOM-killed about 15s after UserManager started (512m heap, 128MB off-heap,
+# plus that second JVM). 1536Mi holds those. Config does not run UserManager.
+# Its request matches the 512MB heap measured from Runtime.maxMemory().
+#
+# The plugins Deployment reads only the CPU request and then copies the API
+# CPU limit. It does not read a plugins memory value. The post-helm patch
+# sets that memory. Requests below are the steady-state TAK set and stay
+# under the 7938Mi allocatable of the 2 CPU test node.
+takserver:
+  config:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        # A 500m limit made the JVM start-up take most of a rollout bound on
+        # the 2 CPU runner. The processes start one after another, so they
+        # can burst into CPU the others are not using.
+        cpu: "1"
+        memory: 1Gi
+  messaging:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 640Mi
+      limits:
+        cpu: 500m
+        # The messaging template ignores this and copies the API limit.
+        memory: 1536Mi
+  api:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        # Messaging and plugins copy this CPU limit.
+        cpu: "1"
+        # Also the messaging container's memory limit. See the note above.
+        memory: 1536Mi
+  plugins:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 384Mi
+postgresql:
+  primary:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    persistence:
+      size: 1Gi
+ignite:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 512Mi
+    limits:
+      # The API lost its Ignite client connection (IgniteClientDisconnected-
+      # Exception) when the server restarted at the 500m limit.
+      cpu: "1"
+      memory: 1280Mi

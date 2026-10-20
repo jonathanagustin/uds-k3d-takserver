@@ -1,0 +1,75 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zarf-dev/zarf/main/zarf.schema.json
+kind: ZarfPackageConfig
+metadata:
+  name: takserver
+  description: TAK Server packaged for a local UDS cluster
+  version: dev
+
+variables:
+  - name: DOMAIN
+    description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev.
+    default: uds.dev
+  - name: TAK_IMAGE_TAG
+    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package.
+    default: 5.7-RELEASE-14
+
+components:
+  - name: takserver
+    required: true
+    description: Deploy TAK Server and the UDS Package config chart
+    only:
+      flavor: upstream
+    import:
+      path: common
+    charts:
+      - name: takserver
+        valuesFiles:
+          - values/upstream-values.yaml
+    actions:
+      onDeploy:
+        after:
+          # The upstream Deployments cannot grow an init container through
+          # values. Helm has already created them. This reads the image names
+          # from those Deployments and strategic-merges the envsubst init
+          # container, then waits for the new pods.
+          - description: Render the OIDC client secret and wait for TAK
+            cmd: |
+              set -eu
+              if command -v kubectl >/dev/null 2>&1; then
+                export KUBECTL=kubectl
+                k() { kubectl "$@"; }
+              elif command -v zarf >/dev/null 2>&1; then
+                export KUBECTL="zarf tools kubectl"
+                k() { zarf tools kubectl "$@"; }
+              elif [ -x ./zarf ]; then
+                export KUBECTL="./zarf tools kubectl"
+                k() { ./zarf tools kubectl "$@"; }
+              else
+                echo "kubectl is not available" >&2
+                exit 1
+              fi
+              if ! k get cm -n takserver takserver-oidc-render >/dev/null 2>&1; then
+                echo "OIDC render ConfigMap is absent. Skipping."
+                exit 0
+              fi
+              k get cm -n takserver takserver-oidc-render -o 'jsonpath={.data.patch-oidc-pods\.py}' > /tmp/patch-oidc-pods.py
+              python3 -u /tmp/patch-oidc-pods.py
+    # TAK images are built from the upstream source and published under this
+    # repository. The tag is literal. Zarf 0.87 parses image refs before it
+    # applies ###ZARF_VAR_*###, so a variable here is not a valid reference.
+    # Helm values still use TAK_IMAGE_TAG. PostGIS and NATS are images the
+    # upstream chart's dependencies render. The NATS toolbox is disabled in
+    # values/common-values.yaml, so its image is not part of the package.
+    images:
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14"
+      - "docker.io/postgis/postgis:15-3.4"
+      - "docker.io/library/nats:2.9.21-alpine"
+      - "docker.io/natsio/nats-server-config-reloader:0.11.0"

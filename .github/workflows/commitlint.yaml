@@ -1,0 +1,16 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [milestoned, opened, edited, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    uses: defenseunicorns/uds-common/.github/workflows/callable-commitlint.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1

@@ -1,0 +1,4 @@
+*
+!Dockerfile
+!UserAuthenticationFile.xml
+!publish-cert-configmap.sh

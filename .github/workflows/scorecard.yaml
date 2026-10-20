@@ -1,0 +1,24 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "30 1 * * 6"
+  push:
+    branches:
+      - main
+      - takserver-scaffold
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
+
+jobs:
+  run:
+    uses: defenseunicorns/uds-common/.github/workflows/callable-scorecard.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+    secrets: inherit

@@ -1,0 +1,22 @@
+title = "TAK key material"
+
+[extend]
+useDefault = false
+
+# The working tree must not contain private keys or Java keystores.
+# hk runs `gitleaks detect --no-git`, so this does not scan older commits.
+
+[[rules]]
+id = "tak-key-material"
+description = "Private key or Java keystore"
+regex = '''(?s).+'''
+path = '''(?i).+\.(key|p12|jks)$'''
+
+[allowlist]
+paths = [
+  '''(^|/)\.git(/|$)''',
+  '''(^|/)build(/|$)''',
+  '''(^|/)node_modules(/|$)''',
+  '''(^|/)zarf-sbom(/|$)''',
+  '''(^|/)tests/\.playwright(/|$)''',
+]

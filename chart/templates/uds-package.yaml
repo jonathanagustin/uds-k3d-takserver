@@ -1,0 +1,177 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: takserver
+  namespace: {{ .Release.Namespace }}
+spec:
+  # TAK exposes Spring actuator on the HTTPS connectors and does not ship
+  # micrometer-registry-prometheus. A ServiceMonitor would not scrape. See docs/configuration.md.
+  # Operator-managed CA bundle. The upstream chart has no value that mounts it.
+  caBundle:
+    configMap:
+      name: uds-trust-bundle
+      key: ca-bundle.pem
+  {{- if .Values.sso.enabled }}
+  sso:
+    - name: TAK Server
+      description: "Keycloak client for TAK native OIDC on the tenant gateway."
+      protocol: openid-connect
+      clientId: {{ .Values.sso.clientId | quote }}
+      enabled: true
+      standardFlowEnabled: true
+      publicClient: false
+      fullScopeAllowed: false
+      # TAK does not send PKCE. Do not set pkce.code.challenge.method.
+      attributes:
+        use.refresh.tokens: "true"
+      defaultClientScopes:
+        - openid
+        - profile
+        - email
+      # Coarse Keycloak gate. TAK still maps /TAK/... and the admin claim.
+      groups:
+        anyOf:
+          - {{ .Values.sso.adminGroup | quote }}
+      secretConfig:
+        name: {{ .Values.sso.secretName | quote }}
+        labels:
+          uds.dev/pod-reload: "true"
+        annotations:
+          uds.dev/pod-reload-selector: "uds.dev/oidc-reload=takserver"
+        template:
+          TAK_OIDC_CLIENT_SECRET: "clientField(secret)"
+      redirectUris:
+        # TAK OAuthApi sends this exact redirect_uri on /login/auth.
+        - {{ include "takserver.redirectUri" . | quote }}
+      # oidc-group-membership-mapper is on the UDS default mapper allowlist.
+      # SECURITY_HARDENING_ADDITIONAL_PROTOCOL_MAPPERS stays empty.
+      protocolMappers:
+        - name: group-membership
+          protocol: openid-connect
+          protocolMapper: oidc-group-membership-mapper
+          config:
+            claim.name: groups
+            full.path: "true"
+            access.token.claim: "true"
+            id.token.claim: "true"
+            userinfo.token.claim: "false"
+  {{- end }}
+  network:
+    # Ambient labels the namespace istio.io/dataplane-mode=ambient and does
+    # not inject istio-proxy. There is no waypoint. Passthrough TLS on 8443,
+    # 8446, and 8089 has to reach TAK, and Authservice is not enabled.
+    serviceMesh:
+      mode: ambient
+    expose:
+      {{- if .Values.sso.enabled }}
+      - description: tak-web-http
+        service: {{ .Values.api.web.service | quote }}
+        selector:
+          {{- toYaml .Values.api.selector | nindent 10 }}
+        gateway: tenant
+        host: {{ .Values.api.web.host | quote }}
+        port: {{ .Values.api.web.port }}
+      {{- end }}
+      - description: tak-api-https
+        service: {{ .Values.api.service | quote }}
+        selector:
+          {{- toYaml .Values.api.selector | nindent 10 }}
+        gateway: passthrough
+        host: {{ .Values.api.https.host | quote }}
+        port: {{ .Values.api.https.port }}
+      - description: tak-api-cert
+        service: {{ .Values.api.service | quote }}
+        selector:
+          {{- toYaml .Values.api.selector | nindent 10 }}
+        gateway: passthrough
+        host: {{ .Values.api.cert.host | quote }}
+        port: {{ .Values.api.cert.port }}
+      - description: tak-messaging-streaming
+        service: {{ .Values.messaging.service | quote }}
+        selector:
+          {{- toYaml .Values.messaging.selector | nindent 10 }}
+        gateway: passthrough
+        host: {{ .Values.messaging.streaming.host | quote }}
+        port: {{ .Values.messaging.streaming.port }}
+    allow:
+      - direction: Ingress
+        remoteGenerated: IntraNamespace
+        description: "Ingress from TAK processes, Postgres, NATS, and Ignite in this namespace"
+
+      - direction: Egress
+        remoteGenerated: IntraNamespace
+        description: "Egress to TAK processes, Postgres, NATS, and Ignite in this namespace"
+
+      # Ignite and the TAK clients discover the Ignite Service through the
+      # Kubernetes API. The chart gives those pods the takserver-ignite
+      # ServiceAccount. A rule limited to the Ignite pod label drops the
+      # clients' API calls during the TLS handshake.
+      {{- range .Values.kubeApi.selectors }}
+      - direction: Egress
+        selector:
+          {{- toYaml . | nindent 10 }}
+        remoteGenerated: KubeAPI
+        description: "Ignite Kubernetes discovery for {{ .app }}"
+      {{- end }}
+
+      # Ignite discovery (47500), communication (47100), and the thin client
+      # (10800) are bidirectional. A missing return path stalls until
+      # igniteConnectionTimeoutSeconds, which defaults to 300.
+      {{- $ignitePorts := list 47100 47500 10800 }}
+      {{- range $sel := .Values.kubeApi.selectors }}
+      {{- if ne $sel.app "takserver-ignite" }}
+      {{- range $port := $ignitePorts }}
+      - direction: Ingress
+        selector:
+          app: {{ $sel.app }}
+        remoteSelector:
+          app: takserver-ignite
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to {{ $sel.app }} from Ignite"
+      - direction: Egress
+        selector:
+          app: {{ $sel.app }}
+        remoteSelector:
+          app: takserver-ignite
+        port: {{ $port }}
+        description: "Egress {{ $port }} from {{ $sel.app }} to Ignite"
+      - direction: Ingress
+        selector:
+          app: takserver-ignite
+        remoteSelector:
+          app: {{ $sel.app }}
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to Ignite from {{ $sel.app }}"
+      - direction: Egress
+        selector:
+          app: takserver-ignite
+        remoteSelector:
+          app: {{ $sel.app }}
+        port: {{ $port }}
+        description: "Egress {{ $port }} from Ignite to {{ $sel.app }}"
+      {{- end }}
+      {{- end }}
+      {{- end }}
+
+      {{- if .Values.sso.enabled }}
+      # sso.<domain> is 127.0.0.1 in this dev DNS. The API pod's hostAlias
+      # sends it to the tenant gateway ClusterIP, which is this selector.
+      # Istio gateway chart 1.31 with release tenant-ingressgateway labels
+      # pods app=tenant-ingressgateway and istio=tenant-ingressgateway.
+      - direction: Egress
+        remoteNamespace: istio-tenant-gateway
+        remoteSelector:
+          app: tenant-ingressgateway
+          istio: tenant-ingressgateway
+        selector:
+          {{- toYaml .Values.api.selector | nindent 10 }}
+        port: 443
+        description: "Keycloak discovery, token, and JWKS"
+      {{- end }}
+
+      {{- with .Values.additionalNetworkAllow }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}

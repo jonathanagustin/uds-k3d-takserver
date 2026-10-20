@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TAKIgniteConfiguration xmlns="http://bbn.com/marti/xml/config"
+                        clusterEnabled="true"
+                        clusterKubernetes="true"
+                        igniteFailureDetectionTimeoutSeconds="30"
+                        cacheOffHeapInitialSizeBytes="67108864"
+                        cacheOffHeapMaxSizeBytes="134217728"/>

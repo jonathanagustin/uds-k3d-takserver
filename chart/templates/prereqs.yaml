@@ -1,0 +1,235 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: reg-cred
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {"auths":{}}
+---
+# ConfigMap cert-migration is not a Helm object. This Job creates it
+# through the Kubernetes API when it is missing, then Helm deletes the Job.
+# An operator who creates the ConfigMap first keeps those certificates.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: takserver-cert-init
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: takserver-cert-init
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: takserver-cert-init
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: takserver-cert-init
+subjects:
+  - kind: ServiceAccount
+    name: takserver-cert-init
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: takserver-cert-init
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: takserver-cert-init
+    spec:
+      serviceAccountName: takserver-cert-init
+      restartPolicy: Never
+      containers:
+        - name: certs
+          image: {{ .Values.certs.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/tak/certs/publish-cert-configmap.sh"]
+          env:
+            - name: CA_NAME
+              value: {{ .Values.certs.caName | quote }}
+            - name: STATE
+              value: {{ .Values.certs.state | quote }}
+            - name: CITY
+              value: {{ .Values.certs.city | quote }}
+            - name: ORGANIZATION
+              value: {{ .Values.certs.organization | quote }}
+            - name: ORGANIZATIONAL_UNIT
+              value: {{ .Values.certs.organizationalUnit | quote }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+{{- $core := .Files.Get "files/config/CoreConfig.xml" }}
+{{- if .Values.sso.enabled }}
+{{- $core = replace "<!-- TAK_OAUTH -->" (include "takserver.oauth" .) $core }}
+{{- else }}
+{{- $core = replace "<!-- TAK_OAUTH -->" "" $core }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-config
+data:
+  CoreConfig.xml: |
+{{ $core | indent 4 }}
+---
+# Pre-shipped. Pods mount this object. They do not create it. Concurrent
+# create-if-missing calls throw FileAlreadyExistsException.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tak-ignite-config
+data:
+  TAKIgniteConfig.xml: |
+{{ .Files.Get "files/config/TAKIgniteConfig.xml" | indent 4 }}
+---
+# The Ignite chart's ClusterRole lists pods and endpoints. This Role adds
+# Deployment reads so the wait init can see readyReplicas for the current
+# generation. A listening port is not that check.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: takserver-ignite-discovery
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: takserver-ignite-discovery
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: takserver-ignite-discovery
+subjects:
+  - kind: ServiceAccount
+    name: takserver-ignite
+    namespace: {{ .Release.Namespace }}
+---
+# floor(1/2)+1 for the single Ignite replica in values/common-values.yaml.
+# The size stays odd. An even count splits the Ignite baseline.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: takserver-ignite
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: takserver-ignite
+---
+# Messaging and the API bind plaintext 8080 and expose the actuator on it.
+# The Ignite chart also publishes 8080 for its REST connector. None of those
+# are gateway ports. This denies the port inside the mesh.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: takserver-deny-plaintext-8080
+spec:
+  # No selector: Istio's WorkloadSelector has matchLabels only. This denies
+  # plaintext 8080 for every pod in the namespace, including messaging, the
+  # API, and the Ignite REST port.
+  action: DENY
+  rules:
+    - to:
+        - operation:
+            ports: ["8080"]
+---
+# The upstream post-install Job hardcodes
+# proxy.istio.io/config: holdApplicationUntilProxyStarts.
+# UDS RestrictIstioSidecarOverrides denies that annotation, so the Job
+# never gets a pod and Helm waits out its timeout. The chart has no value
+# that removes the annotation. This chart is installed first, and the
+# Exemption has to exist before that hook is admitted.
+# The Job name is <upstream release>-db-setup. common/zarf.yaml pins that
+# release name to takserver.
+apiVersion: uds.dev/v1alpha1
+kind: Exemption
+metadata:
+  name: takserver-db-setup
+  namespace: uds-policy-exemptions
+spec:
+  exemptions:
+    - policies:
+        - RestrictIstioSidecarOverrides
+      matcher:
+        namespace: {{ .Release.Namespace | quote }}
+        name: "^takserver-db-setup-.*"
+        kind: pod
+      title: "TAK database setup hook"
+      description: "Upstream post-install Job sets proxy.istio.io/config so the schema container waits for an Istio sidecar. The annotation is not configurable. Ambient mode does not inject a sidecar, and the value only holds startup."
+{{- if .Values.sso.enabled }}
+---
+# The upstream API Service has no port 8447. This Service selects the same
+# pods. The port name is http so the tenant gateway speaks plaintext to the
+# connector, which sets tls=false.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.api.web.service }}
+spec:
+  selector:
+    {{- toYaml .Values.api.selector | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.api.web.port }}
+      targetPort: {{ .Values.api.web.port }}
+      protocol: TCP
+---
+# Scripts for the init containers added after the upstream chart. The stock
+# Deployments have no initContainer value. onDeploy reads patch-oidc-pods.py
+# from this ConfigMap and strategic-merges those containers.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: takserver-oidc-render
+data:
+  render-oidc.sh: |
+{{ .Files.Get "files/scripts/render-oidc.sh" | indent 4 }}
+  import-trust.sh: |
+{{ .Files.Get "files/scripts/import-trust.sh" | indent 4 }}
+  wait-deps.sh: |
+{{ .Files.Get "files/scripts/wait-deps.sh" | indent 4 }}
+  patch-oidc-pods.py: |
+{{ .Files.Get "files/scripts/patch-oidc-pods.py" | indent 4 }}
+{{- end }}

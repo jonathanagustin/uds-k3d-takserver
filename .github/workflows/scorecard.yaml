@@ -10,15 +10,35 @@ on:
   push:
     branches:
       - main
-      - takserver-scaffold
+  workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-  id-token: write
-  actions: read
+permissions: read-all
 
 jobs:
   run:
+    # The called workflow declares `permissions: read-all`, so the caller has
+    # to grant read on every scope or the run fails at startup.
+    permissions:
+      actions: read
+      artifact-metadata: read
+      attestations: read
+      checks: read
+      code-quality: read
+      contents: read
+      deployments: read
+      discussions: read
+      drives: read
+      issues: read
+      models: read
+      packages: read
+      pages: read
+      pull-requests: read
+      repository-projects: read
+      statuses: read
+      vulnerability-alerts: read
+      # Upload results to code scanning.
+      security-events: write
+      # Publish results for the Scorecard badge.
+      id-token: write
     uses: defenseunicorns/uds-common/.github/workflows/callable-scorecard.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
     secrets: inherit

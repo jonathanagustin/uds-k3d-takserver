@@ -178,6 +178,9 @@ jobs:
       - name: Test
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
+        # A normal run takes about 25 minutes. Without this a hang runs into the
+        # 180 minute job limit, which also cancels the log and dump steps below.
+        timeout-minutes: 90
 
       - name: Debug Output
         if: always()

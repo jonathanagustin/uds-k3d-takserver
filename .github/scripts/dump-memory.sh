@@ -93,12 +93,35 @@ k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
   'java -XshowSettings:security:tls -version 2>&1 | grep -iE "protocols|TLSv1|jdk.tls" | head -20; echo ---; grep -rhE "^(jdk\.tls|crypto\.policy|security\.useSystemPropertiesFile)" /usr/lib/jvm/java-17/conf/security/java.security /etc/crypto-policies/back-ends/java.config 2>/dev/null | head -20' 2>&1 | tail -40 || true
 echo "::endgroup::"
 
-echo "::group::tenant gateway TLS probe from the config pod"
-gw="$(k get svc -n istio-tenant-gateway tenant-ingressgateway -o jsonpath='{.spec.clusterIP}' 2>/dev/null)"
-echo "tenant gateway ClusterIP: ${gw}"
-for v in tls1_2 tls1_3; do
-  echo "--- openssl -${v}"
-  k exec deploy/takserver-config -n takserver -c takserver-config -- sh -c \
-    "echo | timeout 15 openssl s_client -connect ${gw}:443 -servername sso.uds.dev -${v} 2>&1 | grep -E 'Protocol|Cipher|alert|handshake failure|Verification' | head -8" 2>&1 | tail -10 || true
-done
+echo "::group::takserver-api JVM TLS probe to Keycloak (same host, TLS stack and trust store)"
+k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c 'cat > /tmp/Probe.java <<"JAVA"
+import java.net.URL;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+public class Probe {
+  public static void main(String[] args) throws Exception {
+    for (String protocol : new String[] {"TLSv1.3", "TLSv1.2", "TLS"}) {
+      try {
+        SSLContext context = SSLContext.getInstance(protocol);
+        context.init(null, null, null);
+        try (SSLSocket socket = (SSLSocket) context.getSocketFactory().createSocket("sso.uds.dev", 443)) {
+          socket.startHandshake();
+          System.out.println("context " + protocol + " ok: " + socket.getSession().getProtocol()
+              + " " + socket.getSession().getCipherSuite());
+        }
+      } catch (Exception e) {
+        System.out.println("context " + protocol + " FAILED: " + e);
+      }
+    }
+    try {
+      HttpsURLConnection c = (HttpsURLConnection) new URL("https://sso.uds.dev/realms/uds/.well-known/openid-configuration").openConnection();
+      System.out.println("default HttpsURLConnection: HTTP " + c.getResponseCode());
+    } catch (Exception e) {
+      System.out.println("default HttpsURLConnection FAILED: " + e);
+    }
+  }
+}
+JAVA
+java /tmp/Probe.java 2>&1 | tail -12' 2>&1 | tail -20 || true
 echo "::endgroup::"

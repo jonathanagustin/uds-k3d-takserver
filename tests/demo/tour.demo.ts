@@ -31,7 +31,7 @@ const pointerOverlay = () => {
     const style = document.createElement("style");
     style.textContent = `
       #demo-cursor { position: fixed; z-index: 2147483647; pointer-events: none;
-        width: 22px; height: 22px; margin: -3px 0 0 -3px; left: var(--x, 640px); top: var(--y, 420px); }
+        width: 30px; height: 30px; margin: -4px 0 0 -4px; left: var(--x, 640px); top: var(--y, 420px); }
       #demo-cursor svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
       .demo-ripple { position: fixed; z-index: 2147483646; pointer-events: none;
         width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
@@ -41,7 +41,7 @@ const pointerOverlay = () => {
     const cursor = document.createElement("div");
     cursor.id = "demo-cursor";
     cursor.innerHTML =
-      '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 13.8 L10.6 20 L13.2 18.8 L10.2 12.6 L16.4 12.4 Z" fill="#ffffff" stroke="#11111b" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+      '<svg width="30" height="30" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 13.8 L10.6 20 L13.2 18.8 L10.2 12.6 L16.4 12.4 Z" fill="#ffffff" stroke="#11111b" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     document.body.appendChild(cursor);
     const saved = sessionStorage.getItem("demo-cursor");
     if (saved) {
@@ -104,6 +104,10 @@ async function caption(page: Page, text: string) {
   }, text);
 }
 
+async function clearCaption(page: Page) {
+  await page.evaluate(() => document.getElementById("demo-caption")?.remove());
+}
+
 async function glideTo(page: Page, target: Locator) {
   const box = await target.boundingBox();
   if (!box) {
@@ -160,7 +164,8 @@ async function walkthrough(page: Page) {
   await expect(userField).toBeVisible();
   await page.mouse.move(mouse.x, mouse.y);
   await caption(page, "TAK redirects to Keycloak (UDS Core SSO)");
-  await page.waitForTimeout(1_500);
+  await page.waitForTimeout(2_000);
+  await clearCaption(page);
 
   await clickLikeAPerson(page, userField);
   await userField.pressSequentially(username, { delay: 95 });

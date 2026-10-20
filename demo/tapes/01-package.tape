@@ -26,7 +26,7 @@ Sleep 700ms
 Enter
 Sleep 400ms
 # caption: Zarf packages deployed by the UDS bundle
-Type@90ms "uds zarf package list"
+Type@90ms "uds zarf package list -l warn"
 Sleep 450ms
 Enter
 Sleep 4s

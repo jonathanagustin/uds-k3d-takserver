@@ -18,7 +18,7 @@ Enter
 Sleep 400ms
 # caption: Package CR reconciled by the UDS Operator
 # zoom: 0,0,1.6
-Type@85ms "kubectl get packages.uds.dev -A"
+Type@85ms "kubectl get packages -A -o custom-columns=NAME:.metadata.name,PHASE:.status.phase"
 Sleep 350ms
 Enter
 Sleep 4500ms

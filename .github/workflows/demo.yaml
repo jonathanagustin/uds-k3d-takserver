@@ -9,6 +9,11 @@ name: Demo Video
 
 on:
   workflow_dispatch:
+    inputs:
+      app_ref:
+        description: Branch or SHA to deploy. The demo scripts always come from the workflow's own commit.
+        required: false
+        default: ""
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
@@ -35,9 +40,23 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      APP_REF: ${{ inputs.app_ref || 'fix/ignite-oidc-tls' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Lets the demo record a branch that is not on main yet. Everything
+      # outside the demo files comes from APP_REF.
+      - name: Use the requested app ref
+        if: env.APP_REF != ''
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${APP_REF}"
+          git checkout FETCH_HEAD -- . \
+            ':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts' \
+            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml'
+          echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
 
       - name: Install Docker Compose
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0

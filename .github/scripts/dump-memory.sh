@@ -125,3 +125,17 @@ public class Probe {
 JAVA
 java /tmp/Probe.java 2>&1 | tail -12' 2>&1 | tail -20 || true
 echo "::endgroup::"
+
+# TAK's own OIDC discovery call offers only TLS 1.2, although the JVM probe above
+# reaches Keycloak at TLS 1.3. Show the effective TLS settings it reads and the
+# stack of the failing call, which names the TAK class that builds that client.
+echo "::group::takserver-api effective CoreConfig TLS settings"
+k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
+  'grep -n "tls context\|<tls\|openIdDiscovery\|context=" /conf/CoreConfig.xml 2>&1 | head -20' 2>&1 | tail -25 || true
+echo "::endgroup::"
+
+echo "::group::takserver-api stack of the protocol_version failure"
+k logs deploy/takserver-api -n takserver -c takserver-api --tail=4000 2>/dev/null |
+  grep -B2 -A45 'protocol_version' | grep -vE 'ExceptionTranslationFilter|FilterChainProxy|OncePerRequestFilter|org.apache.(catalina|coyote|tomcat)|java.base/(java.lang|sun.nio)' |
+  head -70 || true
+echo "::endgroup::"

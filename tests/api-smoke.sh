@@ -158,8 +158,9 @@ request "${work}/mission-del" -X DELETE "${mtls[@]}" "${api8443}Marti/api/missio
 expect_ok "8443 DELETE mission ${mission}" "${REPLY_CODE}" "" "${work}/mission-del"
 
 request "${work}/mission-gone" "${mtls[@]}" "${api8443}Marti/api/missions/${mission}"
-if [ "${REPLY_CODE}" = "404" ]; then
-  pass "8443 GET mission ${mission} after delete is 404"
+# TAK answers 410 Gone for a mission that was deleted. 404 means never created.
+if [ "${REPLY_CODE}" = "404" ] || [ "${REPLY_CODE}" = "410" ]; then
+  pass "8443 GET mission ${mission} after delete is ${REPLY_CODE}"
 else
   fail "8443 GET mission ${mission} after delete is HTTP ${REPLY_CODE}"
 fi
@@ -444,12 +445,17 @@ PY
   fi
 fi
 
-bare="$(echo | openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
+# TLS 1.3 finishes the client side of the handshake before the server checks
+# the client certificate, so CONNECTION ESTABLISHED does not mean it was
+# accepted. Keep stdin open and require the server's alert.
+bare="$({ printf 'GET / HTTP/1.0\r\n\r\n'; sleep 3; } |
+  timeout 20 openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
   -servername takserver-stream.uds.dev 2>&1 || true)"
-if grep -q "CONNECTION ESTABLISHED" <<< "${bare}"; then
-  fail "8089 accepted TLS with no client certificate"
-else
+if grep -Eiq 'certificate required|alert number 11[0-9]|bad certificate|handshake failure|unknown ca' <<< "${bare}"; then
   pass "8089 rejected TLS with no client certificate"
+else
+  fail "8089 did not reject TLS with no client certificate"
+  printf '%s\n' "${bare}" | head -n 20 >&2 || true
 fi
 
 finish

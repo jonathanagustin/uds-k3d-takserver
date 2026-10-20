@@ -86,4 +86,4 @@ ignite:
       # The API lost its Ignite client connection (IgniteClientDisconnected-
       # Exception) when the server restarted at the 500m limit.
       cpu: "1"
-      memory: 1280Mi
+      memory: 1536Mi

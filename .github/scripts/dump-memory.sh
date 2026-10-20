@@ -85,3 +85,20 @@ echo "::group::istio gateway minimum TLS versions"
 k get gateways.networking.istio.io -A -o yaml 2>/dev/null |
   grep -nE '^    name:|minProtocolVersion|maxProtocolVersion|mode:' | head -40 || true
 echo "::endgroup::"
+
+# protocol_version from the gateway: which TLS versions the API's JVM offers,
+# and which the tenant gateway accepts from a client in the same namespace.
+echo "::group::takserver-api JVM TLS protocols and security properties"
+k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
+  'java -XshowSettings:security:tls -version 2>&1 | grep -iE "protocols|TLSv1|jdk.tls" | head -20; echo ---; grep -rhE "^(jdk\.tls|crypto\.policy|security\.useSystemPropertiesFile)" /usr/lib/jvm/java-17/conf/security/java.security /etc/crypto-policies/back-ends/java.config 2>/dev/null | head -20' 2>&1 | tail -40 || true
+echo "::endgroup::"
+
+echo "::group::tenant gateway TLS probe from the config pod"
+gw="$(k get svc -n istio-tenant-gateway tenant-ingressgateway -o jsonpath='{.spec.clusterIP}' 2>/dev/null)"
+echo "tenant gateway ClusterIP: ${gw}"
+for v in tls1_2 tls1_3; do
+  echo "--- openssl -${v}"
+  k exec deploy/takserver-config -n takserver -c takserver-config -- sh -c \
+    "echo | timeout 15 openssl s_client -connect ${gw}:443 -servername sso.uds.dev -${v} 2>&1 | grep -E 'Protocol|Cipher|alert|handshake failure|Verification' | head -8" 2>&1 | tail -10 || true
+done
+echo "::endgroup::"

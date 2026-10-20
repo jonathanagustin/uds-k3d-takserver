@@ -129,13 +129,15 @@ ignite:
     OPTION_LIBS: "ignite-kubernetes,ignite-json,ignite-slf4j,ignite-urideploy,ignite-web"
     JVM_OPTS: "-Xms256m -Xmx512m -XX:MaxMetaspaceSize=128m -XX:+UseContainerSupport -Djava.net.preferIPv4Stack=true"
   # Default data region max is a fraction of host RAM. Cap it so the region
-  # cannot grow past the container limit. 128 MiB matches the TAK off-heap cap.
+  # cannot grow past the container limit. 128 MiB was too small: the server
+  # logged IgniteOutOfMemoryException in region "default" and halted during the
+  # API smoke test. 384 MiB plus the 512m heap and 128m metaspace fits 1536Mi.
   dataStorage:
     config: |
       <property name="defaultDataRegionConfiguration">
         <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
           <property name="initialSize" value="#{64 * 1024 * 1024}"/>
-          <property name="maxSize" value="#{128 * 1024 * 1024}"/>
+          <property name="maxSize" value="#{384 * 1024 * 1024}"/>
         </bean>
       </property>
   resources:
@@ -144,7 +146,7 @@ ignite:
       memory: 768Mi
     limits:
       cpu: "1"
-      memory: 1280Mi
+      memory: 1536Mi
   extraVolumes:
     - name: ignite-work
       emptyDir: {}

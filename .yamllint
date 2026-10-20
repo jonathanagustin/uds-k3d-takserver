@@ -6,6 +6,7 @@ ignore:
   - "**/chart/templates/**"
   - "build/**"
   - "**/node_modules/**"
+  - "pepr/dist/**"
   - "**/tests/.playwright/**"
 
 rules:

@@ -1,0 +1,31 @@
+{
+  "name": "takserver-oidc",
+  "version": "0.1.0",
+  "description": "Admission-time render of the OIDC client secret into the TAK Server CoreConfig",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pepr": {
+    "name": "takserver-oidc",
+    "uuid": "c72fcf944a4f43bbb386d22371aa640f",
+    "onError": "reject",
+    "webhookTimeout": 10,
+    "alwaysIgnore": {
+      "namespaces": [],
+      "labels": []
+    },
+    "includedFiles": [],
+    "peprVersion": "2.0.3",
+    "appVersion": "0.1.0",
+    "rbacMode": "scoped"
+  },
+  "scripts": {
+    "build": "pepr build && node scripts/finalize-chart.mjs",
+    "test": "node --test capabilities/*.test.ts"
+  },
+  "dependencies": {
+    "pepr": "2.0.3"
+  }
+}

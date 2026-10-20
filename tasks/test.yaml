@@ -16,6 +16,7 @@ tasks:
       - task: smoke
       - task: api-smoke
       - task: ui
+      - task: flows
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -265,6 +266,14 @@ tasks:
           else
             echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
           fi
+
+  - name: flows
+    description: List pod-to-pod TCP flows in the namespace and check each against the Package allow list
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: python3 ./tests/flows.py
 
   - name: logs
     description: Confirm TAK writes stdout logs for UDS Core logging

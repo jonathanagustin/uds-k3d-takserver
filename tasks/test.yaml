@@ -122,7 +122,7 @@ tasks:
           grep -q -- '-Xmx512m' <<< "${jvm}"
           ignite_limit="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
           ignite_request="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
-          [ "${ignite_limit}" = "1280Mi" ]
+          [ "${ignite_limit}" = "1536Mi" ]
           [ "${ignite_request}" = "512Mi" ]
           plugin_limit="$(k get deploy takserver-plugins -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
           [ "${plugin_limit}" = "384Mi" ]

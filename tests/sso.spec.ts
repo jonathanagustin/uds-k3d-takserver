@@ -116,7 +116,9 @@ test("Keycloak user reaches Marti and the mapped TAK group", async ({ page }) =>
 test("8443 and 8089 still require a client certificate", async () => {
   const certUrl = process.env.TAK_CERT_URL || "https://takserver-api.uds.dev/";
   const streamUrl = process.env.TAK_STREAM_URL || "https://takserver-stream.uds.dev/";
-  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  // playwright.config.ts attaches the admin certificate to these origins for
+  // every context. An empty list is what makes this request anonymous.
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true, clientCertificates: [] });
   try {
     await expect(ctx.get(certUrl, { timeout: 20_000 })).rejects.toThrow();
     await expect(ctx.get(streamUrl, { timeout: 20_000 })).rejects.toThrow();

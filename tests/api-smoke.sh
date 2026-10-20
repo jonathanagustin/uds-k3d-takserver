@@ -365,8 +365,10 @@ sys.stdout.write(head + "." + body + "." + sig[:-1] + last)
 PY
 )"
   request "${work}/bad" -H "Authorization: Bearer ${bad}" "${tenant}Marti/api/version"
-  if [ "${REPLY_CODE}" = "401" ]; then
-    pass "8447 token with a bad signature is 401"
+  # TAK treats a token it cannot verify like no token and redirects to login
+  # (302); 401/403 are also a rejection. Only a 2xx would be a failure.
+  if [ "${REPLY_CODE}" = "401" ] || [ "${REPLY_CODE}" = "403" ] || [ "${REPLY_CODE}" = "302" ]; then
+    pass "8447 token with a bad signature rejected (${REPLY_CODE})"
   else
     fail "8447 token with a bad signature is HTTP ${REPLY_CODE}"
     show_err
@@ -381,9 +383,16 @@ expect_rejected "8447 GET /Marti/api/groups/all without a token" "${REPLY_CODE}"
 request "${work}/oidc" "${api8446}login/.well-known/openid-configuration"
 if [ "${REPLY_CODE}" = "200" ] && grep -q "authorization_endpoint" "${work}/oidc" && grep -q "token_endpoint" "${work}/oidc" && grep -Eq "sso.uds.dev|realms/uds" "${work}/oidc"; then
   pass "8446 GET /login/.well-known/openid-configuration"
-  jwks_uri="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("jwks_uri",""))' "${work}/oidc")"
+  # TAK relays only part of the Keycloak discovery document, so fall back to
+  # the standard certs path under the issuer when jwks_uri is not included.
+  jwks_uri="$(python3 -c 'import json,sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+u = d.get("jwks_uri", "")
+if not u and d.get("issuer"):
+    u = d["issuer"].rstrip("/") + "/protocol/openid-connect/certs"
+print(u)' "${work}/oidc")"
   if [ -z "${jwks_uri}" ]; then
-    fail "8446 openid document has no jwks_uri"
+    fail "8446 openid document has no jwks_uri or issuer; keys: $(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1], encoding="utf-8"))))' "${work}/oidc")"
   else
     request "${work}/jwks" "${jwks_uri}"
     if [ "${REPLY_CODE}" = "200" ] && python3 -c 'import json,sys; keys=json.load(open(sys.argv[1], encoding="utf-8")).get("keys") or []; raise SystemExit(0 if keys else 1)' "${work}/jwks"; then
@@ -417,9 +426,12 @@ if [ "${#token}" -ge 20 ]; then
 import json, sys
 src, dest = sys.argv[1:]
 body = json.load(open(src, encoding="utf-8"))
-open(dest, "w", encoding="utf-8").write(body["signedCert"])
-if "BEGIN CERTIFICATE" not in body["signedCert"]:
-    raise SystemExit("signedCert is not a certificate")
+cert = body["signedCert"].strip()
+# TAK returns the certificate as bare base64 DER; wrap it as PEM.
+if "BEGIN CERTIFICATE" not in cert:
+    cert = "".join(cert.split())
+    cert = "-----BEGIN CERTIFICATE-----\n" + "\n".join(cert[i:i + 64] for i in range(0, len(cert), 64)) + "\n-----END CERTIFICATE-----"
+open(dest, "w", encoding="utf-8").write(cert + "\n")
 PY
     subject="$(openssl x509 -in "${work}/client.pem" -noout -subject)"
     if grep -q "CN[[:space:]]*=[[:space:]]*${user_name}" <<< "${subject}"; then

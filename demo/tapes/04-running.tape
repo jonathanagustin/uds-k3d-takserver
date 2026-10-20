@@ -17,7 +17,8 @@ Show
 Type@70ms "kubectl get pods -n takserver"
 Sleep 500ms
 Enter
-Sleep 5s
+Sleep 3800ms
+# typo: cluster
 Type@85ms "# Ignite cluster membership, from the logs"
 Sleep 350ms
 Enter
@@ -26,7 +27,7 @@ Sleep 400ms
 Type@65ms "kubectl logs sts/takserver-ignite -n takserver | grep -o 'Topology snapshot.*' | tail -1"
 Sleep 700ms
 Enter
-Sleep 3s
+Sleep 2500ms
 Type@90ms "# Anonymous request: TAK hands off to Keycloak"
 Sleep 450ms
 Enter
@@ -35,4 +36,4 @@ Sleep 400ms
 Type@75ms "curl -sk -o /dev/null -w '%{http_code} -> %{redirect_url}' https://takserver.uds.dev/; echo"
 Sleep 600ms
 Enter
-Sleep 3500ms
+Sleep 2800ms

@@ -13,7 +13,12 @@ if command -v k3d >/dev/null 2>&1; then
   k3d kubeconfig merge uds --kubeconfig-merge-default >/dev/null
 fi
 
-for tape in demo/tapes/*.tape; do
+# demo/ragged.py turns each hand-written tape into uneven, chunked typing.
+# demo/assemble.sh reads the generated tapes to time captions and zooms.
+mkdir -p demo/out/tapes
+for source in demo/tapes/*.tape; do
+  tape="demo/out/tapes/$(basename "${source}")"
+  python3 demo/ragged.py "${source}" "${tape}"
   echo "Recording ${tape}"
   vhs "${tape}"
 done

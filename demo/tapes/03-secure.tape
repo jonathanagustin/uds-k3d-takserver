@@ -20,7 +20,7 @@ Sleep 400ms
 Type@85ms "kubectl get ns takserver -L istio.io/dataplane-mode"
 Sleep 350ms
 Enter
-Sleep 2500ms
+Sleep 2000ms
 Type@65ms "# Policies generated from the Package CR"
 Sleep 700ms
 Enter
@@ -29,7 +29,7 @@ Sleep 400ms
 Type@90ms "kubectl get netpol -n takserver -o name | head -6"
 Sleep 450ms
 Enter
-Sleep 4s
+Sleep 3000ms
 Type@75ms "# Keycloak client secret, written at deploy time"
 Sleep 600ms
 Enter
@@ -38,9 +38,9 @@ Sleep 400ms
 Type@80ms "kubectl get secret takserver-sso -n takserver"
 Sleep 400ms
 Enter
-Sleep 3500ms
+Sleep 2800ms
 # caption: CI workflows include CodeQL, dependency review, scan, cosign, Scorecard
 Type@70ms "ls .github/workflows"
 Sleep 500ms
 Enter
-Sleep 3s
+Sleep 2500ms

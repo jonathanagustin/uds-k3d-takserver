@@ -7,7 +7,8 @@
 // playwright.config.ts so `playwright test` never picks it up.
 import { defineConfig, devices } from "@playwright/test";
 
-const size = { width: 1280, height: 720 };
+// 630 px tall: demo/assemble.sh adds a 90 px caption band below.
+const size = { width: 1280, height: 630 };
 
 export default defineConfig({
   testDir: "./demo",

@@ -3,6 +3,7 @@
 
 # Chapter 1: the upstream app, packaged for UDS.
 # '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
+# '# typo:' lines are read by demo/ragged.py.
 Output "demo/out/01-package.mp4"
 Source "demo/settings.tape"
 
@@ -20,7 +21,8 @@ Sleep 400ms
 Type@85ms "yq '.components[0].charts[] | [.name, .url // .localPath, .version] | @tsv' common/zarf.yaml"
 Sleep 350ms
 Enter
-Sleep 3500ms
+Sleep 2800ms
+# typo: bundle
 Type@65ms "# Deployed as one UDS bundle with UDS Core"
 Sleep 700ms
 Enter
@@ -29,4 +31,4 @@ Sleep 400ms
 Type@90ms "uds zarf package list -l warn"
 Sleep 450ms
 Enter
-Sleep 4s
+Sleep 3000ms

@@ -20,8 +20,8 @@ Sleep 400ms
 Type@85ms "find .github/test-infra -name main.tf | sort"
 Sleep 350ms
 Enter
-Sleep 2500ms
+Sleep 2000ms
 Type@65ms "sed -n '4,6p' .github/test-infra/aws/rke2/main.tf"
 Sleep 700ms
 Enter
-Sleep 3500ms
+Sleep 2800ms

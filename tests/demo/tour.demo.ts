@@ -5,7 +5,8 @@
 
 // Web UI walkthrough for the demo video: Keycloak SSO through UDS Core,
 // then the TAK admin pages. The waits and mouse paths are for the viewer.
-// Writes .playwright/demo/events.json so demo/assemble.sh can time the zoom.
+// Writes .playwright/demo/events.json so demo/assemble.sh can time the zoom
+// and the captions.
 import { mkdirSync, writeFileSync } from "node:fs";
 
 import { expect, type Locator, type Page, test } from "@playwright/test";
@@ -79,34 +80,34 @@ const pointerOverlay = () => {
   }
 };
 
-// Lower-third caption in the same style as the terminal captions.
-async function caption(page: Page, text: string) {
-  await page.evaluate((label) => {
-    const id = "demo-caption";
-    document.getElementById(id)?.remove();
-    const el = document.createElement("div");
-    el.id = id;
-    el.textContent = label;
-    Object.assign(el.style, {
-      position: "fixed",
-      left: "50%",
-      bottom: "56px",
-      transform: "translateX(-50%)",
-      zIndex: "2147483645",
-      padding: "12px 18px",
-      borderRadius: "6px",
-      background: "rgba(17, 17, 27, 0.88)",
-      color: "#cdd6f4",
-      font: "700 22px/1.3 'DejaVu Sans', system-ui, sans-serif",
-      whiteSpace: "nowrap",
-      pointerEvents: "none",
-    });
-    document.body.appendChild(el);
-  }, text);
+// Captions are not drawn in the page. demo/assemble.sh draws them in a band
+// below the recorded area, so they never cover the UI.
+function caption(text: string) {
+  mark("caption", text);
 }
 
-async function clearCaption(page: Page) {
-  await page.evaluate(() => document.getElementById("demo-caption")?.remove());
+// Seeded, so every recording types with the same rhythm.
+let seed = 0x7a4b;
+function random() {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function between(low: number, high: number) {
+  return Math.round(low + random() * (high - low));
+}
+
+// Uneven typing: 50-220 ms per key, with a short pause now and then.
+async function typeLikeAPerson(page: Page, text: string) {
+  for (const key of text) {
+    await page.keyboard.type(key);
+    await page.waitForTimeout(between(50, 220));
+    if (random() < 0.2) {
+      await page.waitForTimeout(between(150, 450));
+    }
+  }
 }
 
 async function glideTo(page: Page, target: Locator) {
@@ -129,14 +130,14 @@ async function clickLikeAPerson(page: Page, target: Locator) {
   await page.mouse.up();
 }
 
-async function visit(page: Page, path: string, label: string, hold = 3_500) {
+async function visit(page: Page, path: string, label: string, hold = 3_000) {
   const response = await page.goto(new URL(path, takUrl).toString(), {
     waitUntil: "load",
     timeout: 60_000,
   });
   expect(response?.status() ?? 0, `${path} status`).toBeLessThan(400);
   await page.mouse.move(mouse.x, mouse.y);
-  await caption(page, label);
+  caption(label);
   await page.waitForTimeout(hold);
 }
 
@@ -164,16 +165,16 @@ async function walkthrough(page: Page) {
   const userField = page.getByLabel("Username or email");
   await expect(userField).toBeVisible();
   await page.mouse.move(mouse.x, mouse.y);
-  await caption(page, "TAK redirects to Keycloak (UDS Core SSO)");
+  caption("TAK redirects to Keycloak (UDS Core SSO)");
   await page.waitForTimeout(2_000);
-  await clearCaption(page);
+  caption("Sign in with a demo Keycloak account");
 
   await clickLikeAPerson(page, userField);
-  await userField.pressSequentially(username, { delay: 95 });
+  await typeLikeAPerson(page, username);
   await page.waitForTimeout(400);
   const passwordField = page.getByLabel("Password");
   await clickLikeAPerson(page, passwordField);
-  await passwordField.pressSequentially(password, { delay: 80 });
+  await typeLikeAPerson(page, password);
   await page.waitForTimeout(500);
   await clickLikeAPerson(page, page.getByRole("button", { name: "Sign In" }));
 
@@ -183,7 +184,7 @@ async function walkthrough(page: Page) {
   await page.waitForLoadState("load");
   await page.waitForTimeout(1_500);
   await page.mouse.move(mouse.x, mouse.y);
-  await caption(page, "Signed in to TAK with a Keycloak account: server monitor");
+  caption("Signed in to TAK with a Keycloak account: server monitor");
   mark("zoom", "0.5,0.35,1.3");
   await page.waitForTimeout(4_500);
 

@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Shared look for every chapter. Sourced by demo/tapes/*.tape.
+# 630 px tall: demo/assemble.sh adds a 90 px caption band below.
 Set Shell "bash"
 Set FontFamily "JetBrains Mono"
-Set FontSize 18
+Set FontSize 16
 Set LineHeight 1.25
 Set Width 1280
-Set Height 720
+Set Height 630
 Set Padding 24
 Set Theme "Catppuccin Mocha"
 Set WindowBar Colorful

@@ -139,3 +139,28 @@ k logs deploy/takserver-api -n takserver -c takserver-api --tail=4000 2>/dev/nul
   grep -B2 -A45 'protocol_version' | grep -vE 'ExceptionTranslationFilter|FilterChainProxy|OncePerRequestFilter|org.apache.(catalina|coyote|tomcat)|java.base/(java.lang|sun.nio)' |
   head -70 || true
 echo "::endgroup::"
+
+# unauthorized_client from Keycloak's token endpoint means TAK's rendered client
+# secret and Keycloak's disagree. Compare without printing the secret: when the
+# secret was last written against when each pod rendered it, whether the pod's
+# CoreConfig still holds the cluster's value, and how Keycloak answers those
+# credentials (invalid_grant for a bogus code means they are accepted).
+echo "::group::takserver OIDC client secret versus Keycloak"
+k get secret takserver-sso -n takserver \
+  -o jsonpath='secret created={.metadata.creationTimestamp} resourceVersion={.metadata.resourceVersion}{"\n"}' 2>&1 || true
+k get pods -n takserver -o custom-columns=NAME:.metadata.name,STARTED:.status.startTime --no-headers 2>&1 || true
+sso_secret="$(k get secret takserver-sso -n takserver -o jsonpath='{.data.TAK_OIDC_CLIENT_SECRET}' 2>/dev/null | base64 -d || true)"
+echo "cluster secret length: ${#sso_secret}"
+for d in api config messaging; do
+  if k exec "deploy/takserver-${d}" -n takserver -c "takserver-${d}" -- cat /conf/CoreConfig.xml 2>/dev/null | grep -qF -- "${sso_secret}"; then
+    echo "takserver-${d}: CoreConfig holds the cluster secret"
+  else
+    echo "takserver-${d}: CoreConfig does NOT hold the cluster secret"
+  fi
+done
+curl -ksS --max-time 20 -X POST https://sso.uds.dev/realms/uds/protocol/openid-connect/token \
+  --data-urlencode grant_type=authorization_code --data-urlencode code=bogus \
+  --data-urlencode client_id=uds-takserver --data-urlencode "client_secret=${sso_secret}" \
+  --data-urlencode redirect_uri=https://takserver.uds.dev/login/redirect 2>&1 | head -c 400 || true
+echo
+echo "::endgroup::"

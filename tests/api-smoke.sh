@@ -383,16 +383,17 @@ expect_rejected "8447 GET /Marti/api/groups/all without a token" "${REPLY_CODE}"
 request "${work}/oidc" "${api8446}login/.well-known/openid-configuration"
 if [ "${REPLY_CODE}" = "200" ] && grep -q "authorization_endpoint" "${work}/oidc" && grep -q "token_endpoint" "${work}/oidc" && grep -Eq "sso.uds.dev|realms/uds" "${work}/oidc"; then
   pass "8446 GET /login/.well-known/openid-configuration"
-  # TAK relays only part of the Keycloak discovery document, so fall back to
-  # the standard certs path under the issuer when jwks_uri is not included.
+  # TAK relays only authorization_endpoint and token_endpoint, so derive the
+  # standard certs path from token_endpoint when jwks_uri is not included.
   jwks_uri="$(python3 -c 'import json,sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 u = d.get("jwks_uri", "")
-if not u and d.get("issuer"):
-    u = d["issuer"].rstrip("/") + "/protocol/openid-connect/certs"
+t = d.get("token_endpoint", "")
+if not u and t.endswith("/token"):
+    u = t[: -len("/token")] + "/certs"
 print(u)' "${work}/oidc")"
   if [ -z "${jwks_uri}" ]; then
-    fail "8446 openid document has no jwks_uri or issuer; keys: $(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1], encoding="utf-8"))))' "${work}/oidc")"
+    fail "8446 openid document has no jwks_uri or token_endpoint; keys: $(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1], encoding="utf-8"))))' "${work}/oidc")"
   else
     request "${work}/jwks" "${jwks_uri}"
     if [ "${REPLY_CODE}" = "200" ] && python3 -c 'import json,sys; keys=json.load(open(sys.argv[1], encoding="utf-8")).get("keys") or []; raise SystemExit(0 if keys else 1)' "${work}/jwks"; then

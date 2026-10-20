@@ -103,6 +103,7 @@ Design decisions are recorded in [`adr/`](adr/):
 4. [TAK OAuth uses one OpenID discovery entry on port 8447](adr/0004-tak-oauth-uses-openid-discovery.md)
 5. [Stay inside what slim UDS Core and the stock chart provide](adr/0005-slim-core-boundaries.md)
 6. [Re-encrypt tenant gateway traffic to the TAK web UI](adr/0006-re-encrypt-gateway-traffic-to-tak.md)
+7. [Per-workload network rules inside the namespace](adr/0007-per-workload-network-rules.md)
 
 ## Documentation
 

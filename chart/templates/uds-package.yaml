@@ -97,13 +97,52 @@ spec:
         host: {{ .Values.messaging.streaming.host | quote }}
         port: {{ .Values.messaging.streaming.port }}
     allow:
-      - direction: Ingress
-        remoteGenerated: IntraNamespace
-        description: "Ingress from TAK processes, Postgres, NATS, and Ignite in this namespace"
-
+      # Explicit pod-to-pod flows from values intraNamespace.flows. There is
+      # no namespace-wide allow rule.
+      {{- range $flow := .Values.intraNamespace.flows }}
+      {{- range $client := $flow.clients }}
+      {{- $clientName := (values $client | first) }}
+      {{- range $port := $flow.ports }}
       - direction: Egress
-        remoteGenerated: IntraNamespace
-        description: "Egress to TAK processes, Postgres, NATS, and Ignite in this namespace"
+        selector:
+          {{- toYaml $client | nindent 10 }}
+        remoteSelector:
+          {{- toYaml $flow.server | nindent 10 }}
+        port: {{ $port }}
+        description: "Egress {{ $port }} from {{ $clientName }} to {{ $flow.name }}"
+      - direction: Ingress
+        selector:
+          {{- toYaml $flow.server | nindent 10 }}
+        remoteSelector:
+          {{- toYaml $client | nindent 10 }}
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to {{ $flow.name }} from {{ $clientName }}"
+      {{- end }}
+      {{- end }}
+      {{- end }}
+
+      # Ignite client nodes talk to each other on the communication port.
+      {{- $peers := .Values.intraNamespace.igniteClientPeers }}
+      {{- range $a := $peers.selectors }}
+      {{- range $b := $peers.selectors }}
+      {{- if ne (toYaml $a) (toYaml $b) }}
+      - direction: Egress
+        selector:
+          {{- toYaml $a | nindent 10 }}
+        remoteSelector:
+          {{- toYaml $b | nindent 10 }}
+        port: {{ $peers.port }}
+        description: "Egress {{ $peers.port }} from {{ values $a | first }} to {{ values $b | first }}"
+      - direction: Ingress
+        selector:
+          {{- toYaml $b | nindent 10 }}
+        remoteSelector:
+          {{- toYaml $a | nindent 10 }}
+        port: {{ $peers.port }}
+        description: "Ingress {{ $peers.port }} to {{ values $b | first }} from {{ values $a | first }}"
+      {{- end }}
+      {{- end }}
+      {{- end }}
 
       # Ignite and the TAK clients discover the Ignite Service through the
       # Kubernetes API. The chart gives those pods the takserver-ignite

@@ -21,7 +21,7 @@ Sleep 400ms
 Type@85ms "yq '.components[0].charts[] | [.name, .url // .localPath, .version] | @tsv' common/zarf.yaml"
 Sleep 350ms
 Enter
-Sleep 2800ms
+Sleep 2500ms
 # typo: bundle
 Type@65ms "# Deployed as one UDS bundle with UDS Core"
 Sleep 700ms
@@ -31,4 +31,4 @@ Sleep 400ms
 Type@90ms "uds zarf package list -l warn"
 Sleep 450ms
 Enter
-Sleep 3000ms
+Sleep 2600ms

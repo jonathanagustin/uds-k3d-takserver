@@ -132,7 +132,7 @@ async function clickLikeAPerson(page: Page, target: Locator) {
   await page.mouse.up();
 }
 
-async function visit(page: Page, path: string, label: string, hold = 3_000) {
+async function visit(page: Page, path: string, label: string, hold = 2_600) {
   const response = await page.goto(new URL(path, takUrl).toString(), {
     waitUntil: "load",
     timeout: 60_000,
@@ -189,7 +189,7 @@ async function walkthrough(page: Page) {
   await page.mouse.move(mouse.x, mouse.y);
   caption("Signed in to TAK with a Keycloak account: server monitor");
   mark("zoom", "0.5,0.35,1.3");
-  await page.waitForTimeout(4_500);
+  await page.waitForTimeout(4_000);
 
   await visit(page, "/Marti/inputs/index.html", "Inputs and data feeds");
   await visit(page, "/Marti/security/index.html", "Security and authentication");

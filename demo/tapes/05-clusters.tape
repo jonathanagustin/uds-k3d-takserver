@@ -24,4 +24,4 @@ Sleep 2000ms
 Type@65ms "sed -n '4,6p' .github/test-infra/aws/rke2/main.tf"
 Sleep 700ms
 Enter
-Sleep 2800ms
+Sleep 2500ms

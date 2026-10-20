@@ -65,18 +65,18 @@ clip() {
     -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
 }
 
-card c00 2.5 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
-card c01 1.8 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
+card c00 2.2 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
+card c01 1.6 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
 clip t01 "${out}/01-package.mp4" terminal demo/out/tapes/01-package.tape
-card c02 1.8 "Integrating with the platform" "the UDS Package custom resource"
+card c02 1.6 "Integrating with the platform" "the UDS Package custom resource"
 clip t02 "${out}/02-package-cr.mp4" terminal demo/out/tapes/02-package-cr.tape
-card c03 1.8 "Secure by default" "mesh, generated policies, SSO, CI checks"
+card c03 1.6 "Secure by default" "mesh, generated policies, SSO, CI checks"
 clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
-card c04 1.8 "Running and healthy" "clustered TAK on k3d"
+card c04 1.6 "Running and healthy" "clustered TAK on k3d"
 clip t04 "${out}/04-running.mp4" terminal demo/out/tapes/04-running.tape
-card c05 1.8 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
+card c05 1.6 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
 clip t05 "${out}/05-clusters.mp4" terminal demo/out/tapes/05-clusters.tape
-card c06 1.8 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
+card c06 1.6 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
 clip t06 "${out}/06-web.webm" web "${out}/06-web-events.json" "${web_trim}"
 card c99 3 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
 

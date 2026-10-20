@@ -17,7 +17,7 @@ Show
 Type@70ms "kubectl get pods -n takserver"
 Sleep 500ms
 Enter
-Sleep 3800ms
+Sleep 3200ms
 # typo: cluster
 Type@85ms "# Ignite cluster membership, from the logs"
 Sleep 350ms
@@ -36,4 +36,4 @@ Sleep 400ms
 Type@75ms "curl -sk -o /dev/null -w '%{http_code} -> %{redirect_url}' https://takserver.uds.dev/; echo"
 Sleep 600ms
 Enter
-Sleep 2800ms
+Sleep 2500ms

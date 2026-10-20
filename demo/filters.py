@@ -9,9 +9,12 @@ terminal TAPE DURATION WORKDIR FONT [OFFSET]
     demo/ragged.py generated. Each applies to the next typed command and
     starts when that command presses Enter. Times come from the tape itself:
     characters x each chunk's typing speed, every Backspace, and every Sleep.
-web EVENTS DURATION WORKDIR FONT [OFFSET]
+web EVENTS DURATION WORKDIR FONT [OFFSET] [BASE_VIDEO]
     Reads the events.json the Playwright walkthrough writes: zoom, caption,
-    and caption-clear events.
+    and caption-clear events. With BASE_VIDEO, frames where the browser
+    shows a blank white page between two pages (a redirect or a page load)
+    are replaced with the last frame before them, so the video holds the
+    previous page instead of flashing white. Timing does not change.
 fit FONT TEXTFILE MAX_SIZE MAX_WIDTH
     Prints the largest font size up to MAX_SIZE at which the text is at most
     MAX_WIDTH pixels wide. The width is measured by rendering it with ffmpeg.
@@ -125,6 +128,49 @@ def fit_size(font, text_file, max_size, max_width):
     return max(10, min(max_size, int(100 * max_width / max(width, 1))))
 
 
+def blank_ranges(video):
+    """Frame ranges where nearly every pixel is white (a blank page).
+
+    signalstats YLOW is the 10th percentile of luma. A rendered page has
+    text, images, or a dark theme below that line. A blank page does not.
+    """
+    result = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", video, "-vf",
+         "signalstats,metadata=print:key=lavfi.signalstats.YLOW:file=-", "-f", "null", "-"],
+        capture_output=True, text=True, check=True,
+    )
+    frames = []
+    frame = None
+    for line in result.stdout.splitlines():
+        match = re.match(r"frame:(\d+)", line)
+        if match:
+            frame = int(match.group(1))
+            continue
+        match = re.search(r"YLOW=([\d.]+)", line)
+        if match and frame is not None and float(match.group(1)) >= 230:
+            frames.append(frame)
+    ranges = []
+    for frame in frames:
+        if ranges and frame == ranges[-1][1] + 1:
+            ranges[-1][1] = frame
+        else:
+            ranges.append([frame, frame])
+    # Frame 0 has nothing before it to hold.
+    return [(a, b) for a, b in ranges if a > 0]
+
+
+def hold_filters(ranges):
+    stages = []
+    for index, (first, last) in enumerate(ranges):
+        source = f"[h{index}]" if index else ""
+        out = f"[h{index + 1}]" if index + 1 < len(ranges) else ""
+        stages.append(
+            f"{source}split[m{index}][r{index}];"
+            f"[m{index}][r{index}]freezeframes=first={first}:last={last}:replace={first - 1}{out}"
+        )
+    return ";".join(stages)
+
+
 def caption_filter(text_file, start, end, font):
     size = fit_size(font, text_file, 26, TEXT_MAX_W)
     fade = 0.25
@@ -156,6 +202,12 @@ def main():
     for event in events:
         event["at"] = float(event["at"]) - offset
     chain = []
+    holds = ""
+    if mode == "web" and len(sys.argv) > 7:
+        ranges = blank_ranges(sys.argv[7])
+        for first, last in ranges:
+            print(f"holding frame {first - 1} over blank frames {first}-{last}", file=sys.stderr)
+        holds = hold_filters(ranges)
     zooms = [e for e in events if e["kind"] == "zoom"]
     if zooms:
         ax, ay, factor = (float(v) for v in str(zooms[0]["value"]).split(","))
@@ -176,7 +228,7 @@ def main():
         text_file = work / f"{stem}-caption-{index}.txt"
         text_file.write_text(event["value"])
         chain.append(caption_filter(text_file, start, end, font))
-    print(",".join(chain))
+    print(f"{holds},{','.join(chain)}" if holds else ",".join(chain))
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ clip() {
   secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${name}-base.mp4")"
   effects="pad=1280:720:0:0:color=${band}"
   if [ -f "${timeline}" ]; then
-    effects="$(python3 demo/filters.py "${mode}" "${timeline}" "${secs}" "${work}" "${title_font}" "${start}")"
+    effects="$(python3 demo/filters.py "${mode}" "${timeline}" "${secs}" "${work}" "${title_font}" "${start}" "${work}/${name}-base.mp4")"
   fi
   ffmpeg -v error -y -i "${work}/${name}-base.mp4" -an \
     -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"

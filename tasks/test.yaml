@@ -7,6 +7,7 @@ tasks:
     actions:
       - task: health-check
       - task: startup
+      - task: oidc-render
       - task: mesh
       - task: policies
       - task: logs
@@ -122,7 +123,7 @@ tasks:
           grep -q -- '-Xmx512m' <<< "${jvm}"
           ignite_limit="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
           ignite_request="$(k get sts takserver-ignite -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
-          [ "${ignite_limit}" = "1280Mi" ]
+          [ "${ignite_limit}" = "1536Mi" ]
           [ "${ignite_request}" = "512Mi" ]
           plugin_limit="$(k get deploy takserver-plugins -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
           [ "${plugin_limit}" = "384Mi" ]
@@ -306,6 +307,11 @@ tasks:
           echo "passthrough gateway port-forward did not accept TLS" >&2
           cat /tmp/tak-passthrough-pf.log >&2 || true
           exit 1
+
+  - name: oidc-render
+    description: Every TAK pod had the render init container from its first start, and every node holds the cluster OIDC secret
+    actions:
+      - cmd: ./tests/oidc-render.sh
 
   - name: smoke
     description: TLS handshake and HTTP status for the 8446 and 8443 gateway hosts

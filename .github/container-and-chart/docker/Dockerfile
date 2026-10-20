@@ -140,6 +140,11 @@ COPY --from=builder \
     /image-root/ignite-extensions.jar \
     /
 
+# setenv.sh sets -Djdk.tls.client.protocols=TLSv1.2, so every default TLS client in
+# the TAK JVM offers TLS 1.2 only. TAK's OIDC discovery and token calls use a
+# default OkHttp client, and the UDS gateways require TLS 1.3, so they failed with
+# a protocol_version alert. Offer 1.3 and keep 1.2 for older peers. The grep fails
+# the build if upstream changes that line.
 RUN chmod 0755 \
         /setenv.sh \
         /takserver.sh \
@@ -158,6 +163,8 @@ RUN chmod 0755 \
         /takserver-messaging-cluster.sh \
         /takserver-config-cluster.sh \
     && sed -i 's/java -jar UserManager.jar/java -Xmx128m -jar UserManager.jar/' /enable_admin.sh \
+    && sed -i 's/-Djdk.tls.client.protocols=TLSv1.2/-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2/' /setenv.sh \
+    && grep -q -- '-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2' /setenv.sh \
     && sed -i "s#cat 'UserAuthenticationFile.xml' | grep -q 'ROLE_ADMIN'#grep -qs -e ROLE_ADMIN -e 'adding new file-based user' /opt/tak/UserAuthenticationFile.xml /logs/takserver-messaging.log#" \
         /messaging-readiness.sh \
     && sed -i 's#location="UserAuthenticationFile.xml"#location="/opt/tak/UserAuthenticationFile.xml"#' /CoreConfig.xml \

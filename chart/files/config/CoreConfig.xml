@@ -95,6 +95,13 @@
 	  </federation-server>
 	</federation>
 
-	<cluster enabled="true" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
+	<!-- cacheConfig="false" stops a node loading the config another node put in the
+	     Ignite cache when it starts. It does not stop the runtime sync: each node
+	     still replaces its config when any node publishes one (see issue #3).
+	     Every TAK pod therefore needs its OIDC client secret rendered before it
+	     starts, because an unrendered copy that is published reaches every node.
+	     The takserver-oidc admission module adds the render init container when
+	     each pod is created. -->
+	<cluster enabled="true" cacheConfig="false" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
 
 </Configuration>

@@ -158,8 +158,9 @@ request "${work}/mission-del" -X DELETE "${mtls[@]}" "${api8443}Marti/api/missio
 expect_ok "8443 DELETE mission ${mission}" "${REPLY_CODE}" "" "${work}/mission-del"
 
 request "${work}/mission-gone" "${mtls[@]}" "${api8443}Marti/api/missions/${mission}"
-if [ "${REPLY_CODE}" = "404" ]; then
-  pass "8443 GET mission ${mission} after delete is 404"
+# TAK answers 410 Gone for a mission that was deleted. 404 means never created.
+if [ "${REPLY_CODE}" = "404" ] || [ "${REPLY_CODE}" = "410" ]; then
+  pass "8443 GET mission ${mission} after delete is ${REPLY_CODE}"
 else
   fail "8443 GET mission ${mission} after delete is HTTP ${REPLY_CODE}"
 fi
@@ -359,13 +360,18 @@ PY
 import sys
 token = sys.argv[1]
 head, body, sig = token.split(".")
-last = "A" if sig[-1] != "A" else "B"
-sys.stdout.write(head + "." + body + "." + sig[:-1] + last)
+# Change a character in the middle. The last base64url character of an RS256
+# signature carries unused bits, so changing it can leave the bytes the same.
+mid = len(sig) // 2
+swap = "A" if sig[mid] != "A" else "B"
+sys.stdout.write(head + "." + body + "." + sig[:mid] + swap + sig[mid + 1:])
 PY
 )"
   request "${work}/bad" -H "Authorization: Bearer ${bad}" "${tenant}Marti/api/version"
-  if [ "${REPLY_CODE}" = "401" ]; then
-    pass "8447 token with a bad signature is 401"
+  # TAK treats a token it cannot verify like no token and redirects to login
+  # (302); 401/403 are also a rejection. Only a 2xx would be a failure.
+  if [ "${REPLY_CODE}" = "401" ] || [ "${REPLY_CODE}" = "403" ] || [ "${REPLY_CODE}" = "302" ]; then
+    pass "8447 token with a bad signature rejected (${REPLY_CODE})"
   else
     fail "8447 token with a bad signature is HTTP ${REPLY_CODE}"
     show_err
@@ -380,9 +386,17 @@ expect_rejected "8447 GET /Marti/api/groups/all without a token" "${REPLY_CODE}"
 request "${work}/oidc" "${api8446}login/.well-known/openid-configuration"
 if [ "${REPLY_CODE}" = "200" ] && grep -q "authorization_endpoint" "${work}/oidc" && grep -q "token_endpoint" "${work}/oidc" && grep -Eq "sso.uds.dev|realms/uds" "${work}/oidc"; then
   pass "8446 GET /login/.well-known/openid-configuration"
-  jwks_uri="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("jwks_uri",""))' "${work}/oidc")"
+  # TAK relays only authorization_endpoint and token_endpoint, so derive the
+  # standard certs path from token_endpoint when jwks_uri is not included.
+  jwks_uri="$(python3 -c 'import json,sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+u = d.get("jwks_uri", "")
+t = d.get("token_endpoint", "")
+if not u and t.endswith("/token"):
+    u = t[: -len("/token")] + "/certs"
+print(u)' "${work}/oidc")"
   if [ -z "${jwks_uri}" ]; then
-    fail "8446 openid document has no jwks_uri"
+    fail "8446 openid document has no jwks_uri or token_endpoint; keys: $(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1], encoding="utf-8"))))' "${work}/oidc")"
   else
     request "${work}/jwks" "${jwks_uri}"
     if [ "${REPLY_CODE}" = "200" ] && python3 -c 'import json,sys; keys=json.load(open(sys.argv[1], encoding="utf-8")).get("keys") or []; raise SystemExit(0 if keys else 1)' "${work}/jwks"; then
@@ -416,9 +430,12 @@ if [ "${#token}" -ge 20 ]; then
 import json, sys
 src, dest = sys.argv[1:]
 body = json.load(open(src, encoding="utf-8"))
-open(dest, "w", encoding="utf-8").write(body["signedCert"])
-if "BEGIN CERTIFICATE" not in body["signedCert"]:
-    raise SystemExit("signedCert is not a certificate")
+cert = body["signedCert"].strip()
+# TAK returns the certificate as bare base64 DER; wrap it as PEM.
+if "BEGIN CERTIFICATE" not in cert:
+    cert = "".join(cert.split())
+    cert = "-----BEGIN CERTIFICATE-----\n" + "\n".join(cert[i:i + 64] for i in range(0, len(cert), 64)) + "\n-----END CERTIFICATE-----"
+open(dest, "w", encoding="utf-8").write(cert + "\n")
 PY
     subject="$(openssl x509 -in "${work}/client.pem" -noout -subject)"
     if grep -q "CN[[:space:]]*=[[:space:]]*${user_name}" <<< "${subject}"; then
@@ -444,12 +461,17 @@ PY
   fi
 fi
 
-bare="$(echo | openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
+# TLS 1.3 finishes the client side of the handshake before the server checks
+# the client certificate, so CONNECTION ESTABLISHED does not mean it was
+# accepted. Keep stdin open and require the server's alert.
+bare="$({ printf 'GET / HTTP/1.0\r\n\r\n'; sleep 3; } |
+  timeout 20 openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
   -servername takserver-stream.uds.dev 2>&1 || true)"
-if grep -q "CONNECTION ESTABLISHED" <<< "${bare}"; then
-  fail "8089 accepted TLS with no client certificate"
-else
+if grep -Eiq 'certificate required|alert number 11[0-9]|bad certificate|handshake failure|unknown ca' <<< "${bare}"; then
   pass "8089 rejected TLS with no client certificate"
+else
+  fail "8089 did not reject TLS with no client certificate"
+  printf '%s\n' "${bare}" | head -n 20 >&2 || true
 fi
 
 finish

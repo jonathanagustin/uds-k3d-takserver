@@ -95,6 +95,12 @@
 	  </federation-server>
 	</federation>
 
-	<cluster enabled="true" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
+	<!-- cacheConfig="false": by default each node loads the CoreConfig that the first
+	     node put in the Ignite cache and saves it over its own file. The OIDC client
+	     secret is rendered into each pod's file by an init container, so a node whose
+	     copy won the race (still holding the unrendered template value) makes the API
+	     send that placeholder to Keycloak and every login fails. Each node keeps its
+	     own rendered file instead. -->
+	<cluster enabled="true" cacheConfig="false" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
 
 </Configuration>

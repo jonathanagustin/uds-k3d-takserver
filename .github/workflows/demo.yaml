@@ -87,7 +87,9 @@ jobs:
         shell: bash
 
       - name: Deploy UDS Core and TAK
-        run: uds run demo-deploy --set FLAVOR=upstream --no-progress
+        run: |
+          set -o pipefail
+          uds run demo-deploy --set FLAVOR=upstream --no-progress 2>&1 | tee /tmp/demo-deploy.log
         shell: bash
         timeout-minutes: 90
 
@@ -136,6 +138,7 @@ jobs:
             demo/out/0*.mp4
             demo/out/06-web.webm
             tests/.playwright/demo
+            /tmp/demo-deploy.log
           if-no-files-found: ignore
           retention-days: 30
 

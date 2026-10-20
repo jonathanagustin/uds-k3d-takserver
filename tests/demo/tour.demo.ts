@@ -25,7 +25,8 @@ function mark(kind: string, value: string) {
 // A visible cursor and a ring on each click. Headless video has no pointer.
 const pointerOverlay = () => {
   const install = () => {
-    if (document.getElementById("demo-cursor")) {
+    // Frames get their own document. One cursor, in the top page only.
+    if (window.top !== window || document.getElementById("demo-cursor")) {
       return;
     }
     const style = document.createElement("style");
@@ -130,7 +131,7 @@ async function clickLikeAPerson(page: Page, target: Locator) {
 
 async function visit(page: Page, path: string, label: string, hold = 3_500) {
   const response = await page.goto(new URL(path, takUrl).toString(), {
-    waitUntil: "networkidle",
+    waitUntil: "load",
     timeout: 60_000,
   });
   expect(response?.status() ?? 0, `${path} status`).toBeLessThan(400);
@@ -177,14 +178,15 @@ async function walkthrough(page: Page) {
   await clickLikeAPerson(page, page.getByRole("button", { name: "Sign In" }));
 
   // /UDS Core/Admin maps to ROLE_ADMIN, so TAK opens the Marti admin UI.
+  // The landing page keeps polling metrics, so networkidle never settles.
   await page.waitForURL(/\/Marti\//, { timeout: 90_000 });
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("load");
+  await page.waitForTimeout(1_500);
   await page.mouse.move(mouse.x, mouse.y);
-  await caption(page, "Signed in to TAK with a Keycloak account");
+  await caption(page, "Signed in to TAK with a Keycloak account: server monitor");
   mark("zoom", "0.5,0.35,1.3");
   await page.waitForTimeout(4_500);
 
-  await visit(page, "/Marti/metrics/index.html", "TAK server monitor");
   await visit(page, "/Marti/inputs/index.html", "Inputs and data feeds");
   await visit(page, "/Marti/security/index.html", "Security and authentication");
 }

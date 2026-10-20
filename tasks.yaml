@@ -92,6 +92,30 @@ tasks:
       - task: fit-runner
       - task: create-deploy-test-bundle
 
+  - name: demo-deploy
+    description: Deploy the bundle on a new k3d-core-slim-dev cluster for the demo recording
+    actions:
+      - task: create-dev-package
+      - task: deploy-slim-core
+      - task: fit-runner
+      - task: create:test-bundle
+      - task: deploy:test-bundle
+        with:
+          options: "--force-conflicts"
+      - task: setup:keycloak-user
+        with:
+          group: "/UDS Core/Admin"
+      - cmd: python3 ./tests/ensure-tak-group.py
+      - task: test:health-check
+      - task: test:gateway
+
+  - name: demo
+    description: Record the terminal chapters and the web walkthrough, then build demo/out/demo.mp4
+    actions:
+      - cmd: ./demo/record-terminal.sh
+      - cmd: ./demo/record-web.sh
+      - cmd: ./demo/assemble.sh
+
   - name: test-upgrade
     description: Upgrade a cluster from the latest published package to this branch
     actions:

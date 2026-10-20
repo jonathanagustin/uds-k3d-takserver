@@ -150,12 +150,16 @@ k get secret takserver-sso -n takserver \
   -o jsonpath='secret created={.metadata.creationTimestamp} resourceVersion={.metadata.resourceVersion}{"\n"}' 2>&1 || true
 k get pods -n takserver -o custom-columns=NAME:.metadata.name,STARTED:.status.startTime --no-headers 2>&1 || true
 sso_secret="$(k get secret takserver-sso -n takserver -o jsonpath='{.data.TAK_OIDC_CLIENT_SECRET}' 2>/dev/null | base64 -d || true)"
-echo "cluster secret length: ${#sso_secret}"
-for d in api config messaging; do
-  if k exec "deploy/takserver-${d}" -n takserver -c "takserver-${d}" -- cat /conf/CoreConfig.xml 2>/dev/null | grep -qF -- "${sso_secret}"; then
-    echo "takserver-${d}: CoreConfig holds the cluster secret"
+fingerprint() { printf '%s' "$1" | sha256sum | cut -c1-8; }
+echo "cluster secret: length=${#sso_secret} sha=$(fingerprint "${sso_secret}")"
+# TAK nodes share CoreConfig through an Ignite cache and the last writer wins,
+# so the API can be using another node's copy of the secret. Compare each file.
+for d in config messaging api; do
+  if conf="$(k exec "deploy/takserver-${d}" -n takserver -c "takserver-${d}" -- cat /conf/CoreConfig.xml 2>&1)"; then
+    val="$(printf '%s' "${conf}" | grep -o 'openIdDiscoveryConfiguration[^>]*' | grep -o ' secret="[^"]*"' | head -1 | sed 's/^ secret="//; s/"$//')"
+    echo "takserver-${d}: file ${#conf} bytes, secret length=${#val} sha=$(fingerprint "${val}") placeholder=$(printf '%s' "${val}" | grep -c 'TAK_OIDC')"
   else
-    echo "takserver-${d}: CoreConfig does NOT hold the cluster secret"
+    echo "takserver-${d}: could not read /conf/CoreConfig.xml: $(printf '%s' "${conf}" | head -c 200)"
   fi
 done
 curl -ksS --max-time 20 -X POST https://sso.uds.dev/realms/uds/protocol/openid-connect/token \

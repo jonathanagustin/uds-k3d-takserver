@@ -12,8 +12,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const takUrl = process.env.TAK_SSO_URL || "https://takserver.uds.dev/";
-const username = process.env.KEYCLOAK_USER || "doug";
-const password = process.env.KEYCLOAK_PASSWORD || "unicorn123!@#UN";
+// demo/record-web.sh creates takuser and passes a password generated for
+// the run. There is no default password.
+const username = process.env.KEYCLOAK_USER || "takuser";
+const password = process.env.KEYCLOAK_PASSWORD || "";
 
 const events: { kind: string; at: number; value: string }[] = [];
 let startedAt = Date.now();
@@ -160,6 +162,7 @@ async function walkthrough(page: Page) {
   page.on("dialog", (dialog) => dialog.accept());
   await page.addInitScript(pointerOverlay);
 
+  expect(password, "KEYCLOAK_PASSWORD is not set").not.toBe("");
   await page.goto(takUrl);
   await expect(page).toHaveURL(/sso\.uds\.dev/, { timeout: 60_000 });
   const userField = page.getByLabel("Username or email");

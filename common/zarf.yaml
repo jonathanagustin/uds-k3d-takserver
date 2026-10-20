@@ -18,6 +18,16 @@ components:
         namespace: takserver
         version: 0.1.0
         localPath: ../chart
+      # Admission module. Installed before the upstream chart so that every
+      # TAK pod is created with the init container that renders the OIDC client
+      # secret into CoreConfig.xml. The chart is built by pepr/build.sh when the
+      # package is created. Zarf waits for its Deployment to be ready.
+      - name: takserver-oidc
+        namespace: pepr-system
+        version: 0.1.0
+        localPath: ../pepr/dist/c72fcf944a4f43bbb386d22371aa640f-chart
+        valuesFiles:
+          - ../values/pepr-values.yaml
       # Upstream chart. Not vendored. `version` is the git tag Zarf clones.
       # releaseName stays takserver so the Bitnami Postgres Service is
       # takserver-postgresql, which is the host the chart's own example uses.

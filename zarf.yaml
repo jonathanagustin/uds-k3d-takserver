@@ -29,6 +29,11 @@ components:
         valuesFiles:
           - values/upstream-values.yaml
     actions:
+      onCreate:
+        before:
+          - description: Build the OIDC render admission module
+            dir: pepr
+            cmd: ./build.sh
       onDeploy:
         after:
           # The upstream Deployments cannot grow an init container through

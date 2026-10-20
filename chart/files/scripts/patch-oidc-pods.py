@@ -2,13 +2,16 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Add the OIDC init containers the upstream chart cannot express.
+"""Add the startup and trust init containers the upstream chart cannot express.
 
 The stock Deployments have no initContainer or extra volume values. This
 runs after Helm, reads the image names Helm already rendered (including the
-Zarf registry rewrite), and strategic-merges an init container onto the
-config, messaging, and API pods. TAK prefers /conf/CoreConfig.xml when that
-file exists, which is where envsubst writes the client secret.
+Zarf registry rewrite), and patches the wait-deps and import-trust init
+containers, the probes, and the rollout strategy onto the TAK Deployments.
+
+It does not render the OIDC client secret. The takserver-oidc admission
+module adds that init container to each TAK pod when the pod is created, so
+no pod, including one created before this script runs, starts without it.
 """
 
 import json
@@ -410,31 +413,9 @@ def strategic_patch(deploy, body):
         raise SystemExit(f"{deploy} has {len(images)} containers after the patch: {images}")
 
 
-def render_init(image):
-    return {
-        "name": "render-oidc",
-        "image": image,
-        "imagePullPolicy": "IfNotPresent",
-        "command": ["bash", "/scripts/render-oidc.sh"],
-        "volumeMounts": [
-            {"name": "oidc-script", "mountPath": "/scripts", "readOnly": True},
-            {"name": "oidc-template", "mountPath": "/template", "readOnly": True},
-            {"name": "oidc-secret", "mountPath": "/var/run/tak-sso", "readOnly": True},
-            {"name": "rendered-core", "mountPath": "/conf"},
-        ],
-        "resources": {
-            "requests": {"cpu": "20m", "memory": "64Mi"},
-            "limits": {"cpu": "200m", "memory": "128Mi"},
-        },
-    }
-
-
-def render_volumes():
+def script_volumes():
     return [
-        {"name": "rendered-core", "emptyDir": {}},
         {"name": "oidc-script", "configMap": {"name": "takserver-oidc-render"}},
-        {"name": "oidc-template", "configMap": {"name": "core-config"}},
-        {"name": "oidc-secret", "secret": {"secretName": "takserver-sso"}},
     ]
 
 
@@ -468,24 +449,17 @@ def patch_config_owner(deploy, image, wait_mode, probes):
                         "containers": [
                             {
                                 "name": name,
-                                "volumeMounts": [
-                                    {"name": "rendered-core", "mountPath": "/conf"}
-                                ],
                                 **probes,
                             }
                         ],
-                        "volumes": render_volumes(),
+                        "volumes": script_volumes(),
                     },
                 }
             }
         },
     )
     # JSON replace keeps wait-deps first. A strategic merge appends it.
-    set_inits(
-        "deploy",
-        deploy,
-        [wait_init(image, wait_mode), render_init(image)],
-    )
+    set_inits("deploy", deploy, [wait_init(image, wait_mode)])
     rollout(deploy)
 
 
@@ -552,13 +526,12 @@ def patch_api(config_image, host, ip):
                                     }
                                 ],
                                 "volumeMounts": [
-                                    {"name": "rendered-core", "mountPath": "/conf"},
                                     {"name": "jvm-trust", "mountPath": "/trust"},
                                 ],
                                 **tcp_probes(8443, "/api-readiness.sh"),
                             }
                         ],
-                        "volumes": render_volumes()
+                        "volumes": script_volumes()
                         + [
                             {"name": "jvm-trust", "emptyDir": {}},
                             {
@@ -579,7 +552,6 @@ def patch_api(config_image, host, ip):
         "takserver-api",
         [
             wait_init(config_image, "config"),
-            render_init(config_image),
             import_init(config_image, host),
         ],
     )

@@ -93,7 +93,7 @@ UDS operator
   -> NetworkPolicy and Istio resources from the Package
 ```
 
-Zarf installs the config chart (`chart/`) before the upstream chart. The config chart creates the `core-config` and `tak-ignite-config` ConfigMaps and the `reg-cred` Secret, and runs the pre-install Job that generates certificates and publishes the Ignite extensions jar. The upstream chart then deploys TAK Server. An init container substitutes the OIDC client secret into `CoreConfig.xml` at startup.
+Zarf installs the config chart (`chart/`) before the upstream chart. The config chart creates the `core-config` and `tak-ignite-config` ConfigMaps and the `reg-cred` Secret, and runs the pre-install Job that generates certificates and publishes the Ignite extensions jar. The upstream chart then deploys TAK Server. The `takserver-oidc` Pepr module adds an init container to the config, messaging, API, and plugins pods when each pod is created. That container substitutes the OIDC client secret into `CoreConfig.xml` before TAK Server starts.
 
 Design decisions are recorded in [`adr/`](adr/):
 
@@ -128,6 +128,7 @@ Design decisions are recorded in [`adr/`](adr/):
 
 - Pod health, Istio mesh, UDS policy, and gateway checks
 - `tests/api-smoke.sh` exercises the Marti API on ports 8443, 8447, 8446, and 8089
+- `tests/oidc-render.sh` checks that every TAK pod rendered the OIDC client secret
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate
 
 In GitHub Actions, `.github/workflows/test.yaml` runs the install and upgrade paths on k3d. The EKS, RKE2, and AKS workflows (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) are manual and disabled by default. They use the OpenTofu scaffolds in `.github/test-infra/` and need cloud credentials.
@@ -139,7 +140,8 @@ In GitHub Actions, `.github/workflows/test.yaml` runs the install and upgrade pa
 | `zarf.yaml` | Package metadata, variables, and image list |
 | `common/zarf.yaml` | Config chart plus the upstream chart (tag `5.7-RELEASE-14`) |
 | `chart/` | Config chart: UDS `Package`, ConfigMaps, and the certificate Job |
-| `values/` | Values overlays for the upstream chart |
+| `values/` | Values overlays for the upstream chart and the Pepr module |
+| `pepr/` | `takserver-oidc` Pepr module that adds the OIDC render init container at admission |
 | `bundle/` | Test bundle (passthrough gateway plus this package) and its config |
 | `tasks.yaml`, `tasks/` | `uds run` tasks, built on [uds-common](https://github.com/defenseunicorns/uds-common) |
 | `tests/` | API smoke script and Playwright tests |

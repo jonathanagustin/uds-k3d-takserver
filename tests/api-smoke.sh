@@ -360,8 +360,11 @@ PY
 import sys
 token = sys.argv[1]
 head, body, sig = token.split(".")
-last = "A" if sig[-1] != "A" else "B"
-sys.stdout.write(head + "." + body + "." + sig[:-1] + last)
+# Change a character in the middle. The last base64url character of an RS256
+# signature carries unused bits, so changing it can leave the bytes the same.
+mid = len(sig) // 2
+swap = "A" if sig[mid] != "A" else "B"
+sys.stdout.write(head + "." + body + "." + sig[:mid] + swap + sig[mid + 1:])
 PY
 )"
   request "${work}/bad" -H "Authorization: Bearer ${bad}" "${tenant}Marti/api/version"

@@ -99,23 +99,6 @@ for required in takserver.jks admin.pem admin.key user.pem ca.pem ca-do-not-shar
   fi
 done
 
-# Fail here rather than publish a keystore in the wrong format. With --fips,
-# makeRootCa.sh also writes truststore-root-legacy.p12, which holds only the
-# public CA certificate, for clients such as Android that need the old format.
-if [[ "${pkcs12_format}" = "modern" ]]; then
-  for store in files/*.p12 files/*.jks; do
-    [[ -f "${store}" ]] || continue
-    [[ "${store}" = *-legacy.p12 ]] && continue
-    info="$(openssl pkcs12 -in "${store}" -info -noout -passin "pass:${CAPASS}" 2>&1)"
-    if ! grep -q '^MAC: sha256' <<< "${info}" || grep -qi 'pbeWithSHA1' <<< "${info}" \
-      || ! grep -q 'AES-256-CBC' <<< "${info}"; then
-      echo "${store} is not PBES2/AES-256-CBC with a SHA-256 MAC" >&2
-      exit 1
-    fi
-  done
-  echo "Keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
-fi
-
 # makeCert.sh only writes a signing keystore for a CA certificate, and that
 # path asks an interactive question. Build the keystore the enrollment
 # endpoint reads from the root CA key the script already wrote.
@@ -141,6 +124,27 @@ fi
 if [[ ! -s files/ca-signing.jks ]]; then
   echo "ca-signing.jks was not written" >&2
   exit 1
+fi
+
+# Fail here rather than publish a keystore in the wrong format, including
+# ca-signing.jks, which client enrollment signs with. With --fips,
+# makeRootCa.sh also writes truststore-root-legacy.p12, which holds only the
+# public CA certificate, for clients such as Android that need the old format.
+if [[ "${pkcs12_format}" = "modern" ]]; then
+  for store in files/*.p12 files/*.jks; do
+    [[ -f "${store}" ]] || continue
+    [[ "${store}" = *-legacy.p12 ]] && continue
+    if ! info="$(openssl pkcs12 -in "${store}" -info -noout -passin "pass:${CAPASS}" 2>&1)"; then
+      echo "${store} is not a PKCS#12 file openssl can read" >&2
+      exit 1
+    fi
+    if ! grep -q '^MAC: sha256' <<< "${info}" || grep -qi 'pbeWithSHA1' <<< "${info}" \
+      || ! grep -q 'AES-256-CBC' <<< "${info}"; then
+      echo "${store} is not PBES2/AES-256-CBC with a SHA-256 MAC" >&2
+      exit 1
+    fi
+  done
+  echo "Keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
 fi
 
 {

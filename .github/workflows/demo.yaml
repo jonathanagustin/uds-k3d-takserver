@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Deploys the bundle on k3d, then records a short demo video: terminal
-# chapters with VHS, the Keycloak SSO and TAK web UI walkthrough with
-# Playwright, joined with ffmpeg. The MP4 is uploaded as the demo-video
+# chapters with VHS, the Keycloak SSO and TAK web UI walkthrough in a real
+# Chrome window (Playwright on an Xvfb display, captured with x11grab),
+# joined with ffmpeg. The MP4 is uploaded as the demo-video
 # artifact.
 name: Demo Video
 
@@ -116,7 +117,12 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+            xvfb libnss3-tools
+          google-chrome --version
+          # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04
+          # blocks the unprivileged user namespaces that sandbox uses.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           tarball="vhs_${VHS_VERSION}_Linux_x86_64.tar.gz"
           curl -fsSL -o "/tmp/${tarball}" "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/${tarball}"
           echo "${VHS_SHA256}  /tmp/${tarball}" | sha256sum -c -
@@ -155,8 +161,11 @@ jobs:
           name: demo-segments
           path: |
             demo/out/0*.mp4
-            demo/out/06-web.webm
-            tests/.playwright/demo
+            demo/out/06-web.mp4
+            demo/out/06-web-events.json
+            demo/out/browser-06-web/screen.mkv
+            demo/out/browser-06-web/ffmpeg.log
+            tests/.playwright/demo/**/*.png
             /tmp/demo-deploy.log
           if-no-files-found: ignore
           retention-days: 30

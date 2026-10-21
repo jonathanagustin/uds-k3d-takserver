@@ -2,8 +2,9 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Record the web UI walkthrough with Playwright's built-in video, in the same
-# container image the UI tests use. Writes demo/out/06-web.webm.
+# Record the web UI walkthrough in a real Chrome window, address bar and
+# all, with demo/record-browser.sh. Writes demo/out/06-web.mp4 and
+# demo/out/06-web-events.json.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -22,28 +23,31 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
 fi
 python3 demo/keycloak-user.py
 
-rm -rf tests/.playwright/demo
+# Chrome trusts the deploy-time TAK CA through its NSS store, along with
+# the self-signed root at the top of each tenant gateway certificate chain.
+# The UDS Core dev certificate for *.uds.dev chains to a public root, so
+# that one is already in Chrome's root store. A private gateway CA would
+# not be, and is trusted the same way.
+kubectl() { uds zarf tools kubectl "$@"; }
+cas="demo/out/trust"
+rm -rf "${cas}"
+mkdir -p "${cas}"
+kubectl get configmap cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}' | base64 -d > "${cas}/tak-ca.pem"
+for secret in $(kubectl get secret -n istio-tenant-gateway -o jsonpath='{range .items[?(@.type=="kubernetes.io/tls")]}{.metadata.name}{" "}{end}'); do
+  kubectl get secret "${secret}" -n istio-tenant-gateway -o jsonpath='{.data.tls\.crt}' | base64 -d \
+    | awk '/-----BEGIN CERTIFICATE-----/ { n++; cert = "" } { cert = cert $0 "\n" } /-----END CERTIFICATE-----/ { last = cert } END { printf "%s", last }' > "${cas}/top.pem"
+  if [ "$(openssl x509 -in "${cas}/top.pem" -noout -subject -nameopt RFC2253 | cut -d= -f2-)" = "$(openssl x509 -in "${cas}/top.pem" -noout -issuer -nameopt RFC2253 | cut -d= -f2-)" ]; then
+    mv "${cas}/top.pem" "${cas}/gateway-${secret}.pem"
+  fi
+  rm -f "${cas}/top.pem"
+done
+for file in "${cas}"/*.pem; do
+  echo "${file}: $(openssl x509 -in "${file}" -noout -subject)"
+done
 
-KEYCLOAK_PASSWORD="${DEMO_KEYCLOAK_PASSWORD}" docker run --rm \
-  --network=host \
-  --shm-size=1g \
-  --security-opt seccomp=unconfined \
-  --user "$(id -u):$(id -g)" \
-  -e CI=true \
-  -e TAK_SSO_URL="${TAK_SSO_URL:-https://takserver.uds.dev/}" \
-  -e KEYCLOAK_USER="${DEMO_KEYCLOAK_USER}" \
-  -e KEYCLOAK_PASSWORD \
-  -v "$(pwd)/tests:/app" \
-  -w /app \
-  mcr.microsoft.com/playwright:v1.64.1 \
-  bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test --config playwright.demo.config.ts'
-
-video="$(find tests/.playwright/demo -name '*.webm' | head -n 1)"
-if [ -z "${video}" ]; then
-  echo "Playwright did not write a video." >&2
-  exit 1
-fi
-cp "${video}" demo/out/06-web.webm
-if [ -f tests/.playwright/demo/events.json ]; then
-  cp tests/.playwright/demo/events.json demo/out/06-web-events.json
-fi
+TAK_SSO_URL="${TAK_SSO_URL:-https://takserver.uds.dev/}" \
+  KEYCLOAK_USER="${DEMO_KEYCLOAK_USER}" \
+  KEYCLOAK_PASSWORD="${DEMO_KEYCLOAK_PASSWORD}" \
+  DEMO_HOSTS="takserver.uds.dev sso.uds.dev" \
+  DEMO_TRUST_CAS="$(echo "${cas}"/*.pem)" \
+  demo/record-browser.sh 06-web tour.demo.ts

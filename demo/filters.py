@@ -128,15 +128,18 @@ def fit_size(font, text_file, max_size, max_width):
     return max(10, min(max_size, int(100 * max_width / max(width, 1))))
 
 
-def blank_ranges(video):
-    """Frame ranges where nearly every pixel is white (a blank page).
+def blank_ranges(video, top=0):
+    """Frame ranges where nearly every pixel of the page is white (a blank page).
 
     signalstats YLOW is the 10th percentile of luma. A rendered page has
     text, images, or a dark theme below that line. A blank page does not.
+    TOP is the height of the browser's tab strip and address bar, which are
+    left out of the measurement.
     """
+    crop = f"crop=iw:ih-{top}:0:{top}," if top else ""
     result = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", video, "-vf",
-         "signalstats,metadata=print:key=lavfi.signalstats.YLOW:file=-", "-f", "null", "-"],
+         f"{crop}signalstats,metadata=print:key=lavfi.signalstats.YLOW:file=-", "-f", "null", "-"],
         capture_output=True, text=True, check=True,
     )
     frames = []
@@ -204,7 +207,8 @@ def main():
     chain = []
     holds = ""
     if mode == "web" and len(sys.argv) > 7:
-        ranges = blank_ranges(sys.argv[7])
+        tops = [int(e["value"]) for e in events if e["kind"] == "chrome-top"]
+        ranges = blank_ranges(sys.argv[7], tops[0] if tops else 0)
         for first, last in ranges:
             print(f"holding frame {first - 1} over blank frames {first}-{last}", file=sys.stderr)
         holds = hold_filters(ranges)

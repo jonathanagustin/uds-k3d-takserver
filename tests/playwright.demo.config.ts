@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-// Records the web UI walkthrough for the demo video. Separate from
-// playwright.config.ts so `playwright test` never picks it up.
-import { defineConfig, devices } from "@playwright/test";
-
-// 630 px tall: demo/assemble.sh adds a 90 px caption band below.
-const size = { width: 1280, height: 630 };
+// Records demo walkthroughs in a headed Chrome window (see demo/browser.ts
+// and demo/record-browser.sh). Separate from playwright.config.ts so
+// `playwright test` never picks them up.
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./demo",
@@ -18,12 +16,4 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   outputDir: ".playwright/demo",
-  use: {
-    ...devices["Desktop Chrome"],
-    viewport: size,
-    deviceScaleFactor: 1,
-    ignoreHTTPSErrors: true,
-    video: { mode: "on", size },
-    screenshot: "on",
-  },
 });

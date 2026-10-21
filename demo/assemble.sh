@@ -26,8 +26,8 @@ fg=0xcdd6f4
 accent=0xcba6f7
 title_font="$(fc-match -f '%{file}' 'DejaVu Sans:bold')"
 mono_font="$(fc-match -f '%{file}' 'JetBrains Mono')"
-# Playwright starts recording on a blank page before the first navigation.
-web_trim="${WEB_TRIM:-0.4}"
+# demo/record-browser.sh already trims the capture to the walkthrough's start.
+web_trim="${WEB_TRIM:-0}"
 
 # card NAME TITLE SUBTITLE [last]
 # A card stays up long enough to read: one second plus three words per
@@ -85,8 +85,8 @@ card c04 "Running and healthy" "clustered TAK on k3d"
 clip t04 "${out}/04-running.mp4" terminal demo/out/tapes/04-running.tape
 card c05 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
 clip t05 "${out}/05-clusters.mp4" terminal demo/out/tapes/05-clusters.tape
-card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
-clip t06 "${out}/06-web.webm" web "${out}/06-web-events.json" "${web_trim}"
+card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, in a real Chrome window"
+clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
 card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
 
 list="${work}/list.txt"

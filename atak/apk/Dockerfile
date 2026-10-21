@@ -43,15 +43,22 @@ RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
     && "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --install \
         "platforms;android-35" "build-tools;35.0.0" "ndk;25.1.8937393" "cmake;3.22.1" >/dev/null
 
-FROM toolchain AS prebuild
+# CI builds each stage with its own --target so a later failure keeps the
+# earlier stages in the cache (TAK third party alone is about 30 minutes).
+FROM toolchain AS ttp
 COPY upstream/atak-civ /src/atak-civ
-COPY atak/apk /build
+COPY atak/apk/prebuild.sh /build/prebuild.sh
 ENV SRC=/src/atak-civ
 RUN /build/prebuild.sh extract ttp
+
+FROM ttp AS deps
+COPY atak/apk /build
 RUN /build/prebuild.sh conan_profile ttp_pkg laszip liblas draco headers
+
+FROM deps AS cesium
 RUN /build/prebuild.sh cesium
 
-FROM prebuild AS build
+FROM cesium AS build
 RUN /build/build-apk.sh \
     && cp "$(find /src/atak-civ/atak/ATAK/app/build/outputs/apk -name '*.apk' | head -1)" /atak-civ.apk
 

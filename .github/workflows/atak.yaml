@@ -43,14 +43,8 @@ jobs:
           git lfs pull --exclude="takthirdparty/distfiles/pdfium/win*,takthirdparty/distfiles/pdfium/mac*,takthirdparty/distfiles/mrsid/win*,takthirdparty/distfiles/mrsid/ios*,takthirdparty/distfiles/mrsid/mac*"
           du -sh .
 
-      - name: Move Docker to the larger disk
-        run: |
-          ./.github/scripts/free-runner-disk.sh
-          sudo systemctl stop docker docker.socket
-          sudo mkdir -p /mnt/docker
-          echo '{"data-root":"/mnt/docker"}' | sudo tee /etc/docker/daemon.json
-          sudo systemctl start docker
-          df -h / /mnt
+      - name: Free runner disk
+        run: ./.github/scripts/free-runner-disk.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -58,11 +52,18 @@ jobs:
       - name: Build the APK
         run: |
           start=$(date +%s)
-          docker buildx build -f atak/apk/Dockerfile --target apk \
-            --cache-from type=gha,scope=atak-apk \
-            --cache-to type=gha,scope=atak-apk,mode=max,ignore-error=true \
-            --output type=local,dest=out .
-          echo "build seconds: $(( $(date +%s) - start ))"
+          for target in toolchain ttp deps cesium apk; do
+            out=(--output type=cacheonly)
+            [ "${target}" = apk ] && out=(--output type=local,dest=out)
+            docker buildx build -f atak/apk/Dockerfile --target "${target}" \
+              --cache-from "type=gha,scope=atak-apk-${target}" \
+              --cache-from type=gha,scope=atak-apk-ttp \
+              --cache-from type=gha,scope=atak-apk-deps \
+              --cache-from type=gha,scope=atak-apk-cesium \
+              --cache-to "type=gha,scope=atak-apk-${target},mode=max,ignore-error=true" \
+              "${out[@]}" .
+            echo "${target} done after $(( $(date +%s) - start ))s"
+          done
           ls -la out
 
       - name: Upload the APK

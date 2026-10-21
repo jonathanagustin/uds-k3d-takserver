@@ -54,7 +54,11 @@ conan_profile() {
 ttp_pkg() {
   cd "${SRC}/takthirdparty"
   ln -sfn "builds/android-${ABI}-release" "android-${ABI}-release"
-  (cd ci-support && conan export-pkg . "${CONAN_S[@]}" -f && ./gradlew --no-daemon -q assemble publishToMavenLocal)
+  # Separate Gradle runs: the upstream publications fail Gradle's task
+  # ordering check when assemble and publish share one invocation.
+  (cd ci-support && conan export-pkg . "${CONAN_S[@]}" -f \
+    && ./gradlew --no-daemon -q assemble \
+    && ./gradlew --no-daemon -q publishTtpRuntimeAndroidPublicationToMavenLocal)
   (cd "${SRC}/takengine/thirdparty/apache-commons-lang-slim" && ./gradlew --no-daemon -q publishToMavenLocal)
 }
 
@@ -74,7 +78,9 @@ liblas() {
     -DCMAKE_CXX_FLAGS="-fexceptions -frtti -std=c++11"
   cmake --build "build-android-${ABI}" -j"${JOBS}"
   cp -r include "build-android-${ABI}/"
-  (cd ci-support && conan export-pkg . "${CONAN_S[@]}" -f && ./gradlew --no-daemon -q assemble publishToMavenLocal)
+  (cd ci-support && conan export-pkg . "${CONAN_S[@]}" -f \
+    && ./gradlew --no-daemon -q assemble \
+    && ./gradlew --no-daemon -q publishLibLasAndroidPublicationToMavenLocal)
 }
 
 draco() {

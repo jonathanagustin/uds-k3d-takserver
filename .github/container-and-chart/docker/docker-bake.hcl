@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # One builder stage, then the six runtime targets together.
-# build.sh sets REPO, TAG, PLATFORMS, and GRADLE_SEED.
+# build.sh sets REPO, TAG, PLATFORMS, GRADLE_SEED, TAK_SRC, UPSTREAM_SHA,
+# and UPSTREAM_TREE.
 
 variable "REPO" {
   default = "ghcr.io/jonathanagustin/uds-k3d-takserver"
@@ -18,6 +19,20 @@ variable "PLATFORMS" {
 
 variable "GRADLE_SEED" {
   default = "gradle-seed"
+}
+
+# Work tree of the upstream/takserver submodule.
+variable "TAK_SRC" {
+  default = "../../../upstream/takserver"
+}
+
+# Submodule commit and tree. Empty values fail the builder stage.
+variable "UPSTREAM_SHA" {
+  default = ""
+}
+
+variable "UPSTREAM_TREE" {
+  default = ""
 }
 
 function "platform_list" {
@@ -42,7 +57,12 @@ target "_image" {
   dockerfile = "Dockerfile"
   context    = "."
   contexts = {
-    gradle-seed = GRADLE_SEED
+    gradle-seed   = GRADLE_SEED
+    takserver-src = TAK_SRC
+  }
+  args = {
+    UPSTREAM_SHA  = UPSTREAM_SHA
+    UPSTREAM_TREE = UPSTREAM_TREE
   }
   platforms = platform_list(PLATFORMS)
 }

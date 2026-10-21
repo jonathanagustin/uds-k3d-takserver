@@ -69,6 +69,12 @@ FROM deps AS cesium
 RUN /build/prebuild.sh cesium
 
 FROM cesium AS build
+# The public 5.5.1.10 tree ships no assets/wms/, but AppVersionUpgrade loads
+# wms/cleanup.properties on the first start after an install and crashes on
+# the null stream (NullPointerException in Properties.load). An empty file
+# means "no legacy map source pointers to clean up".
+RUN mkdir -p /src/atak-civ/atak/ATAK/app/src/main/assets/wms \
+    && touch /src/atak-civ/atak/ATAK/app/src/main/assets/wms/cleanup.properties
 RUN /build/build-apk.sh \
     && cp "$(find /src/atak-civ/atak/ATAK/app/build/outputs/apk -name '*.apk' | head -1)" /atak-civ.apk
 

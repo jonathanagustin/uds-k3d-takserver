@@ -537,17 +537,24 @@ event = (f'<?xml version="1.0" encoding="UTF-8"?><event version="2.0" uid="{uid}
 with socket.create_connection(("127.0.0.1", int(port)), timeout=20) as raw:
     with ctx.wrap_socket(raw, server_hostname=host) as tls:
         tls.sendall(event.encode())
+        # clientEndPoints only lists clients that share a group with the
+        # caller. The admin certificate has no groups, so ask as the
+        # enrolled user, the way that user's contact list sees it.
         found = False
         for _ in range(10):
             time.sleep(2)
-            out = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
-                                  "--pass", apass, api + "Marti/api/clientEndPoints"],
+            out = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", pem, "--key", key,
+                                  api + "Marti/api/clientEndPoints"],
                                  capture_output=True, text=True).stdout
             if uid in out:
                 found = True
                 break
         if not found:
             print(out[:2000], file=sys.stderr)
+            subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
+                                   "--pass", apass, api + "Marti/api/subscriptions/all"],
+                                  capture_output=True, text=True).stdout
+            print("subscriptions/all: " + subs[:2000], file=sys.stderr)
 sys.exit(0 if found else 1)
 PY
     then

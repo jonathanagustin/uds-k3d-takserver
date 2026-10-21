@@ -1,6 +1,6 @@
 # Networking
 
-The UDS operator turns the Package `network` block into NetworkPolicy and Istio resources. The rules are in `chart/templates/uds-package.yaml`. The one Istio object this package ships itself is the DestinationRule described in [Tenant gateway to 8447](#tenant-gateway-to-8447).
+The UDS operator turns the Package `network` block into NetworkPolicy and Istio resources. The rules are in `chart/templates/uds-package.yaml`. This package ships its own Istio objects only for the DestinationRule described in [Tenant gateway to 8447](#tenant-gateway-to-8447) and for the [standard TAK ports](#standard-tak-ports).
 
 ## Exposure
 
@@ -16,6 +16,14 @@ The upstream chart's nginx ingress stays off. The Package exposes the same three
 Ports 8444, 9000, and 9001 stay on the Services and have no gateway host. TLS on 8089, 8443, 8444, 8446, 9000, and 9001 is not terminated by the tenant gateway. Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the API, and Ignite. `k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` turns that optional component on for tests.
 
 On k3d, host port 443 is the tenant gateway. Tests port-forward `svc/passthrough-ingressgateway` in `istio-passthrough-gateway` and send SNI to that local port.
+
+### Standard TAK ports
+
+A field client such as ATAK enrolls at `<host>:8446` and then streams to the same `<host>:8089`, with the port taken from its settings and the host shared. The 443 routes above give each port its own host, so a client cannot use them with one server entry. `chart/templates/standard-ports.yaml` adds an Istio Gateway on the passthrough gateway pods with TLS passthrough listeners on 8446 and 8089, and a VirtualService that sends 8446 to `takserver-api-service:8446` and 8089 to `takserver-messaging-service:8089`, matching on port and SNI. Both listeners accept the hosts in `standardPorts.hosts` (default `takserver` and `takserver-stream`). The 443 routes stay as they are.
+
+See [ADR 0009](../adr/0009-standard-tak-ports-on-the-passthrough-gateway.md). The gateway Service publishes the two ports through the bundle override `istio-passthrough-gateway.gateway` `service.ports` in `bundle/uds-bundle.yaml`. The Istio gateway chart's NetworkPolicy opens every port in that list. Traffic to TAK uses the same Service ports as the Package expose entries, so the operator's ingress rules for 8446 and 8089 already cover it and no rule is added. Set `standardPorts.enabled: false` to drop the listeners. Without the Service ports they are inert.
+
+Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In-cluster DNS](#in-cluster-dns)), so in-cluster clients use `takserver-stream.<domain>:8446` and `:8089`. Outside the cluster, point the TAK host at the passthrough gateway's load balancer. On k3d, host ports 8446 and 8089 are not mapped. Tests port-forward them (`uds run test:gateway` writes `/tmp/tak-std-ports`), and `tests/api-smoke.sh` enrolls a certificate on 8446, streams a CoT event on 8089 with it, and waits for the client in `/Marti/api/clientEndPoints`.
 
 ## Tenant gateway to 8447
 

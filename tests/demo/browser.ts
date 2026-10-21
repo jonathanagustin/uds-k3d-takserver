@@ -212,7 +212,25 @@ export async function typeLikeAPerson(page: Page, text: string) {
   }
 }
 
+// Scrolls with the wheel, a few notches at a time, until the target sits in
+// the window. The page area under the address bar is short.
+async function scrollToward(page: Page, target: Locator) {
+  const box = await target.boundingBox();
+  const height = await page.evaluate(() => window.innerHeight);
+  if (!box || (box.y >= 0 && box.y + box.height <= height - 40)) {
+    return;
+  }
+  const delta = box.y + box.height / 2 - height * 0.6;
+  const notches = 8;
+  for (let i = 0; i < notches; i++) {
+    await page.mouse.wheel(0, delta / notches);
+    await page.waitForTimeout(between(25, 60));
+  }
+  await page.waitForTimeout(300);
+}
+
 export async function glideTo(page: Page, target: Locator) {
+  await scrollToward(page, target);
   const box = await target.boundingBox();
   if (!box) {
     return;

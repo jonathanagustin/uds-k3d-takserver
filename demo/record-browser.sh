@@ -126,7 +126,20 @@ capture = float(re.search(r"start: ([\d.]+)", open(sys.argv[2]).read()).group(1)
 print(f"{max(started - capture, 0):.3f}")
 PY
 )"
-echo "Trimming ${offset}s from the start of the capture."
-ffmpeg -v error -y -ss "${offset}" -i "${work}/screen.mkv" -an -c:v libx264 -crf 14 -pix_fmt yuv420p "${out}/${name}.mp4"
-cp "${work}/events.json" "${out}/${name}-events.json"
+# Chrome can take a few seconds to put its first frame on the display, after
+# the page is ready. Skip those single-colour frames too, and move the
+# events back by the same amount.
+lead="$(ffmpeg -v error -ss "${offset}" -t 15 -i "${work}/screen.mkv" -vf "signalstats,metadata=print:file=-" -f null - \
+  | awk '/pts_time/ { t = $3; sub("pts_time:", "", t) } /YMIN=/ { split($0, a, "="); low = a[2] } /YMAX=/ { split($0, a, "="); if (a[2] - low > 16) { print t; exit } }')"
+lead="${lead:-0}"
+echo "Trimming ${offset}s from the start of the capture, then ${lead}s before Chrome's first frame."
+ffmpeg -v error -y -ss "$(awk "BEGIN { print ${offset} + ${lead} }")" -i "${work}/screen.mkv" -an -c:v libx264 -crf 14 -pix_fmt yuv420p "${out}/${name}.mp4"
+python3 - "${work}/events.json" "${lead}" "${out}/${name}-events.json" << 'PY'
+import json, sys
+events = json.load(open(sys.argv[1]))
+lead = float(sys.argv[2])
+for event in events:
+    event["at"] = round(max(float(event["at"]) - lead, 0), 3)
+json.dump(events, open(sys.argv[3], "w"), indent=2)
+PY
 exit "${status}"

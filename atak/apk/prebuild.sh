@@ -108,9 +108,13 @@ cesium() {
       https://github.com/CesiumGS/cesium-native.git cesium-native
   fi
   # stage.sh pulls the zlib-ng port from vcpkg master. Pin it to the vcpkg
-  # commit cesium-native itself builds against.
-  ref="$(grep -oE '[0-9a-f]{40}' cesium-native/CMakeLists.txt | head -1)"
-  [ -n "${ref}" ] && sed -i "s#refs/heads/master#${ref}#g" overlay-ports/stage.sh
+  # release cesium-native itself builds against (ezvcpkg_fetch COMMIT).
+  ref="$(sed -n 's/^ *COMMIT \([0-9][0-9.]*\).*/\1/p' cesium-native/CMakeLists.txt | head -n 1)"
+  if [ -z "${ref}" ]; then
+    echo "no ezvcpkg COMMIT in cesium-native/CMakeLists.txt" >&2
+    exit 1
+  fi
+  sed -i "s#refs/heads/master#refs/tags/${ref}#g" overlay-ports/stage.sh
   WARNINGS_AS_ERRORS=OFF ANDROID_ABI="${ABI}" ./build-android.sh
   cp "${RECIPES}/cesium-native/conanfile.py" .
   conan export-pkg . "${CONAN_S[@]}" -f

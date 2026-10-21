@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: atak-vm-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   vm:

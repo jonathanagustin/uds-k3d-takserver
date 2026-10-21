@@ -32,9 +32,13 @@ jobs:
   publish:
     needs: release-please
     if: needs.release-please.outputs.release-created == 'true'
+    # release.yaml's provenance job needs contents (release upload),
+    # id-token and attestations on top of the package write.
     permissions:
-      contents: read
+      contents: write
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release.yaml
     with:
       tag: ${{ needs.release-please.outputs.tag }}

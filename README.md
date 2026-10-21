@@ -1,5 +1,7 @@
 # uds-k3d-takserver
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
+
 https://github.com/user-attachments/assets/0b6ab8bf-ef9c-4a09-b52c-e3cb360ddc5d
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged as a [UDS](https://docs.defenseunicorns.com/core/) package. The package deploys the upstream TAK Server Helm chart (tag `5.7-RELEASE-14`) onto UDS Core. It is developed and tested on a local k3d cluster running the `k3d-core-slim-dev` bundle. The repository also has OpenTofu scaffolds for EKS, RKE2, and AKS test clusters.
@@ -197,7 +199,7 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 
 ## Contributing
 
-Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), and [release-please](https://github.com/googleapis/release-please) uses them to open release pull requests. Renovate keeps dependencies current. Its config extends the public `uds-common` preset.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report bugs, request features, and send pull requests, including the coding standards and the test policy. Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), and [release-please](https://github.com/googleapis/release-please) uses them to open release pull requests. Renovate keeps dependencies current. Its config extends the public `uds-common` preset.
 
 ## Security
 

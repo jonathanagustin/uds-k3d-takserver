@@ -33,8 +33,14 @@ mise install
 
 ## Quick start
 
+Clone with the TAK Server source submodule. `build.sh` also checks it out if you forgot:
+
 ```bash
-# 1. Build the six TAK images from the public source.
+git clone --recurse-submodules --shallow-submodules https://github.com/jonathanagustin/uds-k3d-takserver
+```
+
+```bash
+# 1. Build the six TAK images from the public source in upstream/takserver.
 #    Set PUSH_IMAGES=true to push them to GHCR.
 uds run build-image
 

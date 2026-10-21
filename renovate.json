@@ -121,7 +121,26 @@
       ]
     },
     {
+      "description": "upstream/takserver follows the public TAK Server release tags. .gitmodules sets branch to the tag, so Renovate moves the tag and the pinned commit together.",
+      "matchManagers": [
+        "git-submodules"
+      ],
+      "matchDepNames": [
+        "upstream/takserver"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-RELEASE-(?<patch>\\d+)$",
+      "groupName": "TAK Server Package Dependencies",
+      "labels": [
+        "package-deps"
+      ],
+      "commitMessageTopic": "package-deps"
+    },
+    {
       "description": "upstream/cloudtak follows CloudTAK release tags. .gitmodules sets branch to the tag. The image tag strings marked # cloudtak-version move in the same pull request.",
+      "matchManagers": [
+        "git-submodules",
+        "regex"
+      ],
       "matchDepNames": [
         "upstream/cloudtak",
         "dfpc-coe/CloudTAK"

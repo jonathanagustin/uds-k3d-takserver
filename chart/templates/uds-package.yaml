@@ -209,6 +209,17 @@ spec:
           {{- toYaml .Values.api.selector | nindent 10 }}
         port: 443
         description: "Keycloak discovery, token, and JWKS"
+      # Messaging checks a token-enrolled certificate with the issuer when the
+      # client connects on 8089.
+      - direction: Egress
+        remoteNamespace: istio-tenant-gateway
+        remoteSelector:
+          app: tenant-ingressgateway
+          istio: tenant-ingressgateway
+        selector:
+          {{- toYaml .Values.messaging.selector | nindent 10 }}
+        port: 443
+        description: "Keycloak discovery and JWKS for 8089 clients"
       {{- end }}
 
       {{- with .Values.additionalNetworkAllow }}

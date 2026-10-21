@@ -55,6 +55,31 @@ packages:
           values:
             - path: resources.requests.cpu
               value: 50m
+            # Upstream defaults plus the standard TAK ports. The gateway
+            # chart's NetworkPolicy opens each listed port.
+            # chart/templates/standard-ports.yaml routes 8446 and 8089.
+            - path: service.ports
+              value:
+                - name: status-port
+                  port: 15021
+                  protocol: TCP
+                  targetPort: 15021
+                - name: http2
+                  port: 80
+                  protocol: TCP
+                  targetPort: 80
+                - name: https
+                  port: 443
+                  protocol: TCP
+                  targetPort: 443
+                - name: tls-tak-cert
+                  port: 8446
+                  protocol: TCP
+                  targetPort: 8446
+                - name: tls-tak-stream
+                  port: 8089
+                  protocol: TCP
+                  targetPort: 8089
             - path: autoscaling.enabled
               value: false
 

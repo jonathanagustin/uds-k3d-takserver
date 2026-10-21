@@ -471,16 +471,40 @@ tasks:
           if ! curl -k -sS -o /dev/null --max-time 2 "https://127.0.0.1:${port}/" -H "Host: takserver.uds.dev"; then
             setsid uds zarf tools kubectl port-forward -n istio-passthrough-gateway svc/passthrough-ingressgateway "${port}:443" >/tmp/tak-passthrough-pf.log 2>&1 < /dev/null &
           fi
+          ok=""
           for _ in $(seq 1 30); do
             if curl -k -sS -o /dev/null --max-time 2 --resolve "takserver.uds.dev:${port}:127.0.0.1" "https://takserver.uds.dev:${port}/"; then
               echo "${port}" > /tmp/tak-gateway-port
-              exit 0
+              ok=1
+              break
             fi
             sleep 1
           done
-          echo "passthrough gateway port-forward did not accept TLS" >&2
-          cat /tmp/tak-passthrough-pf.log >&2 || true
-          exit 1
+          if [ -z "${ok}" ]; then
+            echo "passthrough gateway port-forward did not accept TLS" >&2
+            cat /tmp/tak-passthrough-pf.log >&2 || true
+            exit 1
+          fi
+          # Standard TAK ports, when the bundle publishes them on the gateway.
+          rm -f /tmp/tak-std-ports
+          ports="$(uds zarf tools kubectl get svc -n istio-passthrough-gateway passthrough-ingressgateway -o jsonpath='{.spec.ports[*].port}')"
+          if grep -qw 8446 <<< "${ports}" && grep -qw 8089 <<< "${ports}"; then
+            setsid uds zarf tools kubectl port-forward -n istio-passthrough-gateway svc/passthrough-ingressgateway 18446:8446 18089:8089 >/tmp/tak-std-pf.log 2>&1 < /dev/null &
+            for _ in $(seq 1 30); do
+              if curl -k -sS -o /dev/null --max-time 2 --resolve "takserver.uds.dev:18446:127.0.0.1" "https://takserver.uds.dev:18446/"; then
+                echo "18446 18089" > /tmp/tak-std-ports
+                break
+              fi
+              sleep 1
+            done
+            if [ ! -f /tmp/tak-std-ports ]; then
+              echo "standard port 8446 on the passthrough gateway did not accept TLS" >&2
+              cat /tmp/tak-std-pf.log >&2 || true
+              exit 1
+            fi
+          else
+            echo "passthrough gateway Service has no 8446/8089 (ports: ${ports})"
+          fi
 
   - name: dns
     description: DOMAIN hosts resolve to the right Istio gateway from inside a pod, and the API pod has no hostAlias

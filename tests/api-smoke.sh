@@ -14,6 +14,9 @@
 # 8446 (passthrough) enrolls a client certificate and serves the OIDC document.
 # 8089 (passthrough) must accept a stream with that certificate and reject a
 # client that presents none.
+# When the gateway also listens on the standard TAK ports, a second client
+# enrolls on <host>:8446 and streams CoT on <host>:8089 until it is listed in
+# /Marti/api/clientEndPoints.
 #
 # Each check prints PASS or FAIL. The last line is the count. Exit status is
 # non-zero when any check fails.
@@ -497,6 +500,85 @@ PY
     if [ -s "${work}/enroll.json" ]; then
       sed 's/^/  /' "${work}/enroll.json" | head -n 20 >&2 || true
     fi
+  fi
+fi
+
+# Standard TAK ports on the passthrough gateway, the way a field device uses
+# them: enroll at <host>:8446, then stream to the same <host>:8089 with the
+# enrolled certificate. The test task port-forwards the gateway Service's 8446
+# and 8089 and writes the local ports to /tmp/tak-std-ports.
+if [ -f /tmp/tak-std-ports ] && [ "${#token}" -ge 20 ]; then
+  read -r std_cert std_stream < /tmp/tak-std-ports
+  std_host="${TAK_STD_HOST:-takserver.uds.dev}"
+  openssl req -new -newkey rsa:2048 -nodes \
+    -keyout "${work}/std.key" -out "${work}/std.csr" \
+    -subj "/CN=${user_name}/O=TAK/OU=UDS" >/dev/null 2>&1
+  request "${work}/std-enroll.json" -X POST "${auth[@]}" \
+    --resolve "${std_host}:${std_cert}:127.0.0.1" \
+    -H "Accept: application/json" -H "Content-Type: text/plain" \
+    --data-binary @"${work}/std.csr" \
+    "https://${std_host}:${std_cert}/Marti/api/tls/signClient/v2?clientUid=${user_name}-std&version=1"
+  if [ "${REPLY_CODE}" = "200" ] && grep -q "signedCert" "${work}/std-enroll.json"; then
+    pass "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2"
+    std_uid="uds-std-ports-$(date +%s)"
+    if python3 - "${work}/std-enroll.json" "${work}/std.key" "${std_host}" "${std_stream}" "${std_uid}" \
+      "${api8443}" "${admin_cert}" "${admin_key}" "${admin_pass}" <<'PY'
+import json, os, socket, ssl, subprocess, sys, tempfile, time
+enroll, key, host, port, uid, api, acert, akey, apass = sys.argv[1:]
+cert = json.load(open(enroll, encoding="utf-8"))["signedCert"].strip()
+if "BEGIN CERTIFICATE" not in cert:
+    cert = "".join(cert.split())
+    cert = "-----BEGIN CERTIFICATE-----\n" + "\n".join(cert[i:i + 64] for i in range(0, len(cert), 64)) + "\n-----END CERTIFICATE-----\n"
+pem = os.path.join(tempfile.mkdtemp(), "std.pem")
+open(pem, "w", encoding="utf-8").write(cert)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+ctx.load_cert_chain(pem, key)
+now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+stale = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 300))
+event = (f'<?xml version="1.0" encoding="UTF-8"?><event version="2.0" uid="{uid}" type="a-f-G-U-C" '
+         f'how="m-g" time="{now}" start="{now}" stale="{stale}"><point lat="0" lon="0" hae="0" ce="9999999" le="9999999"/>'
+         f'<detail><contact callsign="{uid}" endpoint="*:-1:stcp"/><takv platform="uds-smoke" version="1"/></detail></event>')
+# The first connection of a user can create its TAK groups. TAK 5.7 logs
+# "empty bit position in group" for a group created during that connection
+# and the subscription is then hidden. Reconnect once, as a device would.
+found = False
+for attempt in range(2):
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=20) as raw:
+        with ctx.wrap_socket(raw, server_hostname=host) as tls:
+            tls.sendall(event.encode())
+            # clientEndPoints only lists clients that share a group with the
+            # caller. The admin certificate has no groups, so ask as the
+            # enrolled user, the way that user's contact list sees it.
+            found = False
+            for _ in range(10):
+                time.sleep(2)
+                out = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", pem, "--key", key,
+                                      api + "Marti/api/clientEndPoints"],
+                                     capture_output=True, text=True).stdout
+                if uid in out:
+                    found = True
+                    break
+            if not found:
+                print(out[:2000], file=sys.stderr)
+                subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
+                                       "--pass", apass, api + "Marti/api/subscriptions/all"],
+                                      capture_output=True, text=True).stdout
+                print("subscriptions/all: " + subs[:2000], file=sys.stderr)
+    if found:
+        break
+    print(f"attempt {attempt + 1}: client not listed yet", file=sys.stderr)
+sys.exit(0 if found else 1)
+PY
+    then
+      pass "standard port 8089 on ${std_host}: client ${std_uid} listed in /Marti/api/clientEndPoints"
+    else
+      fail "standard port 8089 on ${std_host}: client not listed in /Marti/api/clientEndPoints"
+    fi
+  else
+    fail "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
+    show_err
   fi
 fi
 

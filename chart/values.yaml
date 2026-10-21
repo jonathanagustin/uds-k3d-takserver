@@ -52,6 +52,19 @@ messaging:
     host: takserver-stream
     port: 8089
 
+# Standard TAK ports (8446 enrollment, 8089 streaming) on the passthrough
+# gateway for any of these hosts, so a client uses one host for both. The
+# 443 SNI routes above stay as they are. takserver-stream is listed because
+# the in-cluster DNS rewrite sends it to the passthrough gateway, while
+# takserver resolves to the tenant gateway (web UI) inside the cluster.
+standardPorts:
+  enabled: true
+  certPort: 8446
+  streamPort: 8089
+  hosts:
+    - takserver
+    - takserver-stream
+
 ignite:
   selector:
     app: takserver-ignite

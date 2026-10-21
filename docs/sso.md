@@ -61,7 +61,7 @@ Bearer tokens and the access-token cookie are accepted only when the local port 
 
 The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. The `takserver-oidc` Pepr module in `pepr/` adds an init container to the config, messaging, API, and plugins pods when each pod is created, so no pod can start with the unrendered file. That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes. The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
 
-`trustAllCerts` is false. The API init container copies the JVM trust store and imports ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. `sso.<domain>` resolves to `127.0.0.1` in this dev DNS, including from inside a pod, where that address is the pod itself. The API pod gets a hostAlias to the tenant gateway ClusterIP. Public DNS for `sso.uds.dev` is also `127.0.0.1`.
+`trustAllCerts` is false. The API init container copies the JVM trust store and imports ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
 
 ## Render at admission
 
@@ -107,7 +107,7 @@ API pods may connect to the tenant gateway:
 - Pod labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway` (Istio gateway chart 1.31, release name `tenant-ingressgateway`)
 - Port 443
 
-That is the path for the discovery document, the token endpoint, and JWKS. The calls use `https://sso.<domain>/...`. The hostAlias sends that name to the gateway ClusterIP. There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
+That is the path for the discovery document, the token endpoint, and JWKS. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP. There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
 
 ## Tests
 

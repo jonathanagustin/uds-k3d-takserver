@@ -59,4 +59,10 @@ if [ "${PUSH_IMAGES:-false}" = "true" ]; then
   output="--push"
 fi
 cd "${here}"
-docker buildx bake -f docker-bake.hcl "${output}" cloudtak
+# The bake file reads the submodule, which is outside this directory.
+# Buildx asks for that read to be granted.
+allow=()
+if docker buildx bake --help 2>/dev/null | grep -q -- '--allow'; then
+  allow=(--allow "fs.read=${root}")
+fi
+docker buildx bake -f docker-bake.hcl "${allow[@]}" "${output}" cloudtak

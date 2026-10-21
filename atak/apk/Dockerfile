@@ -47,9 +47,17 @@ RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
 # earlier stages in the cache (TAK third party alone is about 30 minutes).
 FROM toolchain AS ttp
 COPY upstream/atak-civ /src/atak-civ
-COPY atak/apk/prebuild.sh /build/prebuild.sh
 ENV SRC=/src/atak-civ
-RUN /build/prebuild.sh extract ttp
+# Same steps as prebuild.sh extract ttp, written out so that edits to the
+# script do not invalidate this layer.
+WORKDIR /src/atak-civ
+RUN tar xzf depends/assimp-4.0.1-mod.tar.gz -C . \
+    && tar xzf depends/gdal-2.4.4-mod.tar.gz -C . \
+    && tar xzf depends/libLAS-1.8.2-mod.tar.gz -C . \
+    && tar xzf depends/LASzip-3.4.3-mod.tar.gz -C . \
+    && tar xzf depends/tinygltf-2.4.1-mod.tar.gz -C takengine/thirdparty \
+    && make -C takthirdparty TARGET=android-x86_64 GDAL_USE_KDU=no \
+        build_spatialite build_commoncommo build_gdal build_assimp
 
 FROM ttp AS deps
 COPY atak/apk /build

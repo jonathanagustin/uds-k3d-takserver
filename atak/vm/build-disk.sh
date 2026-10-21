@@ -31,6 +31,8 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
   # A test device: keep the screen on so screenshots are not black.
   if [ "$(getprop sys.boot_completed)" = 1 ]; then
     svc power stayon true
+    # The Android-x86 analytics app crashes in a loop without Google services.
+    pm disable org.android_x86.analytics >/dev/null 2>&1
     settings put system screen_off_timeout 2147483647
     input keyevent KEYCODE_WAKEUP
   fi
@@ -42,7 +44,7 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
     echo "dns1=$(getprop net.dns1) eth0.dns1=$(getprop dhcp.eth0.dns1)"
     netstat -ltn 2>&1 | grep -E ':5555|Proto'
     logcat -d -b crash -t 20 2>&1
-    logcat -d -t 400 2>&1 | grep -iE 'surfaceflinger|gralloc|EGL|adbd|FATAL' | tail -n 25
+    logcat -d -t 400 2>&1 | grep -iE 'surfaceflinger|gralloc|EGL|adbd|FATAL|Ethernet|IpClient|DhcpClient' | tail -n 25
   } | while IFS= read -r l; do echo "atak-report: $l" > /dev/kmsg; done
 done
 SH

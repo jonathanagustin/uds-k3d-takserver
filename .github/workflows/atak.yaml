@@ -30,15 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          submodules: true
 
-      - name: Pull the LFS files the Android build reads
-        working-directory: upstream/atak-civ
-        run: |
-          git lfs install --local
-          git lfs pull --exclude="takthirdparty/distfiles/pdfium/win*,takthirdparty/distfiles/pdfium/mac*,takthirdparty/distfiles/mrsid/win*,takthirdparty/distfiles/mrsid/ios*,takthirdparty/distfiles/mrsid/mac*"
-          du -sh .
+      - name: Check out the ATAK submodule and its LFS files
+        run: ./atak/ci/fetch-source.sh
 
       - name: Free runner disk
         run: ./.github/scripts/free-runner-disk.sh

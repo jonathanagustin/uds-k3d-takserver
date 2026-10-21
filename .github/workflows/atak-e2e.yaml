@@ -46,10 +46,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Check out the ATAK submodule
-        run: |
-          git submodule update --init --depth 1 upstream/atak-civ
-          git -C upstream/atak-civ lfs pull --exclude="**/win*/**,**/mac*/**,**/ios*/**,**/*mrsid*/**" || git -C upstream/atak-civ lfs pull
+      - name: Check out the ATAK submodule and its LFS files
+        run: ./atak/ci/fetch-source.sh
 
       - name: Trim the runner
         run: ./.github/scripts/trim-runner.sh
@@ -72,6 +70,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build the device images
+        timeout-minutes: 120
         run: |
           ./atak/ci/build-apk.sh
           docker buildx build -f atak/apk/Dockerfile --target driver -t "${DRIVER_IMAGE}" --load \

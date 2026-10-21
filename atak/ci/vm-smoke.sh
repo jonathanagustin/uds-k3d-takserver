@@ -35,7 +35,7 @@ spec:
               imagePullPolicy: IfNotPresent
               kernelPath: /boot/kernel
               initrdPath: /boot/initrd.img
-            kernelArgs: "root=/dev/ram0 SRC=/android androidboot.selinux=permissive console=ttyS0 androidboot.console=ttyS0 loglevel=6 video=720x1280"
+            kernelArgs: "root=/dev/ram0 SRC=/android androidboot.selinux=permissive console=ttyS0 androidboot.console=ttyS0 loglevel=6 DEBUG=0 video=720x1280"
         devices:
           logSerialConsole: true
           disks:

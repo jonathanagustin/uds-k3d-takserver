@@ -84,6 +84,11 @@ jobs:
       - name: Debug
         if: failure()
         run: |
+          mkdir -p out
+          curl -fsSL -o /usr/local/bin/virtctl "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64" 2>/dev/null \
+            || sudo curl -fsSL -o /usr/local/bin/virtctl "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64"
+          sudo chmod +x /usr/local/bin/virtctl || true
+          virtctl vnc screenshot -n atak atak-device --file out/vnc.png || true
           kubectl get pods -A -o wide || true
           kubectl get vm,vmi -n atak -o yaml || true
           kubectl get events -n atak --sort-by=.lastTimestamp || true

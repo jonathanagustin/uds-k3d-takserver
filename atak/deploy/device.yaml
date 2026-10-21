@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # ATAK test device: the Android-x86 VM, the browser viewer and the UDS Package
-# that limits their traffic. amd64 with /dev/kvm only. Images are set by the
-# e2e script (VM_IMAGE, VIEWER_IMAGE) with envsubst.
+# that limits their traffic. amd64 with /dev/kvm only. Deployed by
+# atak/zarf.yaml, which fills in the image tag (constant ATAK_TAG) and the
+# domain (variable DOMAIN).
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -24,7 +25,7 @@ spec:
         firmware:
           kernelBoot:
             container:
-              image: ${VM_IMAGE}
+              image: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:###ZARF_CONST_ATAK_TAG###
               imagePullPolicy: IfNotPresent
               kernelPath: /boot/kernel
               initrdPath: /boot/initrd.img
@@ -47,7 +48,7 @@ spec:
       volumes:
         - name: android
           containerDisk:
-            image: ${VM_IMAGE}
+            image: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:###ZARF_CONST_ATAK_TAG###
             imagePullPolicy: IfNotPresent
             path: /disk/android.qcow2
 ---
@@ -88,7 +89,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: viewer
-          image: ${VIEWER_IMAGE}
+          image: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:###ZARF_CONST_ATAK_TAG###
           imagePullPolicy: IfNotPresent
           env:
             - name: DEVICE
@@ -124,7 +125,7 @@ spec:
     - name: ATAK test device viewer
       clientId: uds-atak-viewer
       redirectUris:
-        - "https://atak.${DOMAIN}/login"
+        - "https://atak.###ZARF_VAR_DOMAIN###/login"
       enableAuthserviceSelector:
         app.kubernetes.io/name: atak-viewer
       groups:

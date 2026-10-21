@@ -5,36 +5,32 @@
 # End-to-end check of the ATAK test device on a cluster that `uds run
 # actions:test-deploy` built (k3d cluster "uds", UDS Core slim with the
 # passthrough gateway on 8446/8089, TAK Server, Keycloak user doug).
-# Needs VM_IMAGE, VIEWER_IMAGE and DRIVER_IMAGE loaded in Docker.
-# Evidence goes to OUT.
+# Needs the atak-civ-vm, atak-viewer and atak-driver images for ATAK_TAG in
+# Docker; the Zarf package build takes the first two from there. Evidence
+# goes to OUT.
 set -euo pipefail
 OUT="${OUT:-out}"
 DOMAIN="${DOMAIN:-uds.dev}"
-KUBEVIRT_VERSION="${KUBEVIRT_VERSION:-v1.6.2}"
+ATAK_TAG="${ATAK_TAG:-dev}"
+DRIVER_IMAGE="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:${ATAK_TAG}}"
 TAK_USER="${KEYCLOAK_USER:-doug}"
 TAK_PASS="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}"
 TAK_HOST="${TAK_HOST:-takserver-stream.${DOMAIN}}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "${OUT}"
 k() { uds zarf tools kubectl "$@"; }
-export VM_IMAGE VIEWER_IMAGE DOMAIN
 
-echo "== images"
-k3d image import -c uds "${VM_IMAGE}" "${VIEWER_IMAGE}" "${DRIVER_IMAGE}"
-
-echo "== KubeVirt ${KUBEVIRT_VERSION}"
-k apply -f "${here}/deploy/kubevirt-exemption.yaml"
-k apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
-k apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
-k -n kubevirt wait kv kubevirt --for condition=Available --timeout=15m
-
-echo "== device"
-k create namespace atak --dry-run=client -o yaml | k apply -f -
-# shellcheck disable=SC2016 # envsubst takes the variable names literally
-envsubst '${VM_IMAGE} ${VIEWER_IMAGE} ${DOMAIN}' < "${here}/deploy/device.yaml" | k apply -f -
-timeout 300 sh -c 'until uds zarf tools kubectl get vmi -n atak atak-device >/dev/null 2>&1; do sleep 2; done'
-k wait vmi -n atak atak-device --for condition=Ready --timeout=10m
-k rollout status -n atak deploy/atak-viewer --timeout=5m
+echo "== Zarf package (KubeVirt, VM, viewer)"
+start=$(date +%s)
+pkg_dir="$(mktemp -d)"
+uds zarf package create "${here}" --set ATAK_TAG="${ATAK_TAG}" -o "${pkg_dir}" --confirm
+du -h "${pkg_dir}"/*.tar.zst | tee "${OUT}/package.txt"
+echo "create: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+start=$(date +%s)
+uds zarf package deploy "${pkg_dir}"/zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN="${DOMAIN}" --confirm
+echo "deploy: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+# The driver is a test tool, not part of the package.
+k3d image import -c uds "${DRIVER_IMAGE}"
 
 echo "== TAK enrollment credentials"
 # The device enrolls with HTTP Basic, like any ATAK. Record what TAK accepts.

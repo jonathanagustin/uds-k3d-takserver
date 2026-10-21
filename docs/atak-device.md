@@ -1,6 +1,6 @@
 # ATAK test device
 
-`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 VM managed by KubeVirt. It behaves like a field device: it enrolls a client certificate on 8446 as a Keycloak user, streams CoT on 8089, and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
+`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 VM managed by KubeVirt. It behaves like a field device: it enrolls a client certificate on 8446, streams CoT on 8089, and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
 
 It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [ADR 13](../adr/0013-atak-test-device-in-kubevirt.md).
 
@@ -36,7 +36,9 @@ The package (`atak/zarf.yaml`) has two components:
 
 ## Enrollment
 
-Enrollment happens at runtime against the TAK Server it is deployed next to. The e2e driver installs the APK over adb, taps through the first-run prompts, and opens ATAK's quick-enroll link `tak://com.atakmap.app/enroll?host=takserver-stream.<domain>&username=...&token=...` with the user and password from a Secret. ATAK then enrolls on `<host>:8446` and adds the stream `<host>:8089:ssl`. Inside the cluster `takserver.<domain>` resolves to the tenant gateway, so the device uses `takserver-stream.<domain>`.
+Enrollment happens at runtime against the TAK Server it is deployed next to. The e2e driver installs the APK over adb, taps through the first-run prompts, and opens ATAK's quick-enroll link `tak://com.atakmap.app/enroll?host=takserver-stream.<domain>&username=...&token=...` with the user and password from a Secret. ATAK then enrolls on `<host>:8446` and adds the stream `<host>:8089:ssl`.
+
+ATAK always enrolls with HTTP Basic (`CertificateEnrollmentClient` passes `passIsToken=false`), and TAK checks Basic credentials against its file authenticator. Only bearer tokens go to Keycloak. A Keycloak password is therefore refused on 8446 (TAK answers 302 to its login page). The e2e job records that answer, then creates a TAK file user `atak-device` in group `atak-test` through `/user-management/api/new-user` with the admin certificate and a password generated at run time, and the device enrolls as that user. The viewer login still uses the Keycloak user. Inside the cluster `takserver.<domain>` resolves to the tenant gateway, so the device uses `takserver-stream.<domain>`.
 
 ## Network rules
 

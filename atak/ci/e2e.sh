@@ -33,18 +33,43 @@ echo "deploy: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
 k3d image import -c uds "${DRIVER_IMAGE}"
 
 echo "== TAK enrollment credentials"
-# The device enrolls with HTTP Basic, like any ATAK. Record what TAK accepts.
-k -n istio-passthrough-gateway port-forward svc/passthrough-ingressgateway 28446:8446 >/tmp/e2e-pf.log 2>&1 &
+# ATAK enrolls with HTTP Basic (passIsToken is always false in
+# CertificateEnrollmentClient), and TAK checks Basic against its file
+# authenticator. Record whether the Keycloak password works. If it does not,
+# make a TAK file user for the device with a password generated now; it lives
+# only in TAK and in a Secret in this cluster.
+k -n istio-passthrough-gateway port-forward svc/passthrough-ingressgateway 28446:8446 28443:443 >/tmp/e2e-pf.log 2>&1 &
 pf=$!
 trap 'kill ${pf} 2>/dev/null || true' EXIT
 sleep 3
-code="$(curl -k -sS -o /dev/null -w '%{http_code}' --resolve "${TAK_HOST}:28446:127.0.0.1" \
-  -u "${TAK_USER}:${TAK_PASS}" "https://${TAK_HOST}:28446/Marti/api/tls/config" || true)"
+cert_dir="$("${here}/../tests/extract-certs.sh")"
+admin() {
+  curl -k -sS --max-time 20 --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass atakatak \
+    --resolve "takserver-api.${DOMAIN}:28443:127.0.0.1" "$@"
+}
+basic_code() {
+  curl -k -sS -o /dev/null -w '%{http_code}' --resolve "${TAK_HOST}:28446:127.0.0.1" \
+    -u "$1:$2" "https://${TAK_HOST}:28446/Marti/api/tls/config" || true
+}
+code="$(basic_code "${TAK_USER}" "${TAK_PASS}")"
 echo "basic auth with the Keycloak password on 8446: HTTP ${code}" | tee "${OUT}/enroll-auth.txt"
+DEVICE_USER="${TAK_USER}"
+DEVICE_PASS="${TAK_PASS}"
+if [ "${code}" != "200" ]; then
+  DEVICE_USER="atak-device"
+  DEVICE_PASS="Atak-$(openssl rand -hex 12)-9"
+  admin -X DELETE "https://takserver-api.${DOMAIN}:28443/user-management/api/delete-user/${DEVICE_USER}" >/dev/null || true
+  body="$(printf '{"username":"%s","password":"%s","groupList":["atak-test"],"groupListIN":[],"groupListOUT":[]}' "${DEVICE_USER}" "${DEVICE_PASS}")"
+  new_code="$(admin -o "${OUT}/new-user.txt" -w '%{http_code}' -H 'Content-Type: application/json' -X POST \
+    --data "${body}" "https://takserver-api.${DOMAIN}:28443/user-management/api/new-user")"
+  code="$(basic_code "${DEVICE_USER}" "${DEVICE_PASS}")"
+  echo "TAK file user ${DEVICE_USER}: new-user HTTP ${new_code}, basic auth on 8446: HTTP ${code}" | tee -a "${OUT}/enroll-auth.txt"
+  [ "${code}" = "200" ] || { cat "${OUT}/new-user.txt" >&2; exit 1; }
+fi
 
 echo "== driver"
-k -n atak create secret generic atak-tak-user --from-literal=TAK_USER="${TAK_USER}" \
-  --from-literal=TAK_TOKEN="${TAK_PASS}" --dry-run=client -o yaml | k apply -f -
+k -n atak create secret generic atak-tak-user --from-literal=TAK_USER="${DEVICE_USER}" \
+  --from-literal=TAK_TOKEN="${DEVICE_PASS}" --dry-run=client -o yaml | k apply -f -
 k apply -f - <<YAML
 apiVersion: v1
 kind: Pod
@@ -53,6 +78,9 @@ metadata:
   namespace: atak
   labels:
     app.kubernetes.io/name: atak-driver
+    # The driver image is imported into k3d for the test, not carried in the
+    # Zarf package, so the Zarf agent must not point it at the Zarf registry.
+    zarf.dev/agent: ignore
 spec:
   restartPolicy: Never
   securityContext:
@@ -96,22 +124,16 @@ echo "== TAK sees the device"
 # subscriptions/all is the admin view of live connections. clientEndPoints
 # only lists clients that share a group with the caller, and the admin
 # certificate has no groups. Either one listing the device user passes.
-cert_dir="$("${here}/../tests/extract-certs.sh")"
-gw_port="$(cat /tmp/tak-gateway-port 2>/dev/null || echo 18443)"
-marti() {
-  curl -k -sS --max-time 20 --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass atakatak \
-    --resolve "takserver-api.${DOMAIN}:${gw_port}:127.0.0.1" \
-    "https://takserver-api.${DOMAIN}:${gw_port}/Marti/api/$1"
-}
+marti() { admin "https://takserver-api.${DOMAIN}:28443/Marti/api/$1"; }
 found=""
 for _ in $(seq 1 30); do
   marti subscriptions/all > "${OUT}/subscriptions.json" || true
   marti clientEndPoints > "${OUT}/clientEndPoints.json" || true
-  if grep -q "\"${TAK_USER}\"" "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"; then found=1; break; fi
+  if grep -q "\"${DEVICE_USER}\"" "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"; then found=1; break; fi
   sleep 10
 done
 cat "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"
-[ -n "${found}" ] || { echo "device user ${TAK_USER} has no live subscription" >&2; exit 1; }
+[ -n "${found}" ] || { echo "device user ${DEVICE_USER} has no live subscription" >&2; exit 1; }
 
 echo "== viewer behind SSO"
 node "${here}/ci/viewer-sso.cjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"

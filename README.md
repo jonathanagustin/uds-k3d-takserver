@@ -33,6 +33,22 @@ All tools except Docker are pinned in [`mise.toml`](mise.toml). To install them,
 mise install
 ```
 
+## Supported architectures
+
+| Architecture | Images | Zarf package | Tested in CI |
+| --- | --- | --- | --- |
+| `amd64` (x86_64) | yes | yes | install, and upgrade once a release exists |
+| `arm64` (aarch64) | yes | yes | install |
+
+The six TAK images are multi-arch: one tag such as `takserver-api:5.7-RELEASE-14` serves both, and Docker or the cluster pulls the matching one. Zarf packages are per architecture. `uds run create-dev-package` builds for the machine you run it on. To build or deploy for the other one, pass `--architecture`:
+
+```bash
+uds zarf package create . --flavor upstream --architecture arm64 --confirm
+uds zarf package deploy zarf-package-takserver-arm64-*.tar.zst --confirm
+```
+
+A published release has an entry for each architecture under the same OCI reference. Pass `--architecture` to `zarf package deploy oci://...` or `uds deploy` when the cluster's architecture differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
+
 ## Quick start
 
 Clone with the TAK Server source submodule. `build.sh` also checks it out if you forgot:

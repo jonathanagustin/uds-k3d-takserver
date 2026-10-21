@@ -46,5 +46,6 @@ jobs:
           tag="5.7-RELEASE-14"
           repo="ghcr.io/jonathanagustin/uds-k3d-takserver"
           for name in takserver-api takserver-messaging takserver-config takserver-plugins takserver-database-setup takserver-ignite; do
-            cosign sign --yes "${repo}/${name}:${tag}"
+            # --recursive also signs each per-architecture manifest in the index.
+            cosign sign --yes --recursive "${repo}/${name}:${tag}"
           done

@@ -29,20 +29,29 @@ mono_font="$(fc-match -f '%{file}' 'JetBrains Mono')"
 # Playwright starts recording on a blank page before the first navigation.
 web_trim="${WEB_TRIM:-0.4}"
 
-# card NAME SECONDS TITLE SUBTITLE [last]
-# Font sizes shrink from 52 and 26 until the text fits text_max_w. The last
-# card does not fade out, so the video ends on the full card.
+# card NAME TITLE SUBTITLE [last]
+# A card stays up long enough to read: one second plus three words per
+# second of title and subtitle, at least 3 s, and at least 4 s for the last
+# card. That time includes the fades. Font sizes shrink from 52 and 26 until
+# the text fits text_max_w. The last card does not fade out, so the video
+# ends on the full card.
+card_fade=0.4
 card() {
-  local name="$1" secs="$2" last="${5:-}" title_size sub_size fades
-  printf '%s' "$3" > "${work}/${name}.title"
-  printf '%s' "$4" > "${work}/${name}.sub"
+  local name="$1" last="${4:-}" words secs min=3 title_size sub_size fades
+  printf '%s' "$2" > "${work}/${name}.title"
+  printf '%s' "$3" > "${work}/${name}.sub"
+  if [ "${last}" = "last" ]; then
+    min=4
+  fi
+  words="$(cat "${work}/${name}.title" "${work}/${name}.sub" | wc -w)"
+  secs="$(awk -v w="${words}" -v m="${min}" 'BEGIN { s = 1 + w / 3; if (s < m) s = m; printf "%.1f", s }')"
   title_size="$(python3 demo/filters.py fit "${title_font}" "${work}/${name}.title" 52 "${text_max_w}")"
   sub_size="$(python3 demo/filters.py fit "${mono_font}" "${work}/${name}.sub" 26 "${text_max_w}")"
-  fades="fade=t=in:st=0:d=0.3"
+  fades="fade=t=in:st=0:d=${card_fade}"
   if [ "${last}" != "last" ]; then
-    fades="${fades},fade=t=out:st=$(awk "BEGIN{print ${secs}-0.3}"):d=0.3"
+    fades="${fades},fade=t=out:st=$(awk "BEGIN{print ${secs}-${card_fade}}"):d=${card_fade}"
   fi
-  echo "card ${name}: title ${title_size}px, subtitle ${sub_size}px"
+  echo "card ${name}: ${words} words, ${secs}s, title ${title_size}px, subtitle ${sub_size}px"
   ffmpeg -v error -y -f lavfi -i "color=c=${bg}:s=1280x720:r=${fps}:d=${secs}" \
     -vf "drawtext=fontfile=${title_font}:textfile=${work}/${name}.title:fontcolor=${fg}:fontsize=${title_size}:x=(w-text_w)/2:y=(h-text_h)/2-30,drawtext=fontfile=${mono_font}:textfile=${work}/${name}.sub:fontcolor=${accent}:fontsize=${sub_size}:x=(w-text_w)/2:y=(h/2)+40,${fades}" \
     -c:v libx264 -crf 16 -pix_fmt yuv420p "${work}/${name}.mp4"
@@ -65,20 +74,20 @@ clip() {
     -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
 }
 
-card c00 2.2 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
-card c01 1.6 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
+card c00 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
+card c01 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
 clip t01 "${out}/01-package.mp4" terminal demo/out/tapes/01-package.tape
-card c02 1.6 "Integrating with the platform" "the UDS Package custom resource"
+card c02 "Integrating with the platform" "the UDS Package custom resource"
 clip t02 "${out}/02-package-cr.mp4" terminal demo/out/tapes/02-package-cr.tape
-card c03 1.6 "Secure by default" "mesh, generated policies, SSO, CI checks"
+card c03 "Secure by default" "mesh, generated policies, SSO, CI checks"
 clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
-card c04 1.6 "Running and healthy" "clustered TAK on k3d"
+card c04 "Running and healthy" "clustered TAK on k3d"
 clip t04 "${out}/04-running.mp4" terminal demo/out/tapes/04-running.tape
-card c05 1.6 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
+card c05 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
 clip t05 "${out}/05-clusters.mp4" terminal demo/out/tapes/05-clusters.tape
-card c06 1.6 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
+card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, recorded with Playwright"
 clip t06 "${out}/06-web.webm" web "${out}/06-web-events.json" "${web_trim}"
-card c99 3 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
+card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
 
 list="${work}/list.txt"
 : > "${list}"

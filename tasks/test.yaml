@@ -7,6 +7,7 @@ tasks:
     actions:
       - task: health-check
       - task: startup
+      - task: dns
       - task: oidc-render
       - task: mesh
       - task: web-tls
@@ -451,6 +452,73 @@ tasks:
           echo "passthrough gateway port-forward did not accept TLS" >&2
           cat /tmp/tak-passthrough-pf.log >&2 || true
           exit 1
+
+  - name: dns
+    description: DOMAIN hosts resolve to the right Istio gateway from inside a pod, and the API pod has no hostAlias
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          domain="uds.dev"
+          aliases="$(k get deploy takserver-api -n takserver -o jsonpath='{.spec.template.spec.hostAliases}')"
+          if [ -n "${aliases}" ]; then
+            echo "takserver-api still has hostAliases: ${aliases}" >&2
+            exit 1
+          fi
+          k get configmap coredns-custom -n kube-system -o 'jsonpath={.data.00-takserver\.override}'
+          echo
+          svc_ip() { k get svc "$2" -n "$1" -o jsonpath='{.spec.clusterIP}'; }
+          tenant="$(svc_ip istio-tenant-gateway tenant-ingressgateway)"
+          passthrough="$(svc_ip istio-passthrough-gateway passthrough-ingressgateway)"
+          echo "tenant gateway ${tenant}, passthrough gateway ${passthrough}"
+          # Two answers are correct. CoreDNS's rewrite gives the gateway
+          # ClusterIP. In an ambient pod, ztunnel's DNS proxy answers first
+          # for hosts that have a ServiceEntry: the UDS operator writes one
+          # (MeshInternal, endpoint = the gateway Service) for every exposed
+          # host, and ztunnel hands out an auto-allocated address from
+          # 240.240.0.0/16 that it routes to that endpoint. Hosts without a
+          # ServiceEntry, such as map.<domain> before CloudTAK is deployed,
+          # show the CoreDNS answer.
+          entries="$(k get serviceentries.networking.istio.io -A -o json)"
+          fail=0
+          check() {
+            local host="$1" want="$2" fqdn="$3" got via
+            got="$(k exec -n takserver deploy/takserver-api -c takserver-api -- getent ahostsv4 "${host}" 2>/dev/null | awk 'NR==1{print $1}' || true)"
+            if [ -n "${got}" ] && [ "${got}" = "${want}" ]; then
+              echo "ok - ${host} -> ${got} (CoreDNS rewrite)"
+              return
+            fi
+            if [[ "${got}" == 240.240.* ]]; then
+              via="$(HOST="${host}" python3 -c '
+          import json, os, sys
+          host = os.environ["HOST"]
+          for item in json.load(sys.stdin)["items"]:
+              spec = item.get("spec", {})
+              if host in spec.get("hosts", []):
+                  for ep in spec.get("endpoints", []):
+                      print(ep.get("address", ""))
+          ' <<< "${entries}")"
+              if grep -qx "${fqdn}" <<< "${via}"; then
+                echo "ok - ${host} -> ${got} (ztunnel, ServiceEntry endpoint ${fqdn})"
+                return
+              fi
+              echo "not ok - ${host} -> ${got}, ServiceEntry endpoints '${via//$'\n'/ }', expected ${fqdn}" >&2
+              fail=1
+              return
+            fi
+            echo "not ok - ${host} -> '${got}', expected ${want} or a ServiceEntry address for ${fqdn}" >&2
+            fail=1
+          }
+          for host in sso takserver map; do
+            check "${host}.${domain}" "${tenant}" tenant-ingressgateway.istio-tenant-gateway.svc.cluster.local
+          done
+          for host in takserver-api takserver-stream; do
+            check "${host}.${domain}" "${passthrough}" passthrough-ingressgateway.istio-passthrough-gateway.svc.cluster.local
+          done
+          [ "${fail}" -eq 0 ]
 
   - name: oidc-render
     description: Every TAK pod had the render init container from its first start, and every node holds the cluster OIDC secret

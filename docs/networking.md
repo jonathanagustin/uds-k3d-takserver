@@ -55,4 +55,24 @@ No waypoint is configured. The Package service mesh field only selects `ambient`
 
 The upstream database Job sets `proxy.istio.io/config`. UDS `RestrictIstioSidecarOverrides` denies that annotation. Exemption `takserver-db-setup` in `uds-policy-exemptions` allows only that policy for pods named `takserver-db-setup-*`. The cert Job does not set an Istio annotation. The OIDC init container is added to the existing TAK pods and does not set one either.
 
-`sso.uds.dev` resolves to `127.0.0.1` from the dev DNS, including inside a pod. The API Deployment's hostAlias sends that name to the ClusterIP of `tenant-ingressgateway` in `istio-tenant-gateway`. The Istio 1.31 gateway chart labels those pods `app: tenant-ingressgateway` and `istio: tenant-ingressgateway`.
+Inside the cluster, `sso.<domain>` resolves to the ClusterIP of `tenant-ingressgateway` in `istio-tenant-gateway` (see [In-cluster DNS](#in-cluster-dns)). The Istio 1.31 gateway chart labels those pods `app: tenant-ingressgateway` and `istio: tenant-ingressgateway`.
+
+## In-cluster DNS
+
+Public DNS for `*.uds.dev` answers `127.0.0.1`. From inside a pod that is the pod itself, so a pod cannot reach `sso.uds.dev` or `takserver.uds.dev` by name without help. uds-k3d ships ConfigMap `kube-system/coredns-custom` with key `uds.override`, which rewrites `*.admin.uds.dev` to the admin gateway and every other `*.uds.dev` name to the tenant gateway. It has no rule for passthrough hosts and only covers `uds.dev`.
+
+The `takserver` component's first `onDeploy` action adds key `00-takserver.override` to that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, and restarts CoreDNS when the key changed:
+
+| Name | Answer |
+| --- | --- |
+| `takserver-api.<domain>`, `takserver-stream.<domain>` | `passthrough-ingressgateway.istio-passthrough-gateway` ClusterIP |
+| `*.admin.<domain>` | `admin-ingressgateway.istio-admin-gateway` ClusterIP |
+| any other `*.<domain>` (`sso`, `takserver`, `map`, ...) | `tenant-ingressgateway.istio-tenant-gateway` ClusterIP |
+
+Each rule is a CoreDNS `rewrite stop` with `answer auto`, the same form uds-k3d uses. The k3s Corefile imports the `*.override` keys in name order, and the first matching `stop` rule wins, so these rules run before `uds.override`. A rule is written only when its gateway Service exists.
+
+`takserver.<domain>` is on both gateways: the tenant gateway serves the browser UI on 443, and the passthrough gateway serves certificate enrollment (8446) by SNI. A name has one answer, so inside the cluster it resolves to the tenant gateway. In-cluster clients reach 8446 through `takserver-api-service`.
+
+Pods in an ambient namespace can get a different, equally correct answer. The UDS operator writes a `MeshInternal` ServiceEntry for every exposed host, with the gateway Service as its endpoint. ztunnel's DNS proxy answers names that have a ServiceEntry before CoreDNS sees the query, with an address it allocates from `240.240.0.0/16`, and routes connections to that address to the ServiceEntry endpoint, the same gateway. Names without a ServiceEntry, and pods outside the mesh, get the CoreDNS answer. On a cluster without `coredns-custom` the ServiceEntries alone still steer ambient pods, as long as public DNS answers the name at all.
+
+The action does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`. `uds run test:dns` checks the answers from inside the API pod and that the API Deployment has no `hostAliases`. It accepts the gateway ClusterIP, or a `240.240.0.0/16` address when the name's ServiceEntry points at the expected gateway Service. Earlier versions of this package gave the API pod a hostAlias for `sso.<domain>`. An upgrade removes it.

@@ -27,5 +27,14 @@
   },
   "dependencies": {
     "pepr": "2.0.3"
+  },
+  "overrides": {
+    "kubernetes-fluent-client": {
+      "undici": "8.10.2",
+      "js-yaml": "5.4.2",
+      "@kubernetes/client-node": {
+        "js-yaml": "4.3.2"
+      }
+    }
   }
 }

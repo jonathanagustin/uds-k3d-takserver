@@ -31,8 +31,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  actions: write
 
 concurrency:
   group: container-${{ github.ref }}
@@ -48,6 +46,10 @@ jobs:
   # merge always agree on whether this run publishes anything.
   plan:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      actions: write
     outputs:
       build: ${{ steps.image.outputs.build }}
     steps:
@@ -122,6 +124,10 @@ jobs:
   # Each job pushes <tag>-<arch>; the manifest job joins them under <tag>.
   build:
     needs: plan
+    permissions:
+      contents: read
+      packages: write
+      actions: write
     if: needs.plan.outputs.build == 'true'
     strategy:
       fail-fast: false
@@ -215,6 +221,10 @@ jobs:
   # tag that zarf.yaml and the chart values reference.
   manifest:
     needs: [plan, build]
+    permissions:
+      contents: read
+      packages: write
+      actions: write
     if: needs.plan.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.push)
     runs-on: ubuntu-24.04
     steps:

@@ -109,9 +109,21 @@ jobs:
 
   # Install and upgrade do not need each other, so they run at the same time.
   # Upgrade must resolve a released baseline; the first-release bootstrap is reported explicitly.
+  # The install path runs once per architecture on a native runner. The
+  # slim core checkpoint and core-base are published for amd64 and arm64.
+  # Upgrade stays on amd64 until a released arm64 package exists.
   validate-install:
     needs: [check-flavor, images]
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: validate-install (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     permissions:
       actions: write
@@ -158,7 +170,7 @@ jobs:
           version: v0.39.0
 
       - name: Trim the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh
 
       # Restore only. Install and upgrade run together, and a second save of

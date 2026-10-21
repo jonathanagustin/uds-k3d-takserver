@@ -70,7 +70,7 @@ done
 Xvfb "${display}" -screen 0 "${width}x${height}x24" -nolisten tcp > "${work}/xvfb.log" 2>&1 &
 xvfb=$!
 ffmpeg_pid=""
-# shellcheck disable=SC2317 # runs from the EXIT trap
+# shellcheck disable=SC2317,SC2329 # runs from the EXIT trap
 cleanup() {
   if [ -n "${ffmpeg_pid}" ] && kill -0 "${ffmpeg_pid}" 2> /dev/null; then
     kill -INT "${ffmpeg_pid}"

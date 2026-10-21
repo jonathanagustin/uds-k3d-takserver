@@ -26,7 +26,7 @@ Building arm64 under QEMU on an amd64 runner emulates the whole Gradle and Node 
 - The container workflow builds each architecture on a native runner (`ubuntu-24.04` and `ubuntu-24.04-arm`) and pushes `<tag>-amd64` and `<tag>-arm64`. A final job joins them with `docker buildx imagetools create` into one index under `<tag>`, the tag `zarf.yaml` and the values reference. The merge refuses to write `<tag>` unless every architecture's tag exists, so it cannot replace a multi-arch index with fewer platforms.
 - `wait-for-tak-images.sh` treats a tag as published only when its index lists `linux/amd64` and `linux/arm64`.
 - Postgres uses `docker.io/imresamu/postgis:15-3.4`, the multi-arch build of the same `postgis/docker-postgis` Dockerfiles published by one of that project's maintainers. It has the same PostgreSQL 15.8 and PostGIS 3.4.3 as the amd64-only image, on Debian bookworm instead of bullseye.
-- The package workflow creates the package on both architectures. The install test (k3d, slim UDS Core, the test bundle, SSO, and the full smoke and Playwright suite) runs on both. The release workflow publishes one package per architecture, each created and tested on its own runner.
+- The package workflow creates the package on both architectures. The install test (k3d, slim UDS Core, the test bundle, SSO, and the full smoke and Playwright suite) runs on both. The release workflow publishes one package per architecture, each created on its own native runner.
 
 ## Consequences
 

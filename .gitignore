@@ -24,6 +24,7 @@ tests/.playwright/
 .idea/
 .vscode/
 node_modules/
+demo/out/
 
 # Admission module build output.
 pepr/dist/

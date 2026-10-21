@@ -1,5 +1,7 @@
 # uds-k3d-takserver
 
+https://github.com/user-attachments/assets/35746409-0e0b-4466-b733-a148f3a5c6bb
+
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged as a [UDS](https://docs.defenseunicorns.com/core/) package. The package deploys the upstream TAK Server Helm chart (tag `5.7-RELEASE-14`) onto UDS Core. It is developed and tested on a local k3d cluster running the `k3d-core-slim-dev` bundle. The repository also has OpenTofu scaffolds for EKS, RKE2, and AKS test clusters.
 
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).

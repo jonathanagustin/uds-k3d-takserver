@@ -222,6 +222,22 @@ if images_published; then
 fi
 
 if [ "${check_once}" = "true" ]; then
+  # Another branch can push an older single-arch tag over the shared one.
+  # When this commit's Container run is already rebuilding it, wait for that
+  # run instead of failing. The Container workflow itself must not wait on
+  # its own run.
+  if [ "${GITHUB_WORKFLOW:-}" != "Container" ]; then
+    status="$(SAME_SHA_ONLY=true container_run_status)"
+    case "${status}" in
+      queued | in_progress | waiting | pending | requested)
+        echo "The Container run for this commit is ${status}. Waiting for it."
+        if await_same_sha_build && images_published; then
+          echo "All six images are published."
+          exit 0
+        fi
+        ;;
+    esac
+  fi
   echo "The six tags are not all readable." >&2
   exit 1
 fi

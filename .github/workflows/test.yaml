@@ -201,6 +201,29 @@ jobs:
         run: uds run actions:debug-output
         shell: bash
 
+      # debug-output has events but no container logs. A CloudTAK container
+      # that restarts during the chart install shows up here.
+      - name: CloudTAK pod details
+        if: failure()
+        shell: bash
+        run: |
+          k() { uds zarf tools kubectl "$@"; }
+          if ! k get namespace cloudtak >/dev/null 2>&1; then
+            echo "namespace cloudtak does not exist"
+            exit 0
+          fi
+          k get pods -n cloudtak -o wide || true
+          k describe pods -n cloudtak || true
+          for pod in $(k get pods -n cloudtak -o name); do
+            for c in $(k get "${pod}" -n cloudtak -o jsonpath='{.spec.containers[*].name}'); do
+              echo "::group::${pod} ${c}"
+              k logs "${pod}" -n cloudtak -c "${c}" --tail=200 || true
+              echo "--- previous"
+              k logs "${pod}" -n cloudtak -c "${c}" --previous --tail=200 || true
+              echo "::endgroup::"
+            done
+          done
+
       - name: Note whether the slim package is complete
         id: slim-file
         if: always() && env.TEST_TYPE == 'install'

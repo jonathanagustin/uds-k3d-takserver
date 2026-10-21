@@ -50,9 +50,12 @@ const COOKIE_TTL = 600;
 
 const log = (...args) => console.error(new Date().toISOString(), ...args);
 
-// Same connection options as CloudTAK's own pool.
+// Same connection options as CloudTAK's own pool. CloudTAK treats an unset
+// StackName as 'test' and then connects without TLS, as it must to the
+// in-pod PostGIS here.
+const stack = process.env.StackName || 'test';
 const pg = await Pool.connect(env('POSTGRES'), pgtypes, {
-    ssl: process.env.StackName === 'test' ? undefined : { rejectUnauthorized: false },
+    ssl: stack === 'test' ? undefined : { rejectUnauthorized: false },
 });
 const config = {
     pg,

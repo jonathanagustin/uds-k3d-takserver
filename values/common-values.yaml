@@ -98,9 +98,13 @@ global:
 
 postgresql:
   enabled: true
+  # docker.io/postgis/postgis publishes amd64 only. imresamu/postgis is the
+  # multi-arch build of the same postgis/docker-postgis Dockerfiles by one of
+  # its maintainers: PostgreSQL 15.8 and PostGIS 3.4.3, amd64 and arm64.
+  # See adr/0010-amd64-and-arm64.md.
   image:
     registry: docker.io
-    repository: postgis/postgis
+    repository: imresamu/postgis
     tag: 15-3.4
   configurationConfigMap: postgres-configuration
   auth:

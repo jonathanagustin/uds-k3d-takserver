@@ -30,7 +30,7 @@ PUSH_IMAGES=true ./.github/container-and-chart/docker/build.sh
 
 You do not need a JDK, Gradle, protoc, or Node on the host. The Dockerfile's builder stage is Temurin 17.0.20, pinned by the image digest. Gradle is the upstream wrapper, 8.10.2. protoc 3.25.8 and the UI's Node downloads come from Gradle. The Gradle cache is a BuildKit cache mount at `/gradle`, so a rebuild on the same builder does not download everything again. In GitHub Actions that cache is also stored with the Actions cache.
 
-The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. A private `ubuntu-latest` runner has 2 vCPU and 8 GB. The workflow's default platform is `linux/amd64` so the compile stays on one architecture. Pass `linux/amd64,linux/arm64` when the runner can spend the memory on a second compile.
+The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well.
 
 The six tags match `zarf.yaml`:
 
@@ -44,3 +44,15 @@ The six tags match `zarf.yaml`:
 Pull requests scan the loaded images with Grype and Trivy. A push of these files also writes SPDX SBOMs and can push the tags. A vulnerability report does not fail the workflow.
 
 `takserver-tool-ui` uses `react-scripts` 5.0.1. Its ESLint setup names a `jest/globals` environment that the installed plugin does not provide, so the UI build stops before it writes the bundle. The builder sets `DISABLE_ESLINT_PLUGIN=true`. The upstream `package.json` is not changed.
+
+## Architectures
+
+The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU: it builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache, and pushes `<tag>-amd64` and `<tag>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.
+
+To check a published tag:
+
+```bash
+docker buildx imagetools inspect ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api:5.7-RELEASE-14
+```
+
+A local `build.sh` run builds the host architecture. `PLATFORMS=linux/amd64,linux/arm64` builds both with Buildx, which emulates the other architecture under QEMU and takes much longer. See [ADR 10](../adr/0010-amd64-and-arm64.md).

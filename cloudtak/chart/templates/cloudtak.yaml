@@ -158,7 +158,7 @@ spec:
             - name: NODE_EXTRA_CA_CERTS
               value: /var/run/tak-ca/ca.pem
             - name: NODE_OPTIONS
-              value: "--max-old-space-size=160"
+              value: "--max-old-space-size=256"
           # It listens on 127.0.0.1 only, out of reach of an httpGet probe.
           readinessProbe:
             exec:

@@ -64,12 +64,13 @@ resources:
       memory: 384Mi
     limits:
       memory: 1Gi
+  # Loads CloudTAK's model and session modules: about 270 MB resident.
   sso:
     requests:
       cpu: 10m
-      memory: 64Mi
+      memory: 192Mi
     limits:
-      memory: 256Mi
+      memory: 512Mi
   bootstrap:
     requests:
       cpu: 10m

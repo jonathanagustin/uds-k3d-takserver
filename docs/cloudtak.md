@@ -133,4 +133,4 @@ CloudTAK is licensed under AGPL-3.0. This repository does not include its source
 
 ## Resources
 
-On the test node, CloudTAK requests 100m CPU and 384Mi memory with a 1Gi limit, the `sso` container 10m and 64Mi, the bootstrap container 10m and 48Mi, and PostGIS 50m and 128Mi. The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.
+On the test node, CloudTAK requests 100m CPU and 384Mi memory with a 1Gi limit, the `sso` container 10m and 192Mi with a 512Mi limit (it loads CloudTAK's modules and sits near 270 MB), the bootstrap container 10m and 48Mi, and PostGIS 50m and 128Mi. The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.

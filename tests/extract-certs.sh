@@ -9,13 +9,13 @@ set -euo pipefail
 dest="${1:-/tmp/tak-certs}"
 mkdir -p "${dest}"
 
-if [ -s "${dest}/admin.pem" ] && [ -s "${dest}/admin.key" ]; then
+if [[ -s "${dest}/admin.pem" ]] && [[ -s "${dest}/admin.key" ]]; then
   printf '%s\n' "${dest}"
   exit 0
 fi
 
 kctl() {
-  if [ -x ./zarf ]; then
+  if [[ -x ./zarf ]]; then
     ./zarf tools kubectl "$@"
   elif command -v uds >/dev/null 2>&1; then
     uds zarf tools kubectl "$@"
@@ -28,7 +28,7 @@ decode() {
   local name="$1"
   local out="$2"
   kctl get configmap cert-migration -n takserver -o "go-template={{index .binaryData \"${name}\"}}" | base64 -d > "${out}"
-  if [ ! -s "${out}" ]; then
+  if [[ ! -s "${out}" ]]; then
     echo "ConfigMap cert-migration has no ${name}" >&2
     exit 1
   fi

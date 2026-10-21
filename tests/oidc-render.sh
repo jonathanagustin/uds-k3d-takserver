@@ -11,7 +11,7 @@
 set -euo pipefail
 
 kctl() {
-  if [ -x ./zarf ]; then
+  if [[ -x ./zarf ]]; then
     ./zarf tools kubectl "$@"
   elif command -v uds >/dev/null 2>&1; then
     uds zarf tools kubectl "$@"
@@ -39,7 +39,7 @@ echo "cluster secret ${want}"
 
 # The webhook has to fail closed and be limited to the TAK apps.
 hook="$(kctl get mutatingwebhookconfiguration -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.webhooks[0].failurePolicy}{" "}{.webhooks[0].namespaceSelector.matchLabels}{"\n"}{end}' | grep -E '^pepr-[0-9a-f]{32} ' || true)"
-if [ -z "${hook}" ]; then
+if [[ -z "${hook}" ]]; then
   fail "the takserver-oidc webhook is not installed"
 else
   grep -q ' Fail ' <<< "${hook}" || fail "the takserver-oidc webhook does not fail closed: ${hook}"
@@ -54,7 +54,7 @@ for app in "${apps[@]}"; do
   fi
 
   pods="$(kctl get pods -n "${ns}" -l "app=${app}" -o jsonpath='{.items[*].metadata.name}')"
-  if [ -z "${pods}" ]; then
+  if [[ -z "${pods}" ]]; then
     fail "${app}: no pods"
     continue
   fi
@@ -65,7 +65,7 @@ for app in "${apps[@]}"; do
       continue
     fi
     code="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.status.initContainerStatuses[?(@.name=="render-oidc")].state.terminated.exitCode}')"
-    [ "${code}" = "0" ] || fail "${pod}: render-oidc exit code '${code}'"
+    [[ "${code}" = "0" ]] || fail "${pod}: render-oidc exit code '${code}'"
 
     # TAK rewrites /conf/CoreConfig.xml from its in-memory copy when it saves,
     # so this is the secret the process holds, not only what the init rendered.
@@ -77,7 +77,7 @@ for app in "${apps[@]}"; do
       | sed -e 's/^ secret="//' -e 's/"$//' \
             -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g')"
     have="len=${#value} sha=$(fingerprint "${value}")"
-    if [ "${have}" = "${want}" ]; then
+    if [[ "${have}" = "${want}" ]]; then
       echo "PASS ${pod} render-oidc completed, rendered secret ${have}"
     else
       fail "${pod}: rendered secret ${have} does not match the cluster secret ${want}"
@@ -85,7 +85,7 @@ for app in "${apps[@]}"; do
   done
 done
 
-if [ "${failures}" -ne 0 ]; then
+if [[ "${failures}" -ne 0 ]]; then
   echo "oidc-render: ${failures} failed" >&2
   exit 1
 fi

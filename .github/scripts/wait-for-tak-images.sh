@@ -22,7 +22,7 @@ check_once="${CHECK_ONCE:-false}"
 required_platforms="${REQUIRED_PLATFORMS-linux/amd64 linux/arm64}"
 docker_logged_in="false"
 
-if [ -z "${GH_TOKEN:-}" ]; then
+if [[ -z "${GH_TOKEN:-}" ]]; then
   echo "GH_TOKEN is required to read GHCR." >&2
   exit 1
 fi
@@ -37,7 +37,7 @@ names=(
 )
 
 ensure_docker_login() {
-  if [ "${docker_logged_in}" = "true" ]; then
+  if [[ "${docker_logged_in}" = "true" ]]; then
     return 0
   fi
   if ! command -v docker >/dev/null 2>&1; then
@@ -65,7 +65,7 @@ registry_manifest_code() {
   local repo_path="$1"
   local reg_token code
   reg_token="$(registry_token "${repo_path}")"
-  if [ -z "${reg_token}" ]; then
+  if [[ -z "${reg_token}" ]]; then
     echo "000"
     return 0
   fi
@@ -82,7 +82,7 @@ registry_manifest_platforms() {
   local repo_path="$1"
   local reg_token
   reg_token="$(registry_token "${repo_path}")"
-  if [ -z "${reg_token}" ]; then
+  if [[ -z "${reg_token}" ]]; then
     return 0
   fi
   local manifest
@@ -107,7 +107,7 @@ for entry in doc.get("manifests", []):
 has_required_platforms() {
   local repo_path="$1"
   local found want
-  if [ -z "${required_platforms}" ]; then
+  if [[ -z "${required_platforms}" ]]; then
     return 0
   fi
   found="$(registry_manifest_platforms "${repo_path}")"
@@ -125,12 +125,12 @@ images_published() {
   for name in "${names[@]}"; do
     image="ghcr.io/${owner_repo}/${name}:${tag}"
     repo_path="${owner_repo}/${name}"
-    if [ "${docker_logged_in}" = "true" ] && DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect "${image}" >/dev/null 2>&1; then
+    if [[ "${docker_logged_in}" = "true" ]] && DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect "${image}" >/dev/null 2>&1; then
       code="200"
     else
       code="$(registry_manifest_code "${repo_path}")"
     fi
-    if [ "${code}" = "200" ]; then
+    if [[ "${code}" = "200" ]]; then
       if has_required_platforms "${repo_path}"; then
         echo "${image} present"
       else
@@ -141,12 +141,12 @@ images_published() {
     echo "${image} missing (registry HTTP ${code})"
     missing=1
   done
-  [ "${missing}" = "0" ]
+  [[ "${missing}" = "0" ]]
 }
 
 container_run_status() {
   local status
-  if [ -z "${branch}" ] || ! command -v gh >/dev/null 2>&1; then
+  if [[ -z "${branch}" ]] || ! command -v gh >/dev/null 2>&1; then
     echo "unknown"
     return 0
   fi
@@ -176,7 +176,7 @@ elif match.get("status") != "completed":
 else:
     print(match.get("conclusion") or "unknown")
 ' || true)"
-  if [ -z "${status}" ]; then
+  if [[ -z "${status}" ]]; then
     echo "unknown"
     return 0
   fi
@@ -204,13 +204,14 @@ await_same_sha_build() {
         ;;
       none | unknown)
         now="$(date +%s)"
-        if [ $((now - start)) -ge 90 ]; then
+        if [[ $((now - start)) -ge 90 ]]; then
           return 0
         fi
         ;;
+      *) ;;
     esac
     now="$(date +%s)"
-    if [ $((now - start)) -ge "${deadline_seconds}" ]; then
+    if [[ $((now - start)) -ge "${deadline_seconds}" ]]; then
       echo "Timed out waiting for the container workflow." >&2
       return 1
     fi
@@ -219,19 +220,19 @@ await_same_sha_build() {
 }
 
 if images_published; then
-  if [ "${check_once}" != "true" ]; then
+  if [[ "${check_once}" != "true" ]]; then
     await_same_sha_build
   fi
   echo "All six images are already published."
   exit 0
 fi
 
-if [ "${check_once}" = "true" ]; then
+if [[ "${check_once}" = "true" ]]; then
   # Another branch can push an older single-arch tag over the shared one.
   # When this commit's Container run is already rebuilding it, wait for that
   # run instead of failing. The Container workflow itself must not wait on
   # its own run.
-  if [ "${GITHUB_WORKFLOW:-}" != "Container" ]; then
+  if [[ "${GITHUB_WORKFLOW:-}" != "Container" ]]; then
     status="$(SAME_SHA_ONLY=true container_run_status)"
     case "${status}" in
       queued | in_progress | waiting | pending | requested)
@@ -241,6 +242,7 @@ if [ "${check_once}" = "true" ]; then
           exit 0
         fi
         ;;
+      *) ;;
     esac
   fi
   echo "The six tags are not all readable." >&2
@@ -251,7 +253,7 @@ start="$(date +%s)"
 success_waits=0
 while true; do
   now="$(date +%s)"
-  if [ $((now - start)) -ge "${deadline_seconds}" ]; then
+  if [[ $((now - start)) -ge "${deadline_seconds}" ]]; then
     echo "Timed out waiting for ghcr.io/${owner_repo}/*:${tag}." >&2
     exit 1
   fi
@@ -269,7 +271,7 @@ while true; do
       sleep "${sleep_seconds}"
       images_published && exit 0
       success_waits=$((success_waits + 1))
-      if [ "${success_waits}" -ge 10 ]; then
+      if [[ "${success_waits}" -ge 10 ]]; then
         echo "The container workflow succeeded, but the six tags are still not readable." >&2
         exit 1
       fi
@@ -279,9 +281,10 @@ while true; do
       echo "The container workflow finished as ${status} and the images are not published." >&2
       exit 1
       ;;
+    *) ;;
   esac
 
-  if [ "${build_if_missing}" != "true" ] || [ $((now - start)) -lt "${grace_seconds}" ]; then
+  if [[ "${build_if_missing}" != "true" ]] || [[ $((now - start)) -lt "${grace_seconds}" ]]; then
     sleep "${sleep_seconds}"
     images_published && exit 0
     continue

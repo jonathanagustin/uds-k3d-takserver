@@ -20,7 +20,7 @@ node nginx.conf.js \
 # Keycloak sign-in (sso.mjs in its own container, 127.0.0.1:5002). The ^~
 # prefix location wins over CloudTAK's `location ~ ^/api` regex, and the
 # sub_filter loads the auto-redirect script into the app's HTML pages.
-if [ "${CLOUDTAK_Config_oidc_enabled:-false}" = "true" ]; then
+if [[ "${CLOUDTAK_Config_oidc_enabled:-false}" = "true" ]]; then
   awk -v sso=/home/etl/uds/nginx-sso.conf -v head=/home/etl/uds/nginx-sso-head.conf '
     /location ~ \^\/api/ { while ((getline l < sso) > 0) print l; close(sso) }
     { print }
@@ -31,7 +31,7 @@ if [ "${CLOUDTAK_Config_oidc_enabled:-false}" = "true" ]; then
 fi
 
 # Default basemap tile proxy (basemap.mjs). Off unless the chart turns it on.
-if [ "${BASEMAP_ENABLED:-}" = "true" ]; then
+if [[ "${BASEMAP_ENABLED:-}" = "true" ]]; then
   node /home/etl/uds/basemap.mjs nginx /tmp/nginx/basemap
   awk -v srv=/tmp/nginx/basemap/server.conf -v http=/tmp/nginx/basemap/http.conf '
     /location ~ \^\/api/ { while ((getline l < srv) > 0) print l; close(srv) }

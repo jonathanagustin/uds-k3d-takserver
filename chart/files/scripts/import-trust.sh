@@ -19,12 +19,12 @@ for candidate in \
   /etc/pki/ca-trust/extracted/java/cacerts \
   /etc/pki/java/cacerts
 do
-  if [ -n "${candidate}" ] && [ -f "${candidate}" ]; then
+  if [[ -n "${candidate}" ]] && [[ -f "${candidate}" ]]; then
     src="${candidate}"
     break
   fi
 done
-if [ -z "${src}" ]; then
+if [[ -z "${src}" ]]; then
   echo "JVM cacerts was not found" >&2
   exit 1
 fi
@@ -36,7 +36,7 @@ imported=0
 import_file() {
   local file="$1"
   local alias="$2"
-  if [ ! -s "${file}" ]; then
+  if [[ ! -s "${file}" ]]; then
     return 0
   fi
   if keytool -importcert -noprompt -alias "${alias}" \
@@ -55,7 +55,7 @@ split_and_import() {
   ' "${bundle}"
   local cert
   for cert in /tmp/uds-ca-*.pem; do
-    [ -f "${cert}" ] || continue
+    [[ -f "${cert}" ]] || continue
     import_file "${cert}" "${prefix}-$(basename "${cert}" .pem)"
   done
 }
@@ -63,13 +63,13 @@ split_and_import() {
 bundle=/bundle/ca-bundle.pem
 ready=0
 for _ in $(seq 1 15); do
-  if [ -s "${bundle}" ]; then
+  if [[ -s "${bundle}" ]]; then
     ready=1
     break
   fi
   sleep 2
 done
-if [ "${ready}" -eq 1 ]; then
+if [[ "${ready}" -eq 1 ]]; then
   echo "importing uds-trust-bundle"
   split_and_import "${bundle}" "uds"
 else
@@ -77,16 +77,16 @@ else
 fi
 
 issuer="${ISSUER_HOST:-}"
-if [ -n "${issuer}" ] && command -v openssl >/dev/null 2>&1; then
+if [[ -n "${issuer}" ]] && command -v openssl >/dev/null 2>&1; then
   echo "importing certificate presented by ${issuer}:443"
   echo | openssl s_client -connect "${issuer}:443" -servername "${issuer}" -showcerts \
     > /tmp/issuer.txt 2>/dev/null || true
-  if [ -s /tmp/issuer.txt ]; then
+  if [[ -s /tmp/issuer.txt ]]; then
     split_and_import /tmp/issuer.txt "issuer"
   fi
 fi
 
-if [ "${imported}" -ne 1 ]; then
+if [[ "${imported}" -ne 1 ]]; then
   echo "no certificate was imported into the API trust store" >&2
   exit 1
 fi

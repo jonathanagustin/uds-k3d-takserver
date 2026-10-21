@@ -49,6 +49,44 @@ PY
   sleep 2
 }
 
+# Prints the centre of the node whose resource-id ends in ":id/$1" in the
+# UI dump /tmp/ui.xml. Returns 1 when it is not on screen.
+centre() {
+  python3 - "$1" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse("/tmp/ui.xml").getroot()
+except (ET.ParseError, FileNotFoundError):
+    sys.exit(1)
+for n in root.iter("node"):
+    if (n.get("resource-id") or "").endswith(":id/" + sys.argv[1]):
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# ATAK asks a new user for a passphrase that encrypts its local databases.
+# Use a fresh random one; it never leaves the device.
+passphrase() {
+  local one two pass
+  a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  a exec-out cat /sdcard/ui.xml > /tmp/ui.xml 2>/dev/null || return 1
+  one="$(centre key_entry)" || return 1
+  two="$(centre key_entry2)" || return 1
+  pass="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
+  echo "setting the ATAK data passphrase"
+  # shellcheck disable=SC2086
+  a shell input tap ${one}
+  a shell input text "${pass}"
+  # shellcheck disable=SC2086
+  a shell input tap ${two}
+  a shell input text "${pass}"
+  a shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+  sleep 1
+}
+
 for _ in $(seq 1 60); do
   adb connect "${DEVICE}" >/dev/null 2>&1 || true
   if [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then break; fi
@@ -75,6 +113,7 @@ shot atak-first-start
 # button is on screen.
 idle=0
 for _ in $(seq 1 40); do
+  passphrase || true
   if tap "i agree" "agree" "accept" "ok" "allow" "allow all the time" "while using the app" \
     "continue" "next" "done" "got it" "close" "dismiss" "skip"; then
     idle=0
@@ -95,6 +134,7 @@ a shell am force-stop "${PKG}"
 a shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 30
 for _ in $(seq 1 10); do
+  passphrase || true
   tap "yes" "ok" "import" "accept" "connect" || sleep 3
 done
 echo "Download after import: $(a shell ls /sdcard/Download 2>&1 | tr -d '\r' | tr '\n' ' ')"

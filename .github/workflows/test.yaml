@@ -48,8 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # upstream/takserver and upstream/cloudtak. fetch-depth 1 makes the
-          # submodule fetch shallow too.
+          # fetch-depth 1 makes the submodule fetch shallow too.
           submodules: true
 
       - name: Set up Docker Buildx
@@ -97,13 +96,70 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: ./.github/scripts/wait-for-tak-images.sh
 
-      # Tag v13.111.3 is rebuilt only when the submodule pin or
-      # .github/container-and-chart/cloudtak changes. build.sh compares
-      # those inputs with the label on the published image.
+  # CloudTAK builds on a native runner per architecture, like the TAK images.
+  # Each job pushes v13.111.3-<arch> only when the submodule pin or
+  # .github/container-and-chart/cloudtak changed (build.sh compares those
+  # inputs with the label on the published tag). cloudtak-index joins them.
+  cloudtak-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: cloudtak-image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # build.sh fetches only upstream/cloudtak, shallow.
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build the CloudTAK image if its inputs changed
         env:
           PUSH_IMAGES: "true"
+          ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/cloudtak/build.sh --if-changed
+
+  # v13.111.3 is the tag zarf.yaml and the chart reference. Zarf pulls the
+  # entry for the package architecture.
+  cloudtak-index:
+    needs: cloudtak-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the multi-arch CloudTAK index
+        run: ./.github/container-and-chart/cloudtak/build.sh --merge
 
   check-flavor:
     runs-on: ubuntu-latest
@@ -123,7 +179,7 @@ jobs:
   # slim core checkpoint and core-base are published for amd64 and arm64.
   # Upgrade stays on amd64 until a released arm64 package exists.
   validate-install:
-    needs: [check-flavor, images]
+    needs: [check-flavor, images, cloudtak-index]
     strategy:
       fail-fast: false
       matrix:
@@ -340,7 +396,7 @@ jobs:
           if-no-files-found: ignore
 
   validate-upgrade:
-    needs: [images]
+    needs: [images, cloudtak-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}

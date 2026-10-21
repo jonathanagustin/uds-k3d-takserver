@@ -12,7 +12,9 @@ image:
 
 postgis:
   # The image the TAK chart already uses. One image covers both databases.
-  image: docker.io/postgis/postgis:15-3.4
+  # imresamu/postgis is the amd64 and arm64 build of the postgis/postgis
+  # Dockerfiles (adr/0010-amd64-and-arm64.md).
+  image: docker.io/imresamu/postgis:15-3.4
   storage: 2Gi
   database: cloudtak
   username: cloudtak

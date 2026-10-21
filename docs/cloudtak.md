@@ -7,7 +7,7 @@
 | Object | Namespace | Purpose |
 | --- | --- | --- |
 | Deployment `cloudtak` | `cloudtak` | CloudTAK's nginx and API process on port 5000, plus the `sso` and `bootstrap` containers |
-| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `postgis/postgis:15-3.4`, 2Gi volume |
+| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `imresamu/postgis:15-3.4` (amd64 and arm64, see [ADR 10](../adr/0010-amd64-and-arm64.md)), 2Gi volume |
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, and `admin.key`, copied from ConfigMap `takserver/cert-migration` by the component's `onDeploy` action |
@@ -27,7 +27,14 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 - `sso.mjs` is the `sso` container's Keycloak sign-in. `nginx-sso.conf` and `nginx-sso-head.conf` are the two nginx fragments `start.sh` adds for it. See [Sign-in](#sign-in).
 - `bootstrap.mjs` is the bootstrap container's script. See below.
 
-`build.sh` refuses to build if the submodule is not at the pinned commit. The Test workflow's `images` job runs `build.sh --if-changed`, which builds and pushes only when the published image's `dev.uds-k3d-takserver.inputs` label differs from the submodule commit plus the git tree of that directory. `.github/workflows/cloudtak-image.yaml` does the same on `main`.
+`build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). There is no QEMU:
+
+- The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-latest` and `ubuntu-24.04-arm`). Each job pushes `v13.111.3-<arch>`, and only when that tag's `dev.uds-k3d-takserver.inputs` label differs from the submodule commit plus the git tree of this directory.
+- `cloudtak-index` then runs `build.sh --merge`. It writes `v13.111.3` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
+- `build.sh --wait`, used by the Scan and Package workflows, waits until the index lists both platforms with those inputs.
+- `.github/workflows/cloudtak-image.yaml` does the same on `main`.
+
+A local `build.sh` builds the host architecture and loads it as `v13.111.3`.
 
 Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strings marked `# cloudtak-version` in `zarf.yaml`, `cloudtak/chart/`, and `docker-bake.hcl` move in the same pull request.
 

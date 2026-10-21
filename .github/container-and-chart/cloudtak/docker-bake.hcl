@@ -25,18 +25,28 @@ variable "INPUTS" {
   default = ""
 }
 
+# One platform per build. CI builds each architecture on a native runner
+# and build.sh --merge joins the tags into one index.
+variable "PLATFORM" {
+  default = "linux/amd64"
+}
+
+variable "IMAGE_TAG" {
+  default = "v13.111.3" # cloudtak-version
+}
+
 # CloudTAK's own Dockerfile, unchanged. Its first stage downloads the
 # CloudTAK-Data release zip that upstream pins in that Dockerfile.
 target "cloudtak-upstream" {
   context    = CLOUDTAK_SRC
   dockerfile = "Dockerfile"
-  platforms  = ["linux/amd64"]
+  platforms  = [PLATFORM]
 }
 
 target "cloudtak" {
   context    = "."
   dockerfile = "Dockerfile"
-  platforms  = ["linux/amd64"]
+  platforms  = [PLATFORM]
   contexts = {
     cloudtak-upstream = "target:cloudtak-upstream"
   }
@@ -47,5 +57,5 @@ target "cloudtak" {
   labels = {
     "dev.uds-k3d-takserver.inputs" = INPUTS
   }
-  tags = ["${REGISTRY}/cloudtak:${CLOUDTAK_VERSION}"]
+  tags = ["${REGISTRY}/cloudtak:${IMAGE_TAG}"]
 }

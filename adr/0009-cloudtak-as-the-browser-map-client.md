@@ -35,5 +35,6 @@ Authservice in front of CloudTAK was the other option. It would gate the page, b
 - CloudTAK stores the TAK admin certificate and key in its database for its admin connection. The database is a place a TAK admin credential lives.
 - No basemap without egress, and no file features without S3. Both are additions, not configuration of this component.
 - CloudTAK's TAK library does not verify TAK's server certificate on its certificate-authenticated connections. 8447 enrolment is verified against the deploy-time CA.
+- The image is built for amd64 and arm64 on native runners and joined into one index, as [ADR 10](0010-amd64-and-arm64.md) does for the TAK images. Its PostGIS is the same multi-arch `imresamu/postgis:15-3.4`.
 - The image is about 600 MB, and the package grows by that much plus the CloudTAK release cadence: Renovate opens a pull request for each CloudTAK tag.
 - CloudTAK is AGPL-3.0. Anyone who runs a modified CloudTAK for network users must offer its source. The modifications here are the start, sign-in, and bootstrap scripts and two nginx fragments, which are public in this repository. CloudTAK's own code is not changed.

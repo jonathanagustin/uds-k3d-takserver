@@ -14,6 +14,9 @@ on:
 
 permissions:
   contents: read
+  # Build cache in GHCR. The repository's Actions cache is shared with the
+  # Zarf cache and evicts the multi-GB layers.
+  packages: write
 
 concurrency:
   group: atak-${{ github.ref }}
@@ -42,18 +45,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build the APK
+        env:
+          CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
         run: |
           start=$(date +%s)
           for target in toolchain ttp deps cesium apk; do
             out=(--output type=cacheonly)
             [ "${target}" = apk ] && out=(--output type=local,dest=out)
             docker buildx build -f atak/apk/Dockerfile --target "${target}" \
-              --cache-from "type=gha,scope=atak-apk-${target}" \
-              --cache-from type=gha,scope=atak-apk-ttp \
-              --cache-from type=gha,scope=atak-apk-deps \
-              --cache-from type=gha,scope=atak-apk-cesium \
-              --cache-to "type=gha,scope=atak-apk-${target},mode=max,ignore-error=true" \
+              --cache-from "type=registry,ref=${CACHE}:atak-apk-ttp" \
+              --cache-from "type=registry,ref=${CACHE}:atak-apk-deps" \
+              --cache-from "type=registry,ref=${CACHE}:atak-apk-cesium" \
+              --cache-from "type=registry,ref=${CACHE}:atak-apk-apk" \
+              --cache-to "type=registry,ref=${CACHE}:atak-apk-${target},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" \
               "${out[@]}" .
             echo "${target} done after $(( $(date +%s) - start ))s"
           done

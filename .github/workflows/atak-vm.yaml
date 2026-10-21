@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # Build cache in GHCR (see atak.yaml).
+  packages: write
 
 concurrency:
   group: atak-vm-${{ github.ref }}
@@ -42,18 +44,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build the containerDisk
         run: |
           start=$(date +%s)
           docker buildx build -f atak/vm/Dockerfile -t "${IMAGE}" --load \
-            --cache-from type=gha,scope=atak-vm --cache-to type=gha,scope=atak-vm,mode=max,ignore-error=true .
+            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-vm \
+            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-vm,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
           echo "build seconds: $(( $(date +%s) - start ))"
           docker image ls "${IMAGE}"
 
       - name: Build the viewer
         run: |
           docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
-            --cache-from type=gha,scope=atak-viewer --cache-to type=gha,scope=atak-viewer,mode=max,ignore-error=true .
+            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-viewer \
+            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-viewer,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
           docker image ls "${VIEWER_IMAGE}"
 
       - name: k3d and KubeVirt

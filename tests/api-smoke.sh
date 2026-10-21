@@ -44,13 +44,13 @@ fail() {
 
 finish() {
   printf 'api-smoke: %s passed, %s failed\n' "${passes}" "${failures}"
-  if [ "${failures}" -ne 0 ]; then
+  if [[ "${failures}" -ne 0 ]]; then
     exit 1
   fi
 }
 
 gw_port="18443"
-if [ -f /tmp/tak-gateway-port ]; then
+if [[ -f /tmp/tak-gateway-port ]]; then
   gw_port="$(tr -d '[:space:]' < /tmp/tak-gateway-port)"
 fi
 
@@ -93,7 +93,7 @@ request() {
 }
 
 show_err() {
-  if [ -s "${work}/curl.err" ]; then
+  if [[ -s "${work}/curl.err" ]]; then
     sed 's/^/  /' "${work}/curl.err" >&2 || true
   fi
 }
@@ -103,15 +103,15 @@ expect_ok() {
   local code="$2"
   local needle="$3"
   local body="$4"
-  if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+  if [[ "${code}" != "200" ]] && [[ "${code}" != "201" ]]; then
     fail "${name} HTTP ${code}"
     show_err
-    if [ -s "${body}" ]; then
+    if [[ -s "${body}" ]]; then
       sed 's/^/  /' "${body}" | head -n 20 >&2 || true
     fi
     return 0
   fi
-  if [ -n "${needle}" ] && ! grep -q "${needle}" "${body}"; then
+  if [[ -n "${needle}" ]] && ! grep -q "${needle}" "${body}"; then
     fail "${name} HTTP ${code} missing ${needle}"
     sed 's/^/  /' "${body}" | head -n 20 >&2 || true
     return 0
@@ -162,7 +162,7 @@ expect_ok "8443 DELETE mission ${mission}" "${REPLY_CODE}" "" "${work}/mission-d
 
 request "${work}/mission-gone" "${mtls[@]}" "${api8443}Marti/api/missions/${mission}"
 # TAK answers 410 Gone for a mission that was deleted. 404 means never created.
-if [ "${REPLY_CODE}" = "404" ] || [ "${REPLY_CODE}" = "410" ]; then
+if [[ "${REPLY_CODE}" = "404" ]] || [[ "${REPLY_CODE}" = "410" ]]; then
   pass "8443 GET mission ${mission} after delete is ${REPLY_CODE}"
 else
   fail "8443 GET mission ${mission} after delete is HTTP ${REPLY_CODE}"
@@ -179,7 +179,7 @@ login_html="${work}/login.html"
 login_url="$(curl -k -sS --max-time 40 -c "${login_jar}" -b "${login_jar}" -L --max-redirs 15 \
   -o "${login_html}" -w "%{url_effective}" -A "uds-tak-api-smoke" "${tenant}login/auth" || true)"
 
-if [ ! -s "${login_html}" ] || ! python3 - "${login_html}" "${login_url}" "${user_name}" "${user_pass}" "${work}/form.tsv" <<'PY'
+if [[ ! -s "${login_html}" ]] || ! python3 - "${login_html}" "${login_url}" "${user_name}" "${user_pass}" "${work}/form.tsv" <<'PY'
 import html
 import re
 import sys
@@ -244,14 +244,14 @@ fi
 action=""
 post_args=()
 while IFS="$(printf '\t')" read -r field value; do
-  if [ "${field}" = "action" ]; then
+  if [[ "${field}" = "action" ]]; then
     action="${value}"
     continue
   fi
   post_args+=(--data-urlencode "${field}=${value}")
 done < "${work}/form.tsv"
 
-if [ -z "${action}" ]; then
+if [[ -z "${action}" ]]; then
   fail "8447 Keycloak login form"
 else
   after="${work}/after-login.html"
@@ -281,9 +281,9 @@ sys.stdout.write("".join(value for _, value in parts))
 PY
 )"
 
-if [ "${#token}" -lt 20 ]; then
+if [[ "${#token}" -lt 20 ]]; then
   fail "8447 authorization-code token"
-  if [ -s "${work}/after-login.html" ]; then
+  if [[ -s "${work}/after-login.html" ]]; then
     python3 - "${work}/after-login.html" <<'PY' >&2 || true
 import re, sys
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
@@ -315,7 +315,7 @@ for raw in open(sys.argv[1], encoding="utf-8", errors="replace"):
 print(" ".join(sorted(set(bad))))
 PY
 )"
-if [ -n "${insecure_cookies}" ]; then
+if [[ -n "${insecure_cookies}" ]]; then
   fail "8447 cookies without Secure: ${insecure_cookies}"
 else
   pass "8447 cookies from TAK are Secure"
@@ -323,7 +323,7 @@ fi
 
 auth=(-H "Authorization: Bearer ${token}")
 
-if [ "${#token}" -ge 20 ]; then
+if [[ "${#token}" -ge 20 ]]; then
   if ! python3 - "${token}" "${work}/claims" <<'PY'
 import base64, json, sys
 token, dest = sys.argv[1:]
@@ -347,7 +347,7 @@ PY
     fail "8447 token claims"
   else
     claim_name="$(head -n 1 "${work}/claims")"
-    if [ "${claim_name}" = "${user_name}" ]; then
+    if [[ "${claim_name}" = "${user_name}" ]]; then
       pass "8447 token preferred_username ${claim_name}"
     else
       fail "8447 token preferred_username ${claim_name:-empty}"
@@ -373,20 +373,20 @@ PY
 
   # The admin UI banner reads this. "true" means no connector is plaintext.
   request "${work}/issecure" "${auth[@]}" "${tenant}Marti/api/security/isSecure"
-  if [ "${REPLY_CODE}" = "200" ] && grep -Eq '"data" *: *"true"' "${work}/issecure"; then
+  if [[ "${REPLY_CODE}" = "200" ]] && grep -Eq '"data" *: *"true"' "${work}/issecure"; then
     pass "8447 GET /Marti/api/security/isSecure reports no non-secure ports"
   else
     fail "8447 GET /Marti/api/security/isSecure HTTP ${REPLY_CODE}: $(head -c 200 "${work}/issecure" 2>/dev/null)"
   fi
 
   request "${work}/whoami" "${auth[@]}" "${tenant}Marti/api/whoami"
-  if [ "${REPLY_CODE}" = "200" ]; then
+  if [[ "${REPLY_CODE}" = "200" ]]; then
     if grep -q "${user_name}" "${work}/whoami" && grep -q "Operators" "${work}/whoami"; then
       pass "8447 GET /Marti/api/whoami shows ${user_name} and Operators"
     else
       fail "8447 GET /Marti/api/whoami HTTP 200 did not show the user and Operators"
     fi
-  elif [ "${REPLY_CODE}" = "404" ]; then
+  elif [[ "${REPLY_CODE}" = "404" ]]; then
     pass "8447 GET /Marti/api/whoami is 404. User ${user_name} is ROLE_ADMIN and groups include Operators"
   else
     fail "8447 GET /Marti/api/whoami HTTP ${REPLY_CODE}"
@@ -406,7 +406,7 @@ PY
   request "${work}/bad" -H "Authorization: Bearer ${bad}" "${tenant}Marti/api/version"
   # TAK treats a token it cannot verify like no token and redirects to login
   # (302); 401/403 are also a rejection. Only a 2xx would be a failure.
-  if [ "${REPLY_CODE}" = "401" ] || [ "${REPLY_CODE}" = "403" ] || [ "${REPLY_CODE}" = "302" ]; then
+  if [[ "${REPLY_CODE}" = "401" ]] || [[ "${REPLY_CODE}" = "403" ]] || [[ "${REPLY_CODE}" = "302" ]]; then
     pass "8447 token with a bad signature rejected (${REPLY_CODE})"
   else
     fail "8447 token with a bad signature is HTTP ${REPLY_CODE}"
@@ -420,7 +420,7 @@ request "${work}/anon-groups" "${tenant}Marti/api/groups/all"
 expect_rejected "8447 GET /Marti/api/groups/all without a token" "${REPLY_CODE}"
 
 request "${work}/oidc" "${api8446}login/.well-known/openid-configuration"
-if [ "${REPLY_CODE}" = "200" ] && grep -q "authorization_endpoint" "${work}/oidc" && grep -q "token_endpoint" "${work}/oidc" && grep -Eq "sso.uds.dev|realms/uds" "${work}/oidc"; then
+if [[ "${REPLY_CODE}" = "200" ]] && grep -q "authorization_endpoint" "${work}/oidc" && grep -q "token_endpoint" "${work}/oidc" && grep -Eq "sso.uds.dev|realms/uds" "${work}/oidc"; then
   pass "8446 GET /login/.well-known/openid-configuration"
   # TAK relays only authorization_endpoint and token_endpoint, so derive the
   # standard certs path from token_endpoint when jwks_uri is not included.
@@ -431,11 +431,11 @@ t = d.get("token_endpoint", "")
 if not u and t.endswith("/token"):
     u = t[: -len("/token")] + "/certs"
 print(u)' "${work}/oidc")"
-  if [ -z "${jwks_uri}" ]; then
+  if [[ -z "${jwks_uri}" ]]; then
     fail "8446 openid document has no jwks_uri or token_endpoint; keys: $(python3 -c 'import json,sys; print(sorted(json.load(open(sys.argv[1], encoding="utf-8"))))' "${work}/oidc")"
   else
     request "${work}/jwks" "${jwks_uri}"
-    if [ "${REPLY_CODE}" = "200" ] && python3 -c 'import json,sys; keys=json.load(open(sys.argv[1], encoding="utf-8")).get("keys") or []; raise SystemExit(0 if keys else 1)' "${work}/jwks"; then
+    if [[ "${REPLY_CODE}" = "200" ]] && python3 -c 'import json,sys; keys=json.load(open(sys.argv[1], encoding="utf-8")).get("keys") or []; raise SystemExit(0 if keys else 1)' "${work}/jwks"; then
       pass "JWKS has at least one key"
     else
       fail "JWKS HTTP ${REPLY_CODE}"
@@ -445,12 +445,12 @@ print(u)' "${work}/oidc")"
 else
   fail "8446 GET /login/.well-known/openid-configuration HTTP ${REPLY_CODE}"
   show_err
-  if [ -s "${work}/oidc" ]; then
+  if [[ -s "${work}/oidc" ]]; then
     sed 's/^/  /' "${work}/oidc" | head -n 20 >&2 || true
   fi
 fi
 
-if [ "${#token}" -ge 20 ]; then
+if [[ "${#token}" -ge 20 ]]; then
   openssl req -new -newkey rsa:2048 -nodes \
     -keyout "${work}/client.key" \
     -out "${work}/client.csr" \
@@ -460,7 +460,7 @@ if [ "${#token}" -ge 20 ]; then
     -H "Content-Type: text/plain" \
     --data-binary @"${work}/client.csr" \
     "${api8446}Marti/api/tls/signClient/v2?clientUid=${user_name}&version=1"
-  if [ "${REPLY_CODE}" = "200" ] && grep -q "signedCert" "${work}/enroll.json"; then
+  if [[ "${REPLY_CODE}" = "200" ]] && grep -q "signedCert" "${work}/enroll.json"; then
     pass "8446 POST /Marti/api/tls/signClient/v2"
     python3 - "${work}/enroll.json" "${work}/client.pem" <<'PY'
 import json, sys
@@ -488,7 +488,7 @@ PY
     stream="$({ sleep 15; } | timeout 8 openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
       -servername takserver-stream.uds.dev \
       -cert "${work}/client.pem" -key "${work}/client.key" 2>&1)" || stream_rc=$?
-    if grep -q "CONNECTION ESTABLISHED" <<< "${stream}" && [ "${stream_rc}" = "124" ]; then
+    if grep -q "CONNECTION ESTABLISHED" <<< "${stream}" && [[ "${stream_rc}" = "124" ]]; then
       pass "8089 TLS with the enrolled certificate, stream still open after 8s"
     else
       fail "8089 stream with the enrolled certificate (openssl exit ${stream_rc}; TAK closed it if not 124)"
@@ -497,7 +497,7 @@ PY
   else
     fail "8446 POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
     show_err
-    if [ -s "${work}/enroll.json" ]; then
+    if [[ -s "${work}/enroll.json" ]]; then
       sed 's/^/  /' "${work}/enroll.json" | head -n 20 >&2 || true
     fi
   fi
@@ -507,7 +507,7 @@ fi
 # them: enroll at <host>:8446, then stream to the same <host>:8089 with the
 # enrolled certificate. The test task port-forwards the gateway Service's 8446
 # and 8089 and writes the local ports to /tmp/tak-std-ports.
-if [ -f /tmp/tak-std-ports ] && [ "${#token}" -ge 20 ]; then
+if [[ -f /tmp/tak-std-ports ]] && [[ "${#token}" -ge 20 ]]; then
   read -r std_cert std_stream < /tmp/tak-std-ports
   std_host="${TAK_STD_HOST:-takserver.uds.dev}"
   openssl req -new -newkey rsa:2048 -nodes \
@@ -518,7 +518,7 @@ if [ -f /tmp/tak-std-ports ] && [ "${#token}" -ge 20 ]; then
     -H "Accept: application/json" -H "Content-Type: text/plain" \
     --data-binary @"${work}/std.csr" \
     "https://${std_host}:${std_cert}/Marti/api/tls/signClient/v2?clientUid=${user_name}-std&version=1"
-  if [ "${REPLY_CODE}" = "200" ] && grep -q "signedCert" "${work}/std-enroll.json"; then
+  if [[ "${REPLY_CODE}" = "200" ]] && grep -q "signedCert" "${work}/std-enroll.json"; then
     pass "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2"
     std_uid="uds-std-ports-$(date +%s)"
     if python3 - "${work}/std-enroll.json" "${work}/std.key" "${std_host}" "${std_stream}" "${std_uid}" \

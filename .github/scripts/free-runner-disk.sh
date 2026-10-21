@@ -6,7 +6,7 @@
 # A fresh ubuntu-latest image leaves little room for the TAK layers.
 set -euo pipefail
 
-if [ "${GITHUB_ACTIONS:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+if [[ "${GITHUB_ACTIONS:-}" != "true" ]] && [[ "${CI:-}" != "true" ]]; then
   echo "Not a CI runner; leaving the disk alone."
   exit 0
 fi
@@ -19,7 +19,7 @@ sudo rm -rf \
   /opt/ghc \
   /opt/hostedtoolcache
 
-if [ "${PRUNE_DOCKER:-false}" = "true" ] && command -v docker >/dev/null 2>&1; then
+if [[ "${PRUNE_DOCKER:-false}" = "true" ]] && command -v docker >/dev/null 2>&1; then
   docker image prune --all --force || true
 fi
 

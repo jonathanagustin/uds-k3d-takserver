@@ -74,7 +74,7 @@ laszip() {
 
 liblas() {
   cd "${SRC}/libLAS"
-  cmake -S . -B "build-android-${ABI}" "${NDK_CMAKE[@]}" -DANDROID_STL=c++_static \
+  cmake -S . -B "build-android-${ABI}" "${NDK_CMAKE[@]}" -DANDROID_STL=c++_static -DWITH_UTILITIES=OFF -DWITH_TESTS=OFF \
     -DCMAKE_CXX_FLAGS="-fexceptions -frtti -std=c++11"
   cmake --build "build-android-${ABI}" -j"${JOBS}"
   cp -r include "build-android-${ABI}/"

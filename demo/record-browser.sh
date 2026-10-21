@@ -72,7 +72,7 @@ xvfb=$!
 ffmpeg_pid=""
 # shellcheck disable=SC2317,SC2329 # runs from the EXIT trap
 cleanup() {
-  if [ -n "${ffmpeg_pid}" ] && kill -0 "${ffmpeg_pid}" 2> /dev/null; then
+  if [[ -n "${ffmpeg_pid}" ]] && kill -0 "${ffmpeg_pid}" 2> /dev/null; then
     kill -INT "${ffmpeg_pid}"
     wait "${ffmpeg_pid}" || true
   fi
@@ -80,7 +80,7 @@ cleanup() {
 }
 trap cleanup EXIT
 for _ in $(seq 50); do
-  if [ -S "/tmp/.X11-unix/X${display#:}" ]; then
+  if [[ -S "/tmp/.X11-unix/X${display#:}" ]]; then
     break
   fi
   sleep 0.1
@@ -114,7 +114,7 @@ kill -INT "${ffmpeg_pid}"
 wait "${ffmpeg_pid}" || true
 ffmpeg_pid=""
 
-if [ ! -f "${work}/events.json" ]; then
+if [[ ! -f "${work}/events.json" ]]; then
   echo "The walkthrough wrote no events." >&2
   exit 1
 fi

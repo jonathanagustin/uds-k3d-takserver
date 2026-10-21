@@ -9,7 +9,7 @@
 # and the preinstalled Docker images.
 set -euo pipefail
 
-if [ "${GITHUB_ACTIONS:-}" != "true" ] && [ "${CI:-}" != "true" ]; then
+if [[ "${GITHUB_ACTIONS:-}" != "true" ]] && [[ "${CI:-}" != "true" ]]; then
   echo "Not a CI runner; leaving the disk alone."
   exit 0
 fi

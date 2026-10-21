@@ -43,6 +43,9 @@ spec:
               disk: {bus: virtio}
           interfaces:
             - name: default
+              # Android-x86 9 brings up e1000 on its own; with virtio-net
+              # only lo appears.
+              model: e1000
               masquerade: {}
               ports:
                 - {name: adb, port: 5555}

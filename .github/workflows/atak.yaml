@@ -59,7 +59,7 @@ jobs:
           start=$(date +%s)
           for target in toolchain ttp deps cesium apk; do
             out=(--output type=cacheonly)
-            [ "${target}" = apk ] && out=(--output type=local,dest=out)
+            [ "${target}" = apk ] && out=(--output "type=local,dest=out")
             docker buildx build -f atak/apk/Dockerfile --target "${target}" \
               --cache-from "type=registry,ref=${CACHE}:atak-apk-ttp" \
               --cache-from "type=registry,ref=${CACHE}:atak-apk-deps" \

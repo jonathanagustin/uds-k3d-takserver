@@ -101,7 +101,9 @@ jobs:
             kubectl logs -n atak "${p}" -c guest-console-log --tail=3000 || true
           done
           pod="$(kubectl get pod -n atak -l kubevirt.io/domain=atak-device -o name | head -1)"
-          [ -n "${pod}" ] && kubectl logs -n atak "${pod}" -c compute --tail=200 || true
+          if [ -n "${pod}" ]; then
+            kubectl logs -n atak "${pod}" -c compute --tail=200 || true
+          fi
 
       - name: Upload the evidence
         if: always()

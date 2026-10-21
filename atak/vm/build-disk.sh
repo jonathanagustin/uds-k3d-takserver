@@ -28,8 +28,15 @@ setprop service.adb.tcp.port 5555
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
   sleep 20
   [ "$(getprop init.svc.adbd)" = running ] || start adbd
+  # A test device: keep the screen on so screenshots are not black.
+  if [ "$(getprop sys.boot_completed)" = 1 ]; then
+    svc power stayon true
+    settings put system screen_off_timeout 2147483647
+    input keyevent KEYCODE_WAKEUP
+  fi
   {
     echo "round $i boot_completed=$(getprop sys.boot_completed) adbd=$(getprop init.svc.adbd) usb=$(getprop sys.usb.config) sf=$(getprop init.svc.surfaceflinger)"
+    echo "net: $(ls /sys/class/net | tr '\n' ' ')"
     ip -4 addr show 2>&1
     ip route 2>&1
     echo "dns1=$(getprop net.dns1) eth0.dns1=$(getprop dhcp.eth0.dns1)"

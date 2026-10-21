@@ -273,7 +273,11 @@ tasks:
           ' "${work}" > "${work}/names"
           checked=0
           while IFS= read -r name; do
-            info="$(openssl pkcs12 -in "${work}/${name}" -info -noout -passin pass:atakatak 2>&1)"
+            if ! info="$(openssl pkcs12 -in "${work}/${name}" -info -noout -passin pass:atakatak 2>&1)"; then
+              echo "${name} is not a PKCS#12 file openssl can read (a proprietary JKS keystore?):" >&2
+              head -n 3 <<< "${info}" >&2
+              exit 1
+            fi
             if ! grep -q '^MAC: sha256' <<< "${info}" || grep -qi 'pbeWithSHA1' <<< "${info}" \
               || ! grep -q 'AES-256-CBC' <<< "${info}"; then
               echo "${name} is not PBES2/AES-256-CBC with a SHA-256 MAC:" >&2

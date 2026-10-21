@@ -92,6 +92,7 @@ jobs:
       - name: Check the package architecture
         env:
           ARCH: ${{ matrix.arch }}
+        shell: bash
         run: |
           set -euo pipefail
           package="$(ls zarf-package-takserver-"${ARCH}"-*.tar.zst)"

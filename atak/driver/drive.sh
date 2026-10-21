@@ -34,7 +34,8 @@ try:
 except ET.ParseError:
     sys.exit(1)
 for n in root.iter("node"):
-    t = (n.get("text") or n.get("content-desc") or "").strip().lower()
+    # ATAK labels some buttons with a full stop ("I agree.").
+    t = (n.get("text") or n.get("content-desc") or "").strip().rstrip(".!").lower()
     if t in labels and n.get("enabled") == "true":
         x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
         print((x1 + x2) // 2, (y1 + y2) // 2)
@@ -56,6 +57,11 @@ done
 a shell svc power stayon true || true
 a shell input keyevent KEYCODE_WAKEUP || true
 a shell wm dismiss-keyguard || true
+# The image marks the device provisioned, but Google's setup wizard in the
+# Android-x86 build still starts its upgrade flow over the first app
+# launched ("Hi there"). A provisioned phone would not show it.
+a shell pm disable-user --user 0 com.google.android.setupwizard || true
+a shell am force-stop com.google.android.setupwizard || true
 
 start=$(date +%s)
 a install -r -g "${APK}"
@@ -74,7 +80,7 @@ for _ in $(seq 1 40); do
     idle=0
   else
     idle=$((idle + 1))
-    [ "${idle}" -ge 3 ] && break
+    [ "${idle}" -ge 6 ] && break
     sleep 5
   fi
 done

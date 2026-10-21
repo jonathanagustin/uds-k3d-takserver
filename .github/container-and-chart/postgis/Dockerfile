@@ -46,15 +46,20 @@ LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.description="PostgreSQL 15 with PostGIS 3.4.3" \
       dev.uds-k3d-takserver.inputs="${INPUTS}"
 
-# The postgis package depends on the scripts package at the same version, and
-# on libraries (GDAL, GEOS, PROJ and others) that bookworm provides.
-RUN --mount=from=postgis-deb-${TARGETARCH},target=/debs/arch \
+# Both architectures' packages are mounted, because a mount cannot name a
+# stage with a variable. The shell picks the one for this build. The postgis
+# package depends on the scripts package at the same version, and on libraries
+# (GDAL, GEOS, PROJ and others) that bookworm provides.
+RUN --mount=from=postgis-deb-amd64,target=/debs/amd64 \
+    --mount=from=postgis-deb-arm64,target=/debs/arm64 \
     --mount=from=postgis-scripts-deb,target=/debs/all \
-    apt-get update \
-    && apt-get install -y --no-install-recommends \
-         ca-certificates \
-         /debs/all/postgresql-15-postgis-3-scripts.deb \
-         /debs/arch/postgresql-15-postgis-3.deb \
-    && rm -rf /var/lib/apt/lists/*
+    set -eux; \
+    case "${TARGETARCH}" in amd64 | arm64) ;; *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; esac; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        /debs/all/postgresql-15-postgis-3-scripts.deb \
+        "/debs/${TARGETARCH}/postgresql-15-postgis-3.deb"; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY 10_postgis.sh /docker-entrypoint-initdb.d/10_postgis.sh

@@ -5,6 +5,10 @@
 # Runs once, when the postgres entrypoint initialises an empty data
 # directory. Creates template_postgis and loads the PostGIS extensions into it
 # and into $POSTGRES_DB, the same set the previous image loaded.
+#
+# Keep this file mode 644. The entrypoint sources a .sh file that is not
+# executable, and the psql array below is defined in that shell. An executable
+# file runs as its own process, psql is empty there, and the container exits.
 # shellcheck disable=SC2154
 set -e
 

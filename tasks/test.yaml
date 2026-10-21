@@ -316,14 +316,18 @@ tasks:
           fi
           # The operator turns each allow rule into a NetworkPolicy.
           echo "Package phase: $(uds zarf tools kubectl get package takserver -n takserver -o jsonpath='{.status.phase}')"
+          # Read the list once: grep -q in a pipeline can SIGPIPE kubectl under pipefail.
+          policies="$(uds zarf tools kubectl get networkpolicy -n takserver -o name)"
           for name in egress-5432-from-takserver-api-to-postgres ingress-5432-to-postgres-from-takserver-api; do
-            if ! uds zarf tools kubectl get networkpolicy -n takserver -o name | grep -q "${name}"; then
+            if ! grep -q "${name}" <<< "${policies}"; then
               echo "NetworkPolicy for ${name} is missing" >&2
               exit 1
             fi
           done
-          uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml | grep -q RestrictIstioSidecarOverrides
-          if uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q servicemonitors; then
+          exemption="$(uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml)"
+          grep -q RestrictIstioSidecarOverrides <<< "${exemption}"
+          resources="$(uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null || true)"
+          if grep -q servicemonitors <<< "${resources}"; then
             monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
             echo "monitor count: ${monitors}"
             [ "${monitors}" = "0" ]

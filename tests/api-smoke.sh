@@ -576,6 +576,23 @@ PY
     else
       fail "standard port 8089 on ${std_host}: client not listed in /Marti/api/clientEndPoints"
     fi
+    # ATAK's streaming library sends no SNI, so 8089 must route by port alone.
+    python3 -c 'import json, sys
+c = json.load(open(sys.argv[1], encoding="utf-8"))["signedCert"].strip()
+if "BEGIN CERTIFICATE" not in c:
+    c = "".join(c.split())
+    c = "-----BEGIN CERTIFICATE-----\n" + "\n".join(c[i:i + 64] for i in range(0, len(c), 64)) + "\n-----END CERTIFICATE-----"
+print(c)' "${work}/std-enroll.json" > "${work}/std-cert.pem"
+    nosni_rc=0
+    nosni="$({ sleep 15; } | timeout 8 openssl s_client -brief -noservername \
+      -connect "127.0.0.1:${std_stream}" \
+      -cert "${work}/std-cert.pem" -key "${work}/std.key" 2>&1)" || nosni_rc=$?
+    if grep -q "CONNECTION ESTABLISHED" <<< "${nosni}" && [ "${nosni_rc}" = "124" ]; then
+      pass "standard port 8089 without SNI, stream still open after 8s"
+    else
+      fail "standard port 8089 without SNI (openssl exit ${nosni_rc})"
+      printf '%s\n' "${nosni}" | head -n 20 >&2 || true
+    fi
   else
     fail "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
     show_err

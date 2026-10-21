@@ -14,7 +14,7 @@ The UDS Core passthrough Gateway is rendered by `uds-istio-config` with servers 
 
 ## Decision
 
-The bundle overrides `istio-passthrough-gateway.gateway` `service.ports` to publish 8446 and 8089 in addition to the upstream defaults. The chart adds its own Istio Gateway that selects the passthrough gateway pods, with TLS passthrough servers on 8446 and 8089 for the hosts in `standardPorts.hosts`, and a VirtualService that routes by port and SNI to the API Service on 8446 and the messaging Service on 8089. The 443 SNI routes do not change.
+The bundle overrides `istio-passthrough-gateway.gateway` `service.ports` to publish 8446 and 8089 in addition to the upstream defaults. The chart adds its own Istio Gateway that selects the passthrough gateway pods, with a TLS passthrough server on 8446 and a TCP server on 8089 for the hosts in `standardPorts.hosts`, and a VirtualService that routes 8446 by port and SNI to the API Service and 8089 by port alone to the messaging Service. ATAK's streaming library sends no SNI, so 8089 cannot depend on it ([ADR 13](0013-atak-test-device-in-kubevirt.md) found this with a real device). TLS is still end to end on both ports. The 443 SNI routes do not change.
 
 ## Consequences
 

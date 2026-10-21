@@ -4,7 +4,8 @@
 {{- if .Values.standardPorts.enabled }}
 {{- $domain := .Values.domain }}
 # Standard TAK ports on the UDS Core passthrough gateway. Field clients such as
-# ATAK enroll at <host>:8446 and then stream to the same <host>:8089. The
+# ATAK enroll at <host>:8446 and then stream to the same <host>:8089 (with no
+# SNI, so 8089 is routed by port). The
 # Package CR can only publish 443 (SNI), where one host maps to one port. These
 # listeners are plain Istio, next to the UDS Gateway on the same pods. The
 # gateway Service must publish 8446 and 8089 (bundle override
@@ -29,12 +30,13 @@ spec:
         {{- range .Values.standardPorts.hosts }}
         - {{ printf "%s.%s" . $domain | quote }}
         {{- end }}
+    # 8089 is plain TCP routed by port. ATAK's streaming library (commo) sends
+    # no SNI, so an SNI match would drop it. TLS stays end to end and TAK
+    # still requires the client certificate.
     - port:
-        name: tls-tak-stream
+        name: tcp-tak-stream
         number: {{ .Values.standardPorts.streamPort }}
-        protocol: TLS
-      tls:
-        mode: PASSTHROUGH
+        protocol: TCP
       hosts:
         {{- range .Values.standardPorts.hosts }}
         - {{ printf "%s.%s" . $domain | quote }}
@@ -63,12 +65,9 @@ spec:
             host: {{ printf "%s.%s.svc.cluster.local" .Values.api.service .Release.Namespace }}
             port:
               number: {{ .Values.api.https.port }}
+  tcp:
     - match:
         - port: {{ .Values.standardPorts.streamPort }}
-          sniHosts:
-            {{- range .Values.standardPorts.hosts }}
-            - {{ printf "%s.%s" . $domain | quote }}
-            {{- end }}
       route:
         - destination:
             host: {{ printf "%s.%s.svc.cluster.local" .Values.messaging.service .Release.Namespace }}

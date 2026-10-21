@@ -28,3 +28,4 @@ demo/out/
 
 # Admission module build output.
 pepr/dist/
+__pycache__/

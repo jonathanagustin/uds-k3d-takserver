@@ -58,7 +58,7 @@ spec:
 YAML
 
 start=$(date +%s)
-until kubectl get vmi -n "${NS}" atak-device >/dev/null 2>&1; do sleep 2; done
+timeout 300 sh -c "until kubectl get vmi -n ${NS} atak-device >/dev/null 2>&1; do sleep 2; done"
 kubectl wait vmi -n "${NS}" atak-device --for condition=Ready --timeout=10m
 echo "vmi ready after $(( $(date +%s) - start ))s"
 ip="$(kubectl get vmi -n "${NS}" atak-device -o jsonpath='{.status.interfaces[0].ipAddress}')"

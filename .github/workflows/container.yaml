@@ -54,8 +54,11 @@ jobs:
       # also makes the submodule fetch shallow: one commit, no history.
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          submodules: true
+
+      # Only the TAK source. upstream/atak-civ is large and only the ATAK
+      # workflows need it.
+      - name: Check out the TAK submodule
+        run: git submodule update --init --depth 1 upstream/takserver
 
       - name: Free disk
         run: ./.github/scripts/free-runner-disk.sh

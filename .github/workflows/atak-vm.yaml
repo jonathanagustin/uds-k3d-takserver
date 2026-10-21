@@ -11,11 +11,13 @@ on:
     paths:
       - "atak/vm/**"
       - "atak/ci/**"
+      - "atak/viewer/**"
       - ".github/workflows/atak-vm.yaml"
   pull_request:
     paths:
       - "atak/vm/**"
       - "atak/ci/**"
+      - "atak/viewer/**"
       - ".github/workflows/atak-vm.yaml"
 
 permissions:
@@ -30,9 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      KUBEVIRT_VERSION: v1.9.1
+      KUBEVIRT_VERSION: v1.6.2
       K3D_VERSION: v5.8.3
       IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
+      VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -55,12 +58,18 @@ jobs:
           echo "build seconds: $(( $(date +%s) - start ))"
           docker image ls "${IMAGE}"
 
+      - name: Build the viewer
+        run: |
+          docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
+            --cache-from type=gha,scope=atak-viewer --cache-to type=gha,scope=atak-viewer,mode=max,ignore-error=true .
+          docker image ls "${VIEWER_IMAGE}"
+
       - name: k3d and KubeVirt
         run: |
           curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG="${K3D_VERSION}" bash
           k3d cluster create atak --agents 0 --k3s-arg '--disable=traefik@server:0' --wait
           start=$(date +%s)
-          k3d image import -c atak "${IMAGE}"
+          k3d image import -c atak "${IMAGE}" "${VIEWER_IMAGE}"
           echo "import seconds: $(( $(date +%s) - start ))"
           kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
           kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
@@ -68,6 +77,9 @@ jobs:
 
       - name: Boot Android and reach it over adb
         run: OUT=out ./atak/ci/vm-smoke.sh
+
+      - name: Phone view in a browser
+        run: OUT=out ./atak/ci/viewer-smoke.sh
 
       - name: Debug
         if: failure()

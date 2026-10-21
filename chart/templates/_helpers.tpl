@@ -23,3 +23,17 @@ CASE_INSENSITIVE, so ^/TAK/(.+)$ captures the original segment.
 {{- define "takserver.redirectUri" -}}
 https://takserver.{{ .Values.domain }}/login/redirect
 {{- end -}}
+
+{{/*
+The 8447 browser connector. With backendTLS it serves TLS from its own
+keystore, issued at deploy time for the in-cluster Service name, and the
+tenant gateway verifies it. TAK reports any tls="false" connector as a
+non-secure port, so the plaintext form is only for backendTLS.enabled=false.
+*/}}
+{{- define "takserver.webConnector" -}}
+{{- if .Values.api.web.backendTLS.enabled -}}
+		<connector port="{{ .Values.api.web.port }}" clientAuth="false" keystore="JKS" keystoreFile="certs/files/{{ .Values.api.web.backendTLS.keystore }}" keystorePass="atakatak" enableAdminUI="true" enableWebtak="true" enableNonAdminUI="true" _name="web_https"/>
+{{- else -}}
+		<connector port="{{ .Values.api.web.port }}" tls="false" clientAuth="false" enableAdminUI="true" enableWebtak="true" enableNonAdminUI="true" _name="web_http"/>
+{{- end -}}
+{{- end -}}

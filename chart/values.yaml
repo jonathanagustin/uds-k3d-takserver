@@ -24,6 +24,16 @@ api:
     service: takserver-web
     host: takserver
     port: 8447
+    # The tenant gateway re-encrypts to 8447 and verifies TAK's certificate.
+    # Off makes 8447 a plaintext connector behind the gateway, which TAK flags
+    # as a non-secure port. See adr/0006-re-encrypt-gateway-traffic-to-tak.md.
+    backendTLS:
+      enabled: true
+      # Namespace of the UDS Core tenant gateway. The CA Secret goes there.
+      gatewayNamespace: istio-tenant-gateway
+      caSecretName: takserver-web-ca
+      # Key in ConfigMap cert-migration, mounted under certs/files.
+      keystore: takserver-web.jks
 
 messaging:
   service: takserver-messaging-service

@@ -293,6 +293,31 @@ else
   pass "8447 authorization-code token"
 fi
 
+# The gateway re-encrypts to 8447, so TAK sees a secure request and marks its
+# cookies Secure. curl's cookie jar has TRUE in the fourth field for those.
+insecure_cookies="$(python3 - "${login_jar}" <<'PY'
+import sys
+bad = []
+for raw in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    line = raw.rstrip("\n")
+    if line.startswith("#HttpOnly_"):
+        line = line[len("#HttpOnly_"):]
+    elif not line or line.startswith("#"):
+        continue
+    fields = line.split("\t")
+    if len(fields) < 7 or not fields[0].lstrip(".").startswith("takserver."):
+        continue
+    if fields[3] != "TRUE":
+        bad.append(fields[5])
+print(" ".join(sorted(set(bad))))
+PY
+)"
+if [ -n "${insecure_cookies}" ]; then
+  fail "8447 cookies without Secure: ${insecure_cookies}"
+else
+  pass "8447 cookies from TAK are Secure"
+fi
+
 auth=(-H "Authorization: Bearer ${token}")
 
 if [ "${#token}" -ge 20 ]; then
@@ -342,6 +367,14 @@ PY
 
   request "${work}/tgroups" "${auth[@]}" "${tenant}Marti/api/groups/all"
   expect_ok "8447 GET /Marti/api/groups/all" "${REPLY_CODE}" "Operators" "${work}/tgroups"
+
+  # The admin UI banner reads this. "true" means no connector is plaintext.
+  request "${work}/issecure" "${auth[@]}" "${tenant}Marti/api/security/isSecure"
+  if [ "${REPLY_CODE}" = "200" ] && grep -Eq '"data" *: *"true"' "${work}/issecure"; then
+    pass "8447 GET /Marti/api/security/isSecure reports no non-secure ports"
+  else
+    fail "8447 GET /Marti/api/security/isSecure HTTP ${REPLY_CODE}: $(head -c 200 "${work}/issecure" 2>/dev/null)"
+  fi
 
   request "${work}/whoami" "${auth[@]}" "${tenant}Marti/api/whoami"
   if [ "${REPLY_CODE}" = "200" ]; then

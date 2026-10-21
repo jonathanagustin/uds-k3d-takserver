@@ -63,9 +63,22 @@ test("Keycloak user reaches Marti and the mapped TAK group", async ({ page }) =>
   expect(admin.ok()).toBeTruthy();
   expect((await admin.text()).trim()).toBe("true");
 
+  // The gateway re-encrypts to 8447, so no connector is plaintext and TAK
+  // does not show its unencrypted-ports alert banner.
+  const secureUrl = new URL("/Marti/api/security/isSecure", ssoOrigin).toString();
+  const secure = await page.request.get(secureUrl);
+  expect(secure.ok()).toBeTruthy();
+  expect((await secure.json()).data).toBe("true");
+  await expect(page.locator("#securityAlert")).toBeHidden();
+
   const cookies = await page.context().cookies();
-  const token = cookies
-    .filter((cookie) => cookie.name.startsWith("access_token_"))
+  const accessCookies = cookies.filter((cookie) => cookie.name.startsWith("access_token_"));
+  expect(accessCookies.length).toBeGreaterThan(0);
+  // TAK marks the cookie Secure only when the request reached it over TLS.
+  for (const cookie of accessCookies) {
+    expect(cookie.secure, cookie.name).toBe(true);
+  }
+  const token = accessCookies
     .sort((left, right) =>
       left.name.localeCompare(right.name, undefined, { numeric: true }),
     )

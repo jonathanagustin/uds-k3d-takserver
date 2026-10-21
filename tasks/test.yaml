@@ -9,6 +9,7 @@ tasks:
       - task: startup
       - task: oidc-render
       - task: mesh
+      - task: web-tls
       - task: policies
       - task: logs
       - task: gateway
@@ -191,6 +192,46 @@ tasks:
               sys.exit(1)
           print(str(len(pods)) + " pods have no istio-proxy sidecar")
           '
+
+  - name: web-tls
+    description: The tenant gateway re-encrypts to a TLS 8447 connector and verifies it against the TAK CA
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          core="$(k get cm core-config -n takserver -o jsonpath='{.data.CoreConfig\.xml}')"
+          line="$(grep 'port="8447"' <<< "${core}")"
+          echo "${line}"
+          if grep -q 'tls="false"' <<< "${line}"; then
+            echo "8447 is a plaintext connector" >&2
+            exit 1
+          fi
+          grep -q 'keystoreFile="certs/files/takserver-web.jks"' <<< "${line}"
+          if grep -q 'tls="false"' <<< "${core}"; then
+            echo "CoreConfig still has a tls=false connector" >&2
+            exit 1
+          fi
+          [ "$(k get svc takserver-web -n takserver -o jsonpath='{.spec.ports[0].appProtocol}')" = "https" ]
+          [ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.takserver-web\.jks}')" ]
+          dr="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o json)"
+          python3 -c '
+          import json, sys
+          dr = json.loads(sys.argv[1])
+          tls = dr["spec"]["trafficPolicy"]["portLevelSettings"][0]["tls"]
+          assert tls["mode"] == "SIMPLE", tls
+          assert tls.get("credentialName") == "takserver-web-ca", tls
+          assert not tls.get("insecureSkipVerify"), "insecureSkipVerify is set"
+          assert tls["sni"] == "takserver-web.takserver.svc.cluster.local", tls
+          print("DestinationRule originates verified TLS to", tls["sni"])
+          ' "${dr}"
+          # The gateway copy holds the CA certificate only.
+          keys="$(k get secret takserver-web-ca -n istio-tenant-gateway -o jsonpath='{.data}')"
+          echo "gateway CA Secret keys: $(python3 -c 'import json,sys; print(sorted(json.loads(sys.argv[1])))' "${keys}")"
+          python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert set(d) == {"cacert"}, d' "${keys}"
+          echo "8447 serves TLS and the gateway verifies it"
 
   - name: policies
     description: Confirm the Package created NetworkPolicy and AuthorizationPolicy objects

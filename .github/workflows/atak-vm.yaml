@@ -90,7 +90,7 @@ jobs:
           kubectl describe pod -n atak || true
           kubectl logs -n kubevirt -l kubevirt.io=virt-handler --tail=100 || true
           for p in $(kubectl get pod -n atak -l kubevirt.io=virt-launcher -o name); do
-            kubectl logs -n atak "${p}" -c guest-console-log --tail=200 || true
+            kubectl logs -n atak "${p}" -c guest-console-log --tail=3000 || true
           done
           pod="$(kubectl get pod -n atak -l kubevirt.io/domain=atak-device -o name | head -1)"
           [ -n "${pod}" ] && kubectl logs -n atak "${pod}" -c compute --tail=200 || true

@@ -18,7 +18,7 @@ mkdir -p "${work}/iso" "${work}/rd" "${work}/fs/android/data" "${OUT}/boot" "${O
 # adbd listens on TCP 5555 so the in-cluster driver can reach it. Only the
 # driver and viewer pods may connect (NetworkPolicy). Nothing else changes.
 (cd "${work}/rd" && zcat ../iso/ramdisk.img | cpio -id --quiet)
-printf '%s\n' 'service.adb.tcp.port=5555' 'persist.adb.tcp.port=5555' >> "${work}/rd/default.prop"
+printf '%s\n' 'service.adb.tcp.port=5555' 'persist.adb.tcp.port=5555' 'persist.sys.usb.config=adb' 'ro.adb.secure=0' >> "${work}/rd/default.prop"
 (cd "${work}/rd" && find . | LC_ALL=C sort | cpio -o -H newc --quiet --reproducible | gzip -9n > ../fs/android/ramdisk.img)
 cp "${work}/iso/system.sfs" "${work}/fs/android/"
 

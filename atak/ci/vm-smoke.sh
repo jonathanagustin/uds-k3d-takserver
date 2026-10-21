@@ -35,7 +35,7 @@ spec:
               imagePullPolicy: IfNotPresent
               kernelPath: /boot/kernel
               initrdPath: /boot/initrd.img
-            kernelArgs: "root=/dev/ram0 SRC=/android androidboot.selinux=permissive console=ttyS0 video=720x1280 quiet"
+            kernelArgs: "root=/dev/ram0 SRC=/android androidboot.selinux=permissive console=ttyS0 androidboot.console=ttyS0 loglevel=6 video=720x1280"
         devices:
           logSerialConsole: true
           disks:
@@ -69,11 +69,16 @@ kubectl wait pod -n "${NS}" adb --for condition=Ready --timeout=5m
 kubectl exec -n "${NS}" adb -- bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq adb >/dev/null'
 
 a() { kubectl exec -n "${NS}" adb -- adb -s "${ip}:5555" "$@"; }
-for _ in $(seq 1 90); do
+booted=""
+for _ in $(seq 1 120); do
   kubectl exec -n "${NS}" adb -- adb connect "${ip}:5555" >/dev/null 2>&1 || true
-  if [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
+  if [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
   sleep 5
 done
+if [ -z "${booted}" ]; then
+  echo "device did not finish booting over adb" >&2
+  exit 1
+fi
 echo "boot completed after $(( $(date +%s) - start ))s"
 {
   echo "release: $(a shell getprop ro.build.version.release)"

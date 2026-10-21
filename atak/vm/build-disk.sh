@@ -33,6 +33,10 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
     svc power stayon true
     # The Android-x86 analytics app crashes in a loop without Google services.
     pm disable org.android_x86.analytics >/dev/null 2>&1
+    # Skip the first-run setup wizard, as on a provisioned phone.
+    settings put global device_provisioned 1
+    settings put secure user_setup_complete 1
+    pm disable com.android.provision >/dev/null 2>&1
     settings put system screen_off_timeout 2147483647
     input keyevent KEYCODE_WAKEUP
   fi

@@ -8,7 +8,7 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 
 - amd64 nodes with `/dev/kvm`. The VM image is Android-x86 and the APK is built for `x86_64` only. There is no arm64 build (see [Supported architectures](../README.md#supported-architectures)).
 - About 3 GiB of memory and 2 vCPU for the VM, plus KubeVirt.
-- The standard TAK ports 8446 and 8089 on the passthrough gateway (`standardPorts` in `chart/values.yaml`, [ADR 11](../adr/0011-standard-tak-ports-on-the-passthrough-gateway.md)) and the in-cluster DNS rewrite, so the device can reach `takserver-stream.<domain>` the way a phone would.
+- The standard TAK ports 8446 and 8089 on the passthrough gateway (`standardPorts` in `chart/values.yaml`, [ADR 12](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)) and the in-cluster DNS rewrite, so the device can reach `takserver-stream.<domain>` the way a phone would.
 
 ## Images
 

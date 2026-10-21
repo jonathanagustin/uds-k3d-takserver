@@ -20,7 +20,7 @@ Options:
 
 - Build the ATAK-CIV APK from the `upstream/atak-civ` submodule at release 5.5.1.10 for `x86_64`, in Docker, with every native dependency compiled from source.
 - Package Android-x86 9.0-r2 as a KubeVirt containerDisk (kernel boot from `/boot`, system as a qcow2) and run it with KubeVirt v1.6.2 and masquerade networking, so the VM uses cluster DNS like any pod.
-- The device enrolls at runtime with a Keycloak user through ATAK's quick-enroll link, on the standard TAK ports through the passthrough gateway ([ADR 11](0011-standard-tak-ports-on-the-passthrough-gateway.md)). No key, password, or enrolled certificate is in an image.
+- The device enrolls at runtime with a Keycloak user through ATAK's quick-enroll link, on the standard TAK ports through the passthrough gateway ([ADR 12](0012-standard-tak-ports-on-the-passthrough-gateway.md)). No key, password, or enrolled certificate is in an image.
 - A ws-scrcpy viewer shows the screen at `atak.<domain>` behind Authservice and Keycloak.
 - Ship it as a separate Zarf package (`atak/zarf.yaml`), amd64 only, deployed only by the `ATAK e2e` workflow. The TAK package and the default tests do not change.
 

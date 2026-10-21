@@ -81,7 +81,9 @@ done
 shot atak-map
 
 # Quick enroll: the same link a TAK Server QR code carries.
-link="tak://com.atakmap.app/enroll?host=${TAK_HOST}&username=${TAK_USER}&token=${TAK_TOKEN}"
+# The password can hold "#", "&" or "@", so every query value is encoded.
+enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
+link="tak://com.atakmap.app/enroll?host=$(enc "${TAK_HOST}")&username=$(enc "${TAK_USER}")&token=$(enc "${TAK_TOKEN}")"
 a shell am start -a android.intent.action.VIEW -d "'${link}'" >/dev/null
 unset link
 sleep 5
@@ -90,6 +92,13 @@ for _ in $(seq 1 20); do
 done
 sleep 30
 shot atak-enrolled
+# TAK 5.7 can store a user's first connection without the groups it creates
+# during that connection, which hides the device from contact lists. A real
+# device reconnects often; restart ATAK once so the stream reconnects.
+a shell am force-stop "${PKG}"
+a shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 60
+shot atak-connected
 if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   a exec-out cat /sdcard/ui.xml > "${OUT}/ui.xml" || true
 fi

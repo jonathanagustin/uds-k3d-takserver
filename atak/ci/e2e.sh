@@ -88,14 +88,14 @@ YAML
 k wait pod -n atak atak-driver --for condition=Ready --timeout=5m
 timeout 1500 sh -c 'until uds zarf tools kubectl exec -n atak atak-driver -- test -f /out/exit; do sleep 10; done'
 k logs -n atak atak-driver | tee "${OUT}/driver.log"
-for f in atak-first-start.png atak-map.png atak-enrolled.png ui.xml logcat.txt exit; do
+for f in atak-first-start.png atak-map.png atak-enrolled.png atak-connected.png ui.xml logcat.txt exit; do
   k cp "atak/atak-driver:/out/${f}" "${OUT}/${f}" || true
 done
 
 echo "== TAK sees the device"
-# subscriptions/all is the admin view of every live connection.
-# clientEndPoints only lists clients that share a group with the caller, and
-# the admin certificate has no groups, so it is recorded but not required.
+# subscriptions/all is the admin view of live connections. clientEndPoints
+# only lists clients that share a group with the caller, and the admin
+# certificate has no groups. Either one listing the device user passes.
 cert_dir="$("${here}/../tests/extract-certs.sh")"
 gw_port="$(cat /tmp/tak-gateway-port 2>/dev/null || echo 18443)"
 marti() {
@@ -106,10 +106,10 @@ marti() {
 found=""
 for _ in $(seq 1 30); do
   marti subscriptions/all > "${OUT}/subscriptions.json" || true
-  if grep -q "\"${TAK_USER}\"" "${OUT}/subscriptions.json"; then found=1; break; fi
+  marti clientEndPoints > "${OUT}/clientEndPoints.json" || true
+  if grep -q "\"${TAK_USER}\"" "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"; then found=1; break; fi
   sleep 10
 done
-marti clientEndPoints > "${OUT}/clientEndPoints.json" || true
 cat "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"
 [ -n "${found}" ] || { echo "device user ${TAK_USER} has no live subscription" >&2; exit 1; }
 

@@ -2,7 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Join title cards, the terminal chapters, and the two web walkthroughs into
+# Join title cards, the terminal chapters, and the web walkthroughs into
 # demo/out/demo.mp4: H.264, yuv420p, faststart, no audio, under MAX_BYTES.
 # Also writes demo/out/poster.png and demo/out/preview.gif.
 set -euo pipefail
@@ -89,11 +89,19 @@ card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, in a real Chrome win
 clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
 card c07 "A browser map for TAK" "CloudTAK with Keycloak sign-in and an OpenStreetMap basemap"
 clip t07 "${out}/07-map.mp4" web "${out}/07-map-events.json" "${web_trim}"
+# The ATAK chapter is recorded only when the demo deployed the ATAK device.
+atak_parts=""
+if [[ -f "${out}/08-atak.mp4" ]]; then
+  card c08 "A real ATAK device on the same server" "ATAK-CIV in a KubeVirt VM, behind Keycloak, next to CloudTAK"
+  clip t08 "${out}/08-atak.mp4" web "${out}/08-atak-events.json" "${web_trim}"
+  atak_parts="c08 t08"
+fi
 card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
 
 list="${work}/list.txt"
 : > "${list}"
-for part in c00 c01 t01 c02 t02 c03 t03 c04 t04 c05 t05 c06 t06 c07 t07 c99; do
+# shellcheck disable=SC2086
+for part in c00 c01 t01 c02 t02 c03 t03 c04 t04 c05 t05 c06 t06 c07 t07 ${atak_parts} c99; do
   echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
 done
 ffmpeg -v error -y -f concat -safe 0 -i "${list}" -c copy "${work}/joined.mp4"

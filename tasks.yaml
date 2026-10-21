@@ -115,6 +115,11 @@ tasks:
       - cmd: ./demo/record-terminal.sh
       - cmd: ./demo/record-web.sh
       - cmd: ./demo/record-web.sh 07-map map.demo.ts "map.uds.dev sso.uds.dev"
+      # The ATAK chapter needs the device from atak/ci/e2e.sh (KVM, amd64).
+      - cmd: |
+          if uds zarf tools kubectl get vmi -n atak atak-device >/dev/null 2>&1; then
+            ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev"
+          fi
       - cmd: ./demo/assemble.sh
 
   - name: test-upgrade

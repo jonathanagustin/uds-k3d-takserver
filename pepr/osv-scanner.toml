@@ -1,0 +1,22 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# OSV-Scanner (and the OpenSSF Scorecard Vulnerabilities check) read this file.
+# Each entry needs a reason and an expiry, so it comes back for review.
+
+[[IgnoredVulns]]
+# node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested
+# DigestAlgorithm elements (also CVE-2026-33894, GHSA-ppp5-5v6c-4jwp).
+# node-forge 1.4.0 is the latest release and OSV lists no fixed version.
+# Pepr 2.0.3 requires it as a peer dependency, so it can't be dropped.
+# The flaw is in RSA PKCS#1 v1.5 signature verification. Pepr loads
+# node-forge in one place, its CLI (src/lib/tls.ts, genTLS), which runs at
+# `pepr build` time to make the webhook CA and server certificate:
+# rsa.generateKeyPair, createCertificate, cert.sign with SHA-256, and
+# certificateToPem. Nothing verifies a signature with it. Pepr's
+# controller.js and lib.js, which the admission controller and this
+# module's bundle run, never import node-forge. Remove this entry when a
+# fixed node-forge ships or Pepr drops it. Tracked in issue #60.
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2027-01-21
+reason = "No fixed node-forge release. Only the Pepr CLI loads node-forge, at build time, to generate and sign the webhook certificate. It never verifies an RSA signature, and the admission controller never imports node-forge. See issue #60."

@@ -106,3 +106,72 @@ jobs:
           test "${published_version}" = "${RELEASE_VERSION}"
           echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
           echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"
+
+  # Build provenance for the published package index, signed through
+  # Sigstore with this workflow's identity. The attestation is stored with
+  # the package in GHCR and in the repository's attestations, and the bundle
+  # is added to the GitHub release. It runs after both architectures are in
+  # the index, so a failure here never blocks the publish. Verify with:
+  #   gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream \
+  #     --owner jonathanagustin
+  provenance:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.39.0
+
+      # Writes the Docker credentials that both the digest lookup and the
+      # attestation push read.
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read the published index digest
+        id: index
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          name="ghcr.io/jonathanagustin/uds-k3d-takserver/takserver"
+          digest="$(uds zarf tools registry digest "${name}:${version}-upstream")"
+          [[ "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          {
+            echo "name=${name}"
+            echo "digest=${digest}"
+            echo "bundle=takserver-${version}-upstream.provenance.sigstore.json"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.index.outputs.name }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Add the provenance bundle to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+          BUNDLE_NAME: ${{ steps.index.outputs.bundle }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${BUNDLE_PATH}" "${RUNNER_TEMP}/${BUNDLE_NAME}"
+          gh release upload "${RELEASE_TAG}" "${RUNNER_TEMP}/${BUNDLE_NAME}" --clobber --repo "${GITHUB_REPOSITORY}"

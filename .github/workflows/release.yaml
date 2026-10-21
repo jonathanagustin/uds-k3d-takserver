@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: publish-package-${{ inputs.tag || github.event.release.tag_name }}
@@ -22,6 +21,9 @@ concurrency:
 
 jobs:
   publish:
+    permissions:
+      contents: read
+      packages: write
     if: github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft)
     # One package per architecture, each created on a native runner. Both
     # publish under the same OCI tag, and Zarf keeps one index entry per

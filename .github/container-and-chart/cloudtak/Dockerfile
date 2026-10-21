@@ -16,9 +16,9 @@
 FROM cloudtak-upstream AS built
 RUN npm prune --omit=dev
 
-# Same base tag as upstream's Dockerfile. Alpine packages float with it,
-# as they do upstream.
-FROM nginx:alpine3.24
+# Same base tag as upstream's Dockerfile, pinned by digest. Renovate updates
+# the digest when the tag moves. Alpine packages still float, as upstream.
+FROM nginx:alpine3.24@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
 # hadolint ignore=DL3018
 RUN apk add --no-cache bash nodejs-current openssl
 COPY --from=built /home/etl/api /home/etl/api

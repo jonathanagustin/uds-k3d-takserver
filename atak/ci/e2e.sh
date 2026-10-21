@@ -93,18 +93,25 @@ for f in atak-first-start.png atak-map.png atak-enrolled.png ui.xml logcat.txt e
 done
 
 echo "== TAK sees the device"
+# subscriptions/all is the admin view of every live connection.
+# clientEndPoints only lists clients that share a group with the caller, and
+# the admin certificate has no groups, so it is recorded but not required.
 cert_dir="$("${here}/../tests/extract-certs.sh")"
 gw_port="$(cat /tmp/tak-gateway-port 2>/dev/null || echo 18443)"
-found=""
-for _ in $(seq 1 30); do
+marti() {
   curl -k -sS --max-time 20 --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass atakatak \
     --resolve "takserver-api.${DOMAIN}:${gw_port}:127.0.0.1" \
-    "https://takserver-api.${DOMAIN}:${gw_port}/Marti/api/clientEndPoints" > "${OUT}/clientEndPoints.json" || true
-  if grep -q "${TAK_USER}" "${OUT}/clientEndPoints.json"; then found=1; break; fi
+    "https://takserver-api.${DOMAIN}:${gw_port}/Marti/api/$1"
+}
+found=""
+for _ in $(seq 1 30); do
+  marti subscriptions/all > "${OUT}/subscriptions.json" || true
+  if grep -q "\"${TAK_USER}\"" "${OUT}/subscriptions.json"; then found=1; break; fi
   sleep 10
 done
-cat "${OUT}/clientEndPoints.json"
-[ -n "${found}" ] || { echo "device user ${TAK_USER} is not in /Marti/api/clientEndPoints" >&2; exit 1; }
+marti clientEndPoints > "${OUT}/clientEndPoints.json" || true
+cat "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"
+[ -n "${found}" ] || { echo "device user ${TAK_USER} has no live subscription" >&2; exit 1; }
 
 echo "== viewer behind SSO"
 node "${here}/ci/viewer-sso.cjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"

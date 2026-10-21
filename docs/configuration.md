@@ -12,6 +12,8 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | --- | --- | --- |
 | `DOMAIN` | `uds.dev` | Gateway hosts, such as `takserver.uds.dev` |
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
+| `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
+| `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
 Postgres stays `docker.io/postgis/postgis:15-3.4`. NATS stays the images rendered by the upstream NATS chart. This repository does not build those.
 

@@ -23,8 +23,6 @@ import tempfile
 import time
 
 NAMESPACE = "takserver"
-GATEWAY_NAMESPACE = "istio-tenant-gateway"
-GATEWAY_SERVICE = "tenant-ingressgateway"
 
 
 def kubectl_cmd():
@@ -479,28 +477,7 @@ def issuer_host():
     return match.group(1)
 
 
-def gateway_ip():
-    result = kc(
-        "get",
-        "svc",
-        "-n",
-        GATEWAY_NAMESPACE,
-        GATEWAY_SERVICE,
-        "-o",
-        "jsonpath={.spec.clusterIP}",
-    )
-    ip = result.stdout.strip()
-    if not ip or ip == "None":
-        listed = kc("get", "svc", "-n", GATEWAY_NAMESPACE, "-o", "wide", check=False)
-        sys.stderr.write(listed.stdout)
-        sys.stderr.write(listed.stderr)
-        raise SystemExit(
-            f"Service {GATEWAY_NAMESPACE}/{GATEWAY_SERVICE} has no ClusterIP"
-        )
-    return ip
-
-
-def patch_api(config_image, host, ip):
+def patch_api(config_image, host):
     scale_deploy("takserver-api", 1)
     name = container_name("takserver-api")
     strategic_patch(
@@ -515,7 +492,11 @@ def patch_api(config_image, host, ip):
                 "template": {
                     "metadata": pod_meta(),
                     "spec": {
-                        "hostAliases": [{"ip": ip, "hostnames": [host]}],
+                        # Earlier versions pinned the issuer host to the
+                        # tenant gateway ClusterIP here. The in-cluster DNS
+                        # rewrite (zarf.yaml) answers that name now. null
+                        # removes the old alias on upgrade.
+                        "hostAliases": None,
                         "containers": [
                             {
                                 "name": name,
@@ -669,8 +650,7 @@ def main():
         return
     config_image = container_image("takserver-config")
     host = issuer_host()
-    ip = gateway_ip()
-    print(f"OIDC issuer host {host} via {GATEWAY_NAMESPACE}/{GATEWAY_SERVICE} {ip}")
+    print(f"OIDC issuer host {host}. In-cluster DNS sends it to the tenant gateway.")
     # Stop the consumers before Ignite restarts. On the small test node a
     # second Ignite start next to four TAK heaps drops the API server.
     # Plugins is last when they come back, because it uses the others.
@@ -712,7 +692,7 @@ def main():
         "config",
         tcp_probes(8089, "/messaging-readiness.sh"),
     )
-    patch_api(config_image, host, ip)
+    patch_api(config_image, host)
     patch_plugins(config_image)
 
 

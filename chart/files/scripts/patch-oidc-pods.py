@@ -429,9 +429,45 @@ def recreate_strategy():
     return {"type": "Recreate", "rollingUpdate": None}
 
 
-def patch_config_owner(deploy, image, wait_mode, probes):
+def trust_container():
+    # The JVM reads this store for https://sso.<domain>. import_init fills it.
+    return {
+        "env": [
+            {
+                "name": "JAVA_TOOL_OPTIONS",
+                "value": "-Djavax.net.ssl.trustStore=/trust/cacerts -Djavax.net.ssl.trustStorePassword=changeit",
+            }
+        ],
+        "volumeMounts": [
+            {"name": "jvm-trust", "mountPath": "/trust"},
+        ],
+    }
+
+
+def trust_volumes():
+    return [
+        {"name": "jvm-trust", "emptyDir": {}},
+        {
+            "name": "uds-trust",
+            "configMap": {
+                "name": "uds-trust-bundle",
+                "optional": True,
+            },
+        },
+    ]
+
+
+def patch_config_owner(deploy, image, wait_mode, probes, trust_host=None):
+    # trust_host set: the JVM also gets the trust store for the issuer.
     scale_deploy(deploy, 1)
     name = container_name(deploy)
+    container = {"name": name, **probes}
+    volumes = script_volumes()
+    inits = [wait_init(image, wait_mode)]
+    if trust_host:
+        container.update(trust_container())
+        volumes = volumes + trust_volumes()
+        inits.append(import_init(image, trust_host))
     strategic_patch(
         deploy,
         {
@@ -444,20 +480,15 @@ def patch_config_owner(deploy, image, wait_mode, probes):
                 "template": {
                     "metadata": pod_meta(),
                     "spec": {
-                        "containers": [
-                            {
-                                "name": name,
-                                **probes,
-                            }
-                        ],
-                        "volumes": script_volumes(),
+                        "containers": [container],
+                        "volumes": volumes,
                     },
                 }
             }
         },
     )
     # JSON replace keeps wait-deps first. A strategic merge appends it.
-    set_inits("deploy", deploy, [wait_init(image, wait_mode)])
+    set_inits("deploy", deploy, inits)
     rollout(deploy)
 
 
@@ -500,29 +531,11 @@ def patch_api(config_image, host):
                         "containers": [
                             {
                                 "name": name,
-                                "env": [
-                                    {
-                                        "name": "JAVA_TOOL_OPTIONS",
-                                        "value": "-Djavax.net.ssl.trustStore=/trust/cacerts -Djavax.net.ssl.trustStorePassword=changeit",
-                                    }
-                                ],
-                                "volumeMounts": [
-                                    {"name": "jvm-trust", "mountPath": "/trust"},
-                                ],
+                                **trust_container(),
                                 **tcp_probes(8443, "/api-readiness.sh"),
                             }
                         ],
-                        "volumes": script_volumes()
-                        + [
-                            {"name": "jvm-trust", "emptyDir": {}},
-                            {
-                                "name": "uds-trust",
-                                "configMap": {
-                                    "name": "uds-trust-bundle",
-                                    "optional": True,
-                                },
-                            },
-                        ],
+                        "volumes": script_volumes() + trust_volumes(),
                     },
                 }
             }
@@ -691,6 +704,9 @@ def main():
         config_image,
         "config",
         tcp_probes(8089, "/messaging-readiness.sh"),
+        # 8089 checks the bearer token stored with a certificate enrolled on
+        # 8446, so messaging fetches the issuer's keys over HTTPS as well.
+        trust_host=host,
     )
     patch_api(config_image, host)
     patch_plugins(config_image)

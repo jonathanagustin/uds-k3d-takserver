@@ -200,15 +200,19 @@ spec:
       # (zarf.yaml) answers the tenant gateway ClusterIP, which is this selector.
       # Istio gateway chart 1.31 with release tenant-ingressgateway labels
       # pods app=tenant-ingressgateway and istio=tenant-ingressgateway.
+      # Messaging needs it too: on 8089 a certificate enrolled with a bearer
+      # token is checked by validating that token against the Keycloak keys.
+      {{- range $component := list .Values.api .Values.messaging }}
       - direction: Egress
         remoteNamespace: istio-tenant-gateway
         remoteSelector:
           app: tenant-ingressgateway
           istio: tenant-ingressgateway
         selector:
-          {{- toYaml .Values.api.selector | nindent 10 }}
+          {{- toYaml $component.selector | nindent 10 }}
         port: 443
-        description: "Keycloak discovery, token, and JWKS"
+        description: "Keycloak discovery, token, and JWKS for {{ index $component.selector "app" }}"
+      {{- end }}
       {{- end }}
 
       {{- with .Values.cloudtak }}

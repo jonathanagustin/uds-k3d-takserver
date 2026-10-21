@@ -13,15 +13,15 @@
 set -e
 
 # The entrypoint defines psql as an array that connects as $POSTGRES_USER.
-export PGUSER="$POSTGRES_USER"
+export PGUSER="${POSTGRES_USER}"
 
 "${psql[@]}" <<- 'EOSQL'
 CREATE DATABASE template_postgis IS_TEMPLATE true;
 EOSQL
 
-for DB in template_postgis "$POSTGRES_DB"; do
-    echo "Loading PostGIS extensions into $DB"
-    "${psql[@]}" --dbname="$DB" <<- 'EOSQL'
+for DB in template_postgis "${POSTGRES_DB}"; do
+    echo "Loading PostGIS extensions into ${DB}"
+    "${psql[@]}" --dbname="${DB}" <<- 'EOSQL'
 		CREATE EXTENSION IF NOT EXISTS postgis;
 		CREATE EXTENSION IF NOT EXISTS postgis_topology;
 		-- Reconnect so pg_settings picks up the new extension's defaults.

@@ -101,7 +101,7 @@ for i in 1 2 3 4 5; do
     > "${OUT}/certmod.txt" 2>&1; then
     break
   fi
-  [ "${i}" = 5 ] && { cat "${OUT}/certmod.txt" >&2; exit 1; }
+  [[ "${i}" = 5 ]] && { cat "${OUT}/certmod.txt" >&2; exit 1; }
   sleep 10
 done
 cat "${OUT}/certmod.txt"
@@ -218,7 +218,7 @@ for _ in $(seq 1 30); do
   sleep 10
 done
 cat "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"
-[ -n "${found}" ] || { echo "device user ${DEVICE_USER} has no live subscription" >&2; exit 1; }
+[[ -n "${found}" ]] || { echo "device user ${DEVICE_USER} has no live subscription" >&2; exit 1; }
 
 echo "== viewer behind SSO"
 node "${here}/ci/viewer-sso.cjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"

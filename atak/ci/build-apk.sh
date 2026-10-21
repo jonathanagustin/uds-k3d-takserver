@@ -10,7 +10,7 @@ CACHE="${CACHE:?registry cache image}"
 start=$(date +%s)
 for target in toolchain ttp deps cesium apk; do
   out=(--output type=cacheonly)
-  if [ "${target}" = apk ]; then
+  if [[ "${target}" = apk ]]; then
     out=(--output "type=local,dest=out")
   fi
   docker buildx build -f atak/apk/Dockerfile --target "${target}" \

@@ -5,6 +5,7 @@
 # Runs the browser viewer against the device VM started by vm-smoke.sh and
 # saves a screenshot of the phone page. Needs VIEWER_IMAGE imported into k3d.
 set -euo pipefail
+: "${VIEWER_IMAGE:?}"
 NS="${NS:-atak}"
 OUT="${OUT:-out}"
 mkdir -p "${OUT}"

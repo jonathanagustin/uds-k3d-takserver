@@ -587,7 +587,7 @@ print(c)' "${work}/std-enroll.json" > "${work}/std-cert.pem"
     nosni="$({ sleep 15; } | timeout 8 openssl s_client -brief -noservername \
       -connect "127.0.0.1:${std_stream}" \
       -cert "${work}/std-cert.pem" -key "${work}/std.key" 2>&1)" || nosni_rc=$?
-    if grep -q "CONNECTION ESTABLISHED" <<< "${nosni}" && [ "${nosni_rc}" = "124" ]; then
+    if grep -q "CONNECTION ESTABLISHED" <<< "${nosni}" && [[ "${nosni_rc}" = "124" ]]; then
       pass "standard port 8089 without SNI, stream still open after 8s"
     else
       fail "standard port 8089 without SNI (openssl exit ${nosni_rc})"

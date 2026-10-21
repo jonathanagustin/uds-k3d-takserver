@@ -89,7 +89,7 @@ passphrase() {
 
 for _ in $(seq 1 60); do
   adb connect "${DEVICE}" >/dev/null 2>&1 || true
-  if [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then break; fi
+  if [[ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]]; then break; fi
   sleep 5
 done
 a shell svc power stayon true || true
@@ -119,7 +119,7 @@ for _ in $(seq 1 40); do
     idle=0
   else
     idle=$((idle + 1))
-    [ "${idle}" -ge 6 ] && break
+    [[ "${idle}" -ge 6 ]] && break
     sleep 5
   fi
 done

@@ -7,6 +7,8 @@ set -euo pipefail
 
 SRC=${SRC:-/src/atak-civ}
 ABI=${ABI:-x86_64}
+# Set by the Dockerfile toolchain stage.
+: "${ANDROID_SDK_ROOT:?}" "${ANDROID_NDK:?}"
 
 cd "${SRC}/atak"
 cat > local.properties <<PROPS

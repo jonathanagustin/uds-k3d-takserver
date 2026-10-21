@@ -75,10 +75,10 @@ a() { kubectl exec -n "${NS}" adb -- adb -s "${ip}:5555" "$@"; }
 booted=""
 for _ in $(seq 1 120); do
   kubectl exec -n "${NS}" adb -- adb connect "${ip}:5555" >/dev/null 2>&1 || true
-  if [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
+  if [[ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]]; then booted=1; break; fi
   sleep 5
 done
-if [ -z "${booted}" ]; then
+if [[ -z "${booted}" ]]; then
   echo "device did not finish booting over adb" >&2
   exit 1
 fi

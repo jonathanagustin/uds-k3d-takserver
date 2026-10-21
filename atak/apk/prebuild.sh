@@ -58,7 +58,7 @@ ttp_pkg() {
   # only (ci-support/gradle/artifactAssembly.gradle). Point that path at this
   # ABI's jars; no arm64 libraries are added.
   ls "builds/android-${ABI}-release/java/"*.jar
-  if [ "${ABI}" != arm64-v8a ]; then
+  if [[ "${ABI}" != arm64-v8a ]]; then
     mkdir -p android-arm64-v8a-release
     ln -sfn "../builds/android-${ABI}-release/java" android-arm64-v8a-release/java
   fi
@@ -111,14 +111,14 @@ headers() {
 
 cesium() {
   cd "${SRC}/cesium-native"
-  if [ ! -d cesium-native ]; then
+  if [[ ! -d cesium-native ]]; then
     git clone -q --depth 1 --branch "${CESIUM_REF}" --recurse-submodules --shallow-submodules \
       https://github.com/CesiumGS/cesium-native.git cesium-native
   fi
   # stage.sh pulls the zlib-ng port from vcpkg master. Pin it to the vcpkg
   # release cesium-native itself builds against (ezvcpkg_fetch COMMIT).
   ref="$(sed -n 's/^ *COMMIT \([0-9][0-9.]*\).*/\1/p' cesium-native/CMakeLists.txt | head -n 1)"
-  if [ -z "${ref}" ]; then
+  if [[ -z "${ref}" ]]; then
     echo "no ezvcpkg COMMIT in cesium-native/CMakeLists.txt" >&2
     exit 1
   fi
@@ -129,7 +129,7 @@ cesium() {
 }
 
 phases=("$@")
-[ ${#phases[@]} -eq 0 ] && phases=(extract ttp conan_profile ttp_pkg laszip liblas draco headers cesium)
+[[ ${#phases[@]} -eq 0 ]] && phases=(extract ttp conan_profile ttp_pkg laszip liblas draco headers cesium)
 for p in "${phases[@]}"; do
   log "start ${p}"
   "${p}"

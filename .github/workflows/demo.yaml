@@ -139,6 +139,10 @@ jobs:
         run: ./demo/record-web.sh
         shell: bash
 
+      - name: Record the CloudTAK map walkthrough
+        run: ./demo/record-web.sh 07-map map.demo.ts "map.uds.dev sso.uds.dev"
+        shell: bash
+
       - name: Build demo.mp4
         run: ./demo/assemble.sh
         shell: bash
@@ -165,6 +169,9 @@ jobs:
             demo/out/06-web-events.json
             demo/out/browser-06-web/screen.mkv
             demo/out/browser-06-web/ffmpeg.log
+            demo/out/07-map-events.json
+            demo/out/browser-07-map/screen.mkv
+            demo/out/browser-07-map/ffmpeg.log
             tests/.playwright/demo/**/*.png
             /tmp/demo-deploy.log
           if-no-files-found: ignore

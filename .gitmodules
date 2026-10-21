@@ -3,3 +3,8 @@
 	url = https://github.com/TAK-Product-Center/Server
 	shallow = true
 	branch = 5.7-RELEASE-14
+[submodule "upstream/cloudtak"]
+	path = upstream/cloudtak
+	url = https://github.com/dfpc-coe/CloudTAK
+	shallow = true
+	branch = v13.111.3

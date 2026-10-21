@@ -1,3 +1,3 @@
 [codespell]
-skip = *.tar,*.tar.zst,pnpm-lock.yaml,build,node_modules,.git,zarf-sbom,tests/.playwright,dist,package-lock.json,LICENSE
+skip = *.tar,*.tar.zst,pnpm-lock.yaml,build,node_modules,.git,zarf-sbom,tests/.playwright,dist,package-lock.json,LICENSE,./upstream
 ignore-words-list = AKS,aks

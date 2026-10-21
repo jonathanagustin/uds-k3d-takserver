@@ -180,3 +180,52 @@ components:
       - "docker.io/imresamu/postgis:15-3.4"
       - "docker.io/library/nats:2.9.21-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.11.0"
+
+  # Browser map client. Built from the upstream/cloudtak submodule by
+  # .github/container-and-chart/cloudtak. See docs/cloudtak.md.
+  - name: cloudtak
+    required: false
+    default: true
+    description: Deploy CloudTAK, a browser map client connected to this TAK Server
+    only:
+      flavor: upstream
+    charts:
+      - name: uds-cloudtak
+        namespace: cloudtak
+        version: 0.1.0
+        localPath: cloudtak/chart
+    actions:
+      onDeploy:
+        before:
+          # CloudTAK keeps the TAK admin certificate in its own database to
+          # run its admin connection. The pod reads the CA, the admin
+          # certificate, and its key from this Secret. They are created at
+          # deploy time in ConfigMap cert-migration and are never in git.
+          - description: Copy the TAK CA and admin certificate to the cloudtak namespace
+            cmd: |
+              set -eu
+              if command -v kubectl >/dev/null 2>&1; then
+                k() { kubectl "$@"; }
+              elif command -v zarf >/dev/null 2>&1; then
+                k() { zarf tools kubectl "$@"; }
+              elif [ -x ./zarf ]; then
+                k() { ./zarf tools kubectl "$@"; }
+              else
+                echo "kubectl is not available" >&2
+                exit 1
+              fi
+              get() { k get configmap cert-migration -n takserver -o "jsonpath={.binaryData.$1}"; }
+              ca="$(get 'ca\.pem')"
+              cert="$(get 'admin\.pem')"
+              key="$(get 'admin\.key')"
+              if [ -z "${ca}" ] || [ -z "${cert}" ] || [ -z "${key}" ]; then
+                echo "ConfigMap takserver/cert-migration has no ca.pem, admin.pem, or admin.key" >&2
+                exit 1
+              fi
+              k create namespace cloudtak --dry-run=client -o yaml | k apply -f -
+              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"cloudtak-tak-admin","namespace":"cloudtak","labels":{"app.kubernetes.io/part-of":"cloudtak"}},"type":"Opaque","data":{"ca.pem":"%s","admin.pem":"%s","admin.key":"%s"}}' \
+                "${ca}" "${cert}" "${key}" | k apply -f - >/dev/null
+              echo "Secret cloudtak/cloudtak-tak-admin is up to date"
+    images:
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.111.3" # cloudtak-version
+      - "docker.io/imresamu/postgis:15-3.4"

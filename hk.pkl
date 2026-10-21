@@ -11,7 +11,7 @@ steps {
     glob = List("**/*.sh")
   }
   ["hadolint"] {
-    check = "hadolint --config .hadolint.yaml .github/container-and-chart/docker/Dockerfile"
+    check = "hadolint --config .hadolint.yaml .github/container-and-chart/docker/Dockerfile .github/container-and-chart/cloudtak/Dockerfile"
     glob = List("**/Dockerfile", ".hadolint.yaml")
   }
   ["shell"] {
@@ -33,7 +33,8 @@ steps {
       "*.tar",
       "*.tar.zst",
       "zarf-sbom/**",
-      ".git/**"
+      ".git/**",
+      "upstream/**"
     )
   }
   ["renovate-config"] {
@@ -43,6 +44,14 @@ steps {
   ["helm"] {
     check = "uds run lint:helm --no-progress --with paths=chart"
     glob = List("chart/Chart.yaml", "chart/**/*.yaml", "chart/**/*.tpl")
+  }
+  ["helm-cloudtak"] {
+    check = "uds run lint:helm --no-progress --with paths=cloudtak/chart"
+    glob = List("cloudtak/chart/Chart.yaml", "cloudtak/chart/**/*.yaml", "cloudtak/chart/**/*.tpl")
+  }
+  ["helm-template-cloudtak"] {
+    check = "uds run lint:helm-template --no-progress --with paths=cloudtak/chart"
+    glob = List("cloudtak/chart/Chart.yaml", "cloudtak/chart/**/*.yaml", "cloudtak/chart/**/*.tpl")
   }
   ["helm-template"] {
     check = "uds run lint:helm-template --no-progress --with paths=chart"
@@ -54,7 +63,7 @@ steps {
   }
   ["zarf-lint"] {
     check = "uds zarf dev lint . --flavor upstream --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14"
-    glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml")
+    glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml", "cloudtak/chart/**/*.yaml")
   }
   ["gitleaks"] {
     check = "gitleaks detect --no-git --config .gitleaks.toml --source . --redact --exit-code 1"

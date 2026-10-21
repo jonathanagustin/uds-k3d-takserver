@@ -35,6 +35,14 @@ api:
       # Key in ConfigMap cert-migration, mounted under certs/files.
       keystore: takserver-web.jks
 
+# CloudTAK, the browser map client in the cloudtak component. These values
+# only render the Ingress rules that let it reach TAK.
+cloudtak:
+  enabled: true
+  namespace: cloudtak
+  selector:
+    app: cloudtak
+
 messaging:
   service: takserver-messaging-service
   selector:

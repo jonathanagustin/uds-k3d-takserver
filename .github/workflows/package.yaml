@@ -73,6 +73,11 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: ./.github/scripts/wait-for-tak-images.sh
 
+      # The Test workflow builds the CloudTAK image when its inputs change.
+      # Wait for that build instead of reading an older image or none.
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
         with:

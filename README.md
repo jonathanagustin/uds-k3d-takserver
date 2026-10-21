@@ -13,6 +13,7 @@ https://github.com/user-attachments/assets/35746409-0e0b-4466-b733-a148f3a5c6bb
 - **Certificates generated at deploy time.** A pre-install Job runs TAK's `generateClusterCerts.sh`. No keys or keystores are committed. See [ADR 2](adr/0002-generate-certificates-at-deploy-time.md).
 - **UDS networking.** The browser UI goes through the tenant gateway. Certificate-authenticated API, enrollment, and streaming traffic goes through the Istio passthrough gateway. NetworkPolicies are default-deny. See [docs/networking.md](docs/networking.md).
 - **Clustered TAK Server.** The API, messaging, config, and plugins processes run alongside Ignite, NATS, and PostgreSQL in the `takserver` namespace.
+- **Browser map with CloudTAK.** The optional `cloudtak` component runs [CloudTAK](https://github.com/dfpc-coe/CloudTAK) at `map.<domain>` with UDS Keycloak sign-in and connects it to TAK in the cluster. Each Keycloak user gets their own TAK certificate. It is built from a pinned submodule. CloudTAK is not WebTAK, which is not in the public TAK source. See [docs/cloudtak.md](docs/cloudtak.md).
 - **Images built from source.** The TAK images are built from the public upstream source with Docker Buildx and published to GHCR under this repository. See [docs/building.md](docs/building.md).
 - **Supply-chain checks.** CI runs Grype image scans, generates SBOMs, runs CodeQL, dependency review, and OpenSSF Scorecard, and supports optional keyless Cosign signing.
 
@@ -90,6 +91,7 @@ Other tasks (run `uds run --list` for the full list):
 | Admin UI with a client certificate | `takserver-api.<domain>` | passthrough, SNI | 8443 |
 | Streaming (ATAK / WinTAK) | `takserver-stream.<domain>` | passthrough, SNI | 8089 |
 | Certificate enrollment | `takserver.<domain>` | passthrough, SNI | 8446 |
+| CloudTAK map (Keycloak sign-in) | `map.<domain>` | tenant, 443 | 5000 in namespace `cloudtak` |
 
 `<domain>` defaults to `uds.dev`. Ports 8443 and 8089 require a client certificate. The passthrough gateway does not terminate TLS, so the client presents its certificate directly to TAK Server.
 
@@ -138,6 +140,7 @@ Design decisions are recorded in [`adr/`](adr/):
 | [Networking](docs/networking.md) | Gateway exposure and the NetworkPolicy allow list |
 | [Data](docs/data.md) | PostgreSQL and what a backup of the namespace must include |
 | [Building the images](docs/building.md) | Image build script, platforms, pins, and the Gradle cache |
+| [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |
 
 ## Configuration
 
@@ -156,6 +159,7 @@ Design decisions are recorded in [`adr/`](adr/):
 - `tests/api-smoke.sh` exercises the Marti API on ports 8443, 8447, 8446, and 8089
 - `tests/oidc-render.sh` checks that every TAK pod rendered the OIDC client secret
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate
+- `test:cloudtak` and `tests/cloudtak.spec.ts` check the CloudTAK pods and rules, go from `map.<domain>` to the Keycloak login and back to the map as the Keycloak user, and require a live TAK connection with that user's certificate
 
 In GitHub Actions, `.github/workflows/test.yaml` runs the install and upgrade paths on k3d. The EKS, RKE2, and AKS workflows (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) are manual and disabled by default. They use the OpenTofu scaffolds in `.github/test-infra/` and need cloud credentials.
 
@@ -166,6 +170,8 @@ In GitHub Actions, `.github/workflows/test.yaml` runs the install and upgrade pa
 | `zarf.yaml` | Package metadata, variables, and image list |
 | `common/zarf.yaml` | Config chart plus the upstream chart (tag `5.7-RELEASE-14`) |
 | `chart/` | Config chart: UDS `Package`, ConfigMaps, and the certificate Job |
+| `cloudtak/chart/` | CloudTAK chart: Deployment, PostGIS, and its UDS `Package` |
+| `upstream/cloudtak` | CloudTAK source, a git submodule pinned to a release tag |
 | `values/` | Values overlays for the upstream chart and the Pepr module |
 | `pepr/` | `takserver-oidc` Pepr module that adds the OIDC render init container at admission |
 | `bundle/` | Test bundle (passthrough gateway plus this package) and its config |
@@ -183,6 +189,7 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 - External ATAK port 8089 is not mapped. Streaming is SNI on gateway port 443.
 - Ports 8444, 9000, and 9001 are not exposed through a gateway.
 - The upstream chart does not mount the `uds-trust-bundle` ConfigMap.
+- CloudTAK's Keycloak sign-in is a route this package adds next to CloudTAK, because CloudTAK 13.111.3 has no OIDC route of its own. CloudTAK logout does not end the Keycloak session. CloudTAK has no basemap and no S3-backed features in this package. See [docs/cloudtak.md](docs/cloudtak.md).
 - Resource requests are sized for a small development node, and NATS runs as a single replica with clustering off. Production sizing and storage are not tuned yet.
 
 ## Contributing
@@ -195,4 +202,4 @@ Report vulnerabilities through a private GitHub security advisory. See [SECURITY
 
 ## License
 
-[GPL-3.0-only](LICENSE). TAK Server, which the images are built from, is also licensed under GPL-3.0.
+[GPL-3.0-only](LICENSE). TAK Server, which the images are built from, is also licensed under GPL-3.0. CloudTAK, which the optional `cloudtak` image is built from, is licensed under AGPL-3.0.

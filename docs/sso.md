@@ -61,7 +61,7 @@ Bearer tokens and the access-token cookie are accepted only when the local port 
 
 The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. The `takserver-oidc` Pepr module in `pepr/` adds an init container to the config, messaging, API, and plugins pods when each pod is created, so no pod can start with the unrendered file. That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes. The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
 
-`trustAllCerts` is false. The API init container copies the JVM trust store and imports ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
+`trustAllCerts` is false. The API and messaging init containers copy the JVM trust store and import ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
 
 ## Render at admission
 
@@ -101,13 +101,13 @@ Authservice sits on the tenant gateway and authenticates the request before the 
 
 ## Network
 
-API pods may connect to the tenant gateway:
+API and messaging pods may connect to the tenant gateway:
 
 - Namespace `istio-tenant-gateway`
 - Pod labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway` (Istio gateway chart 1.31, release name `tenant-ingressgateway`)
 - Port 443
 
-That is the path for the discovery document, the token endpoint, and JWKS. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP. There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
+That is the path for the discovery document, the token endpoint, and JWKS. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP. Messaging needs the same path. With `x509tokenAuth`, a certificate enrolled on 8446 with a bearer token is stored with that token, and on 8089 TAK authenticates the stream by validating the token against the issuer's keys. Without the rule and the trust store, TAK logs `Remote host terminated the handshake` for the discovery document and closes the stream right after TLS. The messaging pod gets the same trust-store init container as the API pod. There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
 
 ## Tests
 
@@ -117,4 +117,4 @@ Enrollment is `POST /Marti/api/tls/signClient/v2` on 8446 with the access-token 
 
 The same spec, and `tests/smoke.sh`, check that 8443 and 8089 reject a handshake with no client certificate. The 8443 Marti check still uses `admin.pem`. If `https://sso.<domain>` does not answer, the job skips the account-console setup and the OAuth spec and still runs the certificate checks.
 
-`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail. On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, groups, and `security/isSecure`, which must return `true`. The access-token cookies must be Secure. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the user and mapped group are `ROLE_ADMIN` and `Operators`. A missing token must be 401 or a redirect. A token with a damaged signature must be 401. On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints. On 8089 that certificate must complete TLS, and a client with no certificate must be rejected.
+`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail. On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, groups, and `security/isSecure`, which must return `true`. The access-token cookies must be Secure. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the user and mapped group are `ROLE_ADMIN` and `Operators`. A missing token must be 401 or a redirect. A token with a damaged signature must be 401. On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints. On 8089 that certificate must open a stream that is still up after 8 seconds, and a client with no certificate must be rejected.

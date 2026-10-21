@@ -19,7 +19,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ARG ANDROID_X86_URL=https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download
 ARG ANDROID_X86_SHA256=f7eb8fc56f29ad5432335dc054183acf086c539f3990f0b6e9ff58bd6df4604e
-RUN curl -fsSL --retry 5 -o /android-x86.iso "${ANDROID_X86_URL}" \
+# SourceForge mirrors drop long transfers; resume until the hash matches.
+RUN for i in 1 2 3 4 5 6 7 8; do \
+        curl -fsSL --retry 5 --retry-all-errors -C - -o /android-x86.iso "${ANDROID_X86_URL}" && break; \
+        echo "download attempt ${i} failed, resuming"; sleep 5; \
+    done \
     && echo "${ANDROID_X86_SHA256}  /android-x86.iso" | sha256sum -c -
 COPY atak/vm/build-disk.sh /usr/local/bin/build-disk.sh
 RUN ISO=/android-x86.iso OUT=/out build-disk.sh && rm /android-x86.iso

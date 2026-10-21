@@ -54,6 +54,14 @@ conan_profile() {
 ttp_pkg() {
   cd "${SRC}/takthirdparty"
   ln -sfn "builds/android-${ABI}-release" "android-${ABI}-release"
+  # The AAR takes the GDAL and Assimp Java bindings from the arm64-v8a build
+  # only (ci-support/gradle/artifactAssembly.gradle). Point that path at this
+  # ABI's jars; no arm64 libraries are added.
+  ls "builds/android-${ABI}-release/java/"*.jar
+  if [ "${ABI}" != arm64-v8a ]; then
+    mkdir -p android-arm64-v8a-release
+    ln -sfn "../builds/android-${ABI}-release/java" android-arm64-v8a-release/java
+  fi
   # Separate Gradle runs: the upstream publications fail Gradle's task
   # ordering check when assemble and publish share one invocation.
   (cd ci-support && conan export-pkg . "${CONAN_S[@]}" -f \

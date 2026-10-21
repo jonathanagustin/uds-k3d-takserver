@@ -6,6 +6,13 @@
 {{- $web := include "cloudtak.svc" (dict "name" $tak.webService "ns" $tak.namespace) }}
 {{- $msg := include "cloudtak.svc" (dict "name" $tak.messagingService "ns" $tak.namespace) }}
 {{- $issuer := printf "https://sso.%s/realms/%s" .Values.domain .Values.sso.realm }}
+# Its own identity, so the basemap egress rule names only this pod.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudtak
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -38,6 +45,7 @@ spec:
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum | trunc 16 }}
     spec:
+      serviceAccountName: cloudtak
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -93,6 +101,8 @@ spec:
               value: {{ .Values.sso.clientId | quote }}
             - name: CLOUDTAK_Config_oidc_redirect
               value: "{{ include "cloudtak.url" . }}/api/login/oidc/callback"
+            # Default basemap tile proxy (basemap.mjs in the image source).
+            {{- include "cloudtak.basemap.env" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /api
@@ -205,6 +215,8 @@ spec:
                   key: SIGNING_SECRET
             - name: NODE_OPTIONS
               value: "--max-old-space-size=64"
+            # The basemap record it keeps in step.
+            {{- include "cloudtak.basemap.env" . | nindent 12 }}
           resources:
             {{- toYaml .Values.resources.bootstrap | nindent 12 }}
           securityContext:

@@ -30,6 +30,15 @@ test.describe("CloudTAK", () => {
     });
     const page = await context.newPage();
 
+    // Basemap tiles the map loads through CloudTAK's tile proxy.
+    const tiles: { z: number; cache: string }[] = [];
+    page.on("response", (res) => {
+      const m = /\/uds-basemap\/tiles\/(\d+)\/\d+\/\d+(\?|$)/.exec(res.url());
+      if (m && res.status() === 200 && (res.headers()["content-type"] || "").startsWith("image/")) {
+        tiles.push({ z: Number(m[1]), cache: res.headers()["x-cache-status"] || "" });
+      }
+    });
+
     await page.goto(cloudtakUrl);
     await page.waitForURL(/sso\.uds\.dev\/realms\/uds\/protocol\/openid-connect\/auth/, { timeout: 60_000 });
     const auth = new URL(page.url());
@@ -130,9 +139,38 @@ test.describe("CloudTAK", () => {
       .toBe(true);
     console.log(`TAK clients: ${JSON.stringify(seen)}`);
 
+    // Default basemap: a server basemap the bootstrap container created,
+    // with its attribution on the map, and tiles from the tile host.
+    const basemaps = await api("/api/basemap?scope=server");
+    const osm = (basemaps.body?.items || []).find((b: { url: string }) => b.url.includes("/uds-basemap/tiles/"));
+    console.log(`server basemap: ${JSON.stringify(osm && { id: osm.id, name: osm.name, url: osm.url, attribution: osm.attribution })}`);
+    expect(osm).toBeTruthy();
+    await expect.poll(() => tiles.length, { timeout: 60_000, intervals: [1_000] }).toBeGreaterThan(3);
+    await expect(page.locator(".maplibregl-ctrl-attrib-inner")).toContainText("OpenStreetMap", { timeout: 30_000 });
+    // Without the session token the proxy refuses the tile.
+    const anon = await page.evaluate(async () => (await fetch("/uds-basemap/tiles/0/0/0", { credentials: "omit" })).status);
+    expect(anon).toBe(401);
+
     // Let the first frame and the status bar settle.
     await page.waitForTimeout(3_000);
     await page.screenshot({ path: `${shots}/cloudtak-02-map.png` });
+
+    // Zoom in as a user would. The map asks for tiles at the new zoom.
+    const before = Math.max(...tiles.map((t) => t.z));
+    const canvas = page.locator("canvas.maplibregl-canvas");
+    const box = await canvas.boundingBox();
+    if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, -600);
+      await page.waitForTimeout(400);
+    }
+    await expect.poll(() => Math.max(...tiles.map((t) => t.z)), { timeout: 60_000, intervals: [1_000] }).toBeGreaterThan(before);
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(3_000);
+    const zooms = [...new Set(tiles.map((t) => t.z))].sort((a, b) => a - b);
+    const cache = tiles.reduce((acc: Record<string, number>, t) => ({ ...acc, [t.cache || "-"]: (acc[t.cache || "-"] || 0) + 1 }), {});
+    console.log(`basemap tiles: ${tiles.length} at zoom ${JSON.stringify(zooms)}, cache ${JSON.stringify(cache)}`);
+    await page.screenshot({ path: `${shots}/cloudtak-04-basemap.png` });
 
     // The local form is hidden. A signed-out browser on /login?sso=off
     // (no auto-redirect) shows only the Keycloak button.

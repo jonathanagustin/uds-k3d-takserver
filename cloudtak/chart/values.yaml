@@ -59,6 +59,48 @@ account:
   username: cloudtak-admin
   groups: Operators
 
+# Default basemap for new users. nginx in the CloudTAK pod proxies and
+# caches the tiles for signed-in users, and the Package allows egress to the
+# url's host on its port only. See docs/cloudtak.md#basemap.
+basemap:
+  # false removes the basemap record, the proxy, and the egress rule. Use it
+  # where the cluster has no route to the tile host.
+  enabled: true
+  name: OpenStreetMap
+  # Tile URL template with {z}, {x}, and {y}. Point it at a tile server
+  # inside the network for an air-gapped install.
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+  # Shown on the map. HTML is allowed.
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+  minzoom: 0
+  maxzoom: 19
+  # Make it CloudTAK's default basemap (map::basemap). Users who signed in
+  # before it existed keep the basemap they had and can pick it in the
+  # basemap menu.
+  default: true
+  # Sent to the tile host on every request. The OpenStreetMap tile policy
+  # asks a caching proxy for a User-Agent that names the service and a way
+  # to contact its operator: set contact to an email address or URL for
+  # this deployment. userAgent replaces the whole string.
+  contact: ""
+  userAgent: ""
+  # Disk cache in the pod's /tmp.
+  cacheSize: 256m
+  # Tiles a second per signed-in session after a burst.
+  rate: 20
+  burst: 200
+  # Port of the egress rule. Defaults to the url's port, else 443 for https
+  # and 80 for http.
+  port: null
+  # Replaces the generated remoteHost rule, for a tile server inside the
+  # cluster. Fields of a UDS Package allow entry, for example:
+  #   egress:
+  #     remoteNamespace: tiles
+  #     remoteSelector: {app: tileserver}
+  #     port: 8080
+  # The rule always applies to the cloudtak pod only.
+  egress: {}
+
 resources:
   cloudtak:
     requests:

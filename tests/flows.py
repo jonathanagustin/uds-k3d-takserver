@@ -149,6 +149,9 @@ def main():
     def allowed(src, dst, port):
         egress = ingress = False
         for rule in rules:
+            # Rules for hosts and CIDRs outside the cluster cover no pod here.
+            if rule.get("remoteHost") or rule.get("remoteCidr"):
+                continue
             if rule.get("remoteNamespace") not in (None, "", NS) and not rule.get("remoteGenerated"):
                 continue
             generated = rule.get("remoteGenerated")

@@ -1,4 +1,4 @@
-# 12. Run ATAK-CIV in a KubeVirt VM as a test client
+# 13. Run ATAK-CIV in a KubeVirt VM as a test client
 
 Date: 2026-10-21
 

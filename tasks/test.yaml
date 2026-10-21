@@ -345,17 +345,46 @@ tasks:
 
           # Reads the admin connection (connection 0) to TAK's 8089 from
           # inside the pod.
+          live=false
           for i in $(seq 1 40); do
             if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs status 2>&1)"; then
               echo "${out}"
               echo "CloudTAK has a live TAK connection"
-              exit 0
+              live=true
+              break
             fi
             echo "attempt ${i}: ${out}" | tail -n 3
             sleep 15
           done
-          echo "CloudTAK did not report a live TAK connection" >&2
-          false
+          if [ "${live}" != "true" ]; then
+            echo "CloudTAK did not report a live TAK connection" >&2
+            false
+          fi
+
+          # Default basemap. With it on, the Package has one remoteHost rule,
+          # UDS registered that host in the ambient egress namespace, and a
+          # tile comes back through the proxy in the pod.
+          enabled="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="bootstrap")].env[?(@.name=="BASEMAP_ENABLED")].value}')"
+          echo "basemap enabled: ${enabled:-unset}"
+          if [ "${enabled}" = "true" ]; then
+            host="$(k get package cloudtak -n cloudtak -o jsonpath='{.spec.network.allow[?(@.remoteHost)].remoteHost}')"
+            echo "basemap egress host: ${host}"
+            [ -n "${host}" ]
+            [ "$(wc -w <<< "${host}")" = "1" ]
+            k get serviceentry -n istio-egress-ambient -o custom-columns=NAME:.metadata.name,HOSTS:.spec.hosts --no-headers | tee /tmp/cloudtak-se.txt
+            grep -qF "${host}" /tmp/cloudtak-se.txt
+            for i in $(seq 1 20); do
+              if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs basemap 2>&1)"; then
+                echo "${out}"
+                echo "The default basemap serves tiles"
+                exit 0
+              fi
+              echo "attempt ${i}: ${out}" | tail -n 3
+              sleep 15
+            done
+            echo "The default basemap did not serve a tile" >&2
+            false
+          fi
 
   - name: flows
     description: List pod-to-pod TCP flows in the namespace and check each against the Package allow list

@@ -29,6 +29,18 @@ if [ "${CLOUDTAK_Config_oidc_enabled:-false}" = "true" ]; then
   mv /tmp/nginx/nginx.conf.sso /tmp/nginx/nginx.conf
   grep -q 'location ^~ /api/login/oidc' /tmp/nginx/nginx.conf
 fi
+
+# Default basemap tile proxy (basemap.mjs). Off unless the chart turns it on.
+if [ "${BASEMAP_ENABLED:-}" = "true" ]; then
+  node /home/etl/uds/basemap.mjs nginx /tmp/nginx/basemap
+  awk -v srv=/tmp/nginx/basemap/server.conf -v http=/tmp/nginx/basemap/http.conf '
+    /location ~ \^\/api/ { while ((getline l < srv) > 0) print l; close(srv) }
+    { print }
+    /^ *scgi_temp_path / { while ((getline l < http) > 0) print l; close(http) }
+  ' /tmp/nginx/nginx.conf > /tmp/nginx/nginx.conf.basemap
+  mv /tmp/nginx/nginx.conf.basemap /tmp/nginx/nginx.conf
+  grep -q 'location ^~ /uds-basemap/' /tmp/nginx/nginx.conf
+fi
 nginx -e /dev/stderr -c /tmp/nginx/nginx.conf
 
 exec node dist/index.js

@@ -189,7 +189,7 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 - External ATAK port 8089 is not mapped. Streaming is SNI on gateway port 443.
 - Ports 8444, 9000, and 9001 are not exposed through a gateway.
 - The upstream chart does not mount the `uds-trust-bundle` ConfigMap.
-- CloudTAK's Keycloak sign-in is a route this package adds next to CloudTAK, because CloudTAK 13.111.3 has no OIDC route of its own. CloudTAK logout does not end the Keycloak session. CloudTAK has no basemap and no S3-backed features in this package. See [docs/cloudtak.md](docs/cloudtak.md).
+- CloudTAK's Keycloak sign-in is a route this package adds next to CloudTAK, because CloudTAK 13.111.3 has no OIDC route of its own. CloudTAK logout does not end the Keycloak session. CloudTAK's default basemap is OpenStreetMap through a tile proxy in its pod, with egress to that one host; set `basemap.enabled: false` where the cluster has no route to it. CloudTAK has no S3-backed features in this package. See [docs/cloudtak.md](docs/cloudtak.md).
 - Resource requests are sized for a small development node, and NATS runs as a single replica with clustering off. Production sizing and storage are not tuned yet.
 
 ## Contributing

@@ -8,11 +8,15 @@
 # node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested
 # DigestAlgorithm elements (also CVE-2026-33894, GHSA-ppp5-5v6c-4jwp).
 # node-forge 1.4.0 is the latest release and OSV lists no fixed version.
-# Pepr requires it as a peer dependency and only calls it to generate the
-# webhook RSA key pair and self-signed certificate (pepr src/lib/tls.ts:
-# pki.rsa.generateKeyPair, createCertificate, certificateToPem). Nothing in
-# this module verifies an RSA signature with node-forge. Remove this entry
-# when a fixed node-forge ships or Pepr drops it. Tracked in issue #60.
+# Pepr 2.0.3 requires it as a peer dependency, so it can't be dropped.
+# The flaw is in RSA PKCS#1 v1.5 signature verification. Pepr loads
+# node-forge in one place, its CLI (src/lib/tls.ts, genTLS), which runs at
+# `pepr build` time to make the webhook CA and server certificate:
+# rsa.generateKeyPair, createCertificate, cert.sign with SHA-256, and
+# certificateToPem. Nothing verifies a signature with it. Pepr's
+# controller.js and lib.js, which the admission controller and this
+# module's bundle run, never import node-forge. Remove this entry when a
+# fixed node-forge ships or Pepr drops it. Tracked in issue #60.
 id = "GHSA-86w9-cpqp-85rv"
 ignoreUntil = 2027-01-21
-reason = "No fixed node-forge release. Pepr uses node-forge only to generate its webhook key and certificate, never to verify RSA signatures. See issue #60."
+reason = "No fixed node-forge release. Only the Pepr CLI loads node-forge, at build time, to generate and sign the webhook certificate. It never verifies an RSA signature, and the admission controller never imports node-forge. See issue #60."

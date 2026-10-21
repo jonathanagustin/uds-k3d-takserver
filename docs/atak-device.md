@@ -31,7 +31,7 @@ uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=ud
 
 The package (`atak/zarf.yaml`) has two components:
 
-- `kubevirt`: KubeVirt v1.6.2 (operator and CR manifests pinned by checksum) and the UDS policy exemption it needs. v1.9.1 does not start containerDisk VMs in this setup, so the release is pinned.
+- `kubevirt`: KubeVirt v1.8.4 (operator and CR manifests pinned by checksum) and the UDS policy exemption it needs. Kubernetes 1.36 enforces numeric formats in CRD schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every VMI status update fail and the VMI stays `Scheduled` while the guest runs. v1.9.1 does not start containerDisk VMs in this setup, so the release is pinned.
 - `atak-device`: the VM, Service `atak-device-adb`, the viewer Deployment, and the UDS Package `atak`.
 
 ## Enrollment

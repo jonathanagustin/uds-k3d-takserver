@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      KUBEVIRT_VERSION: v1.6.2
+      KUBEVIRT_VERSION: v1.8.4
       K3D_VERSION: v5.8.3
       IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
       VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev

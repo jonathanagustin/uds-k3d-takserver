@@ -21,11 +21,11 @@ mkdir -p demo/out
 # as the test user. The password is generated for this run and never shown:
 # the login form masks it and GitHub Actions masks it in the log.
 export DEMO_KEYCLOAK_USER="${DEMO_KEYCLOAK_USER:-takuser}"
-if [ -z "${DEMO_KEYCLOAK_PASSWORD:-}" ]; then
+if [[ -z "${DEMO_KEYCLOAK_PASSWORD:-}" ]]; then
   DEMO_KEYCLOAK_PASSWORD="Tk7!$(openssl rand -hex 5)@Qz#"
 fi
 export DEMO_KEYCLOAK_PASSWORD
-if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+if [[ "${GITHUB_ACTIONS:-}" = "true" ]]; then
   echo "::add-mask::${DEMO_KEYCLOAK_PASSWORD}"
 fi
 python3 demo/keycloak-user.py
@@ -43,7 +43,7 @@ kubectl get configmap cert-migration -n takserver -o jsonpath='{.binaryData.ca\.
 for secret in $(kubectl get secret -n istio-tenant-gateway -o jsonpath='{range .items[?(@.type=="kubernetes.io/tls")]}{.metadata.name}{" "}{end}'); do
   kubectl get secret "${secret}" -n istio-tenant-gateway -o jsonpath='{.data.tls\.crt}' | base64 -d \
     | awk '/-----BEGIN CERTIFICATE-----/ { n++; cert = "" } { cert = cert $0 "\n" } /-----END CERTIFICATE-----/ { last = cert } END { printf "%s", last }' > "${cas}/top.pem"
-  if [ "$(openssl x509 -in "${cas}/top.pem" -noout -subject -nameopt RFC2253 | cut -d= -f2-)" = "$(openssl x509 -in "${cas}/top.pem" -noout -issuer -nameopt RFC2253 | cut -d= -f2-)" ]; then
+  if [[ "$(openssl x509 -in "${cas}/top.pem" -noout -subject -nameopt RFC2253 | cut -d= -f2-)" = "$(openssl x509 -in "${cas}/top.pem" -noout -issuer -nameopt RFC2253 | cut -d= -f2-)" ]]; then
     mv "${cas}/top.pem" "${cas}/gateway-${secret}.pem"
   fi
   rm -f "${cas}/top.pem"

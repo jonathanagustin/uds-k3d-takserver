@@ -40,7 +40,7 @@ card() {
   local name="$1" last="${4:-}" words secs min=3 title_size sub_size fades
   printf '%s' "$2" > "${work}/${name}.title"
   printf '%s' "$3" > "${work}/${name}.sub"
-  if [ "${last}" = "last" ]; then
+  if [[ "${last}" = "last" ]]; then
     min=4
   fi
   words="$(cat "${work}/${name}.title" "${work}/${name}.sub" | wc -w)"
@@ -48,7 +48,7 @@ card() {
   title_size="$(python3 demo/filters.py fit "${title_font}" "${work}/${name}.title" 52 "${text_max_w}")"
   sub_size="$(python3 demo/filters.py fit "${mono_font}" "${work}/${name}.sub" 26 "${text_max_w}")"
   fades="fade=t=in:st=0:d=${card_fade}"
-  if [ "${last}" != "last" ]; then
+  if [[ "${last}" != "last" ]]; then
     fades="${fades},fade=t=out:st=$(awk "BEGIN{print ${secs}-${card_fade}}"):d=${card_fade}"
   fi
   echo "card ${name}: ${words} words, ${secs}s, title ${title_size}px, subtitle ${sub_size}px"
@@ -67,7 +67,7 @@ clip() {
   local secs effects
   secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${name}-base.mp4")"
   effects="pad=1280:720:0:0:color=${band}"
-  if [ -f "${timeline}" ]; then
+  if [[ -f "${timeline}" ]]; then
     effects="$(python3 demo/filters.py "${mode}" "${timeline}" "${secs}" "${work}" "${title_font}" "${start}" "${work}/${name}-base.mp4")"
   fi
   ffmpeg -v error -y -i "${work}/${name}-base.mp4" -an \
@@ -104,7 +104,7 @@ for crf in 26 28 30 32 34 36; do
     -g $((fps * 4)) -movflags +faststart "${out}/demo.mp4"
   bytes="$(stat -c%s "${out}/demo.mp4")"
   echo "crf ${crf}: ${bytes} bytes"
-  if [ "${bytes}" -le "${max_bytes}" ]; then
+  if [[ "${bytes}" -le "${max_bytes}" ]]; then
     break
   fi
 done

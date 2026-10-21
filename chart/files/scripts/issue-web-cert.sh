@@ -29,14 +29,14 @@ field() {
   grep -o "\"$1\": *\"[^\"]*\"" "${work}/cm.json" | head -n 1 | sed 's/.*: *"\(.*\)"/\1/'
 }
 
-if [ -n "$(field "${key_name}")" ]; then
+if [[ -n "$(field "${key_name}")" ]]; then
   echo "ConfigMap cert-migration already has ${key_name}"
   exit 0
 fi
 
 field ca.pem | base64 -d > "${work}/ca.pem"
 field ca-do-not-share.key | base64 -d > "${work}/ca.key"
-if [ ! -s "${work}/ca.pem" ] || [ ! -s "${work}/ca.key" ]; then
+if [[ ! -s "${work}/ca.pem" ]] || [[ ! -s "${work}/ca.key" ]]; then
   echo "ConfigMap cert-migration has no ca.pem or ca-do-not-share.key" >&2
   exit 1
 fi
@@ -71,7 +71,7 @@ code="$(curl -sS -o "${work}/resp" -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/merge-patch+json" \
   -X PATCH --data-binary @"${work}/patch.json" "${api}")"
-if [ "${code}" != "200" ]; then
+if [[ "${code}" != "200" ]]; then
   echo "ConfigMap cert-migration patch returned HTTP ${code}" >&2
   cat "${work}/resp" >&2 || true
   exit 1

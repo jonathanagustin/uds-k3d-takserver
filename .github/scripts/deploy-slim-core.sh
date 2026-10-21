@@ -14,7 +14,7 @@ ref="oci://ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev:${versi
 mkdir -p "${out}"
 # uds bundles zarf and does not leave ./zarf in the repo until a zarf
 # command has already run. `uds zarf` is that command.
-if [ -x "${root}/zarf" ]; then
+if [[ -x "${root}/zarf" ]]; then
   zarf=("${root}/zarf")
 elif command -v zarf >/dev/null 2>&1; then
   zarf=(zarf)
@@ -27,14 +27,14 @@ fi
 
 shopt -s nullglob
 files=("${out}"/zarf-package-k3d-core-slim-dev-*.tar.zst)
-if [ "${#files[@]}" -eq 0 ]; then
+if [[ "${#files[@]}" -eq 0 ]]; then
   echo "Pulling ${ref}"
   "${zarf[@]}" package pull "${ref}" --output-directory "${out}"
   files=("${out}"/zarf-package-k3d-core-slim-dev-*.tar.zst)
 fi
 shopt -u nullglob
 
-if [ "${#files[@]}" -eq 0 ]; then
+if [[ "${#files[@]}" -eq 0 ]]; then
   echo "No k3d-core-slim-dev package in ${out}" >&2
   exit 1
 fi

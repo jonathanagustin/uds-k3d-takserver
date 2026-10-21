@@ -9,13 +9,13 @@ set -euo pipefail
 secret_file=/var/run/tak-sso/TAK_OIDC_CLIENT_SECRET
 ready=0
 for _ in $(seq 1 150); do
-  if [ -s "${secret_file}" ]; then
+  if [[ -s "${secret_file}" ]]; then
     ready=1
     break
   fi
   sleep 2
 done
-if [ "${ready}" -ne 1 ]; then
+if [[ "${ready}" -ne 1 ]]; then
   echo "TAK_OIDC_CLIENT_SECRET was not present" >&2
   exit 1
 fi

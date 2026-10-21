@@ -40,7 +40,7 @@ docker run --rm \
 
 # Grype creates the schema directory mode 0700. Widen it so this user can
 # copy a database for each scan.
-if [ "$(id -u)" -eq 0 ]; then
+if [[ "$(id -u)" -eq 0 ]]; then
   chmod -R a+rX "${db_dir}"
 else
   sudo chmod -R a+rX "${db_dir}"
@@ -67,6 +67,6 @@ for name in "${names[@]}"; do
   fi
 done
 
-if [ "${fail}" -ne 0 ]; then
+if [[ "${fail}" -ne 0 ]]; then
   exit 1
 fi

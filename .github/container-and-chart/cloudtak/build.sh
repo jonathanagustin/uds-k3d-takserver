@@ -68,7 +68,7 @@ has_all_arches() {
 # The scan and package workflows run next to the Test workflow, which
 # builds the image. They wait for it here instead of reading an old or
 # missing image.
-if [ "${1:-}" = "--wait" ]; then
+if [[ "${1:-}" = "--wait" ]]; then
   version="$(git -C "${root}" config -f .gitmodules submodule.upstream/cloudtak.branch)"
   inputs="$(git -C "${root}" rev-parse HEAD:upstream/cloudtak)-$(git -C "${root}" rev-parse HEAD:.github/container-and-chart/cloudtak)"
   image="${registry}/cloudtak:${version}"
@@ -79,7 +79,7 @@ if [ "${1:-}" = "--wait" ]; then
       echo "${image} has inputs ${inputs} for ${arches[*]}"
       exit 0
     fi
-    if [ "$(date +%s)" -ge "${deadline}" ]; then
+    if [[ "$(date +%s)" -ge "${deadline}" ]]; then
       echo "${image} does not have inputs ${inputs} for every one of ${arches[*]}. Published:" >&2
       printf '%s\n' "${current:-none}" >&2
       exit 1
@@ -89,7 +89,7 @@ if [ "${1:-}" = "--wait" ]; then
   done
 fi
 
-if [ "${1:-}" = "--merge" ]; then
+if [[ "${1:-}" = "--merge" ]]; then
   version="$(git -C "${root}" config -f .gitmodules submodule.upstream/cloudtak.branch)"
   inputs="$(git -C "${root}" rev-parse HEAD:upstream/cloudtak)-$(git -C "${root}" rev-parse HEAD:.github/container-and-chart/cloudtak)"
   image="${registry}/cloudtak:${version}"
@@ -114,18 +114,18 @@ if [ "${1:-}" = "--merge" ]; then
   exit 0
 fi
 
-if [ ! -f "${src}/Dockerfile" ]; then
+if [[ ! -f "${src}/Dockerfile" ]]; then
   git -C "${root}" submodule update --init --depth 1 upstream/cloudtak
 fi
 
 pinned="$(git -C "${root}" rev-parse HEAD:upstream/cloudtak)"
 sha="$(git -C "${src}" rev-parse HEAD)"
-if [ "${sha}" != "${pinned}" ]; then
+if [[ "${sha}" != "${pinned}" ]]; then
   echo "upstream/cloudtak is at ${sha}, but this commit pins ${pinned}" >&2
   echo "Run: git submodule update --init --depth 1 upstream/cloudtak" >&2
   exit 1
 fi
-if [ -n "$(git -C "${src}" status --porcelain --untracked-files=no)" ]; then
+if [[ -n "$(git -C "${src}" status --porcelain --untracked-files=no)" ]]; then
   echo "upstream/cloudtak has local changes" >&2
   exit 1
 fi
@@ -133,7 +133,7 @@ fi
 version="$(git -C "${root}" config -f .gitmodules submodule.upstream/cloudtak.branch)"
 # Committed tree of this directory. Uncommitted edits make a local-only key.
 tree="$(git -C "${root}" rev-parse HEAD:.github/container-and-chart/cloudtak)"
-if [ -n "$(git -C "${root}" status --porcelain -- .github/container-and-chart/cloudtak)" ]; then
+if [[ -n "$(git -C "${root}" status --porcelain -- .github/container-and-chart/cloudtak)" ]]; then
   tree="${tree}-dirty"
 fi
 inputs="${sha}-${tree}"
@@ -146,8 +146,8 @@ case "$(uname -m)" in
   *) host_arch="$(uname -m)" ;;
 esac
 arch="${ARCH:-${host_arch}}"
-if [ "${PUSH_IMAGES:-false}" = "true" ]; then
-  if [ -z "${ARCH:-}" ]; then
+if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
+  if [[ -z "${ARCH:-}" ]]; then
     echo "Set ARCH (amd64 or arm64) to push. build.sh --merge writes ${version}." >&2
     exit 1
   fi
@@ -157,7 +157,7 @@ else
 fi
 image="${registry}/cloudtak:${tag}"
 
-if [ "${1:-}" = "--if-changed" ] && [ "${PUSH_IMAGES:-false}" = "true" ]; then
+if [[ "${1:-}" = "--if-changed" ]] && [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
   current="$(published_inputs "${image}")"
   if has_all_arches_one "${current}" "${arch}" "${inputs}"; then
     echo "${image} already has inputs ${inputs}"
@@ -168,7 +168,7 @@ fi
 
 export REGISTRY="${registry}" CLOUDTAK_VERSION="${version}" CLOUDTAK_SRC="${src}" UPSTREAM_SHA="${sha}" INPUTS="${inputs}" PLATFORM="linux/${arch}" IMAGE_TAG="${tag}"
 output="--load"
-if [ "${PUSH_IMAGES:-false}" = "true" ]; then
+if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
   output="--push"
 fi
 cd "${here}"

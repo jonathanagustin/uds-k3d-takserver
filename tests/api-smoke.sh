@@ -534,27 +534,35 @@ stale = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 300))
 event = (f'<?xml version="1.0" encoding="UTF-8"?><event version="2.0" uid="{uid}" type="a-f-G-U-C" '
          f'how="m-g" time="{now}" start="{now}" stale="{stale}"><point lat="0" lon="0" hae="0" ce="9999999" le="9999999"/>'
          f'<detail><contact callsign="{uid}" endpoint="*:-1:stcp"/><takv platform="uds-smoke" version="1"/></detail></event>')
-with socket.create_connection(("127.0.0.1", int(port)), timeout=20) as raw:
-    with ctx.wrap_socket(raw, server_hostname=host) as tls:
-        tls.sendall(event.encode())
-        # clientEndPoints only lists clients that share a group with the
-        # caller. The admin certificate has no groups, so ask as the
-        # enrolled user, the way that user's contact list sees it.
-        found = False
-        for _ in range(10):
-            time.sleep(2)
-            out = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", pem, "--key", key,
-                                  api + "Marti/api/clientEndPoints"],
-                                 capture_output=True, text=True).stdout
-            if uid in out:
-                found = True
-                break
-        if not found:
-            print(out[:2000], file=sys.stderr)
-            subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
-                                   "--pass", apass, api + "Marti/api/subscriptions/all"],
-                                  capture_output=True, text=True).stdout
-            print("subscriptions/all: " + subs[:2000], file=sys.stderr)
+# The first connection of a user can create its TAK groups. TAK 5.7 logs
+# "empty bit position in group" for a group created during that connection
+# and the subscription is then hidden. Reconnect once, as a device would.
+found = False
+for attempt in range(2):
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=20) as raw:
+        with ctx.wrap_socket(raw, server_hostname=host) as tls:
+            tls.sendall(event.encode())
+            # clientEndPoints only lists clients that share a group with the
+            # caller. The admin certificate has no groups, so ask as the
+            # enrolled user, the way that user's contact list sees it.
+            found = False
+            for _ in range(10):
+                time.sleep(2)
+                out = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", pem, "--key", key,
+                                      api + "Marti/api/clientEndPoints"],
+                                     capture_output=True, text=True).stdout
+                if uid in out:
+                    found = True
+                    break
+            if not found:
+                print(out[:2000], file=sys.stderr)
+                subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
+                                       "--pass", apass, api + "Marti/api/subscriptions/all"],
+                                      capture_output=True, text=True).stdout
+                print("subscriptions/all: " + subs[:2000], file=sys.stderr)
+    if found:
+        break
+    print(f"attempt {attempt + 1}: client not listed yet", file=sys.stderr)
 sys.exit(0 if found else 1)
 PY
     then

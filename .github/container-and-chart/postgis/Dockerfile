@@ -14,26 +14,23 @@
 # ALTER EXTENSION postgis UPDATE, so keep 3.4.3 until that is planned.
 ARG POSTGRES_IMAGE=postgres:15-bookworm@sha256:22c6356b2897cb0b4be6ad550b44ff97a0f29df7dbe327c01bc3c84bd457694d
 
-ARG PGDG_POOL=https://apt-archive.postgresql.org/pub/repos/apt/pool/main/p/postgis
+# The pgdg package version, URL encoded for the file names below.
 ARG POSTGIS_DEB_VERSION=3.4.3%2Bdfsg-2.pgdg120%2B1
 
 FROM scratch AS postgis-deb-amd64
-ARG PGDG_POOL
 ARG POSTGIS_DEB_VERSION
 ADD --checksum=sha256:a50f5816417e616f7b70aa7b16970027e069418f2d2c82c6cbd871a67d76f3a8 \
-    ${PGDG_POOL}/postgresql-15-postgis-3_${POSTGIS_DEB_VERSION}_amd64.deb /postgresql-15-postgis-3.deb
+    https://apt-archive.postgresql.org/pub/repos/apt/pool/main/p/postgis/postgresql-15-postgis-3_${POSTGIS_DEB_VERSION}_amd64.deb /postgresql-15-postgis-3.deb
 
 FROM scratch AS postgis-deb-arm64
-ARG PGDG_POOL
 ARG POSTGIS_DEB_VERSION
 ADD --checksum=sha256:16046df1f80783da10469e4571538c6638e965648e3c7975f5d8a09e8265fe37 \
-    ${PGDG_POOL}/postgresql-15-postgis-3_${POSTGIS_DEB_VERSION}_arm64.deb /postgresql-15-postgis-3.deb
+    https://apt-archive.postgresql.org/pub/repos/apt/pool/main/p/postgis/postgresql-15-postgis-3_${POSTGIS_DEB_VERSION}_arm64.deb /postgresql-15-postgis-3.deb
 
 FROM scratch AS postgis-scripts-deb
-ARG PGDG_POOL
 ARG POSTGIS_DEB_VERSION
 ADD --checksum=sha256:d6a4f3e7d3d99f32558f110ca73d7b459eb7d6747c620826991c96cb250978d4 \
-    ${PGDG_POOL}/postgresql-15-postgis-3-scripts_${POSTGIS_DEB_VERSION}_all.deb /postgresql-15-postgis-3-scripts.deb
+    https://apt-archive.postgresql.org/pub/repos/apt/pool/main/p/postgis/postgresql-15-postgis-3-scripts_${POSTGIS_DEB_VERSION}_all.deb /postgresql-15-postgis-3-scripts.deb
 
 FROM ${POSTGRES_IMAGE}
 

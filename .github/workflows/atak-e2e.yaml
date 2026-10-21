@@ -81,6 +81,14 @@ jobs:
           docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
             --cache-from "type=registry,ref=${CACHE}:atak-viewer" .
           docker image ls | grep atak
+          # The APK build leaves many GB of NDK, Conan and Gradle layers in the
+          # BuildKit container. The images are in Docker now; drop the builder
+          # before UDS Core and TAK need the disk and memory.
+          docker buildx rm --all-inactive --force || true
+          docker buildx prune -af || true
+          docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
+          df -h /
+          free -h
 
       - name: Install Docker Compose
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0

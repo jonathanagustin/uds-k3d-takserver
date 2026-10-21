@@ -82,8 +82,17 @@ openssl x509 -in "${work}/device.pem" -noout -subject -enddate -fingerprint -sha
 # certificate goes into the pod.
 msg() { k exec -i -n takserver deploy/takserver-messaging -c takserver-messaging -- "$@"; }
 msg sh -c 'cat > /tmp/device.pem' < "${work}/device.pem"
-msg sh -c "cd /opt/tak && java -Xmx128m -jar UserManager.jar certmod -g '${DEVICE_GROUP}' /tmp/device.pem; rc=\$?; rm -f /tmp/device.pem; exit \$rc" \
-  | tee "${OUT}/certmod.txt"
+# enable_admin.sh retries certmod the same way; the Ignite client join can fail.
+for i in 1 2 3 4 5; do
+  if msg sh -c "cd / && java -Xmx128m -jar /UserManager.jar certmod -g '${DEVICE_GROUP}' /tmp/device.pem" < /dev/null \
+    > "${OUT}/certmod.txt" 2>&1; then
+    break
+  fi
+  [ "${i}" = 5 ] && { cat "${OUT}/certmod.txt" >&2; exit 1; }
+  sleep 10
+done
+cat "${OUT}/certmod.txt"
+msg rm -f /tmp/device.pem
 admin "https://takserver-api.${DOMAIN}:28443/user-management/api/get-groups-for-user/${DEVICE_USER}" \
   | tee "${OUT}/device-groups.json"; echo
 

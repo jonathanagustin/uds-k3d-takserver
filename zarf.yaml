@@ -105,6 +105,6 @@ components:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14"
-      - "docker.io/postgis/postgis:15-3.4"
+      - "docker.io/imresamu/postgis:15-3.4"
       - "docker.io/library/nats:2.9.21-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.11.0"

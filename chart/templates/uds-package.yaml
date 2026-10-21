@@ -65,6 +65,8 @@ spec:
     # 8446, and 8089 has to reach TAK, and Authservice is not enabled.
     serviceMesh:
       mode: ambient
+    # Passthrough entries below (8443, 8446, 8089) use mutual TLS, so a plain
+    # HTTP uptime probe cannot pass there and none is configured.
     expose:
       {{- if .Values.sso.enabled }}
       - description: tak-web-http
@@ -74,6 +76,12 @@ spec:
         gateway: tenant
         host: {{ .Values.api.web.host | quote }}
         port: {{ .Values.api.web.port }}
+        # The Package operator creates a Blackbox Probe for these paths. The
+        # unauthenticated request ends on the Keycloak login page (2xx).
+        uptime:
+          checks:
+            paths:
+              - /
       {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}

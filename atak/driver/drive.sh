@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Drives the ATAK test device over adb the way a person would: installs the
-# APK, gets through first-run prompts, opens the TAK quick-enroll link for the
-# user, and accepts the prompts that follow. Credentials arrive at run time
-# from a Secret (TAK_USER, TAK_TOKEN); nothing is stored in any image.
-# Screenshots and a UI dump go to OUT.
+# APK, gets through first-run prompts, and imports a TAK connection data
+# package (8089 ssl stream, truststore and client certificate) the way a
+# fielded device does: ATAK imports Download/atak*.dpk when it starts. The
+# package arrives at run time from a Secret mounted at DPK; nothing is stored
+# in any image. Screenshots and a UI dump go to OUT.
 set -euo pipefail
 DEVICE="${DEVICE:?host:port of the device adb listener}"
-TAK_HOST="${TAK_HOST:?TAK host for enrollment and streaming}"
-TAK_USER="${TAK_USER:?TAK user}"
-TAK_TOKEN="${TAK_TOKEN:?password or token for TAK_USER}"
+DPK="${DPK:-/dpk/atak-device.dpk}"
+test -s "${DPK}"
 APK="${APK:-/atak-civ.apk}"
 OUT="${OUT:-/out}"
 PKG="${PKG:-com.atakmap.app.civ}"
@@ -80,18 +80,20 @@ for _ in $(seq 1 40); do
 done
 shot atak-map
 
-# Quick enroll: the same link a TAK Server QR code carries.
-# The password can hold "#", "&" or "@", so every query value is encoded.
-enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
-link="tak://com.atakmap.app/enroll?host=$(enc "${TAK_HOST}")&username=$(enc "${TAK_USER}")&token=$(enc "${TAK_TOKEN}")"
-a shell am start -a android.intent.action.VIEW -d "'${link}'" >/dev/null
-unset link
-sleep 5
-for _ in $(seq 1 20); do
-  tap "yes" "ok" "trust" "accept" "connect" || sleep 3
-done
+# Hand the data package to ATAK and restart it so the start-up scan of the
+# Download folder picks it up. ATAK deletes the copy in Download once it is
+# queued for import.
+a shell mkdir -p /sdcard/Download
+a push "${DPK}" /sdcard/Download/atak-device.dpk >/dev/null
+a shell am force-stop "${PKG}"
+a shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 30
-shot atak-enrolled
+for _ in $(seq 1 10); do
+  tap "yes" "ok" "import" "accept" "connect" || sleep 3
+done
+echo "Download after import: $(a shell ls /sdcard/Download 2>&1 | tr -d '\r' | tr '\n' ' ')"
+echo "ATAK cert directory: $(a shell ls /sdcard/atak/cert 2>&1 | tr -d '\r' | tr '\n' ' ')"
+shot atak-imported
 # TAK 5.7 can store a user's first connection without the groups it creates
 # during that connection, which hides the device from contact lists. A real
 # device reconnects often; restart ATAK once so the stream reconnects.
@@ -103,4 +105,4 @@ if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   a exec-out cat /sdcard/ui.xml > "${OUT}/ui.xml" || true
 fi
 a logcat -d -t 3000 > "${OUT}/logcat.txt" 2>&1 || true
-grep -E "CertificateEnrollment|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true
+grep -E "ImportManager|MissionPackage|Import.*Sort|CertificateManager|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true

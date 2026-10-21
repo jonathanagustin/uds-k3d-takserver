@@ -149,16 +149,8 @@ spec:
         port: 8000
     allow:
       # The device reaches TAK only through the passthrough gateway on the
-      # standard TAK ports (enrollment and streaming). DNS is allowed by
-      # the operator.
-      - direction: Egress
-        selector:
-          app.kubernetes.io/name: atak-device
-        remoteNamespace: istio-passthrough-gateway
-        remoteSelector:
-          app: passthrough-ingressgateway
-        port: 8446
-        description: Device to TAK enrollment
+      # standard streaming port, with a client certificate from its data
+      # package. DNS is allowed by the operator.
       - direction: Egress
         selector:
           app.kubernetes.io/name: atak-device

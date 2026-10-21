@@ -6,7 +6,7 @@
 # KubeVirt containerDisk for the ATAK test device: Android-x86 9.0-r2
 # (Android 9, API 28, x86_64). The same image carries the kernel and initrd
 # for KubeVirt's kernelBoot. No keys, certificates or passwords are inside;
-# ATAK enrolls against the deploy-time TAK Server after boot.
+# ATAK gets its connection data package over adb after boot.
 #
 #   docker buildx build -f atak/vm/Dockerfile -t atak-civ-vm .
 

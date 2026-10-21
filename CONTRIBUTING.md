@@ -68,6 +68,15 @@ Where tests live:
 
 `uds run test-install` builds the package, deploys `k3d-core-slim-dev` and the test bundle, and runs the whole suite. The same suite runs in the Test workflow on every pull request that changes code.
 
+### Coverage
+
+The Unit tests workflow ([`.github/workflows/unit-tests.yaml`](.github/workflows/unit-tests.yaml)) measures coverage on every pull request and on `main`, and writes it to the job summary:
+
+- **Pepr module:** `cd pepr && npm ci && npm run test:coverage` uses Node's built-in coverage. Both files in `pepr/capabilities/` are at 100% of lines, branches and functions, and the run fails below 100% or if a capability file isn't loaded by any test. `pepr/pepr.ts`, which only registers the capability with `PeprModule`, isn't measured.
+- **Python upgrade helpers:** `coverage.py` measures `tests/upgrade-baseline.py` and `tests/upgrade-stream.py` under `tests/test_upgrade_*.py` (66% of lines and branches combined when this was added). The parts that aren't covered call `git`, `gh` and the cluster, and the upgrade job exercises them.
+
+The shell scripts, Helm templates and the TAK and CloudTAK behavior are tested by the deployment suite on a real cluster. That suite isn't instrumented for coverage.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the [GPL-3.0-only](LICENSE) license of this repository.

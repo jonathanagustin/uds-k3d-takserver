@@ -28,4 +28,8 @@ demo/out/
 
 # Admission module build output.
 pepr/dist/
+pepr/coverage/
+
+# Python coverage data.
+.coverage
 __pycache__/

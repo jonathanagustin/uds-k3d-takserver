@@ -1,0 +1,62 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Unit tests
+
+on:
+  pull_request:
+    types: [milestoned, opened, reopened, synchronize]
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # Offline unit tests with coverage. The Pepr tests also run in
+  # pepr/build.sh when the package is created, and the Python tests in the
+  # Test workflow; this job measures them and writes the numbers to the job
+  # summary.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Node and uv
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+        with:
+          install_args: node uv
+          cache: true
+
+      - name: Pepr module tests with coverage
+        working-directory: pepr
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          mkdir -p coverage
+          npm run test:coverage
+          {
+            echo "### Pepr module coverage (node --test)"
+            echo
+            node scripts/coverage-summary.mjs coverage/lcov.info
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Python upgrade helper tests with coverage
+        env:
+          COVERAGE_VERSION: 7.10.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          coverage() { uv tool run --from "coverage==${COVERAGE_VERSION}" coverage "$@"; }
+          coverage run --branch --source=tests -m unittest discover -s tests -p 'test_upgrade_*.py' -v
+          coverage report --include='tests/upgrade-*.py' --show-missing
+          {
+            echo "### Python upgrade helpers coverage (coverage.py, line and branch combined)"
+            echo
+            coverage report --include='tests/upgrade-*.py' --format=markdown
+          } >> "${GITHUB_STEP_SUMMARY}"

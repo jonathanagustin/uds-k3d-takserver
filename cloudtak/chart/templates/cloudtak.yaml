@@ -1,0 +1,229 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+{{- $tak := .Values.tak }}
+{{- $api := include "cloudtak.svc" (dict "name" $tak.apiService "ns" $tak.namespace) }}
+{{- $web := include "cloudtak.svc" (dict "name" $tak.webService "ns" $tak.namespace) }}
+{{- $msg := include "cloudtak.svc" (dict "name" $tak.messagingService "ns" $tak.namespace) }}
+{{- $issuer := printf "https://sso.%s/realms/%s" .Values.domain .Values.sso.realm }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudtak
+spec:
+  selector:
+    app: cloudtak
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudtak
+spec:
+  replicas: 1
+  # One replica and one database writer. Recreate avoids two API processes
+  # running migrations against the same database during an upgrade.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cloudtak
+  template:
+    metadata:
+      labels:
+        app: cloudtak
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum | trunc 16 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cloudtak
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: API_URL
+              value: {{ include "cloudtak.url" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES
+              value: "postgres://{{ .Values.postgis.username }}:$(POSTGRES_PASSWORD)@cloudtak-postgis:5432/{{ .Values.postgis.database }}"
+            - name: SigningSecret
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: SIGNING_SECRET
+            # Upstream `npm run prod` asks for a 6 GiB heap.
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=640"
+            # CloudTAK checks TAK's 8447 certificate on certificate
+            # enrolment. That certificate comes from the deploy-time CA.
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/tak-ca/ca.pem
+            # Keycloak sign-in. CloudTAK upserts CLOUDTAK_Config_* into its
+            # settings on start (a_b becomes a::b). enforced refuses
+            # POST /api/login and hides the password form.
+            # start.sh routes /api/login/oidc to the sso container.
+            - name: CLOUDTAK_Config_oidc_enabled
+              value: "true"
+            - name: CLOUDTAK_Config_oidc_enforced
+              value: "true"
+            # Passkeys are a second local sign-in. Keycloak is the only one.
+            - name: CLOUDTAK_Config_passkey_enabled
+              value: "false"
+            - name: CLOUDTAK_Config_oidc_name
+              value: {{ .Values.sso.name | quote }}
+            - name: CLOUDTAK_Config_oidc_discovery
+              value: "{{ $issuer }}/.well-known/openid-configuration"
+            - name: CLOUDTAK_Config_oidc_client
+              value: {{ .Values.sso.clientId | quote }}
+            - name: CLOUDTAK_Config_oidc_redirect
+              value: "{{ include "cloudtak.url" . }}/api/login/oidc/callback"
+          readinessProbe:
+            httpGet:
+              path: /api
+              port: 5000
+            periodSeconds: 10
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /api
+              port: 5000
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /api
+              port: 5000
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources.cloudtak | nindent 12 }}
+          securityContext:
+            {{- include "cloudtak.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: tak-ca
+              mountPath: /var/run/tak-ca
+              readOnly: true
+        # Keycloak code flow and TAK certificate enrolment for the
+        # /api/login/oidc routes. Listens on 127.0.0.1 only. See sso.mjs in
+        # the image source.
+        - name: sso
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["node", "/home/etl/api/uds-sso.mjs"]
+          env:
+            - name: API_URL
+              value: {{ include "cloudtak.url" . | quote }}
+            - name: OIDC_ISSUER
+              value: {{ $issuer | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ .Values.sso.clientId | quote }}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sso.secretName | quote }}
+                  key: OIDC_CLIENT_SECRET
+            - name: OIDC_ADMIN_GROUP
+              value: {{ .Values.sso.adminGroup | quote }}
+            - name: TAK_WEB_URL
+              value: "https://{{ $web }}:{{ $tak.webPort }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES
+              value: "postgres://{{ .Values.postgis.username }}:$(POSTGRES_PASSWORD)@cloudtak-postgis:5432/{{ .Values.postgis.database }}"
+            - name: SigningSecret
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: SIGNING_SECRET
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/tak-ca/ca.pem
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=256"
+          # It listens on 127.0.0.1 only, out of reach of an httpGet probe.
+          readinessProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5002/healthz"]
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources.sso | nindent 12 }}
+          securityContext:
+            {{- include "cloudtak.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: tak-ca
+              mountPath: /var/run/tak-ca
+              readOnly: true
+        # Talks to CloudTAK on 127.0.0.1, inside the pod. See bootstrap.mjs
+        # in the image source.
+        - name: bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["node", "/home/etl/uds/bootstrap.mjs"]
+          env:
+            - name: TAK_API_URL
+              value: "https://{{ $api }}:8443"
+            - name: TAK_WEB_URL
+              value: "https://{{ $web }}:{{ $tak.webPort }}"
+            - name: TAK_STREAM_URL
+              value: "ssl://{{ $msg }}:8089"
+            - name: TAK_ADMIN_DIR
+              value: /var/run/tak-admin
+            - name: TAK_USER_GROUPS
+              value: {{ .Values.account.groups | quote }}
+            - name: CLOUDTAK_USERNAME
+              value: {{ .Values.account.username | quote }}
+            - name: CLOUDTAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: CLOUDTAK_PASSWORD
+            # For the server-minted token `bootstrap.mjs status` uses.
+            - name: SigningSecret
+              valueFrom:
+                secretKeyRef:
+                  name: cloudtak
+                  key: SIGNING_SECRET
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=64"
+          resources:
+            {{- toYaml .Values.resources.bootstrap | nindent 12 }}
+          securityContext:
+            {{- include "cloudtak.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - name: tak-admin
+              mountPath: /var/run/tak-admin
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # Only the CA certificate reaches the CloudTAK container.
+        - name: tak-ca
+          secret:
+            secretName: {{ $tak.adminSecret }}
+            items:
+              - key: ca.pem
+                path: ca.pem
+        - name: tak-admin
+          secret:
+            secretName: {{ $tak.adminSecret }}
+            defaultMode: 0440

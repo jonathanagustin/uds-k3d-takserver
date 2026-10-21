@@ -12,7 +12,7 @@
 # /Marti/api/util/isAdmin, and /Marti/api/groups/all. The script still requests
 # /Marti/api/whoami and records a 404.
 # 8446 (passthrough) enrolls a client certificate and serves the OIDC document.
-# 8089 (passthrough) must complete TLS with that certificate and reject a
+# 8089 (passthrough) must accept a stream with that certificate and reject a
 # client that presents none.
 # When the gateway also listens on the standard TAK ports, a second client
 # enrolls on <host>:8446 and streams CoT on <host>:8089 until it is listed in
@@ -479,13 +479,19 @@ PY
     else
       fail "8446 enrolled certificate subject ${subject}"
     fi
-    stream="$(echo | openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
+    # TAK closes the stream right after the handshake when it cannot
+    # authenticate the certificate. For a certificate enrolled with a bearer
+    # token that means validating the token against the Keycloak keys from
+    # the messaging pod. Hold stdin open and require the stream to still be
+    # up when timeout ends it (exit 124).
+    stream_rc=0
+    stream="$({ sleep 15; } | timeout 8 openssl s_client -brief -connect "127.0.0.1:${gw_port}" \
       -servername takserver-stream.uds.dev \
-      -cert "${work}/client.pem" -key "${work}/client.key" 2>&1 || true)"
-    if grep -q "CONNECTION ESTABLISHED" <<< "${stream}"; then
-      pass "8089 TLS with the enrolled certificate"
+      -cert "${work}/client.pem" -key "${work}/client.key" 2>&1)" || stream_rc=$?
+    if grep -q "CONNECTION ESTABLISHED" <<< "${stream}" && [ "${stream_rc}" = "124" ]; then
+      pass "8089 TLS with the enrolled certificate, stream still open after 8s"
     else
-      fail "8089 TLS with the enrolled certificate"
+      fail "8089 stream with the enrolled certificate (openssl exit ${stream_rc}; TAK closed it if not 124)"
       printf '%s\n' "${stream}" | head -n 20 >&2 || true
     fi
   else

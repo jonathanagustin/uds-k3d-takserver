@@ -1,0 +1,87 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+domain: "###ZARF_VAR_DOMAIN###"
+
+# Browser host on the tenant gateway: https://<host>.<domain>/
+host: map
+
+image:
+  repository: ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak
+  tag: v13.111.3 # cloudtak-version
+
+postgis:
+  # The image the TAK chart already uses. One image covers both databases.
+  # imresamu/postgis is the amd64 and arm64 build of the postgis/postgis
+  # Dockerfiles (adr/0010-amd64-and-arm64.md).
+  image: docker.io/imresamu/postgis:15-3.4
+  storage: 2Gi
+  database: cloudtak
+  username: cloudtak
+
+# Keycloak sign-in. CloudTAK hides its password form and the map goes
+# straight to the UDS Keycloak login. See docs/cloudtak.md.
+sso:
+  clientId: uds-cloudtak
+  # Secret the UDS operator writes with the client secret.
+  secretName: cloudtak-sso
+  realm: uds
+  # Button text on CloudTAK's login page (/login?sso=off).
+  name: UDS SSO
+  # Same coarse gate as the TAK client.
+  groups:
+    - "/UDS Core/Admin"
+  # Members of this Keycloak group become CloudTAK system administrators.
+  # Empty turns that off.
+  adminGroup: "/UDS Core/Admin"
+
+# Where TAK lives. The takserver component renders the matching Ingress
+# rules in its own Package CR.
+tak:
+  namespace: takserver
+  apiService: takserver-api-service
+  apiSelector:
+    app: takserver-api
+  webService: takserver-web
+  webPort: 8447
+  messagingService: takserver-messaging-service
+  messagingSelector:
+    app: takserver-messaging
+  # Secret the cloudtak component's onDeploy action copies from ConfigMap
+  # cert-migration: ca.pem, admin.pem, admin.key.
+  adminSecret: cloudtak-tak-admin
+
+# TAK file user behind CloudTAK's admin connection, and its TAK groups.
+# The bootstrap container creates it. People do not sign in with it: with
+# Keycloak sign-in on, CloudTAK refuses password logins. The password is
+# generated on first install and kept in Secret cloudtak.
+account:
+  username: cloudtak-admin
+  groups: Operators
+
+resources:
+  cloudtak:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+  # Loads CloudTAK's model and session modules: about 270 MB resident.
+  sso:
+    requests:
+      cpu: 10m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+  bootstrap:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      memory: 128Mi
+  postgis:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

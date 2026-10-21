@@ -16,6 +16,7 @@ tasks:
       - task: gateway
       - task: smoke
       - task: api-smoke
+      - task: cloudtak
       - task: ui
       - task: flows
 
@@ -280,13 +281,94 @@ tasks:
             echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
           fi
 
+  - name: cloudtak
+    description: CloudTAK pods are healthy, its rules are explicit, sign-in goes to Keycloak, and it has a live TAK connection
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          if ! k get namespace cloudtak >/dev/null 2>&1; then
+            echo "The cloudtak component is not deployed. Skipping."
+            exit 0
+          fi
+          dump() {
+            k get pods,svc,pvc -n cloudtak -o wide || true
+            k describe pods -n cloudtak | tail -n 60 || true
+            k logs -n cloudtak deploy/cloudtak -c bootstrap --tail=40 || true
+            k logs -n cloudtak deploy/cloudtak -c sso --tail=40 || true
+            k logs -n cloudtak deploy/cloudtak -c cloudtak --tail=40 || true
+          }
+          trap dump ERR
+          k rollout status statefulset/cloudtak-postgis -n cloudtak --timeout=600s
+          k rollout status deployment/cloudtak -n cloudtak --timeout=600s
+          k get pods -n cloudtak
+          not_ready="$(k get pods -n cloudtak -l app=cloudtak -o jsonpath='{range .items[*].status.containerStatuses[*]}{.name}={.ready}{"\n"}{end}' | grep -c '=false' || true)"
+          [ "${not_ready}" = "0" ]
+          for uid in $(k get pods -n cloudtak -l 'app in (cloudtak,cloudtak-postgis)' -o jsonpath='{range .items[*]}{.spec.securityContext.runAsUser}{" "}{end}'); do
+            [ "${uid}" != "0" ]
+          done
+
+          phase="$(k get package cloudtak -n cloudtak -o jsonpath='{.status.phase}')"
+          echo "Package cloudtak phase: ${phase}"
+          [ "${phase}" = "Ready" ]
+          spec="$(k get package cloudtak -n cloudtak -o yaml)"
+          for bad in 'remoteGenerated: Anywhere' 'remoteGenerated: IntraNamespace'; do
+            if grep -q "${bad}" <<< "${spec}"; then
+              echo "Package cloudtak allow list contains ${bad}" >&2
+              exit 1
+            fi
+          done
+          k get networkpolicy -n cloudtak -o name
+          [ "$(k get networkpolicy -n cloudtak --no-headers | wc -l | tr -d ' ')" -gt 0 ]
+
+          # Keycloak sign-in. The app page loads the auto-redirect script,
+          # /api/login/oidc starts the code flow, and the password login is off.
+          curl_map() { curl -k -sS --max-time 15 --retry 10 --retry-delay 5 --retry-all-errors "$@"; }
+          curl_map -o /tmp/cloudtak-index.html "https://map.uds.dev/login"
+          grep -q '<script src="/api/login/oidc/auto.js"></script>' /tmp/cloudtak-index.html
+          headers="$(curl_map -o /dev/null -D - "https://map.uds.dev/api/login/oidc")"
+          code="$(awk 'NR==1{print $2}' <<< "${headers}")"
+          location="$(grep -i '^location:' <<< "${headers}" | tr -d '\r' || true)"
+          echo "GET /api/login/oidc: ${code} ${location}"
+          [ "${code}" = "302" ]
+          grep -q 'https://sso.uds.dev/realms/uds/protocol/openid-connect/auth?' <<< "${location}"
+          grep -q 'client_id=uds-cloudtak' <<< "${location}"
+          grep -q 'code_challenge_method=S256' <<< "${location}"
+          code="$(curl_map -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+            -d '{"username":"x","password":"x"}' "https://map.uds.dev/api/login")"
+          echo "POST /api/login: ${code}"
+          [ "${code}" = "403" ]
+          k get secret cloudtak-sso -n cloudtak -o name
+
+          # Reads the admin connection (connection 0) to TAK's 8089 from
+          # inside the pod.
+          for i in $(seq 1 40); do
+            if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs status 2>&1)"; then
+              echo "${out}"
+              echo "CloudTAK has a live TAK connection"
+              exit 0
+            fi
+            echo "attempt ${i}: ${out}" | tail -n 3
+            sleep 15
+          done
+          echo "CloudTAK did not report a live TAK connection" >&2
+          false
+
   - name: flows
     description: List pod-to-pod TCP flows in the namespace and check each against the Package allow list
     actions:
       - shell:
           linux: bash
           darwin: bash
-        cmd: python3 ./tests/flows.py --check
+        cmd: |
+          set -euo pipefail
+          python3 ./tests/flows.py --check
+          if uds zarf tools kubectl get package cloudtak -n cloudtak >/dev/null 2>&1; then
+            TAK_NAMESPACE=cloudtak python3 ./tests/flows.py --check
+          fi
 
   - name: logs
     description: Confirm TAK writes stdout logs for UDS Core logging
@@ -490,6 +572,12 @@ tasks:
             port="$(cat /tmp/tak-gateway-port)"
           fi
           cert_dir="$(./tests/extract-certs.sh)"
+          # CloudTAK spec. It skips itself when the cloudtak component is not deployed.
+          cloudtak_url=""
+          if uds zarf tools kubectl get deploy cloudtak -n cloudtak >/dev/null 2>&1; then
+            cloudtak_url="https://map.uds.dev"
+            mkdir -p tests/.playwright/screenshots
+          fi
           # Marti uses the admin client certificate. The Keycloak account page
           # is on the tenant gateway. If that gateway cannot pull its image,
           # still run the Marti checks.
@@ -513,6 +601,7 @@ tasks:
             -e TAK_CLIENT_KEY=/certs/admin.key \
             -e TAK_CLIENT_KEY_PASSPHRASE=atakatak \
             -e SKIP_SSO_SETUP="${skip_sso}" \
+            -e CLOUDTAK_URL="${cloudtak_url}" \
             -v "${cert_dir}:/certs:ro" \
             -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
             -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \

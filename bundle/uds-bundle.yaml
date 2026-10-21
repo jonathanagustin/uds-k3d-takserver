@@ -86,6 +86,9 @@ packages:
   - name: takserver
     path: ../
     ref: dev
+    # CloudTAK, the browser map client at map.<domain>.
+    optionalComponents:
+      - cloudtak
     overrides:
       takserver:
         takserver:

@@ -60,6 +60,64 @@ kubeApi:
     - app: takserver-config
     - app: takserver-plugins
 
+# Pod-to-pod flows inside the namespace. Each entry allows the listed
+# clients to reach the server pods on the listed ports, as an Egress rule on
+# each client and an Ingress rule on the server. Nothing else inside the
+# namespace is allowed, apart from the Ignite rules above. tests/flows.py
+# (task test:flows) lists the connections the pods really open and fails on
+# one that no rule covers. See adr/0007-per-workload-network-rules.md.
+#
+# Observed in CI with the old namespace-wide rule (tests/flows.py):
+# API, messaging, and plugins hold connections to Postgres 5432 and NATS
+# 4222. The config pod holds neither, so it is not a client of either.
+intraNamespace:
+  flows:
+    # CoreConfig repository connection, plus the API and messaging readiness
+    # probes. The upstream db-setup Job runs SchemaManager once and exits, so
+    # a snapshot does not see it. Its pods carry the Job name label.
+    - name: postgres
+      server:
+        app.kubernetes.io/name: postgresql
+        app.kubernetes.io/component: primary
+      ports: [5432]
+      clients:
+        - app: takserver-api
+        - app: takserver-messaging
+        - app: takserver-plugins
+        - batch.kubernetes.io/job-name: takserver-db-setup
+    # CoreConfig cluster natsURL.
+    - name: nats
+      server:
+        app.kubernetes.io/name: nats
+        app.kubernetes.io/component: nats
+      ports: [4222]
+      clients:
+        - app: takserver-api
+        - app: takserver-messaging
+        - app: takserver-plugins
+    # Ignite server nodes join each other on discovery and communication.
+    # CI runs one Ignite replica, so this flow is not observed there. It is
+    # needed when ignite.replicaCount is more than 1.
+    - name: ignite-peers
+      server:
+        app: takserver-ignite
+      ports: [47100, 47500]
+      clients:
+        - app: takserver-ignite
+  # The TAK processes are Ignite client nodes. They also connect to each
+  # other on the communication port (Ignite service calls go to the node that
+  # hosts the service). CI saw api->config, api->messaging, messaging->config,
+  # plugins->api, plugins->config, and plugins->messaging. The side that opens
+  # the connection is whichever node sends first, so every pair is allowed
+  # both ways on this port only.
+  igniteClientPeers:
+    port: 47100
+    selectors:
+      - app: takserver-api
+      - app: takserver-messaging
+      - app: takserver-config
+      - app: takserver-plugins
+
 sso:
   # Registers Keycloak client uds-takserver and Secret takserver-sso.
   # An init container envsubsts TAK_OIDC_CLIENT_SECRET into CoreConfig.

@@ -27,3 +27,4 @@ node_modules/
 
 # Admission module build output.
 pepr/dist/
+__pycache__/

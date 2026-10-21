@@ -16,6 +16,7 @@ tasks:
       - task: smoke
       - task: api-smoke
       - task: ui
+      - task: flows
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -257,6 +258,18 @@ tasks:
             echo "Package allow list contains remoteGenerated Anywhere" >&2
             exit 1
           fi
+          if grep -q 'remoteGenerated: IntraNamespace' <<< "${spec}"; then
+            echo "Package allow list contains remoteGenerated IntraNamespace" >&2
+            exit 1
+          fi
+          # The operator turns each allow rule into a NetworkPolicy.
+          echo "Package phase: $(uds zarf tools kubectl get package takserver -n takserver -o jsonpath='{.status.phase}')"
+          for name in egress-5432-from-takserver-api-to-postgres ingress-5432-to-postgres-from-takserver-api; do
+            if ! uds zarf tools kubectl get networkpolicy -n takserver -o name | grep -q "${name}"; then
+              echo "NetworkPolicy for ${name} is missing" >&2
+              exit 1
+            fi
+          done
           uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml | grep -q RestrictIstioSidecarOverrides
           if uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q servicemonitors; then
             monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
@@ -265,6 +278,14 @@ tasks:
           else
             echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
           fi
+
+  - name: flows
+    description: List pod-to-pod TCP flows in the namespace and check each against the Package allow list
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: python3 ./tests/flows.py --check
 
   - name: logs
     description: Confirm TAK writes stdout logs for UDS Core logging

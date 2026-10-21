@@ -21,8 +21,13 @@ test.describe("CloudTAK", () => {
 
   test("map.<domain> -> Keycloak -> CloudTAK map with a TAK connection", async ({ browser }) => {
     test.setTimeout(240_000);
-    // A new context has no Keycloak session, so the sign-in page has to appear.
-    const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } });
+    // The config's storageState holds the setup project's Keycloak session.
+    // An empty one makes the Keycloak sign-in page appear.
+    const context = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1440, height: 900 },
+      storageState: { cookies: [], origins: [] },
+    });
     const page = await context.newPage();
 
     await page.goto(cloudtakUrl);
@@ -57,10 +62,10 @@ test.describe("CloudTAK", () => {
       }, path);
 
     // The CloudTAK session belongs to the Keycloak user.
-    const login = await api("/api/login");
-    console.log(`GET /api/login: ${login.code} ${JSON.stringify({ username: login.body.username, access: login.body.access })}`);
-    expect(login.code).toBe(200);
-    expect(login.body.username).toBe(keycloakUser);
+    const me = await api("/api/login");
+    console.log(`GET /api/login: ${me.code} ${JSON.stringify({ username: me.body.username, access: me.body.access })}`);
+    expect(me.code).toBe(200);
+    expect(me.body.username).toBe(keycloakUser);
 
     // TAK answers with the user's own certificate. CloudTAK calls TAK's
     // groups API with the certificate it enrolled at sign-in.
@@ -95,12 +100,20 @@ test.describe("CloudTAK", () => {
     await page.waitForTimeout(3_000);
     await page.screenshot({ path: `${shots}/cloudtak-02-map.png` });
 
-    // The local form is hidden: /login?sso=off shows only the Keycloak button.
-    await page.goto(`${cloudtakUrl}/login?sso=off`);
-    await expect(page.getByText("Sign in with UDS SSO")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByPlaceholder("Your password")).toHaveCount(0);
-    await expect(page.getByText("Sign in with Passkey")).toHaveCount(0);
-    await page.screenshot({ path: `${shots}/cloudtak-03-login-page.png` });
+    // The local form is hidden. A signed-out browser on /login?sso=off
+    // (no auto-redirect) shows only the Keycloak button.
+    const signedOut = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1440, height: 900 },
+      storageState: { cookies: [], origins: [] },
+    });
+    const login = await signedOut.newPage();
+    await login.goto(`${cloudtakUrl}/login?sso=off`);
+    await expect(login.getByText("Sign in with UDS SSO")).toBeVisible({ timeout: 30_000 });
+    await expect(login.getByPlaceholder("Your password")).toHaveCount(0);
+    await expect(login.getByText("Sign in with Passkey")).toHaveCount(0);
+    await login.screenshot({ path: `${shots}/cloudtak-03-login-page.png` });
+    await signedOut.close();
 
     await context.close();
   });

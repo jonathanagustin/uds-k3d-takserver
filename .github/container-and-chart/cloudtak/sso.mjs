@@ -16,9 +16,10 @@
 //   2. Create or update the CloudTAK profile with that certificate.
 //   3. Open a CloudTAK login session with CloudTAK's own session code.
 //
-// The browser gets only the session's refresh token, in the URL fragment of
-// a same-origin page. That page stores it where the CloudTAK app looks for
-// it and opens the map. The app swaps it for a login token on boot.
+// The browser gets the session (login token, refresh token, session id) in
+// the URL fragment of a same-origin page, which never reaches a server or a
+// log. That page stores it where CloudTAK's own login page does and opens
+// the map.
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { Pool } from '@openaddresses/batch-generic';
@@ -221,7 +222,12 @@ async function callback(req, res, url) {
     const session = await issueSession(config, req, profile);
     log(`signed in ${username} (CloudTAK ${session.access}, TAK certificate enrolled)`);
 
-    const fragment = new URLSearchParams({ refresh: session.refresh, redirect: saved.redirect });
+    const fragment = new URLSearchParams({
+        token: session.token,
+        refresh: session.refresh,
+        session: session.session,
+        redirect: saved.redirect,
+    });
     send(res, 302, {
         Location: `${BASE}/finish#${fragment}`,
         'Set-Cookie': setCookie('', 0),
@@ -236,17 +242,20 @@ const FINISH_HTML = `<!doctype html>
 `;
 
 // Capacitor Preferences on the web keeps values in localStorage under the
-// CapacitorStorage. prefix. With only a refresh token stored, the app's
-// boot calls POST /api/login/refresh and saves the full session itself.
+// CapacitorStorage. prefix. The app's boot only restores a session when a
+// login token is stored, then rotates the refresh token, which also writes
+// the rest of its session state.
 const FINISH_JS = `(function () {
     var p = new URLSearchParams(location.hash.slice(1));
+    var token = p.get('token');
     var refresh = p.get('refresh');
+    var session = p.get('session');
     var redirect = p.get('redirect') || '/';
     history.replaceState(null, '', location.pathname);
-    if (!refresh) { location.replace('/login?sso=off'); return; }
-    localStorage.removeItem('CapacitorStorage.token');
-    localStorage.removeItem('CapacitorStorage.sessionId');
+    if (!token || !refresh || !session) { location.replace('/login?sso=off'); return; }
+    localStorage.setItem('CapacitorStorage.token', token);
     localStorage.setItem('CapacitorStorage.refresh', refresh);
+    localStorage.setItem('CapacitorStorage.sessionId', session);
     if (redirect.charAt(0) !== '/' || redirect.charAt(1) === '/') redirect = '/';
     location.replace(redirect);
 })();
@@ -254,13 +263,18 @@ const FINISH_JS = `(function () {
 
 // Loaded into every CloudTAK page by nginx. When the app routes to its
 // login page, go straight to Keycloak instead of showing the button.
-// /login?sso=off shows the page as is.
+// /login?sso=off shows the page as is. A second redirect within 30 seconds
+// also shows the page, so a session the app rejects cannot loop.
 const AUTO_JS = `(function () {
     var sent = false;
+    var KEY = 'cloudtak-sso-redirect';
     function check() {
         if (sent || location.pathname !== '/login') return;
         var p = new URLSearchParams(location.search);
         if (p.get('sso') === 'off') return;
+        var last = Number(sessionStorage.getItem(KEY) || 0);
+        if (Date.now() - last < 30000) return;
+        sessionStorage.setItem(KEY, String(Date.now()));
         sent = true;
         var r = p.get('redirect');
         location.replace('${BASE}' + (r ? '?redirect=' + encodeURIComponent(r) : ''));

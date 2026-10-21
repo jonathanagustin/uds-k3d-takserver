@@ -211,6 +211,31 @@ spec:
         description: "Keycloak discovery, token, and JWKS"
       {{- end }}
 
+      {{- with .Values.cloudtak }}
+      {{- if .enabled }}
+      # CloudTAK in namespace {{ .namespace }}. Its Package CR has the
+      # matching Egress rules. See docs/cloudtak.md.
+      {{- range $port := list 8443 (int $.Values.api.web.port) }}
+      - direction: Ingress
+        selector:
+          {{- toYaml $.Values.api.selector | nindent 10 }}
+        remoteNamespace: {{ $.Values.cloudtak.namespace | quote }}
+        remoteSelector:
+          {{- toYaml $.Values.cloudtak.selector | nindent 10 }}
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to TAK API from CloudTAK"
+      {{- end }}
+      - direction: Ingress
+        selector:
+          {{- toYaml $.Values.messaging.selector | nindent 10 }}
+        remoteNamespace: {{ .namespace | quote }}
+        remoteSelector:
+          {{- toYaml .selector | nindent 10 }}
+        port: {{ $.Values.messaging.streaming.port }}
+        description: "Ingress {{ $.Values.messaging.streaming.port }} to TAK messaging from CloudTAK"
+      {{- end }}
+      {{- end }}
+
       {{- with .Values.additionalNetworkAllow }}
       {{- toYaml . | nindent 6 }}
       {{- end }}

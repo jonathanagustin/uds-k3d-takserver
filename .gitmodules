@@ -1,0 +1,5 @@
+[submodule "upstream/cloudtak"]
+	path = upstream/cloudtak
+	url = https://github.com/dfpc-coe/CloudTAK
+	shallow = true
+	branch = v13.111.3

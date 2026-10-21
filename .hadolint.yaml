@@ -5,8 +5,11 @@
 # write under /opt/tak and /, and the UID is not fixed by the stock chart.
 # Apt and microdnf packages float inside the digest-pinned builder and UBI
 # images. Pinning those package versions would churn on every base rebuild.
+# DL3022: `COPY --from` names a build context that docker-bake.hcl or
+# build.sh passes in (the TAK source submodule), not a stage in the file.
 failure-threshold: warning
 ignored:
   - DL3002
   - DL3008
+  - DL3022
   - DL3041

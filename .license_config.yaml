@@ -7,3 +7,4 @@ ignore:
   - ".github/container-and-chart/docker/UserAuthenticationFile.xml"
   - "**/*.jar"
   - "LICENSE"
+  - "upstream/**"

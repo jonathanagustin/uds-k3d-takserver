@@ -12,6 +12,7 @@ found="$(find . -type f \( -name '*.key' -o -name '*.p12' -o -name '*.jks' \) \
   -not -path './node_modules/*' \
   -not -path './zarf-sbom/*' \
   -not -path './tests/.playwright/*' \
+  -not -path './upstream/*' \
   -print)"
 if [ -n "${found}" ]; then
   printf '%s\n' "${found}" >&2

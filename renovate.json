@@ -80,6 +80,21 @@
       ],
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "CloudTAK release tag next to a # cloudtak-version comment. It moves with the upstream/cloudtak submodule.",
+      "fileMatch": [
+        "(^|/)zarf\\.yaml$",
+        "^cloudtak/chart/(values|Chart)\\.yaml$",
+        "^\\.github/container-and-chart/cloudtak/docker-bake\\.hcl$"
+      ],
+      "matchStrings": [
+        "(?<currentValue>v\\d+\\.\\d+\\.\\d+)\"?\\s*# cloudtak-version"
+      ],
+      "depNameTemplate": "dfpc-coe/CloudTAK",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
@@ -106,11 +121,27 @@
       ]
     },
     {
+      "description": "upstream/cloudtak follows CloudTAK release tags. .gitmodules sets branch to the tag. The image tag strings marked # cloudtak-version move in the same pull request.",
+      "matchDepNames": [
+        "upstream/cloudtak",
+        "dfpc-coe/CloudTAK"
+      ],
+      "versioning": "semver",
+      "groupName": "CloudTAK",
+      "labels": [
+        "package-deps"
+      ],
+      "commitMessageTopic": "CloudTAK"
+    },
+    {
       "description": "These image tags are the Zarf variable TAK_IMAGE_TAG, not a registry tag.",
       "matchPackageNames": [
         "ghcr.io/jonathanagustin/uds-k3d-takserver/**"
       ],
       "enabled": false
     }
-  ]
+  ],
+  "git-submodules": {
+    "enabled": true
+  }
 }

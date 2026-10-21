@@ -51,6 +51,30 @@ uds zarf package deploy zarf-package-takserver-arm64-*.tar.zst --confirm
 
 A published release has an entry for each architecture under the same OCI reference. Pass `--architecture` to `zarf package deploy oci://...` or `uds deploy` when the cluster's architecture differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
+### Verify a release
+
+Released packages are signed keylessly with the release workflow's GitHub identity, and the signature is in the Sigstore transparency log. To check one before you deploy it:
+
+```sh
+uds zarf package verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream \
+  --architecture amd64 \
+  --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+In a UDS bundle, add the same check to the package entry, as `core-base` has in [bundle/uds-bundle.yaml](bundle/uds-bundle.yaml):
+
+```yaml
+  - name: takserver
+    repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
+    ref: <version>-upstream
+    keylessVerification:
+      certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/uds-k3d-takserver/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
+      certificateOIDCIssuer: https://token.actions.githubusercontent.com
+```
+
+Only releases made after this was added are signed. Provenance for the package index is separate: see the `gh attestation verify` command in `.github/workflows/release.yaml`.
+
 ## Quick start
 
 Clone with the TAK Server source submodule. `build.sh` also checks it out if you forgot:

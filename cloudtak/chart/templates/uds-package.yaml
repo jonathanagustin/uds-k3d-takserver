@@ -109,3 +109,20 @@ spec:
           istio: tenant-ingressgateway
         port: 443
         description: "Egress 443 from cloudtak to Keycloak on the tenant gateway"
+      {{- if eq (include "cloudtak.basemap.enabled" .) "true" }}
+      # Basemap tiles: the one tile host, its port, from the cloudtak service
+      # account only. UDS routes a remoteHost rule through the ambient egress
+      # waypoint. basemap.egress replaces it for a tile server in the cluster.
+      - direction: Egress
+        selector:
+          app: cloudtak
+        {{- with .Values.basemap.egress }}
+        {{- toYaml (omit . "direction" "selector" "description") | nindent 8 }}
+        {{- else }}
+        serviceAccount: cloudtak
+        remoteHost: {{ include "cloudtak.basemap.host" . | quote }}
+        remoteProtocol: {{ if hasPrefix "https://" .Values.basemap.url }}TLS{{ else }}HTTP{{ end }}
+        port: {{ include "cloudtak.basemap.port" . }}
+        {{- end }}
+        description: "Egress from cloudtak to basemap tile host"
+      {{- end }}

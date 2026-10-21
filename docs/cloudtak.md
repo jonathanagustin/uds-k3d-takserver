@@ -26,6 +26,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 - `start.sh` replaces upstream `api/start`. It renders the same `nginx.conf`, drops the `user` directive, and moves the pid file, logs, and temp paths under `/tmp`. The container runs as uid 101 with a read-only root filesystem.
 - `sso.mjs` is the `sso` container's Keycloak sign-in. `nginx-sso.conf` and `nginx-sso-head.conf` are the two nginx fragments `start.sh` adds for it. See [Sign-in](#sign-in).
 - `bootstrap.mjs` is the bootstrap container's script. See below.
+- `basemap.mjs` writes the tile proxy's nginx configuration and keeps the default basemap record. See [Basemap](#basemap).
 
 `build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). There is no QEMU:
 
@@ -108,12 +109,42 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 | `cloudtak` | `takserver-api` | 8443, 8447 | `cloudtak` Egress and `takserver` Ingress |
 | `cloudtak` | `takserver-messaging` | 8089 | `cloudtak` Egress and `takserver` Ingress |
 | `cloudtak` | tenant gateway (Keycloak) | 443 | `cloudtak` Egress |
+| `cloudtak` (service account `cloudtak`) | `tile.openstreetmap.org` | 443 | `cloudtak` Egress `remoteHost`, only with `basemap.enabled` |
 
-There is no waypoint: the namespace is ambient and Authservice is not enabled. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
+The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
 
 ## Basemap
 
-CloudTAK has no internet egress here, and no basemap is loaded. CloudTAK fetches basemap tiles on the server side (its CSP allows images only from itself), so a basemap that points at an internet tile service needs an egress rule for the CloudTAK pod. UDS Core can scope egress to a host name with `remoteHost`, which needs the UDS egress gateway. The slim development core does not include it. A fully offline basemap needs a PMTiles file in S3 and CloudTAK's tile service, which are not part of this component. The map, CoT markers, and overlays work without one.
+New users get OpenStreetMap as their default basemap. CloudTAK fetches the basemap's tiles through nginx in its own container, which proxies and caches them from the tile host. See [ADR 11](../adr/0011-cloudtak-default-basemap-through-a-tile-proxy.md) for why it is not CloudTAK's own tile route.
+
+- The browser asks for `https://map.<domain>/uds-basemap/tiles/{z}/{x}/{y}?token=<session>`. nginx checks the token with CloudTAK, so only signed-in users get tiles. Zoom levels outside `minzoom`..`maxzoom` get 404, and a session that asks for more than 20 tiles a second after a burst of 200 gets 429.
+- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.111.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
+- Tiles are cached in the pod's `/tmp` (`cacheSize`, default 256m), for as long as the tile host's cache headers allow, or 7 days when it sends none. Responses carry `X-Cache-Status`.
+- The bootstrap container creates the server basemap record "OpenStreetMap" with the attribution "© OpenStreetMap contributors", and sets it as CloudTAK's default basemap (`map::basemap`). It updates the record when the settings change. Users who signed in before keep their basemap and can choose this one in the basemap menu.
+- The Package allows egress to the tile host on its port only, from the `cloudtak` service account (see [Network rules](#network-rules)).
+
+The OpenStreetMap tile servers are run by donations, with no service level, under the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Its rules for a caching proxy are met by the headers, the cache, and the rate limit above. The policy also asks for a contactable User-Agent: set `basemap.contact` to an email address or URL for your deployment. For heavy use, use another provider or your own tile server.
+
+Settings, under `basemap` in `cloudtak/chart/values.yaml` (set them with UDS bundle overrides on chart `uds-cloudtak`):
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | `false` removes the basemap record, the proxy, and the egress rule |
+| `url` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | Tile URL template, http or https, with `{z}`, `{x}`, and `{y}` |
+| `name` | `OpenStreetMap` | Name in CloudTAK's basemap list |
+| `attribution` | `© OpenStreetMap contributors` with a link | Shown on the map. HTML |
+| `minzoom`, `maxzoom` | `0`, `19` | Zoom levels served |
+| `default` | `true` | Make it CloudTAK's default basemap for new users |
+| `contact` | empty | Email or URL added to the User-Agent |
+| `userAgent` | empty | Replaces the whole User-Agent |
+| `cacheSize` | `256m` | Disk cache size |
+| `rate`, `burst` | `20`, `200` | Tiles a second per session, after a burst |
+| `port` | from `url` | Port of the egress rule |
+| `egress` | `{}` | Replaces the `remoteHost` rule, for a tile server in the cluster, such as `{remoteNamespace: tiles, remoteSelector: {app: tileserver}, port: 8080}` |
+
+Air-gapped installs: set `basemap.enabled: false`, or point `basemap.url` at a tile server in the network. A server outside the cluster gets a `remoteHost` rule for its host. For one inside the cluster, use its Service's full name in `url` and set `egress`. A server with a private CA needs that CA in the image's bundle (`/etc/ssl/certs/ca-certificates.crt`), or plain http.
+
+CloudTAK's own tile route for this record (`/api/basemap/:id/tiles/:z/:x/:y`) refuses the private address the tile host resolves to in the mesh. The web map does not use it for this basemap, but server-side tile features do. Uploaded basemaps and fully offline PMTiles need S3 and CloudTAK's tile service, which are not part of this component.
 
 ## Tests
 
@@ -123,6 +154,7 @@ CloudTAK has no internet egress here, and no basemap is loaded. CloudTAK fetches
 - checks that the `cloudtak` Package is `Ready`, has NetworkPolicies, and has no `Anywhere` or `IntraNamespace` rule
 - checks that `https://map.uds.dev/login` loads the auto-redirect script, that `/api/login/oidc` is a 302 to the `uds-cloudtak` client on `sso.uds.dev` with PKCE, that `POST /api/login` is refused with 403, and that Secret `cloudtak-sso` exists
 - runs `bootstrap.mjs status` in the pod until `connection_status` is `live`
+- with the basemap on, checks that the Package has one `remoteHost` rule, that `istio-egress-ambient` has a ServiceEntry for that host, and that `bootstrap.mjs basemap` finds the basemap record as the default and gets tile 0/0/0 back as an image through the proxy
 
 `tests/cloudtak.spec.ts` (Playwright, in `test:ui`) opens `https://map.uds.dev/` in a new browser context and expects the Keycloak login for client `uds-cloudtak` with redirect `https://map.uds.dev/api/login/oidc/callback`. It signs in as the Keycloak test user `doug` (in `/UDS Core/Admin` and `/TAK/Operators_READ`) and waits for the map canvas on `map.uds.dev`, with no CloudTAK form in between. On a first sign-in CloudTAK asks for a callsign; the test enters the Keycloak username and skips the browser permission step. Then, with the CloudTAK session the browser holds, it checks that:
 
@@ -130,13 +162,15 @@ CloudTAK has no internet egress here, and no basemap is loaded. CloudTAK fetches
 - `GET /api/marti/group` returns 200 with at least one group. CloudTAK makes that call to TAK with the certificate it enrolled for the user
 - `GET /api/server` has `connection_status: live` (connection 0)
 - `GET /api/marti/clients` lists a connected TAK client for the user, which is the map's own streaming connection
+- the server basemap with the `/uds-basemap/tiles/` URL exists, the map loads its tiles (200, `image/*`), the attribution box names OpenStreetMap, and a tile request without the session token gets 401
+- zooming in with the mouse wheel loads tiles at a higher zoom
 - `/login?sso=off` shows "Sign in with UDS SSO" and no password or passkey form
 
-It saves `cloudtak-01-keycloak.png`, `cloudtak-02-map.png`, and `cloudtak-03-login-page.png` under `tests/.playwright/screenshots`, which CI uploads with the Playwright report. `test:flows` also checks the flows inside the `cloudtak` namespace.
+It saves `cloudtak-01-keycloak.png`, `cloudtak-02-map.png`, `cloudtak-04-basemap.png` (after the zoom), and `cloudtak-03-login-page.png` under `tests/.playwright/screenshots`, which CI uploads with the Playwright report. `test:flows` also checks the flows inside the `cloudtak` namespace.
 
 ## License
 
-CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image changes only the start script and adds the sign-in and bootstrap scripts and two nginx fragments, all in this repository. CloudTAK's own code is not modified. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
+CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image changes only the start script and adds the sign-in, bootstrap, and basemap scripts and the nginx fragments, all in this repository. CloudTAK's own code is not modified. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
 
 ## Resources
 

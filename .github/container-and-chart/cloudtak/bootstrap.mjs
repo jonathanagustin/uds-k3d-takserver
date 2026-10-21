@@ -16,9 +16,17 @@
 //    a login only while it is unconfigured, and makes the user its system
 //    administrator. Doing it at startup closes that window.
 //
+// 3. Keeps the default basemap record in step with the chart (basemap.mjs):
+//    creates or updates the server basemap it owns and makes it the default
+//    for new users. With the basemap turned off it deletes that record.
+//
 // With Keycloak sign-in on, CloudTAK refuses password logins, so that user
 // is only the admin account behind the TAK connection. People sign in
 // through Keycloak (sso.mjs).
+//
+// `node bootstrap.mjs basemap` prints the basemap record and the default,
+// and fetches tile 0/0/0 through the tile proxy. It exits 1 unless that is
+// an image.
 //
 // `node bootstrap.mjs status` reads the server record, including
 // connection_status, with a short-lived token signed by CloudTAK's
@@ -29,6 +37,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+
+import { reconcile as reconcileBasemap, TILE_PATH } from './basemap.mjs';
 
 const env = (name, fallback) => {
     const value = process.env[name] ?? fallback;
@@ -148,6 +158,12 @@ function adminToken() {
     return `${body}.${sig}`;
 }
 
+async function api(path, opts = {}) {
+    const res = await local(path, { ...opts, headers: { Authorization: `Bearer ${adminToken()}`, ...(opts.headers || {}) } });
+    if (res.status !== 200) throw new Error(`${opts.method || 'GET'} ${path.split('?')[0]} returned ${res.status}: ${res.text.slice(0, 300)}`);
+    return JSON.parse(res.text);
+}
+
 async function status() {
     const token = adminToken();
     const server = await local('/api/server', { headers: { Authorization: `Bearer ${token}` } });
@@ -172,6 +188,21 @@ async function waitForCloudTAK() {
     }
 }
 
+if (process.argv[2] === 'basemap') {
+    const list = await api('/api/basemap?impersonate=true&scope=server&hidden=all&type=raster&sort=id&order=asc&limit=100');
+    const own = list.items.filter((b) => new URL(b.url).pathname.startsWith(`${TILE_PATH}/`));
+    const current = (await api('/api/config?keys=map::basemap'))['map::basemap'] ?? null;
+    console.log(JSON.stringify({ basemaps: own.map(({ id, name, url, attribution, minzoom, maxzoom }) => ({ id, name, url, attribution, minzoom, maxzoom })), default: current }));
+    const tile = await new Promise((resolve, reject) => {
+        http.get(new URL(`${TILE_PATH}/0/0/0?token=${adminToken()}`, cloudtak), { timeout: 30000 }, (res) => {
+            res.resume();
+            res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], cache: res.headers['x-cache-status'] }));
+        }).on('error', reject);
+    });
+    console.log(`GET ${TILE_PATH}/0/0/0: ${JSON.stringify(tile)}`);
+    process.exit(own.length === 1 && current === own[0].id && tile.status === 200 && String(tile.type).startsWith('image/') ? 0 : 1);
+}
+
 if (process.argv[2] === 'status') {
     const body = await status();
     console.log(JSON.stringify(body));
@@ -183,7 +214,10 @@ for (;;) {
     try {
         const user = await ensureUser();
         const server = await configure();
-        console.log(`ok - TAK user ${username}: ${user}; CloudTAK server: ${server}`);
+        // A bad basemap setting is reported but does not hold up the TAK
+        // user and connection.
+        const basemap = await reconcileBasemap(api).catch((err) => `not ok - ${err.message}`);
+        console.log(`ok - TAK user ${username}: ${user}; CloudTAK server: ${server}; basemap: ${basemap}`);
     } catch (err) {
         console.error(`not ok - ${err.message}`);
         await sleep(15000);

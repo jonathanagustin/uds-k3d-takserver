@@ -12,8 +12,8 @@
       ],
       "versioning": "default",
       "extra-files": [
-        "chart/Chart.yaml",
-        "common/zarf.yaml"
+        { "type": "generic", "path": "chart/Chart.yaml" },
+        { "type": "generic", "path": "common/zarf.yaml" }
       ]
     }
   },

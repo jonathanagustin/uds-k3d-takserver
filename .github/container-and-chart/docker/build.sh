@@ -35,7 +35,7 @@ if ! command -v "${runtime}" >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -z "${PLATFORMS:-}" ]; then
+if [[ -z "${PLATFORMS:-}" ]]; then
   machine="$(uname -m)"
   case "${machine}" in
     x86_64) PLATFORMS="linux/amd64" ;;
@@ -47,26 +47,27 @@ fi
 multi="false"
 case "${PLATFORMS}" in
   *,*) multi="true" ;;
+  *) ;;
 esac
 
-if [ "${runtime}" != "docker" ]; then
+if [[ "${runtime}" != "docker" ]]; then
   echo "Podman is best-effort. Multi-arch buildx is verified with Docker." >&2
 fi
 
 src="${root}/upstream/takserver"
-if [ ! -e "${src}/src/build.gradle" ]; then
+if [[ ! -e "${src}/src/build.gradle" ]]; then
   echo "Checking out the upstream/takserver submodule"
   git -C "${root}" submodule update --init --depth 1 upstream/takserver
 fi
 upstream_sha="$(git -C "${src}" rev-parse HEAD)"
 upstream_tree="$(git -C "${src}" rev-parse 'HEAD^{tree}')"
 pinned_sha="$(git -C "${root}" rev-parse HEAD:upstream/takserver)"
-if [ "${upstream_sha}" != "${pinned_sha}" ]; then
+if [[ "${upstream_sha}" != "${pinned_sha}" ]]; then
   echo "upstream/takserver is at ${upstream_sha}, but this commit pins ${pinned_sha}." >&2
   echo "Run: git submodule update --init --depth 1 upstream/takserver" >&2
   exit 1
 fi
-if [ -n "$(git -C "${src}" status --porcelain)" ]; then
+if [[ -n "$(git -C "${src}" status --porcelain)" ]]; then
   echo "upstream/takserver has local changes. The build uses the pinned commit only." >&2
   exit 1
 fi
@@ -75,11 +76,11 @@ echo "TAK source: upstream/takserver ${upstream_sha} (tree ${upstream_tree})"
 targets="takserver-config takserver-messaging takserver-api takserver-plugins takserver-database-setup takserver-ignite"
 
 use_bake="false"
-if [ "${runtime}" = "docker" ] && docker buildx version >/dev/null 2>&1; then
+if [[ "${runtime}" = "docker" ]] && docker buildx version >/dev/null 2>&1; then
   use_bake="true"
 fi
 
-if [ "${use_bake}" = "true" ] && [ "${multi}" = "true" ]; then
+if [[ "${use_bake}" = "true" ]] && [[ "${multi}" = "true" ]]; then
   if ! docker buildx inspect takserver-builder >/dev/null 2>&1; then
     docker buildx create --name takserver-builder --driver docker-container --use
   else
@@ -88,8 +89,8 @@ if [ "${use_bake}" = "true" ] && [ "${multi}" = "true" ]; then
 fi
 
 seed="${GRADLE_SEED:-}"
-if [ -z "${seed}" ]; then
-  if [ -d "${root}/.cache/gradle-user-home/caches" ]; then
+if [[ -z "${seed}" ]]; then
+  if [[ -d "${root}/.cache/gradle-user-home/caches" ]]; then
     seed="${root}/.cache/gradle-user-home"
   else
     seed="${here}/gradle-seed"
@@ -112,7 +113,7 @@ bake() {
     --set "*.context=${here}" \
     --set "*.dockerfile=Dockerfile" \
     "$@"
-  if [ "${runtime}" = "docker" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  if [[ "${runtime}" = "docker" ]] && [[ "${GITHUB_ACTIONS:-}" = "true" ]]; then
     set -- \
       --set "takserver-*.cache-from=type=gha,scope=${cache_scope}" \
       --set "takserver-*.cache-to=type=gha,mode=max,scope=${cache_scope}" \
@@ -131,7 +132,7 @@ save_gradle_cache() {
   bake gradle-export \
     --set "gradle-export.platforms=${platform}" \
     --set "gradle-export.output=type=local,dest=${dest}"
-  if [ -d "${dest}/caches" ]; then
+  if [[ -d "${dest}/caches" ]]; then
     rm -rf "${root}/.cache/gradle-user-home"
     mkdir -p "${root}/.cache"
     mv "${dest}" "${root}/.cache/gradle-user-home"
@@ -142,11 +143,11 @@ save_gradle_cache() {
   fi
 }
 
-if [ "${use_bake}" = "true" ]; then
+if [[ "${use_bake}" = "true" ]]; then
   echo "Building ${targets} for ${PLATFORMS} with buildx bake"
-  if [ "${multi}" = "true" ] && [ "${push}" = "true" ]; then
+  if [[ "${multi}" = "true" ]] && [[ "${push}" = "true" ]]; then
     bake --push
-  elif [ "${multi}" = "true" ]; then
+  elif [[ "${multi}" = "true" ]]; then
     mkdir -p "${root}/build/oci"
     for target in ${targets}; do
       bake "${target}" --set "${target}.output=type=oci,dest=${root}/build/oci/${target}.tar"
@@ -154,7 +155,7 @@ if [ "${use_bake}" = "true" ]; then
   else
     # --load keeps the tags in the local daemon for the Grype scan.
     bake --load
-    if [ "${push}" = "true" ]; then
+    if [[ "${push}" = "true" ]]; then
       for target in ${targets}; do
         "${runtime}" push "${repo}/${target}:${tag}"
       done
@@ -180,20 +181,20 @@ for target in ${targets}; do
     --build-arg "UPSTREAM_TREE=${upstream_tree}" \
     "${here}"
 
-  if [ "${runtime}" = "docker" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  if [[ "${runtime}" = "docker" ]] && [[ "${GITHUB_ACTIONS:-}" = "true" ]]; then
     set -- \
       --cache-from "type=gha,scope=${cache_scope}" \
       --cache-to "type=gha,mode=max,scope=${cache_scope}" \
       "$@"
   fi
 
-  if [ "${multi}" = "true" ]; then
+  if [[ "${multi}" = "true" ]]; then
     echo "${runtime} has no buildx, so it cannot build ${PLATFORMS} in one invocation." >&2
     exit 1
   fi
   echo "${runtime} has no buildx. Falling back to '${runtime} build' for ${PLATFORMS}." >&2
   "${runtime}" build "$@"
-  if [ "${push}" = "true" ]; then
+  if [[ "${push}" = "true" ]]; then
     "${runtime}" push "${image}"
   fi
 done

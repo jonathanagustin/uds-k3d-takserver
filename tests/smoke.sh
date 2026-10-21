@@ -10,7 +10,7 @@
 # passthrough port-forward in /tmp/tak-gateway-port.
 set -euo pipefail
 
-if [ -z "${TAK_HTTPS_URL:-}" ] && [ -f /tmp/tak-gateway-port ]; then
+if [[ -z "${TAK_HTTPS_URL:-}" ]] && [[ -f /tmp/tak-gateway-port ]]; then
   port="$(tr -d '[:space:]' < /tmp/tak-gateway-port)"
   TAK_HTTPS_URL="https://takserver.uds.dev:${port}/"
   TAK_CERT_URL="https://takserver-api.uds.dev:${port}/"
@@ -41,7 +41,7 @@ check_endpoint() {
   verify="$(curl -k --cert "${cert}" --key "${key}" --pass "${pass}" -sS -o /dev/null -w "%{ssl_verify_result}" --max-time 30 "${url}")"
   echo "HTTP ${code}; ssl_verify_result ${verify}"
 
-  if [ -z "${code}" ] || [ "${code}" = "000" ]; then
+  if [[ -z "${code}" ]] || [[ "${code}" = "000" ]]; then
     echo "No TLS/HTTP response from ${url}." >&2
     return 1
   fi
@@ -54,7 +54,7 @@ check_endpoint "api-cert" "${TAK_CERT_URL:-https://takserver-api.uds.dev/}" "844
 # 8089 is the streaming connector, so success with a certificate is a TLS
 # handshake rather than an HTTP status.
 port="443"
-if [ -f /tmp/tak-gateway-port ]; then
+if [[ -f /tmp/tak-gateway-port ]]; then
   port="$(tr -d '[:space:]' < /tmp/tak-gateway-port)"
 fi
 

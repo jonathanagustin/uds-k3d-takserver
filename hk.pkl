@@ -2,12 +2,16 @@ amends "package://github.com/jdx/hk/releases/download/v2.0.0/hk@2.0.0#/Config.pk
 
 // Pre-commit and CI. License headers are the shared lint:all task.
 steps {
+  // --strict fails on warnings too.
   ["yamllint"] {
-    check = "yamllint . -c .yamllint --no-warnings"
+    check = "yamllint --strict . -c .yamllint"
     glob = List("**/*.yaml", "**/*.yml", ".yamllint")
   }
+  // All optional checks are on. SC2310 and SC2312 are off: they flag set -e being
+  // suspended in conditions and command substitutions, and "fixing" them changes
+  // when a script exits.
   ["shellcheck"] {
-    check = "shellcheck {{files}}"
+    check = "shellcheck --enable=all --severity=style --exclude=SC2310,SC2312 {{files}}"
     glob = List("**/*.sh")
   }
   ["hadolint"] {

@@ -14,7 +14,7 @@ found="$(find . -type f \( -name '*.key' -o -name '*.p12' -o -name '*.jks' \) \
   -not -path './tests/.playwright/*' \
   -not -path './upstream/*' \
   -print)"
-if [ -n "${found}" ]; then
+if [[ -n "${found}" ]]; then
   printf '%s\n' "${found}" >&2
   echo "Private key or keystore files are not allowed in this tree." >&2
   exit 1

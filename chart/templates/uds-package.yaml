@@ -65,6 +65,9 @@ spec:
     # 8446, and 8089 has to reach TAK, and Authservice is not enabled.
     serviceMesh:
       mode: ambient
+    # Passthrough entries below (8443, 8446, 8089) use mutual TLS, so a plain
+    # HTTP uptime probe cannot pass there and none is configured. They are for
+    # TAK clients, not browsers, so UDS Portal does not list them.
     expose:
       {{- if .Values.sso.enabled }}
       - description: tak-web-http
@@ -74,11 +77,21 @@ spec:
         gateway: tenant
         host: {{ .Values.api.web.host | quote }}
         port: {{ .Values.api.web.port }}
+        annotations:
+          uds.dev/title: "TAK Server"
+        # The Package operator creates a Blackbox Probe for these paths. The
+        # unauthenticated request ends on the Keycloak login page (2xx).
+        uptime:
+          checks:
+            paths:
+              - /
       {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}
         selector:
           {{- toYaml .Values.api.selector | nindent 10 }}
+        annotations:
+          uds.dev/visible: "false"
         gateway: passthrough
         host: {{ .Values.api.https.host | quote }}
         port: {{ .Values.api.https.port }}
@@ -86,6 +99,8 @@ spec:
         service: {{ .Values.api.service | quote }}
         selector:
           {{- toYaml .Values.api.selector | nindent 10 }}
+        annotations:
+          uds.dev/visible: "false"
         gateway: passthrough
         host: {{ .Values.api.cert.host | quote }}
         port: {{ .Values.api.cert.port }}
@@ -93,6 +108,8 @@ spec:
         service: {{ .Values.messaging.service | quote }}
         selector:
           {{- toYaml .Values.messaging.selector | nindent 10 }}
+        annotations:
+          uds.dev/visible: "false"
         gateway: passthrough
         host: {{ .Values.messaging.streaming.host | quote }}
         port: {{ .Values.messaging.streaming.port }}

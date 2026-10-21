@@ -11,6 +11,13 @@ on:
       tag:
         required: true
         type: string
+  # Re-publish an existing Release Please tag, for example after a failed run.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, such as v0.2.0
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -101,7 +108,10 @@ jobs:
           uds zarf package publish "${package}" \
             oci://ghcr.io/jonathanagustin/uds-k3d-takserver --features values=true
           reference="oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream"
-          uds zarf package inspect definition "${reference}" --architecture "${ARCH}" > "${RUNNER_TEMP}/released-zarf.yaml"
+          # inspect highlights the YAML with ANSI escape codes even when piped,
+          # and yq rejects those control characters, so strip them first.
+          uds zarf package inspect definition "${reference}" --architecture "${ARCH}" \
+            | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' > "${RUNNER_TEMP}/released-zarf.yaml"
           published_version="$(uds zarf tools yq -r '.metadata.version' "${RUNNER_TEMP}/released-zarf.yaml")"
           test "${published_version}" = "${RELEASE_VERSION}"
           echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"

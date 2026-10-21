@@ -36,7 +36,7 @@ wait_ignite() {
       echo "takserver-ignite:47500 is open"
       return 0
     fi
-    if [ "${SECONDS}" -ge "${deadline}" ]; then
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
       echo "takserver-ignite:47500 was not open within 180s" >&2
       exit 1
     fi
@@ -76,10 +76,10 @@ deploy_current() {
   generation="$(number_field "${body}" generation || true)"
   observed="$(number_field "${body}" observedGeneration || true)"
   last_reason="replicas=${spec_replicas} ready=${ready} updated=${updated} generation=${generation} observed=${observed}"
-  [ -n "${spec_replicas}" ] || return 1
-  [ "${ready}" = "${spec_replicas}" ] || return 1
-  [ "${updated}" = "${spec_replicas}" ] || return 1
-  [ -n "${generation}" ] && [ "${observed}" = "${generation}" ] || return 1
+  [[ -n "${spec_replicas}" ]] || return 1
+  [[ "${ready}" = "${spec_replicas}" ]] || return 1
+  [[ "${updated}" = "${spec_replicas}" ]] || return 1
+  [[ -n "${generation}" ]] && [[ "${observed}" = "${generation}" ]] || return 1
   if ! grep -Eq '"type":"Available","status":"True"|"status":"True","type":"Available"' <<< "${body}"; then
     last_reason="${last_reason} Available is not True"
     return 1
@@ -97,11 +97,11 @@ wait_deploy() {
       echo "deployment/${name} is updated and Ready"
       return 0
     fi
-    if [ "${SECONDS}" -ge "${deadline}" ]; then
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
       echo "deployment/${name} was not Ready within ${seconds}s: ${last_reason}" >&2
       exit 1
     fi
-    if [ $((SECONDS % 60)) -lt 5 ]; then
+    if [[ $((SECONDS % 60)) -lt 5 ]]; then
       echo "deployment/${name} not Ready yet: ${last_reason}"
     fi
     sleep 5

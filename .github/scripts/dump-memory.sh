@@ -12,7 +12,7 @@ k() {
     kubectl "$@"
     return
   fi
-  if [ -x ./zarf ]; then
+  if [[ -x ./zarf ]]; then
     ./zarf tools kubectl "$@"
     return
   fi

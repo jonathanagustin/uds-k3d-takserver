@@ -34,7 +34,7 @@ uds create "${work}/bundle" --architecture=amd64 --confirm --no-progress
 uds run deploy-slim-core --no-progress
 uds run fit-runner --no-progress
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')
-[ "${#bundles[@]}" -eq 1 ]
+[[ "${#bundles[@]}" -eq 1 ]]
 UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts
 
 k() { uds zarf tools kubectl "$@"; }
@@ -107,7 +107,7 @@ health
 pvc_snapshot > "${work}/postgres-pvc.after"
 diff -u "${work}/postgres-pvc.before" "${work}/postgres-pvc.after"
 actual="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade_test.retained_state;')"
-[ "${actual}" = "${expected}" ]
+[[ "${actual}" = "${expected}" ]]
 echo "PASS PostgreSQL row, creation timestamp, and persistent volume survived the upgrade"
 sha256sum --check "${work}/certs.sha256"
 gateway
@@ -115,7 +115,7 @@ stream
 sso upgraded
 sql <<< 'DROP SCHEMA upgrade_test CASCADE;'
 echo "PASS released-to-PR upgrade: healthy TAK pods, SSO dashboard, retained client certificate, and PostgreSQL data"
-if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "Upgrade baseline: ${tag} (${package})"
     echo "PASS: healthy TAK pods, fresh SSO dashboard login, retained 8089 client certificate, PostgreSQL row and PVC continuity."

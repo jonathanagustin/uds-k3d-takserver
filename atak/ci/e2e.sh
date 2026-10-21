@@ -82,9 +82,11 @@ openssl x509 -in "${work}/device.pem" -noout -subject -enddate -fingerprint -sha
 # certificate goes into the pod.
 msg() { k exec -i -n takserver deploy/takserver-messaging -c takserver-messaging -- "$@"; }
 msg sh -c 'cat > /tmp/device.pem' < "${work}/device.pem"
-# enable_admin.sh retries certmod the same way; the Ignite client join can fail.
+# Same environment as enable_admin.sh, which takserver-messaging-cluster.sh
+# runs after sourcing setenv.sh: the Ignite client needs its --add-opens
+# flags on JDK 17. enable_admin.sh retries too.
 for i in 1 2 3 4 5; do
-  if msg sh -c "cd / && java -Xmx128m -jar /UserManager.jar certmod -g '${DEVICE_GROUP}' /tmp/device.pem" < /dev/null \
+  if msg sh -c "cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g '${DEVICE_GROUP}' /tmp/device.pem" < /dev/null \
     > "${OUT}/certmod.txt" 2>&1; then
     break
   fi

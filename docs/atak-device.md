@@ -58,7 +58,7 @@ ATAK always enrolls on 8446 with HTTP Basic (`CertificateEnrollmentClient` passe
 For a real device, an operator does the same steps by hand:
 
 1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a CSR with `ca.pem` and `ca-do-not-share.key` from `cert-migration`, as `atak/ci/e2e.sh` does.
-2. Register it: `kubectl exec -n takserver deploy/takserver-messaging -c takserver-messaging -- sh -c 'cd / && java -Xmx128m -jar /UserManager.jar certmod -g <group> /tmp/<name>.pem'` after copying the PEM to `/tmp` in the pod. `UserAuthenticationFile.xml` is not on a volume, so run it again after the messaging pod restarts.
+2. Register it: `kubectl exec -n takserver deploy/takserver-messaging -c takserver-messaging -- sh -c 'cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g <group> /tmp/<name>.pem'` after copying the PEM to `/tmp` in the pod. `UserAuthenticationFile.xml` is not on a volume, so run it again after the messaging pod restarts.
 3. Package the `.p12`, the truststore, and a `.pref` as above, and hand the package to the device: copy it to the device's `Download` folder as `atak*.dpk`, or open it with ATAK's Import Manager.
 
 Remove a device with `certmod -D <cert.pem>`. The CA has no revocation list here, so also keep certificate lifetimes short.

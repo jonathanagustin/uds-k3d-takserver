@@ -62,6 +62,12 @@ spec:
         gateway: tenant
         host: {{ .Values.host | quote }}
         port: 5000
+        # The Package operator creates a Blackbox Probe for this path. The
+        # login page answers 2xx without a session.
+        uptime:
+          checks:
+            paths:
+              - /login
     allow:
       - direction: Egress
         selector:

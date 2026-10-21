@@ -111,4 +111,4 @@ cat "${OUT}/clientEndPoints.json"
 [ -n "${found}" ] || { echo "device user ${TAK_USER} is not in /Marti/api/clientEndPoints" >&2; exit 1; }
 
 echo "== viewer behind SSO"
-node "${here}/ci/viewer-sso.mjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"
+node "${here}/ci/viewer-sso.cjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"

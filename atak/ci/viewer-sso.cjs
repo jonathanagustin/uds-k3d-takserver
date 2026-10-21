@@ -4,7 +4,9 @@
 // Opens the phone view through the tenant gateway, signs in on Keycloak,
 // waits for the device stream and saves a screenshot. Fails when the screen
 // area is blank.
-import { chromium } from "playwright";
+const { chromium } = require("playwright");
+
+(async () => {
 
 const [url, user, pass, out] = process.argv.slice(2);
 const browser = await chromium.launch({ channel: "chrome" });
@@ -25,3 +27,7 @@ if (shot.length < 20000) {
   process.exit(1);
 }
 console.log(`viewer screenshot ${out}, screen area ${shot.length} bytes`);
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

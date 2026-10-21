@@ -377,24 +377,23 @@ tasks:
           # Standard TAK ports, when the bundle publishes them on the gateway.
           rm -f /tmp/tak-std-ports
           ports="$(uds zarf tools kubectl get svc -n istio-passthrough-gateway passthrough-ingressgateway -o jsonpath='{.spec.ports[*].port}')"
-          case " ${ports} " in
-            *" 8446 "*" 8089 "* | *" 8089 "*" 8446 "*)
-              setsid uds zarf tools kubectl port-forward -n istio-passthrough-gateway svc/passthrough-ingressgateway 18446:8446 18089:8089 >/tmp/tak-std-pf.log 2>&1 < /dev/null &
-              for _ in $(seq 1 30); do
-                if curl -k -sS -o /dev/null --max-time 2 --resolve "takserver.uds.dev:18446:127.0.0.1" "https://takserver.uds.dev:18446/"; then
-                  echo "18446 18089" > /tmp/tak-std-ports
-                  break
-                fi
-                sleep 1
-              done
-              if [ ! -f /tmp/tak-std-ports ]; then
-                echo "standard port 8446 on the passthrough gateway did not accept TLS" >&2
-                cat /tmp/tak-std-pf.log >&2 || true
-                exit 1
+          if grep -qw 8446 <<< "${ports}" && grep -qw 8089 <<< "${ports}"; then
+            setsid uds zarf tools kubectl port-forward -n istio-passthrough-gateway svc/passthrough-ingressgateway 18446:8446 18089:8089 >/tmp/tak-std-pf.log 2>&1 < /dev/null &
+            for _ in $(seq 1 30); do
+              if curl -k -sS -o /dev/null --max-time 2 --resolve "takserver.uds.dev:18446:127.0.0.1" "https://takserver.uds.dev:18446/"; then
+                echo "18446 18089" > /tmp/tak-std-ports
+                break
               fi
-              ;;
-            *) echo "passthrough gateway Service has no 8446/8089 (ports: ${ports})" ;;
-          esac
+              sleep 1
+            done
+            if [ ! -f /tmp/tak-std-ports ]; then
+              echo "standard port 8446 on the passthrough gateway did not accept TLS" >&2
+              cat /tmp/tak-std-pf.log >&2 || true
+              exit 1
+            fi
+          else
+            echo "passthrough gateway Service has no 8446/8089 (ports: ${ports})"
+          fi
 
   - name: dns
     description: DOMAIN hosts resolve to the right Istio gateway from inside a pod, and the API pod has no hostAlias

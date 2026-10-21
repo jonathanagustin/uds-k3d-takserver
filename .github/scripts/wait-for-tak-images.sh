@@ -49,10 +49,13 @@ ensure_docker_login() {
 }
 
 # GHCR rejects a raw GitHub token. This exchanges it for a pull bearer token.
+# The reply is saved first and only read as JSON, never run.
 registry_token() {
   local repo_path="$1"
-  curl -sS -u "${GITHUB_ACTOR:-github}:${GH_TOKEN}" \
-    "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo_path}:pull" \
+  local reply
+  reply="$(curl -sS -u "${GITHUB_ACTOR:-github}:${GH_TOKEN}" \
+    "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo_path}:pull" || true)"
+  printf '%s' "${reply}" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))' || true
 }
 
@@ -82,10 +85,12 @@ registry_manifest_platforms() {
   if [ -z "${reg_token}" ]; then
     return 0
   fi
-  curl -sS \
+  local manifest
+  manifest="$(curl -sS \
     -H "Authorization: Bearer ${reg_token}" \
     -H "Accept: ${manifest_accept}" \
-    "https://ghcr.io/v2/${repo_path}/manifests/${tag}" \
+    "https://ghcr.io/v2/${repo_path}/manifests/${tag}" || true)"
+  printf '%s' "${manifest}" \
     | python3 -c '
 import json, sys
 try:

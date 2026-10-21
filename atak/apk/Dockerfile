@@ -39,7 +39,7 @@ RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
     && unzip -q /tmp/tools.zip -d /tmp \
     && mv /tmp/cmdline-tools "${ANDROID_SDK_ROOT}/cmdline-tools/latest" \
     && rm /tmp/tools.zip \
-    && yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null \
+    && (yes || true) | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null \
     && "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --install \
         "platforms;android-35" "build-tools;35.0.0" "ndk;25.1.8937393" "cmake;3.22.1" >/dev/null
 

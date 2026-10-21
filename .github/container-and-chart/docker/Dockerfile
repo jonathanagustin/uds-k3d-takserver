@@ -5,8 +5,9 @@
 #
 # Multi-stage build of the six TAK Server images from the public
 # TAK-Product-Center/Server tag 5.7-RELEASE-14.
-# Renovate moves that tag. The SHA below is the commit for the tag and stays put
-# until the tag bump is checked.
+# The source is the git submodule at upstream/takserver. build.sh passes it as
+# the takserver-src build context, along with the submodule commit and tree.
+# Renovate moves the submodule and the tag below together.
 #
 # The builder digest is Temurin 17.0.20 on Ubuntu 22.04 (amd64 and arm64).
 # Gradle is the upstream wrapper (8.10.2). protoc 3.25.8 and the Node
@@ -33,17 +34,32 @@ RUN apt-get update \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
-ARG UPSTREAM_REPO=https://github.com/TAK-Product-Center/Server
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+# Commit and tree of the upstream/takserver submodule. build.sh reads both
+# from git. There is no default, so a stale value cannot hide a bump.
+ARG UPSTREAM_SHA
+ARG UPSTREAM_TREE
 
 WORKDIR /src
 
-RUN git clone --branch "${UPSTREAM_REF}" --depth 1 "${UPSTREAM_REPO}" /src \
-    && git fetch --depth 1 origin "${UPSTREAM_SHA}" \
-    && git checkout --detach "${UPSTREAM_SHA}" \
-    && test "$(git rev-parse HEAD)" = "${UPSTREAM_SHA}" \
-    && test "$(git describe --tags --exact-match HEAD)" = "${UPSTREAM_REF}"
+# The build context is the submodule work tree. Its .git is a pointer file to
+# the parent repository, so it is dropped here. TAK's src/build.gradle reads
+# the version from `git describe` and the branch name (HEAD when detached), so
+# the checkout is rebuilt as one commit tagged with the release. The tree id
+# has to equal the upstream commit's tree: the files are exactly that commit.
+COPY --from=takserver-src . /src
+RUN test -n "${UPSTREAM_SHA}" && test -n "${UPSTREAM_TREE}" \
+    && rm -rf /src/.git \
+    && git init -q /src \
+    && git -C /src add -f -A \
+    && test "$(git -C /src write-tree)" = "${UPSTREAM_TREE}" \
+    && git -C /src -c user.name=build -c user.email=build@localhost \
+        commit -q -m "TAK Server ${UPSTREAM_REF} (${UPSTREAM_SHA})" \
+    && git -C /src -c user.name=build -c user.email=build@localhost \
+        tag -a -m "${UPSTREAM_REF}" "${UPSTREAM_REF}" \
+    && git -C /src checkout -q --detach \
+    && test "$(git -C /src describe --exact-match HEAD)" = "${UPSTREAM_REF}" \
+    && test "$(git -C /src rev-parse --abbrev-ref HEAD)" = "HEAD"
 
 WORKDIR /src/src
 
@@ -179,7 +195,7 @@ COPY UserAuthenticationFile.xml /opt/tak/UserAuthenticationFile.xml
 RUN chmod 0666 /opt/tak/UserAuthenticationFile.xml
 
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 
 # The plugins entrypoint expands PLUGIN_MANAGER_MAX_HEAP into -Xmx. An empty
@@ -194,7 +210,7 @@ ENV PLUGIN_MANAGER_MAX_HEAP=128
 
 FROM cluster-base AS takserver-config
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
@@ -215,7 +231,7 @@ CMD ["sh", "/takserver-config-cluster.sh"]
 
 FROM cluster-base AS takserver-messaging
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
@@ -225,7 +241,7 @@ CMD ["sh", "/takserver-messaging-cluster.sh"]
 
 FROM cluster-base AS takserver-api
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
@@ -235,7 +251,7 @@ CMD ["sh", "/takserver-api-cluster.sh"]
 
 FROM cluster-base AS takserver-plugins
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
@@ -260,7 +276,7 @@ COPY --from=builder \
     /
 
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
@@ -285,7 +301,7 @@ ARG IGNITE_VERSION=2.17.0
 ARG IGNITE_URL=https://archive.apache.org/dist/ignite/2.17.0/apache-ignite-2.17.0-bin.zip
 ARG IGNITE_SHA512=cd14c9344cc91e9d328a4c4478d9686edc9e1065a0b558e345389a6241afcdfc29f927644cecaf1243a0db7e02113e4dd81ba2df44b65c75c8ec08cab3d405a1
 ARG UPSTREAM_REF=5.7-RELEASE-14
-ARG UPSTREAM_SHA=5187abd46d827d37cfc5708805eced197a837e49
+ARG UPSTREAM_SHA
 ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 
 WORKDIR /opt
@@ -297,11 +313,12 @@ RUN curl -fsSL -o /tmp/ignite.zip "${IGNITE_URL}" \
     && rm /tmp/ignite.zip \
     && mv "/opt/apache-ignite-${IGNITE_VERSION}-bin" /opt/ignite \
     && cp /opt/ignite/libs/optional/ignite-kubernetes/*.jar /opt/ignite/libs/ \
-    && curl -fsSL -o /opt/ignite/bin/ignite.sh \
-        "https://raw.githubusercontent.com/TAK-Product-Center/Server/${UPSTREAM_SHA}/src/takserver-cluster/docker-files/scripts/takserver-ignite/ignite.sh" \
-    && chmod 0755 /opt/ignite/bin/ignite.sh \
     && mkdir -p /opt/ignite/work \
     && chmod -R a+rwx /opt/ignite
+
+# Upstream's Ignite launcher, from the same submodule commit as the TAK build.
+# 0777 matches the chmod -R a+rwx above.
+COPY --from=takserver-src --chmod=0777 src/takserver-cluster/docker-files/scripts/takserver-ignite/ignite.sh /opt/ignite/bin/ignite.sh
 
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \

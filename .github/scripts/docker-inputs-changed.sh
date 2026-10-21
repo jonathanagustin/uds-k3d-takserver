@@ -2,13 +2,14 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Exit 0 when the latest commit touches the Docker build inputs.
+# Exit 0 when the latest commit touches the Docker build inputs: the Docker
+# directory or the upstream/takserver submodule pin.
 # Exit 1 when it does not. Callers skip the image wait on exit 1.
 # The container workflow rebuilds only for that commit, so a later commit
 # that leaves this directory alone can use the tags already published.
 set -euo pipefail
 
-path=".github/container-and-chart/docker"
+paths=(".github/container-and-chart/docker" "upstream/takserver")
 head="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
 
 if ! git cat-file -e "${head}^{commit}" 2>/dev/null; then
@@ -30,10 +31,10 @@ if ! git rev-parse --verify "${head}~1" >/dev/null 2>&1; then
   exit 0
 fi
 
-if git diff --quiet "${head}~1" "${head}" -- "${path}"; then
+if git diff --quiet "${head}~1" "${head}" -- "${paths[@]}"; then
   echo "Docker inputs are unchanged."
   exit 1
 fi
 
-git diff --name-only "${head}~1" "${head}" -- "${path}"
+git diff --name-only "${head}~1" "${head}" -- "${paths[@]}"
 exit 0

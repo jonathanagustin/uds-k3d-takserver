@@ -14,6 +14,9 @@
 #   IMAGE_REPO    default: ghcr.io/jonathanagustin/uds-k3d-takserver
 #   IMAGE_TAG     default: the contents of version.txt
 #   GRADLE_SEED   directory of a previous Gradle home. CI restores one.
+#
+# The TAK source is the git submodule at upstream/takserver. It is checked
+# out here if it is empty (a clone without --recurse-submodules).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -46,6 +49,25 @@ if [ "${runtime}" != "docker" ]; then
   echo "Podman is best-effort. Multi-arch buildx is verified with Docker." >&2
 fi
 
+src="${root}/upstream/takserver"
+if [ ! -e "${src}/src/build.gradle" ]; then
+  echo "Checking out the upstream/takserver submodule"
+  git -C "${root}" submodule update --init --depth 1 upstream/takserver
+fi
+upstream_sha="$(git -C "${src}" rev-parse HEAD)"
+upstream_tree="$(git -C "${src}" rev-parse 'HEAD^{tree}')"
+pinned_sha="$(git -C "${root}" rev-parse HEAD:upstream/takserver)"
+if [ "${upstream_sha}" != "${pinned_sha}" ]; then
+  echo "upstream/takserver is at ${upstream_sha}, but this commit pins ${pinned_sha}." >&2
+  echo "Run: git submodule update --init --depth 1 upstream/takserver" >&2
+  exit 1
+fi
+if [ -n "$(git -C "${src}" status --porcelain)" ]; then
+  echo "upstream/takserver has local changes. The build uses the pinned commit only." >&2
+  exit 1
+fi
+echo "TAK source: upstream/takserver ${upstream_sha} (tree ${upstream_tree})"
+
 targets="takserver-config takserver-messaging takserver-api takserver-plugins takserver-database-setup takserver-ignite"
 
 use_bake="false"
@@ -74,6 +96,9 @@ export REPO="${repo}"
 export TAG="${tag}"
 export PLATFORMS
 export GRADLE_SEED="${seed}"
+export TAK_SRC="${src}"
+export UPSTREAM_SHA="${upstream_sha}"
+export UPSTREAM_TREE="${upstream_tree}"
 
 bake() {
   # bake resolves a relative context from the working directory. CI runs
@@ -146,6 +171,9 @@ for target in ${targets}; do
     --platform "${PLATFORMS}" \
     --tag "${image}" \
     --build-context "gradle-seed=${seed}" \
+    --build-context "takserver-src=${src}" \
+    --build-arg "UPSTREAM_SHA=${upstream_sha}" \
+    --build-arg "UPSTREAM_TREE=${upstream_tree}" \
     "${here}"
 
   if [ "${runtime}" = "docker" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then

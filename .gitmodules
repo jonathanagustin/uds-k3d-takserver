@@ -1,5 +1,10 @@
+[submodule "upstream/takserver"]
+	path = upstream/takserver
+	url = https://github.com/TAK-Product-Center/Server
+	shallow = true
+	branch = 5.7-RELEASE-14
 [submodule "upstream/atak-civ"]
 	path = upstream/atak-civ
 	url = https://github.com/TAK-Product-Center/atak-civ
-	branch = 5.5.1.10
 	shallow = true
+	branch = 5.5.1.10

@@ -4,7 +4,7 @@
 // Connect CloudTAK to the in-cluster TAK Server, then keep that state.
 //
 // Runs as a second container in the CloudTAK pod and talks to CloudTAK on
-// 127.0.0.1, so its calls never cross the mesh or Authservice. Every
+// 127.0.0.1, so its calls never cross the mesh. Every
 // BOOTSTRAP_INTERVAL_SECONDS it:
 //
 // 1. Makes sure the TAK file user CLOUDTAK_USERNAME exists with the password
@@ -16,9 +16,14 @@
 //    a login only while it is unconfigured, and makes the user its system
 //    administrator. Doing it at startup closes that window.
 //
-// `node bootstrap.mjs status` logs in as that user and prints the server
-// record, including connection_status. It exits 1 unless the admin
-// connection is live.
+// With Keycloak sign-in on, CloudTAK refuses password logins, so that user
+// is only the admin account behind the TAK connection. People sign in
+// through Keycloak (sso.mjs).
+//
+// `node bootstrap.mjs status` reads the server record, including
+// connection_status, with a short-lived token signed by CloudTAK's
+// SigningSecret for that admin. It exits 1 unless the admin connection is
+// live.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -134,10 +139,17 @@ async function configure() {
     return `configured now, connection ${JSON.parse(patch.text).connection_status}`;
 }
 
+// CloudTAK accepts a token without a session claim as server minted.
+function adminToken() {
+    const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const body = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ access: 'admin', email: username, iat: now, exp: now + 300 })}`;
+    const sig = crypto.createHmac('sha256', env('SigningSecret')).update(body).digest('base64url');
+    return `${body}.${sig}`;
+}
+
 async function status() {
-    const login = await local('/api/login', { method: 'POST', body: { username, password } });
-    if (login.status !== 200) throw new Error(`POST /api/login returned ${login.status}: ${login.text.slice(0, 300)}`);
-    const { token } = JSON.parse(login.text);
+    const token = adminToken();
     const server = await local('/api/server', { headers: { Authorization: `Bearer ${token}` } });
     if (server.status !== 200) throw new Error(`GET /api/server returned ${server.status}`);
     const body = JSON.parse(server.text);

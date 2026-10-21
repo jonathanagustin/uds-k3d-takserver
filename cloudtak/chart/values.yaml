@@ -17,14 +17,21 @@ postgis:
   database: cloudtak
   username: cloudtak
 
-# Keycloak in front of CloudTAK, through UDS Authservice. CloudTAK has no
-# OIDC login of its own, so a user still signs in to CloudTAK with a TAK
-# account after Keycloak. See docs/cloudtak.md.
+# Keycloak sign-in. CloudTAK hides its password form and the map goes
+# straight to the UDS Keycloak login. See docs/cloudtak.md.
 sso:
   clientId: uds-cloudtak
+  # Secret the UDS operator writes with the client secret.
+  secretName: cloudtak-sso
+  realm: uds
+  # Button text on CloudTAK's login page (/login?sso=off).
+  name: UDS SSO
   # Same coarse gate as the TAK client.
   groups:
     - "/UDS Core/Admin"
+  # Members of this Keycloak group become CloudTAK system administrators.
+  # Empty turns that off.
+  adminGroup: "/UDS Core/Admin"
 
 # Where TAK lives. The takserver component renders the matching Ingress
 # rules in its own Package CR.
@@ -42,9 +49,10 @@ tak:
   # cert-migration: ca.pem, admin.pem, admin.key.
   adminSecret: cloudtak-tak-admin
 
-# TAK file user CloudTAK signs in with, and the TAK groups it gets. The
-# bootstrap container creates it and makes it the CloudTAK system admin.
-# The password is generated on first install and kept in Secret cloudtak.
+# TAK file user behind CloudTAK's admin connection, and its TAK groups.
+# The bootstrap container creates it. People do not sign in with it: with
+# Keycloak sign-in on, CloudTAK refuses password logins. The password is
+# generated on first install and kept in Secret cloudtak.
 account:
   username: cloudtak-admin
   groups: Operators
@@ -56,6 +64,12 @@ resources:
       memory: 384Mi
     limits:
       memory: 1Gi
+  sso:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
   bootstrap:
     requests:
       cpu: 10m

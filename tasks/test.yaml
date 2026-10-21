@@ -281,7 +281,7 @@ tasks:
           fi
 
   - name: cloudtak
-    description: CloudTAK pods are healthy, its rules are explicit, Keycloak guards it, and it has a live TAK connection
+    description: CloudTAK pods are healthy, its rules are explicit, sign-in goes to Keycloak, and it has a live TAK connection
     actions:
       - shell:
           linux: bash
@@ -297,6 +297,7 @@ tasks:
             k get pods,svc,pvc -n cloudtak -o wide || true
             k describe pods -n cloudtak | tail -n 60 || true
             k logs -n cloudtak deploy/cloudtak -c bootstrap --tail=40 || true
+            k logs -n cloudtak deploy/cloudtak -c sso --tail=40 || true
             k logs -n cloudtak deploy/cloudtak -c cloudtak --tail=40 || true
           }
           trap dump ERR
@@ -322,19 +323,27 @@ tasks:
           k get networkpolicy -n cloudtak -o name
           [ "$(k get networkpolicy -n cloudtak --no-headers | wc -l | tr -d ' ')" -gt 0 ]
 
-          # Authservice answers before CloudTAK. No session means a redirect
-          # to Keycloak for the page and for the API.
-          for path in / /api/server; do
-            headers="$(curl -k -sS -o /dev/null -D - --max-time 15 --retry 10 --retry-delay 5 --retry-all-errors "https://map.uds.dev${path}")"
-            code="$(awk 'NR==1{print $2}' <<< "${headers}")"
-            location="$(grep -i '^location:' <<< "${headers}" | tr -d '\r' || true)"
-            echo "GET ${path}: ${code} ${location}"
-            [ "${code}" = "302" ]
-            grep -q 'sso.uds.dev/realms/uds/protocol/openid-connect/auth' <<< "${location}"
-          done
+          # Keycloak sign-in. The app page loads the auto-redirect script,
+          # /api/login/oidc starts the code flow, and the password login is off.
+          curl_map() { curl -k -sS --max-time 15 --retry 10 --retry-delay 5 --retry-all-errors "$@"; }
+          curl_map -o /tmp/cloudtak-index.html "https://map.uds.dev/login"
+          grep -q '<script src="/api/login/oidc/auto.js"></script>' /tmp/cloudtak-index.html
+          headers="$(curl_map -o /dev/null -D - "https://map.uds.dev/api/login/oidc")"
+          code="$(awk 'NR==1{print $2}' <<< "${headers}")"
+          location="$(grep -i '^location:' <<< "${headers}" | tr -d '\r' || true)"
+          echo "GET /api/login/oidc: ${code} ${location}"
+          [ "${code}" = "302" ]
+          grep -q 'https://sso.uds.dev/realms/uds/protocol/openid-connect/auth?' <<< "${location}"
+          grep -q 'client_id=uds-cloudtak' <<< "${location}"
+          grep -q 'code_challenge_method=S256' <<< "${location}"
+          code="$(curl_map -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+            -d '{"username":"x","password":"x"}' "https://map.uds.dev/api/login")"
+          echo "POST /api/login: ${code}"
+          [ "${code}" = "403" ]
+          k get secret cloudtak-sso -n cloudtak -o name
 
-          # Signs in to CloudTAK from inside the pod and reads the admin
-          # connection (connection 0) to TAK's 8089.
+          # Reads the admin connection (connection 0) to TAK's 8089 from
+          # inside the pod.
           for i in $(seq 1 40); do
             if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs status 2>&1)"; then
               echo "${out}"
@@ -472,11 +481,9 @@ tasks:
           fi
           cert_dir="$(./tests/extract-certs.sh)"
           # CloudTAK spec. It skips itself when the cloudtak component is not deployed.
-          cloudtak_url="" cloudtak_user="" cloudtak_password=""
+          cloudtak_url=""
           if uds zarf tools kubectl get deploy cloudtak -n cloudtak >/dev/null 2>&1; then
             cloudtak_url="https://map.uds.dev"
-            cloudtak_user="$(uds zarf tools kubectl get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="bootstrap")].env[?(@.name=="CLOUDTAK_USERNAME")].value}')"
-            cloudtak_password="$(uds zarf tools kubectl get secret cloudtak -n cloudtak -o jsonpath='{.data.CLOUDTAK_PASSWORD}' | base64 -d)"
             mkdir -p tests/.playwright/screenshots
           fi
           # Marti uses the admin client certificate. The Keycloak account page
@@ -503,8 +510,6 @@ tasks:
             -e TAK_CLIENT_KEY_PASSPHRASE=atakatak \
             -e SKIP_SSO_SETUP="${skip_sso}" \
             -e CLOUDTAK_URL="${cloudtak_url}" \
-            -e CLOUDTAK_USERNAME="${cloudtak_user}" \
-            -e CLOUDTAK_PASSWORD="${cloudtak_password}" \
             -v "${cert_dir}:/certs:ro" \
             -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
             -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \

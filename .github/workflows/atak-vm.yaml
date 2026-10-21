@@ -5,14 +5,6 @@ name: ATAK device VM
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/atak-kubevirt
-    paths:
-      - "atak/vm/**"
-      - "atak/ci/**"
-      - "atak/viewer/**"
-      - ".github/workflows/atak-vm.yaml"
   pull_request:
     paths:
       - "atak/vm/**"

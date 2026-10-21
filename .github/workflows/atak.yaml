@@ -5,13 +5,6 @@ name: ATAK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/atak-kubevirt
-    paths:
-      - "atak/apk/**"
-      - "upstream/atak-civ"
-      - ".gitmodules"
   pull_request:
     paths:
       - "atak/apk/**"

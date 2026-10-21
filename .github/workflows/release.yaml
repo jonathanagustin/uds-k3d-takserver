@@ -23,14 +23,23 @@ jobs:
       contents: write
       packages: write
       id-token: write
+    # One package per architecture, each created and tested on a native
+    # runner. Both publish under the same OCI tag; Zarf keeps one index
+    # entry per architecture.
     strategy:
+      fail-fast: false
       matrix:
         flavor: [upstream]
-        architecture: [amd64]
+        architecture: [amd64, arm64]
+        include:
+          - architecture: amd64
+            runner: ubuntu-latest
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
     uses: defenseunicorns/uds-common/.github/workflows/callable-publish.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
     with:
       flavor: ${{ matrix.flavor }}
       arch: ${{ matrix.architecture }}
-      runsOn: ubuntu-latest
+      runsOn: ${{ matrix.runner }}
       options: --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
     secrets: inherit

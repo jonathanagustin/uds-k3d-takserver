@@ -14,6 +14,9 @@
 #   IMAGE_REPO    default: ghcr.io/jonathanagustin/uds-k3d-takserver
 #   IMAGE_TAG     default: the contents of version.txt
 #   GRADLE_SEED   directory of a previous Gradle home. CI restores one.
+#   CACHE_SCOPE   GitHub Actions BuildKit cache scope. default: takserver.
+#                 CI sets one per architecture so the two native builds do
+#                 not overwrite each other's cache.
 #
 # The TAK source is the git submodule at upstream/takserver. It is checked
 # out here if it is empty (a clone without --recurse-submodules).
@@ -24,6 +27,7 @@ runtime="${CONTAINER_RUNTIME:-docker}"
 repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
 tag="${IMAGE_TAG:-$(tr -d '[:space:]' < "${here}/version.txt")}"
 push="${PUSH_IMAGES:-false}"
+cache_scope="${CACHE_SCOPE:-takserver}"
 root="$(cd "${here}/../../.." && pwd)"
 
 if ! command -v "${runtime}" >/dev/null 2>&1; then
@@ -110,8 +114,8 @@ bake() {
     "$@"
   if [ "${runtime}" = "docker" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
     set -- \
-      --set "takserver-*.cache-from=type=gha,scope=takserver" \
-      --set "takserver-*.cache-to=type=gha,mode=max,scope=takserver" \
+      --set "takserver-*.cache-from=type=gha,scope=${cache_scope}" \
+      --set "takserver-*.cache-to=type=gha,mode=max,scope=${cache_scope}" \
       "$@"
   fi
   "${runtime}" buildx bake "$@"
@@ -178,8 +182,8 @@ for target in ${targets}; do
 
   if [ "${runtime}" = "docker" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
     set -- \
-      --cache-from "type=gha,scope=takserver" \
-      --cache-to "type=gha,mode=max,scope=takserver" \
+      --cache-from "type=gha,scope=${cache_scope}" \
+      --cache-to "type=gha,mode=max,scope=${cache_scope}" \
       "$@"
   fi
 

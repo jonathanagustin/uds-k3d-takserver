@@ -15,8 +15,19 @@ permissions:
   packages: read
 
 jobs:
+  # Zarf packages are per architecture. Each runner creates the package for
+  # its own architecture, and Zarf pulls the matching image from each index.
   package:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: package (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     steps:
       - name: Checkout
@@ -77,3 +88,12 @@ jobs:
 
       - name: Create the dev package
         run: uds run create-dev-package --no-progress
+
+      - name: Check the package architecture
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          package="$(ls zarf-package-takserver-"${ARCH}"-*.tar.zst)"
+          uds zarf package inspect definition "${package}" | tee "${RUNNER_TEMP}/zarf.yaml"
+          test "$(uds zarf tools yq -r '.build.architecture' "${RUNNER_TEMP}/zarf.yaml")" = "${ARCH}"

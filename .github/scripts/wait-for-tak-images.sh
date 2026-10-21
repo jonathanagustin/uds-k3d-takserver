@@ -2,7 +2,8 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Wait until the six TAK images can be inspected in GHCR.
+# Wait until the six TAK images can be inspected in GHCR, each as a
+# multi-arch index that lists every platform in REQUIRED_PLATFORMS.
 # GHCR does not accept a raw GitHub token as a registry bearer token.
 # Docker login exchanges it, then `docker manifest inspect` reads the tag.
 # If the container workflow is not running, build and push them.
@@ -16,6 +17,9 @@ sleep_seconds="${WAIT_SLEEP_SECONDS:-30}"
 deadline_seconds="${WAIT_DEADLINE_SECONDS:-9000}"
 build_if_missing="${BUILD_IF_MISSING:-true}"
 check_once="${CHECK_ONCE:-false}"
+# An amd64-only tag left by an older build must not pass for an arm64 test.
+# Set REQUIRED_PLATFORMS="" to accept any manifest.
+required_platforms="${REQUIRED_PLATFORMS-linux/amd64 linux/arm64}"
 docker_logged_in="false"
 
 if [ -z "${GH_TOKEN:-}" ]; then
@@ -45,21 +49,69 @@ ensure_docker_login() {
 }
 
 # GHCR rejects a raw GitHub token. This exchanges it for a pull bearer token.
+registry_token() {
+  local repo_path="$1"
+  curl -sS -u "${GITHUB_ACTOR:-github}:${GH_TOKEN}" \
+    "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo_path}:pull" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))' || true
+}
+
+manifest_accept="application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json"
+
 registry_manifest_code() {
   local repo_path="$1"
   local reg_token code
-  reg_token="$(curl -sS -u "${GITHUB_ACTOR:-github}:${GH_TOKEN}" \
-    "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo_path}:pull" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))' || true)"
+  reg_token="$(registry_token "${repo_path}")"
   if [ -z "${reg_token}" ]; then
     echo "000"
     return 0
   fi
   code="$(curl -sS -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer ${reg_token}" \
-    -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+    -H "Accept: ${manifest_accept}" \
     "https://ghcr.io/v2/${repo_path}/manifests/${tag}" || true)"
   echo "${code:-000}"
+}
+
+# Print the os/arch of each image in the tag's index, one per line. A
+# single-platform manifest prints nothing, so it never satisfies the check.
+registry_manifest_platforms() {
+  local repo_path="$1"
+  local reg_token
+  reg_token="$(registry_token "${repo_path}")"
+  if [ -z "${reg_token}" ]; then
+    return 0
+  fi
+  curl -sS \
+    -H "Authorization: Bearer ${reg_token}" \
+    -H "Accept: ${manifest_accept}" \
+    "https://ghcr.io/v2/${repo_path}/manifests/${tag}" \
+    | python3 -c '
+import json, sys
+try:
+    doc = json.load(sys.stdin)
+except ValueError:
+    raise SystemExit(0)
+for entry in doc.get("manifests", []):
+    platform = entry.get("platform") or {}
+    if platform.get("os") and platform.get("architecture") not in (None, "unknown"):
+        print(platform["os"] + "/" + platform["architecture"])
+' || true
+}
+
+has_required_platforms() {
+  local repo_path="$1"
+  local found want
+  if [ -z "${required_platforms}" ]; then
+    return 0
+  fi
+  found="$(registry_manifest_platforms "${repo_path}")"
+  for want in ${required_platforms}; do
+    if ! grep -qx "${want}" <<< "${found}"; then
+      echo "ghcr.io/${repo_path}:${tag} has no ${want} image (has: $(echo "${found}" | tr '\n' ' '))"
+      return 1
+    fi
+  done
 }
 
 images_published() {
@@ -69,12 +121,16 @@ images_published() {
     image="ghcr.io/${owner_repo}/${name}:${tag}"
     repo_path="${owner_repo}/${name}"
     if [ "${docker_logged_in}" = "true" ] && DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect "${image}" >/dev/null 2>&1; then
-      echo "${image} present"
-      continue
+      code="200"
+    else
+      code="$(registry_manifest_code "${repo_path}")"
     fi
-    code="$(registry_manifest_code "${repo_path}")"
     if [ "${code}" = "200" ]; then
-      echo "${image} present"
+      if has_required_platforms "${repo_path}"; then
+        echo "${image} present"
+      else
+        missing=1
+      fi
       continue
     fi
     echo "${image} missing (registry HTTP ${code})"
@@ -210,8 +266,20 @@ while true; do
     continue
   fi
 
-  echo "No image build is running. Building and pushing ${tag}."
-  PUSH_IMAGES=true ./.github/container-and-chart/docker/build.sh
+  # build.sh builds the runner's architecture only. Push it as <tag>-<arch>
+  # and let the merge script write <tag>, which refuses to drop a platform.
+  case "$(uname -m)" in
+    x86_64) host_arch=amd64 ;;
+    aarch64 | arm64) host_arch=arm64 ;;
+    *) host_arch="$(uname -m)" ;;
+  esac
+  echo "No image build is running. Building and pushing ${tag}-${host_arch}."
+  PUSH_IMAGES=true IMAGE_TAG="${tag}-${host_arch}" PLATFORMS="linux/${host_arch}" \
+    ./.github/container-and-chart/docker/build.sh
+  if ! IMAGE_TAG="${tag}" ./.github/scripts/merge-image-manifests.sh; then
+    echo "Only ${host_arch} was built here. Run the Container workflow to build every architecture." >&2
+    exit 1
+  fi
   images_published
   exit 0
 done

@@ -1,0 +1,77 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+{{- if .Values.standardPorts.enabled }}
+{{- $domain := .Values.domain }}
+# Standard TAK ports on the UDS Core passthrough gateway. Field clients such as
+# ATAK enroll at <host>:8446 and then stream to the same <host>:8089. The
+# Package CR can only publish 443 (SNI), where one host maps to one port. These
+# listeners are plain Istio, next to the UDS Gateway on the same pods. The
+# gateway Service must publish 8446 and 8089 (bundle override
+# istio-passthrough-gateway.gateway service.ports). The Package CR expose
+# entries for 8446 and 8089 already allow the gateway to reach TAK on those
+# ports, so no network rule is added. See docs/networking.md.
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: takserver-standard-ports
+spec:
+  selector:
+    app: passthrough-ingressgateway
+  servers:
+    - port:
+        name: tls-tak-cert
+        number: {{ .Values.standardPorts.certPort }}
+        protocol: TLS
+      tls:
+        mode: PASSTHROUGH
+      hosts:
+        {{- range .Values.standardPorts.hosts }}
+        - {{ printf "%s.%s" . $domain | quote }}
+        {{- end }}
+    - port:
+        name: tls-tak-stream
+        number: {{ .Values.standardPorts.streamPort }}
+        protocol: TLS
+      tls:
+        mode: PASSTHROUGH
+      hosts:
+        {{- range .Values.standardPorts.hosts }}
+        - {{ printf "%s.%s" . $domain | quote }}
+        {{- end }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: takserver-standard-ports
+spec:
+  gateways:
+    - {{ printf "%s/takserver-standard-ports" .Release.Namespace }}
+  hosts:
+    {{- range .Values.standardPorts.hosts }}
+    - {{ printf "%s.%s" . $domain | quote }}
+    {{- end }}
+  tls:
+    - match:
+        - port: {{ .Values.standardPorts.certPort }}
+          sniHosts:
+            {{- range .Values.standardPorts.hosts }}
+            - {{ printf "%s.%s" . $domain | quote }}
+            {{- end }}
+      route:
+        - destination:
+            host: {{ printf "%s.%s.svc.cluster.local" .Values.api.service .Release.Namespace }}
+            port:
+              number: {{ .Values.api.https.port }}
+    - match:
+        - port: {{ .Values.standardPorts.streamPort }}
+          sniHosts:
+            {{- range .Values.standardPorts.hosts }}
+            - {{ printf "%s.%s" . $domain | quote }}
+            {{- end }}
+      route:
+        - destination:
+            host: {{ printf "%s.%s.svc.cluster.local" .Values.messaging.service .Release.Namespace }}
+            port:
+              number: {{ .Values.messaging.streaming.port }}
+{{- end }}

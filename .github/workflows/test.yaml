@@ -161,6 +161,68 @@ jobs:
       - name: Write the multi-arch CloudTAK index
         run: ./.github/container-and-chart/cloudtak/build.sh --merge
 
+  # Each job pushes 15-3.4-<arch> only when .github/container-and-chart/postgis
+  # changed (build.sh compares that tree with the label on the published tag).
+  # postgis-index joins them under 15-3.4, the tag zarf.yaml and the charts
+  # reference.
+  postgis-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: postgis-image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the PostGIS image if its inputs changed
+        env:
+          PUSH_IMAGES: "true"
+          ARCH: ${{ matrix.arch }}
+        run: ./.github/container-and-chart/postgis/build.sh --if-changed
+
+  postgis-index:
+    needs: postgis-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the multi-arch PostGIS index
+        run: ./.github/container-and-chart/postgis/build.sh --merge
+
   check-flavor:
     runs-on: ubuntu-latest
     steps:
@@ -179,7 +241,7 @@ jobs:
   # slim core checkpoint and core-base are published for amd64 and arm64.
   # Upgrade stays on amd64 until a released arm64 package exists.
   validate-install:
-    needs: [check-flavor, images, cloudtak-index]
+    needs: [check-flavor, images, cloudtak-index, postgis-index]
     strategy:
       fail-fast: false
       matrix:
@@ -396,7 +458,7 @@ jobs:
           if-no-files-found: ignore
 
   validate-upgrade:
-    needs: [images, cloudtak-index]
+    needs: [images, cloudtak-index, postgis-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}

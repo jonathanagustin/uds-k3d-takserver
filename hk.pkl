@@ -15,7 +15,7 @@ steps {
     glob = List("**/*.sh")
   }
   ["hadolint"] {
-    check = "hadolint --config .hadolint.yaml .github/container-and-chart/docker/Dockerfile .github/container-and-chart/cloudtak/Dockerfile"
+    check = "hadolint --config .hadolint.yaml .github/container-and-chart/docker/Dockerfile .github/container-and-chart/cloudtak/Dockerfile .github/container-and-chart/postgis/Dockerfile"
     glob = List("**/Dockerfile", ".hadolint.yaml")
   }
   ["shell"] {

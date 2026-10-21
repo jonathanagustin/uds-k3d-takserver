@@ -177,7 +177,7 @@ components:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14"
-      - "docker.io/imresamu/postgis:15-3.4"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4"
       - "docker.io/library/nats:2.9.21-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.11.0"
 
@@ -228,4 +228,4 @@ components:
               echo "Secret cloudtak/cloudtak-tak-admin is up to date"
     images:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.111.3" # cloudtak-version
-      - "docker.io/imresamu/postgis:15-3.4"
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4"

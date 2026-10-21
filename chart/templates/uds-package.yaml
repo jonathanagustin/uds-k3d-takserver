@@ -200,26 +200,44 @@ spec:
       # (zarf.yaml) answers the tenant gateway ClusterIP, which is this selector.
       # Istio gateway chart 1.31 with release tenant-ingressgateway labels
       # pods app=tenant-ingressgateway and istio=tenant-ingressgateway.
+      # Messaging needs it too: on 8089 a certificate enrolled with a bearer
+      # token is checked by validating that token against the Keycloak keys.
+      {{- range $component := list .Values.api .Values.messaging }}
       - direction: Egress
         remoteNamespace: istio-tenant-gateway
         remoteSelector:
           app: tenant-ingressgateway
           istio: tenant-ingressgateway
         selector:
-          {{- toYaml .Values.api.selector | nindent 10 }}
+          {{- toYaml $component.selector | nindent 10 }}
         port: 443
-        description: "Keycloak discovery, token, and JWKS"
-      # Messaging checks a token-enrolled certificate with the issuer when the
-      # client connects on 8089.
-      - direction: Egress
-        remoteNamespace: istio-tenant-gateway
-        remoteSelector:
-          app: tenant-ingressgateway
-          istio: tenant-ingressgateway
+        description: "Keycloak discovery, token, and JWKS for {{ index $component.selector "app" }}"
+      {{- end }}
+      {{- end }}
+
+      {{- with .Values.cloudtak }}
+      {{- if .enabled }}
+      # CloudTAK in namespace {{ .namespace }}. Its Package CR has the
+      # matching Egress rules. See docs/cloudtak.md.
+      {{- range $port := list 8443 (int $.Values.api.web.port) }}
+      - direction: Ingress
         selector:
-          {{- toYaml .Values.messaging.selector | nindent 10 }}
-        port: 443
-        description: "Keycloak discovery and JWKS for 8089 clients"
+          {{- toYaml $.Values.api.selector | nindent 10 }}
+        remoteNamespace: {{ $.Values.cloudtak.namespace | quote }}
+        remoteSelector:
+          {{- toYaml $.Values.cloudtak.selector | nindent 10 }}
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to TAK API from CloudTAK"
+      {{- end }}
+      - direction: Ingress
+        selector:
+          {{- toYaml $.Values.messaging.selector | nindent 10 }}
+        remoteNamespace: {{ .namespace | quote }}
+        remoteSelector:
+          {{- toYaml .selector | nindent 10 }}
+        port: {{ $.Values.messaging.streaming.port }}
+        description: "Ingress {{ $.Values.messaging.streaming.port }} to TAK messaging from CloudTAK"
+      {{- end }}
       {{- end }}
 
       {{- with .Values.additionalNetworkAllow }}

@@ -12,6 +12,7 @@ checked against the allow list from the Package CR, so a flow the rules do
 not cover shows up here before it shows up as a failure.
 
     flows.py [--check]
+    TAK_NAMESPACE=cloudtak flows.py --check
 
 --check exits 1 when an observed in-namespace flow has no matching allow
 rule. Connections to the Kubernetes API, DNS, and the mesh are ignored.
@@ -27,6 +28,8 @@ import sys
 import os
 
 NS = os.environ.get("TAK_NAMESPACE", "takserver")
+# Package CR to check against. The CloudTAK namespace has its own.
+PACKAGE = os.environ.get("TAK_PACKAGE", NS)
 
 
 def kubectl(*args, check=True):
@@ -73,7 +76,7 @@ def main():
     check = "--check" in sys.argv
     pods = json.loads(kubectl("get", "pods", "-n", NS, "-o", "json").stdout)["items"]
     services = json.loads(kubectl("get", "svc", "-n", NS, "-o", "json").stdout)["items"]
-    package = json.loads(kubectl("get", "package", "takserver", "-n", NS, "-o", "json").stdout)
+    package = json.loads(kubectl("get", "package", PACKAGE, "-n", NS, "-o", "json").stdout)
 
     by_ip, labels = {}, {}
     for pod in pods:

@@ -22,7 +22,7 @@ Keep the upstream chart. Inject connectors and the auth block through the `core-
 - `auth` is `default="file"` with `x509groups="true"` and `x509tokenAuth="true"`, then one `openIdDiscoveryConfiguration` named `UDS SSO`. There is no `authServer` element.
 - The client secret is `${TAK_OIDC_CLIENT_SECRET}`. An init container runs `envsubst` from Secret `takserver-sso` into `/conf/CoreConfig.xml`, which TAK prefers over the mounted file. The `takserver-oidc` Pepr module adds the init container to each TAK pod at admission because the chart cannot express it, so no pod starts with the unrendered file. The secret carries the pod-reload label so a rotation restarts those pods.
 - `groupprefix` stays `/tak/` and the extractor stays `^/TAK/(.+)$`. TAK lowercases the prefix and the claim before the prefix compare, and compiles the regex case-insensitively, so those two strings already match `/TAK/...`.
-- `trustAllCerts` is false. The API and messaging pods trust the UDS bundle and reaches `sso.<domain>` at the tenant gateway through the in-cluster DNS rewrite (see docs/networking.md). The first version used a hostAlias on the API pod.
+- `trustAllCerts` is false. The API and messaging pods trust the UDS bundle and reach `sso.<domain>` at the tenant gateway through the in-cluster DNS rewrite (see docs/networking.md). The first version used a hostAlias on the API pod.
 
 `/UDS Core/Admin` in the `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` with `_READ` or `_WRITE` are the TAK groups. The Keycloak client uses the standard group-membership mapper, which the UDS hardening policy already allows.
 

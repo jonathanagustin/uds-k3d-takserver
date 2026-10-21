@@ -1,0 +1,111 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: cloudtak
+  namespace: {{ .Release.Namespace }}
+spec:
+  sso:
+    # Keycloak client for CloudTAK's "Sign in with UDS SSO" flow. sso.mjs in
+    # the CloudTAK pod runs the code flow and enrols a TAK certificate for
+    # the user with the access token. There is no Authservice in front, so
+    # the CloudTAK API and its WebSocket see no extra redirect.
+    - name: CloudTAK
+      description: "Keycloak sign-in for the CloudTAK map."
+      protocol: openid-connect
+      clientId: {{ .Values.sso.clientId | quote }}
+      enabled: true
+      standardFlowEnabled: true
+      publicClient: false
+      fullScopeAllowed: false
+      attributes:
+        pkce.code.challenge.method: S256
+      defaultClientScopes:
+        - openid
+        - profile
+        - email
+      groups:
+        anyOf:
+          {{- toYaml .Values.sso.groups | nindent 10 }}
+      secretConfig:
+        name: {{ .Values.sso.secretName | quote }}
+        labels:
+          uds.dev/pod-reload: "true"
+        annotations:
+          uds.dev/pod-reload-selector: "app=cloudtak"
+        template:
+          OIDC_CLIENT_SECRET: "clientField(secret)"
+      redirectUris:
+        - "{{ include "cloudtak.url" . }}/api/login/oidc/callback"
+      # TAK reads the groups claim of the access token that enrols the
+      # certificate, the same mapper as the TAK client.
+      protocolMappers:
+        - name: group-membership
+          protocol: openid-connect
+          protocolMapper: oidc-group-membership-mapper
+          config:
+            claim.name: groups
+            full.path: "true"
+            access.token.claim: "true"
+            id.token.claim: "true"
+            userinfo.token.claim: "false"
+  network:
+    serviceMesh:
+      mode: ambient
+    expose:
+      - description: cloudtak-map
+        service: cloudtak
+        selector:
+          app: cloudtak
+        gateway: tenant
+        host: {{ .Values.host | quote }}
+        port: 5000
+    allow:
+      - direction: Egress
+        selector:
+          app: cloudtak
+        remoteSelector:
+          app: cloudtak-postgis
+        port: 5432
+        description: "Egress 5432 from cloudtak to its PostGIS"
+      - direction: Ingress
+        selector:
+          app: cloudtak-postgis
+        remoteSelector:
+          app: cloudtak
+        port: 5432
+        description: "Ingress 5432 to PostGIS from cloudtak"
+      # TAK on 8443 (admin certificate API), 8447 (token and password
+      # certificate enrolment), and 8089 (CoT streaming). The takserver
+      # Package CR has the matching Ingress rules.
+      {{- range $port := list 8443 (int .Values.tak.webPort) }}
+      - direction: Egress
+        selector:
+          app: cloudtak
+        remoteNamespace: {{ $.Values.tak.namespace | quote }}
+        remoteSelector:
+          {{- toYaml $.Values.tak.apiSelector | nindent 10 }}
+        port: {{ $port }}
+        description: "Egress {{ $port }} from cloudtak to TAK API"
+      {{- end }}
+      - direction: Egress
+        selector:
+          app: cloudtak
+        remoteNamespace: {{ .Values.tak.namespace | quote }}
+        remoteSelector:
+          {{- toYaml .Values.tak.messagingSelector | nindent 10 }}
+        port: 8089
+        description: "Egress 8089 from cloudtak to TAK messaging"
+      # Keycloak discovery and the code exchange. sso.<domain> resolves to
+      # the tenant gateway through the in-cluster CoreDNS rewrite.
+      - direction: Egress
+        selector:
+          app: cloudtak
+        remoteNamespace: istio-tenant-gateway
+        remoteSelector:
+          app: tenant-ingressgateway
+          istio: tenant-ingressgateway
+        port: 443
+        description: "Egress 443 from cloudtak to Keycloak on the tenant gateway"

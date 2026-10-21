@@ -44,6 +44,39 @@ test.describe("CloudTAK", () => {
 
     // No CloudTAK password form on the way back.
     await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 120_000 });
+
+    // First sign-in: CloudTAK asks for a callsign before the map is usable.
+    // Answer it as a user would, then skip the browser permission step.
+    const welcome = page.getByText("Welcome to CloudTAK");
+    const firstRun = await welcome
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (firstRun) {
+      await page.getByPlaceholder("Enter your callsign").fill(keycloakUser);
+      await page.getByRole("button", { name: "Get Started" }).click();
+      // The permission step may follow. Skip it until no step is left.
+      const steps = [
+        welcome,
+        page.getByRole("button", { name: "Not now" }),
+        page.getByRole("button", { name: "Skip for now" }),
+      ];
+      await expect
+        .poll(
+          async () => {
+            for (const skip of steps.slice(1)) {
+              if (await skip.isVisible().catch(() => false)) await skip.click().catch(() => {});
+            }
+            for (const step of steps) {
+              if (await step.isVisible().catch(() => false)) return false;
+            }
+            return true;
+          },
+          { timeout: 30_000, intervals: [1_000] },
+        )
+        .toBe(true);
+    }
+    console.log(`first-run dialog: ${firstRun ? "answered" : "not shown"}`);
     expect(new URL(page.url()).origin).toBe(new URL(cloudtakUrl).origin);
     expect(new URL(page.url()).pathname).not.toMatch(/^\/login/);
 

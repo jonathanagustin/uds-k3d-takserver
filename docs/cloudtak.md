@@ -117,7 +117,7 @@ CloudTAK has no internet egress here, and no basemap is loaded. CloudTAK fetches
 - checks that `https://map.uds.dev/login` loads the auto-redirect script, that `/api/login/oidc` is a 302 to the `uds-cloudtak` client on `sso.uds.dev` with PKCE, that `POST /api/login` is refused with 403, and that Secret `cloudtak-sso` exists
 - runs `bootstrap.mjs status` in the pod until `connection_status` is `live`
 
-`tests/cloudtak.spec.ts` (Playwright, in `test:ui`) opens `https://map.uds.dev/` in a new browser context and expects the Keycloak login for client `uds-cloudtak` with redirect `https://map.uds.dev/api/login/oidc/callback`. It signs in as the Keycloak test user `doug` (in `/UDS Core/Admin` and `/TAK/Operators_READ`) and waits for the map canvas on `map.uds.dev`, with no CloudTAK form in between. Then, with the CloudTAK session the browser holds, it checks that:
+`tests/cloudtak.spec.ts` (Playwright, in `test:ui`) opens `https://map.uds.dev/` in a new browser context and expects the Keycloak login for client `uds-cloudtak` with redirect `https://map.uds.dev/api/login/oidc/callback`. It signs in as the Keycloak test user `doug` (in `/UDS Core/Admin` and `/TAK/Operators_READ`) and waits for the map canvas on `map.uds.dev`, with no CloudTAK form in between. On a first sign-in CloudTAK asks for a callsign; the test enters the Keycloak username and skips the browser permission step. Then, with the CloudTAK session the browser holds, it checks that:
 
 - `GET /api/login` returns the Keycloak username as the account (`email`)
 - `GET /api/marti/group` returns 200 with at least one group. CloudTAK makes that call to TAK with the certificate it enrolled for the user

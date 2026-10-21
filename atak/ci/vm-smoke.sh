@@ -37,6 +37,7 @@ spec:
               initrdPath: /boot/initrd.img
             kernelArgs: "root=/dev/ram0 SRC=/android androidboot.selinux=permissive console=ttyS0 video=720x1280 quiet"
         devices:
+          logSerialConsole: true
           disks:
             - name: android
               disk: {bus: virtio}

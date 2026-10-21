@@ -29,7 +29,19 @@
   fetch("config.json").then(r => r.json()).then(c => {
     const ws = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
       "/?action=proxy-adb&remote=tcp%3A8886&udid=" + encodeURIComponent(c.device);
-    document.getElementById("s").src = "./#!action=stream&udid=" + encodeURIComponent(c.device) +
+    const frame = document.getElementById("s");
+    // Phone view: hide the ws-scrcpy button column so the screen fills the
+    // bezel, then let it refit. Same origin, so the frame can be styled.
+    frame.addEventListener("load", () => {
+      const d = frame.contentDocument;
+      const st = d.createElement("style");
+      st.textContent = ".control-buttons-list, .more-box { display: none !important; }" +
+        " body.stream { background: #000 !important; }" +
+        " .device-view, .video { float: none !important; margin: 0 auto; }";
+      d.head.appendChild(st);
+      frame.contentWindow.dispatchEvent(new Event("resize"));
+    });
+    frame.src = "./#!action=stream&udid=" + encodeURIComponent(c.device) +
       "&player=" + (c.player || "mse") + "&ws=" + encodeURIComponent(ws);
   });
 </script>

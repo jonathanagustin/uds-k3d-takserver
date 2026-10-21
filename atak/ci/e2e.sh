@@ -85,7 +85,9 @@ p12() { openssl pkcs12 -export -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -mac
 mkdir -p "${work}/dpk/certs" "${work}/dpk/MANIFEST"
 p12 -in "${work}/device.pem" -inkey "${work}/device.key" -certfile "${work}/ca.pem" \
   -name "${DEVICE_USER}" -out "${work}/dpk/certs/${DEVICE_USER}.p12"
-p12 -nokeys -in "${work}/ca.pem" -name tak-ca -out "${work}/dpk/certs/truststore.p12"
+# -caname, not -name: with -nokeys only -caname labels the certificate, and
+# Android's PKCS12 keystore lists no entry without a friendlyName.
+p12 -nokeys -in "${work}/ca.pem" -caname tak-ca -out "${work}/dpk/certs/truststore.p12"
 rm -f "${work}/device.key"
 openssl x509 -in "${work}/device.pem" -noout -subject -enddate -fingerprint -sha256 | tee "${OUT}/device-cert.txt"
 
@@ -127,6 +129,7 @@ cat > "${work}/dpk/certs/server.pref" <<PREF
   <preference version="1" name="com.atakmap.app_preferences">
     <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
     <entry key="locationCallsign" class="class java.lang.String">ATAK-DEVICE</entry>
+    <entry key="atakControlForcePortrait" class="class java.lang.Boolean">true</entry>
   </preference>
 </preferences>
 PREF

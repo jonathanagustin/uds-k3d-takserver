@@ -139,8 +139,14 @@ jobs:
           uds zarf tools kubectl get events -n kubevirt --sort-by=.lastTimestamp || true
           uds zarf tools kubectl logs -n pepr-system -l app=pepr-uds-core-admission --tail=200 | grep -i -E "deny|kubevirt|atak" || true
           for p in $(uds zarf tools kubectl get pod -n atak -l kubevirt.io=virt-launcher -o name); do
+            uds zarf tools kubectl get -n atak "${p}" -o yaml || true
+            uds zarf tools kubectl logs -n atak "${p}" -c compute --tail=300 || true
             uds zarf tools kubectl logs -n atak "${p}" -c guest-console-log --tail=400 || true
           done
+          uds zarf tools kubectl logs -n kubevirt ds/virt-handler -c virt-handler --tail=400 || true
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-controller --tail=200 --prefix | grep -i -E "atak|error|fail" || true
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-api --tail=200 --prefix | grep -i -E "error|fail|denied" || true
+          uds zarf tools kubectl get networkpolicy -n atak -o wide || true
 
       - name: Upload the evidence
         if: always()

@@ -2,7 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Join title cards, the terminal chapters, and the web walkthrough into
+# Join title cards, the terminal chapters, and the two web walkthroughs into
 # demo/out/demo.mp4: H.264, yuv420p, faststart, no audio, under MAX_BYTES.
 # Also writes demo/out/poster.png and demo/out/preview.gif.
 set -euo pipefail
@@ -87,11 +87,13 @@ card c05 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
 clip t05 "${out}/05-clusters.mp4" terminal demo/out/tapes/05-clusters.tape
 card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, in a real Chrome window"
 clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
+card c07 "A browser map for TAK" "CloudTAK with Keycloak sign-in and an OpenStreetMap basemap"
+clip t07 "${out}/07-map.mp4" web "${out}/07-map-events.json" "${web_trim}"
 card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
 
 list="${work}/list.txt"
 : > "${list}"
-for part in c00 c01 t01 c02 t02 c03 t03 c04 t04 c05 t05 c06 t06 c99; do
+for part in c00 c01 t01 c02 t02 c03 t03 c04 t04 c05 t05 c06 t06 c07 t07 c99; do
   echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
 done
 ffmpeg -v error -y -f concat -safe 0 -i "${list}" -c copy "${work}/joined.mp4"

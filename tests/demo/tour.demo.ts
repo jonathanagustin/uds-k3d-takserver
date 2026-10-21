@@ -38,6 +38,9 @@ test("TAK web UI through UDS Core SSO", async ({ page }) => {
   await expect(page).toHaveURL(/sso\.uds\.dev/, { timeout: 60_000 });
   const userField = page.getByLabel("Username or email");
   await expect(userField).toBeVisible();
+  // Chrome opens with the address bar focused and its URL selected. A click
+  // on the page, before the video starts, moves focus to the page.
+  await page.mouse.click(8, 200);
   start();
   await showCursor(page);
   await expectSecure(page);

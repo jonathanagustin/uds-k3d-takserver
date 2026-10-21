@@ -23,7 +23,20 @@ concurrency:
 jobs:
   publish:
     if: github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft)
-    runs-on: ubuntu-latest
+    # One package per architecture, each created on a native runner. Both
+    # publish under the same OCI tag, and Zarf keeps one index entry per
+    # architecture. max-parallel 1 keeps the two index updates apart.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: publish (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
       - name: Checkout the release tag
@@ -65,27 +78,29 @@ jobs:
       - name: Build the released Zarf package with its SBOM
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
           uds zarf tools yq -i '.metadata.version = strenv(RELEASE_VERSION)' zarf.yaml
-          uds zarf package create . --flavor upstream --architecture amd64 \
+          uds zarf package create . --flavor upstream --architecture "${ARCH}" \
             --confirm --no-progress --features values=true \
             --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
 
       - name: Publish the baseline package
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
-          package="zarf-package-takserver-amd64-${RELEASE_VERSION}-upstream.tar.zst"
+          package="zarf-package-takserver-${ARCH}-${RELEASE_VERSION}-upstream.tar.zst"
           test -s "${package}"
           uds zarf package publish "${package}" \
             oci://ghcr.io/jonathanagustin/uds-k3d-takserver --features values=true
           reference="oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream"
-          uds zarf package inspect definition "${reference}" --architecture amd64 > "${RUNNER_TEMP}/released-zarf.yaml"
+          uds zarf package inspect definition "${reference}" --architecture "${ARCH}" > "${RUNNER_TEMP}/released-zarf.yaml"
           published_version="$(uds zarf tools yq -r '.metadata.version' "${RUNNER_TEMP}/released-zarf.yaml")"
           test "${published_version}" = "${RELEASE_VERSION}"
-          echo "Published upstream amd64 Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
           echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"

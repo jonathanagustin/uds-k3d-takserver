@@ -36,5 +36,8 @@
         "js-yaml": "4.3.2"
       }
     }
+  },
+  "devDependencies": {
+    "fast-check": "4.10.2"
   }
 }

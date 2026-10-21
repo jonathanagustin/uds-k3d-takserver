@@ -13,6 +13,8 @@
 # Each prebuild phase is its own layer so a cache hit resumes at the first
 # phase that changed.
 
+# Base of the driver image (adb and python3 for UI Automator dumps).
+ARG DRIVER_IMAGE=ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 ARG BUILDER_IMAGE=eclipse-temurin:17.0.20_8-jdk-jammy@sha256:51d32af96fb8a13ffbc96c719d7b05447a04ca69f314627d64050a64ecd13057
 
 FROM ${BUILDER_IMAGE} AS toolchain
@@ -72,3 +74,15 @@ RUN /build/build-apk.sh \
 
 FROM scratch AS apk
 COPY --from=build /atak-civ.apk /atak-civ.apk
+
+# Test driver: adb, the APK, and atak/driver/drive.sh. No credentials; the
+# Job passes them from a Secret at run time.
+FROM ${DRIVER_IMAGE} AS driver
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends adb python3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /atak-civ.apk /atak-civ.apk
+COPY atak/driver/drive.sh /usr/local/bin/drive.sh
+USER 65532
+ENV HOME=/tmp
+ENTRYPOINT ["/usr/local/bin/drive.sh"]

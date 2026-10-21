@@ -33,6 +33,7 @@ jobs:
 
       - name: Pepr module tests with coverage
         working-directory: pepr
+        shell: bash
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
@@ -48,6 +49,7 @@ jobs:
       - name: Python upgrade helper tests with coverage
         env:
           COVERAGE_VERSION: 7.10.7
+        shell: bash
         run: |
           set -euo pipefail
           coverage() { uv tool run --from "coverage==${COVERAGE_VERSION}" coverage "$@"; }

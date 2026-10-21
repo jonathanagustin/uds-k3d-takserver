@@ -48,6 +48,8 @@ uds zarf package deploy zarf-package-takserver-arm64-*.tar.zst --confirm
 
 A published release has an entry for each architecture under the same OCI reference. Pass `--architecture` to `zarf package deploy oci://...` or `uds deploy` when the cluster's architecture differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
+The optional ATAK test device (`atak/`) is amd64 only and needs KVM on the node. Its Android VM image is Android-x86 under KubeVirt, and the APK is built for `x86_64` only. It is not part of the default package and is not built for arm64.
+
 ## Quick start
 
 Clone with the TAK Server source submodule. `build.sh` also checks it out if you forgot:

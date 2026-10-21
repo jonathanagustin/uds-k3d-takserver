@@ -14,8 +14,6 @@ on:
 
 permissions:
   contents: read
-  # Build cache in GHCR (see atak.yaml).
-  packages: write
 
 concurrency:
   group: atak-vm-${{ github.ref }}
@@ -24,6 +22,10 @@ concurrency:
 jobs:
   vm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Build cache in GHCR (see atak.yaml).
+      packages: write
     timeout-minutes: 60
     env:
       KUBEVIRT_VERSION: v1.8.4

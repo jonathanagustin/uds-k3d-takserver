@@ -15,9 +15,6 @@ on:
 
 permissions:
   contents: read
-  # Build cache in GHCR. The repository's Actions cache is shared with the
-  # Zarf cache and evicts the multi-GB layers.
-  packages: write
 
 concurrency:
   group: atak-${{ github.ref }}
@@ -26,6 +23,11 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Build cache in GHCR. The repository's Actions cache is shared with the
+      # Zarf cache and evicts the multi-GB layers.
+      packages: write
     timeout-minutes: 350
     steps:
       - name: Checkout

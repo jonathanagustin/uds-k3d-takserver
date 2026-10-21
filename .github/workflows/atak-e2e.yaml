@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 concurrency:
   group: atak-e2e-${{ github.ref }}
@@ -41,6 +39,10 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Reads the GHCR build cache; main also publishes the device images.
+      packages: write
     timeout-minutes: 300
     steps:
       - name: Checkout

@@ -1,6 +1,22 @@
 # Building the images
 
-`uds run build-image` and `mise run build-image` both run [`.github/container-and-chart/docker/build.sh`](../.github/container-and-chart/docker/build.sh). GitHub Actions runs that same script from [`.github/workflows/container.yaml`](../.github/workflows/container.yaml), and only when files under `.github/container-and-chart/` or that workflow change.
+`uds run build-image` and `mise run build-image` both run [`.github/container-and-chart/docker/build.sh`](../.github/container-and-chart/docker/build.sh). GitHub Actions runs that same script from [`.github/workflows/container.yaml`](../.github/workflows/container.yaml), and only when files under `.github/container-and-chart/`, that workflow, or the `upstream/takserver` pin change.
+
+## Where the source comes from
+
+The TAK Server source is a git submodule at [`upstream/takserver`](../upstream/takserver), pinned to commit `5187abd46d827d37cfc5708805eced197a837e49`, which is the public tag `5.7-RELEASE-14` of [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server). `.gitmodules` marks it shallow, so a clone fetches that one commit and no history.
+
+```bash
+git submodule update --init --depth 1 upstream/takserver
+```
+
+`build.sh` runs that command when the directory is empty. It refuses to build when the submodule is checked out at a different commit than the one this repository pins, or when it has local changes.
+
+`build.sh` passes the submodule work tree to BuildKit as the `takserver-src` build context, with the commit and its tree id as build arguments. The builder stage copies the files, removes the submodule's `.git` pointer file, and commits them again as one commit tagged with the release. TAK's `src/build.gradle` reads its version from `git describe` and the branch name, so the war still reports `5.7-RELEASE-14-HEAD`, the same as a detached clone of the tag. The stage fails unless the tree id of that commit equals the upstream commit's tree id, which proves the files are exactly the pinned commit. The Ignite image copies `ignite.sh` from the same context instead of downloading it.
+
+Renovate's `git-submodules` manager is on. `.gitmodules` sets `branch = 5.7-RELEASE-14`, so Renovate looks for newer `X.Y-RELEASE-N` tags and moves the pinned commit, the tag in `.gitmodules`, and the other `5.7-RELEASE-14` strings in one pull request. See [ADR 0008](../adr/0008-tak-source-as-a-submodule.md).
+
+## Running the build
 
 The host needs a container runtime. Docker Buildx is the supported one. It builds for the machine's architecture unless you set `PLATFORMS`.
 

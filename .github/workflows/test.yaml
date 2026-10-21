@@ -43,8 +43,12 @@ jobs:
       contents: read
       packages: write
     steps:
+      # wait-for-tak-images.sh builds from the upstream/takserver submodule
+      # when no container run is publishing the tags.
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1

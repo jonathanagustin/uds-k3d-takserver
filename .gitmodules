@@ -1,0 +1,5 @@
+[submodule "upstream/takserver"]
+	path = upstream/takserver
+	url = https://github.com/TAK-Product-Center/Server
+	shallow = true
+	branch = 5.7-RELEASE-14

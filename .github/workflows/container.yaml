@@ -18,6 +18,8 @@ on:
     paths:
       - .github/container-and-chart/**
       - .github/workflows/container.yaml
+      - .gitmodules
+      - upstream/takserver
   push:
     branches:
       - takserver-scaffold
@@ -26,6 +28,8 @@ on:
     paths:
       - .github/container-and-chart/**
       - .github/workflows/container.yaml
+      - .gitmodules
+      - upstream/takserver
 
 permissions:
   contents: read
@@ -46,8 +50,12 @@ jobs:
       IMAGE_TAG: 5.7-RELEASE-14
       IMAGE_REPO: ghcr.io/jonathanagustin/uds-k3d-takserver
     steps:
+      # The TAK source is the upstream/takserver submodule. fetch-depth 1
+      # also makes the submodule fetch shallow: one commit, no history.
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: true
 
       - name: Free disk
         run: ./.github/scripts/free-runner-disk.sh
@@ -81,13 +89,19 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --depth=2 origin "${HEAD_SHA}"
-          if ! git diff --quiet "${HEAD_SHA}~1" "${HEAD_SHA}" -- .github/container-and-chart/docker; then
+          if ! git diff --quiet "${HEAD_SHA}~1" "${HEAD_SHA}" -- .github/container-and-chart/docker upstream/takserver; then
             echo "build=true" >> "${GITHUB_OUTPUT}"
             echo "Docker inputs changed."
             exit 0
           fi
 
-          tree="$(git rev-parse "${HEAD_SHA}:.github/container-and-chart/docker")"
+          # The Docker directory tree plus the pinned TAK source commit.
+          inputs() {
+            printf '%s %s\n' \
+              "$(git rev-parse "$1:.github/container-and-chart/docker")" \
+              "$(git rev-parse "$1:upstream/takserver" 2>/dev/null || echo none)"
+          }
+          tree="$(inputs "${HEAD_SHA}")"
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           published_json="$(gh run list \
             --workflow container.yaml \
@@ -103,7 +117,7 @@ jobs:
               continue
             fi
             git fetch --depth=1 origin "${sha}" || continue
-            if [ "$(git rev-parse "${sha}:.github/container-and-chart/docker")" = "${tree}" ]; then
+            if [ "$(inputs "${sha}")" = "${tree}" ]; then
               matched="${sha}"
               break
             fi
@@ -117,12 +131,17 @@ jobs:
           echo "build=true" >> "${GITHUB_OUTPUT}"
           echo "No published images match the current Docker inputs."
 
+      - name: Read the pinned TAK source commit
+        if: steps.image.outputs.build == 'true'
+        id: src
+        run: echo "sha=$(git rev-parse HEAD:upstream/takserver)" >> "${GITHUB_OUTPUT}"
+
       - name: Restore the Gradle cache
         if: steps.image.outputs.build == 'true'
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: .cache/gradle-user-home
-          key: gradle-user-home-${{ runner.os }}-${{ runner.arch }}-5187abd46d827d37cfc5708805eced197a837e49
+          key: gradle-user-home-${{ runner.os }}-${{ runner.arch }}-${{ steps.src.outputs.sha }}
 
       - name: Build images
         if: steps.image.outputs.build == 'true'

@@ -60,7 +60,7 @@ The viewer's Keycloak client is `uds-atak-viewer` and is limited to the group `/
 
 - `virt-handler` runs privileged on the host (it manages `/dev/kvm`, cgroups, and the launcher's network): `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`.
 - `virt-operator`, `virt-api`, `virt-controller`, and `virt-exportproxy`: `RequireNonRootUser`, `DropAllCapabilities`, `RestrictVolumeTypes`.
-- `virt-launcher-atak-device-*` in `atak` (the pod that runs QEMU, as UID 107): `RestrictCapabilities` (it adds `NET_BIND_SERVICE` for masquerade networking), `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`.
+- `virt-launcher-atak-device-*` in `atak` (the pod that runs QEMU, as UID 107): `RestrictCapabilities` (it adds `NET_BIND_SERVICE` for masquerade networking), `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`, `RestrictIstioTrafficOverrides` (KubeVirt always adds the `traffic.sidecar.istio.io/kubevirtInterfaces` annotation to launcher pods; it is read only by Istio sidecars, and `atak` runs in ambient mode).
 
 ## Android-x86 notes
 

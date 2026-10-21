@@ -30,8 +30,19 @@ echo "create: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
 start=$(date +%s)
 uds zarf package deploy "${pkg_dir}"/zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN="${DOMAIN}" --confirm
 echo "deploy: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
-# The driver is a test tool, not part of the package.
-k3d image import -c uds "${DRIVER_IMAGE}"
+# The driver is a test tool, not part of the package. k3d can report a
+# successful import that left nothing in the node's containerd, so check the
+# node and retry with a direct import. The pod never pulls it.
+driver_present() {
+  docker exec k3d-uds-server-0 crictl images -o json 2>/dev/null | grep -q "\"${DRIVER_IMAGE}\""
+}
+for mode in tools-node direct direct; do
+  k3d image import -c uds --mode "${mode}" "${DRIVER_IMAGE}"
+  if driver_present; then break; fi
+  echo "driver image is not in the k3d node after a ${mode} import" >&2
+  sleep 5
+done
+driver_present || { docker exec k3d-uds-server-0 crictl images >&2 || true; exit 1; }
 
 echo "== device certificate"
 # The device authenticates to 8089 with a client certificate, like a fielded
@@ -163,7 +174,7 @@ spec:
   containers:
     - name: driver
       image: ${DRIVER_IMAGE}
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Never
       command: ["/bin/sh", "-c", "/usr/local/bin/drive.sh; echo \$? > /out/exit; sleep 900"]
       env:
         - name: DEVICE

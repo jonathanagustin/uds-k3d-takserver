@@ -196,8 +196,8 @@ spec:
       {{- end }}
 
       {{- if .Values.sso.enabled }}
-      # sso.<domain> is 127.0.0.1 in this dev DNS. The API pod's hostAlias
-      # sends it to the tenant gateway ClusterIP, which is this selector.
+      # sso.<domain> is 127.0.0.1 in public DNS. The in-cluster DNS rewrite
+      # (zarf.yaml) answers the tenant gateway ClusterIP, which is this selector.
       # Istio gateway chart 1.31 with release tenant-ingressgateway labels
       # pods app=tenant-ingressgateway and istio=tenant-ingressgateway.
       - direction: Egress

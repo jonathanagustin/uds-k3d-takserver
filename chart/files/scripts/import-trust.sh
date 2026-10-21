@@ -9,7 +9,7 @@
 # k3d-core-slim-dev does not set CA bundle variables, and the operator then
 # deletes the ConfigMap instead of leaving it empty. The issuer certificate
 # presented by the tenant gateway is imported in that case. ISSUER_HOST is
-# the configurationUri host, and the pod hostAlias sends it to the gateway.
+# the configurationUri host, and in-cluster DNS sends it to the gateway.
 set -euo pipefail
 
 store=/trust/cacerts

@@ -65,6 +65,10 @@ steps {
     check = "uds zarf dev lint . --flavor upstream --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14"
     glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml", "cloudtak/chart/**/*.yaml")
   }
+  ["exemptions"] {
+    check = "bash .github/scripts/check-exemptions.sh"
+    glob = List("chart/**/*.yaml", "chart/**/*.tpl", "docs/justifications.md", ".github/scripts/check-exemptions.sh")
+  }
   ["gitleaks"] {
     check = "gitleaks detect --no-git --config .gitleaks.toml --source . --redact --exit-code 1"
     glob = List("**/*", ".gitleaks.toml", ".gitignore")

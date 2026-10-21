@@ -32,5 +32,6 @@ Options:
 - Image size: the containerDisk is about 950 MB, and KubeVirt adds its own images.
 - Android-x86 9 (2020) is old and unmaintained. ATAK 5.5 still supports Android 9, but this does not show behavior on current Android.
 - adb on the device has no authentication. Network rules limit it to the viewer and the driver.
+- The VM's launcher pod is outside the ambient mesh (`istio.io/dataplane-mode: none`), because ztunnel's in-pod redirection bypasses KubeVirt's masquerade DNAT and adb never reaches the guest. The pod gets no mesh mTLS or Istio authorization; NetworkPolicies still limit it, and its TAK traffic is TLS end to end.
 - ATAK enrolls with HTTP Basic. TAK's default authenticator here is the file authenticator, and only bearer tokens go to Keycloak, so TAK refuses a Keycloak password on 8446 (302). The device enrolls as a TAK file user that the e2e job creates at run time with a generated password. The device does not prove that a Keycloak user can enroll from ATAK. With this server configuration that needs a token-capable client or a TAK change.
 - A certificate enrolled with a Keycloak token is checked against Keycloak again when it connects on 8089, so the messaging pod needs egress to the issuer (added with this work).

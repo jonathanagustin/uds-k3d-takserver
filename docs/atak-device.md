@@ -42,7 +42,9 @@ ATAK always enrolls with HTTP Basic (`CertificateEnrollmentClient` passes `passI
 
 ## Network rules
 
-The UDS Package `atak` sets ambient mesh and:
+The UDS Package `atak` sets ambient mesh for the viewer. The VM's launcher pod carries `istio.io/dataplane-mode: none` and stays out of the mesh: ztunnel hands inbound connections to the pod from inside its network namespace, which bypasses KubeVirt's masquerade DNAT, so adb never reached the guest (`adb: device offline`). Its traffic is still limited by these NetworkPolicies, and TAK traffic is TLS from the device to TAK. adb from the viewer and the driver to the device is plain TCP inside the cluster.
+
+Rules:
 
 | Direction | Peer | Port | Why |
 | --- | --- | --- | --- |
@@ -62,7 +64,7 @@ The viewer's Keycloak client is `uds-atak-viewer` and is limited to the group `/
 
 - `virt-handler` runs privileged on the host (it manages `/dev/kvm`, cgroups, and the launcher's network): `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`.
 - `virt-operator`, `virt-api`, `virt-controller`, and `virt-exportproxy`: `RequireNonRootUser`, `DropAllCapabilities`, `RestrictVolumeTypes`.
-- `virt-launcher-atak-device-*` in `atak` (the pod that runs QEMU, as UID 107): `RestrictCapabilities` (it adds `NET_BIND_SERVICE` for masquerade networking), `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`, `RestrictIstioTrafficOverrides` (KubeVirt always adds the `traffic.sidecar.istio.io/kubevirtInterfaces` annotation to launcher pods; it is read only by Istio sidecars, and `atak` runs in ambient mode).
+- `virt-launcher-atak-device-*` in `atak` (the pod that runs QEMU, as UID 107): `RestrictCapabilities` (it adds `NET_BIND_SERVICE` for masquerade networking), `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`, `RestrictIstioTrafficOverrides` (KubeVirt always adds the `traffic.sidecar.istio.io/kubevirtInterfaces` annotation to launcher pods; only Istio sidecars read it, and there is no sidecar here).
 
 ## Android-x86 notes
 

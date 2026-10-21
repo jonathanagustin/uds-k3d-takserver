@@ -16,6 +16,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: atak-device
+        # Keep the launcher pod out of the ambient mesh. ztunnel delivers
+        # inbound traffic from inside the pod's network namespace, which skips
+        # KubeVirt's masquerade DNAT to the guest, so adb on 5555 never reaches
+        # Android ("device offline"). The NetworkPolicies below still apply.
+        istio.io/dataplane-mode: none
     spec:
       domain:
         cpu:

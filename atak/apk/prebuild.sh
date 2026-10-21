@@ -25,6 +25,8 @@ case "${ABI}" in
 esac
 CONAN_S=(-s "arch=${CARCH}" -s os=Android -s os.api_level=21 -s compiler=gcc
   -s compiler.version=8 -s compiler.libcxx=libstdc++ -s build_type=Release)
+# Set by the Dockerfile toolchain stage.
+: "${ANDROID_NDK:?}"
 NDK_CMAKE=(-G Ninja "-DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake"
   -DCMAKE_BUILD_TYPE=Release "-DANDROID_ABI=${ABI}" -DANDROID_PLATFORM=android-21)
 

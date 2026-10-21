@@ -106,11 +106,29 @@
       ]
     },
     {
+      "description": "upstream/takserver follows the public TAK Server release tags. .gitmodules sets branch to the tag, so Renovate moves the tag and the pinned commit together.",
+      "matchManagers": [
+        "git-submodules"
+      ],
+      "matchDepNames": [
+        "upstream/takserver"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-RELEASE-(?<patch>\\d+)$",
+      "groupName": "TAK Server Package Dependencies",
+      "labels": [
+        "package-deps"
+      ],
+      "commitMessageTopic": "package-deps"
+    },
+    {
       "description": "These image tags are the Zarf variable TAK_IMAGE_TAG, not a registry tag.",
       "matchPackageNames": [
         "ghcr.io/jonathanagustin/uds-k3d-takserver/**"
       ],
       "enabled": false
     }
-  ]
+  ],
+  "git-submodules": {
+    "enabled": true
+  }
 }

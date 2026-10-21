@@ -63,9 +63,10 @@ test.describe("CloudTAK", () => {
 
     // The CloudTAK session belongs to the Keycloak user.
     const me = await api("/api/login");
-    console.log(`GET /api/login: ${me.code} ${JSON.stringify({ username: me.body.username, access: me.body.access })}`);
+    console.log(`GET /api/login: ${me.code} ${JSON.stringify({ email: me.body.email, access: me.body.access })}`);
     expect(me.code).toBe(200);
-    expect(me.body.username).toBe(keycloakUser);
+    // CloudTAK names the account `email`; here it is the Keycloak username.
+    expect(me.body.email).toBe(keycloakUser);
 
     // TAK answers with the user's own certificate. CloudTAK calls TAK's
     // groups API with the certificate it enrolled at sign-in.

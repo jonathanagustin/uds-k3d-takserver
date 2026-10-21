@@ -119,7 +119,7 @@ CloudTAK has no internet egress here, and no basemap is loaded. CloudTAK fetches
 
 `tests/cloudtak.spec.ts` (Playwright, in `test:ui`) opens `https://map.uds.dev/` in a new browser context and expects the Keycloak login for client `uds-cloudtak` with redirect `https://map.uds.dev/api/login/oidc/callback`. It signs in as the Keycloak test user `doug` (in `/UDS Core/Admin` and `/TAK/Operators_READ`) and waits for the map canvas on `map.uds.dev`, with no CloudTAK form in between. Then, with the CloudTAK session the browser holds, it checks that:
 
-- `GET /api/login` is the Keycloak username
+- `GET /api/login` returns the Keycloak username as the account (`email`)
 - `GET /api/marti/group` returns 200 with at least one group. CloudTAK makes that call to TAK with the certificate it enrolled for the user
 - `GET /api/server` has `connection_status: live` (connection 0)
 - `GET /api/marti/clients` lists a connected TAK client for the user, which is the map's own streaming connection

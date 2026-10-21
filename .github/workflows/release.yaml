@@ -4,33 +4,88 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - ".github/container-and-chart/**"
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: read
-  packages: read
-  id-token: write
+  packages: write
+
+concurrency:
+  group: publish-package-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
-  # publish-package creates the Zarf package without --skip-sbom, so the
-  # release artifact includes the Syft SBOM Zarf writes under zarf-sbom/.
   publish:
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-    strategy:
-      matrix:
-        flavor: [upstream]
-        architecture: [amd64]
-    uses: defenseunicorns/uds-common/.github/workflows/callable-publish.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
-    with:
-      flavor: ${{ matrix.flavor }}
-      arch: ${{ matrix.architecture }}
-      runsOn: ubuntu-latest
-      options: --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
-    secrets: inherit
+    if: github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Verify the Release Please version on main
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_TAG}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Expected a stable Release Please tag" >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          git merge-base --is-ancestor HEAD origin/main
+          manifest="$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')"
+          test "${version}" = "${manifest}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.39.0
+
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s' "${GH_TOKEN}" | uds zarf tools registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Free runner disk space
+        run: bash .github/scripts/trim-runner.sh
+
+      - name: Build the released Zarf package with its SBOM
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uds zarf tools yq -i '.metadata.version = strenv(RELEASE_VERSION)' zarf.yaml
+          uds zarf package create . --flavor upstream --architecture amd64 \
+            --confirm --no-progress --features values=true \
+            --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
+
+      - name: Publish the baseline package
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="zarf-package-takserver-amd64-${RELEASE_VERSION}-upstream.tar.zst"
+          test -s "${package}"
+          uds zarf package publish "${package}" \
+            oci://ghcr.io/jonathanagustin/uds-k3d-takserver --features values=true
+          reference="oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream"
+          uds zarf package inspect definition "${reference}" --architecture amd64 > "${RUNNER_TEMP}/released-zarf.yaml"
+          published_version="$(uds zarf tools yq -r '.metadata.version' "${RUNNER_TEMP}/released-zarf.yaml")"
+          test "${published_version}" = "${RELEASE_VERSION}"
+          echo "Published upstream amd64 Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
+          echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"

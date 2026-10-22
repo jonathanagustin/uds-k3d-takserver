@@ -144,6 +144,8 @@ fi
 card c03 "Secure by default" "mesh, generated network policy, signed releases with provenance"
 clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
 operate_video+=(c03 t03)
+card c96 "Upgrades from the last signed release" "CI installs the verified release, upgrades in place, keeps certificates and data"
+operate_video+=(c96)
 if [[ -f "${out}/10-operate-4.mp4" ]]; then
   card c10 "Footprint and self-healing" "live numbers from this run; TAK's messaging pod deleted"
   operate_video+=(c10)

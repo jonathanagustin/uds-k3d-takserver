@@ -18,16 +18,19 @@ Enter
 Sleep 400ms
 # caption: Package CR reconciled by the UDS Operator
 # zoom: 0,0,1.6
+# fast
 Type@85ms "kubectl get packages -A -o custom-columns=NAME:.metadata.name,PHASE:.status.phase"
 Sleep 350ms
 Enter
 Sleep 2600ms
 # caption: Operator status for the takserver Package
+# fast
 Type@65ms "kubectl get package takserver -n takserver -o yaml | yq '.status | del(.conditions)'"
 Sleep 700ms
 Enter
 Sleep 3200ms
 # caption: Istio routes the UDS Operator created for TAK's hosts
+# fast
 Type@75ms "kubectl get virtualservice -n takserver -o custom-columns=NAME:.metadata.name,HOSTS:.spec.hosts"
 Sleep 400ms
 Enter

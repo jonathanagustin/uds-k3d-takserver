@@ -39,16 +39,12 @@ Type@80ms "kubectl get secret takserver-sso -n takserver"
 Sleep 400ms
 Enter
 Sleep 2500ms
-# caption: CI workflows include CodeQL, dependency review, scan, cosign, Scorecard
-Type@70ms "ls .github/workflows"
-Sleep 500ms
-Enter
-Sleep 2500ms
 Type@70ms "# A pod TAK's policy does not allow, trying TAK's streaming port"
 Sleep 500ms
 Enter
 Sleep 400ms
 # caption: A pod in another namespace cannot reach TAK's 8089: the generated network policy drops it
+# fast
 Type@40ms "kubectl run deny-test -n default --rm -i --restart=Never -l zarf.dev/agent=ignore --image=docker.io/curlimages/curl:8.11.1 -- curl -sS -m 5 telnet://takserver-messaging-service.takserver.svc.cluster.local:8089"
 Sleep 400ms
 Enter
@@ -59,12 +55,14 @@ Sleep 500ms
 Enter
 Sleep 400ms
 # caption: The published v0.3.0 package verifies against the release workflow's signing identity
+# fast
 Type@30ms "uds zarf package verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --certificate-identity-regexp $RELEASE_WORKFLOW --certificate-oidc-issuer https://token.actions.githubusercontent.com"
 Sleep 400ms
 Enter
 Wait@180s /takserver \$\s*$/
 Sleep 3000ms
 # caption: Build provenance for the same package, attested with the release workflow's identity
+# fast
 Type@40ms "gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --owner jonathanagustin"
 Sleep 400ms
 Enter

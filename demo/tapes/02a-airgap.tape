@@ -18,6 +18,7 @@ Sleep 500ms
 Enter
 Sleep 400ms
 # caption: Image references rewritten to the in-cluster Zarf registry: no pulls from the internet
+# fast
 Type@80ms "kubectl get pods -n takserver -o custom-columns=POD:.metadata.name,IMAGE:.spec.containers[0].image"
 Sleep 400ms
 Enter
@@ -33,6 +34,7 @@ Sleep 500ms
 Enter
 Sleep 400ms
 # caption: SBOMs travel inside the signed release package, readable offline
+# fast
 Type@35ms "uds zarf package inspect sbom oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --certificate-identity-regexp $RELEASE_WORKFLOW --certificate-oidc-issuer $RELEASE_ISSUER --output /tmp/sbom && ls /tmp/sbom/takserver | grep json"
 Sleep 400ms
 Enter

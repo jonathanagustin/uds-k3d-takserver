@@ -7,9 +7,20 @@
 # GHCR does not accept a raw GitHub token as a registry bearer token.
 # Docker login exchanges it, then `docker manifest inspect` reads the tag.
 # If the container workflow is not running, build and push them.
+#
+# The default tag is <version>-<key> from docker/build.sh --tag, which only
+# ever holds the images built from this commit's Docker directory and TAK
+# source. Set IMAGE_TAG to check another tag, such as the plain release tag.
 set -euo pipefail
 
-tag="${IMAGE_TAG:-5.7-RELEASE-14}"
+if [[ -n "${IMAGE_TAG:-}" ]]; then
+  tag="${IMAGE_TAG}"
+  keyed="false"
+else
+  tag="$(./.github/container-and-chart/docker/build.sh --tag)"
+  keyed="true"
+fi
+echo "TAK image tag: ${tag}"
 owner_repo="${IMAGE_OWNER_REPO:-jonathanagustin/uds-k3d-takserver}"
 branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
 grace_seconds="${WAIT_GRACE_SECONDS:-300}"
@@ -220,7 +231,8 @@ await_same_sha_build() {
 }
 
 if images_published; then
-  if [[ "${check_once}" != "true" ]]; then
+  # A keyed tag cannot hold older inputs, so there is nothing to wait for.
+  if [[ "${check_once}" != "true" ]] && [[ "${keyed}" != "true" ]]; then
     await_same_sha_build
   fi
   echo "All six images are already published."
@@ -228,10 +240,9 @@ if images_published; then
 fi
 
 if [[ "${check_once}" = "true" ]]; then
-  # Another branch can push an older single-arch tag over the shared one.
-  # When this commit's Container run is already rebuilding it, wait for that
-  # run instead of failing. The Container workflow itself must not wait on
-  # its own run.
+  # When this commit's Container run is still building the images, wait for
+  # that run instead of failing. The Container workflow itself must not wait
+  # on its own run.
   if [[ "${GITHUB_WORKFLOW:-}" != "Container" ]]; then
     status="$(SAME_SHA_ONLY=true container_run_status)"
     case "${status}" in

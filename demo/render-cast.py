@@ -17,13 +17,19 @@ and the caption says how much faster it is shown.
 
 import json
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;5;245m$\x1b[0m "
 IDLE = 2.0
-FONT_SIZE = 16
+# Short outputs read better large: CAST_FONT_SIZE, CAST_COLS and CAST_ROWS
+# override the font size and the terminal size agg renders.
+FONT_SIZE = int(os.environ.get("CAST_FONT_SIZE", "16"))
+COLS = os.environ.get("CAST_COLS")
+ROWS = os.environ.get("CAST_ROWS")
+HOLD = os.environ.get("CAST_HOLD", "2.5")
 
 def human(seconds):
     seconds = int(round(seconds))
@@ -64,7 +70,8 @@ def main():
                 f.write(json.dumps([round(e[0] - t0, 6), e[1], e[2]]) + "\n")
         gif = Path(f"{prefix}-{n}.gif")
         subprocess.run([agg, "--font-size", str(FONT_SIZE), "--idle-time-limit", str(IDLE),
-                        "--speed", f"{speed:.3f}", "--last-frame-duration", "2.5", "--no-loop",
+                        "--speed", f"{speed:.3f}", "--last-frame-duration", HOLD, "--no-loop",
+                        *(["--cols", COLS] if COLS else []), *(["--rows", ROWS] if ROWS else []),
                         "--theme", "monokai", str(seg), str(gif)], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         mp4 = Path(f"{prefix}-{n}.mp4")
@@ -73,6 +80,8 @@ def main():
                         "-c:v", "libx264", "-crf", "16", str(mp4)], check=True)
         sped = "" if speed <= 1.05 else f", shown about {math.floor(real / target)}x faster"
         caption = f"{label} (real time {human(real)}{sped})"
+        if real < 1:
+            caption = label
         Path(f"{prefix}-{n}-events.json").write_text(
             json.dumps([{"kind": "caption", "at": 0, "value": caption}]) + "\n")
         print(f"segment {n}: real {real:.0f}s, played {played:.0f}s, speed {speed:.1f}: {caption}")

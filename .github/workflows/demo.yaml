@@ -253,10 +253,11 @@ jobs:
             echo "::warning::The footprint and self-healing chapter failed and is left out"
             exit 0
           fi
-          python3 demo/render-cast.py demo/out/10-operate.cast demo/out/10-operate \
+          CAST_FONT_SIZE=26 CAST_COLS=104 CAST_ROWS=16 CAST_HOLD=4.5 \
+            python3 demo/render-cast.py demo/out/10-operate.cast demo/out/10-operate \
             "Live CPU and memory of TAK's pods::6" \
             "The whole package for an offline install::4" \
-            "The ATAK test device before::4" \
+            "The ATAK test device, connected with its own client certificate::4" \
             "Delete TAK's messaging pod: Kubernetes brings it back::8" \
             "ATAK reconnects by itself::6"
         shell: bash

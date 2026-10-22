@@ -26,14 +26,12 @@ import {
   watchSecurity,
 } from "./browser";
 
-const phoneUrl =
-  process.env.ATAK_VIEWER_URL || "https://atak.uds.dev/phone.html";
+const phoneUrl = process.env.ATAK_VIEWER_URL || "https://atak.uds.dev/phone.html";
 const mapUrl = process.env.CLOUDTAK_URL || "https://map.uds.dev/";
 const takUrl = process.env.TAK_SSO_URL || "https://takserver.uds.dev/";
 const username = process.env.KEYCLOAK_USER || "takuser";
 const password = process.env.KEYCLOAK_PASSWORD || "";
-const deviceCallsign =
-  process.env.ATAK_CALLSIGN || "ATAK-DEVICE (TEST LOCATION)";
+const deviceCallsign = process.env.ATAK_CALLSIGN || "ATAK-DEVICE (TEST LOCATION)";
 const testLocation = process.env.ATAK_TEST_LOCATION || "38.8895/-77.0353";
 
 async function scene(page: Page, name: string, body: () => Promise<void>) {
@@ -42,9 +40,7 @@ async function scene(page: Page, name: string, body: () => Promise<void>) {
     return true;
   } catch (error) {
     console.log(`scene ${name} skipped: ${String(error).split("\n")[0]}`);
-    await page
-      .screenshot({ path: test.info().outputPath(`probe-${name}.png`) })
-      .catch(() => undefined);
+    await page.screenshot({ path: test.info().outputPath(`probe-${name}.png`) }).catch(() => undefined);
     return false;
   }
 }
@@ -83,18 +79,14 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   map.setDefaultTimeout(30_000);
   await watchSecurity(map);
   await map.goto(mapUrl);
-  await expect(map.locator("canvas.maplibregl-canvas")).toBeVisible({
-    timeout: 120_000,
-  });
+  await expect(map.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 120_000 });
   await cloudtakReady(map, "CLOUDTAK-TEST");
   await map.evaluate((loc) => {
     window.location.hash = `#15/${loc}`;
   }, testLocation);
   await map.waitForTimeout(3_000);
   await expectSecure(map);
-  caption(
-    "ATAK to CloudTAK: the device's TEST LOCATION marker, live from its CoT stream",
-  );
+  caption("ATAK to CloudTAK: the device's TEST LOCATION marker, live from its CoT stream");
   await map.waitForTimeout(3_000);
 
   // CloudTAK -> ATAK: a named point from Coordinate Entry, a little east of
@@ -108,46 +100,27 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
       [lat, lon + 0.004],
     );
     await map.waitForTimeout(1_500);
-    await clickLikeAPerson(
-      map,
-      map.getByTitle("Geometry Editing", { exact: true }),
-    );
-    await clickLikeAPerson(
-      map,
-      map.getByText("Coordinate Input", { exact: true }),
-    );
+    await clickLikeAPerson(map, map.getByTitle("Geometry Editing", { exact: true }));
+    await clickLikeAPerson(map, map.getByText("Coordinate Input", { exact: true }));
     // CloudTAK's input label is not tied to the field, so find it by placeholder.
     const name = map.getByPlaceholder("Name", { exact: true });
     await expect(name).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, name);
     await typeLikeAPerson(map, "TEST MARKER");
-    await clickLikeAPerson(
-      map,
-      map.getByRole("button", { name: "Create Point" }),
-    );
-    await expect(map.getByText("Coordinate Entry", { exact: true })).toBeHidden(
-      { timeout: 10_000 },
-    );
+    await clickLikeAPerson(map, map.getByRole("button", { name: "Create Point" }));
+    await expect(map.getByText("Coordinate Entry", { exact: true })).toBeHidden({ timeout: 10_000 });
     await map.waitForTimeout(2_500);
     caption("A TEST MARKER placed in CloudTAK");
     const centre = await canvasPoint(map);
     await clickAtLikeAPerson(map, centre.x, centre.y);
     await expect(map).toHaveURL(/\/cot\//, { timeout: 10_000 });
-    await expect(
-      map.getByText("TEST MARKER", { exact: true }).first(),
-    ).toBeVisible({ timeout: 10_000 });
-    await clickLikeAPerson(
-      map,
-      map.getByTitle("Share", { exact: true }).first(),
-    );
+    await expect(map.getByText("TEST MARKER", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    await clickLikeAPerson(map, map.getByTitle("Share", { exact: true }).first());
     const modal = map.locator(".modal").filter({ hasText: "Share Features" });
     await expect(modal).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, modal.getByPlaceholder("Filter..."));
     await typeLikeAPerson(map, "ATAK");
-    await clickLikeAPerson(
-      map,
-      modal.getByText(deviceCallsign, { exact: true }).first(),
-    );
+    await clickLikeAPerson(map, modal.getByText(deviceCallsign, { exact: true }).first());
     await clickLikeAPerson(map, modal.getByTitle("Share to Selected"));
     caption("Shared to the ATAK device through TAK");
     await map.waitForTimeout(3_000);
@@ -157,8 +130,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   const chat = await scene(map, "chat", async () => {
     for (const title of ["Close Pane", "Close Menu"]) {
       const close = map.getByTitle(title, { exact: true }).first();
-      if (await close.isVisible().catch(() => false))
-        await clickLikeAPerson(map, close);
+      if (await close.isVisible().catch(() => false)) await clickLikeAPerson(map, close);
     }
     await map.evaluate((loc) => {
       window.location.hash = `#16/${loc}`;
@@ -166,22 +138,14 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await map.waitForTimeout(2_000);
     const centre = await canvasPoint(map);
     await clickAtLikeAPerson(map, centre.x, centre.y);
-    await expect(
-      map.getByText(deviceCallsign, { exact: true }).first(),
-    ).toBeVisible({ timeout: 10_000 });
-    await clickLikeAPerson(
-      map,
-      map.getByTitle("More Actions", { exact: true }).first(),
-    );
+    await expect(map.getByText(deviceCallsign, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    await clickLikeAPerson(map, map.getByTitle("More Actions", { exact: true }).first());
     await clickLikeAPerson(map, map.getByText("Chat", { exact: true }).first());
     const input = map.getByPlaceholder("Send Message...");
     await expect(input).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, input);
     await typeLikeAPerson(map, "TEST MESSAGE from CloudTAK");
-    await clickLikeAPerson(
-      map,
-      map.getByTitle("Send Message", { exact: true }).first(),
-    );
+    await clickLikeAPerson(map, map.getByTitle("Send Message", { exact: true }).first());
     caption("A TEST chat message from CloudTAK to the device");
     await map.waitForTimeout(3_000);
   });

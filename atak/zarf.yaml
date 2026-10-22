@@ -1,0 +1,103 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zarf-dev/zarf/main/zarf.schema.json
+#
+# Optional ATAK-CIV test device: KubeVirt, an Android-x86 VM with ATAK, and a
+# phone viewer behind Keycloak. It is a separate package so the TAK package
+# does not carry about 1.5 GB of VM and KubeVirt images. amd64 nodes with
+# /dev/kvm only. Deploy it after the TAK package; see docs/atak-device.md.
+#
+#   uds zarf package create atak --set ATAK_TAG=5.5.1.10 --confirm
+#   uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --confirm
+kind: ZarfPackageConfig
+metadata:
+  name: atak-device
+  description: ATAK-CIV in a KubeVirt VM as a TAK test client (amd64 with KVM only)
+  version: "###ZARF_PKG_TMPL_ATAK_TAG###"
+  architecture: amd64
+
+constants:
+  - name: ATAK_TAG
+    value: "###ZARF_PKG_TMPL_ATAK_TAG###"
+
+variables:
+  - name: DOMAIN
+    description: Domain suffix for gateway hosts. The viewer is atak.<DOMAIN>.
+    default: uds.dev
+
+components:
+  - name: kubevirt
+    required: true
+    description: KubeVirt v1.8.4 and the UDS policy exemption it needs
+    only:
+      cluster:
+        architecture: amd64
+    manifests:
+      - name: kubevirt-exemption
+        files:
+          - deploy/kubevirt-exemption.yaml
+      # v1.8.4 publishes the VMI checksum fields with uint32 bounds (v1.6.6 and v1.7.4 do not).
+      # Kubernetes 1.36 enforces numeric formats, and older releases publish
+      # the kernel and containerDisk checksums as int32, so virt-handler can
+      # never move the VMI past Scheduled. v1.9.1 fails to start containerDisk
+      # VMs (the container-disk binary is missing from the launcher).
+      - name: kubevirt-operator
+        files:
+          - https://github.com/kubevirt/kubevirt/releases/download/v1.8.4/kubevirt-operator.yaml@d1d8264eec5b802c122bec6c54d8c3b11e119ee2a5c75602aaa8b53ea3857eda
+      - name: kubevirt-cr
+        files:
+          - https://github.com/kubevirt/kubevirt/releases/download/v1.8.4/kubevirt-cr.yaml@43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
+    images:
+      - quay.io/kubevirt/virt-operator:v1.8.4
+      - quay.io/kubevirt/virt-api:v1.8.4
+      - quay.io/kubevirt/virt-controller:v1.8.4
+      - quay.io/kubevirt/virt-handler:v1.8.4
+      - quay.io/kubevirt/virt-launcher:v1.8.4
+      - quay.io/kubevirt/virt-exportproxy:v1.8.4
+      - quay.io/kubevirt/virt-exportserver:v1.8.4
+    actions:
+      onDeploy:
+        after:
+          - description: Wait for KubeVirt
+            maxTotalSeconds: 900
+            wait:
+              cluster:
+                kind: kubevirt
+                name: kubevirt
+                namespace: kubevirt
+                condition: Available
+
+  - name: atak-device
+    required: true
+    description: The ATAK VM, its adb Service, the phone viewer, and their UDS Package
+    only:
+      cluster:
+        architecture: amd64
+    manifests:
+      - name: atak-device
+        namespace: atak
+        files:
+          - deploy/device.yaml
+    images:
+      - ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:###ZARF_PKG_TMPL_ATAK_TAG###
+      - ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:###ZARF_PKG_TMPL_ATAK_TAG###
+    actions:
+      onDeploy:
+        after:
+          - description: Wait for the VM to boot its kernel
+            maxTotalSeconds: 900
+            wait:
+              cluster:
+                kind: vmi
+                name: atak-device
+                namespace: atak
+                condition: Ready
+          - description: Wait for the viewer
+            maxTotalSeconds: 300
+            wait:
+              cluster:
+                kind: deployment
+                name: atak-viewer
+                namespace: atak
+                condition: Available

@@ -2,8 +2,10 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Join title cards, the terminal chapters, and the two web walkthroughs into
-# demo/out/demo.mp4: H.264, yuv420p, faststart, no audio, under MAX_BYTES.
+# Join title cards, the terminal chapters, and the web walkthroughs into two
+# videos: demo/out/demo.mp4 (deploy) and demo/out/demo-operate.mp4 (operate
+# and trust). H.264, yuv420p, faststart, no audio, each under MAX_BYTES.
+# Each gets a NAME-chapters.txt with the start time of every part.
 # Also writes demo/out/poster.png and demo/out/preview.gif.
 set -euo pipefail
 
@@ -74,40 +76,92 @@ clip() {
     -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
 }
 
-card c00 "TAK Server on UDS" "Upstream TAK, packaged with Zarf, running on UDS Core"
-card c01 "Packaging an upstream app for UDS" "Zarf package and UDS bundle"
-clip t01 "${out}/01-package.mp4" terminal demo/out/tapes/01-package.tape
-card c02 "Integrating with the platform" "the UDS Package custom resource"
+# build NAME PART... joins the parts into ${out}/NAME.mp4 under max_bytes and
+# writes ${out}/NAME-chapters.txt (start time and caption of each part).
+build() {
+  local name="$1" list="${work}/$1-list.txt" chapters="${out}/$1-chapters.txt" at=0 part secs crf bytes
+  shift
+  : > "${list}"
+  : > "${chapters}"
+  for part in "$@"; do
+    echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
+    printf '%s %s\n' "$(awk -v t="${at}" 'BEGIN { printf "%d:%04.1f", t / 60, t % 60 }')" \
+      "$(cat "${work}/${part}.title" 2>/dev/null || echo "${part}")" >> "${chapters}"
+    secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${part}.mp4")"
+    at="$(awk -v a="${at}" -v s="${secs}" 'BEGIN { print a + s }')"
+  done
+  ffmpeg -v error -y -f concat -safe 0 -i "${list}" -c copy "${work}/${name}-joined.mp4"
+  for crf in 26 28 30 32 34 36; do
+    ffmpeg -v error -y -i "${work}/${name}-joined.mp4" -an \
+      -c:v libx264 -preset slow -crf "${crf}" -profile:v high -pix_fmt yuv420p \
+      -g $((fps * 4)) -movflags +faststart "${out}/${name}.mp4"
+    bytes="$(stat -c%s "${out}/${name}.mp4")"
+    echo "${name} crf ${crf}: ${bytes} bytes"
+    if [[ "${bytes}" -le "${max_bytes}" ]]; then
+      break
+    fi
+  done
+  cat "${chapters}"
+}
+
+# Video 1, Deploy: the standard UDS flow from this run's real deployment
+# (demo/deploy.sh, recorded by the workflow), the Package CR, SSO sign-in,
+# and the ATAK test device on the same server.
+deploy_video=(v1)
+card v1 "TAK Server on UDS: Deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
+if [[ -f "${out}/00-deploy-4.mp4" ]]; then
+  for n in 1 2 3 4; do
+    clip "d0${n}" "${out}/00-deploy-${n}.mp4" web "${out}/00-deploy-${n}-events.json" 0
+    deploy_video+=("d0${n}")
+  done
+fi
+card c02 "Package Ready" "the UDS Operator turns one Package CR into policy, routes and SSO"
 clip t02 "${out}/02-package-cr.mp4" terminal demo/out/tapes/02-package-cr.tape
-card c03 "Secure by default" "mesh, generated policies, SSO, CI checks"
-clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
-card c04 "Running and healthy" "clustered TAK on k3d"
-clip t04 "${out}/04-running.mp4" terminal demo/out/tapes/04-running.tape
-card c05 "Other clusters (scaffolds)" "OpenTofu for EKS, RKE2 and AKS"
-clip t05 "${out}/05-clusters.mp4" terminal demo/out/tapes/05-clusters.tape
-card c06 "SSO into the TAK web UI" "Keycloak from UDS Core, in a real Chrome window"
+card c06 "Sign In through UDS SSO" "TAK's web UI at takserver.uds.dev, Keycloak from UDS Core"
 clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
-card c07 "A browser map for TAK" "CloudTAK with Keycloak sign-in and an OpenStreetMap basemap"
-clip t07 "${out}/07-map.mp4" web "${out}/07-map-events.json" "${web_trim}"
+deploy_video+=(c02 t02 c06 t06)
+if [[ -f "${out}/08-atak.mp4" ]]; then
+  card c08 "A Real ATAK Device on the Same Server" "ATAK-CIV in a KubeVirt VM, its TEST LOCATION marker in CloudTAK"
+  clip t08 "${out}/08-atak.mp4" web "${out}/08-atak-events.json" "${web_trim}"
+  deploy_video+=(c08 t08)
+fi
 card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
+deploy_video+=(c99)
 
-list="${work}/list.txt"
-: > "${list}"
-for part in c00 c01 t01 c02 t02 c03 t03 c04 t04 c05 t05 c06 t06 c07 t07 c99; do
-  echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
-done
-ffmpeg -v error -y -f concat -safe 0 -i "${list}" -c copy "${work}/joined.mp4"
+# Video 2, Operate and trust.
+operate_video=(v2)
+card v2 "TAK Server on UDS: Operate and Trust" "air-gapped, policy-checked, verified, measured"
+card c2a "Air-Gapped Install" "images from the in-cluster Zarf registry, SBOMs in the package"
+clip t2a "${out}/02a-airgap.mp4" terminal demo/out/tapes/02a-airgap.tape
+card c2b "Policy at Work" "UDS admission policy on every pod, one narrow exemption"
+clip t2b "${out}/02b-policy.mp4" terminal demo/out/tapes/02b-policy.tape
+operate_video+=(c2a t2a c2b t2b)
+if [[ -f "${out}/09-sync.mp4" ]]; then
+  card c09 "CloudTAK and ATAK in Sync" "a TEST MARKER and a TEST chat message, live"
+  clip t09 "${out}/09-sync.mp4" web "${out}/09-sync-events.json" "${web_trim}"
+  operate_video+=(c09 t09)
+fi
+card c03 "Secure by Default" "mesh, generated network policy, signed releases with provenance"
+clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
+operate_video+=(c03 t03)
+card c96 "Upgrades from the Last Signed Release" "CI installs the verified release, upgrades in place, keeps certificates and data"
+operate_video+=(c96)
+if [[ -f "${out}/10-operate-4.mp4" ]]; then
+  card c10 "Footprint and Self-Healing" "live numbers from this run; TAK's messaging pod deleted"
+  operate_video+=(c10)
+  for n in 1 2 3 4 5; do
+    if [[ -f "${out}/10-operate-${n}.mp4" ]]; then
+      clip "e0${n}" "${out}/10-operate-${n}.mp4" web "${out}/10-operate-${n}-events.json" 0
+      operate_video+=("e0${n}")
+    fi
+  done
+fi
+card c98 "What This Does Not Prove" "phone is an Android VM; fixed TEST LOCATION; one-node k3d; no radio or degraded links"
+card c97 "github.com/jonathanagustin/uds-k3d-takserver" "open issues track the known gaps" last
+operate_video+=(c98 c97)
 
-for crf in 26 28 30 32 34 36; do
-  ffmpeg -v error -y -i "${work}/joined.mp4" -an \
-    -c:v libx264 -preset slow -crf "${crf}" -profile:v high -pix_fmt yuv420p \
-    -g $((fps * 4)) -movflags +faststart "${out}/demo.mp4"
-  bytes="$(stat -c%s "${out}/demo.mp4")"
-  echo "crf ${crf}: ${bytes} bytes"
-  if [[ "${bytes}" -le "${max_bytes}" ]]; then
-    break
-  fi
-done
+build demo "${deploy_video[@]}"
+build demo-operate "${operate_video[@]}"
 
 # Poster: the TAK landing page after sign-in, with its caption fully shown
 # and before the zoom starts. Preview: six seconds of the Package CR chapter.
@@ -125,4 +179,5 @@ ffmpeg -v error -y -ss 4 -t 6 -i "${work}/t02.mp4" \
   "${out}/preview.gif"
 
 ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height,pix_fmt,r_frame_rate "${out}/demo.mp4"
+ffprobe -v error -show_entries format=duration,size "${out}/demo-operate.mp4"
 ls -l "${out}"

@@ -1,0 +1,159 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# ATAK test device end to end: UDS Core slim + TAK Server (the normal test
+# deploy), then KubeVirt, the Android-x86 VM, the adb driver and the viewer.
+# Optional component, amd64 with KVM only. Not part of the default tests.
+name: ATAK e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "atak/**"
+      - ".github/workflows/atak-e2e.yaml"
+  # Publishes the device images under the ATAK release tag after a merge.
+  push:
+    branches: [main]
+    paths:
+      - "atak/**"
+      - ".github/workflows/atak-e2e.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atak-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+  # Pull requests test local "dev" images and push nothing. Only main
+  # publishes, under RELEASE_TAG (the atak-civ submodule tag).
+  ATAK_TAG: dev
+  RELEASE_TAG: 5.5.1.10
+  VM_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
+  VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
+  DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Reads the GHCR build cache; main also publishes the device images.
+      packages: write
+    timeout-minutes: 300
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check out the ATAK submodule and its LFS files
+        run: ./atak/ci/fetch-source.sh
+
+      - name: Trim the runner
+        run: ./.github/scripts/trim-runner.sh
+
+      - name: Let the runner use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the device images
+        timeout-minutes: 120
+        run: |
+          ./atak/ci/build-apk.sh
+          docker buildx build -f atak/apk/Dockerfile --target driver -t "${DRIVER_IMAGE}" --load \
+            --cache-from "type=registry,ref=${CACHE}:atak-apk-apk" .
+          docker buildx build -f atak/vm/Dockerfile -t "${VM_IMAGE}" --load \
+            --cache-from "type=registry,ref=${CACHE}:atak-vm" .
+          docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
+            --cache-from "type=registry,ref=${CACHE}:atak-viewer" .
+          docker image ls | grep atak
+          # The APK build leaves many GB of NDK, Conan and Gradle layers in the
+          # BuildKit container. The images are in Docker now; drop the builder
+          # before UDS Core and TAK need the disk and memory.
+          docker buildx rm --all-inactive --force || true
+          docker buildx prune -af || true
+          docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
+          df -h /
+          free -h
+
+      - name: Install Docker Compose
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.6.0
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.39.0
+
+      - name: Environment setup
+        run: |
+          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "$GITHUB_ENV"
+          uds run actions:setup-environment \
+          --set REGISTRY1_USERNAME="${{ secrets.IRON_BANK_ROBOT_USERNAME }}" \
+          --set REGISTRY1_PASSWORD="${{ secrets.IRON_BANK_ROBOT_PASSWORD }}" \
+          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+          --set RAPIDFORT_USERNAME="${{ secrets.RAPIDFORT_USERNAME }}" \
+          --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
+          --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
+        shell: bash
+
+      - name: Deploy UDS Core slim and TAK Server
+        run: uds run actions:test-deploy --set FLAVOR=upstream --set TYPE=install --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
+        shell: bash
+        timeout-minutes: 90
+
+      - name: ATAK device end to end
+        run: |
+          (cd "${RUNNER_TEMP}" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.56.1 >/dev/null)
+          NODE_PATH="${RUNNER_TEMP}/node_modules" OUT=out ./atak/ci/e2e.sh
+        timeout-minutes: 90
+
+      - name: Publish the device images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          for img in "${VM_IMAGE}" "${VIEWER_IMAGE}" "${DRIVER_IMAGE}"; do
+            docker tag "${img}" "${img%:*}:${RELEASE_TAG}"
+            docker push "${img%:*}:${RELEASE_TAG}"
+          done
+
+      - name: Debug
+        if: failure()
+        run: |
+          uds zarf tools kubectl get pods -A -o wide || true
+          uds zarf tools kubectl get vm,vmi -n atak -o yaml || true
+          uds zarf tools kubectl get events -n atak --sort-by=.lastTimestamp || true
+          uds zarf tools kubectl get events -n kubevirt --sort-by=.lastTimestamp || true
+          uds zarf tools kubectl logs -n pepr-system -l app=pepr-uds-core-admission --tail=200 | grep -i -E "deny|kubevirt|atak" || true
+          for p in $(uds zarf tools kubectl get pod -n atak -l kubevirt.io=virt-launcher -o name); do
+            uds zarf tools kubectl get -n atak "${p}" -o yaml || true
+            uds zarf tools kubectl logs -n atak "${p}" -c compute --tail=300 || true
+            uds zarf tools kubectl logs -n atak "${p}" -c guest-console-log --tail=400 || true
+          done
+          uds zarf tools kubectl logs -n kubevirt ds/virt-handler -c virt-handler --tail=400 || true
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-controller --tail=200 --prefix | grep -i -E "atak|error|fail" || true
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-api --tail=200 --prefix | grep -i -E "error|fail|denied" || true
+          uds zarf tools kubectl get networkpolicy -n atak -o wide || true
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atak-e2e
+          path: out/
+          if-no-files-found: warn

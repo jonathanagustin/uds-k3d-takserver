@@ -11,6 +11,7 @@ speeds and pauses between them: words often go in one burst, flags, pipes and
 quotes get a hesitation first, and a pipeline gets one longer think pause.
 The Sleep before each Enter becomes 300-800 ms. Lines marked with
 '# typo: <word>' get one corrected typo in that word (comments only).
+Lines marked with '# fast' are typed quickly in one go (long commands).
 The random seed is the tape's file name, so the schedule is the same on
 every run, and demo/filters.py reads the generated tape to time captions.
 """
@@ -91,6 +92,7 @@ def main():
     rng = random.Random(source.name)
     shown = False
     typo_word = None
+    fast = False
     out = []
     lines = source.read_text().splitlines()
     i = 0
@@ -100,6 +102,10 @@ def main():
         if line == "Show":
             shown = True
         match = re.match(r'Type(?:@\S+)?\s+"(.*)"$', line)
+        if line == "# fast":
+            fast = True
+            i += 1
+            continue
         if line.startswith("# typo:"):
             typo_word = line.split(":", 1)[1].strip()
             i += 1
@@ -108,8 +114,12 @@ def main():
             text = match.group(1)
             if typo_word and not text.startswith("#"):
                 raise SystemExit("typos are only allowed in comment lines")
-            out.extend(type_line(rng, text, typo_word))
+            if fast:
+                out.append(f'Type@{ms(rng.uniform(6, 10))} "{text}"')
+            else:
+                out.extend(type_line(rng, text, typo_word))
             typo_word = None
+            fast = False
             # Replace the Sleep before Enter with a 300-800 ms pause.
             if i + 2 < len(lines) and lines[i + 1].startswith("Sleep ") and lines[i + 2].strip() == "Enter":
                 i += 1

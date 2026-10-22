@@ -250,6 +250,17 @@ export async function clickLikeAPerson(page: Page, target: Locator) {
   await page.mouse.up();
 }
 
+// Glides to a point on the page and clicks there (for a map canvas).
+export async function clickAtLikeAPerson(page: Page, x: number, y: number) {
+  await page.mouse.move(mouse.x, mouse.y);
+  await page.mouse.move(x, y, { steps: 28 });
+  mouse = { x, y };
+  await page.waitForTimeout(250);
+  await page.mouse.down();
+  await page.waitForTimeout(90);
+  await page.mouse.up();
+}
+
 // Puts the overlay cursor back where it was after a navigation.
 export async function showCursor(page: Page) {
   await page.mouse.move(mouse.x, mouse.y);
@@ -262,4 +273,35 @@ export async function visit(page: Page, url: string, label: string, hold = 2_600
   await expectSecure(page);
   caption(label);
   await page.waitForTimeout(hold);
+}
+
+// CloudTAK after its map canvas shows: on a first sign-in it asks for a
+// callsign, then for browser permissions. Answers both like a person.
+export async function cloudtakReady(page: Page, callsign: string) {
+  const welcome = page.getByText("Welcome to CloudTAK");
+  const skipNow = page.getByRole("button", { name: "Skip for now" });
+  await Promise.race([
+    welcome.waitFor({ state: "visible", timeout: 20_000 }),
+    skipNow.waitFor({ state: "visible", timeout: 20_000 }),
+  ]).catch(() => undefined);
+  if (await welcome.isVisible().catch(() => false)) {
+    caption("First sign-in to CloudTAK: pick a callsign");
+    await clickLikeAPerson(page, page.getByPlaceholder("Enter your callsign"));
+    await typeLikeAPerson(page, callsign);
+    await page.waitForTimeout(500);
+    await clickLikeAPerson(page, page.getByRole("button", { name: "Get Started" }));
+    await skipNow.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+  }
+  for (let i = 0; i < 10; i++) {
+    let open = false;
+    for (const name of ["Not now", "Skip for now"]) {
+      const skip = page.getByRole("button", { name });
+      if (await skip.isVisible().catch(() => false)) {
+        open = true;
+        await clickLikeAPerson(page, skip).catch(() => undefined);
+      }
+    }
+    if (!open && !(await welcome.isVisible().catch(() => false))) break;
+    await page.waitForTimeout(800);
+  }
 }

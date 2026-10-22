@@ -51,6 +51,8 @@ uds zarf package deploy zarf-package-takserver-arm64-*.tar.zst --confirm
 
 A published release has an entry for each architecture under the same OCI reference. Pass `--architecture` to `zarf package deploy oci://...` or `uds deploy` when the cluster's architecture differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
+The optional ATAK test device (`atak/`) is amd64 only and needs KVM on the node. Its Android VM image is Android-x86 under KubeVirt, and the APK is built for `x86_64` only. It is not part of the default package and is not built for arm64. The device has no GPS and reports a fixed test location in Washington, DC under the callsign `ATAK-DEVICE (TEST LOCATION)`. See [docs/atak-device.md](docs/atak-device.md).
+
 ### Verify a release
 
 Released packages are signed keylessly with the release workflow's GitHub identity, and the signature is in the Sigstore transparency log. To check one before you deploy it:
@@ -172,6 +174,7 @@ Design decisions are recorded in [`adr/`](adr/):
 | [Data](docs/data.md) | PostgreSQL and what a backup of the namespace must include |
 | [Building the images](docs/building.md) | Image build script, platforms, pins, and the Gradle cache |
 | [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |
+| [ATAK test device](docs/atak-device.md) | Optional ATAK-CIV client in a KubeVirt VM, amd64 with KVM only |
 
 ## Configuration
 

@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- Copyright 2026 uds-k3d-takserver authors -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATAK test device</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1d232b; font-family: system-ui, sans-serif; color: #c9d1d9; }
+  main { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; gap: 14px; padding: 16px; box-sizing: border-box; }
+  .phone { position: relative; background: #0b0d10; border-radius: 46px;
+           padding: 14px; box-sizing: border-box; box-shadow: 0 0 0 2px #3a4048, 0 24px 60px rgba(0,0,0,.55); }
+  .phone::before { content: ""; position: absolute; top: 22px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #222830; z-index: 2; }
+  /* The device screen is 576x1024 (9:16); match it so the stream fills the bezel. */
+  .screen { height: min(82vh, 860px); aspect-ratio: 9 / 16; border-radius: 34px; overflow: hidden; background: #000; }
+  .screen iframe { width: 100%; height: 100%; border: 0; }
+  .side { position: absolute; right: -4px; top: 150px; width: 4px; height: 70px; background: #3a4048; border-radius: 0 3px 3px 0; }
+  p { margin: 0; font-size: 13px; opacity: .75; }
+</style>
+</head>
+<body>
+<main>
+  <div class="phone"><div class="side"></div><div class="screen"><iframe id="s" title="Device screen" allow="autoplay"></iframe></div></div>
+  <p id="cap">ATAK-CIV on Android-x86 in a KubeVirt VM</p>
+</main>
+<script>
+  // The viewer injects DEVICE (ip:5555) into config.js; ws-scrcpy streams it
+  // through the adb connection, so the browser never talks to the VM.
+  fetch("config.json").then(r => r.json()).then(c => {
+    const ws = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
+      "/?action=proxy-adb&remote=tcp%3A8886&udid=" + encodeURIComponent(c.device);
+    const frame = document.getElementById("s");
+    // Phone view: hide the ws-scrcpy button column so the screen fills the
+    // bezel, then let it refit. Same origin, so the frame can be styled.
+    frame.addEventListener("load", () => {
+      const d = frame.contentDocument;
+      const st = d.createElement("style");
+      st.textContent = ".control-buttons-list, .more-box { display: none !important; }" +
+        " body.stream { background: #000 !important; }" +
+        " .device-view, .video { float: none !important; margin: 0 auto; width: 100% !important; }" +
+        " .video-layer, .touch-layer { width: 100% !important; height: auto !important; }";
+      d.head.appendChild(st);
+      frame.contentWindow.dispatchEvent(new Event("resize"));
+    });
+    frame.src = "./#!action=stream&udid=" + encodeURIComponent(c.device) +
+      "&player=" + (c.player || "mse") + "&ws=" + encodeURIComponent(ws);
+  });
+</script>
+</body>
+</html>

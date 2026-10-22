@@ -1,0 +1,62 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: ATAK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "atak/apk/**"
+      - "atak/ci/build-apk.sh"
+      - "upstream/atak-civ"
+      - ".gitmodules"
+      - ".github/workflows/atak.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atak-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Build cache in GHCR. The repository's Actions cache is shared with the
+      # Zarf cache and evicts the multi-GB layers.
+      packages: write
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check out the ATAK submodule and its LFS files
+        run: ./atak/ci/fetch-source.sh
+
+      - name: Free runner disk
+        run: ./.github/scripts/free-runner-disk.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the APK
+        env:
+          CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+        run: ./atak/ci/build-apk.sh
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: atak-civ-apk
+          path: out/atak-civ.apk
+          if-no-files-found: error

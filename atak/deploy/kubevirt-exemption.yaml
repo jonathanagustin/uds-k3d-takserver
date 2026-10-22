@@ -1,0 +1,50 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# UDS policy exemptions for KubeVirt (optional ATAK test device only).
+# virt-handler is a privileged node agent: it opens /dev/kvm, manages the
+# launcher pods' network namespaces and mounts the containerDisk, so it needs
+# host paths, host PID and privileged mode. virt-launcher runs as UID 107 and
+# adds NET_BIND_SERVICE for the guest network. Nothing else in the cluster
+# is exempted.
+apiVersion: uds.dev/v1alpha1
+kind: Exemption
+metadata:
+  name: kubevirt
+  namespace: uds-policy-exemptions
+spec:
+  exemptions:
+    - title: KubeVirt node agent
+      description: virt-handler manages VMs on the node and needs privileged access to /dev/kvm, host paths and host namespaces.
+      matcher:
+        namespace: kubevirt
+        name: "^virt-handler-.*"
+      policies:
+        - DisallowPrivileged
+        - RequireNonRootUser
+        - DropAllCapabilities
+        - RestrictCapabilities
+        - RestrictHostPathWrite
+        - RestrictVolumeTypes
+        - DisallowHostNamespaces
+        - RestrictSELinuxType
+    - title: KubeVirt control plane
+      description: virt-operator, virt-api, virt-controller and virt-exportproxy run as non-root but the operator does not set every field the UDS defaults expect.
+      matcher:
+        namespace: kubevirt
+        name: "^virt-(operator|api|controller|exportproxy)-.*"
+      policies:
+        - RequireNonRootUser
+        - DropAllCapabilities
+        - RestrictVolumeTypes
+    - title: ATAK test device VM launcher
+      description: virt-launcher runs the device VM as UID 107 and adds NET_BIND_SERVICE for masquerade networking. KubeVirt always sets the traffic.sidecar.istio.io/kubevirtInterfaces annotation on launcher pods; it only matters to Istio sidecars, and there is no sidecar here, so it changes nothing.
+      matcher:
+        namespace: atak
+        name: "^virt-launcher-atak-device-.*"
+      policies:
+        - RestrictCapabilities
+        - DropAllCapabilities
+        - RestrictVolumeTypes
+        - RestrictHostPathWrite
+        - RestrictIstioTrafficOverrides

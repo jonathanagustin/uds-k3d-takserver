@@ -9,6 +9,8 @@
 #   default: 06-web tour.demo.ts "takserver.uds.dev sso.uds.dev", the TAK
 #   web UI. demo/out/NAME.mp4 and demo/out/NAME-events.json.
 #   The CloudTAK map: 07-map map.demo.ts "map.uds.dev sso.uds.dev"
+#   The ATAK device (after atak/ci/e2e.sh): 08-atak atak.demo.ts
+#   "atak.uds.dev map.uds.dev sso.uds.dev"
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

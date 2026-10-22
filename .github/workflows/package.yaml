@@ -6,8 +6,6 @@ name: Package
 on:
   workflow_dispatch:
   pull_request:
-    paths-ignore:
-      - .github/container-and-chart/**
 
 permissions:
   actions: read

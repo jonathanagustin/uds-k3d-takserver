@@ -37,7 +37,8 @@
       const st = d.createElement("style");
       st.textContent = ".control-buttons-list, .more-box { display: none !important; }" +
         " body.stream { background: #000 !important; }" +
-        " .device-view, .video { float: none !important; margin: 0 auto; }";
+        " .device-view, .video { float: none !important; margin: 0 auto; width: 100% !important; }" +
+        " .video-layer, .touch-layer { width: 100% !important; height: auto !important; }";
       d.head.appendChild(st);
       frame.contentWindow.dispatchEvent(new Event("resize"));
     });

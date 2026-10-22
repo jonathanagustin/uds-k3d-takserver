@@ -100,6 +100,8 @@ a shell wm dismiss-keyguard || true
 # launched ("Hi there"). A provisioned phone would not show it.
 a shell pm disable-user --user 0 com.google.android.setupwizard || true
 a shell am force-stop com.google.android.setupwizard || true
+# Location mode "high accuracy", as on a phone; ATAK warns on battery saving.
+a shell settings put secure location_mode 3 || true
 
 start=$(date +%s)
 a install -r -g "${APK}"
@@ -146,6 +148,8 @@ shot atak-imported
 a shell am force-stop "${PKG}"
 a shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 60
+# Clear start-up hints so the screenshot shows the map.
+for _ in $(seq 1 3); do tap "ok" "got it" "close" "dismiss" || break; sleep 2; done
 shot atak-connected
 if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   a exec-out cat /sdcard/ui.xml > "${OUT}/ui.xml" || true

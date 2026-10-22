@@ -52,7 +52,7 @@ Sleep 400ms
 Type@40ms "kubectl run deny-test -n default --rm -i --restart=Never -l zarf.dev/agent=ignore --image=docker.io/curlimages/curl:8.11.1 -- curl -sS -m 5 telnet://takserver-messaging-service.takserver.svc.cluster.local:8089"
 Sleep 400ms
 Enter
-Wait@120s /takserver \$ $/
+Wait@120s /takserver \$\s*$/
 Sleep 2500ms
 Type@70ms "# Releases are signed keylessly by the release workflow"
 Sleep 500ms
@@ -62,11 +62,11 @@ Sleep 400ms
 Type@30ms "uds zarf package verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --certificate-identity-regexp $RELEASE_WORKFLOW --certificate-oidc-issuer https://token.actions.githubusercontent.com"
 Sleep 400ms
 Enter
-Wait@180s /takserver \$ $/
+Wait@180s /takserver \$\s*$/
 Sleep 3000ms
 # caption: Build provenance for the same package, attested with the release workflow's identity
 Type@40ms "gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --owner jonathanagustin"
 Sleep 400ms
 Enter
-Wait@120s /takserver \$ $/
+Wait@120s /takserver \$\s*$/
 Sleep 3000ms

@@ -26,7 +26,7 @@ Sleep 3200ms
 Type@80ms "uds zarf tools registry catalog | head -12"
 Sleep 400ms
 Enter
-Wait@60s /takserver \$ $/
+Wait@60s /takserver \$\s*$/
 Sleep 2600ms
 Type@70ms "# The released package carries its SBOMs"
 Sleep 500ms
@@ -36,5 +36,5 @@ Sleep 400ms
 Type@35ms "uds zarf package inspect sbom oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --certificate-identity-regexp $RELEASE_WORKFLOW --certificate-oidc-issuer $RELEASE_ISSUER --output /tmp/sbom && ls /tmp/sbom/takserver | grep json"
 Sleep 400ms
 Enter
-Wait@180s /takserver \$ $/
+Wait@180s /takserver \$\s*$/
 Sleep 3000ms

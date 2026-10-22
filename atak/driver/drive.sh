@@ -20,11 +20,22 @@ a() { adb -s "${DEVICE}" "$@"; }
 
 shot() { a exec-out screencap -p > "${OUT}/$1.png" || true; }
 
+# Records ATAK's certificate prompt ("Unable to validate Truststore", "TLS
+# certificate invalid") if the UI dump /tmp/ui.xml shows one.
+cert_prompt() {
+  grep -Eqi "unable to validate|truststore|certificate invalid" /tmp/ui.xml 2>/dev/null || return 1
+  grep -Eoi "[^\"]*(unable to validate|truststore|certificate invalid)[^\"]*" /tmp/ui.xml >> "${OUT}/cert-dialog.txt" || true
+  [[ -f "${OUT}/cert-dialog.png" ]] || shot cert-dialog
+  return 0
+}
+
 # Taps the first button whose text matches one of the given labels.
 # Returns 1 when none is on screen.
 tap() {
   a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
   a exec-out cat /sdcard/ui.xml > /tmp/ui.xml 2>/dev/null || return 1
+  # Never tap away a certificate prompt: record it so the run fails.
+  cert_prompt && return 1
   local xy
   xy="$(python3 - "$@" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
@@ -148,11 +159,10 @@ shot atak-imported
 a shell am force-stop "${PKG}"
 a shell monkey -p "${PKG}" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 60
-# Clear start-up hints so the screenshot shows the map.
-for _ in $(seq 1 3); do tap "ok" "got it" "close" "dismiss" || break; sleep 2; done
 shot atak-connected
 if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   a exec-out cat /sdcard/ui.xml > "${OUT}/ui.xml" || true
+  cp "${OUT}/ui.xml" /tmp/ui.xml && cert_prompt || true
 fi
 a logcat -d -t 3000 > "${OUT}/logcat.txt" 2>&1 || true
 grep -E "ImportManager|MissionPackage|Import.*Sort|CertificateManager|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true

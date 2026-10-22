@@ -17,6 +17,12 @@ DRIVER_IMAGE="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-k3d-takserver/atak-dri
 TAK_USER="${KEYCLOAK_USER:-doug}"
 TAK_PASS="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}"
 TAK_HOST="${TAK_HOST:-takserver-stream.${DOMAIN}}"
+# The VM has no GPS. ATAK's "restore location on restart" settings give the
+# device a fixed self position: a test location on the National Mall in
+# Washington, DC, never a real fix. The callsign says so wherever it shows.
+TEST_LAT="${TEST_LAT:-38.8895}"
+TEST_LON="${TEST_LON:--77.0353}"
+CALLSIGN="${CALLSIGN:-ATAK-DEVICE (TEST LOCATION)}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "${OUT}"
 k() { uds zarf tools kubectl "$@"; }
@@ -128,7 +134,9 @@ cat > "${work}/dpk/certs/server.pref" <<PREF
   </preference>
   <preference version="1" name="com.atakmap.app_preferences">
     <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
-    <entry key="locationCallsign" class="class java.lang.String">ATAK-DEVICE</entry>
+    <entry key="locationCallsign" class="class java.lang.String">${CALLSIGN}</entry>
+    <entry key="restoreRecordedLocation" class="class java.lang.Boolean">true</entry>
+    <entry key="recordedLocation" class="class java.lang.String">${TEST_LAT}, ${TEST_LON}</entry>
     <entry key="atakControlForcePortrait" class="class java.lang.Boolean">true</entry>
   </preference>
 </preferences>
@@ -204,7 +212,8 @@ YAML
 k wait pod -n atak atak-driver --for condition=Ready --timeout=5m
 timeout 1500 sh -c 'until uds zarf tools kubectl exec -n atak atak-driver -- test -f /out/exit; do sleep 10; done'
 k logs -n atak atak-driver | tee "${OUT}/driver.log"
-for f in atak-first-start.png atak-map.png atak-imported.png atak-connected.png ui.xml logcat.txt exit; do
+for f in atak-first-start.png atak-map.png atak-imported.png atak-connected.png ui.xml logcat.txt exit \
+  cert-dialog.txt cert-dialog.png; do
   k cp "atak/atak-driver:/out/${f}" "${OUT}/${f}" || true
 done
 
@@ -222,6 +231,46 @@ for _ in $(seq 1 30); do
 done
 cat "${OUT}/subscriptions.json" "${OUT}/clientEndPoints.json"
 [[ -n "${found}" ]] || { echo "device user ${DEVICE_USER} has no live subscription" >&2; exit 1; }
+
+echo "== truststore"
+# ATAK validates the imported truststore with Java's PKCS12 keystore before it
+# connects. Any "Unable to validate Truststore" prompt or "Truststore invalid"
+# log line fails the run, even if commo still connected.
+if [[ -s "${OUT}/cert-dialog.txt" ]] || grep -Eq "Truststore invalid|Unable to validate Truststore|Cert not found for" "${OUT}/logcat.txt"; then
+  cat "${OUT}/cert-dialog.txt" 2>/dev/null >&2 || true
+  grep -E "Truststore invalid|Unable to validate|Cert not found for" "${OUT}/logcat.txt" >&2 || true
+  echo "ATAK could not validate the truststore" >&2
+  exit 1
+fi
+echo "no truststore prompt and no truststore errors in logcat"
+
+echo "== test location"
+# TAK keeps the latest event per client. The device reports the fixed test
+# location under the test callsign.
+uid="$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+print(next((c.get("clientUid") or c.get("uid") or "" for c in d.get("data", []) if c.get("username") == sys.argv[2]), ""))' "${OUT}/subscriptions.json" "${DEVICE_USER}")"
+located=""
+for _ in $(seq 1 30); do
+  if [[ -n "${uid}" ]] && marti "cot/xml/${uid}" > "${OUT}/device-cot.xml" 2>/dev/null &&
+    python3 - "${OUT}/device-cot.xml" "${TEST_LAT}" "${TEST_LON}" "${CALLSIGN}" <<'PY'
+import sys, xml.etree.ElementTree as ET
+path, lat, lon, callsign = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+try:
+    ev = ET.parse(path).getroot()
+except ET.ParseError:
+    sys.exit(1)
+pt, contact = ev.find("point"), ev.find("detail/contact")
+ok = (pt is not None and abs(float(pt.get("lat")) - lat) < 0.001 and abs(float(pt.get("lon")) - lon) < 0.001
+      and contact is not None and contact.get("callsign") == callsign)
+print(f"device at {pt.get('lat') if pt is not None else '?'}, {pt.get('lon') if pt is not None else '?'}"
+      f" callsign {contact.get('callsign') if contact is not None else '?'}")
+sys.exit(0 if ok else 1)
+PY
+  then located=1; break; fi
+  sleep 10
+done
+[[ -n "${located}" ]] || { echo "TAK has no event from ${DEVICE_USER} at the test location" >&2; exit 1; }
 
 echo "== viewer behind SSO"
 node "${here}/ci/viewer-sso.cjs" "https://atak.${DOMAIN}/phone.html" "${TAK_USER}" "${TAK_PASS}" "${OUT}/viewer-phone-sso.png"

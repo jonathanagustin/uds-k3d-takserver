@@ -27,6 +27,7 @@ Options:
 ## Consequences
 
 - ATAK's streaming library sends no SNI. The 8089 listener on the passthrough gateway therefore routes by port alone ([ADR 12](0012-standard-tak-ports-on-the-passthrough-gateway.md)), and `tests/api-smoke.sh` checks a handshake without SNI.
+- The VM has no GPS, so the data package gives ATAK a fixed test location (National Mall, Washington, DC) with ATAK's restore-location settings, and the callsign `ATAK-DEVICE (TEST LOCATION)` marks it as a test position wherever it appears. It is never a real fix.
 - KVM is required. It is amd64 only; there is no arm64 Android-x86 build, so arm64 clusters cannot run it ([ADR 10](0010-amd64-and-arm64.md)).
 - `virt-handler` runs privileged on every node, with the UDS policy exemptions listed in docs/atak-device.md. That is a much larger trust grant than anything else in this repository, and is the main reason the component is opt-in.
 - CI cost: a cold APK build is more than an hour and the e2e job deploys UDS Core, TAK, KubeVirt, and a 3 GiB VM on one runner. The build layers live in a GHCR registry cache because the Actions cache is too small.

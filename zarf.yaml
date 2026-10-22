@@ -261,5 +261,5 @@ components:
                 "${ca}" "${cert}" "${key}" | k apply -f - >/dev/null
               echo "Secret cloudtak/cloudtak-tak-admin is up to date"
     images:
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.111.3" # cloudtak-version
+      - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.112.3" # cloudtak-version
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4"

@@ -19,9 +19,16 @@ version="$(read_baseline version)"
 # Use the released bundle and test values, without checking out or executing old code.
 git archive "${tag}" bundle values | tar -x -C "${work}"
 export UPGRADE_PACKAGE_REF="${version}-upstream"
+# Releases from v0.3.0 on are signed keylessly by release.yaml, and uds create
+# refuses a signed package without the identity to verify it against.
+export UPGRADE_SIGNER_REGEXP='^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 uds zarf tools yq -i '
   (.packages[] | select(.name == "takserver") | .path) = "../" |
   (.packages[] | select(.name == "takserver") | .ref) = strenv(UPGRADE_PACKAGE_REF) |
+  (.packages[] | select(.name == "takserver") | .keylessVerification) = {
+    "certificateIdentityRegexp": strenv(UPGRADE_SIGNER_REGEXP),
+    "certificateOIDCIssuer": "https://token.actions.githubusercontent.com"
+  } |
   del(.packages[] | select(.name == "takserver") | .repository)
 ' "${work}/bundle/uds-bundle.yaml"
 if ! uds zarf package pull "${package}" --architecture=amd64 --no-progress --features values=true -o "${work}"; then

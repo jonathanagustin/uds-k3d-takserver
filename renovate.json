@@ -274,6 +274,17 @@
         "needs-migration"
       ],
       "commitMessageTopic": "{{depName}}"
+    },
+    {
+      "description": "The admission module's Deployment runs the Pepr controller image of the pepr version in pepr/package.json, and the package does not carry that image: it uses the one UDS Core already pushed to the Zarf registry. A pepr version that UDS Core does not ship leaves the module in ImagePullBackOff, so pepr moves with UDS Core after approval on the dependency dashboard.",
+      "matchDepNames": [
+        "pepr"
+      ],
+      "groupName": "Pepr",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "needs-migration"
+      ]
     }
   ],
   "git-submodules": {

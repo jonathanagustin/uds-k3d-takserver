@@ -14,6 +14,9 @@ on:
       - "bundle/**"
       - ".github/container-and-chart/**"
       - ".github/workflows/scan.yaml"
+      - ".github/scripts/pin-image-tags.sh"
+      - ".gitmodules"
+      - "upstream/**"
 
 permissions:
   actions: read
@@ -74,7 +77,121 @@ jobs:
       - name: Wait for the PostGIS image
         run: ./.github/container-and-chart/postgis/build.sh --wait
 
-  scan:
+  # The same steps as uds-common's callable-scan.yaml (v1.32.1), with one
+  # added: the plain image tags in zarf.yaml are written from main only, so a
+  # pull request that changes the TAK, CloudTAK or PostGIS inputs would scan
+  # main's images, or fail on a tag that does not exist yet. pin-image-tags.sh
+  # points zarf.yaml at the tags keyed by this commit's inputs, which the
+  # images job above waited for.
+  scan-and-compare:
     needs: images
-    uses: defenseunicorns/uds-common/.github/workflows/callable-scan.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
-    secrets: inherit
+    runs-on: ubuntu-latest
+    concurrency:
+      group: scan-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      UDS_CLI_VERSION: 0.39.0
+      GRYPE_VERSION: v0.120.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v${{ env.UDS_CLI_VERSION }}
+
+      - name: Environment setup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${GH_TOKEN}\"}\"" >> "${GITHUB_ENV}"
+          uds run actions:setup-environment \
+            --set REGISTRY1_USERNAME="${{ secrets.IRON_BANK_ROBOT_USERNAME }}" \
+            --set REGISTRY1_PASSWORD="${{ secrets.IRON_BANK_ROBOT_PASSWORD }}" \
+            --set GH_TOKEN="${GH_TOKEN}" \
+            --set RAPIDFORT_USERNAME="${{ secrets.RAPIDFORT_USERNAME }}" \
+            --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
+            --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
+          uds run actions:install-deps
+        shell: bash
+
+      - name: Use this commit's TAK, CloudTAK and PostGIS images
+        run: ./.github/scripts/pin-image-tags.sh
+
+      - name: Compare scans
+        id: compare-scans
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          curl -sSfL https://get.anchore.io/grype | sudo sh -s -- -b /usr/local/bin "${GRYPE_VERSION}"
+          uds-pk scan compare \
+            --public-packages-prefix "" \
+            --private-packages-prefix "private" \
+            --zarf-yaml-path zarf.yaml --verbose \
+            --allow-different-images --repo-owner "${REPO_OWNER}" > comment.md
+          {
+            echo "----"
+            echo "generated with uds-pk scan compare"
+          } >> comment.md
+          chars="$(wc -m < comment.md)"
+          echo "Characters in comparison: ${chars}"
+          if [[ "${chars}" -gt 65536 ]]; then
+            echo "artifact=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "artifact=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Post markdown as comment
+        if: steps.compare-scans.outputs.artifact == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --body-file comment.md \
+            --edit-last \
+            --create-if-none
+
+      - name: Upload comparison results
+        id: upload-comparison-results
+        if: steps.compare-scans.outputs.artifact == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scan-comparison
+          path: comment.md
+
+      # A long comparison has many images, so the comment keeps each one
+      # collapsed and links the full results.
+      - name: Post comment about artifact
+        if: steps.compare-scans.outputs.artifact == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.upload-comparison-results.outputs.artifact-url }}
+        run: |
+          # The sed scripts match literal backticks.
+          # shellcheck disable=SC2016
+          {
+            echo "Full scan comparison results are too large to post as a comment. Link to full results artifact: [Results](${ARTIFACT_URL})"
+            echo "Summarized results are below:"
+            echo "<details>"
+            echo
+            sed '/<details>/,/<\/details>/d' comment.md | sed '/^______________________________________________________________________$/{
+            i\
+            </details>
+            a\
+            <details>
+            d
+            }' | sed -E 's/^(### )([^`]+)( `)/<summary>\2<\/summary>\n\n\0/'
+          } >> summary.md
+          tac summary.md | sed '0,/<details>/ s/<details>//' | tac > summary-done.md
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --body-file summary-done.md \
+            --edit-last \
+            --create-if-none

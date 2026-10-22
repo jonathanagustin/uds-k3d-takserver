@@ -217,8 +217,8 @@ flowchart TB
     ctdb["PostGIS"]
   end
 
-  browser -- "takserver.&lt;domain&gt;" --> tenant
-  browser -- "map.&lt;domain&gt;" --> tenant
+  browser -- "takserver.#60;domain#62;" --> tenant
+  browser -- "map.#60;domain#62;" --> tenant
   browser -. "sign-in" .-> keycloak
   atak -- "mutual TLS" --> passthrough
   tenant -- "re-encrypted TLS" --> web
@@ -247,7 +247,7 @@ flowchart LR
   pkg --> bundle["Test bundle<br/>with UDS Core"]
   bundle --> deploy["uds deploy on k3d<br/>and the test suite"]
   pkg -- "release on main" --> sign["Keyless signature<br/>and SLSA provenance"]
-  sign --> ghcr["GHCR<br/>takserver:&lt;version&gt;-upstream"]
+  sign --> ghcr["GHCR<br/>takserver:#60;version#62;-upstream"]
 ```
 
 Release Please opens a release pull request from the Conventional Commit titles. Merging it tags the release, and `release.yaml` creates, signs, verifies, and publishes the package for each architecture, then attests its provenance.

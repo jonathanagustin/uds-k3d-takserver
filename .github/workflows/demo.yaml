@@ -73,12 +73,6 @@ jobs:
         if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest'
         run: ./.github/scripts/trim-runner.sh
 
-      - name: Restore the slim core package
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: .cache/k3d-core-slim-dev
-          key: k3d-core-slim-dev-1.15.0-${{ runner.os }}-${{ runner.arch }}
-
       - name: Restore the Zarf cache
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:

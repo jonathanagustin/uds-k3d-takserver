@@ -45,6 +45,16 @@ Pull requests scan the loaded images with Grype and Trivy. A push of these files
 
 `takserver-tool-ui` uses `react-scripts` 5.0.1. Its ESLint setup names a `jest/globals` environment that the installed plugin does not provide, so the UI build stops before it writes the bundle. The builder sets `DISABLE_ESLINT_PLUGIN=true`. The upstream `package.json` is not changed.
 
+## Docker Hub rate limits
+
+The Zarf package pulls three images from `docker.io`: Postgres (`imresamu/postgis`), NATS, and the NATS config reloader. Docker Hub limits anonymous pulls per IP address, so a shared runner or sandbox can fail package creation with `429 toomanyrequests`. Pull them through a mirror:
+
+```bash
+uds run create-dev-package --set CREATE_OPTIONS="--registry-override docker.io=mirror.gcr.io"
+```
+
+The package still records the `docker.io` image names. Only the place Zarf pulls from changes.
+
 ## Architectures
 
 The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU: it builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache, and pushes `<tag>-amd64` and `<tag>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.

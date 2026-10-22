@@ -162,7 +162,8 @@ sleep 60
 shot atak-connected
 if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   a exec-out cat /sdcard/ui.xml > "${OUT}/ui.xml" || true
-  cp "${OUT}/ui.xml" /tmp/ui.xml && cert_prompt || true
+  cp "${OUT}/ui.xml" /tmp/ui.xml
+  cert_prompt || true
 fi
 a logcat -d -t 3000 > "${OUT}/logcat.txt" 2>&1 || true
 grep -E "ImportManager|MissionPackage|Import.*Sort|CertificateManager|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true

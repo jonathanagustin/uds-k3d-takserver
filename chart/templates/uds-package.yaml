@@ -16,7 +16,7 @@ spec:
       key: ca-bundle.pem
   {{- if .Values.sso.enabled }}
   sso:
-    - name: TAK Server
+    - name: TAK Server Login
       description: "Keycloak client for TAK native OIDC on the tenant gateway."
       protocol: openid-connect
       clientId: {{ .Values.sso.clientId | quote }}

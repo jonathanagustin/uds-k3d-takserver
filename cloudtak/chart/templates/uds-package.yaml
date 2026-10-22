@@ -12,7 +12,7 @@ spec:
     # the CloudTAK pod runs the code flow and enrols a TAK certificate for
     # the user with the access token. There is no Authservice in front, so
     # the CloudTAK API and its WebSocket see no extra redirect.
-    - name: CloudTAK
+    - name: CloudTAK Login
       description: "Keycloak sign-in for the CloudTAK map."
       protocol: openid-connect
       clientId: {{ .Values.sso.clientId | quote }}
@@ -133,4 +133,8 @@ spec:
         port: {{ include "cloudtak.basemap.port" . }}
         {{- end }}
         description: "Egress from cloudtak to basemap tile host"
+      {{- end }}
+
+      {{- with .Values.additionalNetworkAllow }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}

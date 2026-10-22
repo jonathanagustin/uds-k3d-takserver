@@ -6,4 +6,4 @@ name: uds-cloudtak
 description: CloudTAK browser map client for the TAK Server in this package
 type: application
 version: 0.1.0
-appVersion: "v13.111.3" # cloudtak-version
+appVersion: "v13.112.3" # cloudtak-version

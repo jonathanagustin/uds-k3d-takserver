@@ -7,4 +7,4 @@
 	path = upstream/cloudtak
 	url = https://github.com/dfpc-coe/CloudTAK
 	shallow = true
-	branch = v13.111.3
+	branch = v13.112.3

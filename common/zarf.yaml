@@ -16,7 +16,7 @@ components:
       # live in this chart rather than a manifest.
       - name: uds-takserver-config
         namespace: takserver
-        version: 0.4.0 # x-release-please-version
+        version: 0.5.0 # x-release-please-version
         localPath: ../chart
       # Admission module. Installed before the upstream chart so that every
       # TAK pod is created with the init container that renders the OIDC client

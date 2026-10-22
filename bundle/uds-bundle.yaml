@@ -57,7 +57,7 @@ packages:
               value: 50m
             # Upstream defaults plus the standard TAK ports. The gateway
             # chart's NetworkPolicy opens each listed port.
-            # chart/templates/standard-ports.yaml routes 8446 and 8089.
+            # charts/takserver/templates/standard-ports.yaml routes 8446 and 8089.
             - path: service.ports
               value:
                 - name: status-port

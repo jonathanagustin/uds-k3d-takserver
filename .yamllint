@@ -3,7 +3,6 @@ yaml-files:
   - ".yamllint"
 
 ignore:
-  - "**/chart/templates/**"
   - "charts/*/templates/**"
   - "build/**"
   - "**/node_modules/**"

@@ -15,7 +15,7 @@ The rules have to match what the pods really open. The upstream chart and `CoreC
 ## Decision
 
 - Remove both `IntraNamespace` rules. Every pod-to-pod flow is an Egress rule on the client and an Ingress rule on the server, limited to one port.
-- The flows live in `intraNamespace` in `chart/values.yaml`, so a deployment can add or remove one without editing the template. `additionalNetworkAllow` still appends rules.
+- The flows live in `intraNamespace` in `charts/takserver/values.yaml`, so a deployment can add or remove one without editing the template. `additionalNetworkAllow` still appends rules.
 - The list comes from observed connections. `tests/flows.py` reads `/proc/net/tcp` in every pod, maps each connection to pods and a port, and checks it against the Package allow list. Run against the old rules, it saw:
   - API, messaging, and plugins to Postgres 5432 and NATS 4222. The config pod held neither.
   - Each TAK process to Ignite on 47100 and 47500.

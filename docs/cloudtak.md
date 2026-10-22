@@ -113,7 +113,7 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 | `cloudtak` | tenant gateway (Keycloak) | 443 | `cloudtak` Egress |
 | `cloudtak` (service account `cloudtak`) | `tile.openstreetmap.org` | 443 | `cloudtak` Egress `remoteHost`, only with `basemap.enabled` |
 
-The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
+The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `charts/takserver/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
 
 `additionalNetworkAllow` in `charts/cloudtak/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
 

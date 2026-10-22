@@ -6,7 +6,7 @@
 # docs/justifications.md, or when a matcher name is a bare wildcard.
 set -euo pipefail
 
-rendered="$(helm template takserver chart --namespace takserver)"
+rendered="$(helm template takserver charts/takserver --namespace takserver)"
 
 names="$(awk '
   /^---/ { kind = ""; name = ""; next }

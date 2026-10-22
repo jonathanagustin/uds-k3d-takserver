@@ -17,7 +17,7 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md). NATS stays the images rendered by the upstream NATS chart. This repository does not build those.
 
-The overlay turns the chart's nginx ingress off. The UDS Package in `chart/templates/uds-package.yaml` exposes the same ports through the passthrough gateway:
+The overlay turns the chart's nginx ingress off. The UDS Package in `charts/takserver/templates/uds-package.yaml` exposes the same ports through the passthrough gateway:
 
 - `https://takserver.uds.dev` on the tenant gateway to `takserver-web` port 8447. The gateway re-encrypts and verifies TAK's certificate.
 - `https://takserver.uds.dev` on the passthrough gateway to `takserver-api-service` port 8446
@@ -28,7 +28,7 @@ The overlay turns the chart's nginx ingress off. The UDS Package in `chart/templ
 
 ## Upstream chart values
 
-The TAK chart is used as published. Nothing under `src/takserver-cluster/deployments/helm` is copied into this repo. `chart/` is only the UDS Package and the ConfigMaps that chart mounts. It is not a fork of the TAK templates.
+The TAK chart is used as published. Nothing under `src/takserver-cluster/deployments/helm` is copied into this repo. `charts/takserver/` is only the UDS Package and the ConfigMaps that chart mounts. It is not a fork of the TAK templates.
 
 The chart has no defaults file. `developer-values.yaml` in tag `5.7-RELEASE-14` is the example these overrides are measured against. Probes are hardcoded in the upstream Deployments (`api-readiness.sh`, `config-readiness.sh`, `messaging-readiness.sh`, and the TCP liveness ports). This repo does not replace those templates. The readiness scripts read `/logs/takserver-api.log`, `/logs/takserver-config.log`, and `UserAuthenticationFile.xml`. Logback writes `logs/takserver-*.log` and the image working directory is `/`, so that path is `/logs/takserver-*.log`. The file is absent until the process gets past Ignite discovery. `cat: /logs/takserver-api.log: No such file or directory` is that startup window, or a container that just restarted. It is not a different log path.
 
@@ -59,7 +59,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 
 ## What the chart mounts
 
-`chart/templates/prereqs.yaml` creates ConfigMaps `core-config` and `tak-ignite-config`, Secret `reg-cred`, and Exemption `takserver-db-setup` in `uds-policy-exemptions`. A pre-install Job creates ConfigMap `cert-migration` when that object is missing and publishes ConfigMap `ignite-extensions` from the jar in the `takserver-config` image. The image build produces that jar with `:takserver-cluster:igniteExtensions`. Zarf installs this chart before the upstream chart, because a manifest in the same component would run only after that chart finished. The upstream chart mounts those ConfigMaps and always sets `imagePullSecrets` to `reg-cred`.
+`charts/takserver/templates/prereqs.yaml` creates ConfigMaps `core-config` and `tak-ignite-config`, Secret `reg-cred`, and Exemption `takserver-db-setup` in `uds-policy-exemptions`. A pre-install Job creates ConfigMap `cert-migration` when that object is missing and publishes ConfigMap `ignite-extensions` from the jar in the `takserver-config` image. The image build produces that jar with `:takserver-cluster:igniteExtensions`. Zarf installs this chart before the upstream chart, because a manifest in the same component would run only after that chart finished. The upstream chart mounts those ConfigMaps and always sets `imagePullSecrets` to `reg-cred`.
 
 The upstream `post-install-hook-postgres.yaml` Job is named `takserver-db-setup` and sets `proxy.istio.io/config` to `{ "holdApplicationUntilProxyStarts": true }`. There is no values key for that annotation. UDS `RestrictIstioSidecarOverrides` denied every pod the Job created, so the schema hook never ran and Helm hit its 15 minute deadline with the Job still `0/1`. The Exemption matches pods `^takserver-db-setup-.*` in the release namespace and allows only that policy. Probes stay the upstream delays and ports. The messaging restarts on that run were the 1Gi OOM above, not the TCP liveness timing: the container exited about 15 seconds after UserManager started, before six liveness failures could accumulate.
 
@@ -67,7 +67,7 @@ The upstream `post-install-hook-postgres.yaml` Job is named `takserver-db-setup`
 
 ## Certificates
 
-No private key, keystore, CSR, or CRL is stored in this repository. `chart/values.yaml` `certs` sets the CA subject (`uds-tak-ca`, `VA`, `Arlington`, `TAK`, `UDS`). The pre-install Job `takserver-cert-init` runs `/opt/tak/certs/publish-cert-configmap.sh` in the `takserver-config` image. That script runs the same steps as TAK's `generateClusterCerts.sh` from tag `5.7-RELEASE-14` (`makeRootCa.sh` and `makeCert.sh` for the server, admin, and user) and POSTs ConfigMap `cert-migration`. The upstream chart mounts that ConfigMap. The keystore password stays the upstream example value `atakatak`, which is also `CAPASS` in `cert-metadata.sh` and the password on the generated `admin.key`. Changing it means editing `CoreConfig.xml` and the Job together.
+No private key, keystore, CSR, or CRL is stored in this repository. `charts/takserver/values.yaml` `certs` sets the CA subject (`uds-tak-ca`, `VA`, `Arlington`, `TAK`, `UDS`). The pre-install Job `takserver-cert-init` runs `/opt/tak/certs/publish-cert-configmap.sh` in the `takserver-config` image. That script runs the same steps as TAK's `generateClusterCerts.sh` from tag `5.7-RELEASE-14` (`makeRootCa.sh` and `makeCert.sh` for the server, admin, and user) and POSTs ConfigMap `cert-migration`. The upstream chart mounts that ConfigMap. The keystore password stays the upstream example value `atakatak`, which is also `CAPASS` in `cert-metadata.sh` and the password on the generated `admin.key`. Changing it means editing `CoreConfig.xml` and the Job together.
 
 `certs.pkcs12` sets the format of the `.p12` files. `modern`, the default, passes TAK's `--fips` flag, so every `.p12` uses PBES2 (PBKDF2, AES-256-CBC) with an HMAC-SHA256 MAC, and the Job fails if one doesn't. `legacy` is TAK's own OpenSSL 3 output (`-legacy`: RC2 or 3DES with a SHA-1 MAC). The `.jks` keystores TAK Server loads are written by the JDK 17 `keytool` as PKCS#12 with AES-256-CBC and HMAC-SHA256 in both modes, including `takserver-web.jks` from `issue-web-cert.sh`. TAK opens them with `keystore="JKS"` through the JDK's keystore compatibility mode. In `modern` mode `makeRootCa.sh` also writes `truststore-root-legacy.p12`, which holds only the public CA certificate. The Job records the format in the ConfigMap annotation `uds.dev/pkcs12-format`, and `uds run test:pkcs12` checks every keystore when it says `modern`. The setting only applies when the Job generates the CA, so an upgrade keeps the existing files.
 

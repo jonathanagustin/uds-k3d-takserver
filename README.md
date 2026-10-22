@@ -56,7 +56,7 @@ https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 
 ## What you get
 
-- **Upstream chart, not a fork.** Zarf pulls the public TAK Server chart at package time. A small config chart in `chart/` adds the UDS `Package` and the ConfigMaps the upstream chart mounts.
+- **Upstream chart, not a fork.** Zarf pulls the public TAK Server chart at package time. A small config chart in `charts/takserver/` adds the UDS `Package` and the ConfigMaps the upstream chart mounts.
 - **Keycloak single sign-on.** The UDS operator registers the Keycloak client, and TAK's own OpenID Connect client handles browser sign-in. Keycloak groups map to TAK roles and groups. See [docs/sso.md](docs/sso.md).
 - **Certificates made at deploy time.** A pre-install Job runs TAK's `generateClusterCerts.sh`. No keys or keystores are in git or in any image. See [ADR 2](adr/0002-generate-certificates-at-deploy-time.md).
 - **UDS networking.** The browser UI goes through the tenant gateway. Certificate traffic (API, enrollment, streaming) goes through the passthrough gateway, including the standard TAK ports 8446 and 8089. NetworkPolicies are default-deny, with explicit per-workload rules. See [docs/networking.md](docs/networking.md).
@@ -240,7 +240,7 @@ flowchart TB
 
 The TAK namespace runs in the Istio ambient mesh with default-deny NetworkPolicies, and every flow above has an explicit allow rule from the UDS `Package`. The browser UI is the only TAK path through the tenant gateway. Certificate clients go through the passthrough gateway, so TLS ends at TAK Server and TAK checks the client certificate itself.
 
-Zarf installs the config chart (`chart/`) before the upstream chart. The config chart creates the `core-config` and `tak-ignite-config` ConfigMaps and the `reg-cred` Secret, and runs the pre-install Job that generates certificates. The `takserver-oidc` Pepr module adds an init container to the config, messaging, API, and plugins pods that writes the OIDC client secret into `CoreConfig.xml` before TAK Server starts.
+Zarf installs the config chart (`charts/takserver/`) before the upstream chart. The config chart creates the `core-config` and `tak-ignite-config` ConfigMaps and the `reg-cred` Secret, and runs the pre-install Job that generates certificates. The `takserver-oidc` Pepr module adds an init container to the config, messaging, API, and plugins pods that writes the OIDC client secret into `CoreConfig.xml` before TAK Server starts.
 
 ### Build and release
 
@@ -314,7 +314,7 @@ In GitHub Actions, the Test workflow runs install on amd64 and arm64 and the upg
 | Path | Purpose |
 | --- | --- |
 | `zarf.yaml`, `common/zarf.yaml` | Package metadata, variables, images, and the `takserver` and `cloudtak` components |
-| `chart/` | Config chart: UDS `Package`, ConfigMaps, standard TAK ports, and the certificate Job |
+| `charts/takserver/` | Config chart: UDS `Package`, ConfigMaps, standard TAK ports, and the certificate Job |
 | `charts/cloudtak/` | CloudTAK chart: Deployment, PostGIS, and its UDS `Package` |
 | `values/` | Values overlays for the upstream chart and the Pepr module |
 | `pepr/` | `takserver-oidc` Pepr module that adds the OIDC init container |

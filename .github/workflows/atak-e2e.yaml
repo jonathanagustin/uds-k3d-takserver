@@ -99,7 +99,8 @@ jobs:
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
         with:
-          version: v0.39.0
+          # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
+          version: v0.40.0
 
       - name: Environment setup
         run: |

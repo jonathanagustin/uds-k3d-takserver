@@ -38,7 +38,7 @@ components:
         files:
           - deploy/kubevirt-exemption.yaml
       # v1.8.4 publishes the VMI checksum fields with uint32 bounds (v1.6.6 and v1.7.4 do not).
-      # Kubernetes 1.36 enforces numeric formats, and older releases publish
+      # Kubernetes 1.37 (k3s v1.37.1 in CI) enforces numeric formats, and older releases publish
       # the kernel and containerDisk checksums as int32, so virt-handler can
       # never move the VMI past Scheduled. v1.9.1 fails to start containerDisk
       # VMs (the container-disk binary is missing from the launcher).

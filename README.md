@@ -12,43 +12,47 @@
 
 ## Demo
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-deploy.mp4"><img src="docs/images/demo-deploy.png" alt="Deploy demo video" width="100%"></a>
-      <br><b>Deploy</b> (3 min)
-      <br>Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK device.
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-operate-and-trust.mp4"><img src="docs/images/demo-operate-and-trust.png" alt="Operate and Trust demo video" width="100%"></a>
-      <br><b>Operate and Trust</b> (4 min)
-      <br>Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing.
-    </td>
-  </tr>
-</table>
+### Deploy
+
+Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK device. 3 min.
+
+https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
 <details>
 <summary>Chapters</summary>
 
-**Deploy:**
-0:05 UDS Core (Slim) on a New k3d Cluster ·
-0:15 Build the Zarf Package ·
-0:24 Bundle the Package with UDS Core ·
-0:32 Deploy the Bundle ·
-0:44 Package Ready ·
-1:08 Sign In through UDS SSO ·
-1:38 A Real ATAK Device on the Same Server
-
-**Operate and Trust:**
-0:04 Air-Gapped Install ·
-0:38 Policy at Work ·
-1:03 CloudTAK and ATAK in Sync ·
-1:48 Secure by Default ·
-3:04 Upgrades from the Last Signed Release ·
-3:11 Footprint and Self-Healing ·
-3:48 What This Does Not Prove
+- 0:05 UDS Core (Slim) on a New k3d Cluster
+- 0:15 Build the Zarf Package
+- 0:24 Bundle the Package with UDS Core
+- 0:32 Deploy the Bundle
+- 0:44 Package Ready
+- 1:08 Sign In through UDS SSO
+- 1:38 A Real ATAK Device on the Same Server
 
 </details>
+
+[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-deploy.mp4)
+
+### Operate and Trust
+
+Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 4 min.
+
+https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
+
+<details>
+<summary>Chapters</summary>
+
+- 0:04 Air-Gapped Install
+- 0:38 Policy at Work
+- 1:03 CloudTAK and ATAK in Sync
+- 1:48 Secure by Default
+- 3:04 Upgrades from the Last Signed Release
+- 3:11 Footprint and Self-Healing
+- 3:48 What This Does Not Prove
+
+</details>
+
+[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-operate-and-trust.mp4)
 
 ## What you get
 

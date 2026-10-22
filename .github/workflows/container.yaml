@@ -154,14 +154,14 @@ jobs:
       - name: Scan the local images
         env:
           IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
-          GRYPE_IMAGE: anchore/grype:v0.120.1@sha256:e4a44ef45d285b829ce6efe2642980329661bd2d18eab5fc539138d4adaebbbe
+          GRYPE_IMAGE: anchore/grype:v0.121.0@sha256:621d56d1d68106b787022c81546f7e0a36202a25d1239f0c20195fab8c16f7ea
         run: ./.github/scripts/scan-local-images.sh
 
       - name: Generate SBOMs from the local images
         if: env.PUSH_IMAGES == 'true'
         env:
           IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
-          SYFT_IMAGE: anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
+          SYFT_IMAGE: anchore/syft:v1.55.0@sha256:4cc92b64ca74ffca4c94d4c8fcc01f217731375300be14d0b6eeb2e82eaa110a
         shell: bash
         run: |
           set -euo pipefail

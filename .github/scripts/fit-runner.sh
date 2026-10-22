@@ -7,32 +7,38 @@
 # Pepr and the Istio CNI stay up: the bundle webhook and pod sandbox depend on them.
 set -euo pipefail
 
+if command -v kubectl >/dev/null 2>&1; then
+  k() { kubectl "$@"; }
+elif command -v uds >/dev/null 2>&1; then
+  k() { uds zarf tools kubectl "$@"; }
+else
+  echo "kubectl is not available" >&2
+  exit 1
+fi
+
 if command -v k3d >/dev/null 2>&1; then
   k3d kubeconfig merge uds --kubeconfig-merge-default >/dev/null
 fi
 
-if ! kubectl get nodes >/dev/null 2>&1; then
+if ! k get nodes >/dev/null 2>&1; then
   echo "kubectl cannot read the k3d cluster." >&2
   exit 1
 fi
 
 # This DaemonSet is restored with the checkpoint and requests 100m.
-kubectl delete daemonset --ignore-not-found -n kube-system ensure-machine-id
-kubectl delete job --ignore-not-found -n kube-system ensure-machine-id
-kubectl delete pod --ignore-not-found -n kube-system -l job-name=ensure-machine-id
+k delete daemonset --ignore-not-found -n kube-system ensure-machine-id
+k delete job --ignore-not-found -n kube-system ensure-machine-id
+k delete pod --ignore-not-found -n kube-system -l job-name=ensure-machine-id
 
-# The checkpoint CRDs are the standard channel. core-base ships the
-# experimental channel, and this policy rejects that upgrade.
-kubectl delete validatingadmissionpolicy --ignore-not-found safe-upgrades.gateway.networking.k8s.io
-kubectl delete validatingadmissionpolicybinding --ignore-not-found safe-upgrades.gateway.networking.k8s.io
+"$(dirname "${BASH_SOURCE[0]}")/allow-experimental-gateway-crds.sh"
 
 scale_to() {
   local namespace="$1"
   local name="$2"
   local replicas="$3"
-  if kubectl get deploy "${name}" -n "${namespace}" >/dev/null 2>&1; then
-    kubectl scale "deploy/${name}" -n "${namespace}" --replicas="${replicas}"
-    kubectl rollout status "deploy/${name}" -n "${namespace}" --timeout=180s
+  if k get deploy "${name}" -n "${namespace}" >/dev/null 2>&1; then
+    k scale "deploy/${name}" -n "${namespace}" --replicas="${replicas}"
+    k rollout status "deploy/${name}" -n "${namespace}" --timeout=180s
   fi
 }
 
@@ -42,4 +48,4 @@ scale_to uds-dev-stack minio 0
 scale_to zarf agent-hook 1
 
 echo "Allocated CPU after trimming unused pods:"
-kubectl describe node | sed -n '/Allocated resources:/,/Events:/p'
+k describe node | sed -n '/Allocated resources:/,/Events:/p'

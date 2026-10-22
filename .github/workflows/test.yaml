@@ -24,6 +24,27 @@ on:
       - "CODEOWNERS"
       - "SECURITY.md"
 
+  # A run on main is the only one that saves the Zarf cache. A cache saved by a
+  # pull request is scoped to that pull request and no other one can restore it.
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/container-and-chart/**"
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "docs/**"
+      - "adr/**"
+      - ".gitignore"
+      - "LICENSE"
+      - "renovate.json"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
+      - "CODEOWNERS"
+      - "SECURITY.md"
+
 permissions:
   contents: read
   packages: read
@@ -32,7 +53,8 @@ permissions:
 
 concurrency:
   group: test-${{ github.ref }}
-  cancel-in-progress: true
+  # A cancelled run on main would skip its cache save.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   images:
@@ -161,6 +183,68 @@ jobs:
       - name: Write the multi-arch CloudTAK index
         run: ./.github/container-and-chart/cloudtak/build.sh --merge
 
+  # Each job pushes 15-3.4-<arch> only when .github/container-and-chart/postgis
+  # changed (build.sh compares that tree with the label on the published tag).
+  # postgis-index joins them under 15-3.4, the tag zarf.yaml and the charts
+  # reference.
+  postgis-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: postgis-image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the PostGIS image if its inputs changed
+        env:
+          PUSH_IMAGES: "true"
+          ARCH: ${{ matrix.arch }}
+        run: ./.github/container-and-chart/postgis/build.sh --if-changed
+
+  postgis-index:
+    needs: postgis-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the multi-arch PostGIS index
+        run: ./.github/container-and-chart/postgis/build.sh --merge
+
   check-flavor:
     runs-on: ubuntu-latest
     steps:
@@ -179,7 +263,7 @@ jobs:
   # slim core checkpoint and core-base are published for amd64 and arm64.
   # Upgrade stays on amd64 until a released arm64 package exists.
   validate-install:
-    needs: [check-flavor, images, cloudtak-index]
+    needs: [check-flavor, images, cloudtak-index, postgis-index]
     strategy:
       fail-fast: false
       matrix:
@@ -240,15 +324,7 @@ jobs:
         run: ./.github/scripts/trim-runner.sh
 
       # Restore only. Install and upgrade run together, and a second save of
-      # the same key fails the job. Install saves after the deploy.
-      - name: Restore the slim core package
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
-        id: slim-cache
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: .cache/k3d-core-slim-dev
-          key: k3d-core-slim-dev-1.15.0-${{ runner.os }}-${{ runner.arch }}
-
+      # the same key fails the job. Only a run on main saves, after the deploy.
       - name: Restore the Zarf cache
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         id: zarf-cache
@@ -321,33 +397,8 @@ jobs:
             done
           done
 
-      - name: Note whether the slim package is complete
-        id: slim-file
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always() && env.TEST_TYPE == 'install')
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          files=(.cache/k3d-core-slim-dev/zarf-package-k3d-core-slim-dev-*.tar.zst)
-          ok=false
-          if [ "${#files[@]}" -gt 0 ]; then
-            bytes="$(stat -c%s "${files[0]}")"
-            # The published checkpoint is about 5.5 GB. A smaller file is a
-            # partial pull and must not be reused on the next run.
-            if [ "${bytes}" -gt 4000000000 ]; then
-              ok=true
-            fi
-          fi
-          echo "ok=${ok}" >> "${GITHUB_OUTPUT}"
-
-      - name: Save the slim core package
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always() && env.TEST_TYPE == 'install' && steps.slim-cache.outputs.cache-hit != 'true' && steps.slim-file.outputs.ok == 'true')
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: .cache/k3d-core-slim-dev
-          key: k3d-core-slim-dev-1.15.0-${{ runner.os }}-${{ runner.arch }}
-
       - name: Save the Zarf cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (success() && env.TEST_TYPE == 'install' && steps.zarf-cache.outputs.cache-hit != 'true')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (success() && github.event_name == 'push' && env.TEST_TYPE == 'install' && steps.zarf-cache.outputs.cache-hit != 'true')
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: .cache/zarf-cache
@@ -396,7 +447,7 @@ jobs:
           if-no-files-found: ignore
 
   validate-upgrade:
-    needs: [images, cloudtak-index]
+    needs: [images, cloudtak-index, postgis-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}

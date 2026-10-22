@@ -23,6 +23,13 @@ variables:
     default: takserver
   - name: TARGET_REPO
     default: ghcr.io/jonathanagustin/uds-k3d-takserver
+  # Extra zarf package create flags. Docker Hub limits anonymous pulls per IP
+  # and the package pulls three docker.io images, so a shared CI or sandbox IP
+  # can hit HTTP 429. Pull them through a mirror instead:
+  #   uds run create-dev-package --set CREATE_OPTIONS="--registry-override docker.io=mirror.gcr.io"
+  # The image names in the package stay docker.io, only the pull source changes.
+  - name: CREATE_OPTIONS
+    default: ""
   # Shared lint:all checks SPDX headers when this is true.
   - name: RUN_LICENSE_CHECKS
     default: "true"
@@ -33,7 +40,7 @@ tasks:
     actions:
       - task: create:package
         with:
-          options: "--skip-sbom --set DOMAIN=${{ .variables.DOMAIN }} --set TAK_IMAGE_TAG=${{ .variables.TAK_IMAGE_TAG }}"
+          options: "--skip-sbom --set DOMAIN=${{ .variables.DOMAIN }} --set TAK_IMAGE_TAG=${{ .variables.TAK_IMAGE_TAG }} ${{ .variables.CREATE_OPTIONS }}"
 
   - name: fit-runner
     description: Free CPU on a 2 vCPU node before the slim core upgrade
@@ -63,10 +70,16 @@ tasks:
       - task: fit-runner
       - task: create-deploy-test-bundle
 
+  - name: allow-experimental-gateway-crds
+    description: Remove the Gateway API safe-upgrades policy so the core-base upgrade can apply
+    actions:
+      - cmd: ./.github/scripts/allow-experimental-gateway-crds.sh
+
   - name: dev
     description: Create and deploy the bundle on an existing cluster
     actions:
       - task: create-dev-package
+      - task: allow-experimental-gateway-crds
       - task: create:test-bundle
       - task: deploy:test-bundle
         with:

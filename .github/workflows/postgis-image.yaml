@@ -1,0 +1,94 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: PostGIS image
+
+# Builds ghcr.io/jonathanagustin/uds-k3d-takserver/postgis. Pull requests
+# build it in the Test workflow, before the package is created.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even when the published image has the same inputs
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - .github/container-and-chart/postgis/**
+      - .github/workflows/postgis-image.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgis-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One native runner per architecture, each pushing 15-3.4-<arch>.
+  # index joins them under 15-3.4, the tag zarf.yaml references.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        env:
+          PUSH_IMAGES: "true"
+          ARCH: ${{ matrix.arch }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          if [ "${FORCE}" = "true" ]; then
+            ./.github/container-and-chart/postgis/build.sh
+          else
+            ./.github/container-and-chart/postgis/build.sh --if-changed
+          fi
+
+  index:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the multi-arch index
+        run: ./.github/container-and-chart/postgis/build.sh --merge

@@ -78,6 +78,10 @@ jobs:
       - name: Wait for the CloudTAK image
         run: ./.github/container-and-chart/cloudtak/build.sh --wait
 
+      # Same for the PostGIS image.
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
+
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
         with:

@@ -51,3 +51,4 @@ jobs:
             # --recursive also signs each per-architecture manifest in the index.
             cosign sign --yes --recursive "${repo}/${name}:${tag}"
           done
+          cosign sign --yes --recursive "${repo}/postgis:15-3.4"

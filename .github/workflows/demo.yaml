@@ -118,6 +118,28 @@ jobs:
           docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
           df -h /
 
+      - name: Install recording tools
+        # Before the deploy, while the runner is idle: after it, apt has
+        # hung here twice.
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          apt_opts=(-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_opts[@]}" update
+          sudo apt-get "${apt_opts[@]}" install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+            xvfb libnss3-tools
+          google-chrome --version
+          # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04
+          # blocks the unprivileged user namespaces that sandbox uses.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          tarball="vhs_${VHS_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSL -o "/tmp/${tarball}" "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/${tarball}"
+          echo "${VHS_SHA256}  /tmp/${tarball}" | sha256sum -c -
+          tar -xzf "/tmp/${tarball}" -C /tmp
+          sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
+          vhs --version
+        shell: bash
+
       - name: Install Docker Compose
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
         with:
@@ -172,26 +194,6 @@ jobs:
           uds run demo-setup --no-progress
         shell: bash
         timeout-minutes: 90
-
-      - name: Install recording tools
-        timeout-minutes: 15
-        run: |
-          set -euo pipefail
-          apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          sudo apt-get "${apt_opts[@]}" update -qq
-          sudo apt-get "${apt_opts[@]}" install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
-            xvfb libnss3-tools
-          google-chrome --version
-          # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04
-          # blocks the unprivileged user namespaces that sandbox uses.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          tarball="vhs_${VHS_VERSION}_Linux_x86_64.tar.gz"
-          curl -fsSL -o "/tmp/${tarball}" "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/${tarball}"
-          echo "${VHS_SHA256}  /tmp/${tarball}" | sha256sum -c -
-          tar -xzf "/tmp/${tarball}" -C /tmp
-          sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
-          vhs --version
-        shell: bash
 
       - name: Render the recorded deployment
         run: |

@@ -4,8 +4,12 @@
 name: CloudTAK image
 
 # Builds ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak from the
-# upstream/cloudtak submodule. Pull requests build it in the Test workflow's
-# images job, before the package is created.
+# upstream/cloudtak submodule. The Test workflow also builds it on pull
+# requests, but it skips a pull request that only changes
+# .github/container-and-chart. The package and scan workflows wait for the
+# image, so a pull request that only changes it needs this build too. Both
+# builds use build.sh --if-changed, so whichever runs second finds the tag
+# already carries the same inputs.
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +17,12 @@ on:
         description: Rebuild even when the published image has the same inputs
         default: false
         type: boolean
+  pull_request:
+    paths:
+      - .gitmodules
+      - upstream/cloudtak
+      - .github/container-and-chart/cloudtak/**
+      - .github/workflows/cloudtak-image.yaml
   push:
     branches:
       - main

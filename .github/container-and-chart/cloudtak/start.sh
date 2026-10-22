@@ -41,6 +41,12 @@ if [[ "${BASEMAP_ENABLED:-}" = "true" ]]; then
   mv /tmp/nginx/nginx.conf.basemap /tmp/nginx/nginx.conf
   grep -q 'location ^~ /uds-basemap/' /tmp/nginx/nginx.conf
 fi
+# Upstream's config also listens on [::]:5000. A kernel with IPv6 disabled
+# (ipv6.disable=1) has no AF_INET6 sockets and nginx stops with error 97, so
+# drop those lines there. With IPv6 available the config is unchanged.
+if [[ ! -e /proc/net/if_inet6 ]]; then
+  sed -i '/^[[:space:]]*listen[[:space:]]\+\[::\]/d' /tmp/nginx/nginx.conf
+fi
 nginx -e /dev/stderr -c /tmp/nginx/nginx.conf
 
 exec node dist/index.js

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.2.0...v0.3.0) (2026-10-22)
+
+
+### Features
+
+* add renovate fix, uptime probes, exemption docs, package metadata and portal tiles ([#72](https://github.com/jonathanagustin/uds-k3d-takserver/issues/72)) ([4880f21](https://github.com/jonathanagustin/uds-k3d-takserver/commit/4880f21d3076967be473e3eb7c289053fda74697))
+* build the postgis image in this repository for amd64 and arm64 ([#81](https://github.com/jonathanagustin/uds-k3d-takserver/issues/81)) ([f0bb485](https://github.com/jonathanagustin/uds-k3d-takserver/commit/f0bb485a3d6ec523bfa9e682fe15e737ab1efdc4))
+
+
+### Bug Fixes
+
+* **ci:** strip color codes from the released package definition before checking its version ([#70](https://github.com/jonathanagustin/uds-k3d-takserver/issues/70)) ([c992016](https://github.com/jonathanagustin/uds-k3d-takserver/commit/c992016dbf9436dc84346bf35c7a50d7bba3b0b8))
+* let uds run dev upgrade core-base and add a registry mirror option ([#78](https://github.com/jonathanagustin/uds-k3d-takserver/issues/78)) ([03b9d05](https://github.com/jonathanagustin/uds-k3d-takserver/commit/03b9d059930ade6eacb2db4e375c0ab15b8df1a7))
+* write TAK PKCS[#12](https://github.com/jonathanagustin/uds-k3d-takserver/issues/12) files with AES-256 and an HMAC-SHA256 MAC ([#74](https://github.com/jonathanagustin/uds-k3d-takserver/issues/74)) ([460cde6](https://github.com/jonathanagustin/uds-k3d-takserver/commit/460cde632b0fcc951d0203d198a3b5774a26f6ae))
+
 ## [0.2.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.1.0...v0.2.0) (2026-10-21)
 
 

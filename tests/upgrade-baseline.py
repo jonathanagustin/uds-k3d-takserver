@@ -40,7 +40,8 @@ def releases(repository):
         page += 1
 
 
-def select_release(items):
+def select_release(items, head=None):
+    """Pick the newest published release, skipping one tagged on the commit under test."""
     candidates = []
     for release in items:
         tag = release.get("tag_name", "")
@@ -55,10 +56,19 @@ def select_release(items):
         if stable_tags:
             raise RuntimeError("Stable Git tags exist but no published Release Please release is available")
         return None
-    _, tag, match = max(candidates, key=lambda candidate: candidate[0])
+    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+    _, tag, match = candidates[0]
     ref = f"refs/tags/{tag}"
     # Never fall back to an older release if the latest baseline is invalid.
     commit = git("rev-parse", "--verify", f"{ref}^{{commit}}")
+    if head and commit == head:
+        # The release commit itself: its package may not be published yet, and
+        # upgrading a release to itself proves nothing. Use the one before it.
+        if len(candidates) == 1:
+            return None
+        _, tag, match = candidates[1]
+        ref = f"refs/tags/{tag}"
+        commit = git("rev-parse", "--verify", f"{ref}^{{commit}}")
     subprocess.run(
         ["git", "merge-base", "--is-ancestor", commit, "refs/remotes/origin/main"],
         check=True, capture_output=True,
@@ -83,7 +93,8 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise RuntimeError("Invalid repository name")
     subprocess.run(["git", "fetch", "origin", "main", "--tags"], check=True)
-    baseline = select_release(releases(repository))
+    head = os.environ.get("GITHUB_SHA") or git("rev-parse", "HEAD")
+    baseline = select_release(releases(repository), head=head)
     args.output.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:

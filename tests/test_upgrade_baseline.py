@@ -59,6 +59,28 @@ class BaselineTests(unittest.TestCase):
             check=True, capture_output=True,
         )
 
+    def test_release_on_the_commit_under_test_uses_the_previous_release(self):
+        commits = {"v1.0.0": "a" * 40, "v1.1.0": "b" * 40}
+
+        def git(command, *args):
+            if command == "rev-parse":
+                return commits[args[1].split("/")[-1].removesuffix("^{commit}")]
+            return self.valid_git(command, *args)
+
+        self.git.side_effect = git
+        result = baseline.select_release([release("v1.0.0"), release("v1.1.0")], head="b" * 40)
+        self.assertEqual(result["tag"], "v1.0.0")
+        self.assertEqual(result["commit"], "a" * 40)
+
+    def test_first_release_on_the_commit_under_test_is_bootstrap(self):
+        self.git.side_effect = self.valid_git
+        self.assertIsNone(baseline.select_release([release("v1.0.0")], head="a" * 40))
+
+    def test_other_head_keeps_the_latest_release(self):
+        self.git.side_effect = self.valid_git
+        result = baseline.select_release([release("v1.0.0"), release("v1.1.0")], head="c" * 40)
+        self.assertEqual(result["tag"], "v1.1.0")
+
     def test_manifest_mismatch_fails_without_older_fallback(self):
         self.git.side_effect = ["a" * 40, '{".": "1.0.0"}']
         with self.assertRaisesRegex(RuntimeError, "does not match"):

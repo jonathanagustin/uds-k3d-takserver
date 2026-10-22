@@ -383,6 +383,15 @@ jobs:
         run: bash tests/upgrade.sh "${RUNNER_TEMP}/tak-upgrade-baseline.json"
         timeout-minutes: 90
 
+      # The trim step deletes toolchains to keep disk headroom. This is the other
+      # half of that number: how much of the disk the test used by its end.
+      - name: Disk use after the test
+        if: always()
+        shell: bash
+        run: |
+          df -h /
+          sudo docker system df || true
+
       - name: Debug Output
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
         run: uds run actions:debug-output

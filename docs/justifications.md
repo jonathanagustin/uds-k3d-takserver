@@ -33,6 +33,28 @@ uds zarf tools kubectl get pods -n takserver -o jsonpath='{range .items[*]}{.met
 
 Both Package CRs set `serviceMesh.mode: ambient`. Passthrough TLS on 8443, 8446, and 8089 has to reach TAK unchanged, and there is no waypoint and no Authservice in front of TAK. See [Networking](networking.md).
 
+## UDS package requirements
+
+The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/configuration--packaging/package-requirements/) are a pre-publish checklist. These are the items this package does not meet, or meets only through the exception the requirement allows.
+
+### Metrics monitor
+
+- **Requirement:** Implement a monitor for each application metrics endpoint, unless the application provides no metrics.
+- **Status:** Not applicable. TAK Server 5.7-RELEASE-14 has no Prometheus endpoint, and its actuator is served on the Marti HTTPS connectors, where port 8443 requires a client certificate. The Package has no `monitor` entry.
+- **Details:** [ADR 3](../adr/0003-no-prometheus-monitor.md) and [Configuration](configuration.md).
+- **What changes it:** A Prometheus registry in the TAK image and a metrics port that does not require a client certificate.
+
+### Commands in Zarf actions
+
+- **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
+- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`, and two of them run `python3`: one writes the CoreDNS rewrite patch as JSON, and one runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
+- **What removes it:** Moving the init containers into the `takserver-oidc` Pepr module or an upstream chart value, and building the CoreDNS patch with `./zarf tools yq`.
+
+### Version scheme
+
+- **Requirement:** Versions follow `<upstream-app-version>-uds.<n>`, or Semantic Versioning when that scheme does not apply.
+- **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK `v13.111.3`, so no single application version leads the tag.
+
 ## Adding an exemption
 
 1. Keep the matcher as narrow as it can be. Never use `.*`.

@@ -57,7 +57,14 @@ The package still records the `docker.io` image names. Only the place Zarf pulls
 
 ## Architectures
 
-The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU: it builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache, and pushes `<tag>-amd64` and `<tag>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.
+The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU: it builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache, and pushes `<tag>-<key>-amd64` and `<tag>-<key>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>-<key>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.
+
+### Tags keyed by the build inputs
+
+- The inputs are the pinned `upstream/takserver` commit plus the git tree of `.github/container-and-chart/docker`, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256. `build.sh --tag` prints `5.7-RELEASE-14-<key>` for the current commit.
+- The container workflow builds only when `5.7-RELEASE-14-<key>` is not already published for both architectures. A pull request that does not change those inputs reuses the images built for them before.
+- `5.7-RELEASE-14` and `5.7-RELEASE-14-<arch>`, the tags in the committed files and in released packages, are written only from `main`, from the keyed images.
+- `wait-for-tak-images.sh` waits for the keyed index, and `.github/scripts/pin-image-tags.sh` points `zarf.yaml`, `tasks.yaml` and `bundle/uds-config.yaml` at it before CI creates a package. A keyed tag only ever holds one set of inputs, so a pull request deploys its own TAK images even when another branch builds different ones at the same time.
 
 To check a published tag:
 

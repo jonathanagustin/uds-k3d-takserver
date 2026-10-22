@@ -10,7 +10,7 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 - **Policy:** `RestrictIstioSidecarOverrides`
 - **Matcher:** `^takserver-db-setup-.*`, kind `pod`, namespace `takserver`
-- **Defined in:** `chart/templates/prereqs.yaml`
+- **Defined in:** `charts/takserver/templates/prereqs.yaml`
 - **Why:** The upstream chart's post-install database Job sets the `proxy.istio.io/config` annotation so the schema container waits for an Istio sidecar. The chart has no value that removes it. Without the exemption the policy denies the Job's pod, and Helm waits out its timeout.
 - **Why it is safe:** The package uses Istio ambient mode, which does not inject a sidecar. The annotation has no effect on the mesh here. The matcher is the one hook Job name, not a wildcard.
 - **What removes it:** An upstream chart that makes the annotation optional or drops it.

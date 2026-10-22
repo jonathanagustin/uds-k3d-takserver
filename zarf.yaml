@@ -36,7 +36,7 @@ variables:
     description: On a uds-k3d cluster, add CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist.
     default: "true"
   - name: PASSTHROUGH_HOSTS
-    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. chart/values.yaml api.cert.host and messaging.streaming.host.
+    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host.
     default: "takserver-api takserver-stream"
 
 components:

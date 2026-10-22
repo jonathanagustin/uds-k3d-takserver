@@ -1,7 +1,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Inputs for chart/templates/uds-package.yaml.
+# Inputs for charts/takserver/templates/uds-package.yaml.
 # Service names and pod labels match a render of the upstream chart
 # with release name takserver.
 

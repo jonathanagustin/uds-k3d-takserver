@@ -12,7 +12,7 @@
       ],
       "versioning": "default",
       "extra-files": [
-        { "type": "generic", "path": "chart/Chart.yaml" },
+        { "type": "generic", "path": "charts/takserver/Chart.yaml" },
         { "type": "generic", "path": "common/zarf.yaml" }
       ]
     }

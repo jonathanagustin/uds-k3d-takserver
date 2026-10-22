@@ -8,7 +8,7 @@ host: map
 
 image:
   repository: ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak
-  tag: v13.111.3 # cloudtak-version
+  tag: v13.112.3 # cloudtak-version
 
 postgis:
   # The image the TAK chart already uses. One image covers both databases.

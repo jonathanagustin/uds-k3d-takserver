@@ -326,6 +326,10 @@ jobs:
       - name: Trim the runner
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh
+        env:
+          # The test uses about 30 GB (see "Disk use after the test"), so a
+          # runner with this much free needs no deletes.
+          TRIM_SKIP_ABOVE_GB: "60"
 
       # Restore only. Install and upgrade run together, and a second save of
       # the same key fails the job. Only a run on main saves, after the deploy.

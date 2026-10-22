@@ -195,5 +195,40 @@ if a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
   cp "${OUT}/ui.xml" /tmp/ui.xml
   cert_prompt || true
 fi
+
+# Show the test location the way a person would: lock the view on the self
+# marker (the centre button), then zoom in with the + button.
+a shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+a exec-out cat /sdcard/ui.xml > /tmp/ui.xml 2>/dev/null || true
+if xy="$(centre tak_nav_center)"; then
+  echo "lock on self ${xy}"
+  # shellcheck disable=SC2086
+  a shell input tap ${xy}
+  sleep 3
+fi
+if zoom="$(python3 - <<'PY'
+import re, xml.etree.ElementTree as ET
+try:
+    root = ET.parse("/tmp/ui.xml").getroot()
+except (ET.ParseError, FileNotFoundError):
+    raise SystemExit(1)
+for n in root.iter("node"):
+    if (n.get("resource-id") or "").endswith(":id/tak_nav_zoom"):
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+        # The + half of the zoom control.
+        print((x1 + x2) // 2, y1 + (y2 - y1) // 4)
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+)"; then
+  echo "zoom in ${zoom}"
+  for _ in $(seq 1 14); do
+    # shellcheck disable=SC2086
+    a shell input tap ${zoom}
+    sleep 1
+  done
+  sleep 5
+fi
+shot atak-test-location
 a logcat -d -t 3000 > "${OUT}/logcat.txt" 2>&1 || true
 grep -E "ImportManager|MissionPackage|Import.*Sort|CertificateManager|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true

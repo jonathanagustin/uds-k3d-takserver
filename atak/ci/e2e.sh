@@ -214,7 +214,7 @@ YAML
 k wait pod -n atak atak-driver --for condition=Ready --timeout=5m
 timeout 1500 sh -c 'until uds zarf tools kubectl exec -n atak atak-driver -- test -f /out/exit; do sleep 10; done'
 k logs -n atak atak-driver | tee "${OUT}/driver.log"
-for f in atak-first-start.png atak-map.png atak-imported.png atak-connected.png ui.xml logcat.txt exit \
+for f in atak-first-start.png atak-map.png atak-imported.png atak-connected.png atak-test-location.png ui.xml logcat.txt exit \
   cert-dialog.txt cert-dialog.png; do
   k cp "atak/atak-driver:/out/${f}" "${OUT}/${f}" || true
 done

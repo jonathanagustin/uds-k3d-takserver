@@ -161,7 +161,8 @@ Run `uds run --list` for the rest. `hk check` runs the pre-commit checks in [`hk
 Releases are published as `oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream`, with one entry per architecture. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
 
 ```bash
-uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.5.1-upstream --confirm
+VERSION=0.5.2 # x-release-please-version
+uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" --confirm
 ```
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
@@ -171,7 +172,8 @@ Pass `--architecture amd64` or `--architecture arm64` when the cluster differs f
 From v0.4.0 on, each release package is signed keylessly by `.github/workflows/release.yaml` on `main`, and the signature is in the public Sigstore transparency log. Check it before you deploy, once per architecture:
 
 ```bash
-uds zarf package verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.5.1-upstream \
+VERSION=0.5.2 # x-release-please-version
+uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" \
   --architecture amd64 \
   --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
@@ -182,7 +184,7 @@ In a UDS bundle, put the same check on the package entry, as `core-base` has in 
 ```yaml
   - name: takserver
     repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
-    ref: 0.5.1-upstream
+    ref: <version>-upstream
     keylessVerification:
       certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/uds-k3d-takserver/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
@@ -191,7 +193,8 @@ In a UDS bundle, put the same check on the package entry, as `core-base` has in 
 The package index also has signed SLSA v1 build provenance, stored in GHCR and in the repository's attestations. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.5.1-upstream \
+VERSION=0.5.2 # x-release-please-version
+gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" \
   --owner jonathanagustin
 ```
 

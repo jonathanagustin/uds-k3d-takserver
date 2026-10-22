@@ -93,6 +93,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Package the images built from this commit's inputs, not whatever
+      # another branch pushed to the shared tags last.
+      - name: Use this commit's CloudTAK and PostGIS images
+        run: ./.github/scripts/pin-image-tags.sh
+
       - name: Create the dev package
         run: uds run create-dev-package --no-progress
 

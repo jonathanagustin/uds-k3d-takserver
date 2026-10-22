@@ -276,14 +276,14 @@
       "commitMessageTopic": "{{depName}}"
     },
     {
-      "description": "The admission module's Deployment runs the Pepr controller image of the pepr version in pepr/package.json, and the package does not carry that image: it uses the one UDS Core already pushed to the Zarf registry. A pepr version that UDS Core does not ship leaves the module in ImagePullBackOff, so pepr moves with UDS Core after approval on the dependency dashboard.",
-      "matchDepNames": [
-        "pepr"
-      ],
+      "description": "The admission module's Deployment runs the Pepr controller image of the pepr version in pepr/package.json, and the package does not carry that image: it uses the one UDS Core already pushed to the Zarf registry. A pepr version that UDS Core does not ship leaves the module in ImagePullBackOff, so pepr moves with UDS Core after approval on the dependency dashboard. The security overrides for its transitive undici and js-yaml in the same file are held with it: in #95 Renovate moved them without updating package-lock.json, and npm ci failed.",
       "groupName": "Pepr",
       "dependencyDashboardApproval": true,
       "addLabels": [
         "needs-migration"
+      ],
+      "matchFileNames": [
+        "pepr/package.json"
       ]
     }
   ],

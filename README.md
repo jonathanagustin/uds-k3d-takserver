@@ -164,6 +164,7 @@ Design decisions are recorded in [`adr/`](adr/):
 | [Configuration](docs/configuration.md) | Zarf variables, the values overlay, resource sizing, and what the config chart mounts |
 | [Single sign-on](docs/sso.md) | Keycloak client, group mapping, and certificate enrollment |
 | [Networking](docs/networking.md) | Gateway exposure and the NetworkPolicy allow list |
+| [Policy exemptions](docs/justifications.md) | Every UDS policy exemption and why it exists |
 | [Data](docs/data.md) | PostgreSQL and what a backup of the namespace must include |
 | [Building the images](docs/building.md) | Image build script, platforms, pins, and the Gradle cache |
 | [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |

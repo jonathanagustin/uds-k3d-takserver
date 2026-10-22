@@ -222,7 +222,9 @@ raise SystemExit(1)
 PY
 )"; then
   echo "zoom in ${zoom}"
-  for _ in $(seq 1 14); do
+  # ATAK has no street map without an imagery source; stop at a scale where
+  # its built-in world imagery still shows the region around the marker.
+  for _ in $(seq 1 7); do
     # shellcheck disable=SC2086
     a shell input tap ${zoom}
     sleep 1

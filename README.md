@@ -86,16 +86,14 @@ git clone --recurse-submodules --shallow-submodules https://github.com/jonathana
 ```
 
 ```bash
-# 1. Build the six TAK images from the public source in upstream/takserver.
-#    Set PUSH_IMAGES=true to push them to GHCR.
-uds run build-image
-
-# 2. Create the package, deploy k3d-core-slim-dev, deploy the test bundle,
-#    create a Keycloak test user, and run the validation suite.
+# Create the package, deploy k3d-core-slim-dev, deploy the test bundle,
+# create a Keycloak test user, and run the validation suite.
 uds run test-install
 ```
 
 Then open `https://takserver.uds.dev/` and sign in through Keycloak.
+
+Creating the package pulls the published images from GHCR and Docker Hub, so you do not have to build them first. Build the six TAK images only when you change them or the `upstream/takserver` pin. `uds run build-image` builds them from the public source, and `PUSH_IMAGES=true` pushes them. See [docs/building.md](docs/building.md).
 
 Other tasks (run `uds run --list` for the full list):
 
@@ -158,6 +156,12 @@ Design decisions are recorded in [`adr/`](adr/):
 5. [Stay inside what slim UDS Core and the stock chart provide](adr/0005-slim-core-boundaries.md)
 6. [Re-encrypt tenant gateway traffic to the TAK web UI](adr/0006-re-encrypt-gateway-traffic-to-tak.md)
 7. [Per-workload network rules inside the namespace](adr/0007-per-workload-network-rules.md)
+8. [TAK Server source as a git submodule](adr/0008-tak-source-as-a-submodule.md)
+9. [CloudTAK as the browser map client](adr/0009-cloudtak-as-the-browser-map-client.md)
+10. [Build, package, and test for amd64 and arm64](adr/0010-amd64-and-arm64.md)
+11. [CloudTAK default basemap through a tile proxy in its pod](adr/0011-cloudtak-default-basemap-through-a-tile-proxy.md)
+12. [Standard TAK ports on the passthrough gateway](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)
+13. [Build the PostGIS image in this repository](adr/0013-build-the-postgis-image-here.md)
 
 ## Documentation
 
@@ -166,7 +170,7 @@ Design decisions are recorded in [`adr/`](adr/):
 | [Configuration](docs/configuration.md) | Zarf variables, the values overlay, resource sizing, and what the config chart mounts |
 | [Single sign-on](docs/sso.md) | Keycloak client, group mapping, and certificate enrollment |
 | [Networking](docs/networking.md) | Gateway exposure and the NetworkPolicy allow list |
-| [Policy exemptions](docs/justifications.md) | Every UDS policy exemption and why it exists |
+| [Policy exemptions](docs/justifications.md) | Every UDS policy exemption, why it exists, and the package requirements not met yet |
 | [Data](docs/data.md) | PostgreSQL and what a backup of the namespace must include |
 | [Building the images](docs/building.md) | Image build script, platforms, pins, and the Gradle cache |
 | [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |
@@ -214,11 +218,11 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 
 ## Known limitations
 
-- The six TAK images are not published to GHCR yet, so build them before creating the package. `uds run test-upgrade` needs a published package release, and none exists yet.
 - The upstream chart renders the `postgres-configuration` ConfigMap with empty `pg_hba.conf` and `postgres.conf` keys.
 - External ATAK port 8089 is not mapped. Streaming is SNI on gateway port 443.
 - Ports 8444, 9000, and 9001 are not exposed through a gateway.
-- The upstream chart does not mount the `uds-trust-bundle` ConfigMap.
+- The upstream chart does not mount the `uds-trust-bundle` ConfigMap. The API and messaging init containers import it into a copy of the JVM trust store instead. See [docs/sso.md](docs/sso.md).
+- Some deploy-time Zarf actions need `python3` on the deploy host. See [Policy exemptions](docs/justifications.md#uds-package-requirements).
 - CloudTAK's Keycloak sign-in is a route this package adds next to CloudTAK, because CloudTAK 13.111.3 has no OIDC route of its own. CloudTAK logout does not end the Keycloak session. CloudTAK's default basemap is OpenStreetMap through a tile proxy in its pod, with egress to that one host; set `basemap.enabled: false` where the cluster has no route to it. CloudTAK has no S3-backed features in this package. See [docs/cloudtak.md](docs/cloudtak.md).
 - Resource requests are sized for a small development node, and NATS runs as a single replica with clustering off. Production sizing and storage are not tuned yet.
 

@@ -183,7 +183,7 @@ Design decisions are recorded in [`adr/`](adr/):
 | `DOMAIN` | `uds.dev` | Domain suffix for gateway hosts |
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
 
-`values/common-values.yaml` is the overlay for the upstream chart. `values/test-values.yaml` is applied only by the test bundle and sizes TAK Server for a 2 vCPU, 8 GB node. See [docs/configuration.md](docs/configuration.md) for details on each value.
+`values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle and sizes TAK Server for a 2 vCPU, 8 GB node. See [docs/configuration.md](docs/configuration.md) for details on each value.
 
 ## Testing
 
@@ -204,7 +204,7 @@ In GitHub Actions, `.github/workflows/test.yaml` runs the install and upgrade pa
 | `zarf.yaml` | Package metadata, variables, and image list |
 | `common/zarf.yaml` | Config chart plus the upstream chart (tag `5.7-RELEASE-14`) |
 | `chart/` | Config chart: UDS `Package`, ConfigMaps, and the certificate Job |
-| `cloudtak/chart/` | CloudTAK chart: Deployment, PostGIS, and its UDS `Package` |
+| `charts/cloudtak/` | CloudTAK chart: Deployment, PostGIS, and its UDS `Package` |
 | `upstream/cloudtak` | CloudTAK source, a git submodule pinned to a release tag |
 | `values/` | Values overlays for the upstream chart and the Pepr module |
 | `pepr/` | `takserver-oidc` Pepr module that adds the OIDC render init container at admission |

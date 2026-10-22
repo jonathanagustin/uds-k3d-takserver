@@ -218,7 +218,7 @@ components:
       - name: uds-cloudtak
         namespace: cloudtak
         version: 0.1.0
-        localPath: cloudtak/chart
+        localPath: charts/cloudtak
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package

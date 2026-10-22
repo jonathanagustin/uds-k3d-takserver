@@ -50,12 +50,12 @@ steps {
     glob = List("chart/Chart.yaml", "chart/**/*.yaml", "chart/**/*.tpl")
   }
   ["helm-cloudtak"] {
-    check = "uds run lint:helm --no-progress --with paths=cloudtak/chart"
-    glob = List("cloudtak/chart/Chart.yaml", "cloudtak/chart/**/*.yaml", "cloudtak/chart/**/*.tpl")
+    check = "uds run lint:helm --no-progress --with paths=charts/cloudtak"
+    glob = List("charts/cloudtak/Chart.yaml", "charts/cloudtak/**/*.yaml", "charts/cloudtak/**/*.tpl")
   }
   ["helm-template-cloudtak"] {
-    check = "uds run lint:helm-template --no-progress --with paths=cloudtak/chart"
-    glob = List("cloudtak/chart/Chart.yaml", "cloudtak/chart/**/*.yaml", "cloudtak/chart/**/*.tpl")
+    check = "uds run lint:helm-template --no-progress --with paths=charts/cloudtak"
+    glob = List("charts/cloudtak/Chart.yaml", "charts/cloudtak/**/*.yaml", "charts/cloudtak/**/*.tpl")
   }
   ["helm-template"] {
     check = "uds run lint:helm-template --no-progress --with paths=chart"
@@ -67,7 +67,7 @@ steps {
   }
   ["zarf-lint"] {
     check = "uds zarf dev lint . --flavor upstream --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14"
-    glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml", "cloudtak/chart/**/*.yaml")
+    glob = List("zarf.yaml", "common/zarf.yaml", "chart/**/*.yaml", "charts/cloudtak/**/*.yaml")
   }
   ["exemptions"] {
     check = "bash .github/scripts/check-exemptions.sh"

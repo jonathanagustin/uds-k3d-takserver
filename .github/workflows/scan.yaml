@@ -9,6 +9,7 @@ on:
       - "zarf.yaml"
       - "common/zarf.yaml"
       - "chart/**"
+      - "charts/**"
       - "values/**"
       - "bundle/**"
       - ".github/container-and-chart/**"

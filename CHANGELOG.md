@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.1...v0.5.2) (2026-10-22)
+
+
+### Documentation
+
+* add demo videos to README ([#107](https://github.com/jonathanagustin/uds-k3d-takserver/issues/107)) ([7526bc2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/7526bc27c9bce22b791d0fe83c4e89c4ab3a78f9))
+* play the demo videos inline in the README ([#110](https://github.com/jonathanagustin/uds-k3d-takserver/issues/110)) ([c97bb8d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/c97bb8de80c01ebec839de311bc76c332d4d7e12))
+
 ## [0.5.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.0...v0.5.1) (2026-10-22)
 
 

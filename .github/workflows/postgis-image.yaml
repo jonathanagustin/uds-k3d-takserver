@@ -35,7 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One native runner per architecture, each pushing 15-3.4-<arch>.
+  # One native runner per architecture, each pushing 15-3.4-<key>-<arch> and, on main, 15-3.4-<arch>.
   # index joins them under 15-3.4, the tag zarf.yaml references.
   build:
     strategy:

@@ -119,9 +119,10 @@ jobs:
         run: ./.github/scripts/wait-for-tak-images.sh
 
   # CloudTAK builds on a native runner per architecture, like the TAK images.
-  # Each job pushes v13.111.3-<arch> only when the submodule pin or
-  # .github/container-and-chart/cloudtak changed (build.sh compares those
-  # inputs with the label on the published tag). cloudtak-index joins them.
+  # Each job pushes v13.111.3-<key>-<arch>, keyed by the submodule pin and
+  # the .github/container-and-chart/cloudtak tree, only when no image with
+  # those inputs exists yet. cloudtak-index joins them under v13.111.3-<key>.
+  # v13.111.3 itself moves only on main (see build.sh).
   cloudtak-image:
     strategy:
       fail-fast: false
@@ -158,7 +159,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/cloudtak/build.sh --if-changed
 
-  # v13.111.3 is the tag zarf.yaml and the chart reference. Zarf pulls the
+  # pin-image-tags.sh points the package at v13.111.3-<key>. Zarf pulls the
   # entry for the package architecture.
   cloudtak-index:
     needs: cloudtak-image
@@ -183,10 +184,10 @@ jobs:
       - name: Write the multi-arch CloudTAK index
         run: ./.github/container-and-chart/cloudtak/build.sh --merge
 
-  # Each job pushes 15-3.4-<arch> only when .github/container-and-chart/postgis
-  # changed (build.sh compares that tree with the label on the published tag).
-  # postgis-index joins them under 15-3.4, the tag zarf.yaml and the charts
-  # reference.
+  # Each job pushes 15-3.4-<key>-<arch>, keyed by the
+  # .github/container-and-chart/postgis tree, only when no image with that
+  # tree exists yet. postgis-index joins them under 15-3.4-<key>. 15-3.4, the
+  # tag zarf.yaml and the charts name, moves only on main.
   postgis-image:
     strategy:
       fail-fast: false
@@ -355,6 +356,12 @@ jobs:
           --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
+
+      # Another branch can build different CloudTAK or PostGIS inputs while
+      # this job runs. The keyed tags hold only this commit's build.
+      - name: Use this commit's CloudTAK and PostGIS images
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
+        run: ./.github/scripts/pin-image-tags.sh
 
       - name: Test
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install')

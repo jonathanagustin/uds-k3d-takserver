@@ -3,8 +3,12 @@
 
 name: PostGIS image
 
-# Builds ghcr.io/jonathanagustin/uds-k3d-takserver/postgis. Pull requests
-# build it in the Test workflow, before the package is created.
+# Builds ghcr.io/jonathanagustin/uds-k3d-takserver/postgis. The Test workflow
+# also builds it on pull requests, but it skips a pull request that only
+# changes .github/container-and-chart. The package and scan workflows wait for
+# the image, so a pull request that only changes it needs this build too. Both
+# builds use build.sh --if-changed, so whichever runs second finds the tag
+# already carries the same inputs.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +16,10 @@ on:
         description: Rebuild even when the published image has the same inputs
         default: false
         type: boolean
+  pull_request:
+    paths:
+      - .github/container-and-chart/postgis/**
+      - .github/workflows/postgis-image.yaml
   push:
     branches:
       - main
@@ -27,7 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One native runner per architecture, each pushing 15-3.4-<arch>.
+  # One native runner per architecture, each pushing 15-3.4-<key>-<arch> and, on main, 15-3.4-<arch>.
   # index joins them under 15-3.4, the tag zarf.yaml references.
   build:
     strategy:

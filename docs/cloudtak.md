@@ -11,7 +11,7 @@
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, and `admin.key`, copied from ConfigMap `takserver/cert-migration` by the component's `onDeploy` action |
-| Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak`, the `map` host on the tenant gateway, and the allow list |
+| Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
 Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, CoT from TAK, and the admin pages do.
 
@@ -30,9 +30,11 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 
 `build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). There is no QEMU:
 
-- The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-latest` and `ubuntu-24.04-arm`). Each job pushes `v13.111.3-<arch>`, and only when that tag's `dev.uds-k3d-takserver.inputs` label differs from the submodule commit plus the git tree of this directory.
-- `cloudtak-index` then runs `build.sh --merge`. It writes `v13.111.3` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
-- `build.sh --wait`, used by the Scan and Package workflows, waits until the index lists both platforms with those inputs.
+- The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.111.3-<key>`).
+- The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-latest` and `ubuntu-24.04-arm`). Each job pushes `v13.111.3-<key>-<arch>`, and only when no image with those inputs exists yet.
+- `cloudtak-index` then runs `build.sh --merge`. It writes `v13.111.3-<key>` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
+- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.111.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`15-3.4-<key>`).
+- `v13.111.3` and `v13.111.3-<arch>`, the tags in the committed files and in released packages, are written only from `main`. `build.sh --wait`, used by the Scan and Package workflows, waits for the keyed index.
 - `.github/workflows/cloudtak-image.yaml` does the same on `main`.
 
 A local `build.sh` builds the host architecture and loads it as `v13.111.3`.
@@ -112,6 +114,8 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 | `cloudtak` (service account `cloudtak`) | `tile.openstreetmap.org` | 443 | `cloudtak` Egress `remoteHost`, only with `basemap.enabled` |
 
 The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
+
+`additionalNetworkAllow` in `cloudtak/chart/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
 
 ## Basemap
 

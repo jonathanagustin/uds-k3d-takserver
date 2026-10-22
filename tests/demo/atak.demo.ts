@@ -11,6 +11,7 @@
 // atak/ci/e2e.sh has deployed and connected the device.
 import {
   caption,
+  cloudtakReady,
   clickLikeAPerson,
   expect,
   expectSecure,
@@ -74,22 +75,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
   const canvas = map.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 120_000 });
   // CloudTAK opens its permissions prompt a moment after the map loads.
-  await map
-    .getByRole("button", { name: "Skip for now" })
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .catch(() => undefined);
-  for (let i = 0; i < 10; i++) {
-    let open = false;
-    for (const name of ["Not now", "Skip for now"]) {
-      const skip = map.getByRole("button", { name });
-      if (await skip.isVisible().catch(() => false)) {
-        open = true;
-        await clickLikeAPerson(map, skip).catch(() => undefined);
-      }
-    }
-    if (!open) break;
-    await map.waitForTimeout(800);
-  }
+  await cloudtakReady(map, "CLOUDTAK-TEST");
   await expectSecure(map);
   caption("CloudTAK on the same TAK Server, signed in through the same Keycloak session");
   await expect

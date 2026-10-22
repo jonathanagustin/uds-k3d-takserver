@@ -13,6 +13,7 @@
 import type { Page } from "@playwright/test";
 import {
   caption,
+  cloudtakReady,
   clickAtLikeAPerson,
   clickLikeAPerson,
   expect,
@@ -51,7 +52,7 @@ async function canvasPoint(map: Page, dx = 0, dy = 0) {
 }
 
 test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
-  test.setTimeout(420_000);
+  test.setTimeout(600_000);
   expect(password, "KEYCLOAK_PASSWORD is not set").not.toBe("");
   await watchSecurity(page);
 
@@ -75,31 +76,17 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   await page.waitForTimeout(3_000);
 
   const map = await page.context().newPage();
+  map.setDefaultTimeout(30_000);
   await watchSecurity(map);
   await map.goto(mapUrl);
   await expect(map.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 120_000 });
-  await map
-    .getByRole("button", { name: "Skip for now" })
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .catch(() => undefined);
-  for (let i = 0; i < 10; i++) {
-    let open = false;
-    for (const name of ["Not now", "Skip for now"]) {
-      const skip = map.getByRole("button", { name });
-      if (await skip.isVisible().catch(() => false)) {
-        open = true;
-        await clickLikeAPerson(map, skip).catch(() => undefined);
-      }
-    }
-    if (!open) break;
-    await map.waitForTimeout(800);
-  }
+  await cloudtakReady(map, "CLOUDTAK-TEST");
   await map.evaluate((loc) => {
     window.location.hash = `#15/${loc}`;
   }, testLocation);
   await map.waitForTimeout(3_000);
   await expectSecure(map);
-  caption("CloudTAK on the same TAK Server, at the device's TEST LOCATION");
+  caption("ATAK to CloudTAK: the device's TEST LOCATION marker, live from its CoT stream");
   await map.waitForTimeout(3_000);
 
   // CloudTAK -> ATAK: draw a point, name it TEST MARKER, share it to the device.
@@ -109,7 +96,12 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     const at = await canvasPoint(map, 220, -90);
     await clickAtLikeAPerson(map, at.x, at.y);
     await expect(map).toHaveURL(/\/cot\//, { timeout: 15_000 });
-    await clickLikeAPerson(map, map.getByTitle("Edit", { exact: true }).first());
+    // The callsign field: its pencil shows on hover.
+    await clickLikeAPerson(map, map.getByTitle("Edit Field", { exact: true }).first());
+    const field = map.locator("input:focus");
+    if (!(await field.count())) {
+      await clickLikeAPerson(map, map.locator('input[type="text"]:visible').first());
+    }
     await map.keyboard.press("Control+A");
     await typeLikeAPerson(map, "TEST MARKER");
     await map.keyboard.press("Enter");
@@ -119,6 +111,8 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await clickLikeAPerson(map, map.getByTitle("Share", { exact: true }).first());
     const modal = map.locator(".modal").filter({ hasText: "Share Features" });
     await expect(modal).toBeVisible({ timeout: 10_000 });
+    await clickLikeAPerson(map, modal.getByPlaceholder("Filter..."));
+    await typeLikeAPerson(map, "ATAK");
     await clickLikeAPerson(map, modal.getByText(deviceCallsign, { exact: true }).first());
     await clickLikeAPerson(map, modal.getByTitle("Share to Selected"));
     caption("Shared to the ATAK device through TAK");
@@ -140,7 +134,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await expect(input).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, input);
     await typeLikeAPerson(map, "TEST MESSAGE from CloudTAK");
-    await map.keyboard.press("Enter");
+    await clickLikeAPerson(map, map.getByTitle("Send Message", { exact: true }).first());
     caption("A TEST chat message from CloudTAK to the device");
     await map.waitForTimeout(3_000);
   });
@@ -162,6 +156,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   // TAK's own view: the device's certificate-authenticated connection.
   const tak = await page.context().newPage();
+  tak.setDefaultTimeout(30_000);
   await watchSecurity(tak);
   await scene(tak, "clients", async () => {
     await tak.goto(new URL("/Marti/clients/index.html", takUrl).toString(), { timeout: 60_000 });

@@ -274,3 +274,34 @@ export async function visit(page: Page, url: string, label: string, hold = 2_600
   caption(label);
   await page.waitForTimeout(hold);
 }
+
+// CloudTAK after its map canvas shows: on a first sign-in it asks for a
+// callsign, then for browser permissions. Answers both like a person.
+export async function cloudtakReady(page: Page, callsign: string) {
+  const welcome = page.getByText("Welcome to CloudTAK");
+  const skipNow = page.getByRole("button", { name: "Skip for now" });
+  await Promise.race([
+    welcome.waitFor({ state: "visible", timeout: 20_000 }),
+    skipNow.waitFor({ state: "visible", timeout: 20_000 }),
+  ]).catch(() => undefined);
+  if (await welcome.isVisible().catch(() => false)) {
+    caption("First sign-in to CloudTAK: pick a callsign");
+    await clickLikeAPerson(page, page.getByPlaceholder("Enter your callsign"));
+    await typeLikeAPerson(page, callsign);
+    await page.waitForTimeout(500);
+    await clickLikeAPerson(page, page.getByRole("button", { name: "Get Started" }));
+    await skipNow.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+  }
+  for (let i = 0; i < 10; i++) {
+    let open = false;
+    for (const name of ["Not now", "Skip for now"]) {
+      const skip = page.getByRole("button", { name });
+      if (await skip.isVisible().catch(() => false)) {
+        open = true;
+        await clickLikeAPerson(page, skip).catch(() => undefined);
+      }
+    }
+    if (!open && !(await welcome.isVisible().catch(() => false))) break;
+    await page.waitForTimeout(800);
+  }
+}

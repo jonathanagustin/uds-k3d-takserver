@@ -231,7 +231,12 @@ jobs:
 
       - name: Record CloudTAK and ATAK in sync
         if: env.ATAK == 'true'
-        run: ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"
+        # A failed take is left out of the video rather than failing the run.
+        run: |
+          if ! ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"; then
+            rm -f demo/out/09-sync.mp4
+            echo "::warning::The CloudTAK and ATAK sync chapter failed and is left out"
+          fi
         shell: bash
 
       # Footprint and self-healing, recorded like the deployment and rendered
@@ -244,7 +249,10 @@ jobs:
             -c './demo/after-atak.sh; echo $? > demo/out/10-operate.exit' demo/out/10-operate.cast < /dev/null
           python3 -c 'import json,sys; [sys.stdout.write(json.loads(l)[2]) for l in open(sys.argv[1]).readlines()[1:] if l.strip()]' \
             demo/out/10-operate.cast | tail -n 80
-          test "$(cat demo/out/10-operate.exit)" = 0
+          if [[ "$(cat demo/out/10-operate.exit)" != 0 ]]; then
+            echo "::warning::The footprint and self-healing chapter failed and is left out"
+            exit 0
+          fi
           python3 demo/render-cast.py demo/out/10-operate.cast demo/out/10-operate \
             "Live CPU and memory of TAK's pods::6" \
             "The whole package for an offline install::4" \

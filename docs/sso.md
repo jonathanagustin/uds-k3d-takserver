@@ -4,6 +4,7 @@ TAK Server 5.7 has its own OpenID Connect authorization-code flow. The Package r
 
 | Field | Value |
 | --- | --- |
+| Client name | `TAK Server Login` |
 | Client id | `uds-takserver` |
 | Protocol | `openid-connect` |
 | Public client | false |

@@ -35,6 +35,10 @@ sso:
   # Empty turns that off.
   adminGroup: "/UDS Core/Admin"
 
+# Extra Package CR network.allow entries, appended after the rules above.
+# Each entry needs a unique description. See docs/cloudtak.md#network-rules.
+additionalNetworkAllow: []
+
 # Where TAK lives. The takserver component renders the matching Ingress
 # rules in its own Package CR.
 tak:

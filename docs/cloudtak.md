@@ -11,7 +11,7 @@
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, and `admin.key`, copied from ConfigMap `takserver/cert-migration` by the component's `onDeploy` action |
-| Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak`, the `map` host on the tenant gateway, and the allow list |
+| Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
 Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, CoT from TAK, and the admin pages do.
 
@@ -114,6 +114,8 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 | `cloudtak` (service account `cloudtak`) | `tile.openstreetmap.org` | 443 | `cloudtak` Egress `remoteHost`, only with `basemap.enabled` |
 
 The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
+
+`additionalNetworkAllow` in `cloudtak/chart/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
 
 ## Basemap
 

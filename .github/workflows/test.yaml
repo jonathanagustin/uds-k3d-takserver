@@ -6,9 +6,10 @@ name: Test
 on:
   pull_request:
     types: [milestoned, opened, reopened, synchronize]
-    # Doc-only and image-only changes skip this workflow.
+    # Doc-only changes skip this workflow. Changes under
+    # .github/container-and-chart run it, so a rebuilt image is deployed and
+    # tested before it merges.
     paths-ignore:
-      - ".github/container-and-chart/**"
       - "**.md"
       - "**.jpg"
       - "**.png"
@@ -29,7 +30,6 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - ".github/container-and-chart/**"
       - "**.md"
       - "**.jpg"
       - "**.png"

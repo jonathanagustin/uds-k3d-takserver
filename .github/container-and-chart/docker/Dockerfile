@@ -16,7 +16,7 @@
 # amd64 and arm64.
 
 ARG BUILDER_IMAGE=eclipse-temurin:17.0.20_8-jdk-jammy@sha256:51d32af96fb8a13ffbc96c719d7b05447a04ca69f314627d64050a64ecd13057
-ARG RUNTIME_IMAGE=registry.access.redhat.com/ubi9/openjdk-17:1.22@sha256:0d960bd9b766d815e202b7807da8389bbc7b2efb6b863dcf6743bec882eb03c9
+ARG RUNTIME_IMAGE=registry.access.redhat.com/ubi9/openjdk-17:1.24-3.1791779556@sha256:716810ec4ad7805f57b6434da9405188cb98b30042bdb1cff0d833f76ed5b4b0
 
 FROM ${BUILDER_IMAGE} AS builder
 

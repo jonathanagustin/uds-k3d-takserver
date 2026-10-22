@@ -12,6 +12,12 @@ permissions:
   contents: read
   packages: read
 
+# A newer push replaces the one before it. The old run would otherwise wait
+# on images the newer push has already overwritten, and fail an hour later.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Zarf packages are per architecture. Each runner creates the package for
   # its own architecture, and Zarf pulls the matching image from each index.

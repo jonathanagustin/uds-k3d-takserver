@@ -29,6 +29,11 @@ jobs:
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # A newer push replaces the one before it. This job waits for images, and
+    # the old run would otherwise wait on images the newer push has overwritten.
+    concurrency:
+      group: scan-images-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

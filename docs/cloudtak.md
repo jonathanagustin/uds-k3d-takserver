@@ -17,7 +17,7 @@ Upstream CloudTAK's compose file also runs a tile server, an events worker, a me
 
 ## Image
 
-The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v13.111.3` (`2b706cee75428788edcf010ec6bf2b5433f29a83`), and published as `ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.111.3`. No upstream image is used.
+The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v13.112.3` (`745d8a9bcfebde48d7a97cc4e77aa0f4d827508a`), and published as `ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.112.3`. No upstream image is used.
 
 [`.github/container-and-chart/cloudtak/`](../.github/container-and-chart/cloudtak/) holds the build:
 
@@ -30,14 +30,14 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 
 `build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). There is no QEMU:
 
-- The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.111.3-<key>`).
-- The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-latest` and `ubuntu-24.04-arm`). Each job pushes `v13.111.3-<key>-<arch>`, and only when no image with those inputs exists yet.
-- `cloudtak-index` then runs `build.sh --merge`. It writes `v13.111.3-<key>` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
-- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.111.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`15-3.4-<key>`).
-- `v13.111.3` and `v13.111.3-<arch>`, the tags in the committed files and in released packages, are written only from `main`. `build.sh --wait`, used by the Scan and Package workflows, waits for the keyed index.
+- The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.112.3-<key>`).
+- The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-latest` and `ubuntu-24.04-arm`). Each job pushes `v13.112.3-<key>-<arch>`, and only when no image with those inputs exists yet.
+- `cloudtak-index` then runs `build.sh --merge`. It writes `v13.112.3-<key>` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
+- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.112.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`15-3.4-<key>`).
+- `v13.112.3` and `v13.112.3-<arch>`, the tags in the committed files and in released packages, are written only from `main`. `build.sh --wait`, used by the Scan and Package workflows, waits for the keyed index.
 - `.github/workflows/cloudtak-image.yaml` does the same on `main`.
 
-A local `build.sh` builds the host architecture and loads it as `v13.111.3`.
+A local `build.sh` builds the host architecture and loads it as `v13.112.3`.
 
 Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strings marked `# cloudtak-version` in `zarf.yaml`, `charts/cloudtak/`, and `docker-bake.hcl` move in the same pull request.
 
@@ -54,7 +54,7 @@ People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page
 
 ### What CloudTAK does and does not provide
 
-CloudTAK 13.111.3 has `oidc::enabled`, `oidc::enforced`, `oidc::name`, and `oidc::discovery` settings, and its login page links a "Sign in with ..." button to `/api/login/oidc`. Its API has no route there (upstream issue [#661](https://github.com/dfpc-coe/CloudTAK/issues/661)). The chart sets those settings with `CLOUDTAK_Config_*` variables, which CloudTAK writes to its settings table on start:
+CloudTAK 13.112.3 has `oidc::enabled`, `oidc::enforced`, `oidc::name`, and `oidc::discovery` settings, and its login page links a "Sign in with ..." button to `/api/login/oidc`. Its API has no route there (upstream issue [#661](https://github.com/dfpc-coe/CloudTAK/issues/661)). The chart sets those settings with `CLOUDTAK_Config_*` variables, which CloudTAK writes to its settings table on start:
 
 | Setting | Value | Effect |
 | --- | --- | --- |
@@ -122,7 +122,7 @@ The namespace has no waypoint of its own: it is ambient and Authservice is not e
 New users get OpenStreetMap as their default basemap. CloudTAK fetches the basemap's tiles through nginx in its own container, which proxies and caches them from the tile host. See [ADR 11](../adr/0011-cloudtak-default-basemap-through-a-tile-proxy.md) for why it is not CloudTAK's own tile route.
 
 - The browser asks for `https://map.<domain>/uds-basemap/tiles/{z}/{x}/{y}?token=<session>`. nginx checks the token with CloudTAK, so only signed-in users get tiles. Zoom levels outside `minzoom`..`maxzoom` get 404, and a session that asks for more than 20 tiles a second after a burst of 200 gets 429.
-- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.111.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
+- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.112.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
 - Tiles are cached in the pod's `/tmp` (`cacheSize`, default 256m), for as long as the tile host's cache headers allow, or 7 days when it sends none. Responses carry `X-Cache-Status`.
 - The bootstrap container creates the server basemap record "OpenStreetMap" with the attribution "© OpenStreetMap contributors", and sets it as CloudTAK's default basemap (`map::basemap`). It updates the record when the settings change. Users who signed in before keep their basemap and can choose this one in the basemap menu.
 - The Package allows egress to the tile host on its port only, from the `cloudtak` service account (see [Network rules](#network-rules)).

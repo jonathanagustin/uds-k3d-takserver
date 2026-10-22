@@ -1,13 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>defenseunicorns/uds-common//config/renovate.json5",
+    ":dependencyDashboard",
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "helpers:pinGitHubActionDigestsToSemver",
     ":semanticCommits",
     ":semanticPrefixFixDepsChoreOthers",
     "group:all",
     "replacements:all",
     "workarounds:all"
   ],
+  "ignorePresets": [
+    ":ignoreModulesAndTests"
+  ],
+  "reviewersFromCodeOwners": false,
+  "rebaseWhen": "conflicted",
+  "commitBodyTable": true,
+  "pre-commit": {
+    "enabled": true
+  },
   "schedule": [
     "after 7am and before 9am every weekday"
   ],
@@ -95,6 +107,34 @@
       "depNameTemplate": "dfpc-coe/CloudTAK",
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Version after a # renovate: datasource=... comment, as a YAML value or a shell or env assignment",
+      "fileMatch": [
+        "\\.ya?ml$",
+        "\\.sh$",
+        "\\.md$",
+        "(^|/)Dockerfile$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?(?: registryUrl=(?<registryUrl>\\S+))?\\n\\s*[\\w-]+\\s*[:=]\\s*['\"]?(?<currentValue>[^'\"\\s]+)['\"]?"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}",
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.*)${{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "OCI package repository and ref in bundle/uds-bundle.yaml",
+      "fileMatch": [
+        "(^|/)uds-bundle\\.yaml$"
+      ],
+      "matchStringsStrategy": "recursive",
+      "matchStrings": [
+        "(?m)repository: [\"']?(?<depName>.+?)[\"']?$(.)*(\\n.*){0,2}ref: [\"']?(?<currentValue>.+?)[\"']?$"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-uds\\.(?<build>\\d+))?(-(?<compatibility>\\w+)?)?(.*?)?$"
     }
   ],
   "packageRules": [

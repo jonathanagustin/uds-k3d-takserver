@@ -63,7 +63,7 @@ openssl pkcs12 -export \
   -name takserver-web -out "${work}/web.p12" -passout "pass:${pass}"
 keytool -importkeystore -noprompt \
   -srckeystore "${work}/web.p12" -srcstoretype PKCS12 -srcstorepass "${pass}" \
-  -destkeystore "${work}/web.jks" -deststoretype JKS \
+  -destkeystore "${work}/web.jks" -deststoretype PKCS12 \
   -deststorepass "${pass}" -destkeypass "${pass}" -alias takserver-web
 
 printf '{"binaryData": {"%s": "%s"}}' "${key_name}" "$(base64 -w 0 "${work}/web.jks")" > "${work}/patch.json"

@@ -162,3 +162,9 @@ certs:
   city: Arlington
   organization: TAK
   organizationalUnit: UDS
+  # modern: every .p12 uses PBES2 (PBKDF2, AES-256-CBC) with an HMAC-SHA256 MAC.
+  # legacy: TAK's OpenSSL 3 default (RC2/3DES, SHA-1 MAC), for clients that
+  # cannot import the modern format, such as Android 9 through 13. TAK Server
+  # reads the .jks files, which are modern either way. Applies only when the
+  # Job generates the CA.
+  pkcs12: modern

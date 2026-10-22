@@ -100,6 +100,8 @@ spec:
               value: {{ .Values.certs.organization | quote }}
             - name: ORGANIZATIONAL_UNIT
               value: {{ .Values.certs.organizationalUnit | quote }}
+            - name: PKCS12_FORMAT
+              value: {{ .Values.certs.pkcs12 | default "modern" | quote }}
           resources:
             requests:
               cpu: 50m

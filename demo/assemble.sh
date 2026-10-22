@@ -74,10 +74,24 @@ clip() {
   fi
   ffmpeg -v error -y -i "${work}/${name}-base.mp4" -an \
     -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
+  # A web clip whose first event is a caption gets that caption, without the
+  # "(real time ...)" note, as its chapter title. Other clips follow a card
+  # and get no chapter of their own. Caption chapters are indented under
+  # the card chapter they belong to.
+  if [[ "${mode}" = web && -f "${timeline}" ]]; then
+    python3 -c '
+import json, re, sys
+events = json.load(open(sys.argv[1]))
+if events and events[0]["kind"] == "caption" and events[0]["at"] <= 0.5:
+    print("  " + re.sub(r"\s*\(real time[^)]*\)$", "", events[0]["value"]), end="")
+' "${timeline}" > "${work}/${name}.title"
+    [[ -s "${work}/${name}.title" ]] || rm -f "${work}/${name}.title"
+  fi
 }
 
 # build NAME PART... joins the parts into ${out}/NAME.mp4 under max_bytes and
-# writes ${out}/NAME-chapters.txt (start time and caption of each part).
+# writes ${out}/NAME-chapters.txt (start time and title of each card and
+# captioned web clip).
 build() {
   local name="$1" list="${work}/$1-list.txt" chapters="${out}/$1-chapters.txt" at=0 part secs crf bytes
   shift
@@ -85,8 +99,10 @@ build() {
   : > "${chapters}"
   for part in "$@"; do
     echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
-    printf '%s %s\n' "$(awk -v t="${at}" 'BEGIN { printf "%d:%04.1f", t / 60, t % 60 }')" \
-      "$(cat "${work}/${part}.title" 2>/dev/null || echo "${part}")" >> "${chapters}"
+    if [[ -s "${work}/${part}.title" ]]; then
+      printf '%s %s\n' "$(awk -v t="${at}" 'BEGIN { printf "%d:%04.1f", t / 60, t % 60 }')" \
+        "$(cat "${work}/${part}.title")" >> "${chapters}"
+    fi
     secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${part}.mp4")"
     at="$(awk -v a="${at}" -v s="${secs}" 'BEGIN { print a + s }')"
   done

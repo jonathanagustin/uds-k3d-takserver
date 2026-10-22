@@ -7,6 +7,23 @@ metadata:
   name: takserver
   description: TAK Server packaged for a local UDS cluster
   version: dev
+  # Read by UDS Portal and the package catalog. See
+  # https://docs.defenseunicorns.com/core/concepts/configuration-and-packaging/package-metadata/
+  annotations:
+    dev.uds.title: TAK Server
+    dev.uds.tagline: Team Awareness Kit server with Keycloak SSO and a CloudTAK browser map
+    dev.uds.categories: Mapping,Situational Awareness
+    dev.uds.keywords: tak,takserver,cloudtak,cot,atak
+
+# Shipped in the package. Inspect with: uds zarf package inspect documentation
+documentation:
+  README: README.md
+  configuration: docs/configuration.md
+  sso: docs/sso.md
+  networking: docs/networking.md
+  justifications: docs/justifications.md
+  data: docs/data.md
+  cloudtak: docs/cloudtak.md
 
 variables:
   - name: DOMAIN
@@ -34,6 +51,14 @@ components:
       - name: takserver
         valuesFiles:
           - values/upstream-values.yaml
+    # The TAK Deployments are not listed. This component's onDeploy.after
+    # action adds the OIDC init container to them, so they are not final here.
+    # tasks/test.yaml health-check waits on them.
+    healthChecks:
+      - apiVersion: uds.dev/v1alpha1
+        kind: Package
+        name: takserver
+        namespace: takserver
     actions:
       onCreate:
         before:
@@ -194,6 +219,15 @@ components:
         namespace: cloudtak
         version: 0.1.0
         localPath: cloudtak/chart
+    healthChecks:
+      - apiVersion: uds.dev/v1alpha1
+        kind: Package
+        name: cloudtak
+        namespace: cloudtak
+      - apiVersion: apps/v1
+        kind: Deployment
+        name: cloudtak
+        namespace: cloudtak
     actions:
       onDeploy:
         before:

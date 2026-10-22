@@ -31,6 +31,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Keyless signing uses the job's OIDC token.
+      id-token: write
     if: github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft)
     # One package per architecture, each created on a native runner. Both
     # publish under the same OCI tag, and Zarf keeps one index entry per
@@ -96,6 +98,20 @@ jobs:
             --confirm --no-progress --features values=true \
             --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14
 
+      # Keyless: Fulcio issues a short-lived certificate for this workflow's
+      # identity and the signing event goes to the Rekor transparency log.
+      # The SBOM is a file in the package, so the signature covers it.
+      - name: Sign the package keylessly
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="zarf-package-takserver-${ARCH}-${RELEASE_VERSION}-upstream.tar.zst"
+          test -s "${package}"
+          uds zarf package sign "${package}" --keyless --confirm
+
       - name: Publish the baseline package
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
@@ -114,6 +130,11 @@ jobs:
             | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' > "${RUNNER_TEMP}/released-zarf.yaml"
           published_version="$(uds zarf tools yq -r '.metadata.version' "${RUNNER_TEMP}/released-zarf.yaml")"
           test "${published_version}" = "${RELEASE_VERSION}"
+          # The published package has to verify against this workflow's
+          # identity. A release run has a tag ref and a re-run has a branch ref.
+          uds zarf package verify "${reference}" --architecture "${ARCH}" \
+            --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
           echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
           echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"
 

@@ -11,6 +11,7 @@ tasks:
       - task: oidc-render
       - task: mesh
       - task: web-tls
+      - task: pkcs12
       - task: policies
       - task: logs
       - task: gateway
@@ -236,6 +237,59 @@ tasks:
           python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert set(d) == {"cacert"}, d' "${keys}"
           echo "8447 serves TLS and the gateway verifies it"
 
+  - name: pkcs12
+    description: Keystores in ConfigMap cert-migration use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          format="$(k get cm cert-migration -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/pkcs12-format}')"
+          # Certificates from an older release or supplied by an operator have
+          # no annotation. They are kept as they are, so there is nothing to check.
+          if [[ -z "${format}" ]]; then
+            echo "cert-migration has no uds.dev/pkcs12-format annotation; skipping"
+            exit 0
+          fi
+          echo "cert-migration PKCS#12 format: ${format}"
+          if [[ "${format}" != "modern" ]]; then
+            echo "certs.pkcs12 is ${format}; only modern is checked"
+            exit 0
+          fi
+          work="$(mktemp -d)"
+          trap 'rm -rf "${work}"' EXIT
+          # Write each keystore out of the ConfigMap. A *-legacy.p12 holds only
+          # the public CA certificate for clients that need the old format.
+          k get cm cert-migration -n takserver -o json | python3 -c '
+          import base64, json, sys
+          work = sys.argv[1]
+          for name, data in json.load(sys.stdin).get("binaryData", {}).items():
+              if name.endswith((".p12", ".jks")) and not name.endswith("-legacy.p12"):
+                  with open(work + "/" + name, "wb") as f:
+                      f.write(base64.b64decode(data))
+                  print(name)
+          ' "${work}" > "${work}/names"
+          checked=0
+          while IFS= read -r name; do
+            if ! info="$(openssl pkcs12 -in "${work}/${name}" -info -noout -passin pass:atakatak 2>&1)"; then
+              echo "${name} is not a PKCS#12 file openssl can read (a proprietary JKS keystore?):" >&2
+              head -n 3 <<< "${info}" >&2
+              exit 1
+            fi
+            if ! grep -q '^MAC: sha256' <<< "${info}" || grep -qi 'pbeWithSHA1' <<< "${info}" \
+              || ! grep -q 'AES-256-CBC' <<< "${info}"; then
+              echo "${name} is not PBES2/AES-256-CBC with a SHA-256 MAC:" >&2
+              grep -E 'MAC:|Encrypted data|Shrouded' <<< "${info}" >&2 || true
+              exit 1
+            fi
+            echo "${name}: $(grep -m1 'Encrypted data' <<< "${info}" | sed 's/^PKCS7 Encrypted data: //'), $(grep -m1 '^MAC:' <<< "${info}")"
+            checked=$((checked + 1))
+          done < "${work}/names"
+          [[ "${checked}" -ge 8 ]] || { echo "only ${checked} keystores were checked" >&2; exit 1; }
+          echo "${checked} keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
+
   - name: policies
     description: Confirm the Package created NetworkPolicy and AuthorizationPolicy objects
     actions:
@@ -266,14 +320,18 @@ tasks:
           fi
           # The operator turns each allow rule into a NetworkPolicy.
           echo "Package phase: $(uds zarf tools kubectl get package takserver -n takserver -o jsonpath='{.status.phase}')"
+          # Read the list once: grep -q in a pipeline can SIGPIPE kubectl under pipefail.
+          policies="$(uds zarf tools kubectl get networkpolicy -n takserver -o name)"
           for name in egress-5432-from-takserver-api-to-postgres ingress-5432-to-postgres-from-takserver-api; do
-            if ! uds zarf tools kubectl get networkpolicy -n takserver -o name | grep -q "${name}"; then
+            if ! grep -q "${name}" <<< "${policies}"; then
               echo "NetworkPolicy for ${name} is missing" >&2
               exit 1
             fi
           done
-          uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml | grep -q RestrictIstioSidecarOverrides
-          if uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q servicemonitors; then
+          exemption="$(uds zarf tools kubectl get exemption -n uds-policy-exemptions takserver-db-setup -o yaml)"
+          grep -q RestrictIstioSidecarOverrides <<< "${exemption}"
+          resources="$(uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null || true)"
+          if grep -q servicemonitors <<< "${resources}"; then
             monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
             echo "monitor count: ${monitors}"
             [ "${monitors}" = "0" ]

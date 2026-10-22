@@ -121,6 +121,9 @@ RUN bash -euxo pipefail -c '\
     cp /src/src/takserver-cluster/utilities/db-connection-configuration.sh "$out/db-connection-configuration.sh"; \
     cp /src/src/takserver-schemamanager/scripts/generic-cluster-database-configuration.sh "$out/generic-cluster-database-configuration.sh"'
 
+# SchemaManager.jar is not copied here. Only takserver-database-setup runs it,
+# and none of the cluster start scripts in the api, messaging, config and
+# plugins images call it. Storing it in both cost about 59 MB per architecture.
 FROM ${RUNTIME_IMAGE} AS cluster-base
 
 USER 0
@@ -139,7 +142,6 @@ COPY --from=builder \
     /image-root/setenv.sh \
     /image-root/UserManager.jar \
     /image-root/CoreConfig.xml \
-    /image-root/SchemaManager.jar \
     /image-root/logging-restrictsize.xml \
     /image-root/takserver.sh \
     /image-root/takserver-config-cluster.sh \

@@ -359,9 +359,9 @@ jobs:
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
 
-      # Another branch can build different CloudTAK or PostGIS inputs while
-      # this job runs. The keyed tags hold only this commit's build.
-      - name: Use this commit's CloudTAK and PostGIS images
+      # Another branch can build different TAK, CloudTAK or PostGIS inputs
+      # while this job runs. The keyed tags hold only this commit's build.
+      - name: Use this commit's TAK, CloudTAK and PostGIS images
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: ./.github/scripts/pin-image-tags.sh
 

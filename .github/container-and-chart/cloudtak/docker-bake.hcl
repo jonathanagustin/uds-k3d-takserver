@@ -10,7 +10,7 @@ variable "REGISTRY" {
 }
 
 variable "CLOUDTAK_VERSION" {
-  default = "v13.111.3" # cloudtak-version
+  default = "v13.112.3" # cloudtak-version
 }
 
 variable "CLOUDTAK_SRC" {
@@ -32,7 +32,7 @@ variable "PLATFORM" {
 }
 
 variable "IMAGE_TAG" {
-  default = "v13.111.3" # cloudtak-version
+  default = "v13.112.3" # cloudtak-version
 }
 
 # CloudTAK's own Dockerfile, unchanged. Its first stage downloads the

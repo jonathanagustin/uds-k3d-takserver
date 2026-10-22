@@ -38,7 +38,6 @@ concurrency:
 
 env:
   PUSH_IMAGES: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
-  IMAGE_TAG: 5.7-RELEASE-14
   IMAGE_REPO: ghcr.io/jonathanagustin/uds-k3d-takserver
 
 jobs:
@@ -52,6 +51,7 @@ jobs:
       actions: write
     outputs:
       build: ${{ steps.image.outputs.build }}
+      tag: ${{ steps.image.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -64,64 +64,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # A pull request retriggers this workflow for the whole diff. A later
-      # commit can cancel a build of an earlier Docker change, so skip only
-      # when a successful run already published this Docker tree for both
-      # architectures (wait-for-tak-images.sh checks the platforms).
+      # The images are tagged <version>-<key>, where <key> comes from the
+      # Docker directory tree and the pinned TAK source commit. That tag only
+      # ever holds one set of inputs, so if it is already published for both
+      # architectures (wait-for-tak-images.sh checks the platforms) there is
+      # nothing to build. A cancelled build never writes the index.
       - name: Decide whether to build
         id: image
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHECK_ONCE: "true"
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          git fetch --depth=2 origin "${HEAD_SHA}"
-          if ! git diff --quiet "${HEAD_SHA}~1" "${HEAD_SHA}" -- .github/container-and-chart/docker upstream/takserver; then
-            echo "build=true" >> "${GITHUB_OUTPUT}"
-            echo "Docker inputs changed."
-            exit 0
-          fi
-
-          # The Docker directory tree plus the pinned TAK source commit.
-          inputs() {
-            printf '%s %s\n' \
-              "$(git rev-parse "$1:.github/container-and-chart/docker")" \
-              "$(git rev-parse "$1:upstream/takserver" 2>/dev/null || echo none)"
-          }
-          tree="$(inputs "${HEAD_SHA}")"
-          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          published_json="$(gh run list \
-            --workflow container.yaml \
-            --branch "${branch}" \
-            --status success \
-            --limit 10 \
-            --json headSha)"
-          mapfile -t published < <(python3 -c 'import json,sys; [print(run["headSha"]) for run in json.load(sys.stdin)]' <<< "${published_json}")
-
-          matched=""
-          for sha in "${published[@]}"; do
-            if [ -z "${sha}" ]; then
-              continue
-            fi
-            git fetch --depth=1 origin "${sha}" || continue
-            if [ "$(inputs "${sha}")" = "${tree}" ]; then
-              matched="${sha}"
-              break
-            fi
-          done
-
-          if [ -n "${matched}" ] && ./.github/scripts/wait-for-tak-images.sh; then
+          tag="$(./.github/container-and-chart/docker/build.sh --tag)"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          if IMAGE_TAG="${tag}" ./.github/scripts/wait-for-tak-images.sh; then
             echo "build=false" >> "${GITHUB_OUTPUT}"
-            echo "Docker inputs match the images built at ${matched}."
+            echo "${tag} is already published for these inputs."
             exit 0
           fi
           echo "build=true" >> "${GITHUB_OUTPUT}"
-          echo "No published images match the current Docker inputs."
+          echo "${tag} is not published yet. Building it."
 
   # Each architecture compiles on its own native runner. QEMU emulation of
   # the Gradle and Node build is many times slower than a native compile.
-  # Each job pushes <tag>-<arch>; the manifest job joins them under <tag>.
+  # Each job pushes <tag>-<key>-<arch>; the manifest job joins them under
+  # <tag>-<key>.
   build:
     needs: plan
     permissions:
@@ -142,7 +110,6 @@ jobs:
     timeout-minutes: 180
     env:
       PLATFORMS: linux/${{ matrix.arch }}
-      ARCH_TAG: 5.7-RELEASE-14-${{ matrix.arch }}
       CACHE_SCOPE: takserver-${{ matrix.arch }}
     steps:
       - name: Checkout
@@ -181,19 +148,19 @@ jobs:
 
       - name: Build images
         env:
-          IMAGE_TAG: ${{ env.ARCH_TAG }}
+          IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
         run: ./.github/container-and-chart/docker/build.sh
 
       - name: Scan the local images
         env:
-          IMAGE_TAG: ${{ env.ARCH_TAG }}
+          IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
           GRYPE_IMAGE: anchore/grype:v0.120.1@sha256:e4a44ef45d285b829ce6efe2642980329661bd2d18eab5fc539138d4adaebbbe
         run: ./.github/scripts/scan-local-images.sh
 
       - name: Generate SBOMs from the local images
         if: env.PUSH_IMAGES == 'true'
         env:
-          IMAGE_TAG: ${{ env.ARCH_TAG }}
+          IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
           SYFT_IMAGE: anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
         shell: bash
         run: |
@@ -217,15 +184,19 @@ jobs:
           path: build/sbom/**
           if-no-files-found: error
 
-  # Join the two per-architecture tags into one multi-arch index under the
-  # tag that zarf.yaml and the chart values reference.
+  # Join the two per-architecture tags into one multi-arch index. On main
+  # this also writes the plain tag that zarf.yaml and releases reference,
+  # including when the keyed images were already built on a pull request.
   manifest:
     needs: [plan, build]
     permissions:
       contents: read
       packages: write
       actions: write
-    if: needs.plan.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.push)
+    if: >-
+      always() && needs.plan.result == 'success'
+      && (needs.build.result == 'success' || (needs.plan.outputs.build == 'false' && github.ref == 'refs/heads/main'))
+      && (github.event_name != 'workflow_dispatch' || inputs.push)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -244,4 +215,5 @@ jobs:
       - name: Create the multi-arch manifests
         env:
           ARCHES: amd64 arm64
+          IMAGE_TAG: ${{ needs.plan.outputs.tag }}
         run: ./.github/scripts/merge-image-manifests.sh

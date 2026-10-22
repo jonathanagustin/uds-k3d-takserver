@@ -20,15 +20,36 @@
 #
 # The TAK source is the git submodule at upstream/takserver. It is checked
 # out here if it is empty (a clone without --recurse-submodules).
+#
+#   build.sh --tag   build nothing. Print <version>-<key> for this commit.
+#
+# The images carry the label dev.uds-k3d-takserver.inputs: the pinned
+# upstream/takserver commit plus the git tree of this directory. <key> is the
+# first 12 hex digits of its sha256. CI pushes <version>-<key>-<arch> and the
+# manifest job writes <version>-<key>, so those tags only ever hold images
+# built from one set of inputs. <version> itself is written from main only
+# (.github/scripts/merge-image-manifests.sh), and releases use it.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "${here}/../../.." && pwd)"
+version="$(tr -d '[:space:]' < "${here}/version.txt")"
+
+input_key() {
+  printf '%s' "$1" | sha256sum | cut -c1-12
+}
+
+if [[ "${1:-}" = "--tag" ]]; then
+  inputs="$(git -C "${root}" rev-parse HEAD:upstream/takserver)-$(git -C "${root}" rev-parse HEAD:.github/container-and-chart/docker)"
+  echo "${version}-$(input_key "${inputs}")"
+  exit 0
+fi
+
 runtime="${CONTAINER_RUNTIME:-docker}"
 repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
-tag="${IMAGE_TAG:-$(tr -d '[:space:]' < "${here}/version.txt")}"
+tag="${IMAGE_TAG:-${version}}"
 push="${PUSH_IMAGES:-false}"
 cache_scope="${CACHE_SCOPE:-takserver}"
-root="$(cd "${here}/../../.." && pwd)"
 
 if ! command -v "${runtime}" >/dev/null 2>&1; then
   echo "Container runtime '${runtime}' is not on PATH." >&2
@@ -73,6 +94,14 @@ if [[ -n "$(git -C "${src}" status --porcelain)" ]]; then
 fi
 echo "TAK source: upstream/takserver ${upstream_sha} (tree ${upstream_tree})"
 
+# Committed tree of this directory. Uncommitted edits make a local-only label.
+docker_tree="$(git -C "${root}" rev-parse HEAD:.github/container-and-chart/docker)"
+if [[ -n "$(git -C "${root}" status --porcelain -- .github/container-and-chart/docker)" ]]; then
+  docker_tree="${docker_tree}-dirty"
+fi
+inputs="${upstream_sha}-${docker_tree}"
+echo "Image inputs: ${inputs} (key $(input_key "${inputs}"))"
+
 targets="takserver-config takserver-messaging takserver-api takserver-plugins takserver-database-setup takserver-ignite"
 
 use_bake="false"
@@ -104,6 +133,7 @@ export GRADLE_SEED="${seed}"
 export TAK_SRC="${src}"
 export UPSTREAM_SHA="${upstream_sha}"
 export UPSTREAM_TREE="${upstream_tree}"
+export INPUTS="${inputs}"
 
 bake() {
   # bake resolves a relative context from the working directory. CI runs
@@ -179,6 +209,7 @@ for target in ${targets}; do
     --build-context "takserver-src=${src}" \
     --build-arg "UPSTREAM_SHA=${upstream_sha}" \
     --build-arg "UPSTREAM_TREE=${upstream_tree}" \
+    --label "dev.uds-k3d-takserver.inputs=${inputs}" \
     "${here}"
 
   if [[ "${runtime}" = "docker" ]] && [[ "${GITHUB_ACTIONS:-}" = "true" ]]; then

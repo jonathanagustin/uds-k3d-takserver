@@ -13,7 +13,7 @@ metadata:
     dev.uds.title: TAK Server
     dev.uds.tagline: Team Awareness Kit server with Keycloak SSO and a CloudTAK browser map
     dev.uds.categories: Command And Control, Situational Awareness
-    dev.uds.keywords: TAK, TAK Server, CloudTAK, CoT, ATAK
+    dev.uds.keywords: TAK, TAK Server, CloudTAK, Cursor on Target, CoT, ATAK
 
 # Shipped in the package. Inspect with: uds zarf package inspect documentation
 documentation:

@@ -4,7 +4,7 @@ Date: 2026-10-20
 
 ## Status
 
-Accepted
+Accepted. The Postgres image decision is replaced by [ADR 13](0013-build-the-postgis-image-here.md).
 
 ## Context
 

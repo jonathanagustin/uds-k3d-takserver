@@ -98,7 +98,7 @@
       "description": "CloudTAK release tag next to a # cloudtak-version comment. It moves with the upstream/cloudtak submodule.",
       "fileMatch": [
         "(^|/)zarf\\.yaml$",
-        "^cloudtak/chart/(values|Chart)\\.yaml$",
+        "^charts/cloudtak/(values|Chart)\\.yaml$",
         "^\\.github/container-and-chart/cloudtak/docker-bake\\.hcl$"
       ],
       "matchStrings": [

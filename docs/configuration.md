@@ -24,7 +24,7 @@ The overlay turns the chart's nginx ingress off. The UDS Package in `chart/templ
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `values/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory for a 2 vCPU, 8 GB runner.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory for a 2 vCPU, 8 GB runner.
 
 ## Upstream chart values
 
@@ -38,7 +38,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 | --- | --- | --- | --- |
 | `takserver.{api,messaging,config,plugins}.image` and `takserverDatabaseSetup.image` | `docker-devtest-local.artifacts.tak.gov/...` | `ghcr.io/jonathanagustin/uds-k3d-takserver/...` and `###ZARF_VAR_TAK_IMAGE_TAG###` | The example registry is private. These are the images built from the same tag. |
 | `ignite.image` | tag `2.17.0` on the chart's tak.gov repository | this repo's `takserver-ignite` tag | Same Ignite version, built here. |
-| `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 250m and 1Gi, limit 1 CPU and 1536Mi. Messaging requests match; its own limit is ignored. `values/test-values.yaml`: API request 50m and 512Mi, messaging request 50m and 640Mi, CPU limit 500m, memory limit 1536Mi | The example does not schedule on a 2 vCPU, 8 GB runner. CPU requests stay low. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. The messaging request adds the 128m UserManager heap. |
+| `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 250m and 1Gi, limit 1 CPU and 1536Mi. Messaging requests match; its own limit is ignored. `bundle/test-values.yaml`: API request 50m and 512Mi, messaging request 50m and 640Mi, CPU limit 500m, memory limit 1536Mi | The example does not schedule on a 2 vCPU, 8 GB runner. CPU requests stay low. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. The messaging request adds the 128m UserManager heap. |
 | `takserver.config.resources` | unset | common values: request 250m and 1Gi, limit 1 CPU and 1Gi. test values: request 50m and 512Mi, limit 500m and 1Gi | The example does not set config resources. Config does not run UserManager. The request is the measured 512MB heap. 1Gi holds that heap and the off-heap cap. |
 | `takserver.plugins.resources.requests.cpu` | 1 | 100m in common values, 25m in test values. The post-helm patch sets memory request 128Mi and limit 384Mi | The plugins template reads this CPU request and then uses the API CPU limit. It ignores plugin memory. The patch supplies the memory. The heap is `-Xmx128m`. |
 | `ignite.replicaCount` | chart default 2 | 1 | A second Ignite pod does not fit next to the slim core. |

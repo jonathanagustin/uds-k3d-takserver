@@ -39,7 +39,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 
 A local `build.sh` builds the host architecture and loads it as `v13.111.3`.
 
-Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strings marked `# cloudtak-version` in `zarf.yaml`, `cloudtak/chart/`, and `docker-bake.hcl` move in the same pull request.
+Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strings marked `# cloudtak-version` in `zarf.yaml`, `charts/cloudtak/`, and `docker-bake.hcl` move in the same pull request.
 
 ## Sign-in
 
@@ -115,7 +115,7 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 
 The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `chart/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
 
-`additionalNetworkAllow` in `cloudtak/chart/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
+`additionalNetworkAllow` in `charts/cloudtak/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
 
 ## Basemap
 
@@ -129,7 +129,7 @@ New users get OpenStreetMap as their default basemap. CloudTAK fetches the basem
 
 The OpenStreetMap tile servers are run by donations, with no service level, under the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). Its rules for a caching proxy are met by the headers, the cache, and the rate limit above. The policy also asks for a contactable User-Agent: set `basemap.contact` to an email address or URL for your deployment. For heavy use, use another provider or your own tile server.
 
-Settings, under `basemap` in `cloudtak/chart/values.yaml` (set them with UDS bundle overrides on chart `uds-cloudtak`):
+Settings, under `basemap` in `charts/cloudtak/values.yaml` (set them with UDS bundle overrides on chart `uds-cloudtak`):
 
 | Value | Default | Meaning |
 | --- | --- | --- |

@@ -40,10 +40,10 @@ PY
 }
 
 replace zarf.yaml "${repo}/cloudtak:${cloudtak_version}\"" "${repo}/cloudtak:${cloudtak_tag}\""
-replace cloudtak/chart/values.yaml "tag: ${cloudtak_version} # cloudtak-version" "tag: ${cloudtak_tag} # cloudtak-version"
+replace charts/cloudtak/values.yaml "tag: ${cloudtak_version} # cloudtak-version" "tag: ${cloudtak_tag} # cloudtak-version"
 
 replace zarf.yaml "${repo}/postgis:${postgis_version}\"" "${repo}/postgis:${postgis_tag}\""
-replace cloudtak/chart/values.yaml "${repo}/postgis:${postgis_version}" "${repo}/postgis:${postgis_tag}"
+replace charts/cloudtak/values.yaml "${repo}/postgis:${postgis_version}" "${repo}/postgis:${postgis_tag}"
 replace values/common-values.yaml "tag: \"${postgis_version}\"" "tag: \"${postgis_tag}\""
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

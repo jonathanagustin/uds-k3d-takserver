@@ -93,4 +93,4 @@ packages:
       takserver:
         takserver:
           valuesFiles:
-            - ../values/test-values.yaml
+            - test-values.yaml

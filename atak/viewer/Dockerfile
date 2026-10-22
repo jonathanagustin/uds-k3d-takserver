@@ -7,7 +7,7 @@
 # the device's adb connection, and phone.html frames it. Remote shell and file
 # listing are compiled out. amd64 only, like the device VM.
 
-ARG NODE_IMAGE=node:20.20-bookworm-slim
+ARG NODE_IMAGE=node:20.20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
 
 FROM ${NODE_IMAGE} AS build
 RUN apt-get update \

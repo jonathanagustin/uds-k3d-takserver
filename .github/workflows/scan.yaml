@@ -90,7 +90,8 @@ jobs:
       group: scan-${{ github.ref }}
       cancel-in-progress: true
     env:
-      UDS_CLI_VERSION: 0.39.0
+      # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
+      UDS_CLI_VERSION: 0.40.0
       GRYPE_VERSION: v0.120.1
     steps:
       - name: Checkout

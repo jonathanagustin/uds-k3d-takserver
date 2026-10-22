@@ -174,10 +174,12 @@ jobs:
         timeout-minutes: 90
 
       - name: Install recording tools
+        timeout-minutes: 15
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+          apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_opts[@]}" update -qq
+          sudo apt-get "${apt_opts[@]}" install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
             xvfb libnss3-tools
           google-chrome --version
           # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.3.0...v0.4.0) (2026-10-22)
+
+
+### Features
+
+* add additionalNetworkAllow to the cloudtak chart and follow UDS client and metadata naming ([#87](https://github.com/jonathanagustin/uds-k3d-takserver/issues/87)) ([e5a4abf](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e5a4abfbe5f68768c60845b00c283ee5ab035bb3))
+
+
+### Bug Fixes
+
+* let cloudtak's nginx start on a node with ipv6 disabled ([#83](https://github.com/jonathanagustin/uds-k3d-takserver/issues/83)) ([96e298d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/96e298ddcb97405e8292d76106c0875830ed4f8e))
+
+
+### Miscellaneous
+
+* move the cloudtak chart to charts/ and the test values next to the test bundle ([#90](https://github.com/jonathanagustin/uds-k3d-takserver/issues/90)) ([67b9c6e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/67b9c6eff6b4aa2c55849cb3febaccf7f91af03f))
+
+
+### Documentation
+
+* drop the image build from the quick start and list unmet package requirements ([#85](https://github.com/jonathanagustin/uds-k3d-takserver/issues/85)) ([0a1c6ed](https://github.com/jonathanagustin/uds-k3d-takserver/commit/0a1c6ed692ff1b2c48d83a3825c1516767a62460))
+
 ## [0.3.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.2.0...v0.3.0) (2026-10-22)
 
 

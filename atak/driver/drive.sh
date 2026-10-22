@@ -15,6 +15,11 @@ test -s "${DPK}"
 APK="${APK:-/atak-civ.apk}"
 OUT="${OUT:-/out}"
 PKG="${PKG:-com.atakmap.app.civ}"
+# Fixed test location (National Mall, Washington, DC). The VM has no GPS;
+# this is a labelled test position, not a fix.
+TEST_LAT="${TEST_LAT:-38.8895}"
+TEST_LON="${TEST_LON:--77.0353}"
+CALLSIGN="${CALLSIGN:-ATAK-DEVICE (TEST LOCATION)}"
 mkdir -p "${OUT}"
 a() { adb -s "${DEVICE}" "$@"; }
 
@@ -111,8 +116,33 @@ a shell wm dismiss-keyguard || true
 # launched ("Hi there"). A provisioned phone would not show it.
 a shell pm disable-user --user 0 com.google.android.setupwizard || true
 a shell am force-stop com.google.android.setupwizard || true
-# Location mode "high accuracy", as on a phone; ATAK warns on battery saving.
-a shell settings put secure location_mode 3 || true
+
+# ATAK loads atak/config/prefs/defaults once at start-up, before the map
+# components, and deletes it (PreferenceControl.ingestDefaults). Stage the
+# device settings there so the very first launch already has them:
+# - recordedLocation: RestoreLocationMapComponent places the self marker
+#   there as a mock location; restoreRecordedLocation keeps it across restarts.
+# - mockingOption IgnoreInternalGPS ("external only"): the VM has no GPS
+#   receiver, so internal GPS is off and the mock location is used.
+# - atak.hint.gps.device.mode: ATAK checks the internal GPS provider once at
+#   start-up before applying mockingOption; mark that hint as seen.
+# - atakControlForcePortrait: a phone held upright.
+# No secrets here; the connection and certificates come in the data package.
+cat > /tmp/defaults <<PREF
+<?xml version='1.0' standalone='yes'?>
+<preferences>
+  <preference version="1" name="com.atakmap.app_preferences">
+    <entry key="locationCallsign" class="class java.lang.String">${CALLSIGN}</entry>
+    <entry key="recordedLocation" class="class java.lang.String">${TEST_LAT}, ${TEST_LON}</entry>
+    <entry key="restoreRecordedLocation" class="class java.lang.Boolean">true</entry>
+    <entry key="mockingOption" class="class java.lang.String">IgnoreInternalGPS</entry>
+    <entry key="atak.hint.gps.device.mode" class="class java.lang.Boolean">false</entry>
+    <entry key="atakControlForcePortrait" class="class java.lang.Boolean">true</entry>
+  </preference>
+</preferences>
+PREF
+a shell mkdir -p /sdcard/atak/config/prefs
+a push /tmp/defaults /sdcard/atak/config/prefs/defaults >/dev/null
 
 start=$(date +%s)
 a install -r -g "${APK}"

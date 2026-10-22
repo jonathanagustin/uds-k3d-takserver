@@ -134,10 +134,6 @@ cat > "${work}/dpk/certs/server.pref" <<PREF
   </preference>
   <preference version="1" name="com.atakmap.app_preferences">
     <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
-    <entry key="locationCallsign" class="class java.lang.String">${CALLSIGN}</entry>
-    <entry key="restoreRecordedLocation" class="class java.lang.Boolean">true</entry>
-    <entry key="recordedLocation" class="class java.lang.String">${TEST_LAT}, ${TEST_LON}</entry>
-    <entry key="atakControlForcePortrait" class="class java.lang.Boolean">true</entry>
   </preference>
 </preferences>
 PREF
@@ -192,6 +188,12 @@ spec:
           value: atak-device-adb.atak.svc.cluster.local:5555
         - name: TAK_HOST
           value: ${TAK_HOST}
+        - name: TEST_LAT
+          value: "${TEST_LAT}"
+        - name: TEST_LON
+          value: "${TEST_LON}"
+        - name: CALLSIGN
+          value: "${CALLSIGN}"
       volumeMounts:
         - name: out
           mountPath: /out

@@ -250,6 +250,17 @@ export async function clickLikeAPerson(page: Page, target: Locator) {
   await page.mouse.up();
 }
 
+// Glides to a point on the page and clicks there (for a map canvas).
+export async function clickAtLikeAPerson(page: Page, x: number, y: number) {
+  await page.mouse.move(mouse.x, mouse.y);
+  await page.mouse.move(x, y, { steps: 28 });
+  mouse = { x, y };
+  await page.waitForTimeout(250);
+  await page.mouse.down();
+  await page.waitForTimeout(90);
+  await page.mouse.up();
+}
+
 // Puts the overlay cursor back where it was after a navigation.
 export async function showCursor(page: Page) {
   await page.mouse.move(mouse.x, mouse.y);

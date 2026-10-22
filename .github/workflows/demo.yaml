@@ -37,6 +37,8 @@ concurrency:
 
 env:
   VHS_VERSION: 0.12.1
+  AGG_VERSION: 1.9.0
+  AGG_SHA256: f111e315cd71056b116302342553dd765b7297579ed511f111d0cedb442aeda6
   VHS_SHA256: eb33787a5b1cebf91fe0b18bd231e2d71d36c1ff4babd99ddac1a6ab411efd10
 
 jobs:
@@ -44,6 +46,7 @@ jobs:
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 240
     permissions:
+      attestations: read
       contents: read
       packages: read
     env:
@@ -152,10 +155,21 @@ jobs:
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
 
+      # The deployment is recorded as the video's opening chapter: the same
+      # commands as `uds run demo-deploy`, printed as they run, captured with
+      # asciinema and rendered later by demo/render-cast.py.
       - name: Deploy UDS Core and TAK
         run: |
-          set -o pipefail
-          uds run demo-deploy --set FLAVOR=upstream --no-progress 2>&1 | tee /tmp/demo-deploy.log
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends asciinema
+          mkdir -p demo/out
+          TERM=xterm-256color FLAVOR=upstream asciinema rec --overwrite -q --cols 132 --rows 34 \
+            -c './demo/deploy.sh; echo $? > demo/out/00-deploy.exit' demo/out/00-deploy.cast < /dev/null
+          python3 -c 'import json,sys; [sys.stdout.write(json.loads(l)[2]) for l in open(sys.argv[1]).readlines()[1:] if l.strip()]' \
+            demo/out/00-deploy.cast | tee /tmp/demo-deploy.log | tail -n 200
+          test "$(cat demo/out/00-deploy.exit)" = 0
+          uds run demo-setup --no-progress
         shell: bash
         timeout-minutes: 90
 
@@ -177,16 +191,28 @@ jobs:
           vhs --version
         shell: bash
 
+      - name: Render the recorded deployment
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/agg "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-gnu"
+          echo "${AGG_SHA256}  /tmp/agg" | sha256sum -c -
+          sudo install -m 0755 /tmp/agg /usr/local/bin/agg
+          python3 demo/render-cast.py demo/out/00-deploy.cast demo/out/00-deploy \
+            "1. UDS Core (slim) on a new k3d cluster::7" \
+            "2. Build the Zarf package: upstream chart, images by full name::7" \
+            "3. Bundle the package with UDS Core::5" \
+            "4. Deploy the bundle: UDS Core, then TAK Server::10"
+        shell: bash
+
       - name: Record the terminal chapters
         run: ./demo/record-terminal.sh
+        env:
+          # gh attestation verify in the "Secure by default" chapter.
+          GH_TOKEN: ${{ github.token }}
         shell: bash
 
       - name: Record the web walkthrough
         run: ./demo/record-web.sh
-        shell: bash
-
-      - name: Record the CloudTAK map walkthrough
-        run: ./demo/record-web.sh 07-map map.demo.ts "map.uds.dev sso.uds.dev"
         shell: bash
 
       - name: Deploy and connect the ATAK device
@@ -203,6 +229,30 @@ jobs:
         run: ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev"
         shell: bash
 
+      - name: Record CloudTAK and ATAK in sync
+        if: env.ATAK == 'true'
+        run: ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"
+        shell: bash
+
+      # Footprint and self-healing, recorded like the deployment and rendered
+      # with the same speed-up and real elapsed times.
+      - name: Record footprint and self-healing
+        if: env.ATAK == 'true'
+        run: |
+          set -euo pipefail
+          TERM=xterm-256color asciinema rec --overwrite -q --cols 132 --rows 34 \
+            -c './demo/after-atak.sh; echo $? > demo/out/10-operate.exit' demo/out/10-operate.cast < /dev/null
+          python3 -c 'import json,sys; [sys.stdout.write(json.loads(l)[2]) for l in open(sys.argv[1]).readlines()[1:] if l.strip()]' \
+            demo/out/10-operate.cast | tail -n 80
+          test "$(cat demo/out/10-operate.exit)" = 0
+          python3 demo/render-cast.py demo/out/10-operate.cast demo/out/10-operate \
+            "Live CPU and memory of TAK's pods::6" \
+            "The whole package for an offline install::4" \
+            "The ATAK test device before::4" \
+            "Delete TAK's messaging pod: Kubernetes brings it back::8" \
+            "ATAK reconnects by itself::6"
+        shell: bash
+
       - name: Build demo.mp4
         run: ./demo/assemble.sh
         shell: bash
@@ -213,6 +263,8 @@ jobs:
           name: demo-video
           path: |
             demo/out/demo.mp4
+            demo/out/demo-operate.mp4
+            demo/out/*-chapters.txt
             demo/out/poster.png
             demo/out/preview.gif
           if-no-files-found: error
@@ -229,10 +281,10 @@ jobs:
             demo/out/06-web-events.json
             demo/out/browser-06-web/screen.mkv
             demo/out/browser-06-web/ffmpeg.log
-            demo/out/07-map-events.json
-            demo/out/browser-07-map/screen.mkv
-            demo/out/browser-07-map/ffmpeg.log
             demo/out/08-atak-events.json
+            demo/out/09-sync-events.json
+            demo/out/browser-09-sync/screen.mkv
+            demo/out/*.cast
             demo/out/browser-08-atak/screen.mkv
             demo/out/browser-08-atak/ffmpeg.log
             demo/out/atak/*.png

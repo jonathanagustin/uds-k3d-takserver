@@ -108,13 +108,15 @@ tasks:
   - name: demo-deploy
     description: Deploy the bundle on a new k3d-core-slim-dev cluster for the demo recording
     actions:
-      - task: create-dev-package
-      - task: deploy-slim-core
-      - task: fit-runner
-      - task: create:test-bundle
-      - task: deploy:test-bundle
-        with:
-          options: "--force-conflicts"
+      # The same commands as create-dev-package, deploy-slim-core, fit-runner,
+      # create:test-bundle and deploy:test-bundle, printed as they run so the
+      # Demo Video workflow can record them.
+      - cmd: ./demo/deploy.sh
+      - task: demo-setup
+
+  - name: demo-setup
+    description: Demo user, TAK group and health checks after demo/deploy.sh
+    actions:
       - task: setup:keycloak-user
         with:
           group: "/UDS Core/Admin"
@@ -127,7 +129,6 @@ tasks:
     actions:
       - cmd: ./demo/record-terminal.sh
       - cmd: ./demo/record-web.sh
-      - cmd: ./demo/record-web.sh 07-map map.demo.ts "map.uds.dev sso.uds.dev"
       # The ATAK chapter needs the device from atak/ci/e2e.sh (KVM, amd64).
       - cmd: |
           if uds zarf tools kubectl get vmi -n atak atak-device >/dev/null 2>&1; then

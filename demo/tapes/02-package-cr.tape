@@ -27,3 +27,8 @@ Type@65ms "kubectl get package takserver -n takserver -o yaml | yq '.status | de
 Sleep 700ms
 Enter
 Sleep 3200ms
+# caption: Istio routes the UDS Operator created for TAK's hosts
+Type@75ms "kubectl get virtualservice -n takserver -o custom-columns=NAME:.metadata.name,HOSTS:.spec.hosts"
+Sleep 400ms
+Enter
+Sleep 2800ms

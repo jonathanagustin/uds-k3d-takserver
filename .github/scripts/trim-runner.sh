@@ -14,6 +14,18 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" ]] && [[ "${CI:-}" != "true" ]]; then
   exit 0
 fi
 
+# TRIM_SKIP_ABOVE_GB: leave the disk alone when at least this many GB are
+# already free. The deletes cost minutes on a slow runner, and a test job
+# uses about 30 GB (measured in the Test workflow). Unset, the trim always runs.
+if [[ -n "${TRIM_SKIP_ABOVE_GB:-}" ]]; then
+  avail_gb="$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')"
+  if ((avail_gb >= TRIM_SKIP_ABOVE_GB)); then
+    echo "trim: ${avail_gb} GB free, at least ${TRIM_SKIP_ABOVE_GB} GB; skipping the deletes."
+    df -h /
+    exit 0
+  fi
+fi
+
 # Time each delete and report the space it freed, so the slow ones can be cut
 # or moved to the background on the numbers. Same deletes as before.
 used_kb() { df --output=used -k / | tail -n 1 | tr -d ' '; }

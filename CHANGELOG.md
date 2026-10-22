@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.4.0...v0.5.0) (2026-10-22)
+
+
+### Features
+
+* run ATAK-CIV in a KubeVirt VM as a test client ([#18](https://github.com/jonathanagustin/uds-k3d-takserver/issues/18)) ([76bb3b1](https://github.com/jonathanagustin/uds-k3d-takserver/commit/76bb3b1ddb36c79b89f690fe88a1c333c3cbe356))
+
+
+### Miscellaneous
+
+* **deps:** replace support-deps with actions/attest v4.2.2 ([#92](https://github.com/jonathanagustin/uds-k3d-takserver/issues/92)) ([9f8d6cd](https://github.com/jonathanagustin/uds-k3d-takserver/commit/9f8d6cd89ef4a67f602ac8d4f27281b1c4cbe04b))
+* **deps:** update cloudtak to v13.112.3 ([#93](https://github.com/jonathanagustin/uds-k3d-takserver/issues/93)) ([efca508](https://github.com/jonathanagustin/uds-k3d-takserver/commit/efca5080276788acc7e6fcb1c2ac6f583e39509e))
+* **renovate:** hold the pepr overrides together with pepr ([#104](https://github.com/jonathanagustin/uds-k3d-takserver/issues/104)) ([eecc25d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/eecc25d3f53fd59da37a78b185c01628d3527795))
+* **renovate:** name major pull requests by dependency, hold the mise Java major and pepr ([#99](https://github.com/jonathanagustin/uds-k3d-takserver/issues/99)) ([8438da6](https://github.com/jonathanagustin/uds-k3d-takserver/commit/8438da61428e5f12220126bb6dd2044b753e137d))
+* **renovate:** open major updates in their own pull requests ([#98](https://github.com/jonathanagustin/uds-k3d-takserver/issues/98)) ([e05e311](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e05e311c0d821d34cf0f010fdccb6d3811ac2358))
+
 ## [0.4.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.3.0...v0.4.0) (2026-10-22)
 
 

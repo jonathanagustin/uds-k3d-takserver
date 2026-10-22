@@ -70,8 +70,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
   // already has a session, so there is no second sign-in.
   const map = await page.context().newPage();
   await watchSecurity(map);
-  // Open the map on the device's test location (maplibre URL hash).
-  await map.goto(`${mapUrl.replace(/\/$/, "")}/#15/${testLocation}`);
+  await map.goto(mapUrl);
   const canvas = map.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 120_000 });
   // CloudTAK opens its permissions prompt a moment after the map loads.
@@ -107,6 +106,12 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
     .toBe(true);
   caption("TAK lists the ATAK device as a connected client");
   await map.waitForTimeout(4_000);
+  // CloudTAK replaces the URL hash with its own default view while it loads;
+  // move the view to the test location afterwards (maplibre URL hash).
+  await map.evaluate((loc) => {
+    window.location.hash = `#15/${loc}`;
+  }, testLocation);
+  await map.waitForTimeout(3_000);
   caption("Its marker sits at a fixed TEST LOCATION on the National Mall, not a GPS fix");
   mark("zoom", "0.5,0.5,1.6");
   await map.waitForTimeout(6_000);

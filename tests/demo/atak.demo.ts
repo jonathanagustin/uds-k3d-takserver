@@ -71,9 +71,22 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
   await map.goto(mapUrl);
   const canvas = map.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 120_000 });
-  for (const name of ["Not now", "Skip for now"]) {
-    const skip = map.getByRole("button", { name });
-    if (await skip.isVisible().catch(() => false)) await skip.click().catch(() => undefined);
+  // CloudTAK opens its permissions prompt a moment after the map loads.
+  await map
+    .getByRole("button", { name: "Skip for now" })
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .catch(() => undefined);
+  for (let i = 0; i < 10; i++) {
+    let open = false;
+    for (const name of ["Not now", "Skip for now"]) {
+      const skip = map.getByRole("button", { name });
+      if (await skip.isVisible().catch(() => false)) {
+        open = true;
+        await clickLikeAPerson(map, skip).catch(() => undefined);
+      }
+    }
+    if (!open) break;
+    await map.waitForTimeout(800);
   }
   await expectSecure(map);
   caption("CloudTAK on the same TAK Server, signed in through the same Keycloak session");

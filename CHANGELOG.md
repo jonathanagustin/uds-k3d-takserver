@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.0...v0.5.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **demo:** repair the CloudTAK sync scenes and name chapters after their cards ([#106](https://github.com/jonathanagustin/uds-k3d-takserver/issues/106)) ([fce36d2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/fce36d2c9fda7ec2b25208b93a92029d2edd94eb))
+
+
+### Miscellaneous
+
+* **deps:** update tak server package dependencies ([#94](https://github.com/jonathanagustin/uds-k3d-takserver/issues/94)) ([73074fd](https://github.com/jonathanagustin/uds-k3d-takserver/commit/73074fd3df982354e7ab8d670915db29b6d58aad))
+* **deps:** update tak server support dependencies ([#95](https://github.com/jonathanagustin/uds-k3d-takserver/issues/95)) ([af5506c](https://github.com/jonathanagustin/uds-k3d-takserver/commit/af5506cdd1bd6ea8dd57e146333af3e42f2aae06))
+
 ## [0.5.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.4.0...v0.5.0) (2026-10-22)
 
 

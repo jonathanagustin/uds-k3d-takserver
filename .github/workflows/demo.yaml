@@ -285,6 +285,9 @@ jobs:
           name: demo-segments
           path: |
             demo/out/0*.mp4
+            demo/out/0*-events.json
+            demo/out/10-operate-*
+            demo/out/tapes/*.tape
             demo/out/06-web.mp4
             demo/out/06-web-events.json
             demo/out/browser-06-web/screen.mkv

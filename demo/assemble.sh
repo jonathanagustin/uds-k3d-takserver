@@ -108,20 +108,20 @@ build() {
 # (demo/deploy.sh, recorded by the workflow), the Package CR, SSO sign-in,
 # and the ATAK test device on the same server.
 deploy_video=(v1)
-card v1 "TAK Server on UDS: deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
+card v1 "TAK Server on UDS: Deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
 if [[ -f "${out}/00-deploy-4.mp4" ]]; then
   for n in 1 2 3 4; do
     clip "d0${n}" "${out}/00-deploy-${n}.mp4" web "${out}/00-deploy-${n}-events.json" 0
     deploy_video+=("d0${n}")
   done
 fi
-card c02 "Package ready" "the UDS Operator turns one Package CR into policy, routes and SSO"
+card c02 "Package Ready" "the UDS Operator turns one Package CR into policy, routes and SSO"
 clip t02 "${out}/02-package-cr.mp4" terminal demo/out/tapes/02-package-cr.tape
-card c06 "Sign in through UDS SSO" "TAK's web UI at takserver.uds.dev, Keycloak from UDS Core"
+card c06 "Sign In through UDS SSO" "TAK's web UI at takserver.uds.dev, Keycloak from UDS Core"
 clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
 deploy_video+=(c02 t02 c06 t06)
 if [[ -f "${out}/08-atak.mp4" ]]; then
-  card c08 "A real ATAK device on the same server" "ATAK-CIV in a KubeVirt VM, its TEST LOCATION marker in CloudTAK"
+  card c08 "A Real ATAK Device on the Same Server" "ATAK-CIV in a KubeVirt VM, its TEST LOCATION marker in CloudTAK"
   clip t08 "${out}/08-atak.mp4" web "${out}/08-atak-events.json" "${web_trim}"
   deploy_video+=(c08 t08)
 fi
@@ -130,24 +130,24 @@ deploy_video+=(c99)
 
 # Video 2, Operate and trust.
 operate_video=(v2)
-card v2 "TAK Server on UDS: operate and trust" "air-gapped, policy-checked, verified, measured"
-card c2a "Air-gapped install" "images from the in-cluster Zarf registry, SBOMs in the package"
+card v2 "TAK Server on UDS: Operate and Trust" "air-gapped, policy-checked, verified, measured"
+card c2a "Air-Gapped Install" "images from the in-cluster Zarf registry, SBOMs in the package"
 clip t2a "${out}/02a-airgap.mp4" terminal demo/out/tapes/02a-airgap.tape
-card c2b "Policy at work" "UDS admission policy on every pod, one narrow exemption"
+card c2b "Policy at Work" "UDS admission policy on every pod, one narrow exemption"
 clip t2b "${out}/02b-policy.mp4" terminal demo/out/tapes/02b-policy.tape
 operate_video+=(c2a t2a c2b t2b)
 if [[ -f "${out}/09-sync.mp4" ]]; then
-  card c09 "CloudTAK and ATAK in sync" "a TEST MARKER and a TEST chat message, live"
+  card c09 "CloudTAK and ATAK in Sync" "a TEST MARKER and a TEST chat message, live"
   clip t09 "${out}/09-sync.mp4" web "${out}/09-sync-events.json" "${web_trim}"
   operate_video+=(c09 t09)
 fi
-card c03 "Secure by default" "mesh, generated network policy, signed releases with provenance"
+card c03 "Secure by Default" "mesh, generated network policy, signed releases with provenance"
 clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
 operate_video+=(c03 t03)
-card c96 "Upgrades from the last signed release" "CI installs the verified release, upgrades in place, keeps certificates and data"
+card c96 "Upgrades from the Last Signed Release" "CI installs the verified release, upgrades in place, keeps certificates and data"
 operate_video+=(c96)
 if [[ -f "${out}/10-operate-4.mp4" ]]; then
-  card c10 "Footprint and self-healing" "live numbers from this run; TAK's messaging pod deleted"
+  card c10 "Footprint and Self-Healing" "live numbers from this run; TAK's messaging pod deleted"
   operate_video+=(c10)
   for n in 1 2 3 4 5; do
     if [[ -f "${out}/10-operate-${n}.mp4" ]]; then
@@ -156,7 +156,7 @@ if [[ -f "${out}/10-operate-4.mp4" ]]; then
     fi
   done
 fi
-card c98 "What this does not prove" "phone is an Android VM; fixed TEST LOCATION; one-node k3d; no radio or degraded links"
+card c98 "What This Does Not Prove" "phone is an Android VM; fixed TEST LOCATION; one-node k3d; no radio or degraded links"
 card c97 "github.com/jonathanagustin/uds-k3d-takserver" "open issues track the known gaps" last
 operate_video+=(c98 c97)
 

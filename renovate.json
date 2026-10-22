@@ -14,6 +14,7 @@
   "ignorePresets": [
     ":ignoreModulesAndTests"
   ],
+  "separateMajorMinor": true,
   "reviewersFromCodeOwners": false,
   "rebaseWhen": "conflicted",
   "commitBodyTable": true,
@@ -198,6 +199,66 @@
         "ghcr.io/jonathanagustin/uds-k3d-takserver/**"
       ],
       "enabled": false
+    },
+    {
+      "description": "Major updates come in their own pull request, one per dependency, so a breaking upgrade cannot hold back the minor and patch group. group:all turns separateMajorMinor off, so it is turned back on above.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": null,
+      "addLabels": [
+        "major"
+      ]
+    },
+    {
+      "description": "Majors that need real work before they can land: the PostgreSQL base of the PostGIS image (a new major needs a data migration) and the Java toolchain the TAK build compiles with. They wait for approval on the dependency dashboard.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "matchPackageNames": [
+        "postgres",
+        "docker.io/library/postgres",
+        "postgis/postgis",
+        "docker.io/postgis/postgis",
+        "eclipse-temurin",
+        "docker.io/library/eclipse-temurin",
+        "java"
+      ],
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "major",
+        "needs-migration"
+      ]
+    },
+    {
+      "description": "The NATS images in zarf.yaml are the ones the upstream NATS chart renders. A new NATS server or config reloader has to be checked against that chart, so every update gets its own pull request after approval on the dependency dashboard.",
+      "matchPackageNames": [
+        "nats",
+        "docker.io/library/nats",
+        "natsio/nats-server-config-reloader",
+        "docker.io/natsio/nats-server-config-reloader"
+      ],
+      "groupName": "NATS",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "needs-migration"
+      ]
+    },
+    {
+      "description": "GitHub-hosted runner images (runs-on). A new Ubuntu release is a major change to every job and waits for approval on the dependency dashboard.",
+      "matchDatasources": [
+        "github-runners"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": null,
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "major",
+        "needs-migration"
+      ]
     }
   ],
   "git-submodules": {

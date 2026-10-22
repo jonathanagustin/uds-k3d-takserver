@@ -34,6 +34,15 @@ const password = process.env.KEYCLOAK_PASSWORD || "";
 const deviceCallsign = process.env.ATAK_CALLSIGN || "ATAK-DEVICE (TEST LOCATION)";
 const testLocation = process.env.ATAK_TEST_LOCATION || "38.8895/-77.0353";
 
+// Clicking a marker opens CloudTAK's radial menu; its "view" sector opens
+// the marker's pane.
+async function viewFromRadial(page: Page) {
+  const view = page.locator('.menuHolder g[data-id="view"] use').first();
+  await expect(view).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(600);
+  await clickLikeAPerson(page, view);
+}
+
 async function scene(page: Page, name: string, body: () => Promise<void>) {
   try {
     await body();
@@ -113,6 +122,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     caption("A TEST MARKER placed in CloudTAK");
     const centre = await canvasPoint(map);
     await clickAtLikeAPerson(map, centre.x, centre.y);
+    await viewFromRadial(map);
     await expect(map).toHaveURL(/\/cot\//, { timeout: 10_000 });
     await expect(map.getByText("TEST MARKER", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, map.getByTitle("Share", { exact: true }).first());
@@ -138,6 +148,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await map.waitForTimeout(2_000);
     const centre = await canvasPoint(map);
     await clickAtLikeAPerson(map, centre.x, centre.y);
+    await viewFromRadial(map);
     await expect(map.getByText(deviceCallsign, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
     await clickLikeAPerson(map, map.getByTitle("More Actions", { exact: true }).first());
     await clickLikeAPerson(map, map.getByText("Chat", { exact: true }).first());

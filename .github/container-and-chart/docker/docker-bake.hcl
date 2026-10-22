@@ -3,7 +3,7 @@
 
 # One builder stage, then the six runtime targets together.
 # build.sh sets REPO, TAG, PLATFORMS, GRADLE_SEED, TAK_SRC, UPSTREAM_SHA,
-# and UPSTREAM_TREE.
+# UPSTREAM_TREE, and INPUTS.
 
 variable "REPO" {
   default = "ghcr.io/jonathanagustin/uds-k3d-takserver"
@@ -35,6 +35,12 @@ variable "UPSTREAM_TREE" {
   default = ""
 }
 
+# Submodule commit plus the git tree of this directory. The keyed tags and
+# the CI checks read it back from the image label.
+variable "INPUTS" {
+  default = ""
+}
+
 function "platform_list" {
   params = [csv]
   result = split(",", csv)
@@ -63,6 +69,9 @@ target "_image" {
   args = {
     UPSTREAM_SHA  = UPSTREAM_SHA
     UPSTREAM_TREE = UPSTREAM_TREE
+  }
+  labels = {
+    "dev.uds-k3d-takserver.inputs" = INPUTS
   }
   platforms = platform_list(PLATFORMS)
 }

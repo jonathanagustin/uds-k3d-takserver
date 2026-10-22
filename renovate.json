@@ -208,7 +208,8 @@
       "groupName": null,
       "addLabels": [
         "major"
-      ]
+      ],
+      "commitMessageTopic": "{{depName}}"
     },
     {
       "description": "Majors that need real work before they can land: the PostgreSQL base of the PostGIS image (a new major needs a data migration) and the Java toolchain the TAK build compiles with. They wait for approval on the dependency dashboard.",
@@ -221,8 +222,21 @@
         "postgis/postgis",
         "docker.io/postgis/postgis",
         "eclipse-temurin",
-        "docker.io/library/eclipse-temurin",
+        "docker.io/library/eclipse-temurin"
+      ],
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "major",
+        "needs-migration"
+      ]
+    },
+    {
+      "description": "The Java that mise installs for local Gradle runs is the same toolchain. Its major also waits for approval on the dependency dashboard.",
+      "matchDepNames": [
         "java"
+      ],
+      "matchUpdateTypes": [
+        "major"
       ],
       "dependencyDashboardApproval": true,
       "addLabels": [
@@ -257,6 +271,18 @@
       "dependencyDashboardApproval": true,
       "addLabels": [
         "major",
+        "needs-migration"
+      ],
+      "commitMessageTopic": "{{depName}}"
+    },
+    {
+      "description": "The admission module's Deployment runs the Pepr controller image of the pepr version in pepr/package.json, and the package does not carry that image: it uses the one UDS Core already pushed to the Zarf registry. A pepr version that UDS Core does not ship leaves the module in ImagePullBackOff, so pepr moves with UDS Core after approval on the dependency dashboard.",
+      "matchDepNames": [
+        "pepr"
+      ],
+      "groupName": "Pepr",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
         "needs-migration"
       ]
     }

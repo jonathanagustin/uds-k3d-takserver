@@ -141,10 +141,16 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   // CloudTAK -> ATAK: a TEST chat message to the device.
   const chat = await scene(map, "chat", async () => {
-    for (const title of ["Close Pane", "Close Menu"]) {
-      const close = map.getByTitle(title, { exact: true }).first();
-      if (await close.isVisible().catch(() => false)) await clickLikeAPerson(map, close);
-    }
+    // Close the TEST MARKER's pane with the circled X in its own header. The
+    // top bar has a "Close Menu" button with the same title, and the first
+    // match can be that one, which does not close the pane: the pane stayed
+    // open and the next click landed on it instead of the map.
+    const closePane = map
+      .locator('[title="Close Menu"]:has(svg.tabler-icon-circle-x)')
+      .filter({ visible: true })
+      .first();
+    if (await closePane.isVisible().catch(() => false)) await clickLikeAPerson(map, closePane);
+    await expect(map, "the TEST MARKER pane is still open").not.toHaveURL(/\/cot\//, { timeout: 10_000 });
     await map.evaluate((loc) => {
       window.location.hash = `#16/${loc}`;
     }, testLocation);

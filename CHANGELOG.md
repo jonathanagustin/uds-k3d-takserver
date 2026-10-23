@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.4](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.3...v0.5.4) (2026-10-23)
+
+
+### Bug Fixes
+
+* **demo:** close the TEST MARKER pane before the chat scene ([#134](https://github.com/jonathanagustin/uds-k3d-takserver/issues/134)) ([7a5b3d5](https://github.com/jonathanagustin/uds-k3d-takserver/commit/7a5b3d5665ca4d14833069d9cae7a0a252ae414d))
+
+
+### Documentation
+
+* link the demo video downloads to the demo release ([#133](https://github.com/jonathanagustin/uds-k3d-takserver/issues/133)) ([6d7afd6](https://github.com/jonathanagustin/uds-k3d-takserver/commit/6d7afd6dd86644a4f8e3937ef0d49c9663f3bcba))
+
 ## [0.5.3](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.2...v0.5.3) (2026-10-23)
 
 

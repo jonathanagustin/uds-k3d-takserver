@@ -385,12 +385,15 @@ jobs:
 
       # The trim step deletes toolchains to keep disk headroom. This is the other
       # half of that number: how much of the disk the test used by its end.
+      # A wedged Docker daemon after a failed cluster start can make
+      # "docker system df" hang, so bound it.
       - name: Disk use after the test
         if: always()
+        timeout-minutes: 2
         shell: bash
         run: |
           df -h /
-          sudo docker system df || true
+          sudo timeout 60 docker system df || true
 
       - name: Debug Output
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())

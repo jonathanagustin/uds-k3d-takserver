@@ -69,6 +69,10 @@ steps {
     check = "uds zarf dev lint . --flavor upstream --set DOMAIN=uds.dev --set TAK_IMAGE_TAG=5.7-RELEASE-14"
     glob = List("zarf.yaml", "common/zarf.yaml", "charts/takserver/**/*.yaml", "charts/cloudtak/**/*.yaml")
   }
+  ["icon"] {
+    check = "bash .github/scripts/check-icon.sh"
+    glob = List("zarf.yaml", "assets/icon.svg", ".github/scripts/check-icon.sh")
+  }
   ["exemptions"] {
     check = "bash .github/scripts/check-exemptions.sh"
     glob = List("charts/takserver/**/*.yaml", "charts/takserver/**/*.tpl", "atak/deploy/*.yaml", "docs/justifications.md", ".github/scripts/check-exemptions.sh")

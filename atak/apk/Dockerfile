@@ -26,8 +26,10 @@ RUN apt-get update \
         patch patchelf pkg-config python3 python3-pip sqlite3 swig tcl unzip xz-utils zip zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# takkernel requires Conan 1.x.
-RUN pip3 install --no-cache-dir "conan==1.65.0"
+# takkernel requires Conan 1.x. requirements.txt pins it and its
+# dependencies by hash.
+COPY atak/apk/requirements.txt /tmp/conan-requirements.txt
+RUN pip3 install --no-cache-dir --require-hashes -r /tmp/conan-requirements.txt
 
 ENV ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_HOME=/opt/android-sdk \

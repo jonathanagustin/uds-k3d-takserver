@@ -1,8 +1,8 @@
 # Policy exemptions and security posture
 
-UDS Core's policy engine validates and mutates every pod. A package has to keep its exemptions small and say why each one exists. This page lists every `Exemption` the package renders, and the places where it deliberately differs from the default UDS posture.
+UDS Core's policy engine validates and mutates every pod. A package has to keep its exemptions small and say why each one exists. This page lists every `Exemption` the package renders, and the one the optional ATAK test device adds, and the places where it deliberately differs from the default UDS posture.
 
-`.github/scripts/check-exemptions.sh` renders the chart and fails when an `Exemption` has no `## <name>` section on this page. Add the section in the same change that adds the exemption.
+`.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. Add the section in the same change that adds the exemption.
 
 ## Exemptions
 
@@ -14,6 +14,23 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 - **Why:** The upstream chart's post-install database Job sets the `proxy.istio.io/config` annotation so the schema container waits for an Istio sidecar. The chart has no value that removes it. Without the exemption the policy denies the Job's pod, and Helm waits out its timeout.
 - **Why it is safe:** The package uses Istio ambient mode, which does not inject a sidecar. The annotation has no effect on the mesh here. The matcher is the one hook Job name, not a wildcard.
 - **What removes it:** An upstream chart that makes the annotation optional or drops it.
+
+## kubevirt
+
+Only the optional ATAK test device uses this. It is not part of the package: `atak/deploy/kubevirt-exemption.yaml` is applied by the ATAK end-to-end workflow, and a normal install never creates it. It is one `Exemption` object with three entries.
+
+- **Defined in:** `atak/deploy/kubevirt-exemption.yaml`
+- **KubeVirt node agent** (`virt-handler-*`, namespace `kubevirt`)
+  - **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`
+  - **Why:** `virt-handler` is a privileged node agent. It opens `/dev/kvm`, manages the launcher pods' network namespaces and mounts the containerDisk, so it needs host paths, host PID and privileged mode.
+- **KubeVirt control plane** (`virt-(operator|api|controller|exportproxy)-*`, namespace `kubevirt`)
+  - **Policies:** `RequireNonRootUser`, `DropAllCapabilities`, `RestrictVolumeTypes`
+  - **Why:** These run as non-root, but the operator does not set every field the UDS defaults expect.
+- **ATAK test device VM launcher** (`virt-launcher-atak-device-*`, namespace `atak`)
+  - **Policies:** `RestrictCapabilities`, `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`, `RestrictIstioTrafficOverrides`
+  - **Why:** `virt-launcher` runs the device VM as UID 107 and adds `NET_BIND_SERVICE` for masquerade networking. KubeVirt always sets the `traffic.sidecar.istio.io/kubevirtInterfaces` annotation on launcher pods. It only matters to Istio sidecars and there is none here, so it changes nothing.
+- **Why it is safe:** Every matcher names the KubeVirt components or the one launcher name pattern, in the `kubevirt` and `atak` namespaces. Nothing in the `takserver` or `cloudtak` namespaces is exempted.
+- **What removes it:** Not running the ATAK test device, or a KubeVirt release that sets these fields itself.
 
 ## Differences from the default UDS posture
 

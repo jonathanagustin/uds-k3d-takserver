@@ -98,6 +98,9 @@ jobs:
       # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
       UDS_CLI_VERSION: 0.40.0
       GRYPE_VERSION: v0.120.1
+      # sha256 of grype_<version>_linux_amd64.tar.gz for GRYPE_VERSION, from
+      # the release's checksums file. Update both together.
+      GRYPE_SHA256: 0a9ee97ef5ae2ee953b0a80098105052e846cdbe319a57d808b519c33cd1343d
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -133,7 +136,13 @@ jobs:
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          curl -sSfL https://get.anchore.io/grype | sudo sh -s -- -b /usr/local/bin "${GRYPE_VERSION}"
+          archive="${RUNNER_TEMP}/grype.tar.gz"
+          curl -fsSLo "${archive}" \
+            "https://github.com/anchore/grype/releases/download/${GRYPE_VERSION}/grype_${GRYPE_VERSION#v}_linux_amd64.tar.gz"
+          echo "${GRYPE_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}" grype
+          sudo install -m 0755 "${RUNNER_TEMP}/grype" /usr/local/bin/grype
+          grype version
           uds-pk scan compare \
             --public-packages-prefix "" \
             --private-packages-prefix "private" \

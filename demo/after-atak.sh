@@ -26,13 +26,14 @@ pf=$!
 trap 'kill "${pf}" 2>/dev/null || true' EXIT
 sleep 3
 device_status() {
-  curl -k -sS --max-time 20 --cert "${certs}/admin.pem" --key "${certs}/admin.key" --pass atakatak \
+  local endpoints
+  endpoints="$(curl -k -sS --max-time 20 --cert "${certs}/admin.pem" --key "${certs}/admin.key" --pass atakatak \
     --resolve "takserver-api.${domain}:28443:127.0.0.1" \
-    "https://takserver-api.${domain}:28443/Marti/api/clientEndPoints" |
-    python3 -c 'import json,sys
+    "https://takserver-api.${domain}:28443/Marti/api/clientEndPoints")"
+  python3 -c 'import json,sys
 for c in json.load(sys.stdin)["data"]:
     if c.get("username") == sys.argv[1]:
-        print(c["callsign"], c["lastStatus"], "last event", c["lastEventTime"])' "${device}"
+        print(c["callsign"], c["lastStatus"], "last event", c["lastEventTime"])' "${device}" <<< "${endpoints}"
 }
 usage() {
   k get --raw "/api/v1/nodes/$(k get nodes -o name | head -n 1 | cut -d/ -f2)/proxy/stats/summary" |

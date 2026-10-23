@@ -121,8 +121,9 @@ jobs:
 
       - name: ATAK device end to end
         run: |
-          (cd "${RUNNER_TEMP}" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.56.1 >/dev/null)
-          NODE_PATH="${RUNNER_TEMP}/node_modules" OUT=out ./atak/ci/e2e.sh
+          # Playwright from atak/ci/package-lock.json.
+          npm ci --prefix atak/ci --no-audit --no-fund >/dev/null
+          NODE_PATH="${PWD}/atak/ci/node_modules" OUT=out ./atak/ci/e2e.sh
         timeout-minutes: 90
 
       - name: Publish the device images

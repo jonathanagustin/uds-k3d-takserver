@@ -71,7 +71,7 @@ steps {
   }
   ["exemptions"] {
     check = "bash .github/scripts/check-exemptions.sh"
-    glob = List("charts/takserver/**/*.yaml", "charts/takserver/**/*.tpl", "docs/justifications.md", ".github/scripts/check-exemptions.sh")
+    glob = List("charts/takserver/**/*.yaml", "charts/takserver/**/*.tpl", "atak/deploy/*.yaml", "docs/justifications.md", ".github/scripts/check-exemptions.sh")
   }
   ["gitleaks"] {
     check = "gitleaks detect --no-git --config .gitleaks.toml --source . --redact --exit-code 1"

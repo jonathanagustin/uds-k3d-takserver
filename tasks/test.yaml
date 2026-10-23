@@ -21,6 +21,7 @@ tasks:
       - task: cloudtak
       - task: ui
       - task: flows
+      - task: usage
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -631,6 +632,11 @@ tasks:
             check "${host}.${domain}" "${passthrough}" passthrough-ingressgateway.istio-passthrough-gateway.svc.cluster.local
           done
           [ "${fail}" -eq 0 ]
+
+  - name: usage
+    description: CPU and memory each TAK, CloudTAK and Pepr container uses at the end of the tests, next to its requests and limits
+    actions:
+      - cmd: ./tests/usage.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented

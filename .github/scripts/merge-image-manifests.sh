@@ -61,6 +61,10 @@ for name in "${names[@]}"; do
   for target in "${targets[@]}"; do
     echo "Writing ${repo}/${name}:${target} from ${sources[*]}"
     docker buildx imagetools create --tag "${repo}/${name}:${target}" "${sources[@]}"
+    # The Container workflow attests what PUSHED_REFS lists.
+    if [[ -n "${PUSHED_REFS:-}" ]]; then
+      echo "${repo}/${name}:${target}" >> "${PUSHED_REFS}"
+    fi
   done
   if write_version_tag; then
     for arch in "${arches[@]}"; do

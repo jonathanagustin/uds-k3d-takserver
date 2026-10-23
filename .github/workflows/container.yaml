@@ -15,6 +15,7 @@ on:
       - .github/container-and-chart/**
       - .github/workflows/container.yaml
       - .github/scripts/merge-image-manifests.sh
+      - .github/actions/attest-images/**
       - .gitmodules
       - upstream/takserver
   push:
@@ -26,6 +27,7 @@ on:
       - .github/container-and-chart/**
       - .github/workflows/container.yaml
       - .github/scripts/merge-image-manifests.sh
+      - .github/actions/attest-images/**
       - .gitmodules
       - upstream/takserver
 
@@ -96,6 +98,8 @@ jobs:
       contents: read
       packages: write
       actions: write
+      id-token: write
+      attestations: write
     if: needs.plan.outputs.build == 'true'
     strategy:
       fail-fast: false
@@ -149,7 +153,13 @@ jobs:
       - name: Build images
         env:
           IMAGE_TAG: ${{ needs.plan.outputs.tag }}-${{ matrix.arch }}
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
         run: ./.github/container-and-chart/docker/build.sh
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
 
       - name: Scan the local images
         env:
@@ -193,6 +203,8 @@ jobs:
       contents: read
       packages: write
       actions: write
+      id-token: write
+      attestations: write
     if: >-
       always() && needs.plan.result == 'success'
       && (needs.build.result == 'success' || (needs.plan.outputs.build == 'false' && github.ref == 'refs/heads/main'))
@@ -216,4 +228,11 @@ jobs:
         env:
           ARCHES: amd64 arm64
           IMAGE_TAG: ${{ needs.plan.outputs.tag }}
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
         run: ./.github/scripts/merge-image-manifests.sh
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
+          include-platforms: "false"

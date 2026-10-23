@@ -20,12 +20,14 @@ on:
     paths:
       - .github/container-and-chart/postgis/**
       - .github/workflows/postgis-image.yaml
+      - .github/actions/attest-images/**
   push:
     branches:
       - main
     paths:
       - .github/container-and-chart/postgis/**
       - .github/workflows/postgis-image.yaml
+      - .github/actions/attest-images/**
 
 permissions:
   contents: read
@@ -52,6 +54,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -68,6 +72,7 @@ jobs:
 
       - name: Build and push
         env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
           PUSH_IMAGES: "true"
           ARCH: ${{ matrix.arch }}
           FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
@@ -78,12 +83,19 @@ jobs:
             ./.github/container-and-chart/postgis/build.sh --if-changed
           fi
 
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
+
   index:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -99,4 +111,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write the multi-arch index
+        env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
         run: ./.github/container-and-chart/postgis/build.sh --merge
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
+          include-platforms: "false"

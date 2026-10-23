@@ -14,7 +14,21 @@
 # root filesystem.
 # hadolint ignore=DL3006
 FROM cloudtak-upstream AS built
-RUN npm prune --omit=dev
+# The API's package.json lists tsx and drizzle-kit as dependencies, and
+# @openaddresses/batch-generic names drizzle-kit as a peer, so npm keeps
+# them after the prune. The API runs the compiled dist/index.js with plain
+# node and applies its migrations through drizzle-orm, so nothing loads them
+# at runtime. Between them they carry three esbuild Go binaries, which image
+# scanners report for the Go standard library they were built with. Remove
+# them, and fail the build if an esbuild binary is left.
+RUN npm prune --omit=dev \
+ && rm -rf node_modules/tsx node_modules/drizzle-kit node_modules/esbuild \
+      node_modules/@esbuild node_modules/@esbuild-kit \
+      node_modules/.bin/tsx node_modules/.bin/drizzle-kit node_modules/.bin/esbuild \
+ && left="$(find node_modules -type f -name esbuild)" \
+ && if [ -n "${left}" ]; then \
+      echo "esbuild is still in the API's node_modules: ${left}" >&2; exit 1; \
+    fi
 
 # Same base tag as upstream's Dockerfile, pinned by digest. Renovate updates
 # the digest when the tag moves. Alpine packages still float, as upstream.

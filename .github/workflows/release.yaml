@@ -186,6 +186,7 @@ jobs:
             echo "name=${name}"
             echo "digest=${digest}"
             echo "bundle=takserver-${version}-upstream.provenance.sigstore.json"
+            echo "intoto=takserver-${version}-upstream.intoto.jsonl"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Attest build provenance
@@ -197,14 +198,38 @@ jobs:
           push-to-registry: true
           create-storage-record: false
 
-      - name: Add the provenance bundle to the release
+      # The bundle's DSSE envelope, the signed in-toto statement, on one line.
+      # That is the *.intoto.jsonl layout the SLSA GitHub generator writes,
+      # and the file name Scorecard's Signed-Releases check reads as
+      # provenance. The bundle keeps the certificate and the transparency log
+      # entry that verification needs.
+      - name: Add the provenance to the release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
           BUNDLE_NAME: ${{ steps.index.outputs.bundle }}
+          INTOTO_NAME: ${{ steps.index.outputs.intoto }}
         shell: bash
         run: |
           set -euo pipefail
           cp "${BUNDLE_PATH}" "${RUNNER_TEMP}/${BUNDLE_NAME}"
-          gh release upload "${RELEASE_TAG}" "${RUNNER_TEMP}/${BUNDLE_NAME}" --clobber --repo "${GITHUB_REPOSITORY}"
+          jq -ce 'select(.dsseEnvelope.payloadType == "application/vnd.in-toto+json") | .dsseEnvelope' \
+            "${BUNDLE_PATH}" > "${RUNNER_TEMP}/${INTOTO_NAME}"
+          jq -e '.payload | @base64d | fromjson | .predicateType == "https://slsa.dev/provenance/v1"' \
+            "${RUNNER_TEMP}/${INTOTO_NAME}"
+          gh release upload "${RELEASE_TAG}" "${RUNNER_TEMP}/${BUNDLE_NAME}" "${RUNNER_TEMP}/${INTOTO_NAME}" \
+            --clobber --repo "${GITHUB_REPOSITORY}"
+
+      # Check the attestation the way the README tells users to, against
+      # the registry copy and this workflow as the signer.
+      - name: Verify the provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUBJECT: ${{ steps.index.outputs.name }}@${{ steps.index.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${SUBJECT}" \
+            --owner "${GITHUB_REPOSITORY_OWNER}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yaml"

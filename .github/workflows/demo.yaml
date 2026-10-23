@@ -315,3 +315,41 @@ jobs:
         if: failure()
         run: uds run actions:debug-output
         shell: bash
+
+  # A manual run from main puts the two videos on the fixed "demo" release, so
+  # the README's download links do not follow the package version. Pull request
+  # runs and runs from other branches never publish. The release is a
+  # prerelease and not "latest", and its tag is not a version, so Release Please
+  # and the upgrade baseline (strict vX.Y.Z tags only) ignore it.
+  publish:
+    needs: record
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download the demo videos
+        run: |
+          set -euo pipefail
+          gh run download "${GITHUB_RUN_ID}" --name demo-video --dir videos
+          # The release assets keep the names the README links to.
+          mv videos/demo.mp4 videos/demo-deploy.mp4
+          mv videos/demo-operate.mp4 videos/demo-operate-and-trust.mp4
+          ls -l videos
+        shell: bash
+
+      - name: Publish them to the demo release
+        run: |
+          set -euo pipefail
+          if ! gh release view demo >/dev/null 2>&1; then
+            gh release create demo --prerelease --latest=false --target main \
+              --title "Demo videos" \
+              --notes "The two demo videos the README links to. The Demo workflow replaces them on each manual run from main. Not a package release."
+          fi
+          gh release upload demo videos/demo-deploy.mp4 videos/demo-operate-and-trust.mp4 --clobber
+        shell: bash

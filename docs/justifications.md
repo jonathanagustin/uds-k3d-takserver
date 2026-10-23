@@ -2,7 +2,9 @@
 
 UDS Core's policy engine validates and mutates every pod. A package has to keep its exemptions small and say why each one exists. This page lists every `Exemption` the package renders, and the one the optional ATAK test device adds, and the places where it deliberately differs from the default UDS posture.
 
-`.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. Add the section in the same change that adds the exemption.
+`.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. hk runs it when the chart, `atak/deploy/`, this page or the script changes. Add the section in the same change that adds the exemption.
+
+`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails when an `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard, and when a pod in those namespaces is annotated `exempted` without a matching expected exemption. It prints the exempted-resource list and the security context of each TAK pod.
 
 ## Exemptions
 
@@ -40,11 +42,7 @@ These are not exemptions. The policy engine mutates these settings or leaves the
 
 The TAK images run as root and write `/certs`, `/logs`, `/conf`, and `/tmp`. The upstream Deployments expose no `securityContext`, so the package cannot set `runAsNonRoot` or a read-only root filesystem without forking them. See [ADR 0005](../adr/0005-slim-core-boundaries.md) and [Configuration](configuration.md).
 
-What UDS mutates on the TAK pods (`runAsNonRoot`, `runAsUser`, dropped capabilities) has to be read from a live cluster, not assumed. Record it here after a run:
-
-```sh
-uds zarf tools kubectl get pods -n takserver -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].securityContext}{"\n"}{end}'
-```
+What UDS mutates on the TAK pods (`runAsNonRoot`, `runAsUser`, dropped capabilities) has to be read from a live cluster, not assumed. `test:exemptions` prints each TAK pod's and container's security context on every CI run.
 
 ### Ambient mesh instead of sidecars
 
@@ -70,7 +68,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Version scheme
 
 - **Requirement:** Versions follow `<upstream-app-version>-uds.<n>`, or Semantic Versioning when that scheme does not apply.
-- **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK `v13.111.3`, so no single application version leads the tag.
+- **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK (the `appVersion` in `charts/cloudtak/Chart.yaml`), so no single application version leads the tag.
 
 ## Adding an exemption
 

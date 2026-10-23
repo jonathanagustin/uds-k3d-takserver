@@ -121,24 +121,24 @@ jobs:
       - name: Install recording tools
         # Before the deploy, while the runner is idle: after it, apt has
         # hung here twice.
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           apt_opts=(-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          # apt has stalled in the install here, on every run since 22:47 on
-          # 2026-10-22, for the full 15 minutes. Each attempt is bounded. The
-          # install runs without -qq so the log shows the last package apt
-          # reached, which is where it stalled. sudo resets the environment, so
-          # the non-interactive frontend is passed through env: otherwise a
-          # debconf question waits on input that never comes.
+          # The Ubuntu mirror serves some runners at a trickle (a 9 MB package
+          # took two minutes), so the install is slow, not hung. Packages
+          # already downloaded are kept between attempts, so each bounded
+          # attempt resumes where the last stopped. sudo resets the
+          # environment, so the non-interactive frontend is passed through
+          # env: otherwise a debconf question waits on input that never comes.
           apt_try() {
             local attempt
-            for attempt in 1 2; do
+            for attempt in 1 2 3 4 5; do
               if sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
                 timeout --kill-after=10 240 apt-get "${apt_opts[@]}" "$@"; then
                 return 0
               fi
-              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 2)"
+              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 5)"
               pgrep -af '^(/usr/bin/|/usr/lib/apt/)?(apt|apt-get|dpkg|debconf|needrestart|unattended)' | cut -c1-200 || true
               sleep 5
             done

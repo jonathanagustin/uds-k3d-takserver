@@ -1,7 +1,8 @@
 # Local tools. Docker and Podman are not installed by mise.
 # Install with: mise install
-# The image build does not need a JDK on the host. The java pin matches the
-# Temurin 17.0.20 builder image in .github/container-and-chart/docker/Dockerfile.
+# The image build does not need a JDK on the host. The java pin is Temurin 17,
+# the same major as the builder image in .github/container-and-chart/docker/Dockerfile.
+# Renovate updates the two separately, so their patch releases can differ.
 
 [tools]
 # renovate: datasource=node depName=node versioning=node
@@ -22,7 +23,7 @@ shellcheck = "0.11.0"
 actionlint = "1.7.12"
 # renovate: datasource=github-releases depName=astral-sh/uv versioning=semver
 uv = "0.13.5"
-# renovate: datasource=adoptium depName=java versioning=regex:^temurin-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+(?<build>\d+)$
+# Renovate's built-in mise manager updates java, so it has no # renovate: line.
 java = "temurin-17.0.21+9"
 # renovate: datasource=github-releases depName=anchore/syft versioning=semver
 syft = "1.55.0"

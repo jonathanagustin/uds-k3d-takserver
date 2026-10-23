@@ -23,11 +23,14 @@ kctl() {
   fi
 }
 
-exemptions="$(kctl get exemptions -A -o json)"
-pods="$(kctl get pods -n takserver -o json)"
-cloudtak_pods="$(kctl get pods -n cloudtak -o json)"
+# Pod lists are too large for environment variables, so pass files.
+work="$(mktemp -d)"
+trap 'rm -rf "${work}"' EXIT
+kctl get exemptions -A -o json > "${work}/exemptions.json"
+kctl get pods -n takserver -o json > "${work}/pods.json"
+kctl get pods -n cloudtak -o json > "${work}/cloudtak-pods.json"
 
-EXEMPTIONS="${exemptions}" PODS="${pods}" CLOUDTAK_PODS="${cloudtak_pods}" python3 - <<'PY'
+python3 - "${work}" <<'PY'
 import json
 import os
 import re
@@ -43,8 +46,14 @@ WILDCARDS = {"", ".*", "^.*", ".*$", "^.*$"}
 PREFIX = "uds-core.pepr.dev/uds-core-policies."
 
 failures = []
-exemptions = json.loads(os.environ["EXEMPTIONS"])["items"]
-pods = json.loads(os.environ["PODS"])["items"] + json.loads(os.environ["CLOUDTAK_PODS"])["items"]
+def load(name):
+    with open(os.path.join(sys.argv[1], name)) as handle:
+        return json.load(handle)["items"]
+
+
+exemptions = load("exemptions.json")
+tak_pods = load("pods.json")
+pods = tak_pods + load("cloudtak-pods.json")
 
 print("Exemptions that match the takserver or cloudtak namespaces:")
 seen = set()
@@ -93,7 +102,7 @@ if exempted == 0:
     print("  none (the database setup hook pod is gone once its Job is cleaned up)")
 
 print("TAK pod and container security contexts:")
-for pod in json.loads(os.environ["PODS"])["items"]:
+for pod in tak_pods:
     context = json.dumps(pod["spec"].get("securityContext") or {}, sort_keys=True)
     print(f"  {pod['metadata']['name']}: {context}")
     for container in pod["spec"].get("containers", []):

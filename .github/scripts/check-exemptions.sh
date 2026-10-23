@@ -2,11 +2,16 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Fail when a UDS Exemption rendered by the chart has no section in
+# Fail when a UDS Exemption rendered by the chart, or shipped in atak/deploy,
+# has no section in
 # docs/justifications.md, or when a matcher name is a bare wildcard.
 set -euo pipefail
 
+# The optional ATAK test device ships its own Exemption outside the chart.
 rendered="$(helm template takserver charts/takserver --namespace takserver)"
+for file in atak/deploy/*.yaml; do
+  rendered+=$'\n---\n'"$(cat "${file}")"
+done
 
 names="$(awk '
   /^---/ { kind = ""; name = ""; next }

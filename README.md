@@ -206,6 +206,14 @@ The TAK, CloudTAK and PostGIS images have signed SLSA v1 build provenance too: f
 gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/<image>:<tag>" --owner jonathanagustin
 ```
 
+The demo videos on the `demo` release are signed the same way, by `.github/workflows/demo.yaml` on `main`. Each video has a Cosign bundle, `<video>.sigstore.json`, and both have SLSA v1 provenance in `demo-videos.intoto.jsonl`:
+
+```bash
+cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
+  --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Architecture
 
 ```mermaid

@@ -37,3 +37,19 @@ non-secure port, so the plaintext form is only for backendTLS.enabled=false.
 		<connector port="{{ .Values.api.web.port }}" tls="false" clientAuth="false" enableAdminUI="true" enableWebtak="true" enableNonAdminUI="true" _name="web_http"/>
 {{- end -}}
 {{- end -}}
+
+{{/*
+remoteServiceAccount line for an Ingress rule from a TAK workload, looked up
+by its app label in workloadServiceAccounts. Fails the render for a client
+with no entry, so a new flow cannot drop the identity check.
+Usage: include "takserver.remoteServiceAccount" (list $ "takserver-api")
+*/}}
+{{- define "takserver.remoteServiceAccount" -}}
+{{- $root := index . 0 -}}
+{{- $app := index . 1 -}}
+{{- $sa := index $root.Values.workloadServiceAccounts $app | default "" -}}
+{{- if not $sa -}}
+{{- fail (printf "workloadServiceAccounts has no entry for %s" $app) -}}
+{{- end -}}
+remoteServiceAccount: {{ $sa | quote }}
+{{- end -}}

@@ -132,6 +132,7 @@ spec:
           {{- toYaml $flow.server | nindent 10 }}
         remoteSelector:
           {{- toYaml $client | nindent 10 }}
+        {{- include "takserver.remoteServiceAccount" (list $ $clientName) | nindent 8 }}
         port: {{ $port }}
         description: "Ingress {{ $port }} to {{ $flow.name }} from {{ $clientName }}"
       {{- end }}
@@ -155,6 +156,7 @@ spec:
           {{- toYaml $b | nindent 10 }}
         remoteSelector:
           {{- toYaml $a | nindent 10 }}
+        {{- include "takserver.remoteServiceAccount" (list $ (values $a | first)) | nindent 8 }}
         port: {{ $peers.port }}
         description: "Ingress {{ $peers.port }} to {{ values $b | first }} from {{ values $a | first }}"
       {{- end }}
@@ -185,6 +187,7 @@ spec:
           app: {{ $sel.app }}
         remoteSelector:
           app: takserver-ignite
+        {{- include "takserver.remoteServiceAccount" (list $ "takserver-ignite") | nindent 8 }}
         port: {{ $port }}
         description: "Ingress {{ $port }} to {{ $sel.app }} from Ignite"
       - direction: Egress
@@ -199,6 +202,7 @@ spec:
           app: takserver-ignite
         remoteSelector:
           app: {{ $sel.app }}
+        {{- include "takserver.remoteServiceAccount" (list $ $sel.app) | nindent 8 }}
         port: {{ $port }}
         description: "Ingress {{ $port }} to Ignite from {{ $sel.app }}"
       - direction: Egress
@@ -243,6 +247,7 @@ spec:
         remoteNamespace: {{ $.Values.cloudtak.namespace | quote }}
         remoteSelector:
           {{- toYaml $.Values.cloudtak.selector | nindent 10 }}
+        remoteServiceAccount: {{ $.Values.cloudtak.serviceAccount | quote }}
         port: {{ $port }}
         description: "Ingress {{ $port }} to TAK API from CloudTAK"
       {{- end }}
@@ -252,6 +257,7 @@ spec:
         remoteNamespace: {{ .namespace | quote }}
         remoteSelector:
           {{- toYaml .selector | nindent 10 }}
+        remoteServiceAccount: {{ .serviceAccount | quote }}
         port: {{ $.Values.messaging.streaming.port }}
         description: "Ingress {{ $.Values.messaging.streaming.port }} to TAK messaging from CloudTAK"
       {{- end }}

@@ -31,7 +31,16 @@ A pod can only reach the pods and ports its role needs. Postgres accepts connect
 
 Remaining gaps:
 
-- These are L4 rules: pod label and port. There is no waypoint, so there are no L7 or per-identity Istio authorization rules between these pods. Ambient mTLS still encrypts the traffic.
+- These are L4 rules: pod label, port and, since the update below, the client's ServiceAccount. There is no waypoint, so there are no L7 authorization rules between these pods. Ambient mTLS still encrypts the traffic.
 - Authservice is off by design (see [ADR 0004](0004-tak-oauth-uses-openid-discovery.md)). TAK authenticates browser users itself.
 - Passthrough ports 8443, 8446, and 8089 terminate TLS in TAK. The mesh cannot inspect that traffic. TAK checks the client certificate.
 - The list is a snapshot of one CI run plus the commented flows. A TAK feature that opens a new connection (federation, a plugin that calls out) needs a new flow. `test:flows` reports it as a connection with no rule.
+
+## Update: workload identity on Ingress rules
+
+Every Ingress rule from other pods now also sets `remoteServiceAccount`. The UDS Operator then writes the AuthorizationPolicy source as the client's mTLS principal (`cluster.local/ns/<namespace>/sa/<account>`) instead of the whole namespace. The NetworkPolicy still matches the pod labels.
+
+- `workloadServiceAccounts` in `charts/takserver/values.yaml` maps each TAK client's app label to its ServiceAccount. The render fails for a client with no entry. The upstream chart gives api, messaging, config, plugins and Ignite one account, `takserver-ignite`, and leaves the db-setup Job on `default`. So the identity separates the TAK processes from any other pod in the namespace, but not from each other. Per-process accounts need an upstream chart change.
+- The Ingress rules from CloudTAK, in the takserver Package and on CloudTAK's PostGIS, match the `cloudtak` ServiceAccount. The basemap `remoteHost` rule already sets `serviceAccount: cloudtak`.
+- `serviceAccount` on Egress rules applies only to `remoteHost` egress through the ambient egress waypoint, so the in-cluster Egress rules (Keycloak on the tenant gateway, Kubernetes API) stay label-based.
+- `tests/flows.py --check` fails when an Ingress rule from other pods has no `remoteServiceAccount`. It also fails when a generated ALLOW AuthorizationPolicy admits the namespace or a peer namespace with no principal.

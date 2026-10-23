@@ -42,6 +42,9 @@ cloudtak:
   namespace: cloudtak
   selector:
     app: cloudtak
+  # The Ingress rules from CloudTAK also match this workload identity, so
+  # only the CloudTAK pod's ServiceAccount passes the AuthorizationPolicy.
+  serviceAccount: cloudtak
 
 messaging:
   service: takserver-messaging-service
@@ -68,6 +71,23 @@ standardPorts:
 ignite:
   selector:
     app: takserver-ignite
+
+# ServiceAccount of each TAK workload, keyed by its app label (the Job name for
+# the db-setup hook). Every Ingress rule between TAK workloads also sets
+# remoteServiceAccount from this map, so the generated AuthorizationPolicy
+# matches the client's workload identity and not only the namespace. The
+# upstream chart gives api, messaging, config, plugins and Ignite the
+# takserver-ignite account and leaves the db-setup Job on default, so the
+# identity separates the TAK processes from other pods in the namespace but
+# not from each other. tests/flows.py --check fails on an Ingress rule
+# between pods that has no remoteServiceAccount.
+workloadServiceAccounts:
+  takserver-api: takserver-ignite
+  takserver-messaging: takserver-ignite
+  takserver-config: takserver-ignite
+  takserver-plugins: takserver-ignite
+  takserver-ignite: takserver-ignite
+  takserver-db-setup: default
 
 # Pods that call the Kubernetes API to discover Ignite. The upstream chart
 # sets serviceAccountName takserver-ignite on the Ignite StatefulSet and on

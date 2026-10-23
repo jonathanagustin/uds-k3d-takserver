@@ -77,6 +77,14 @@ The Unit tests workflow ([`.github/workflows/unit-tests.yaml`](.github/workflows
 
 The shell scripts, Helm templates and the TAK and CloudTAK behavior are tested by the deployment suite on a real cluster. That suite isn't instrumented for coverage.
 
+## Demo videos
+
+The two videos in the README come from the Demo workflow (`.github/workflows/demo.yaml`). Pull requests that touch `demo/` or `tests/demo/` run it as a check, and nothing is published.
+
+To update the videos, run the Demo workflow by hand from `main`. Its last job replaces `demo-deploy.mp4` and `demo-operate-and-trust.mp4` on the fixed `demo` release, so the README's download links stay valid across package releases.
+
+The inline players in the README are a separate thing. GitHub only plays a video in a page when it was uploaded through its web editor, and there is no API for that. After a run, download the two files from the `demo` release, upload them by hand in the README editor, and paste the new `user-attachments` URLs into `README.md`.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the [GPL-3.0-only](LICENSE) license of this repository.

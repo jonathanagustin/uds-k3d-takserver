@@ -19,7 +19,11 @@ RUN git init -q /src && cd /src \
     && git checkout -q FETCH_HEAD
 WORKDIR /src
 COPY atak/viewer/build.config.override.json build.config.override.json
-RUN npm ci --no-audit --no-fund && npm run dist
+# The generated dist/package.json pins express 4.18.3, ws 8.16.0 and yaml
+# 2.4.1, which have published advisories. Raise them inside the same major
+# versions before the runtime install.
+RUN npm ci --no-audit --no-fund && npm run dist \
+    && cd dist && npm pkg set dependencies.express=4.22.3 dependencies.ws=8.22.0 dependencies.yaml=2.9.1
 
 # The dist step writes its own package.json with no lockfile. The runtime
 # dependencies come from dist-package-lock.json, so they are pinned by

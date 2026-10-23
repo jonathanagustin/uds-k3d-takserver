@@ -23,7 +23,7 @@ actionlint = "1.7.12"
 # renovate: datasource=github-releases depName=astral-sh/uv versioning=semver
 uv = "0.13.5"
 # renovate: datasource=adoptium depName=java versioning=regex:^temurin-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\+(?<build>\d+)$
-java = "temurin-17.0.20+101"
+java = "temurin-17.0.21+9"
 # renovate: datasource=github-releases depName=anchore/syft versioning=semver
 syft = "1.55.0"
 # renovate: datasource=github-releases depName=anchore/grype versioning=semver

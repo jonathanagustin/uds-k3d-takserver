@@ -13,6 +13,7 @@ tasks:
       - task: web-tls
       - task: pkcs12
       - task: policies
+      - task: exemptions
       - task: logs
       - task: gateway
       - task: smoke
@@ -630,6 +631,11 @@ tasks:
             check "${host}.${domain}" "${passthrough}" passthrough-ingressgateway.istio-passthrough-gateway.svc.cluster.local
           done
           [ "${fail}" -eq 0 ]
+
+  - name: exemptions
+    description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented
+    actions:
+      - cmd: ./tests/exemptions.sh
 
   - name: oidc-render
     description: Every TAK pod had the render init container from its first start, and every node holds the cluster OIDC secret

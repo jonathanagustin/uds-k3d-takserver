@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Applied only by bundle/uds-bundle.yaml.
-# Sized for a private ubuntu-latest runner (2 vCPU, 8 GB). The upstream
-# developer example requests 1 CPU and 8Gi for messaging and the API.
+# Sized to fit a 2 vCPU, 8 GB node, the ubuntu-latest runner for private
+# repositories. CI here runs on the public-repository runners, which have
+# 4 CPU and 16 GB on amd64 and arm64. The upstream developer example requests
+# 1 CPU and 8Gi for messaging and the API.
 # k3d-core-slim-dev still uses most of the runner.
 #
 # CPU requests stay small so the pods can schedule.
@@ -21,7 +23,7 @@
 # The plugins Deployment reads only the CPU request and then copies the API
 # CPU limit. It does not read a plugins memory value. The post-helm patch
 # sets that memory. Requests below are the steady-state TAK set and stay
-# under the 7938Mi allocatable of the 2 CPU test node.
+# under the 7938Mi allocatable of a 2 CPU, 8 GB node.
 takserver:
   config:
     replicas: 1

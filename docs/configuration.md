@@ -24,7 +24,7 @@ The overlay turns the chart's nginx ingress off. The UDS Package in `charts/taks
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory for a 2 vCPU, 8 GB runner.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory to fit a 2 vCPU, 8 GB runner. The CI runners have 4 CPU and 16 GB on both architectures.
 
 ## Upstream chart values
 
@@ -45,6 +45,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 | `ignite.resources` | unset | common values: request 250m and 768Mi, limit 1 CPU and 1536Mi. test values: request 50m and 512Mi, limit 1 CPU and 1536Mi | `-Xmx512m`, 128m metaspace, and a 384 MiB data region. A 128 MiB region ran out of memory (`IgniteOutOfMemoryException`) during the API smoke test. 1536Mi is the limit those fit inside. |
 | `ignite.serviceAccount.name` | `takserver-ignite` | `takserver-ignite` | Unchanged. The API, messaging, config, and plugins Deployments also use that account, and the Package allows those pod labels to reach the Kubernetes API. |
 | `nats.replicaCount`, `nats.cluster`, `nats.config.cluster`, `nats.natsBox.enabled` | jetstream on, cluster on, 3 replicas, toolbox default on | 1 replica, clustering off, toolbox off | The toolbox crash-looped and blocked Helm. TAK does not use it. |
+| `nats.container.merge.resources` and `nats.reloader.merge.resources` | unset | NATS: request 10m and 32Mi, limit 250m and 128Mi. Reloader: request 5m and 16Mi, limit 50m and 32Mi | The subchart sets none. Idle use at the end of the install test (`tests/usage.sh`) was at most 1m and 9Mi for NATS and 1m and 5Mi for the reloader. The limits leave room for message traffic the tests do not load. |
 | `global.postgresql` and `postgresql.auth` | host, port, username, password, database | same, plus `postgresPassword` and the Bitnami username keys | Bitnami PostgreSQL 12.1.6 reads `auth.postgresPassword`. The mounted CoreConfig already points at `takserver-postgresql`. |
 | `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` | PostgreSQL 15 and PostGIS 3.4.3, built here for amd64 and arm64. The upstream image is amd64 only. |
 | `takserver.ingress.enabled` | false | false | Unchanged. The UDS Package exposes the same ports on the passthrough gateway. |

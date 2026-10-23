@@ -200,6 +200,14 @@ gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
 
 Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`.
 
+The demo videos on the `demo` release are signed the same way, by `.github/workflows/demo.yaml` on `main`. Each video has a Cosign bundle, `<video>.sigstore.json`, and both have SLSA v1 provenance in `demo-videos.intoto.jsonl`:
+
+```bash
+cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
+  --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Architecture
 
 ```mermaid

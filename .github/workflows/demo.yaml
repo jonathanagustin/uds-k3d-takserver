@@ -5,7 +5,8 @@
 # chapters with VHS, the Keycloak SSO and TAK web UI walkthrough in a real
 # Chrome window (Playwright on an Xvfb display, captured with x11grab),
 # joined with ffmpeg. The MP4 is uploaded as the demo-video
-# artifact.
+# artifact. A manual run from main publishes the videos to the demo release
+# and signs them there.
 name: Demo Video
 
 on:
@@ -17,6 +18,11 @@ on:
         default: ""
       atak:
         description: Also deploy the ATAK test device (KVM, amd64) and record its chapter.
+        type: boolean
+        required: false
+        default: false
+      sign_only:
+        description: Skip the recording and only sign the videos already on the demo release (main only).
         type: boolean
         required: false
         default: false
@@ -43,6 +49,7 @@ env:
 
 jobs:
   record:
+    if: ${{ !inputs.sign_only }}
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 240
     permissions:
@@ -371,4 +378,106 @@ jobs:
               --notes "The two demo videos the README links to. The Demo workflow replaces them on each manual run from main. Not a package release."
           fi
           gh release upload demo videos/demo-deploy.mp4 videos/demo-operate-and-trust.mp4 --clobber
+        shell: bash
+
+  # Signs the videos on the demo release keylessly through Sigstore with this
+  # workflow's identity, the same way as the package releases. It downloads
+  # the assets from the release, so it signs exactly the bytes the README
+  # links to, and it never uploads or changes the videos. Each video gets a
+  # Cosign bundle (<video>.sigstore.json), and both get one SLSA provenance
+  # attestation (demo-videos.intoto.jsonl). It runs after publish, or alone
+  # with sign_only for the videos already there. Verify with:
+  #   cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
+  #     --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
+  #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  sign:
+    needs: [record, publish]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+      && (inputs.sign_only || needs.publish.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      VIDEOS: demo-deploy.mp4 demo-operate-and-trust.mp4
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # renovate: datasource=github-releases depName=sigstore/cosign versioning=semver
+          cosign-release: v3.1.4
+
+      - name: Download the videos from the demo release
+        run: |
+          set -euo pipefail
+          mkdir videos
+          for video in ${VIDEOS}; do
+            gh release download demo --pattern "${video}" --dir videos
+            digest="$(gh release view demo --json assets --jq ".assets[] | select(.name == \"${video}\") | .digest")"
+            echo "${digest#sha256:}  videos/${video}" | sha256sum -c -
+            echo "${digest#sha256:}  ${video}" >> digests.txt
+          done
+          cat digests.txt
+        shell: bash
+
+      - name: Sign the videos
+        run: |
+          set -euo pipefail
+          cd videos
+          for video in ${VIDEOS}; do
+            cosign sign-blob --yes --bundle "${video}.sigstore.json" "${video}"
+          done
+        shell: bash
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            videos/demo-deploy.mp4
+            videos/demo-operate-and-trust.mp4
+
+      - name: Write the provenance as in-toto JSON lines
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          jq -ce 'select(.dsseEnvelope.payloadType == "application/vnd.in-toto+json") | .dsseEnvelope' \
+            "${BUNDLE_PATH}" > videos/demo-videos.intoto.jsonl
+          jq -re '.payload | @base64d | fromjson | .predicateType' videos/demo-videos.intoto.jsonl \
+            | grep -qx 'https://slsa.dev/provenance/v1'
+        shell: bash
+
+      - name: Verify the signatures and the provenance
+        env:
+          IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          identity="${IDENTITY%@*}@refs/heads/main"
+          cd videos
+          for video in ${VIDEOS}; do
+            cosign verify-blob "${video}" --bundle "${video}.sigstore.json" \
+              --certificate-identity "${identity}" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            gh attestation verify "${video}" --owner "${GITHUB_REPOSITORY_OWNER}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/demo.yaml"
+          done
+        shell: bash
+
+      - name: Add the signatures and the provenance to the demo release
+        run: |
+          set -euo pipefail
+          cd videos
+          gh release upload demo demo-deploy.mp4.sigstore.json demo-operate-and-trust.mp4.sigstore.json \
+            demo-videos.intoto.jsonl --clobber
+          # The videos on the release must still be the ones that were signed.
+          for video in ${VIDEOS}; do
+            digest="$(gh release view demo --json assets --jq ".assets[] | select(.name == \"${video}\") | .digest")"
+            grep -qx "${digest#sha256:}  ${video}" ../digests.txt
+          done
         shell: bash

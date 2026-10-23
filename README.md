@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
 </details>
 
-[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-deploy.mp4)
+[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4)
 
 ### Operate and Trust
 
@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 
 </details>
 
-[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/v0.5.1/demo-operate-and-trust.mp4)
+[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4)
 
 ## What you get
 

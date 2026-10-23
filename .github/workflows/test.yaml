@@ -140,6 +140,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       # build.sh fetches only upstream/cloudtak, shallow.
       - name: Checkout
@@ -157,9 +159,15 @@ jobs:
 
       - name: Build the CloudTAK image if its inputs changed
         env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
           PUSH_IMAGES: "true"
           ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/cloudtak/build.sh --if-changed
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
 
   # pin-image-tags.sh points the package at v13.111.3-<key>. Zarf pulls the
   # entry for the package architecture.
@@ -169,6 +177,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -184,7 +194,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write the multi-arch CloudTAK index
+        env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
         run: ./.github/container-and-chart/cloudtak/build.sh --merge
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
+          include-platforms: "false"
 
   # Each job pushes 15-3.4-<key>-<arch>, keyed by the
   # .github/container-and-chart/postgis tree, only when no image with that
@@ -205,6 +223,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -221,9 +241,15 @@ jobs:
 
       - name: Build the PostGIS image if its inputs changed
         env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
           PUSH_IMAGES: "true"
           ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/postgis/build.sh --if-changed
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
 
   postgis-index:
     needs: postgis-image
@@ -231,6 +257,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -246,7 +274,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write the multi-arch PostGIS index
+        env:
+          PUSHED_REFS: ${{ runner.temp }}/pushed-refs.txt
         run: ./.github/container-and-chart/postgis/build.sh --merge
+
+      - name: Attest the pushed images
+        uses: ./.github/actions/attest-images
+        with:
+          refs-file: ${{ runner.temp }}/pushed-refs.txt
+          include-platforms: "false"
 
   check-flavor:
     runs-on: ubuntu-latest

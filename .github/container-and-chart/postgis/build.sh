@@ -55,6 +55,14 @@ fi
 key="$(printf '%s' "${inputs}" | sha256sum | cut -c1-12)"
 image="${registry}/postgis:${version}-${key}"
 
+# PUSHED_REFS names a file that gets one line per tag this run pushed or
+# wrote as an index. The workflows attest those (.github/actions/attest-images).
+record_push() {
+  if [[ -n "${PUSHED_REFS:-}" ]]; then
+    echo "$1" >> "${PUSHED_REFS}"
+  fi
+}
+
 write_version_tag() {
   [[ "${WRITE_VERSION_TAG:-false}" = "true" ]] || [[ "${GITHUB_REF:-}" = "refs/heads/main" ]]
 }
@@ -137,6 +145,7 @@ if [[ "${1:-}" = "--merge" ]]; then
     echo "Writing ${target} from ${sources[*]}"
     docker buildx imagetools create --tag "${target}" "${sources[@]}"
     docker buildx imagetools inspect "${target}"
+    record_push "${target}"
   done
   exit 0
 fi
@@ -195,5 +204,6 @@ if [[ -n "${POSTGRES_IMAGE:-}" ]]; then
 fi
 docker buildx build "${args[@]}" "${output}" "${here}"
 if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
+  record_push "${registry}/postgis:${tag}"
   publish_version_arch
 fi

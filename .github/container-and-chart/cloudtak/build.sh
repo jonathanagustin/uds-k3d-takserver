@@ -77,6 +77,14 @@ input_key() {
   printf '%s' "$1" | sha256sum | cut -c1-12
 }
 
+# PUSHED_REFS names a file that gets one line per tag this run pushed or
+# wrote as an index. The workflows attest those (.github/actions/attest-images).
+record_push() {
+  if [[ -n "${PUSHED_REFS:-}" ]]; then
+    echo "$1" >> "${PUSHED_REFS}"
+  fi
+}
+
 write_version_tag() {
   [[ "${WRITE_VERSION_TAG:-false}" = "true" ]] || [[ "${GITHUB_REF:-}" = "refs/heads/main" ]]
 }
@@ -138,6 +146,7 @@ if [[ "${1:-}" = "--merge" ]]; then
     echo "Writing ${image} from ${sources[*]}"
     docker buildx imagetools create --tag "${image}" "${sources[@]}"
     docker buildx imagetools inspect "${image}"
+    record_push "${image}"
   done
   exit 0
 fi
@@ -225,5 +234,6 @@ if docker buildx bake --help 2>/dev/null | grep -q -- '--allow'; then
 fi
 docker buildx bake -f docker-bake.hcl "${allow[@]}" "${output}" cloudtak
 if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
+  record_push "${image}"
   publish_version_arch
 fi

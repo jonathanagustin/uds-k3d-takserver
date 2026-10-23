@@ -135,6 +135,14 @@ export UPSTREAM_SHA="${upstream_sha}"
 export UPSTREAM_TREE="${upstream_tree}"
 export INPUTS="${inputs}"
 
+# PUSHED_REFS names a file that gets one line per tag this run pushed. The
+# Container workflow attests those (.github/actions/attest-images).
+record_push() {
+  if [[ -n "${PUSHED_REFS:-}" ]]; then
+    echo "$1" >> "${PUSHED_REFS}"
+  fi
+}
+
 bake() {
   # bake resolves a relative context from the working directory. CI runs
   # this script from the repository root, where there is no Dockerfile.
@@ -177,6 +185,9 @@ if [[ "${use_bake}" = "true" ]]; then
   echo "Building ${targets} for ${PLATFORMS} with buildx bake"
   if [[ "${multi}" = "true" ]] && [[ "${push}" = "true" ]]; then
     bake --push
+    for target in ${targets}; do
+      record_push "${repo}/${target}:${tag}"
+    done
   elif [[ "${multi}" = "true" ]]; then
     mkdir -p "${root}/build/oci"
     for target in ${targets}; do
@@ -188,6 +199,7 @@ if [[ "${use_bake}" = "true" ]]; then
     if [[ "${push}" = "true" ]]; then
       for target in ${targets}; do
         "${runtime}" push "${repo}/${target}:${tag}"
+        record_push "${repo}/${target}:${tag}"
       done
     fi
   fi
@@ -227,6 +239,7 @@ for target in ${targets}; do
   "${runtime}" build "$@"
   if [[ "${push}" = "true" ]]; then
     "${runtime}" push "${image}"
+    record_push "${image}"
   fi
 done
 

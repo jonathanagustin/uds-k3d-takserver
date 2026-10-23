@@ -14,6 +14,8 @@ metadata:
     dev.uds.tagline: Team Awareness Kit server with Keycloak SSO and a CloudTAK browser map
     dev.uds.categories: Command And Control, Situational Awareness
     dev.uds.keywords: TAK, TAK Server, CloudTAK, Cursor on Target, CoT, ATAK
+    # base64 of assets/icon.svg. hk's icon check fails when they differ.
+    dev.uds.icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PHBhdGggZD0iTTEwMCAyMmMtMzEgMC01NiAyNS01NiA1NiAwIDQyIDU2IDEwMCA1NiAxMDBzNTYtNTggNTYtMTAwYzAtMzEtMjUtNTYtNTYtNTZ6IiBmaWxsPSIjMWY0ZTc5Ii8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iNzgiIHI9IjIwIiBmaWxsPSIjZmZmIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iNzgiIHI9IjkiIGZpbGw9IiMyZTlkNWIiLz48cGF0aCBkPSJNMTM3IDM0YTU4IDU4IDAgMCAxIDIwIDI2TTE0NiAxOGE3OCA3OCAwIDAgMSAyOCAzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMmU5ZDViIiBzdHJva2Utd2lkdGg9IjkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPgo=
 
 # Shipped in the package. Inspect with: uds zarf package inspect documentation
 documentation:

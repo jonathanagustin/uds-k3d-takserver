@@ -37,6 +37,22 @@ if ! uds zarf package pull "${package}" --architecture=amd64 --no-progress --fea
 fi
 released="${work}/zarf-package-takserver-amd64-${version}-upstream.tar.zst"
 test -s "${released}"
+# A bundle that names a different signer must refuse the same signed package.
+# Check the reason too, so a network or disk failure cannot pass for a refusal.
+cp -r "${work}/bundle" "${work}/bundle-wrong-signer"
+WRONG_SIGNER_REGEXP='^https://github\.com/not-this-repo/not-this-repo/\.github/workflows/release\.yaml@refs/heads/main$' \
+  uds zarf tools yq -i '(.packages[] | select(.name == "takserver") | .keylessVerification.certificateIdentityRegexp) = strenv(WRONG_SIGNER_REGEXP)' \
+  "${work}/bundle-wrong-signer/uds-bundle.yaml"
+if wrong="$(uds create "${work}/bundle-wrong-signer" --architecture=amd64 --confirm --no-progress 2>&1)"; then
+  echo "::error title=Wrong signer accepted::uds create accepted a bundle whose keylessVerification names a different signer."
+  exit 1
+fi
+if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
+  echo "${wrong}"
+  echo "::error title=Wrong signer failed for another reason::uds create failed, but not on the certificate identity check."
+  exit 1
+fi
+rm -rf "${work}/bundle-wrong-signer"
 uds create "${work}/bundle" --architecture=amd64 --confirm --no-progress
 uds run deploy-slim-core --no-progress
 uds run fit-runner --no-progress

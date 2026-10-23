@@ -18,7 +18,7 @@ RUN npm prune --omit=dev
 
 # Same base tag as upstream's Dockerfile, pinned by digest. Renovate updates
 # the digest when the tag moves. Alpine packages still float, as upstream.
-FROM nginx:alpine3.24@sha256:060849a174666c53439dc7cecbf8f67e225c7cbfb1a44ca97915d9a172a81e6d
+FROM nginx:alpine3.24@sha256:a3554c0d0b48177b1413c26e01f695334428020d9df01243fbae3e11cfd17417
 # hadolint ignore=DL3018
 RUN apk add --no-cache bash nodejs-current openssl
 COPY --from=built /home/etl/api /home/etl/api

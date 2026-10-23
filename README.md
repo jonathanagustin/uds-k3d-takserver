@@ -198,7 +198,7 @@ gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
   --owner jonathanagustin
 ```
 
-Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`.
+Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`. Releases after 0.5.4 also have `takserver-<version>-upstream.intoto.jsonl`, which holds the signed in-toto statement from that bundle (its DSSE envelope) on one line, for tools that read SLSA provenance in that layout.
 
 ## Architecture
 

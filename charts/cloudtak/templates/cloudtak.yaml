@@ -43,7 +43,7 @@ spec:
       labels:
         app: cloudtak
       annotations:
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum | trunc 16 }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum | trunc 16 | quote }}
     spec:
       serviceAccountName: cloudtak
       automountServiceAccountToken: false

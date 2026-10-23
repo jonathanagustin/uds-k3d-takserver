@@ -89,7 +89,7 @@ TAK writes its process log to stdout and to `/logs/takserver-*.log`. UDS Core's 
 
 ## Pod security
 
-The upstream Deployments do not set `securityContext`, and the chart has no value for `runAsNonRoot` or a read-only root filesystem. The images run as root. TAK and the cert scripts write `/certs`, `/logs`, `/conf`, and `/tmp`. Setting a read-only root filesystem would mean forking those Deployments. This package does not.
+The upstream Deployments do not set `securityContext`, and the chart has no value for it. The images default to `USER 0`, and UDS Core's policy engine sets `runAsUser: 1000`, `runAsNonRoot: true` and drops all capabilities when each pod is admitted (see [Policy exemptions](justifications.md#non-root-user-and-writable-root-filesystem)). TAK and the cert scripts write `/certs`, `/logs`, `/conf`, and `/tmp`, which the image makes world-writable. Setting a read-only root filesystem would mean forking those Deployments. This package does not.
 
 ## Startup order
 

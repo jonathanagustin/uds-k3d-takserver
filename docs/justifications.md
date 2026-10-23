@@ -38,11 +38,14 @@ Only the optional ATAK test device uses this. It is not part of the package: `at
 
 These are not exemptions. The policy engine mutates these settings or leaves them alone, so no `Exemption` object exists.
 
-### Root user and writable root filesystem
+### Non-root user and writable root filesystem
 
-The TAK images run as root and write `/certs`, `/logs`, `/conf`, and `/tmp`. The upstream Deployments expose no `securityContext`, so the package cannot set `runAsNonRoot` or a read-only root filesystem without forking them. See [ADR 0005](../adr/0005-slim-core-boundaries.md) and [Configuration](configuration.md).
+The TAK images default to `USER 0`, and the upstream Deployments set no `securityContext`. UDS Core's policy engine fills it in when each pod is admitted. `test:exemptions` prints the result on every CI run. On amd64 and arm64 every TAK pod (api, config, messaging, plugins, ignite, nats, the database setup hook, postgresql) runs with:
 
-What UDS mutates on the TAK pods (`runAsNonRoot`, `runAsUser`, dropped capabilities) has to be read from a live cluster, not assumed. `test:exemptions` prints each TAK pod's and container's security context on every CI run.
+- pod: `runAsUser: 1000`, `runAsGroup: 1000`, `runAsNonRoot: true`. PostgreSQL also has `fsGroup: 1001`, and its container runs as `1001`.
+- each container: `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`.
+
+TAK still starts because the image makes the directories it writes world-writable (`/certs`, `/logs`, `/conf`, `/work` and the TAK work and log directories under `/opt/tak`). The root filesystem stays writable. A read-only one would mean forking the upstream Deployments. See [ADR 0005](../adr/0005-slim-core-boundaries.md) and [Configuration](configuration.md).
 
 ### Ambient mesh instead of sidecars
 

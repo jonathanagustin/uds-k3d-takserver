@@ -121,10 +121,10 @@ jobs:
         run: ./.github/scripts/wait-for-tak-images.sh
 
   # CloudTAK builds on a native runner per architecture, like the TAK images.
-  # Each job pushes v13.111.3-<key>-<arch>, keyed by the submodule pin and
+  # Each job pushes <version>-<key>-<arch>, keyed by the submodule pin and
   # the .github/container-and-chart/cloudtak tree, only when no image with
-  # those inputs exists yet. cloudtak-index joins them under v13.111.3-<key>.
-  # v13.111.3 itself moves only on main (see build.sh).
+  # those inputs exists yet. cloudtak-index joins them under <version>-<key>.
+  # <version> itself moves only on main (see build.sh).
   cloudtak-image:
     strategy:
       fail-fast: false
@@ -161,7 +161,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/cloudtak/build.sh --if-changed
 
-  # pin-image-tags.sh points the package at v13.111.3-<key>. Zarf pulls the
+  # pin-image-tags.sh points the package at <version>-<key>. Zarf pulls the
   # entry for the package architecture.
   cloudtak-index:
     needs: cloudtak-image

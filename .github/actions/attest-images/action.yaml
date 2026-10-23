@@ -1,0 +1,51 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Attest pushed images
+description: >-
+  Signed SLSA build provenance for the image tags a job pushed, through
+  actions/attest (keyless Sigstore, stored in the repository's
+  attestations), then the same gh attestation verify a user runs.
+inputs:
+  refs-file:
+    description: >-
+      File with one pushed <registry>/<name>:<tag> per line. A missing or
+      empty file means the job pushed nothing, and the action does nothing.
+    required: true
+  include-platforms:
+    description: >-
+      Also attest the image manifests inside each pushed index. Jobs that only
+      join per-architecture images into an index set this to false, because
+      the build jobs attested those images.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: List the subjects
+      id: subjects
+      shell: bash
+      env:
+        REFS_FILE: ${{ inputs.refs-file }}
+        INCLUDE_PLATFORMS: ${{ inputs.include-platforms }}
+      run: |
+        set -euo pipefail
+        file="${RUNNER_TEMP}/attest-subjects.txt"
+        count="$("${GITHUB_ACTION_PATH}/subjects.sh" "${REFS_FILE}" "${file}")"
+        echo "file=${file}" >> "${GITHUB_OUTPUT}"
+        echo "count=${count}" >> "${GITHUB_OUTPUT}"
+        echo "${count} subjects"
+        cat "${file}"
+
+    - name: Attest build provenance
+      if: steps.subjects.outputs.count != '0'
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-checksums: ${{ steps.subjects.outputs.file }}
+
+    - name: Verify the attestations
+      if: steps.subjects.outputs.count != '0'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SUBJECTS: ${{ steps.subjects.outputs.file }}
+      run: '"${GITHUB_ACTION_PATH}/verify.sh" "${SUBJECTS}"'

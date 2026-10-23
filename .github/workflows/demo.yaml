@@ -125,26 +125,27 @@ jobs:
         run: |
           set -euo pipefail
           apt_opts=(-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          # apt has stalled here without output, three runs in a row, so each
-          # attempt is bounded and retried. sudo resets the environment, so the
-          # non-interactive frontend is passed through env: otherwise a debconf
-          # question waits on input that never comes. A stalled attempt prints
-          # what apt and dpkg were doing.
+          # apt has stalled in the install here, on every run since 22:47 on
+          # 2026-10-22, for the full 15 minutes. Each attempt is bounded. The
+          # install runs without -qq so the log shows the last package apt
+          # reached, which is where it stalled. sudo resets the environment, so
+          # the non-interactive frontend is passed through env: otherwise a
+          # debconf question waits on input that never comes.
           apt_try() {
             local attempt
-            for attempt in 1 2 3; do
+            for attempt in 1 2; do
               if sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
                 timeout --kill-after=10 240 apt-get "${apt_opts[@]}" "$@"; then
                 return 0
               fi
-              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 3)"
+              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 2)"
               pgrep -af '^(/usr/bin/|/usr/lib/apt/)?(apt|apt-get|dpkg|debconf|needrestart|unattended)' | cut -c1-200 || true
               sleep 5
             done
             return 1
           }
           apt_try update
-          apt_try install -y -qq --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+          apt_try install -y -o Dpkg::Use-Pty=0 --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
             xvfb libnss3-tools
           google-chrome --version
           # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04

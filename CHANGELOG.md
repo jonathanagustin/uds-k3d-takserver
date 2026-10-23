@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.3](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.2...v0.5.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **ci:** skip the release on the commit under test when picking the upgrade baseline ([#128](https://github.com/jonathanagustin/uds-k3d-takserver/issues/128)) ([a151a3b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/a151a3b18b6b8927620e6eec07897724319dc978))
+* quote the cloudtak secret checksum annotation ([#130](https://github.com/jonathanagustin/uds-k3d-takserver/issues/130)) ([698f853](https://github.com/jonathanagustin/uds-k3d-takserver/commit/698f85309c24e38ef80f46c0ec3d5bff3e7163fb))
+
+
+### Miscellaneous
+
+* pin the atak viewer node base image by digest ([#129](https://github.com/jonathanagustin/uds-k3d-takserver/issues/129)) ([42b4fa8](https://github.com/jonathanagustin/uds-k3d-takserver/commit/42b4fa8c531bba3b87490e1c93fdad0d5ac8cf69))
+
+
+### Documentation
+
+* keep the README release examples on the current version ([#123](https://github.com/jonathanagustin/uds-k3d-takserver/issues/123)) ([0bfae62](https://github.com/jonathanagustin/uds-k3d-takserver/commit/0bfae629e750e5307c7511dfaab2c58e06f4c4a8))
+* list the atak test device's kubevirt exemption and check it ([#124](https://github.com/jonathanagustin/uds-k3d-takserver/issues/124)) ([f550459](https://github.com/jonathanagustin/uds-k3d-takserver/commit/f550459d13df668c7cf9667e126bd99ea07f78b1))
+
 ## [0.5.2](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.1...v0.5.2) (2026-10-22)
 
 

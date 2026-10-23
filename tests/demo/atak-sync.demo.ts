@@ -48,7 +48,10 @@ async function scene(page: Page, name: string, body: () => Promise<void>) {
     await body();
     return true;
   } catch (error) {
-    console.log(`scene ${name} skipped: ${String(error).split("\n")[0]}`);
+    // Keep the whole message: Playwright puts the locator and the call log
+    // after the first line, and that is what says which step failed.
+    const detail = String(error).replace(/\u001b\[[0-9;]*m/g, "").split("\n").slice(0, 12).join("\n  ");
+    console.log(`scene ${name} skipped: ${detail}`);
     await page.screenshot({ path: test.info().outputPath(`probe-${name}.png`) }).catch(() => undefined);
     return false;
   }

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.4...v0.6.0) (2026-10-24)
+
+
+### Features
+
+* add a package icon for UDS Portal and the registry ([#149](https://github.com/jonathanagustin/uds-k3d-takserver/issues/149)) ([1d9768e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/1d9768ecd0423c233a6d3c7ff676fd4e42fd5e0c))
+* **ci:** attest the TAK, CloudTAK and PostGIS images ([#143](https://github.com/jonathanagustin/uds-k3d-takserver/issues/143)) ([140d6ec](https://github.com/jonathanagustin/uds-k3d-takserver/commit/140d6ec8aefb455059a81d12dd05e2d8a98ef788))
+* **demo:** sign the demo videos and attach their provenance ([#147](https://github.com/jonathanagustin/uds-k3d-takserver/issues/147)) ([9844122](https://github.com/jonathanagustin/uds-k3d-takserver/commit/98441223871fdc6569a5c87c253e1bd707af487d))
+* match the client ServiceAccount on pod-to-pod Ingress rules ([#151](https://github.com/jonathanagustin/uds-k3d-takserver/issues/151)) ([168a14a](https://github.com/jonathanagustin/uds-k3d-takserver/commit/168a14aba26cd350a009ccf5ce9bcabac735417c))
+* **release:** attach the provenance as an intoto.jsonl asset and verify it ([#142](https://github.com/jonathanagustin/uds-k3d-takserver/issues/142)) ([b1120c9](https://github.com/jonathanagustin/uds-k3d-takserver/commit/b1120c9ad6bff7bcb5aad06c2d33ae79dba47a56))
+
+
+### Bug Fixes
+
+* **cloudtak:** drop the unused build tools from the runtime image ([#141](https://github.com/jonathanagustin/uds-k3d-takserver/issues/141)) ([33c9f0f](https://github.com/jonathanagustin/uds-k3d-takserver/commit/33c9f0f6d0278a0633b627db3b4756cbd0f892d6))
+* give NATS and its reloader requests and limits ([#148](https://github.com/jonathanagustin/uds-k3d-takserver/issues/148)) ([0a52608](https://github.com/jonathanagustin/uds-k3d-takserver/commit/0a52608ad304e0f227378a3811b0bcdd94906cb3))
+
+
+### Miscellaneous
+
+* **deps:** update package-deps to a3554c0 ([#137](https://github.com/jonathanagustin/uds-k3d-takserver/issues/137)) ([a08cb15](https://github.com/jonathanagustin/uds-k3d-takserver/commit/a08cb15bd086fe3ab91590829803b0bc1c72f339))
+* **deps:** update support-deps to v17.0.21+9 ([#138](https://github.com/jonathanagustin/uds-k3d-takserver/issues/138)) ([4baee63](https://github.com/jonathanagustin/uds-k3d-takserver/commit/4baee634f25a94444a290cf187bf3c3c788e6980))
+* drop the unknown adoptium datasource from the java pin ([#145](https://github.com/jonathanagustin/uds-k3d-takserver/issues/145)) ([358b615](https://github.com/jonathanagustin/uds-k3d-takserver/commit/358b615948290a0d818bd9c2ab9d7c1768b94a65))
+* pin the remaining CI and build downloads by hash ([#144](https://github.com/jonathanagustin/uds-k3d-takserver/issues/144)) ([9fc5148](https://github.com/jonathanagustin/uds-k3d-takserver/commit/9fc5148ec7cea32ad6cd910384c1abc6c8597895))
+
 ## [0.5.4](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.3...v0.5.4) (2026-10-23)
 
 

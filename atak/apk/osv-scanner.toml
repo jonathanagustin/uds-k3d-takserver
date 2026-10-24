@@ -1,0 +1,56 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# OSV-Scanner (and the OpenSSF Scorecard Vulnerabilities check) read this file.
+# Each entry needs a reason and an expiry, so it comes back for review.
+#
+# urllib3 in requirements.txt. Conan 1.66.0, the last 1.x release, requires
+# urllib3>=1.26.6,<1.27, so no fixed urllib3 (2.5.0 and later) installs next
+# to it. takkernel's build needs Conan 1.x. Conan and urllib3 only exist in
+# the ATAK APK build container (atak/apk/Dockerfile). That image and the APK
+# are CI test artifacts for the ATAK test device and are not in the Zarf
+# package. prebuild.sh runs `conan export-pkg` for local sources only.
+# Remove these entries when the APK build moves to Conan 2, or earlier if
+# Conan 1.x allows a fixed urllib3.
+
+[[IgnoredVulns]]
+# Also GHSA-qccp-gfcp-xxvc.
+id = "PYSEC-2026-141"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-2xpw-w6gg-jr37.
+id = "PYSEC-2026-1994"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-38jv-5279-wg99.
+id = "PYSEC-2026-1996"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-gm62-xv2j-4w53.
+id = "PYSEC-2026-1998"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-pq67-6m6q-mj2v.
+id = "PYSEC-2026-1999"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-8988-9cw3-xx77.
+id = "PYSEC-2026-4175"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."
+
+[[IgnoredVulns]]
+# Also GHSA-vxq7-64xx-v4gw.
+id = "PYSEC-2026-4177"
+ignoreUntil = 2027-01-23
+reason = "urllib3 1.26.x is the newest Conan 1.x allows (urllib3<1.27), and takkernel needs Conan 1.x. It only runs in the ATAK APK build container, which is not part of the Zarf package, and prebuild.sh only exports local packages into the Conan cache."

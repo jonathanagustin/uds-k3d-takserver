@@ -16,6 +16,11 @@ not cover shows up here before it shows up as a failure.
 
 --check exits 1 when an observed in-namespace flow has no matching allow
 rule. Connections to the Kubernetes API, DNS, and the mesh are ignored.
+
+--check also exits 1 when an Ingress rule from other pods (a remoteSelector
+with no remoteGenerated) has no remoteServiceAccount, or when a generated
+AuthorizationPolicy in the namespace admits this namespace or a peer
+namespace by namespace alone, with no principal.
 """
 
 import ipaddress
@@ -173,9 +178,45 @@ def main():
     for src, dst, port, ok in summary:
         print(f"{src:<24} {dst:<24} {port:>6}  {'yes' if ok else 'NO'}")
         missing += 0 if ok else 1
-    if check and missing:
-        print(f"{missing} observed flows have no allow rule", file=sys.stderr)
+    unscoped = unscoped_rules(rules) + unscoped_policies(rules)
+    for line in unscoped:
+        print(f"no workload identity: {line}")
+    if check and (missing or unscoped):
+        if missing:
+            print(f"{missing} observed flows have no allow rule", file=sys.stderr)
+        if unscoped:
+            print(f"{len(unscoped)} pod-to-pod rules or policies have no service account", file=sys.stderr)
         raise SystemExit(1)
+
+
+def unscoped_rules(rules):
+    """Ingress rules from other pods that do not name the client's ServiceAccount."""
+    return [
+        f"Package rule {rule.get('description', rule)}"
+        for rule in rules
+        if rule.get("direction") == "Ingress"
+        and rule.get("remoteSelector")
+        and not rule.get("remoteGenerated")
+        and not rule.get("remoteServiceAccount")
+    ]
+
+
+def unscoped_policies(rules):
+    """Generated AuthorizationPolicy sources that admit a pod namespace without a principal."""
+    peers = {NS} | {r["remoteNamespace"] for r in rules if r.get("remoteNamespace")}
+    out = kubectl("get", "authorizationpolicies.security.istio.io", "-n", NS, "-l", f"uds/package={PACKAGE}", "-o", "json")
+    found = []
+    for policy in json.loads(out.stdout)["items"]:
+        if policy["spec"].get("action", "ALLOW") != "ALLOW":
+            continue
+        for rule in policy["spec"].get("rules") or []:
+            for src in rule.get("from") or []:
+                source = src.get("source") or {}
+                if source.get("principals"):
+                    continue
+                if set(source.get("namespaces") or []) & peers:
+                    found.append(f"AuthorizationPolicy {policy['metadata']['name']} {source}")
+    return found
 
 
 if __name__ == "__main__":

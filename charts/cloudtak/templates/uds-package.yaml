@@ -83,6 +83,7 @@ spec:
           app: cloudtak-postgis
         remoteSelector:
           app: cloudtak
+        remoteServiceAccount: cloudtak
         port: 5432
         description: "Ingress 5432 to PostGIS from cloudtak"
       # TAK on 8443 (admin certificate API), 8447 (token and password

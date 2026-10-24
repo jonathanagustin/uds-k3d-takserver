@@ -37,7 +37,7 @@ test("every TAK app gets the init container, the volumes and the mount", () => {
     );
     assert.equal(inits[1].image, IMAGE);
     const names = (p.spec?.volumes ?? []).map(v => v.name);
-    for (const name of [CONFIG_MOUNT, "oidc-script", "oidc-template", "oidc-secret"]) {
+    for (const name of [CONFIG_MOUNT, "oidc-script", "oidc-template", "oidc-secret", "keystore-secret"]) {
       assert.ok(names.includes(name), `${app}: volume ${name}`);
     }
     const mounts = p.spec?.containers?.[0].volumeMounts ?? [];

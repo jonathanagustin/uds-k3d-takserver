@@ -127,6 +127,14 @@ uds run create-dev-package --set FLAVOR=upstream --no-progress
 uds run create:test-bundle --set FLAVOR=upstream --no-progress
 uds run deploy:test-bundle --no-progress --with options=--force-conflicts
 health
+mode="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}')"
+legacy="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}' | base64 -d)"
+if [[ "${mode}" != "legacy" || "${legacy}" != "atakatak" ]]; then
+  echo "upgrade from a release that used the example keystore password did not keep it (mode ${mode:-unset})" >&2
+  exit 1
+fi
+unset legacy
+echo "PASS upgrade kept the keystore password those certificates were issued with"
 pvc_snapshot > "${work}/postgres-pvc.after"
 diff -u "${work}/postgres-pvc.before" "${work}/postgres-pvc.after"
 actual="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade_test.retained_state;')"

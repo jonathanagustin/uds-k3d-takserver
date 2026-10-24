@@ -21,13 +21,14 @@ run() {
 # TAK's admin API through the gateway, with the deploy-time admin certificate
 # (tests/extract-certs.sh), as atak/ci/e2e.sh checks the device.
 certs="$(bash tests/extract-certs.sh /tmp/demo-certs | tail -n 1)"
+key_pass="$(bash tests/keystore-pass.sh)"
 k -n istio-passthrough-gateway port-forward svc/passthrough-ingressgateway 28443:443 >/tmp/demo-pf.log 2>&1 &
 pf=$!
 trap 'kill "${pf}" 2>/dev/null || true' EXIT
 sleep 3
 device_status() {
   local endpoints
-  endpoints="$(curl -k -sS --max-time 20 --cert "${certs}/admin.pem" --key "${certs}/admin.key" --pass atakatak \
+  endpoints="$(curl -k -sS --max-time 20 --cert "${certs}/admin.pem" --key "${certs}/admin.key" --pass "${key_pass}" \
     --resolve "takserver-api.${domain}:28443:127.0.0.1" \
     "https://takserver-api.${domain}:28443/Marti/api/clientEndPoints")"
   python3 -c 'import json,sys

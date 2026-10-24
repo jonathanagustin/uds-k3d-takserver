@@ -18,6 +18,8 @@ def connect(port, cert=None, key=None):
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.maximum_version = ssl.TLSVersion.TLSv1_2
     if cert:
+        # The released package issued this key with the upstream example
+        # password. The upgrade keeps that password for these certificates.
         context.load_cert_chain(cert, key, password="atakatak")
     with socket.create_connection(("127.0.0.1", port), timeout=20) as raw:
         with context.wrap_socket(raw, server_hostname="takserver-stream.uds.dev") as stream:

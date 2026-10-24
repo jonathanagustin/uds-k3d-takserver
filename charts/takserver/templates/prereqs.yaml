@@ -13,6 +13,46 @@ stringData:
 # ConfigMap cert-migration is not a Helm object. This Job creates it
 # through the Kubernetes API when it is missing, then Helm deletes the Job.
 # An operator who creates the ConfigMap first keeps those certificates.
+# The keystore password is created first, at a lower hook weight, so the Job
+# can read it. lookup keeps the same password across upgrades. A cluster that
+# already has cert-migration and no Secret keeps atakatak, which is the
+# password those certificates were generated with.
+{{- $existingKeystore := lookup "v1" "Secret" .Release.Namespace "takserver-keystore" }}
+{{- $existingCerts := lookup "v1" "ConfigMap" .Release.Namespace "cert-migration" }}
+{{- $keystorePass := "" }}
+{{- $keystoreMode := "generated" }}
+{{- if and $existingKeystore $existingKeystore.data (index $existingKeystore.data "CAPASS") }}
+{{- $keystorePass = index $existingKeystore.data "CAPASS" | b64dec }}
+{{- $storedMode := "" }}
+{{- if and $existingKeystore.metadata $existingKeystore.metadata.annotations }}
+{{- $storedMode = index $existingKeystore.metadata.annotations "uds.dev/keystore-password" | default "" }}
+{{- end }}
+{{- if eq $storedMode "legacy" }}
+{{- $keystoreMode = "legacy" }}
+{{- else }}
+{{- $keystoreMode = "generated" }}
+{{- end }}
+{{- else if $existingCerts }}
+{{- $keystorePass = "atakatak" }}
+{{- $keystoreMode = "legacy" }}
+{{- else }}
+{{- $keystorePass = randAlphaNum 32 }}
+{{- $keystoreMode = "generated" }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: takserver-keystore
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+    uds.dev/keystore-password: {{ $keystoreMode | quote }}
+type: Opaque
+stringData:
+  CAPASS: {{ $keystorePass | quote }}
+  PASS: {{ $keystorePass | quote }}
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -34,6 +74,13 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["takserver-keystore", "takserver-ca-key"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -74,17 +121,19 @@ spec:
         - name: certs
           image: {{ .Values.certs.image | quote }}
           imagePullPolicy: IfNotPresent
-          {{- if .Values.api.web.backendTLS.enabled }}
-          # Then issue the 8447 server certificate the tenant gateway verifies.
+          # issue-web-cert.sh exits 0 when the web keystore is already there.
+          # A subshell keeps that from skipping the CA key move.
           command: ["/bin/bash", "-c"]
           args:
             - |
               set -euo pipefail
               /opt/tak/certs/publish-cert-configmap.sh
+              {{- if .Values.api.web.backendTLS.enabled }}
+              (
               {{- .Files.Get "files/scripts/issue-web-cert.sh" | nindent 14 }}
-          {{- else }}
-          command: ["/opt/tak/certs/publish-cert-configmap.sh"]
-          {{- end }}
+              )
+              {{- end }}
+              {{- .Files.Get "files/scripts/move-ca-key.sh" | nindent 14 }}
           env:
             - name: WEB_SERVICE
               value: {{ .Values.api.web.service | quote }}
@@ -102,6 +151,16 @@ spec:
               value: {{ .Values.certs.organizationalUnit | quote }}
             - name: PKCS12_FORMAT
               value: {{ .Values.certs.pkcs12 | default "modern" | quote }}
+            - name: CAPASS
+              valueFrom:
+                secretKeyRef:
+                  name: takserver-keystore
+                  key: CAPASS
+            - name: PASS
+              valueFrom:
+                secretKeyRef:
+                  name: takserver-keystore
+                  key: PASS
           resources:
             requests:
               cpu: 50m

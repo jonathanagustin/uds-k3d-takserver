@@ -69,7 +69,7 @@
 		<TAKServerCAConfig
 			keystore="JKS"
 			keystoreFile="certs/files/ca-signing.jks"
-			keystorePass="atakatak"
+			keystorePass="${TAK_KEYSTORE_PASS}"
 			validityDays="30"
 			signatureAlg="SHA256WithRSA"/>
 	</certificateSigning>
@@ -80,8 +80,8 @@
 		     when this was TLSv1.2. -->
 		<tls context="TLSv1.3"
 			keymanager="SunX509"
-			keystore="JKS" keystoreFile="certs/files/takserver.jks" keystorePass="atakatak"
-			truststore="JKS" truststoreFile="certs/files/truststore-root.jks" truststorePass="atakatak">
+			keystore="JKS" keystoreFile="certs/files/takserver.jks" keystorePass="${TAK_KEYSTORE_PASS}"
+			truststore="JKS" truststoreFile="certs/files/truststore-root.jks" truststorePass="${TAK_KEYSTORE_PASS}">
 		</tls>
 
 	</security>
@@ -90,8 +90,8 @@
 	  <federation-server port="9000" v1enabled="true" v2port="9001" v2enabled="true">
 	    <tls context="TLSv1.2"
 		 keymanager="SunX509"
-		 keystore="JKS" keystoreFile="certs/files/takserver.jks" keystorePass="atakatak"
-		 truststore="JKS" truststoreFile="certs/files/fed-truststore.jks" truststorePass="atakatak"/>
+		 keystore="JKS" keystoreFile="certs/files/takserver.jks" keystorePass="${TAK_KEYSTORE_PASS}"
+		 truststore="JKS" truststoreFile="certs/files/fed-truststore.jks" truststorePass="${TAK_KEYSTORE_PASS}"/>
 	  </federation-server>
 	</federation>
 

@@ -273,9 +273,11 @@ tasks:
                       f.write(base64.b64decode(data))
                   print(name)
           ' "${work}" > "${work}/names"
+          pass="$(./tests/keystore-pass.sh)"
+          mode="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}')"
           checked=0
           while IFS= read -r name; do
-            if ! info="$(openssl pkcs12 -in "${work}/${name}" -info -noout -passin pass:atakatak 2>&1)"; then
+            if ! info="$(openssl pkcs12 -in "${work}/${name}" -info -noout -passin "pass:${pass}" 2>&1)"; then
               echo "${name} is not a PKCS#12 file openssl can read (a proprietary JKS keystore?):" >&2
               head -n 3 <<< "${info}" >&2
               exit 1
@@ -291,6 +293,26 @@ tasks:
           done < "${work}/names"
           [[ "${checked}" -ge 8 ]] || { echo "only ${checked} keystores were checked" >&2; exit 1; }
           echo "${checked} keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
+          if [[ "${mode}" == "legacy" ]]; then
+            echo "Secret takserver-keystore kept the password from certificates that already existed"
+          else
+            if [[ "${mode}" != "generated" ]]; then
+              echo "Secret takserver-keystore has no generated or legacy marker (mode ${mode:-unset})" >&2
+              exit 1
+            fi
+            if openssl pkcs12 -in "${work}/takserver.jks" -info -noout -passin pass:atakatak >/dev/null 2>&1; then
+              echo "a fresh takserver.jks still opens with the upstream example password" >&2
+              exit 1
+            fi
+            echo "takserver.jks does not open with the upstream example password"
+            if [[ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca-do-not-share\.key}')" ]]; then
+              echo "ca-do-not-share.key is still in ConfigMap cert-migration" >&2
+              exit 1
+            fi
+            k get secret takserver-ca-key -n takserver -o name >/dev/null
+            echo "CA key is in Secret takserver-ca-key"
+          fi
+          unset pass
 
   - name: policies
     description: Confirm the Package created NetworkPolicy and AuthorizationPolicy objects
@@ -671,6 +693,7 @@ tasks:
             port="$(cat /tmp/tak-gateway-port)"
           fi
           cert_dir="$(./tests/extract-certs.sh)"
+          key_pass="$(./tests/keystore-pass.sh)"
           # CloudTAK spec. It skips itself when the cloudtak component is not deployed.
           cloudtak_url=""
           if uds zarf tools kubectl get deploy cloudtak -n cloudtak >/dev/null 2>&1; then
@@ -698,7 +721,7 @@ tasks:
             -e TAK_SSO_URL="https://takserver.uds.dev/" \
             -e TAK_CLIENT_CERT=/certs/admin.pem \
             -e TAK_CLIENT_KEY=/certs/admin.key \
-            -e TAK_CLIENT_KEY_PASSPHRASE=atakatak \
+            -e TAK_CLIENT_KEY_PASSPHRASE="${key_pass}" \
             -e SKIP_SSO_SETUP="${skip_sso}" \
             -e CLOUDTAK_URL="${cloudtak_url}" \
             -v "${cert_dir}:/certs:ro" \

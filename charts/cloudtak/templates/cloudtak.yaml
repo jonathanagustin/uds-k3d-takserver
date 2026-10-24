@@ -198,6 +198,11 @@ spec:
               value: "ssl://{{ $msg }}:8089"
             - name: TAK_ADMIN_DIR
               value: /var/run/tak-admin
+            - name: TAK_ADMIN_KEY_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tak.adminSecret }}
+                  key: CAPASS
             - name: TAK_USER_GROUPS
               value: {{ .Values.account.groups | quote }}
             - name: CLOUDTAK_USERNAME

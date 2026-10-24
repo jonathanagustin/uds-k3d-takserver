@@ -1,8 +1,9 @@
 // Copyright 2026 uds-k3d-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Adds the init container that renders the OIDC client secret into
-// CoreConfig.xml. It is applied when a TAK pod is created, so no TAK pod can
+// Adds the init container that renders the OIDC client secret and the
+// keystore password into CoreConfig.xml. It is applied when a TAK pod is
+// created, so no TAK pod can
 // start with the unrendered template. A node that did would publish that
 // copy to the others through the Ignite configuration cache.
 
@@ -53,6 +54,7 @@ function renderVolumes(): Volume[] {
     { name: "oidc-script", configMap: { name: "takserver-oidc-render" } },
     { name: "oidc-template", configMap: { name: "core-config" } },
     { name: "oidc-secret", secret: { secretName: "takserver-sso" } },
+    { name: "keystore-secret", secret: { secretName: "takserver-keystore" } },
   ];
 }
 
@@ -66,6 +68,7 @@ function renderInit(image: string): Container {
       { name: "oidc-script", mountPath: "/scripts", readOnly: true },
       { name: "oidc-template", mountPath: "/template", readOnly: true },
       { name: "oidc-secret", mountPath: "/var/run/tak-sso", readOnly: true },
+      { name: "keystore-secret", mountPath: "/var/run/tak-keystore", readOnly: true },
       { name: CONFIG_MOUNT, mountPath: "/conf" },
     ],
     resources: {

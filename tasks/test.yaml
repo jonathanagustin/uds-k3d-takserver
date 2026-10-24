@@ -638,6 +638,11 @@ tasks:
     actions:
       - cmd: ./tests/usage.sh
 
+  - name: full-core
+    description: Functional-layer pods are Ready, and kubectl top returns numbers for TAK and CloudTAK
+    actions:
+      - cmd: ./.github/scripts/check-full-core.sh
+
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented
     actions:

@@ -1,7 +1,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Applied only by bundle/uds-bundle.yaml.
+# Applied by bundle/uds-bundle.yaml and bundle/full/uds-bundle.yaml.
 # Sized to fit a 2 vCPU, 8 GB node, the ubuntu-latest runner for private
 # repositories. CI here runs on the public-repository runners, which have
 # 4 CPU and 16 GB on amd64 and arm64. The upstream developer example requests

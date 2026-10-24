@@ -85,4 +85,16 @@ steps {
     check = "bash .github/scripts/check-key-material.sh"
     glob = List("**/*", ".gitignore", ".github/scripts/check-key-material.sh")
   }
+  // Lockfile advisories. Ignore entries live in the osv-scanner.toml beside
+  // the lockfile, with a reason and an expiry, which Scorecard reads too.
+  ["osv"] {
+    check = "bash .github/scripts/scan-advisories.sh"
+    glob = List(
+      "**/*lock*.json",
+      "**/*lock*.yaml",
+      "**/requirements.txt",
+      "**/osv-scanner.toml",
+      ".github/scripts/scan-advisories.sh",
+    )
+  }
 }

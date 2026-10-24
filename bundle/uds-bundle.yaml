@@ -15,7 +15,8 @@ metadata:
   version: dev
 
 packages:
-  # Same core version as the shared setup task's k3d-core-slim-dev default.
+  # Same UDS Core version as the k3d-core-slim-dev checkpoint in
+  # .github/scripts/deploy-slim-core.sh.
   - name: core-base
     repository: ghcr.io/defenseunicorns/packages/uds/core-base
     ref: 1.15.2-upstream

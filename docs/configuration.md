@@ -24,7 +24,7 @@ The overlay turns the chart's nginx ingress off. The UDS Package in `charts/taks
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory to fit a 2 vCPU, 8 GB runner. The CI runners have 4 CPU and 16 GB on both architectures.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory to fit a 2 vCPU, 8 GB runner. The CI runners have 4 CPU and 16 GB on both architectures.
 
 ## Upstream chart values
 

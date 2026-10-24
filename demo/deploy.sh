@@ -17,7 +17,9 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 arch="${UDS_ARCH:-amd64}"
 flavor="${FLAVOR:-upstream}"
-core="${SLIM_CORE_VERSION:-1.15.0}"
+# renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
+slim_core_version=1.15.2
+core="${SLIM_CORE_VERSION:-${slim_core_version}}"
 var() { uds zarf tools yq ".variables[] | select(.name == \"$1\") | .default" tasks.yaml; }
 domain="$(var DOMAIN)"
 tak_tag="$(var TAK_IMAGE_TAG)"

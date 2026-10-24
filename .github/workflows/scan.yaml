@@ -19,15 +19,15 @@ on:
       - "upstream/**"
 
 permissions:
-  actions: read
   contents: read
-  packages: read
-  id-token: write
-  pull-requests: write
 
 jobs:
   images:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     timeout-minutes: 180
     # A newer push replaces the one before it. This job waits for images, and
     # the old run would otherwise wait on images the newer push has overwritten.
@@ -91,6 +91,10 @@ jobs:
   scan-and-compare:
     needs: images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
     concurrency:
       group: scan-${{ github.ref }}
       cancel-in-progress: true

@@ -36,7 +36,7 @@ jobs:
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
           else
             echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice title=Dependency review skipped::This private repository does not have the dependency graph and GitHub Advanced Security enabled. Dependency review cannot run until both are turned on under Settings, Code security."
+            echo "::notice title=Dependency review skipped::The dependency graph is not available for this repository, so dependency review cannot run. Enable it under Settings, Code security."
           fi
 
       - name: Dependency review

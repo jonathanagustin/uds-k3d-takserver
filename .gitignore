@@ -26,6 +26,9 @@ tests/.playwright/
 node_modules/
 demo/out/
 
+# Benchmark output. The workflow uploads it. It is not source.
+bench/out/
+
 # Admission module build output.
 pepr/dist/
 pepr/coverage/

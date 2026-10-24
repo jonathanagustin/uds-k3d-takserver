@@ -19,7 +19,14 @@ found=0
 while IFS= read -r -d '' lock; do
   found=$((found + 1))
   dir="$(dirname "${lock}")"
-  args=(scan source -L "${lock}")
+  # osv-scanner infers the extractor from a well-known filename. The viewer
+  # image build writes an npm lockfileVersion 3 as dist-package-lock.json,
+  # which that inference rejects (exit 127, "could not determine extractor").
+  lock_arg="${lock}"
+  if [[ "$(basename "${lock}")" == "dist-package-lock.json" ]]; then
+    lock_arg="package-lock.json:${lock}"
+  fi
+  args=(scan source -L "${lock_arg}")
   if [[ -f "${dir}/osv-scanner.toml" ]]; then
     args+=(--config "${dir}/osv-scanner.toml")
   fi

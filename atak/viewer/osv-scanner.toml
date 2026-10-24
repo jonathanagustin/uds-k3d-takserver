@@ -1,0 +1,17 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# OSV-Scanner (and the OpenSSF Scorecard Vulnerabilities check) read this file.
+# Each entry needs a reason and an expiry, so it comes back for review.
+#
+# node-forge is a transitive dependency of @dead50f7/adbkit 2.11.5, which the
+# ws-scrcpy viewer uses for its adb client. 1.4.0 is the newest release, and
+# GHSA-86w9-cpqp-85rv marks that version last_affected with no fixed version.
+# The viewer is the optional ATAK test-device screen stream. Remove this entry
+# when node-forge publishes a fix, or when adbkit no longer depends on it.
+
+[[IgnoredVulns]]
+# Also GHSA-ppp5-5v6c-4jwp and CVE-2026-33894 / CVE-2026-85393.
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2027-01-23
+reason = "node-forge 1.4.0 is the newest release and GHSA-86w9-cpqp-85rv marks it last_affected, with no fixed version. @dead50f7/adbkit 2.11.5 pulls it into the ATAK test-device viewer."

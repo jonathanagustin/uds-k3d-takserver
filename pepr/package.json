@@ -31,7 +31,7 @@
   },
   "overrides": {
     "kubernetes-fluent-client": {
-      "undici": "8.10.2",
+      "undici": "8.12.3",
       "js-yaml": "5.4.2",
       "@kubernetes/client-node": {
         "js-yaml": "4.3.2"

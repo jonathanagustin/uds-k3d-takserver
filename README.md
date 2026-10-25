@@ -68,7 +68,7 @@ https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 
 ## Prerequisites
 
-You need Docker, [k3d](https://k3d.io/), and the [UDS CLI](https://github.com/defenseunicorns/uds-cli) (which includes Zarf). kubectl is optional: `uds zarf tools kubectl` does the same job. The [UDS local demo requirements](https://docs.defenseunicorns.com/core/getting-started/local-demo/basic-requirements/) call for at least 4 CPU, 10 GiB of memory, and 40 GiB of disk for Docker.
+You need Docker, [k3d](https://k3d.io/), and the [UDS CLI](https://github.com/defenseunicorns/uds-cli) (which includes Zarf). kubectl is optional: `uds zarf tools kubectl` does the same job. `python3` is required on the deploy host: the package's `onDeploy` actions use it, and `uds run test-install` runs the checks under `tests/`. The [UDS local demo requirements](https://docs.defenseunicorns.com/core/getting-started/local-demo/basic-requirements/) call for at least 4 CPU, 10 GiB of memory, and 40 GiB of disk for Docker.
 
 The versions below match what this repository pins and tests with: k3d v5.9.0, UDS CLI v0.40.0 (`mise.toml`), and kubectl v1.37.1 for the k3s v1.37.1 cluster that `k3d-core-slim-dev` creates.
 

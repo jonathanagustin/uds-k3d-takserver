@@ -286,6 +286,8 @@ jobs:
 
   check-flavor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -529,6 +531,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-install, validate-upgrade]
     if: always()
+    permissions:
+      contents: read
     steps:
       - name: Check validate result
         run: |

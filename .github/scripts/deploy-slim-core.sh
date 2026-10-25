@@ -2,11 +2,13 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Deploy the slim UDS Core checkpoint. A restored package tarball skips the
-# OCI pull. The first run pulls k3d-core-slim-dev into the cache directory.
+# Deploy the slim UDS Core checkpoint. A tarball of this version in the cache
+# directory skips the OCI pull. The first run pulls k3d-core-slim-dev.
 set -euo pipefail
 
-version="${SLIM_CORE_VERSION:-1.15.0}"
+# renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
+slim_core_version=1.15.2
+version="${SLIM_CORE_VERSION:-${slim_core_version}}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"
 ref="oci://ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev:${version}"
@@ -26,16 +28,23 @@ else
 fi
 
 shopt -s nullglob
-files=("${out}"/zarf-package-k3d-core-slim-dev-*.tar.zst)
+# The version is part of the name. An older tarball in the same directory
+# must not be deployed in its place.
+files=("${out}"/zarf-package-k3d-core-slim-dev-*-"${version}".tar.zst)
 if [[ "${#files[@]}" -eq 0 ]]; then
   echo "Pulling ${ref}"
   "${zarf[@]}" package pull "${ref}" --output-directory "${out}"
-  files=("${out}"/zarf-package-k3d-core-slim-dev-*.tar.zst)
+  files=("${out}"/zarf-package-k3d-core-slim-dev-*-"${version}".tar.zst)
 fi
 shopt -u nullglob
 
 if [[ "${#files[@]}" -eq 0 ]]; then
-  echo "No k3d-core-slim-dev package in ${out}" >&2
+  echo "No k3d-core-slim-dev ${version} package in ${out}" >&2
+  exit 1
+fi
+if [[ "${#files[@]}" -gt 1 ]]; then
+  echo "More than one k3d-core-slim-dev ${version} package in ${out}:" >&2
+  printf '  %s\n' "${files[@]}" >&2
   exit 1
 fi
 

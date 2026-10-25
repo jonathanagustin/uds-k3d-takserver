@@ -55,7 +55,7 @@ jobs:
             echo "upload=true" >> "${GITHUB_OUTPUT}"
           else
             echo "upload=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice title=CodeQL results kept local::Code scanning is not enabled on this private repository, so the analysis is not uploaded. Enable code scanning under Settings, Code security."
+            echo "::notice title=CodeQL results kept local::Code scanning is not enabled on this repository, so the analysis is not uploaded. Enable code scanning under Settings, Code security."
           fi
 
       - name: Perform CodeQL analysis

@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, Keycloak, Pepr). The standard `core` package is the one that adds Vector, Loki, Prometheus, and optional Velero. The stock TAK chart has no `securityContext` values and no Prometheus port. TAK 5.7-RELEASE-14 does not depend on `micrometer-registry-prometheus`.
+The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, the UDS operator, Pepr) and `core-identity-authorization` (Keycloak, Authservice). The standard `core` package is the one that adds Vector, Loki, Prometheus, and optional Velero. The stock TAK chart has no `securityContext` values and no Prometheus port. TAK 5.7-RELEASE-14 does not depend on `micrometer-registry-prometheus`.
 
 ## Decision
 

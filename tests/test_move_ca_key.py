@@ -133,8 +133,8 @@ class MoveCaKeyTests(unittest.TestCase):
 
     def test_hook_scripts_share_the_retry_helper(self):
         block = helper_text(SCRIPT)
-        self.assertIn("--retry 5", block)
-        self.assertIn("--retry-delay 1", block)
+        self.assertIn("--retry 20", block)
+        self.assertIn("--retry-delay 2", block)
         self.assertIn("--retry-all-errors", block)
         self.assertIn("--retry-connrefused", block)
         self.assertEqual(helper_text(ISSUE), block)

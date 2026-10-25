@@ -6,7 +6,9 @@
 # The scripts live in this image at /opt/tak/certs (TAK Server 5.7-RELEASE-14).
 # A ConfigMap that already exists is left alone so an operator can supply certs.
 
-# Retry a refused or reset handshake. Five tries, one second apart.
+# Retry a refused or reset handshake. The k3s port-6443 tunnel refuses new
+# connections for several seconds after this hook reads cert-migration, which
+# is longer than five one-second tries. Twenty tries, two seconds apart.
 # --retry-all-errors covers a TLS reset (curl 35 or 56). --retry-connrefused
 # covers ECONNREFUSED. An HTTP status is not an error unless the caller
 # passes -f, so 409 still returns to the caller. The config image is UBI9,
@@ -15,8 +17,8 @@ api_curl() {
   curl \
     --silent \
     --show-error \
-    --retry 5 \
-    --retry-delay 1 \
+    --retry 20 \
+    --retry-delay 2 \
     --retry-all-errors \
     --retry-connrefused \
     --connect-timeout 5 \

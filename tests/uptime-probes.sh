@@ -2,7 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# List the TAK and CloudTAK blackbox probes, require probe_success 1, then
+# List the TAK and CloudTAK blackbox probes (in their own namespaces), require probe_success 1, then
 # delete the CloudTAK pod and record the drop and the recovery.
 # The ATAK viewer probe is on atak/deploy/device.yaml. The full bundle does
 # not deploy that package, so this job does not list it.
@@ -38,17 +38,19 @@ say "uptime: ATAK viewer probe is not in this job; the full bundle does not depl
 
 listed=0
 for _ in $(seq 1 18); do
-  k get probes.monitoring.coreos.com -n monitoring -o wide >"${log}.list" 2>/dev/null || true
+  # The Package operator creates each Probe in the package's own namespace
+  # (takserver, cloudtak), not in monitoring, so list across namespaces.
+  k get probes.monitoring.coreos.com -A -o wide >"${log}.list" 2>/dev/null || true
   if grep -Ei 'takserver|cloudtak|map' "${log}.list" >/dev/null 2>&1; then
     listed=1
     break
   fi
   sleep 10
 done
-say "kubectl get probes -n monitoring"
+say "kubectl get probes -A"
 tee -a "${log}" < "${log}.list"
 if [[ "${listed}" -ne 1 ]]; then
-  say "monitoring probes do not include TAK or CloudTAK" >&2
+  say "probes do not include TAK or CloudTAK" >&2
   exit 1
 fi
 

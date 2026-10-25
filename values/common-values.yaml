@@ -99,13 +99,24 @@ global:
 postgresql:
   enabled: true
   # docker.io/postgis/postgis publishes amd64 only. This repository builds
-  # PostgreSQL 15 with PostGIS 3.4.3 for amd64 and arm64 from the official
-  # postgres image. See .github/container-and-chart/postgis and
-  # adr/0013-build-the-postgis-image-here.md.
+  # PostgreSQL 18 with PostGIS 3.6.4 for amd64 and arm64 from the official
+  # postgres image. The entrypoint upgrades a PostgreSQL 15 data directory.
+  # See .github/container-and-chart/postgis and
+  # adr/0018-upgrade-postgres-in-place.md.
   image:
     registry: ghcr.io
     repository: jonathanagustin/uds-k3d-takserver/postgis
-    tag: "15-3.4"
+    tag: "18-3.6"
+  # pg_upgrade runs before the server listens. Without a startup probe the
+  # liveness probe kills that first start. 60 failures at 10s is 10 minutes.
+  primary:
+    startupProbe:
+      enabled: true
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 60
+      successThreshold: 1
   configurationConfigMap: postgres-configuration
   auth:
     database: cot

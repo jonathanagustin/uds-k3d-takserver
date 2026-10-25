@@ -4,7 +4,7 @@ Date: 2026-10-21
 
 ## Status
 
-Accepted. Replaces the Postgres image decision in [ADR 10](0010-amd64-and-arm64.md).
+Accepted. Replaces the Postgres image decision in [ADR 10](0010-amd64-and-arm64.md). The PostgreSQL 15 and PostGIS 3.4.3 pin is superseded by [ADR 18](0018-upgrade-postgres-in-place.md). Building the image in this repository still stands.
 
 ## Context
 

@@ -42,7 +42,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "${here}" rev-parse --show-toplevel)"
 registry="${REGISTRY:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
 # PostgreSQL major and PostGIS major.minor, the tag the chart and zarf.yaml use.
-version="15-3.4"
+version="18-3.6"
 version_image="${registry}/postgis:${version}"
 
 read -r -a arches <<< "${ARCHES:-amd64 arm64}"

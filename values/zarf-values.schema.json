@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "tak", "dns"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain"],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "tak": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageTag"],
+      "properties": {
+        "imageTag": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inCluster", "passthroughHosts"],
+      "properties": {
+        "inCluster": {
+          "type": "string",
+          "enum": ["true", "false"]
+        },
+        "passthroughHosts": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,9 @@ components:
         namespace: takserver
         version: 0.6.0 # x-release-please-version
         localPath: ../charts/takserver
+        values:
+          - sourcePath: .global.domain
+            targetPath: .domain
       # Admission module. Installed before the upstream chart so that every
       # TAK pod is created with the init container that renders the OIDC client
       # secret into CoreConfig.xml. The chart is built by pepr/build.sh when the
@@ -26,7 +29,7 @@ components:
         namespace: pepr-system
         version: 0.1.0
         localPath: ../pepr/dist/c72fcf944a4f43bbb386d22371aa640f-chart
-        valuesFiles:
+        templatedValuesFiles:
           - ../values/pepr-values.yaml
       # Upstream chart. Not vendored. `version` is the git tag Zarf clones.
       # releaseName stays takserver so the Bitnami Postgres Service is
@@ -39,3 +42,16 @@ components:
         version: 5.7-RELEASE-14
         valuesFiles:
           - ../values/common-values.yaml
+        values:
+          - sourcePath: .tak.imageTag
+            targetPath: .takserver.config.image.tag
+          - sourcePath: .tak.imageTag
+            targetPath: .takserver.messaging.image.tag
+          - sourcePath: .tak.imageTag
+            targetPath: .takserver.api.image.tag
+          - sourcePath: .tak.imageTag
+            targetPath: .takserver.plugins.image.tag
+          - sourcePath: .tak.imageTag
+            targetPath: .takserver.takserverDatabaseSetup.image.tag
+          - sourcePath: .tak.imageTag
+            targetPath: .ignite.image.tag

@@ -49,8 +49,9 @@ replace zarf.yaml "${repo}/postgis:${postgis_version}\"" "${repo}/postgis:${post
 replace charts/cloudtak/values.yaml "${repo}/postgis:${postgis_version}" "${repo}/postgis:${postgis_tag}"
 replace values/common-values.yaml "tag: \"${postgis_version}\"" "tag: \"${postgis_tag}\""
 
-# The six TAK images, plus TAK_IMAGE_TAG wherever a package is created or a
-# bundle is deployed, since the Helm values read the tag from that variable.
+# The six TAK images, TAK_IMAGE_TAG, and tak.imageTag. The images list and
+# certs.image still read the variable. Helm tag keys read the package value.
+# Both have to be the commit tag or the pods and the package disagree.
 for name in takserver-api takserver-messaging takserver-config takserver-plugins takserver-database-setup takserver-ignite; do
   replace zarf.yaml "${repo}/${name}:${tak_version}\"" "${repo}/${name}:${tak_tag}\""
 done
@@ -58,6 +59,7 @@ done
 replace zarf.yaml "default: ${tak_version}" "default: ${tak_tag}"
 replace tasks.yaml "default: ${tak_version}" "default: ${tak_tag}"
 replace bundle/uds-config.yaml "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
+replace values/zarf-values.yaml "imageTag: \"${tak_version}\"" "imageTag: \"${tak_tag}\""
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {

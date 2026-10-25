@@ -27,18 +27,26 @@ documentation:
   data: docs/data.md
   cloudtak: docs/cloudtak.md
 
+# Beta. Chart mappings read these. The variables below stay for UDS CLI 0.40
+# bundles, which set Zarf variables and cannot pass package values, and for
+# the cert image string. docs/configuration.md lists which path wins.
+values:
+  files:
+    - values/zarf-values.yaml
+  schema: values/zarf-values.schema.json
+
 variables:
   - name: DOMAIN
-    description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev.
+    description: Compatibility variable for UDS bundles. Helm domain comes from global.domain. This still fills cert and ATAK strings that package values cannot.
     default: uds.dev
   - name: TAK_IMAGE_TAG
-    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package.
+    description: Compatibility variable. The images list cannot be templated, and charts/takserver certs.image is one string. Helm tag keys come from tak.imageTag. Keep the two equal.
     default: 5.7-RELEASE-14
   - name: IN_CLUSTER_DNS
-    description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist.
+    description: Compatibility variable. The watcher reads dns.inCluster. Left so uds-config.yaml and --set IN_CLUSTER_DNS= still name a real variable.
     default: "true"
   - name: PASSTHROUGH_HOSTS
-    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host.
+    description: Compatibility variable. The watcher reads dns.passthroughHosts. Hosts under the domain that the passthrough gateway serves by SNI.
     default: "takserver-api takserver-stream"
 
 components:
@@ -103,6 +111,9 @@ components:
         namespace: cloudtak
         version: 0.1.0
         localPath: charts/cloudtak
+        values:
+          - sourcePath: .global.domain
+            targetPath: .domain
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package

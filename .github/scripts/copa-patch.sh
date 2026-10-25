@@ -99,10 +99,15 @@ for image in "$@"; do
   if [[ "${before}" -eq 0 ]]; then
     continue
   fi
+  # setup-buildx-action leaves a docker-container builder current. Copa
+  # uses that builder when it does not stay on the engine, and a container
+  # builder cannot read an image that was only loaded into the daemon.
+  # docker:// is the engine's buildkit, which can.
   "${copa}" patch \
     -i "${image}" \
     -r "${before_report}" \
     -t "${image}" \
+    --addr docker:// \
     --timeout "${COPA_TIMEOUT:-15m}"
   after_report="${work}/reports/after.json"
   scan "${image}" "${after_report}"

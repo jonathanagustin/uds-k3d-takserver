@@ -4,6 +4,9 @@
 """Pareto and log-parser fixtures. These dicts are not benchmark measurements."""
 
 import importlib.util
+import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -91,6 +94,30 @@ class LoadLogTests(unittest.TestCase):
     def test_a_log_without_stats_is_an_error(self):
         with self.assertRaises(ValueError):
             loadlog.parse("tester started\n")
+
+
+class ScriptPathTests(unittest.TestCase):
+    def test_launching_the_file_can_import_the_parser(self):
+        root = Path(__file__).resolve().parents[1]
+        script = root / "bench" / "run.py"
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        # `python bench/run.py` puts the script directory first and drops cwd.
+        probe = (
+            "import pathlib, runpy, sys\n"
+            "script = pathlib.Path(sys.argv[1]).resolve()\n"
+            "sys.path = [str(script.parent), *sys.path[1:]]\n"
+            "runpy.run_path(str(script), run_name='bench_probe')\n"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", probe, str(script)],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 class ImageRefTests(unittest.TestCase):

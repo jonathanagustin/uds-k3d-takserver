@@ -23,6 +23,12 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+# Running this file as a script puts bench/ on sys.path and hides the package.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from bench.loadlog import parse
+
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
 
 
@@ -234,8 +240,6 @@ def kubelet_samples(stop, sink, errors):
 
 
 def run_load(clients, duration, password, tester):
-    from bench.loadlog import parse
-
     if not tester.is_file():
         raise RuntimeError(f"load tester is not at {tester}")
     cert_dir = Path(tempfile.mkdtemp(prefix="bench-certs-"))

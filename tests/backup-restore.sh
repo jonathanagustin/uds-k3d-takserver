@@ -143,9 +143,11 @@ store_secret() {
   local ns="$1"
   local name="$2"
   local file="$3"
+  # Server-side apply: client-side apply copies the whole Secret into the
+  # last-applied annotation, which is capped at 256KiB.
   k create secret generic "${name}" -n "${ns}" \
     --from-file=dump.sql="${file}" \
-    --dry-run=client -o yaml | k apply -f -
+    --dry-run=client -o yaml | k apply --server-side --force-conflicts -f -
   say "Secret ${ns}/${name} stored"
 }
 

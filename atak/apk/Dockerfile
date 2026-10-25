@@ -37,9 +37,12 @@ ENV ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_NDK_HOME=/opt/android-sdk/ndk/25.1.8937393
 
 ARG CMDLINE_TOOLS=11076708
+# Google names the zip "_latest" even for a numbered build. The hash is the pin.
+ARG CMDLINE_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
     && curl -fsSLo /tmp/tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS}_latest.zip" \
+    && echo "${CMDLINE_TOOLS_SHA256}  /tmp/tools.zip" | sha256sum -c - \
     && unzip -q /tmp/tools.zip -d /tmp \
     && mv /tmp/cmdline-tools "${ANDROID_SDK_ROOT}/cmdline-tools/latest" \
     && rm /tmp/tools.zip \

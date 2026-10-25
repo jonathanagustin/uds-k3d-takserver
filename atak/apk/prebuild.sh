@@ -14,7 +14,8 @@ SRC=${SRC:-/src/atak-civ}
 RECIPES=${RECIPES:-$(cd "$(dirname "$0")" && pwd)/conan}
 ABI=${ABI:-x86_64}
 JOBS=${JOBS:-$(nproc)}
-CESIUM_REF=${CESIUM_REF:-v0.40.1}
+# v0.40.1. A tag can move, so the clone uses the commit.
+CESIUM_REF=${CESIUM_REF:-f8b38abbbaa24ec2984ff663182240d06285b36c}
 
 case "${ABI}" in
   x86_64) CARCH=x86_64 ;;

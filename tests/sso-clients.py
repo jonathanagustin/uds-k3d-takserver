@@ -5,9 +5,9 @@
 """Read the TAK and CloudTAK Keycloak clients and check their attributes.
 
 The expected values are the chart values in charts/takserver/values.yaml and
-charts/cloudtak/values.yaml. Keycloak's default session idle is 1800 seconds
-and the default max lifespan is 36000. UDS Core 1.15.2 does not override those
-realm settings.
+charts/cloudtak/values.yaml. The UDS realm idle timeout is 600 seconds and
+the max lifespan is 36000. A client idle of 1800 is longer than the realm
+and Keycloak rejects the client.
 """
 
 import importlib.util
@@ -24,7 +24,7 @@ spec.loader.exec_module(kc)
 
 REALM = kc.REALM
 DOMAIN = os.environ.get("DOMAIN", "uds.dev")
-IDLE = "1800"
+IDLE = "600"
 LIFESPAN = "36000"
 
 EXPECTED = {

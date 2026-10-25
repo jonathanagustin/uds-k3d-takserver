@@ -166,10 +166,10 @@ sso:
   enabled: true
   clientId: uds-takserver
   secretName: takserver-sso
-  # Keycloak's own defaults. UDS Core 1.15.2 does not set SSO_SESSION_IDLE_TIMEOUT
-  # or SSO_SESSION_MAX_LIFESPAN, so these match the realm. A client value longer
-  # than the realm is ignored.
-  sessionIdleTimeout: "1800"
+  # uds-identity-config 0.32.3 imports the realm with idle 600 and max
+  # lifespan 36000 when those env vars are unset. UDS Core 1.15.2 does not
+  # set them. Keycloak 26 rejects a client idle longer than the realm.
+  sessionIdleTimeout: "600"
   sessionMaxLifespan: "36000"
   # Keycloak full group path. TAK grants ROLE_ADMIN when the groups claim
   # contains this value. It does not match groupprefix /tak/, so it is not

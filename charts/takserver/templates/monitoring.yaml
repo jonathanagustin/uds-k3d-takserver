@@ -4,8 +4,9 @@
 
 # Grafana, Prometheus, and Loki ruler objects. Slim has no
 # monitoring.coreos.com API, so this file renders nothing there.
-# TAK does not export Prometheus text yet, so the dashboard panels stay
-# empty until a monitor exists. No ServiceMonitor is created here.
+# The Package monitor entries scrape TAK. This PodMonitor scrapes the Pepr
+# module: the Package block cannot set scheme or tlsConfig, and the generated
+# chart's ServiceMonitor would select every admission controller in pepr-system.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -79,4 +80,23 @@ data:
               severity: warning
             annotations:
               summary: TAK logged "error pulling auth file" more than 3 times in 5 minutes
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: takserver-oidc
+spec:
+  selector:
+    matchLabels:
+      app: takserver-oidc
+      pepr.dev/controller: admission
+  namespaceSelector:
+    matchNames:
+      - pepr-system
+  podMetricsEndpoints:
+    - targetPort: 3000
+      scheme: https
+      path: /metrics
+      tlsConfig:
+        insecureSkipVerify: true
 {{- end }}

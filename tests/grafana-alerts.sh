@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Grafana /api/search returns the TAK dashboard, and Prometheus /api/v1/rules
-# lists the TAK alerts. Slim has no monitoring API and this script exits 0.
+# lists the TAK alerts. When Prometheus is up, the TAK API and messaging
+# targets and the Pepr module target are up, and a JVM query returns data.
+# Slim has no monitoring API and this script exits 0.
 #
-# Scaling takserver-messaging to 0 cannot fire TAKAPITargetDown until a
-# monitor exists, and this job has no browser for a dashboard screenshot.
+# This job does not scale a Deployment to fire TAKAPITargetDown, and it has
+# no browser for a dashboard screenshot.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -152,5 +154,111 @@ if [[ "${rules_ok}" -ne 1 ]]; then
 fi
 echo "Prometheus /api/v1/rules lists the TAK alerts"
 
-echo "grafana-alerts: target-down firing check skipped: TAK has no ServiceMonitor, so scaling takserver-messaging to 0 cannot make TAKAPITargetDown fire"
-echo "grafana-alerts: playwright screenshot skipped: this job has no browser, and the dashboard has no TAK metrics until Prometheus monitors exist"
+scrape_ok=0
+for _ in $(seq 1 30); do
+  code="$(curl -sS -o out/prometheus-targets.json -w '%{http_code}' --max-time 20 "http://127.0.0.1:9091/api/v1/targets?state=active" || true)"
+  echo "prometheus targets HTTP ${code}"
+  if [[ "${code}" == "200" ]] && python3 - <<'PY'
+import json
+import sys
+
+active = json.load(open("out/prometheus-targets.json")).get("data", {}).get("activeTargets", [])
+
+def up(namespace, path, pod_prefix):
+    matched = []
+    for target in active:
+        labels = target.get("labels") or {}
+        url = target.get("scrapeUrl") or ""
+        pod = labels.get("pod") or ""
+        if target.get("health") != "up" or labels.get("namespace") != namespace or path not in url:
+            continue
+        if pod_prefix and not pod.startswith(pod_prefix):
+            continue
+        matched.append(pod or url)
+    return matched
+
+missing = []
+if not up("takserver", "/actuator/prometheus", "takserver-api-"):
+    missing.append("takserver-api")
+if not up("takserver", "/actuator/prometheus", "takserver-messaging-"):
+    missing.append("takserver-messaging")
+if not up("pepr-system", "/metrics", "takserver-oidc-"):
+    missing.append("takserver-oidc")
+if missing:
+    print("waiting on " + ", ".join(missing))
+    sys.exit(1)
+PY
+  then
+    scrape_ok=1
+    break
+  fi
+  sleep 10
+done
+if [[ "${scrape_ok}" -ne 1 ]]; then
+  echo "Prometheus targets for TAK or the Pepr module were not up" >&2
+  python3 - <<'PY' >&2 || true
+import json
+try:
+    active = json.load(open("out/prometheus-targets.json")).get("data", {}).get("activeTargets", [])
+except FileNotFoundError:
+    raise SystemExit(0)
+for target in active:
+    labels = target.get("labels") or {}
+    ns = labels.get("namespace")
+    if ns not in ("takserver", "pepr-system"):
+        continue
+    print(ns, labels.get("pod"), target.get("health"), target.get("scrapeUrl"), target.get("lastError"))
+PY
+  exit 1
+fi
+echo "Prometheus targets for the TAK API, messaging, and the Pepr module are up"
+
+query_ok=0
+for _ in $(seq 1 12); do
+  code="$(curl -sS -G -o out/prometheus-jvm.json -w '%{http_code}' --max-time 20 \
+    "http://127.0.0.1:9091/api/v1/query" \
+    --data-urlencode 'query=jvm_memory_used_bytes{namespace="takserver"}' || true)"
+  echo "prometheus jvm query HTTP ${code}"
+  if [[ "${code}" == "200" ]] && python3 - <<'PY'
+import json
+import sys
+result = json.load(open("out/prometheus-jvm.json")).get("data", {}).get("result", [])
+sys.exit(0 if result else 1)
+PY
+  then
+    query_ok=1
+    break
+  fi
+  sleep 10
+done
+if [[ "${query_ok}" -ne 1 ]]; then
+  echo "jvm_memory_used_bytes{namespace=\"takserver\"} returned no data" >&2
+  exit 1
+fi
+echo "jvm_memory_used_bytes{namespace=\"takserver\"} returned data"
+
+pepr_ok=0
+for _ in $(seq 1 12); do
+  code="$(curl -sS -G -o out/prometheus-pepr.json -w '%{http_code}' --max-time 20 \
+    "http://127.0.0.1:9091/api/v1/query" \
+    --data-urlencode 'query=pepr_errors{namespace="pepr-system",pod=~"takserver-oidc-.*"}' || true)"
+  echo "prometheus pepr query HTTP ${code}"
+  if [[ "${code}" == "200" ]] && python3 - <<'PY'
+import json
+import sys
+result = json.load(open("out/prometheus-pepr.json")).get("data", {}).get("result", [])
+sys.exit(0 if result else 1)
+PY
+  then
+    pepr_ok=1
+    break
+  fi
+  sleep 10
+done
+if [[ "${pepr_ok}" -ne 1 ]]; then
+  echo "pepr_errors for takserver-oidc returned no data" >&2
+  exit 1
+fi
+echo "pepr_errors for takserver-oidc returned data"
+echo "grafana-alerts: target-down firing check skipped: this job does not scale a Deployment to zero"
+echo "grafana-alerts: playwright screenshot skipped: this job has no browser"

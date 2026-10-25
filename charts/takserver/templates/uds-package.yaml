@@ -7,8 +7,25 @@ metadata:
   name: takserver
   namespace: {{ .Release.Namespace }}
 spec:
-  # TAK exposes Spring actuator on the HTTPS connectors and does not ship
-  # micrometer-registry-prometheus. A ServiceMonitor would not scrape. See docs/configuration.md.
+  {{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+  # API and messaging listen on plaintext 9100. The admission module names
+  # that container port metrics. Absent when the monitoring API is not installed.
+  monitor:
+    - description: tak-api
+      kind: PodMonitor
+      selector:
+        {{- toYaml .Values.api.selector | nindent 8 }}
+      portName: metrics
+      targetPort: 9100
+      path: /actuator/prometheus
+    - description: tak-messaging
+      kind: PodMonitor
+      selector:
+        {{- toYaml .Values.messaging.selector | nindent 8 }}
+      portName: metrics
+      targetPort: 9100
+      path: /actuator/prometheus
+  {{- end }}
   # Operator-managed CA bundle. The upstream chart has no value that mounts it.
   caBundle:
     configMap:

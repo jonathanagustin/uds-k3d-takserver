@@ -357,9 +357,19 @@ tasks:
           grep -q RestrictIstioSidecarOverrides <<< "${exemption}"
           resources="$(uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null || true)"
           if grep -q servicemonitors <<< "${resources}"; then
-            monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
-            echo "monitor count: ${monitors}"
-            [ "${monitors}" = "0" ]
+            monitors="$(uds zarf tools kubectl get podmonitor.monitoring.coreos.com -n takserver -o yaml)"
+            if ! grep -q '/actuator/prometheus' <<< "${monitors}"; then
+              echo "TAK PodMonitors are missing" >&2
+              exit 1
+            fi
+            if ! grep -q 'name: takserver-oidc' <<< "${monitors}"; then
+              echo "Pepr PodMonitor takserver-oidc is missing" >&2
+              exit 1
+            fi
+            if ! grep -q '/metrics' <<< "${monitors}"; then
+              echo "Pepr PodMonitor does not scrape /metrics" >&2
+              exit 1
+            fi
           else
             echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
           fi

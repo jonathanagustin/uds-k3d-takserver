@@ -22,15 +22,27 @@ export const RELOAD_VALUE = "takserver";
 export const INIT_NAME = "render-oidc";
 export const CONFIG_MOUNT = "rendered-core";
 
+// Plain HTTP Prometheus text. The upstream Deployment has no metrics port,
+// and the Package PodMonitor scrapes a named container port.
+export const METRICS_PORT_NAME = "metrics";
+export const METRICS_PORT = 9100;
+
 interface Volume {
   name: string;
   [key: string]: unknown;
+}
+
+interface ContainerPort {
+  name?: string;
+  containerPort: number;
+  protocol?: string;
 }
 
 interface Container {
   name: string;
   image?: string;
   volumeMounts?: { name: string; mountPath: string; readOnly?: boolean }[];
+  ports?: ContainerPort[];
   [key: string]: unknown;
 }
 
@@ -109,6 +121,14 @@ export function addRender(pod: PodLike, image: string): boolean {
     if (!mounts.some(existing => existing.name === CONFIG_MOUNT)) {
       mounts.push({ name: CONFIG_MOUNT, mountPath: "/conf" });
       changed = true;
+    }
+    const app = pod.metadata?.labels?.app;
+    if (app === "takserver-api" || app === "takserver-messaging") {
+      const ports = (main.ports ??= []);
+      if (!ports.some(existing => existing.name === METRICS_PORT_NAME)) {
+        ports.push({ name: METRICS_PORT_NAME, containerPort: METRICS_PORT, protocol: "TCP" });
+        changed = true;
+      }
     }
   }
 

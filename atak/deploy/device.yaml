@@ -147,6 +147,14 @@ spec:
         gateway: tenant
         host: atak
         port: 8000
+        # /phone.html is the page the viewer serves. The expose is behind
+        # Authservice, so the operator's probe client is what gets a 2xx.
+        # The full-core bundle does not deploy this package, so the probe
+        # is not in that job. Passthrough TAK ports stay without an HTTP probe.
+        uptime:
+          checks:
+            paths:
+              - /phone.html
     allow:
       # The device reaches TAK only through the passthrough gateway on the
       # standard streaming port, with a client certificate from its data

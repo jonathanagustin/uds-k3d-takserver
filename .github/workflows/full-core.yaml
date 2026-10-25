@@ -179,6 +179,16 @@ jobs:
           # shellcheck disable=SC3028
           echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
 
+      - name: Upload uptime probe log
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: uptime-probes-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
+          path: out/uptime-probes.txt
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload kubectl top
         if: always()
         timeout-minutes: 2

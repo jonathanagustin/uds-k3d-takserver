@@ -86,6 +86,16 @@ Older commits of this branch still contain the keystores that used to live in `c
 
 TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. It does not depend on `micrometer-registry-prometheus`. The actuator endpoints are on the same HTTPS connectors as Marti (8443 and 8446). 8443 requires a client certificate. The API Service has no metrics port. The Package has no `monitor` entry, because a ServiceMonitor would not scrape a Prometheus text endpoint. `k3d-core-slim-dev` does not install the Prometheus operator.
 
+## Monitoring
+
+When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds three objects. Slim does not have that API, so it does not get them, and the chart still adds no ServiceMonitor or PodMonitor.
+
+ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". Its panels are JVM heap, GC, HTTP rate, Postgres up, and pod restarts. Those series are empty until TAK exports Prometheus text.
+
+PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. A target-down alert can fire only after a monitor exists. Scaling messaging to 0 does not create a down target today.
+
+ConfigMap `takserver-loki-rules` is labeled `loki_rule: "1"`. The ruler alerts when a TAK pod logs `error pulling auth file` more than three times in five minutes. That string is the one the API log check already rejects.
+
 ## Logging
 
 TAK writes its process log to stdout and to `/logs/takserver-*.log`. UDS Core's Vector and Loki collectors ship in the standard `core` package, not in `core-base` / `k3d-core-slim-dev`. This bundle does not add a second log agent. When the standard logging package is installed, Vector already tails pod stdout, which is the same stream `kubectl logs` reads. The test task requires a TAK startup line in that stream. It queries Loki only when a Loki Service is present.

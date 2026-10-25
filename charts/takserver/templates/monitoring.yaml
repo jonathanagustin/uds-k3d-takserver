@@ -1,0 +1,82 @@
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Grafana, Prometheus, and Loki ruler objects. Slim has no
+# monitoring.coreos.com API, so this file renders nothing there.
+# TAK does not export Prometheus text yet, so the dashboard panels stay
+# empty until a monitor exists. No ServiceMonitor is created here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: takserver-dashboard
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: takserver
+data:
+  takserver.json: |
+{{ .Files.Get "dashboards/takserver.json" | indent 4 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: takserver
+spec:
+  groups:
+    - name: takserver.rules
+      rules:
+        - alert: TAKAPITargetDown
+          expr: up{namespace="takserver", pod=~"takserver-api-.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: TAK API target is down
+        - alert: TAKMessagingTargetDown
+          expr: up{namespace="takserver", pod=~"takserver-messaging-.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: TAK messaging target is down
+        - alert: TAKJVMHeapHigh
+          expr: |
+            (
+              sum by (pod) (jvm_memory_used_bytes{namespace="takserver", area="heap"})
+              /
+              sum by (pod) (jvm_memory_max_bytes{namespace="takserver", area="heap"})
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: TAK JVM heap has been above 90% for 10 minutes
+        - alert: TAKPodRestartLoop
+          expr: increase(kube_pod_container_status_restarts_total{namespace="takserver"}[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: A TAK container restarted more than 3 times in 15 minutes
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: takserver-loki-rules
+  labels:
+    loki_rule: "1"
+data:
+  takserver.yaml: |
+    groups:
+      - name: takserver
+        rules:
+          - alert: TAKAuthFilePullErrors
+            expr: |
+              sum by (pod) (count_over_time({namespace="takserver"} |= "error pulling auth file" [5m])) > 3
+            for: 0s
+            labels:
+              severity: warning
+            annotations:
+              summary: TAK logged "error pulling auth file" more than 3 times in 5 minutes
+{{- end }}

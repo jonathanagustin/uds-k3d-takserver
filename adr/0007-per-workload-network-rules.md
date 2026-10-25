@@ -44,3 +44,4 @@ Every Ingress rule from other pods now also sets `remoteServiceAccount`. The UDS
 - The Ingress rules from CloudTAK, in the takserver Package and on CloudTAK's PostGIS, match the `cloudtak` ServiceAccount. The basemap `remoteHost` rule already sets `serviceAccount: cloudtak`.
 - `serviceAccount` on Egress rules applies only to `remoteHost` egress through the ambient egress waypoint, so the in-cluster Egress rules (Keycloak on the tenant gateway, Kubernetes API) stay label-based.
 - `tests/flows.py --check` fails when an Ingress rule from other pods has no `remoteServiceAccount`. It also fails when a generated ALLOW AuthorizationPolicy admits the namespace or a peer namespace with no principal.
+- The cloudtak test fetches a tile as ServiceAccount `cloudtak`, then runs a second pod as ServiceAccount `basemap-denied` against the same host. That pod has to fail. Reaching the host from the other account means the egress rule is not limited to CloudTAK.

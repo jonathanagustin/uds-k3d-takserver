@@ -109,9 +109,12 @@ pvc_snapshot() {
   done | sort
 }
 require_pg() {
-  local label="$1" version="$2" extension="$3" low="$4" high="$5" pattern="$6"
-  if [[ ! "${version}" =~ ^[0-9]+$ || "${version}" -lt "${low}" || "${version}" -ge "${high}" || "${extension}" != ${pattern} ]]; then
-    echo "${label}: expected PostgreSQL ${low} and PostGIS ${pattern}, got ${version:-unset} / ${extension:-unset}" >&2
+  local label="$1" version="$2" extension="$3" low="$4" high="$5" prefix="$6"
+  # ${extension#prefix.} is the suffix after "3.4." or "3.6.". An unchanged
+  # value means the extension is not that PostGIS release.
+  local rest="${extension#"${prefix}."}"
+  if [[ ! "${version}" =~ ^[0-9]+$ || "${version}" -lt "${low}" || "${version}" -ge "${high}" || "${rest}" == "${extension}" || -z "${rest}" ]]; then
+    echo "${label}: expected PostgreSQL ${low} and PostGIS ${prefix}, got ${version:-unset} / ${extension:-unset}" >&2
     exit 1
   fi
 }
@@ -164,7 +167,7 @@ expected="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade
 pvc_snapshot > "${work}/postgres-pvc.before"
 released_version="$(sql <<< 'SHOW server_version_num;')"
 released_postgis="$(sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "released TAK database" "${released_version}" "${released_postgis}" 150000 160000 '3.4.*'
+require_pg "released TAK database" "${released_version}" "${released_postgis}" 150000 160000 3.4
 echo "PASS released TAK database is PostgreSQL ${released_version} / PostGIS ${released_postgis}"
 
 if ! k get statefulset cloudtak-postgis -n cloudtak >/dev/null 2>&1; then
@@ -181,7 +184,7 @@ cloudtak_expected="$(cloudtak_sql <<< 'SELECT marker || '\''|'\'' || created_at:
 [[ "${cloudtak_expected}" == "${cloudtak_marker}|"* ]]
 released_cloudtak_version="$(cloudtak_sql <<< 'SHOW server_version_num;')"
 released_cloudtak_postgis="$(cloudtak_sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "released CloudTAK database" "${released_cloudtak_version}" "${released_cloudtak_postgis}" 150000 160000 '3.4.*'
+require_pg "released CloudTAK database" "${released_cloudtak_version}" "${released_cloudtak_postgis}" 150000 160000 3.4
 pvc_snapshot cloudtak "$(cloudtak_pod)" > "${work}/cloudtak-pvc.before"
 echo "PASS released CloudTAK database is PostgreSQL ${released_cloudtak_version} / PostGIS ${released_cloudtak_postgis}"
 
@@ -204,7 +207,7 @@ actual="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade_t
 [[ "${actual}" = "${expected}" ]]
 server_version="$(sql <<< 'SHOW server_version_num;')"
 postgis_version="$(sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "upgraded TAK database" "${server_version}" "${postgis_version}" 180000 190000 '3.6.*'
+require_pg "upgraded TAK database" "${server_version}" "${postgis_version}" 180000 190000 3.6
 require_upgrade_log takserver "$(postgres_pod)" postgresql
 echo "PASS TAK PostgreSQL ${released_version} moved to ${server_version} / PostGIS ${postgis_version} on the same volume"
 
@@ -215,7 +218,7 @@ pvc_snapshot cloudtak "$(cloudtak_pod)" > "${work}/cloudtak-pvc.after"
 diff -u "${work}/cloudtak-pvc.before" "${work}/cloudtak-pvc.after"
 cloudtak_version="$(cloudtak_sql <<< 'SHOW server_version_num;')"
 cloudtak_postgis="$(cloudtak_sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "upgraded CloudTAK database" "${cloudtak_version}" "${cloudtak_postgis}" 180000 190000 '3.6.*'
+require_pg "upgraded CloudTAK database" "${cloudtak_version}" "${cloudtak_postgis}" 180000 190000 3.6
 require_upgrade_log cloudtak "$(cloudtak_pod)" postgis
 cloudtak_sql <<< 'DROP TABLE upgrade_test_retained;'
 echo "PASS CloudTAK PostgreSQL ${released_cloudtak_version} moved to ${cloudtak_version} / PostGIS ${cloudtak_postgis} on the same volume"

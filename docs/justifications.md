@@ -73,6 +73,17 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 - **Requirement:** Versions follow `<upstream-app-version>-uds.<n>`, or Semantic Versioning when that scheme does not apply.
 - **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK (the `appVersion` in `charts/cloudtak/Chart.yaml`), so no single application version leads the tag.
 
+### Image flavors
+
+- **Requirement:** A package that can run in a DoD environment ships a `registry1` flavor whose images come from Iron Bank (`registry1.dso.mil`), alongside `upstream`.
+- **Status:** Only `upstream`. There is no `registry1` flavor. Iron Bank has some related images, and none of them are the images this package runs.
+- **TAK Server.** Iron Bank publishes one server image, `registry1.dso.mil/ironbank/tpc/tak/tak-server`. Its README pulls tag `5.5`. It also publishes `tpc/tak/tak-server-db`. This package runs six images built here from `5.7-RELEASE-14`: `takserver-api`, `takserver-messaging`, `takserver-config`, `takserver-plugins`, `takserver-database-setup`, and `takserver-ignite`. Those names are not on Iron Bank, and `5.5` is not this package's release.
+- **CloudTAK.** No CloudTAK project showed up on repo1. The `cloudtak` image is built here from the upstream submodule.
+- **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). CloudTAK's database is `postgis:15-3.4`, built here. TAK's database is the Bitnami chart the upstream TAK chart installs, not that PostGIS image.
+- **NATS.** Iron Bank publishes `opensource/synadia/nats-server` and `opensource/synadia/nats-box`. This package pins `docker.io/library/nats:2.9.21-alpine` and `docker.io/natsio/nats-server-config-reloader:0.11.0`. The reloader did not show up on repo1, and the server project is not tag `2.9.21`.
+- **ATAK viewer.** No ATAK-CIV image showed up on repo1. The viewer is a separate package, built here.
+- **What changes it:** Iron Bank images that match those names and tags, and chart values that can point at them without forking the upstream chart. Until then the package does not pretend a values overlay is a `registry1` flavor.
+
 ## Adding an exemption
 
 1. Keep the matcher as narrow as it can be. Never use `.*`.

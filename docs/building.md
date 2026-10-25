@@ -57,7 +57,7 @@ The package still records the `docker.io` image names. Only the place Zarf pulls
 
 ## Architectures
 
-The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU: it builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache, and pushes `<tag>-<key>-amd64` and `<tag>-<key>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>-<key>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.
+The images are published for `linux/amd64` and `linux/arm64`. The container workflow does not use QEMU. It builds each architecture on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), each with its own Gradle and BuildKit cache. It pushes `<tag>-<key>-amd64` and `<tag>-<key>-arm64`. A last job runs [`merge-image-manifests.sh`](../.github/scripts/merge-image-manifests.sh), which joins them with `docker buildx imagetools create` into one index under `<tag>-<key>`. It writes nothing unless both per-architecture tags exist. `wait-for-tak-images.sh` checks that each index lists both platforms before a package or test job uses it.
 
 ### Tags keyed by the build inputs
 

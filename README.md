@@ -202,7 +202,7 @@ gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
 
 Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`. Releases after 0.5.4 also have `takserver-<version>-upstream.intoto.jsonl`, which holds the signed in-toto statement from that bundle (its DSSE envelope) on one line, for tools that read SLSA provenance in that layout.
 
-The TAK, CloudTAK and PostGIS images have signed SLSA v1 build provenance too: from the workflow run that built each architecture's image, and for a multi-arch tag, from the run that wrote the index. Images built before that was added, including the ones in 0.5.4 and earlier, have none. To check an image tag listed in `zarf.yaml`:
+The TAK, CloudTAK, and PostGIS images have signed SLSA v1 build provenance too. Each architecture's image is signed by the workflow run that built it. A multi-arch tag is signed by the run that wrote the index. Images built before that was added, including the ones in 0.5.4 and earlier, have none. To check an image tag listed in `zarf.yaml`:
 
 ```bash
 gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/<image>:<tag>" --owner jonathanagustin

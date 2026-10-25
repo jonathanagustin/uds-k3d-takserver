@@ -1,6 +1,8 @@
 # Docs site
 
-Starlight site for the markdown already in this repository: `README.md`, `docs/`, `adr/`, and the root guides (`CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`). `npm run build` copies those files into `src/content/docs/` with the frontmatter Starlight needs, rewrites links to the published pages, and then builds. The copies are gitignored.
+This directory publishes the guides that already live in the repository. It does not keep a second copy of them.
+
+`npm run build` copies `README.md`, `docs/`, `adr/`, `CONTRIBUTING.md`, `SECURITY.md`, and `CHANGELOG.md` into `src/content/docs/`. It adds the frontmatter Starlight needs, rewrites links to the published pages, and then builds. Those copies are gitignored. A broken link fails the build.
 
 ```bash
 npm ci

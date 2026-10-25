@@ -158,6 +158,7 @@ tasks:
       - task: deploy:test-bundle
         with:
           path: bundle/full
+          config: bundle/full/uds-config.yaml
           options: "--force-conflicts"
       - task: setup:keycloak-user
         with:

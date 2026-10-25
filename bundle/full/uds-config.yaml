@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Full-core deploy only. Slim keeps bundle/uds-config.yaml, where
+# FILESYSTEM_BACKUP stays at the package default false.
+# pin-image-tags.sh rewrites TAK_IMAGE_TAG here before the package is created.
+variables:
+  takserver:
+    DOMAIN: uds.dev
+    TAK_IMAGE_TAG: 5.7-RELEASE-14
+    FILESYSTEM_BACKUP: "true"

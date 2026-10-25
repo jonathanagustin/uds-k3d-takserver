@@ -117,6 +117,19 @@ packages:
     repository: ghcr.io/defenseunicorns/packages/uds/core-backup-restore
     ref: 1.15.2-upstream
     keylessVerification: *core-keyless
+    # The node-agent lives in the velero namespace, so the TAK Package
+    # cannot allow it. This is the Velero Package's extra allow list.
+    overrides:
+      velero:
+        uds-velero-config:
+          values:
+            - path: additionalNetworkAllow
+              value:
+                - direction: Egress
+                  selector:
+                    name: node-agent
+                  remoteGenerated: KubeAPI
+                  description: "Velero node-agent to the Kubernetes API"
 
   - name: core-monitoring
     repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring

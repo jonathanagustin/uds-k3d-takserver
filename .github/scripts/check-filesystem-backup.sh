@@ -52,4 +52,16 @@ if ! grep -q 'backup.velero.io/backup-volumes: data' "${tpl}"; then
   fail "${tpl} does not annotate the Bitnami data volume"
 fi
 
+bundle="bundle/full/uds-bundle.yaml"
+if ! grep -q 'name: node-agent' "${bundle}"; then
+  fail "${bundle} does not select the node-agent"
+fi
+if ! grep -q 'remoteGenerated: KubeAPI' "${bundle}"; then
+  fail "${bundle} does not allow the node-agent to the Kubernetes API"
+fi
+config="bundle/full/uds-config.yaml"
+if ! grep -q 'FILESYSTEM_BACKUP: "true"' "${config}"; then
+  fail "${config} does not turn FILESYSTEM_BACKUP on"
+fi
+
 echo "filesystem-backup: default render is empty and the enabled render has the agent"

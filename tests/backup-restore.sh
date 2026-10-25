@@ -266,6 +266,10 @@ spec:
     - takserver
     - cloudtak
   includeClusterResources: false
+  # The backup holds no volumes. A restored claim would point at the deleted
+  # volume and stay Pending, so let the StatefulSets create fresh claims.
+  excludedResources:
+    - persistentvolumeclaims
 EOF
 
 wait_phase restore.velero.io "${restore_name}" 60

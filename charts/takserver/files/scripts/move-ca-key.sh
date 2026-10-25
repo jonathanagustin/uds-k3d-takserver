@@ -56,16 +56,25 @@ if [[ "${code}" != "200" && "${code}" != "201" ]]; then
   exit 1
 fi
 
-strip_ca_key_json < "${work}/cm.json" > "${work}/stripped.json"
-if grep -q 'ca-do-not-share.key' "${work}/stripped.json"; then
-  echo "Could not remove the CA key from ConfigMap cert-migration" >&2
-  exit 1
-fi
+# A JSON merge patch deletes the key. Rewriting the whole ConfigMap fails
+# this check: the apiserver keeps the field name under managedFields as
+# f:ca-do-not-share.key, and a line-oriented edit misses a pretty-printed
+# last field. Search for the quoted key so that managedFields entry does
+# not look like the binaryData field.
 code="$(curl -sS -o "${work}/cm-resp" -w '%{http_code}' --cacert "${ca}" \
-  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
-  -X PUT --data-binary @"${work}/stripped.json" "${api}/configmaps/cert-migration")"
+  -H "Authorization: Bearer ${token}" \
+  -H "Content-Type: application/merge-patch+json" \
+  -X PATCH \
+  --data '{"binaryData":{"ca-do-not-share.key":null}}' \
+  "${api}/configmaps/cert-migration")"
 if [[ "${code}" != "200" ]]; then
   echo "ConfigMap cert-migration update returned HTTP ${code}" >&2
+  exit 1
+fi
+curl -sS -f --cacert "${ca}" -H "Authorization: Bearer ${token}" \
+  "${api}/configmaps/cert-migration" > "${work}/after.json"
+if grep -q '"ca-do-not-share.key"' "${work}/after.json"; then
+  echo "Could not remove the CA key from ConfigMap cert-migration" >&2
   exit 1
 fi
 echo "Moved the CA key from ConfigMap cert-migration to Secret takserver-ca-key"

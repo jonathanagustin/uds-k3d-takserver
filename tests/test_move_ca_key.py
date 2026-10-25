@@ -17,7 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "charts" / "takserver" / "files" / "scripts" / "move-ca-key.sh"
 ISSUE = ROOT / "charts" / "takserver" / "files" / "scripts" / "issue-web-cert.sh"
+SPLIT = ROOT / "charts" / "takserver" / "files" / "scripts" / "split-key-material.sh"
 PUBLISH = ROOT / ".github" / "container-and-chart" / "docker" / "publish-cert-configmap.sh"
+PREREQS = ROOT / "charts" / "takserver" / "templates" / "prereqs.yaml"
 HELPER_START = "# Retry a refused or reset handshake."
 
 
@@ -137,6 +139,17 @@ class MoveCaKeyTests(unittest.TestCase):
         self.assertIn("--retry-connrefused", block)
         self.assertEqual(helper_text(ISSUE), block)
         self.assertEqual(helper_text(PUBLISH), block)
+        self.assertEqual(helper_text(SPLIT), block)
+
+    def test_cert_job_runs_the_split_after_the_ca_move(self):
+        text = PREREQS.read_text()
+        move = text.index("files/scripts/move-ca-key.sh")
+        split = text.index("files/scripts/split-key-material.sh")
+        self.assertLess(move, split)
+        # move-ca-key.sh exits 0 once the CA key is in its Secret. That
+        # script is inlined, so the exit has to stay inside a subshell.
+        opening = text[:move].splitlines()[-2].strip()
+        self.assertEqual(opening, "(")
 
     def test_dropped_handshake_is_retried(self):
         info = serve_once(drops=2, status=200, body=b"moved")
@@ -174,6 +187,136 @@ class MoveCaKeyTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout, "409")
         self.assertEqual(info["hits"], 1)
+
+
+def source_split(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'SPLIT_KEY_SOURCE_ONLY=1; source "$1"; shift; "$@"',
+            "bash",
+            str(SPLIT),
+            *args,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def split_fields(body: str, section: str) -> list[tuple[str, str]]:
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'SPLIT_KEY_SOURCE_ONLY=1; source "$1"; printf %s "$2" | data_fields "$3"',
+            "bash",
+            str(SPLIT),
+            body,
+            section,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(completed.stderr)
+    rows = []
+    for line in completed.stdout.splitlines():
+        name, value = line.split("\t", 1)
+        rows.append((name, value))
+    return rows
+
+
+class SplitKeyTests(unittest.TestCase):
+    def test_private_material_matches_the_publish_script(self):
+        names = [
+            "admin.key",
+            "ca-do-not-share.key",
+            "takserver.jks",
+            "takserver-web.jks",
+            "ca-signing.jks",
+            "admin.p12",
+            "truststore-root.jks",
+            "fed-truststore.jks",
+            "truststore-root-legacy.p12",
+            "ca.pem",
+            "admin.pem",
+            "admin.csr",
+        ]
+        for name in names:
+            split = source_split("is_private_material", name)
+            publish = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'PUBLISH_CERT_SOURCE_ONLY=1; source "$1"; is_private_material "$2"',
+                    "bash",
+                    str(PUBLISH),
+                    name,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(split.returncode, publish.returncode, name)
+            self.assertIn(split.returncode, (0, 1), name)
+        self.assertEqual(source_split("is_private_material", "admin.key").returncode, 0)
+        self.assertEqual(source_split("is_private_material", "truststore-root.jks").returncode, 1)
+        self.assertEqual(source_split("is_private_material", "ca.pem").returncode, 1)
+
+    def test_fields_come_from_the_named_object(self):
+        body = (
+            '{"metadata":{"name":"cert-migration","managedFields":'
+            '[{"manager":"kubectl","fieldsV1":{"f:binaryData":{"f:ca.pem":{}}}}]},'
+            '"binaryData":{"ca.pem":"YQ==","takserver.jks":"Yg==","admin.key":"Yw==",'
+            '"truststore-root.jks":"ZA=="}}'
+        )
+        self.assertEqual(
+            split_fields(body, "binaryData"),
+            [
+                ("ca.pem", "YQ=="),
+                ("takserver.jks", "Yg=="),
+                ("admin.key", "Yw=="),
+                ("truststore-root.jks", "ZA=="),
+            ],
+        )
+        self.assertEqual(split_fields(body, "data"), [])
+
+    def test_pretty_printed_object_and_base64(self):
+        body = """
+        {
+          "data": {
+            "admin.key": "Y+/=",
+            "ca.pem": "YQ=="
+          }
+        }
+        """
+        self.assertEqual(
+            split_fields(body, "data"),
+            [("admin.key", "Y+/="), ("ca.pem", "YQ==")],
+        )
+
+    def test_truncated_object_is_rejected(self):
+        completed = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'SPLIT_KEY_SOURCE_ONLY=1; source "$1"; printf %s "$2" | data_fields binaryData',
+                "bash",
+                str(SPLIT),
+                '{"binaryData":{"ca.pem":"YQ=="',
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertNotEqual(completed.returncode, 0)
 
 
 if __name__ == "__main__":

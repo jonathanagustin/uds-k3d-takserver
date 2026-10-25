@@ -235,8 +235,9 @@ components:
         before:
           # CloudTAK keeps the TAK admin certificate in its own database to
           # run its admin connection. The pod reads the CA, the admin
-          # certificate, and its key from this Secret. They are created at
-          # deploy time in ConfigMap cert-migration and are never in git.
+          # certificate, and its key from this Secret. The cert Job writes
+          # them at deploy time. The key is in Secret takserver-certs. The
+          # certificates stay in ConfigMap cert-migration. None of it is in git.
           - description: Copy the TAK CA and admin certificate to the cloudtak namespace
             cmd: |
               set -eu
@@ -250,10 +251,15 @@ components:
                 echo "kubectl is not available" >&2
                 exit 1
               fi
-              get() { k get configmap cert-migration -n takserver -o "jsonpath={.binaryData.$1}"; }
-              ca="$(get 'ca\.pem')"
-              cert="$(get 'admin\.pem')"
-              key="$(get 'admin\.key')"
+              from_cm() { k get configmap cert-migration -n takserver -o "jsonpath={.binaryData.$1}"; }
+              from_secret() { k get secret takserver-certs -n takserver -o "jsonpath={.data.$1}" 2>/dev/null || true; }
+              ca="$(from_cm 'ca\.pem')"
+              cert="$(from_cm 'admin\.pem')"
+              key="$(from_secret 'admin\.key')"
+              # A ConfigMap supplied before this package moved keys still has them.
+              if [ -z "${ca}" ]; then ca="$(from_secret 'ca\.pem')"; fi
+              if [ -z "${cert}" ]; then cert="$(from_secret 'admin\.pem')"; fi
+              if [ -z "${key}" ]; then key="$(from_cm 'admin\.key')"; fi
               # Already base64, same as the certificate fields. Do not decode it.
               pass="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}')"
               if [ -z "${ca}" ] || [ -z "${cert}" ] || [ -z "${key}" ] || [ -z "${pass}" ]; then

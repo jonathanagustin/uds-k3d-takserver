@@ -76,7 +76,7 @@ rules:
     verbs: ["get", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["takserver-keystore", "takserver-ca-key"]
+    resourceNames: ["takserver-keystore", "takserver-ca-key", "takserver-certs"]
     verbs: ["get", "update", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
@@ -121,8 +121,8 @@ spec:
         - name: certs
           image: {{ .Values.certs.image | quote }}
           imagePullPolicy: IfNotPresent
-          # issue-web-cert.sh exits 0 when the web keystore is already there.
-          # A subshell keeps that from skipping the CA key move.
+          # issue-web-cert.sh and move-ca-key.sh exit 0 when the work is
+          # already done. A subshell keeps that from skipping the rest.
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -133,7 +133,10 @@ spec:
               {{- .Files.Get "files/scripts/issue-web-cert.sh" | nindent 14 }}
               )
               {{- end }}
+              (
               {{- .Files.Get "files/scripts/move-ca-key.sh" | nindent 14 }}
+              )
+              {{- .Files.Get "files/scripts/split-key-material.sh" | nindent 14 }}
           env:
             - name: WEB_SERVICE
               value: {{ .Values.api.web.service | quote }}

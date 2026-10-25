@@ -222,7 +222,8 @@ tasks:
             exit 1
           fi
           [ "$(k get svc takserver-web -n takserver -o jsonpath='{.spec.ports[0].appProtocol}')" = "https" ]
-          [ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.takserver-web\.jks}')" ]
+          [ -n "$(k get secret takserver-certs -n takserver -o jsonpath='{.data.takserver-web\.jks}')" ]
+          [ -z "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.takserver-web\.jks}')" ]
           dr="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o json)"
           python3 -c '
           import json, sys
@@ -241,7 +242,7 @@ tasks:
           echo "8447 serves TLS and the gateway verifies it"
 
   - name: pkcs12
-    description: Keystores in ConfigMap cert-migration use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC
+    description: Keystores in Secret takserver-certs use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC
     actions:
       - shell:
           linux: bash
@@ -263,15 +264,38 @@ tasks:
           fi
           work="$(mktemp -d)"
           trap 'rm -rf "${work}"' EXIT
-          # Write each keystore out of the ConfigMap. A *-legacy.p12 holds only
+          # Write each keystore out of the Secret. A *-legacy.p12 holds only
           # the public CA certificate for clients that need the old format.
-          k get cm cert-migration -n takserver -o json | python3 -c '
+          # Private keys and keystores must not remain in the ConfigMap.
+          k get secret takserver-certs -n takserver -o json > "${work}/secret.json"
+          k get cm cert-migration -n takserver -o json > "${work}/cm.json"
+          python3 -c '
           import base64, json, sys
           work = sys.argv[1]
-          for name, data in json.load(sys.stdin).get("binaryData", {}).items():
+          secret = json.load(open(work + "/secret.json"))
+          cm = json.load(open(work + "/cm.json"))
+          def private(name):
+              if name.endswith(".key"):
+                  return True
+              if "truststore" in name or name.endswith("-legacy.p12"):
+                  return False
+              return name.endswith(".jks") or name.endswith(".p12")
+          leaked = sorted(name for name in (cm.get("binaryData") or {}) if private(name))
+          if leaked:
+              sys.stderr.write("private files still in cert-migration: " + ", ".join(leaked) + "\n")
+              sys.exit(1)
+          data = secret.get("data") or {}
+          if "ca-do-not-share.key" in data:
+              sys.stderr.write("ca-do-not-share.key is in Secret takserver-certs\n")
+              sys.exit(1)
+          for required in ("takserver.jks", "admin.key"):
+              if required not in data:
+                  sys.stderr.write("Secret takserver-certs has no " + required + "\n")
+                  sys.exit(1)
+          for name, raw in data.items():
               if name.endswith((".p12", ".jks")) and not name.endswith("-legacy.p12"):
-                  with open(work + "/" + name, "wb") as f:
-                      f.write(base64.b64decode(data))
+                  with open(work + "/" + name, "wb") as handle:
+                      handle.write(base64.b64decode(raw))
                   print(name)
           ' "${work}" > "${work}/names"
           pass="$(./tests/keystore-pass.sh)"
@@ -294,6 +318,8 @@ tasks:
           done < "${work}/names"
           [[ "${checked}" -ge 8 ]] || { echo "only ${checked} keystores were checked" >&2; exit 1; }
           echo "${checked} keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
+          k get secret takserver-ca-key -n takserver -o name >/dev/null
+          echo "CA key is in Secret takserver-ca-key"
           if [[ "${mode}" == "legacy" ]]; then
             echo "Secret takserver-keystore kept the password from certificates that already existed"
           else
@@ -306,12 +332,6 @@ tasks:
               exit 1
             fi
             echo "takserver.jks does not open with the upstream example password"
-            if [[ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca-do-not-share\.key}')" ]]; then
-              echo "ca-do-not-share.key is still in ConfigMap cert-migration" >&2
-              exit 1
-            fi
-            k get secret takserver-ca-key -n takserver -o name >/dev/null
-            echo "CA key is in Secret takserver-ca-key"
           fi
           unset pass
 

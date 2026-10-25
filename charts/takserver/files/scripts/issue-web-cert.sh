@@ -55,6 +55,16 @@ if [[ -n "$(field "${key_name}")" ]]; then
   echo "ConfigMap cert-migration already has ${key_name}"
   exit 0
 fi
+# split-key-material.sh moves the keystore into the Secret. A later upgrade
+# must not issue a second certificate just because the ConfigMap no longer
+# has it.
+secret_code="$(api_curl -o "${work}/certs.json" -w '%{http_code}' --cacert "${ca}" \
+  -H "Authorization: Bearer ${token}" \
+  "https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets/takserver-certs")"
+if [[ "${secret_code}" == "200" ]] && grep -F -q "\"${key_name}\"" "${work}/certs.json"; then
+  echo "Secret takserver-certs already has ${key_name}"
+  exit 0
+fi
 
 field ca.pem | base64 -d > "${work}/ca.pem"
 # The CA key is not left in the ConfigMap TAK pods mount. A fresh install

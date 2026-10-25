@@ -32,7 +32,7 @@ api:
       # Namespace of the UDS Core tenant gateway. The CA Secret goes there.
       gatewayNamespace: istio-tenant-gateway
       caSecretName: takserver-web-ca
-      # Key in ConfigMap cert-migration, mounted under certs/files.
+      # Key in Secret takserver-certs, mounted under certs/files.
       keystore: takserver-web.jks
 
 # CloudTAK, the browser map client in the cloudtak component. These values

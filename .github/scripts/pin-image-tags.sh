@@ -58,6 +58,7 @@ done
 replace zarf.yaml "default: ${tak_version}" "default: ${tak_tag}"
 replace tasks.yaml "default: ${tak_version}" "default: ${tak_tag}"
 replace bundle/uds-config.yaml "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
+replace bundle/full/uds-config.yaml "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {

@@ -37,6 +37,12 @@ if ! k api-resources --api-group=velero.io 2>/dev/null | grep -q '^backups '; th
   exit 0
 fi
 
+# Full-core sets FILESYSTEM_BACKUP. Slim never reaches this point.
+if ! k get daemonset node-agent -n velero >/dev/null 2>&1; then
+  say "node-agent DaemonSet is missing; FILESYSTEM_BACKUP was not true" >&2
+  exit 1
+fi
+
 run_id="${GITHUB_RUN_ID:-}"
 if [[ -z "${run_id}" ]]; then
   run_id="$(date +%s)"
@@ -204,6 +210,27 @@ if [[ "${bsl_ok}" -ne 1 ]]; then
   exit 1
 fi
 
+say "wait for the Velero node-agent"
+if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
+  k describe daemonset/node-agent -n velero >&2 || true
+  k describe pods -n velero -l name=node-agent >&2 || true
+  exit 1
+fi
+agent_ok=0
+for _ in $(seq 1 30); do
+  if k logs -n velero -l name=node-agent --tail=300 2>/dev/null | grep -q "Starting controllers"; then
+    agent_ok=1
+    break
+  fi
+  sleep 5
+done
+if [[ "${agent_ok}" -ne 1 ]]; then
+  say "node-agent did not log Starting controllers; it has not reached the Kubernetes API" >&2
+  k logs -n velero -l name=node-agent --tail=200 >&2 || true
+  exit 1
+fi
+say "node-agent logged Starting controllers"
+
 tak_pod="$(pod_name takserver app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary takserver-postgresql-0)"
 tak_container="$(container_name takserver "${tak_pod}")"
 ct_pod="$(pod_name cloudtak app=cloudtak-postgis cloudtak-postgis-0)"
@@ -238,8 +265,41 @@ spec:
   ttl: 2h0m0s
 EOF
 
-wait_phase backup.velero.io "${backup_name}" 60
+wait_phase backup.velero.io "${backup_name}" 120
 say "Backup ${backup_name} Completed"
+
+k get podvolumebackups.velero.io -n velero -o json > "${work}/pvb.json"
+if ! python3 - "${work}/pvb.json" "${backup_name}" <<'PY'
+import json
+import sys
+
+path, backup = sys.argv[1], sys.argv[2]
+items = json.load(open(path)).get("items") or []
+ok = False
+for item in items:
+    meta = item.get("metadata") or {}
+    names = set()
+    for bag in (meta.get("labels") or {}, meta.get("annotations") or {}):
+        for key in ("velero.io/backup-name", "velero.io/backup"):
+            value = bag.get(key)
+            if value:
+                names.add(value)
+    if backup not in names:
+        continue
+    spec = item.get("spec") or {}
+    pod = spec.get("pod") or {}
+    phase = (item.get("status") or {}).get("phase")
+    if spec.get("volume") == "data" and pod.get("namespace") == "takserver" and phase == "Completed":
+        ok = True
+        break
+sys.exit(0 if ok else 1)
+PY
+then
+  say "Backup ${backup_name} has no Completed PodVolumeBackup for the takserver data volume" >&2
+  k get podvolumebackups.velero.io -n velero >&2 || true
+  exit 1
+fi
+say "Backup ${backup_name} holds the Postgres volume"
 
 say "delete namespaces takserver and cloudtak"
 k delete namespace takserver cloudtak --wait=true --timeout=600s

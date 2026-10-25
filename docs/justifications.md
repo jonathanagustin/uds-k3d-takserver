@@ -17,6 +17,17 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 - **Why it is safe:** The package uses Istio ambient mode, which does not inject a sidecar. The annotation has no effect on the mesh here. The matcher is the one hook Job name, not a wildcard.
 - **What removes it:** An upstream chart that makes the annotation optional or drops it.
 
+## velero-node-agent
+
+Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create it. See [ADR 0017](../adr/0017-velero-node-agent.md).
+
+- **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`
+- **Matcher:** `^node-agent-.*`, kind `pod`, namespace `velero`
+- **Defined in:** `charts/takserver/templates/filesystem-backup.yaml`
+- **Why:** The node-agent is privileged so it can mount pod volumes from `/var/lib/kubelet/pods` on the node. That is host path, a host volume type, and a root process.
+- **Why it is safe:** The matcher is the node-agent pods in the `velero` namespace. Nothing in `takserver` or `cloudtak` is exempted. The DaemonSet exists only when file-system backup is turned on.
+- **What removes it:** Leaving `FILESYSTEM_BACKUP` at its default, or a Velero release that can copy the volumes without host access.
+
 ## kubevirt
 
 Only the optional ATAK test device uses this. It is not part of the package: `atak/deploy/kubevirt-exemption.yaml` is applied by the ATAK end-to-end workflow, and a normal install never creates it. It is one `Exemption` object with three entries.

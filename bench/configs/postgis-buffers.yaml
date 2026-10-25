@@ -1,0 +1,22 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: postgis-buffers
+description: >
+  TAK Postgres shared_buffers 128MB, a quarter of the 512Mi limit, work_mem
+  4MB, effective_cache_size 384MB, max_wal_size 256MB, checkpoint_timeout
+  5min. effective_cache_size is a planner hint and is not allocated. The
+  steady set on run 40174810574 was 57Mi amd64 and 59Mi arm64 at the chart
+  defaults. This file is a harness point only. It is not copied into the
+  package until a report puts it on the front.
+clients: [10, 50, 200]
+duration_s: 60
+restart: true
+env: []
+resources: []
+postgres:
+  shared_buffers: 128MB
+  work_mem: 4MB
+  effective_cache_size: 384MB
+  max_wal_size: 256MB
+  checkpoint_timeout: 5min

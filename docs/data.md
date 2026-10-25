@@ -14,7 +14,9 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 | JDBC | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
 | Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` (amd64 and arm64) |
 
-The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Postgres uses the Bitnami chart defaults.
+The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami PostgreSQL 12.1.6 does not read `postgresql.configurationConfigMap`, so that object is not mounted. Postgres uses the chart defaults.
+
+Those defaults are what the package ships. No benchmark load run has finished, so `values/` does not set `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, or `checkpoint_timeout`. The harness records `pg_stat_database`, `pg_stat_bgwriter`, and the `postgresql` container working set beside the TAK load. `bench/configs/postgis-buffers.yaml` and `bench/configs/postgis-wal.yaml` apply those five parameters with `ALTER SYSTEM` and restart `takserver-postgresql`. `shared_buffers` is 128MB or 64MB, both under the 512Mi limit. `effective_cache_size` is a planner hint, not memory the server allocates. The sweep does not set `fsync=off`. A setting is copied into the package only after a harness report puts it on the front. The key for that is `postgresql.primary.extendedConfiguration`, which Bitnami appends under `conf.d`. On run 40174810574, at the chart defaults, the steady working set was 57Mi on amd64 and 59Mi on arm64.
 
 The password is not a production secret. Replace it, and the matching JDBC password, before a shared cluster.
 

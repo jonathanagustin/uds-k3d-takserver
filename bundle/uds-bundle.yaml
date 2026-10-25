@@ -22,6 +22,17 @@ packages:
     ref: 1.15.2-upstream
     optionalComponents:
       - istio-passthrough-gateway
+      # QUIC is UDP. Istio has no UDP ingress, so the test bundle selects
+      # Envoy Gateway. The controller request is pinned below. The proxy pod
+      # is created only while a UDP listener exists (quic.enabled on the
+      # config chart). Envoy Gateway 1.9.2 sizes that proxy at 100m CPU and
+      # 512Mi, plus a 10m/32Mi shutdown manager. Those are not chart values.
+      # Together with this controller pin, the extra request is about 160m
+      # CPU and 800Mi, next to Istiod at 100m and the passthrough gateway
+      # at 50m. The public CI runners have 4 CPU and 16 GB. A 2 CPU node
+      # still has room beside the test-values TAK requests.
+      - envoy-gateway
+      - envoy-default-gateway
     keylessVerification:
       certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
@@ -83,6 +94,16 @@ packages:
                   targetPort: 8089
             - path: autoscaling.enabled
               value: false
+      envoy-gateway:
+        envoy-gateway:
+          values:
+            # Upstream chart default is 100m CPU, 256Mi request, 1024Mi limit.
+            - path: deployment.envoyGateway.resources.requests.cpu
+              value: 50m
+            - path: deployment.envoyGateway.resources.requests.memory
+              value: 256Mi
+            - path: deployment.envoyGateway.resources.limits.memory
+              value: 512Mi
 
   - name: takserver
     path: ../
@@ -92,6 +113,13 @@ packages:
       - cloudtak
     overrides:
       takserver:
+        # Our config chart, not the upstream chart. test-values.yaml is
+        # shared with other bundles, so the QUIC switch stays here, next to
+        # the Envoy Gateway components above.
+        uds-takserver-config:
+          values:
+            - path: quic.enabled
+              value: true
         takserver:
           valuesFiles:
             - test-values.yaml

@@ -176,6 +176,12 @@ spec:
 {{- else }}
 {{- $core = replace "<!-- TAK_OAUTH -->" "" $core }}
 {{- end }}
+{{- if .Values.quic.enabled }}
+{{- $quic := printf "\t\t<input _name=\"quic\" protocol=\"quic\" port=\"%d\"/>" (int .Values.quic.port) }}
+{{- $core = replace "<!-- TAK_QUIC -->" $quic $core }}
+{{- else }}
+{{- $core = replace "<!-- TAK_QUIC -->" "" $core }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -340,4 +346,22 @@ data:
 {{ .Files.Get "files/scripts/wait-deps.sh" | indent 4 }}
   patch-oidc-pods.py: |
 {{ .Files.Get "files/scripts/patch-oidc-pods.py" | indent 4 }}
+{{- end }}
+{{- if .Values.quic.enabled }}
+---
+# The upstream messaging Service publishes TCP 8089 only. QUIC listens on UDP
+# 8090 in the messaging process. The Package expose entry routes that port
+# through Envoy Gateway. See adr/0016-quic-through-envoy-gateway.md.
+apiVersion: v1
+kind: Service
+metadata:
+  name: takserver-messaging-quic
+spec:
+  selector:
+    {{- toYaml .Values.messaging.selector | nindent 4 }}
+  ports:
+    - name: quic
+      port: {{ .Values.quic.port }}
+      targetPort: {{ .Values.quic.port }}
+      protocol: UDP
 {{- end }}

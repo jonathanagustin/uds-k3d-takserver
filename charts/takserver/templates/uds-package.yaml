@@ -116,6 +116,16 @@ spec:
         gateway: passthrough
         host: {{ .Values.messaging.streaming.host | quote }}
         port: {{ .Values.messaging.streaming.port }}
+      {{- if .Values.quic.enabled }}
+      # UDP has no host. Envoy Gateway routes by port. Istio AuthorizationPolicy
+      # does not cover it. TAK requires the client certificate itself.
+      - description: tak-messaging-quic
+        service: takserver-messaging-quic
+        selector:
+          {{- toYaml .Values.messaging.selector | nindent 10 }}
+        protocol: UDP
+        port: {{ .Values.quic.port }}
+      {{- end }}
     allow:
       # Explicit pod-to-pod flows from values intraNamespace.flows. There is
       # no namespace-wide allow rule.
@@ -244,6 +254,21 @@ spec:
         description: "Egress {{ $port }} from Ignite to {{ $sel.app }}"
       {{- end }}
       {{- end }}
+      {{- end }}
+
+      {{- if .Values.quic.enabled }}
+      # The default Gateway proxy lives in envoy-default-gateway. Its own
+      # Package already allows UDP egress. This is the return path into TAK.
+      - direction: Ingress
+        selector:
+          {{- toYaml .Values.messaging.selector | nindent 10 }}
+        remoteNamespace: envoy-default-gateway
+        remoteSelector:
+          app.kubernetes.io/managed-by: envoy-gateway
+          gateway.envoyproxy.io/owning-gateway-name: envoy-default-gateway
+        port: {{ .Values.quic.port }}
+        remoteProtocol: UDP
+        description: "QUIC ingress {{ .Values.quic.port }} from the Envoy default gateway"
       {{- end }}
 
       {{- if .Values.sso.enabled }}

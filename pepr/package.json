@@ -19,12 +19,19 @@
     "includedFiles": [],
     "peprVersion": "2.0.5",
     "appVersion": "0.1.0",
-    "rbacMode": "scoped"
+    "rbacMode": "scoped",
+    "rbac": [
+      {
+        "apiGroups": [""],
+        "resources": ["namespaces"],
+        "verbs": ["get", "create"]
+      }
+    ]
   },
   "scripts": {
     "build": "pepr build && node scripts/finalize-chart.mjs",
-    "test": "node --test capabilities/*.test.ts",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='capabilities/**' --test-coverage-exclude='**/*.test.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info capabilities/*.test.ts"
+    "test": "PEPR_MODE=build node --test capabilities/*.test.ts",
+    "test:coverage": "PEPR_MODE=build node --test --experimental-test-coverage --test-coverage-include='capabilities/**' --test-coverage-exclude='**/*.test.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info capabilities/*.test.ts"
   },
   "dependencies": {
     "pepr": "2.0.5"

@@ -3,6 +3,10 @@
 
 import { PeprModule } from "pepr";
 import cfg from "./package.json" with { type: "json" };
+import { CloudtakAdmin } from "./capabilities/cloudtak-admin-capability.ts";
+import { CoreDns } from "./capabilities/coredns-rewrite-capability.ts";
+import { GatewayCa } from "./capabilities/gateway-ca-capability.ts";
 import { OidcRender } from "./capabilities/oidc-render-capability.ts";
+import { Workload } from "./capabilities/workload-capability.ts";
 
-new PeprModule(cfg, [OidcRender]);
+new PeprModule(cfg, [OidcRender, CoreDns, GatewayCa, CloudtakAdmin, Workload]);

@@ -303,7 +303,8 @@ spec:
 # against the deploy-time CA. Istio still tunnels that TLS over the ambient
 # mesh (HBONE), so the hop is mTLS outside and TLS inside. The CA Secret lives
 # in the gateway namespace, because a gateway only reads credentialName
-# Secrets from its own namespace. zarf.yaml copies the CA certificate there.
+# Secrets from its own namespace. The takserver-oidc watcher copies the CA
+# certificate there.
 apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
@@ -324,9 +325,9 @@ spec:
             - {{ printf "%s.%s.svc.cluster.local" .Values.api.web.service .Release.Namespace | quote }}
 {{- end }}
 ---
-# Scripts for the init containers added after the upstream chart. The stock
-# Deployments have no initContainer value. onDeploy reads patch-oidc-pods.py
-# from this ConfigMap and strategic-merges those containers.
+# Scripts the admission webhook mounts into the TAK pods. The stock
+# Deployments have no initContainer value. The takserver-oidc module adds
+# these containers before the pod starts.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -338,6 +339,4 @@ data:
 {{ .Files.Get "files/scripts/import-trust.sh" | indent 4 }}
   wait-deps.sh: |
 {{ .Files.Get "files/scripts/wait-deps.sh" | indent 4 }}
-  patch-oidc-pods.py: |
-{{ .Files.Get "files/scripts/patch-oidc-pods.py" | indent 4 }}
 {{- end }}

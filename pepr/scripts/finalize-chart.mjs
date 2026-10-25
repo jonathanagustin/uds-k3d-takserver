@@ -19,6 +19,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NAMESPACE, TAK_APPS } from "../capabilities/oidc-render.ts";
+import { applyChartRbac } from "./rbac-scope.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -46,4 +47,5 @@ const scope = [
 writeFileSync(webhookPath, webhook.slice(0, start) + scope + webhook.slice(end));
 
 rmSync(join(chart, "templates", "namespace.yaml"));
+applyChartRbac(chart);
 console.log(`finalized ${chart}`);

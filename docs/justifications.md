@@ -65,8 +65,8 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`. Two of them run `python3`. One writes the CoreDNS rewrite patch as JSON. The other runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
-- **What removes it:** Moving the init containers into the `takserver-oidc` Pepr module or an upstream chart value, and building the CoreDNS patch with `./zarf tools yq`.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers, writes the CoreDNS rewrite, copies the gateway CA and the CloudTAK admin material, and restarts TAK in order. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **What removes it:** Nothing further. The init containers, the CoreDNS rewrite, and the ordered restart now live in the Pepr module.
 
 ### Version scheme
 

@@ -281,12 +281,24 @@ def run_load(clients, duration, password, tester):
         shutil.rmtree(cert_dir, ignore_errors=True)
 
 
+def git_sha():
+    # The benchmark job trims git off the runner to free disk. Actions still
+    # exports GITHUB_SHA for the commit under test.
+    sha = os.environ.get("GITHUB_SHA", "").strip()
+    if sha:
+        return sha
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def blank(arch, config, clients, duration):
     return {
         "schema": 1,
         "arch": arch,
         "config": config,
-        "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "git_sha": git_sha(),
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "footprint": None,
         "kubelet": None,

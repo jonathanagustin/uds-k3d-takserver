@@ -11,7 +11,7 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | --- | --- | --- |
 | `arch` | `amd64` or `arm64` | `uname -m` on the runner |
 | `config` | name | `bench/configs/<name>.yaml` |
-| `git_sha` | git sha | `git rev-parse HEAD` |
+| `git_sha` | git sha | `GITHUB_SHA` when it is set, otherwise `git rev-parse HEAD` |
 | `recorded_at` | UTC timestamp | clock when the record is written |
 | `footprint.cpu_requests_m` | millicores | sum of container CPU requests in `takserver` and `cloudtak` |
 | `footprint.memory_requests_bytes` | bytes | sum of memory requests |

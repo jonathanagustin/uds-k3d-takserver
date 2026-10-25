@@ -444,9 +444,86 @@ tasks:
             false
           fi
 
+          # A pod that is not the CloudTAK ServiceAccount must not reach the
+          # tile host. The image is already on the node. The pod uses the
+          # same security context as the CloudTAK container so policy
+          # admits it, and it exits when the fetch finishes.
+          deny_other_sa() {
+            local host="$1" image code
+            image="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="cloudtak")].image}')"
+            cleanup_denied() {
+              k delete pod basemap-denied -n cloudtak --ignore-not-found --wait=false >/dev/null 2>&1 || true
+              k delete sa basemap-denied -n cloudtak --ignore-not-found >/dev/null 2>&1 || true
+            }
+            trap cleanup_denied RETURN
+            k delete pod basemap-denied -n cloudtak --ignore-not-found --wait=true >/dev/null 2>&1 || true
+            k delete sa basemap-denied -n cloudtak --ignore-not-found >/dev/null 2>&1 || true
+            k create sa basemap-denied -n cloudtak
+            IMAGE="${image}" HOST="${host}" python3 - <<'PY' > /tmp/basemap-denied.json
+          import json, os
+          json.dump({
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {"name": "basemap-denied", "namespace": "cloudtak", "labels": {"app": "basemap-denied"}},
+            "spec": {
+              "serviceAccountName": "basemap-denied",
+              "automountServiceAccountToken": False,
+              "restartPolicy": "Never",
+              "securityContext": {
+                "runAsNonRoot": True,
+                "runAsUser": 101,
+                "runAsGroup": 101,
+                "fsGroup": 101,
+                "seccompProfile": {"type": "RuntimeDefault"},
+              },
+              "containers": [{
+                "name": "basemap-denied",
+                "image": os.environ["IMAGE"],
+                "imagePullPolicy": "IfNotPresent",
+                "command": ["node", "-e", "fetch('https://' + process.env.HOST + '/', {signal: AbortSignal.timeout(8000)}).then(r => { console.log(r.status); process.exit(0); }).catch(e => { console.error(String(e)); process.exit(1); })"],
+                "env": [{"name": "HOST", "value": os.environ["HOST"]}],
+                "securityContext": {
+                  "allowPrivilegeEscalation": False,
+                  "readOnlyRootFilesystem": True,
+                  "capabilities": {"drop": ["ALL"]},
+                },
+                "volumeMounts": [{"name": "tmp", "mountPath": "/tmp"}],
+                "resources": {"requests": {"cpu": "25m", "memory": "64Mi"}, "limits": {"cpu": "200m", "memory": "128Mi"}},
+              }],
+              "volumes": [{"name": "tmp", "emptyDir": {}}],
+            },
+          }, open("/dev/stdout", "w"))
+          PY
+            k apply -f /tmp/basemap-denied.json
+            code=""
+            for _ in $(seq 1 30); do
+              code="$(k get pod basemap-denied -n cloudtak -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null || true)"
+              if [ -n "${code}" ]; then
+                break
+              fi
+              sleep 2
+            done
+            k logs -n cloudtak basemap-denied || true
+            if [ -z "${code}" ]; then
+              k describe pod basemap-denied -n cloudtak || true
+              echo "basemap-denied did not finish" >&2
+              return 1
+            fi
+            if [ "${code}" = "0" ]; then
+              echo "ServiceAccount basemap-denied reached ${host}" >&2
+              return 1
+            fi
+            if [ "${code}" = "127" ]; then
+              echo "the CloudTAK image has no node binary" >&2
+              return 1
+            fi
+            echo "ServiceAccount basemap-denied did not reach ${host} (exit ${code})"
+          }
+
           # Default basemap. With it on, the Package has one remoteHost rule,
           # UDS registered that host in the ambient egress namespace, and a
-          # tile comes back through the proxy in the pod.
+          # tile comes back through the proxy in the pod. A second
+          # ServiceAccount in the same namespace must not reach that host.
           enabled="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="bootstrap")].env[?(@.name=="BASEMAP_ENABLED")].value}')"
           echo "basemap enabled: ${enabled:-unset}"
           if [ "${enabled}" = "true" ]; then
@@ -460,6 +537,7 @@ tasks:
               if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs basemap 2>&1)"; then
                 echo "${out}"
                 echo "The default basemap serves tiles"
+                deny_other_sa "${host}"
                 exit 0
               fi
               echo "attempt ${i}: ${out}" | tail -n 3

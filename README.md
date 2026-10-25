@@ -10,6 +10,8 @@
 
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
+The same guides are published at <https://jonathanagustin.github.io/uds-k3d-takserver/>.
+
 ## Demo
 
 ### Deploy

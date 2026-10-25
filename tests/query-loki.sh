@@ -4,8 +4,10 @@
 
 # Ask loki-gateway for log lines over the last hour. Exit 0 when the response
 # contains one of the match strings. Exit 3 when no Loki Service exists so a
-# slim cluster can skip. An instant query is one nanosecond wide and comes
-# back empty for these lines, so this uses query_range.
+# slim cluster can skip. An instant query rejects a stream selector, so this
+# uses query_range. start and end are Unix seconds: Loki's parser passes the
+# number to time.Unix, and a nanosecond value becomes a range of tens of
+# thousands of years that never finishes.
 set -euo pipefail
 
 body_has_match() {
@@ -92,11 +94,12 @@ trap cleanup EXIT
 
 found="0"
 try="1"
+body=""
 while [[ "${try}" -le "${attempts}" ]]; do
-  end="$(python3 -c 'import time; print(time.time_ns())')"
-  start="$((end - 3600000000000))"
+  end="$(python3 -c 'import time; print(int(time.time()))')"
+  start="$((end - 3600))"
   url="$(loki_query_url "${query}" "${start}" "${end}")"
-  body="$(curl -fsS --max-time 10 "${url}" || true)"
+  body="$(curl -sS --max-time 20 "${url}" || true)"
   if body_has_match "${body}" "${matches[@]}"; then
     found="1"
     break
@@ -110,6 +113,10 @@ done
 if [[ "${found}" != "1" ]]; then
   echo "Loki query did not return a matching line" >&2
   echo "query: ${query}" >&2
+  if [[ -n "${body}" ]]; then
+    printf '%s\n' "${body}" | head -c 500 >&2
+    echo >&2
+  fi
   cat /tmp/loki-pf.log >&2 || true
   exit 1
 fi

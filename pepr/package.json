@@ -19,7 +19,54 @@
     "includedFiles": [],
     "peprVersion": "2.0.5",
     "appVersion": "0.1.0",
-    "rbacMode": "scoped"
+    "rbacMode": "scoped",
+    "rbac": [
+      {
+        "apiGroups": [""],
+        "resources": ["configmaps"],
+        "verbs": ["get", "patch"]
+      },
+      {
+        "apiGroups": [""],
+        "resources": ["namespaces"],
+        "verbs": ["get", "create"]
+      },
+      {
+        "apiGroups": [""],
+        "resources": ["pods"],
+        "verbs": ["get", "list"]
+      },
+      {
+        "apiGroups": [""],
+        "resources": ["secrets"],
+        "verbs": ["get", "create", "patch"]
+      },
+      {
+        "apiGroups": [""],
+        "resources": ["services"],
+        "verbs": ["get"]
+      },
+      {
+        "apiGroups": ["networking.istio.io"],
+        "resources": ["destinationrules"],
+        "verbs": ["get"]
+      },
+      {
+        "apiGroups": ["apps"],
+        "resources": ["deployments"],
+        "verbs": ["get", "patch"]
+      },
+      {
+        "apiGroups": ["apps"],
+        "resources": ["deployments/scale"],
+        "verbs": ["get", "patch", "update"]
+      },
+      {
+        "apiGroups": ["apps"],
+        "resources": ["statefulsets"],
+        "verbs": ["get", "patch"]
+      }
+    ]
   },
   "scripts": {
     "build": "pepr build && node scripts/finalize-chart.mjs",

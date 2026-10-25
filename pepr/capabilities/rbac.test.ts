@@ -121,6 +121,32 @@ test("the chart moves watched objects into namespaced Roles", () => {
   ]) {
     assert.equal(text.includes(name), true, name);
   }
+  const roles = text
+    .split(/^---\n/m)
+    .map(part => part.trim())
+    .filter(part => part.startsWith("apiVersion"))
+    .map(
+      part =>
+        parse(part) as {
+          kind: string;
+          metadata: { namespace?: string };
+          rules?: { resources?: string[]; verbs?: string[] }[];
+        },
+    );
+  for (const role of roles) {
+    if (role.kind !== "Role") {
+      continue;
+    }
+    for (const rule of role.rules ?? []) {
+      if ((rule.verbs ?? []).includes("watch")) {
+        assert.equal(
+          (rule.verbs ?? []).includes("list"),
+          true,
+          `${role.metadata.namespace ?? ""} ${(rule.resources ?? []).join(",")} watch without list`,
+        );
+      }
+    }
+  }
   assert.equal(text.includes("*"), false);
   const dir = mkdtempSync(join(tmpdir(), "pepr-rbac-"));
   mkdirSync(join(dir, "templates"));

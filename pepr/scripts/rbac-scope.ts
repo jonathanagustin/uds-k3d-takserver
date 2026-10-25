@@ -19,7 +19,12 @@
 // - ConfigMap `create` in takserver (the startup marker). `create` ignores
 //   resourceNames.
 // - Secret `create` in cloudtak and istio-tenant-gateway, for the same reason.
-//   get/patch/watch name the objects.
+//   get/list/patch/watch name the objects. list sits beside every watch:
+//   the client lists with `?fieldSelector=metadata.name=` before it watches,
+//   and a named rule that lacks list rejects that call. An object that is
+//   not there yet then sends no watch event, the client gives up after five
+//   tries, and the process exits. A field selector for a different name
+//   stays forbidden.
 // - Pod `get`/`list` in takserver. The list is by label, so resourceNames
 //   would deny it.
 
@@ -55,24 +60,24 @@ const ROLE_RULES = [
         apiGroups: [""],
         resources: ["configmaps"],
         resourceNames: ["core-config", "cert-migration", "takserver-ignite-configmap", "takserver-startup"],
-        verbs: ["get", "patch", "watch"],
+        verbs: ["get", "list", "patch", "watch"],
       },
       { apiGroups: [""], resources: ["configmaps"], verbs: ["create"] },
-      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-keystore"], verbs: ["get", "watch"] },
+      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-keystore"], verbs: ["get", "list", "watch"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
-      { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "patch", "watch"] },
+      { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },
       { apiGroups: ["apps"], resources: ["deployments/scale"], resourceNames: TAK, verbs: ["get", "patch", "update"] },
       {
         apiGroups: ["apps"],
         resources: ["statefulsets"],
         resourceNames: ["takserver-ignite"],
-        verbs: ["get", "patch", "watch"],
+        verbs: ["get", "list", "patch", "watch"],
       },
       {
         apiGroups: ["networking.istio.io"],
         resources: ["destinationrules"],
         resourceNames: ["takserver-web"],
-        verbs: ["get", "watch"],
+        verbs: ["get", "list", "watch"],
       },
     ],
   },
@@ -102,7 +107,7 @@ const ROLE_RULES = [
         apiGroups: [""],
         resources: ["services"],
         resourceNames: ["tenant-ingressgateway"],
-        verbs: ["get", "watch"],
+        verbs: ["get", "list", "watch"],
       },
     ],
   },
@@ -113,7 +118,7 @@ const ROLE_RULES = [
         apiGroups: [""],
         resources: ["services"],
         resourceNames: ["passthrough-ingressgateway"],
-        verbs: ["get", "watch"],
+        verbs: ["get", "list", "watch"],
       },
     ],
   },
@@ -124,7 +129,7 @@ const ROLE_RULES = [
         apiGroups: [""],
         resources: ["services"],
         resourceNames: ["admin-ingressgateway"],
-        verbs: ["get", "watch"],
+        verbs: ["get", "list", "watch"],
       },
     ],
   },
@@ -135,13 +140,13 @@ const ROLE_RULES = [
         apiGroups: [""],
         resources: ["configmaps"],
         resourceNames: ["coredns-custom"],
-        verbs: ["get", "patch", "watch"],
+        verbs: ["get", "list", "patch", "watch"],
       },
       {
         apiGroups: ["apps"],
         resources: ["deployments"],
         resourceNames: ["coredns"],
-        verbs: ["get", "patch", "watch"],
+        verbs: ["get", "list", "patch", "watch"],
       },
     ],
   },

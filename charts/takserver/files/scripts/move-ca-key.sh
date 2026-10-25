@@ -14,6 +14,23 @@ strip_ca_key_json() {
     -e 's/"ca-do-not-share\.key"[[:space:]]*:[[:space:]]*"[^"]*",//g'
 }
 
+# Retry a refused or reset handshake. Five tries, one second apart.
+# --retry-all-errors covers a TLS reset (curl 35 or 56). --retry-connrefused
+# covers ECONNREFUSED. An HTTP status is not an error unless the caller
+# passes -f, so 409 still returns to the caller. The config image is UBI9,
+# whose curl is new enough for --retry-all-errors.
+api_curl() {
+  curl \
+    --silent \
+    --show-error \
+    --retry 5 \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --retry-connrefused \
+    --connect-timeout 5 \
+    "$@"
+}
+
 if [[ "${MOVE_CA_KEY_SOURCE_ONLY:-}" == "1" ]]; then
   return 0
 fi
@@ -27,12 +44,12 @@ api="https://kubernetes.default.svc/api/v1/namespaces/${ns}"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
-curl -sS -f --cacert "${ca}" -H "Authorization: Bearer ${token}" \
+api_curl -f --cacert "${ca}" -H "Authorization: Bearer ${token}" \
   "${api}/configmaps/cert-migration" > "${work}/cm.json"
 
 key_b64="$(grep -o '"ca-do-not-share.key"[[:space:]]*:[[:space:]]*"[^"]*"' "${work}/cm.json" | head -n 1 | sed 's/.*:[[:space:]]*"\(.*\)"/\1/' || true)"
 if [[ -z "${key_b64}" ]]; then
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --cacert "${ca}" \
+  code="$(api_curl -o /dev/null -w '%{http_code}' --cacert "${ca}" \
     -H "Authorization: Bearer ${token}" "${api}/secrets/takserver-ca-key")"
   if [[ "${code}" == "200" ]]; then
     echo "CA key is in Secret takserver-ca-key and not in ConfigMap cert-migration"
@@ -43,11 +60,11 @@ if [[ -z "${key_b64}" ]]; then
 fi
 
 secret_body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"takserver-ca-key"},"type":"Opaque","data":{"ca-do-not-share.key":"%s"}}' "${key_b64}")"
-code="$(curl -sS -o "${work}/secret-resp" -w '%{http_code}' --cacert "${ca}" \
+code="$(api_curl -o "${work}/secret-resp" -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
   -X POST --data-binary "${secret_body}" "${api}/secrets")"
 if [[ "${code}" == "409" ]]; then
-  code="$(curl -sS -o "${work}/secret-resp" -w '%{http_code}' --cacert "${ca}" \
+  code="$(api_curl -o "${work}/secret-resp" -w '%{http_code}' --cacert "${ca}" \
     -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
     -X PUT --data-binary "${secret_body}" "${api}/secrets/takserver-ca-key")"
 fi
@@ -61,7 +78,7 @@ fi
 # f:ca-do-not-share.key, and a line-oriented edit misses a pretty-printed
 # last field. Search for the quoted key so that managedFields entry does
 # not look like the binaryData field.
-code="$(curl -sS -o "${work}/cm-resp" -w '%{http_code}' --cacert "${ca}" \
+code="$(api_curl -o "${work}/cm-resp" -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/merge-patch+json" \
   -X PATCH \
@@ -71,7 +88,7 @@ if [[ "${code}" != "200" ]]; then
   echo "ConfigMap cert-migration update returned HTTP ${code}" >&2
   exit 1
 fi
-curl -sS -f --cacert "${ca}" -H "Authorization: Bearer ${token}" \
+api_curl -f --cacert "${ca}" -H "Authorization: Bearer ${token}" \
   "${api}/configmaps/cert-migration" > "${work}/after.json"
 if grep -q '"ca-do-not-share.key"' "${work}/after.json"; then
   echo "Could not remove the CA key from ConfigMap cert-migration" >&2

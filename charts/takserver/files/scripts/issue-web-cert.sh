@@ -8,6 +8,24 @@
 # so its SANs are the in-cluster names of Service WEB_SERVICE.
 # Runs in the cert-init Job after publish-cert-configmap.sh. On an upgrade
 # the ConfigMap already exists, so the CA comes out of the ConfigMap.
+
+# Retry a refused or reset handshake. Five tries, one second apart.
+# --retry-all-errors covers a TLS reset (curl 35 or 56). --retry-connrefused
+# covers ECONNREFUSED. An HTTP status is not an error unless the caller
+# passes -f, so 409 still returns to the caller. The config image is UBI9,
+# whose curl is new enough for --retry-all-errors.
+api_curl() {
+  curl \
+    --silent \
+    --show-error \
+    --retry 5 \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --retry-connrefused \
+    --connect-timeout 5 \
+    "$@"
+}
+
 set -euo pipefail
 
 service="${WEB_SERVICE:?WEB_SERVICE is not set}"
@@ -26,7 +44,7 @@ api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/configmaps/cert-migr
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
-curl -sS -f --cacert "${ca}" -H "Authorization: Bearer ${token}" "${api}" > "${work}/cm.json"
+api_curl -f --cacert "${ca}" -H "Authorization: Bearer ${token}" "${api}" > "${work}/cm.json"
 
 # Pull one binaryData key out of the ConfigMap JSON. Base64 has no quotes.
 field() {
@@ -45,7 +63,7 @@ field ca.pem | base64 -d > "${work}/ca.pem"
 if [[ -s /opt/tak/certs/files/ca-do-not-share.key ]]; then
   cp /opt/tak/certs/files/ca-do-not-share.key "${work}/ca.key"
 else
-  key_b64="$(curl -sS --cacert "${ca}" -H "Authorization: Bearer ${token}" \
+  key_b64="$(api_curl --cacert "${ca}" -H "Authorization: Bearer ${token}" \
     "https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets/takserver-ca-key" \
     | grep -o '"ca-do-not-share.key": *"[^"]*"' | head -n 1 | sed 's/.*: *"\(.*\)"/\1/' || true)"
   if [[ -n "${key_b64}" ]]; then
@@ -85,7 +103,7 @@ keytool -importkeystore -noprompt \
   -deststorepass "${pass}" -destkeypass "${pass}" -alias takserver-web
 
 printf '{"binaryData": {"%s": "%s"}}' "${key_name}" "$(base64 -w 0 "${work}/web.jks")" > "${work}/patch.json"
-code="$(curl -sS -o "${work}/resp" -w '%{http_code}' --cacert "${ca}" \
+code="$(api_curl -o "${work}/resp" -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/merge-patch+json" \
   -X PATCH --data-binary @"${work}/patch.json" "${api}")"

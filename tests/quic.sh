@@ -92,12 +92,13 @@ run_net() {
   fi
 }
 
-if ! command -v uv >/dev/null 2>&1; then
-  echo "uv is not installed; tests/requirements-quic.txt cannot be installed" >&2
-  exit 1
+if command -v uv >/dev/null 2>&1; then
+  uv venv --python python3 "${work}/venv"
+  uv pip install --python "${work}/venv/bin/python" -r "${script_dir}/requirements-quic.txt"
+else
+  python3 -m venv "${work}/venv"
+  "${work}/venv/bin/python" -m pip install --disable-pip-version-check --no-input -r "${script_dir}/requirements-quic.txt"
 fi
-uv venv --python python3 "${work}/venv"
-uv pip install --python "${work}/venv/bin/python" -r "${script_dir}/requirements-quic.txt"
 
 cert_dir="$("${script_dir}/extract-certs.sh" "${work}/certs")"
 export TAK_CLIENT_KEY_PASSPHRASE

@@ -18,8 +18,8 @@ import sys
 ASSERTED = (
     ("statefulset", "takserver-ignite", "limits", "memory", "1536Mi"),
     ("statefulset", "takserver-ignite", "requests", "memory", "512Mi"),
-    ("deployment", "takserver-plugins", "limits", "memory", "384Mi"),
-    ("deployment", "takserver-config", "requests", "memory", "512Mi"),
+    ("deployment", "takserver-plugins", "limits", "memory", "512Mi"),
+    ("deployment", "takserver-config", "requests", "memory", "1Gi"),
 )
 
 UNITS = {

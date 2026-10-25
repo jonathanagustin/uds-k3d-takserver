@@ -18,11 +18,16 @@ takserver:
   ingress:
     enabled: false
   # Local sizes. The upstream developer example requests 1 CPU and 8Gi for
-  # messaging and api. These requests have not been scheduled on a cluster.
-  # The messaging Deployment copies the API CPU and memory limits. The API
-  # limit is 1536Mi so messaging can hold a 512m heap, the 128MB off-heap
-  # cap, and UserManager's 128m heap. A 1Gi cgroup was OOM-killed when
-  # UserManager started.
+  # messaging and api. Requests sit near the steady working set measured by
+  # tests/usage.sh at the end of install on run 40174810574 (kubelet Summary
+  # API, the same source as bench/run.py). The higher of the two arches:
+  # api 66m and 911Mi, messaging 26m and 888Mi, config 11m and 750Mi, Ignite
+  # 48m and 488Mi. Heaps stay -Xmx512m. That run is idle plus the smoke
+  # tests; the benchmark workflow has no completed load sweep, so these are
+  # not a heap or GC change. The messaging Deployment copies the API CPU and
+  # memory limits. The API limit is 1536Mi so messaging can hold a 512m heap,
+  # the 128MB off-heap cap, and UserManager's 128m heap. A 1Gi cgroup was
+  # OOM-killed when UserManager started.
   config:
     image:
       repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config
@@ -30,11 +35,11 @@ takserver:
     replicas: 1
     resources:
       requests:
-        cpu: "250m"
+        cpu: "50m"
         memory: 1Gi
       limits:
         cpu: "1"
-        memory: 1Gi
+        memory: 1280Mi
   messaging:
     image:
       repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging
@@ -42,7 +47,7 @@ takserver:
     replicas: 1
     resources:
       requests:
-        cpu: "250m"
+        cpu: "50m"
         memory: 1Gi
       limits:
         cpu: "1"
@@ -55,7 +60,7 @@ takserver:
     replicas: 1
     resources:
       requests:
-        cpu: "250m"
+        cpu: "100m"
         memory: 1Gi
       limits:
         cpu: "1"
@@ -68,7 +73,7 @@ takserver:
     replicas: 1
     resources:
       requests:
-        cpu: "100m"
+        cpu: "50m"
       limits:
         cpu: "500m"
   takserverDatabaseSetup:
@@ -112,6 +117,17 @@ postgresql:
     username: postgres
     password: postgres
     postgresPassword: postgres
+  # Steady working set on run 40174810574 was 57Mi amd64 and 59Mi arm64.
+  # The container limit stays 512Mi, so shared_buffers has to stay well
+  # under it. The request is about twice the steady set.
+  primary:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
 ignite:
   # Odd on purpose. floor(n/2)+1 is the disruption budget in the config chart.
@@ -146,8 +162,8 @@ ignite:
       </property>
   resources:
     requests:
-      cpu: "250m"
-      memory: 768Mi
+      cpu: "100m"
+      memory: 512Mi
     limits:
       cpu: "1"
       memory: 1536Mi

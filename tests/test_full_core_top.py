@@ -89,7 +89,7 @@ class FullCoreTopTests(unittest.TestCase):
         encoded = json.dumps(top.ASSERTED)
         self.assertIn("1536Mi", encoded)
         self.assertIn("512Mi", encoded)
-        self.assertIn("384Mi", encoded)
+        self.assertIn("1Gi", encoded)
 
 
 if __name__ == "__main__":

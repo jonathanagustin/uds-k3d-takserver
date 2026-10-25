@@ -204,3 +204,11 @@ backup:
     enabled: false
     schedule: "15 2 * * *"
     image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4
+  # String, not a boolean. The Zarf variable is text, and Helm treats the
+  # string "false" as true. Templates compare it to "true".
+  filesystem:
+    enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
+    image: docker.io/velero/velero:v1.18.4
+    namespace: velero
+    serviceAccount: velero
+    credentialSecret: velero-bucket-credentials

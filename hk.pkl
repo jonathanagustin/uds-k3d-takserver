@@ -77,6 +77,10 @@ steps {
     check = "bash .github/scripts/check-exemptions.sh"
     glob = List("charts/takserver/**/*.yaml", "charts/takserver/**/*.tpl", "atak/deploy/*.yaml", "docs/justifications.md", ".github/scripts/check-exemptions.sh")
   }
+  ["filesystem-backup"] {
+    check = "bash .github/scripts/check-filesystem-backup.sh"
+    glob = List("charts/takserver/**/*.yaml", "charts/cloudtak/**/*.yaml", "values/filesystem-backup.yaml.tpl", ".github/scripts/check-filesystem-backup.sh")
+  }
   ["gitleaks"] {
     check = "gitleaks detect --no-git --config .gitleaks.toml --source . --redact --exit-code 1"
     glob = List("**/*", ".gitleaks.toml", ".gitignore")

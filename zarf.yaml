@@ -40,6 +40,9 @@ variables:
   - name: PASSTHROUGH_HOSTS
     description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host.
     default: "takserver-api takserver-stream"
+  - name: FILESYSTEM_BACKUP
+    description: When true, annotate the database volumes for Velero file-system backup and run the node-agent. Default false. The logical dump stays the full-bundle path. See adr/0017-velero-node-agent.md.
+    default: "false"
 
 components:
   - name: takserver
@@ -207,6 +210,9 @@ components:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4"
       - "docker.io/library/nats:2.9.21-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.11.0"
+      # Same tag UDS Core 1.15.2 runs. The manifest lists amd64 and arm64.
+      # The DaemonSet renders only when FILESYSTEM_BACKUP is true.
+      - "docker.io/velero/velero:v1.18.4"
 
   # Browser map client. Built from the upstream/cloudtak submodule by
   # .github/container-and-chart/cloudtak. See docs/cloudtak.md.

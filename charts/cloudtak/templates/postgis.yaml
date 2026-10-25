@@ -29,6 +29,10 @@ spec:
     metadata:
       labels:
         app: cloudtak-postgis
+      {{- if eq (toString .Values.backup.filesystem.enabled) "true" }}
+      annotations:
+        backup.velero.io/backup-volumes: data
+      {{- end }}
     spec:
       automountServiceAccountToken: false
       securityContext:

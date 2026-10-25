@@ -28,6 +28,6 @@ A Secret is about 1Mi. A fresh CI database fits. A long-lived TAK database may n
 ## Consequences
 
 - Slim stays free of dump CronJobs and of Velero. The full bundle requires `core-backup-restore`.
-- A database that outgrows a Secret needs a node-agent image for both arches and a file-system backup exemption. This package does not add that image.
+- A database that outgrows a Secret needs file-system backup. That path is [ADR 0017](0017-velero-node-agent.md). It stays off unless `FILESYSTEM_BACKUP=true`.
 - The restore test deletes the TAK and CloudTAK namespaces. It is the last command in `test:full-core`.
 - Whether Backup and Restore reach `Completed` on the GitHub runners is visible only after the full-core workflow runs.

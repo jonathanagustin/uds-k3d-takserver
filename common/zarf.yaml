@@ -39,3 +39,7 @@ components:
         version: 5.7-RELEASE-14
         valuesFiles:
           - ../values/common-values.yaml
+        # Adds the Postgres pod annotation only when FILESYSTEM_BACKUP=true.
+        # An empty object otherwise, so the default overlay is unchanged.
+        templatedValuesFiles:
+          - ../values/filesystem-backup.yaml.tpl

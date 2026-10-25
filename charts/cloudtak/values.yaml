@@ -18,6 +18,9 @@ backup:
     schedule: "20 2 * * *"
     # Writes the Secret. The PostGIS image has pg_dump and no curl.
     publishImage: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
+  # Same string switch as the TAK chart. See adr/0017-velero-node-agent.md.
+  filesystem:
+    enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
 
 postgis:
   # The image the TAK chart already uses. One image covers both databases.

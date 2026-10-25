@@ -3,6 +3,7 @@
 
 import { PeprModule } from "pepr";
 import cfg from "./package.json" with { type: "json" };
+import { CoreDns } from "./capabilities/coredns-rewrite-capability.ts";
 import { OidcRender } from "./capabilities/oidc-render-capability.ts";
 
-new PeprModule(cfg, [OidcRender]);
+new PeprModule(cfg, [OidcRender, CoreDns]);

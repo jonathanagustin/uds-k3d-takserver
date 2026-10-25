@@ -25,6 +25,9 @@ spec:
         client.session.idle.timeout: {{ .Values.sso.sessionIdleTimeout | quote }}
         client.session.max.lifespan: {{ .Values.sso.sessionMaxLifespan | quote }}
         post.logout.redirect.uris: "{{ include "cloudtak.url" . }}/api/login/oidc"
+        # UDS Core turns this on. Keycloak then shows "You are logged out"
+        # and does not follow post_logout_redirect_uri until the link is clicked.
+        logout.confirmation.enabled: "false"
       defaultClientScopes:
         - openid
         - profile

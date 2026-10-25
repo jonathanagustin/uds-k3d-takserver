@@ -238,8 +238,9 @@ async function callback(req, res, url) {
 // Browser logout. CloudTAK clears its own session and opens /login. auto.js
 // sends that here with the ID token so Keycloak's session ends before the
 // next sign-in. post_logout_redirect_uri is this route's start path, which
-// is registered on the client. Keycloak follows it when id_token_hint is
-// present, and the authorization request shows the login page.
+// is registered on the client. The client sets logout.confirmation.enabled
+// to false, so Keycloak follows this redirect when id_token_hint is present
+// instead of stopping on the "You are logged out" page.
 async function logout(_req, res, url) {
     const doc = await oidc();
     if (!doc.end_session_endpoint) return fail(res, 'no end_session_endpoint');

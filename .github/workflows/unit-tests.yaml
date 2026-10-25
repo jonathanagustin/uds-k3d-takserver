@@ -54,6 +54,7 @@ jobs:
           set -euo pipefail
           coverage() { uv tool run --from "coverage==${COVERAGE_VERSION}" coverage "$@"; }
           python3 -B -m unittest discover -s tests -p 'test_move_ca_key.py' -v
+          python3 -B -m unittest discover -s tests -p 'test_nats_roundtrip.py' -v
           coverage run --branch --source=tests -m unittest discover -s tests -p 'test_upgrade_*.py' -v
           coverage report --include='tests/upgrade-*.py' --show-missing
           {

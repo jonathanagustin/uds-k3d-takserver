@@ -143,6 +143,18 @@ packages:
       - cloudtak
     overrides:
       takserver:
+        # The dump CronJobs stay out of the chart until this bundle, so a
+        # slim install never creates them. test-values.yaml is shared with
+        # the slim bundle and is not the place for this switch.
+        uds-takserver-config:
+          values:
+            - path: backup.dump.enabled
+              value: true
         takserver:
           valuesFiles:
             - ../test-values.yaml
+      cloudtak:
+        uds-cloudtak:
+          values:
+            - path: backup.dump.enabled
+              value: true

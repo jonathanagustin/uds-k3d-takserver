@@ -188,3 +188,14 @@ certs:
   # reads the .jks files, which are modern either way. Applies only when the
   # Job generates the CA.
   pkcs12: modern
+
+# Logical pg_dump of database cot into Secret tak-db-dump, before Velero's
+# 03:00 schedule. Off by default: the objects and the network rules render
+# only when a bundle sets backup.dump.enabled. Slim has no Velero, and the
+# upstream chart values file is not used for this because that chart does
+# not own the Secret. See adr/0016-logical-db-dump.md.
+backup:
+  dump:
+    enabled: false
+    schedule: "15 2 * * *"
+    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4

@@ -20,9 +20,31 @@ The password is not a production secret. Replace it, and the matching JDBC passw
 
 ## Backup
 
-`k3d-core-slim-dev` installs `core-base` and `core-identity-authorization`. It does not install Velero. The standard UDS Core package has an optional `velero` component and the S3 settings for it. This package does not enable that component and does not ship a `Backup` or `Schedule`.
+Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.15.2-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
 
-A restore of TAK needs the Postgres volume (database `cot`) and ConfigMap `cert-migration`. The ConfigMap holds the CA and server keystores generated at deploy time. Without those files, enrolled client certificates no longer chain to the server. CoreConfig and the Ignite ConfigMap are in git and can be re-rendered. When the standard core package enables Velero, the backup should include the `takserver` namespace. That puts the Postgres PVC and `cert-migration` in the backup.
+Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.15.2 does not ship the node agent, and k3d local-path has no snapshot API, so the backup is API objects only. The Postgres files on the volume are not in it. The package stores a logical `pg_dump` in Secret `tak-db-dump` (database `cot`) and Secret `cloudtak-db-dump` (CloudTAK's PostGIS database). CronJobs `tak-db-dump` (02:15 UTC) and `cloudtak-db-dump` (02:20 UTC) refresh those Secrets. They render only when `backup.dump.enabled` is true, which the full bundle sets. A slim install does not create them.
+
+What a namespace backup contains:
+
+| Object | In the backup |
+| --- | --- |
+| ConfigMap `cert-migration` | Yes. It holds the CA and the server keystores, including private keys, because that is the object the upstream chart mounts. A restored server presents the same CA. |
+| Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |
+| Secrets `tak-db-dump` and `cloudtak-db-dump` | Yes, when the CronJob or `tests/backup-restore.sh` has written them. |
+| Postgres and PostGIS volumes | No. Load the dump after the pods are back. |
+| Ignite | No. The cache is memory. Clients reconnect. |
+| CoreConfig and the Ignite ConfigMap | Yes, as rendered objects. The chart can render them again from git. |
+
+A Secret holds about 1Mi. The CronJob refuses a dump over 700000 bytes. A database that large needs a node-agent image and file-system backup, which this package does not add.
+
+Restore, after Velero has put the namespaces back:
+
+1. Scale the TAK API, messaging, plugins, and config Deployments to 0, and scale CloudTAK to 0, so they do not write during the load.
+2. Wait until `takserver-postgresql` and `cloudtak-postgis` are Ready.
+3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty.
+4. Scale the Deployments to 1. Enrolled client certificates still chain, because `cert-migration` came back with the namespace.
+
+`tests/backup-restore.sh` does this at the end of the full-core job. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. The checkpoint MinIO is scaled to 0 by `fit-runner`; the script scales it back to 1 because Velero's default bucket `uds` is on that MinIO. BackupStorageLocation has to be `Available`.
 
 ## Find TAK logs
 

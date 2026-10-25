@@ -136,6 +136,29 @@ spec:
         description: "Egress from cloudtak to basemap tile host"
       {{- end }}
 
+      {{- if .Values.backup.dump.enabled }}
+      - direction: Egress
+        selector:
+          app: cloudtak-db-dump
+        remoteSelector:
+          app: cloudtak-postgis
+        port: 5432
+        description: "Egress 5432 from the logical dump to PostGIS"
+      - direction: Ingress
+        selector:
+          app: cloudtak-postgis
+        remoteSelector:
+          app: cloudtak-db-dump
+        remoteServiceAccount: cloudtak-db-dump
+        port: 5432
+        description: "Ingress 5432 to PostGIS from the logical dump"
+      - direction: Egress
+        selector:
+          app: cloudtak-db-dump
+        remoteGenerated: KubeAPI
+        description: "Logical dump writes Secret cloudtak-db-dump"
+      {{- end }}
+
       {{- with .Values.additionalNetworkAllow }}
       {{- toYaml . | nindent 6 }}
       {{- end }}

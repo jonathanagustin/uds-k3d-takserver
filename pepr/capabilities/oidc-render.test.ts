@@ -8,6 +8,8 @@ import {
   CONFIG_MOUNT,
   INIT_NAME,
   isTakPod,
+  METRICS_PORT,
+  METRICS_PORT_NAME,
   RELOAD_LABEL,
   TAK_APPS,
   type PodLike,
@@ -65,6 +67,39 @@ test("a second call changes nothing", () => {
   const once = structuredClone(p);
   assert.equal(addRender(p, IMAGE), false);
   assert.deepEqual(p, once);
+});
+
+test("api and messaging get a metrics port and the other TAK pods do not", () => {
+  for (const app of ["takserver-api", "takserver-messaging"]) {
+    const p = pod(app);
+    addRender(p, IMAGE);
+    assert.deepEqual(p.spec?.containers?.[0].ports, [
+      { name: METRICS_PORT_NAME, containerPort: METRICS_PORT, protocol: "TCP" },
+    ]);
+  }
+  for (const app of ["takserver-config", "takserver-plugins"]) {
+    const p = pod(app);
+    addRender(p, IMAGE);
+    assert.equal(p.spec?.containers?.[0].ports, undefined, app);
+  }
+});
+
+test("an existing metrics port is not duplicated", () => {
+  const p = pod("takserver-api");
+  p.spec!.containers![0].ports = [{ name: METRICS_PORT_NAME, containerPort: METRICS_PORT, protocol: "TCP" }];
+  addRender(p, IMAGE);
+  const ports = p.spec?.containers?.[0].ports ?? [];
+  assert.equal(ports.filter(port => port.name === METRICS_PORT_NAME).length, 1);
+});
+
+test("the metrics port is added beside an existing connector port", () => {
+  const p = pod("takserver-messaging");
+  p.spec!.containers![0].ports = [{ name: "https", containerPort: 8443, protocol: "TCP" }];
+  addRender(p, IMAGE);
+  assert.deepEqual(
+    (p.spec?.containers?.[0].ports ?? []).map(port => port.name),
+    ["https", METRICS_PORT_NAME],
+  );
 });
 
 test("an existing oidc-script volume is not duplicated", () => {

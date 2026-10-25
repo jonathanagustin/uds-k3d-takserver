@@ -189,6 +189,13 @@ RUN chmod 0755 \
         /takserver-api-cluster.sh \
         /takserver-messaging-cluster.sh \
         /takserver-config-cluster.sh \
+    && sed -i 's#-jar takserver.war#-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100 -Dmanagement.endpoint.prometheus.access=unrestricted -Dmanagement.server.ssl.enabled=false -Dspring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration,org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration -jar takserver.war#' \
+        /takserver-api-cluster.sh \
+        /takserver-messaging-cluster.sh \
+    && grep -q -- '-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100' /takserver-api-cluster.sh \
+    && grep -q -- '-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100' /takserver-messaging-cluster.sh \
+    && ! grep -q -- '-Dmanagement.server.port=' /takserver-config-cluster.sh \
+    && ! grep -q -- '-Dmanagement.server.port=' /takserver-plugins-cluster.sh \
     && sed -i 's/java -jar UserManager.jar/java -Xmx128m -jar UserManager.jar/' /enable_admin.sh \
     && sed -i 's/-Djdk.tls.client.protocols=TLSv1.2/-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2/' /setenv.sh \
     && grep -q -- '-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2' /setenv.sh \
@@ -217,7 +224,42 @@ ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 # MaxRAMPercentage. 512m is the floor Ignite prints in its own warning.
 # The flags stay on those three java commands. JDK_JAVA_OPTIONS would also
 # apply to UserManager, and a second 512m heap in the messaging pod exceeds 1Gi.
+# API and messaging also get loader.path and management.server.port. The jars
+# below are the Prometheus registry Spring Boot 3.4 already knows how to load.
+# Config and plugins do not bind 9100. Replacing spring.autoconfigure.exclude
+# has to repeat the Mongo excludes from application.properties.
 ENV PLUGIN_MANAGER_MAX_HEAP=128
+
+# micrometer-core is already in takserver.war. These are the registry and the
+# Prometheus client 1.2.1 jars it needs. tracer-initializer is excluded by the
+# registry pom. Checksums are sha256 of the Maven Central artifacts.
+RUN mkdir -p /opt/tak/metrics \
+    && curl -fsSL -o /opt/tak/metrics/micrometer-registry-prometheus-1.13.8.jar \
+        https://repo1.maven.org/maven2/io/micrometer/micrometer-registry-prometheus/1.13.8/micrometer-registry-prometheus-1.13.8.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-core-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-core/1.2.1/prometheus-metrics-core-1.2.1.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-tracer-common-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-tracer-common/1.2.1/prometheus-metrics-tracer-common-1.2.1.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-exposition-formats-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-exposition-formats/1.2.1/prometheus-metrics-exposition-formats-1.2.1.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-model-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-model/1.2.1/prometheus-metrics-model-1.2.1.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-config-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-config/1.2.1/prometheus-metrics-config-1.2.1.jar \
+    && curl -fsSL -o /opt/tak/metrics/prometheus-metrics-shaded-protobuf-1.2.1.jar \
+        https://repo1.maven.org/maven2/io/prometheus/prometheus-metrics-shaded-protobuf/1.2.1/prometheus-metrics-shaded-protobuf-1.2.1.jar \
+    && printf '%s\n' \
+        '0311eb24394f875ee18c3531e76b64563ff33f09772878222bfae7b367f083fd  /opt/tak/metrics/micrometer-registry-prometheus-1.13.8.jar' \
+        '47ae6ba7f38550637c9d6a0e83b7959cd974ace32b60beb948f91d2edb35461b  /opt/tak/metrics/prometheus-metrics-core-1.2.1.jar' \
+        'c55e5d5272518e9cb468b13f252f828565b976ec78b8470cd7c622dc201ca82d  /opt/tak/metrics/prometheus-metrics-tracer-common-1.2.1.jar' \
+        'c618f0210980d6272fefcd76b2964883380a828ba6fc399a9bf84253d5d39107  /opt/tak/metrics/prometheus-metrics-exposition-formats-1.2.1.jar' \
+        '3520279e1fa7fbf0febd32b3a68863e389f32a152062e6627aff5a20c8408061  /opt/tak/metrics/prometheus-metrics-model-1.2.1.jar' \
+        'b9fb02ef15e63d02aedea7fc57b3bdeae4dcfc91c905af60fffe66b8950f951f  /opt/tak/metrics/prometheus-metrics-config-1.2.1.jar' \
+        'e6060c7ef59fcf1c110677b01a96e4a08ab23d138700a6e2d0999163122750e1  /opt/tak/metrics/prometheus-metrics-shaded-protobuf-1.2.1.jar' \
+        > /tmp/metrics.sha256 \
+    && sha256sum -c /tmp/metrics.sha256 \
+    && rm /tmp/metrics.sha256 \
+    && chmod 0644 /opt/tak/metrics/*.jar
 
 FROM cluster-base AS takserver-config
 ARG UPSTREAM_REF=5.7-RELEASE-14

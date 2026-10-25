@@ -84,15 +84,19 @@ Older commits of this branch still contain the keystores that used to live in `c
 
 ## Metrics
 
-TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. It does not depend on `micrometer-registry-prometheus`. The actuator endpoints are on the same HTTPS connectors as Marti (8443 and 8446). 8443 requires a client certificate. The API Service has no metrics port. The Package has no `monitor` entry, because a ServiceMonitor would not scrape a Prometheus text endpoint. `k3d-core-slim-dev` does not install the Prometheus operator.
+TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. The image adds `micrometer-registry-prometheus` 1.13.8 on `/opt/tak/metrics` and the API and messaging scripts load it with `-Dloader.path`. Those two scripts also set `-Dmanagement.server.port=9100`, so Actuator's Prometheus text is on plaintext 9100 at `/actuator/prometheus`. The Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not bind it. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 16](../adr/0016-prometheus-monitors.md).
 
 ## Monitoring
 
-When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds three objects. Slim does not have that API, so it does not get them, and the chart still adds no ServiceMonitor or PodMonitor.
+When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
 
-ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". Its panels are JVM heap, GC, HTTP rate, Postgres up, and pod restarts. Those series are empty until TAK exports Prometheus text.
+ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". Its panels are JVM heap, GC, HTTP rate, Postgres up, and pod restarts.
 
-PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. A target-down alert can fire only after a monitor exists. Scaling messaging to 0 does not create a down target today.
+PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. The heap alert reads `jvm_memory_used_bytes` and `jvm_memory_max_bytes`.
+
+PodMonitor `takserver-oidc` selects the admission pods in `pepr-system` and scrapes HTTPS `/metrics` with `insecureSkipVerify`. The Package `monitor` block cannot set a scheme or TLS, and the generated Pepr chart's ServiceMonitor would select every admission controller in that namespace.
+
+Postgres and NATS exporters are not enabled. This package does not build those images.
 
 ConfigMap `takserver-loki-rules` is labeled `loki_rule: "1"`. The ruler alerts when a TAK pod logs `error pulling auth file` more than three times in five minutes. That string is the one the API log check already rejects.
 
@@ -128,6 +132,7 @@ Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver`
 - [OAuth discovery](../adr/0004-tak-oauth-uses-openid-discovery.md)
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
+- [Prometheus monitors](../adr/0016-prometheus-monitors.md)
 
 The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
 

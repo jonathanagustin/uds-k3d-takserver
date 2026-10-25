@@ -58,9 +58,9 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Metrics monitor
 
 - **Requirement:** Implement a monitor for each application metrics endpoint, unless the application provides no metrics.
-- **Status:** Not applicable. TAK Server 5.7-RELEASE-14 has no Prometheus endpoint, and its actuator is served on the Marti HTTPS connectors, where port 8443 requires a client certificate. The Package has no `monitor` entry.
-- **Details:** [ADR 3](../adr/0003-no-prometheus-monitor.md) and [Configuration](configuration.md).
-- **What changes it:** A Prometheus registry in the TAK image and a metrics port that does not require a client certificate.
+- **Status:** Met for the TAK API, TAK messaging, and the `takserver-oidc` module when the monitoring API is installed. Slim omits the monitors. Postgres and NATS are not scraped. Their exporter images are not built here.
+- **Details:** [ADR 16](../adr/0016-prometheus-monitors.md) and [Configuration](configuration.md).
+- **What changes it:** Building multi-arch Postgres and NATS exporter images, and enabling them without an upstream chart change that this package does not carry.
 
 ### Commands in Zarf actions
 

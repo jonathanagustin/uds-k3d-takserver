@@ -25,8 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Build cache in GHCR. The repository's Actions cache is shared with the
-      # Zarf cache and evicts the multi-GB layers.
+      # Build cache in GHCR. The Actions cache limit is 10 GB, and these
+      # layers do not fit beside the other entries.
       packages: write
     timeout-minutes: 350
     steps:

@@ -177,21 +177,6 @@ jobs:
           # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
           version: v0.40.0
 
-      - name: Restore the Zarf cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
-
       - name: Environment setup
         run: |
           echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "$GITHUB_ENV"

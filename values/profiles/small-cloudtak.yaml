@@ -1,0 +1,36 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Overlay for chart uds-cloudtak. Merge it over charts/cloudtak/values.yaml.
+# Steady working set on run 40174810574, higher arch: cloudtak 62m / 146Mi,
+# sso 32m / 67Mi, bootstrap 0m / 19Mi, postgis 33m / 96Mi. The sso limit stays
+# 512Mi because an earlier note had that container near 270Mi.
+resources:
+  cloudtak:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+  sso:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  bootstrap:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  postgis:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

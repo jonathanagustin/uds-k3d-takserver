@@ -26,6 +26,7 @@ documentation:
   justifications: docs/justifications.md
   data: docs/data.md
   cloudtak: docs/cloudtak.md
+  profiles: docs/profiles.md
 
 variables:
   - name: DOMAIN

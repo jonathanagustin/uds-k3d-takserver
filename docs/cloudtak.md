@@ -7,7 +7,7 @@
 | Object | Namespace | Purpose |
 | --- | --- | --- |
 | Deployment `cloudtak` | `cloudtak` | CloudTAK's nginx and API process on port 5000, plus the `sso` and `bootstrap` containers |
-| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64, see [ADR 16](../adr/0016-upgrade-postgres-in-place.md)), 2Gi volume |
+| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64, see [ADR 17](../adr/0017-upgrade-postgres-in-place.md)), 2Gi volume |
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, and `admin.key`, copied from ConfigMap `takserver/cert-migration` by the component's `onDeploy` action |

@@ -1,4 +1,4 @@
-# 16. Upgrade Postgres in place
+# 17. Upgrade Postgres in place
 
 Date: 2026-10-25
 

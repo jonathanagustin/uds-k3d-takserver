@@ -102,7 +102,7 @@ postgresql:
   # PostgreSQL 18 with PostGIS 3.6.4 for amd64 and arm64 from the official
   # postgres image. The entrypoint upgrades a PostgreSQL 15 data directory.
   # See .github/container-and-chart/postgis and
-  # adr/0016-upgrade-postgres-in-place.md.
+  # adr/0017-upgrade-postgres-in-place.md.
   image:
     registry: ghcr.io
     repository: jonathanagustin/uds-k3d-takserver/postgis

@@ -25,8 +25,7 @@ on:
       - "CODEOWNERS"
       - "SECURITY.md"
 
-  # A run on main is the only one that saves the Zarf cache. A cache saved by a
-  # pull request is scoped to that pull request and no other one can restore it.
+  # The same install runs again after a pull request merges.
   push:
     branches: [main]
     paths-ignore:
@@ -53,7 +52,8 @@ permissions:
 
 concurrency:
   group: test-${{ github.ref }}
-  # A cancelled run on main would skip its cache save.
+  # A pull request push replaces the run before it. A main run is left
+  # alone so two merges do not cancel each other.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -317,7 +317,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       pull-requests: read
@@ -369,26 +369,11 @@ jobs:
           # runner with this much free needs no deletes.
           TRIM_SKIP_ABOVE_GB: "60"
 
-      # Restore only. Install and upgrade run together, and a second save of
-      # the same key fails the job. Only a run on main saves, after the deploy.
-      - name: Restore the Zarf cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
-        id: zarf-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
-
+      # No Actions cache for ~/.zarf-cache. On 2026-10-25 the entries were
+      # 4.28 GB (amd64) and 4.11 GB (arm64), and a second arm64 key put the
+      # repo at 14.6 GB of the 10 GB limit, so the arm64 prefix missed
+      # (run 40174810574). The amd64 hit took 32s to unpack. The miss saved
+      # the same images in about 9s. The slim checkpoint cache is not here.
       - name: Environment setup
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: |
@@ -461,13 +446,6 @@ jobs:
             done
           done
 
-      - name: Save the Zarf cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (success() && github.event_name == 'push' && env.TEST_TYPE == 'install' && steps.zarf-cache.outputs.cache-hit != 'true')
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-
       - name: Node memory
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (failure())
         run: ./.github/scripts/dump-memory.sh
@@ -517,7 +495,7 @@ jobs:
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 180
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       pull-requests: read

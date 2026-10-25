@@ -76,7 +76,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       id-token: write
@@ -108,25 +108,6 @@ jobs:
       - name: Add swap
         if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64'
         run: ./.github/scripts/add-runner-swap.sh
-
-      # Restore the cache the Test workflow fills. Do not save it again: a
-      # second save of that key fails, and another multi-gigabyte cache entry
-      # crowds the repository cache.
-      - name: Restore the Zarf cache
-        id: zarf-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
 
       - name: Environment setup
         run: |

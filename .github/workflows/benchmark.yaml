@@ -1,0 +1,187 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Nightly footprint, load, and ready-time sweep. It is not part of the per-PR
+# Test workflow. The client count defaults to 10. The configs also list 50
+# and 200; a manual run can pass clients=10,50,200. See bench/SCHEMA.md.
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      clients:
+        description: "Client counts, comma-separated, or all"
+        default: "10"
+        required: false
+        type: string
+  schedule:
+    - cron: "41 9 * * *"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  benchmark:
+    name: benchmark (${{ matrix.arch }})
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark'))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+      id-token: write
+    env:
+      TEST_FLAVOR: upstream
+      BENCH_CLIENTS: ${{ github.event.inputs.clients || '10' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Install Docker Compose
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.6.1
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
+          version: v0.40.0
+
+      - name: Trim the runner
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64'
+        run: ./.github/scripts/trim-runner.sh
+        env:
+          TRIM_SKIP_ABOVE_GB: "60"
+
+      - name: Restore the Zarf cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/zarf-cache
+          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
+          restore-keys: |
+            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Point Zarf at the restored cache
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
+          rm -rf "${HOME}/.zarf-cache"
+          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
+
+      - name: Environment setup
+        run: |
+          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "$GITHUB_ENV"
+          uds run actions:setup-environment \
+          --set REGISTRY1_USERNAME="${{ secrets.IRON_BANK_ROBOT_USERNAME }}" \
+          --set REGISTRY1_PASSWORD="${{ secrets.IRON_BANK_ROBOT_PASSWORD }}" \
+          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+          --set RAPIDFORT_USERNAME="${{ secrets.RAPIDFORT_USERNAME }}" \
+          --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
+          --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
+        shell: bash
+
+      - name: Use this commit's TAK, CloudTAK and PostGIS images
+        run: ./.github/scripts/pin-image-tags.sh
+
+      - name: Install the current branch
+        run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
+        timeout-minutes: 110
+
+      - name: Fetch the upstream load tester
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --filter=blob:none --sparse --branch 5.7-RELEASE-14 \
+            https://github.com/TAK-Product-Center/Server.git "${RUNNER_TEMP}/tak-load"
+          git -C "${RUNNER_TEMP}/tak-load" sparse-checkout set src/testing/load_test
+          python3 -m venv "${RUNNER_TEMP}/bench-venv"
+          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check \
+            -r "${RUNNER_TEMP}/tak-load/src/testing/load_test/requirements.txt"
+
+      - name: Run the sweep
+        env:
+          TAK_LOAD_TESTER: ${{ runner.temp }}/tak-load/src/testing/load_test/tak_tester.py
+        run: |
+          set -euo pipefail
+          # A workflow env PATH is not a shell, so ${PATH:-} was stored literally
+          # and hid bash, openssl, and uds.
+          export PATH="${RUNNER_TEMP}/bench-venv/bin:${GITHUB_WORKSPACE}/.local/bin:${PATH}"
+          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check 'pyyaml==6.0.2'
+          "${RUNNER_TEMP}/bench-venv/bin/python" bench/run.py
+
+      - name: Upload the records
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-${{ matrix.arch }}
+          path: bench/out
+          if-no-files-found: warn
+          retention-days: 14
+
+  summary:
+    name: benchmark-summary
+    needs: [benchmark]
+    if: needs.benchmark.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download the records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p bench/in
+          gh run download "${GITHUB_RUN_ID}" --dir bench/in
+
+      - name: Plot the front
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find bench/in -name '*.json' | sort)
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            echo "No benchmark JSON was uploaded."
+            exit 1
+          fi
+          python3 bench/report.py bench/out "${files[@]}"
+          {
+            echo "## Benchmark front"
+            echo
+            cat bench/out/front.md
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload the report
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-front
+          path: |
+            bench/out/front.md
+            bench/out/front.svg
+          retention-days: 14

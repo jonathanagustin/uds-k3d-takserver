@@ -1,0 +1,27 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: gc-serial
+description: Serial GC on api, messaging, and config. Not run.
+skip: true
+reason: The image command passes UseG1GC after JDK_JAVA_OPTIONS. Adding UseSerialGC makes the JVM exit, and the rollout never becomes Ready.
+clients: [10, 50, 200]
+duration_s: 60
+restart: true
+env:
+  - workload: deployment/takserver-api
+    namespace: takserver
+    container: takserver-api
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms512m -Xmx512m -XX:+UseSerialGC"
+  - workload: deployment/takserver-messaging
+    namespace: takserver
+    container: takserver-messaging
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms512m -Xmx512m -XX:+UseSerialGC"
+  - workload: deployment/takserver-config
+    namespace: takserver
+    container: takserver-config
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms512m -Xmx512m -XX:+UseSerialGC"
+resources: []

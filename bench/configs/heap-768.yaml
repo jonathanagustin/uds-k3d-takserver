@@ -1,0 +1,25 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: heap-768
+description: JDK_JAVA_OPTIONS sets -Xmx768m on the api, messaging, and config containers. The image scripts also pass -Xmx512m. The JVM keeps the last -Xmx on the command line, so the record is the measured RSS, not an assumption about which flag won.
+clients: [10, 50, 200]
+duration_s: 60
+restart: true
+env:
+  - workload: deployment/takserver-api
+    namespace: takserver
+    container: takserver-api
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms768m -Xmx768m"
+  - workload: deployment/takserver-messaging
+    namespace: takserver
+    container: takserver-messaging
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms768m -Xmx768m"
+  - workload: deployment/takserver-config
+    namespace: takserver
+    container: takserver-config
+    name: JDK_JAVA_OPTIONS
+    value: "-Xms768m -Xmx768m"
+resources: []

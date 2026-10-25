@@ -236,10 +236,10 @@ async function callback(req, res, url) {
 }
 
 // Browser logout. CloudTAK clears its own session and opens /login. auto.js
-// sends that here so Keycloak's session ends before the next sign-in.
-// post_logout_redirect_uri is this route's start path, which is registered
-// on the client. Keycloak then comes back and the authorization request
-// shows the login page.
+// sends that here with the ID token so Keycloak's session ends before the
+// next sign-in. post_logout_redirect_uri is this route's start path, which
+// is registered on the client. Keycloak follows it when id_token_hint is
+// present, and the authorization request shows the login page.
 async function logout(_req, res, url) {
     const doc = await oidc();
     if (!doc.end_session_endpoint) return fail(res, 'no end_session_endpoint');
@@ -287,11 +287,12 @@ const FINISH_JS = `(function () {
 `;
 
 // Loaded into every CloudTAK page by nginx. When the app routes to its
-// login page, end the Keycloak session and then show the Keycloak login.
-// A visit that is already signed in at Keycloak must not bounce back onto
-// the map without a password.
+// login page, a stored ID token ends the Keycloak session and Keycloak
+// returns to the sign-in route. Keycloak shows a confirmation page and
+// does not follow post_logout_redirect_uri when id_token_hint is absent,
+// so a first visit goes straight to the authorization request.
 // /login?sso=off shows the page as is. A second redirect within 30 seconds
-// also shows the page, so a session the app rejects cannot loop.
+// with no ID token also shows the page, so a session the app rejects cannot loop.
 const AUTO_JS = `(function () {
     var sent = false;
     var KEY = 'cloudtak-sso-redirect';
@@ -299,15 +300,17 @@ const AUTO_JS = `(function () {
         if (sent || location.pathname !== '/login') return;
         var p = new URLSearchParams(location.search);
         if (p.get('sso') === 'off') return;
+        var hint = localStorage.getItem('cloudtak_sso_id_token') || '';
         var last = Number(sessionStorage.getItem(KEY) || 0);
-        if (Date.now() - last < 30000) return;
+        if (!hint && Date.now() - last < 30000) return;
         sessionStorage.setItem(KEY, String(Date.now()));
         sent = true;
-        var hint = localStorage.getItem('cloudtak_sso_id_token') || '';
-        localStorage.removeItem('cloudtak_sso_id_token');
-        var logout = '${BASE}/logout';
-        if (hint) logout += '?id_token_hint=' + encodeURIComponent(hint);
-        location.replace(logout);
+        if (hint) {
+            localStorage.removeItem('cloudtak_sso_id_token');
+            location.replace('${BASE}/logout?id_token_hint=' + encodeURIComponent(hint));
+            return;
+        }
+        location.replace('${BASE}');
     }
     check();
     setInterval(check, 250);

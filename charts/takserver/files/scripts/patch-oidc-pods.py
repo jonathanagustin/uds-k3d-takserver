@@ -15,14 +15,21 @@ no pod, including one created before this script runs, starts without it.
 """
 
 import json
+import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 
 NAMESPACE = "takserver"
+# Used when the Helm release has no plugins memory. The chart template drops
+# that value, so this script is what the pod actually gets.
+DEFAULT_PLUGIN_REQUEST = "320Mi"
+DEFAULT_PLUGIN_LIMIT = "512Mi"
+_MEMORY = re.compile(r"^[0-9]+(\.[0-9]+)?(Ki|Mi|Gi)$")
 
 
 def kubectl_cmd():
@@ -37,15 +44,68 @@ def kubectl_cmd():
 
 
 def os_env(name):
-    import os
-
     return os.environ.get(name, "")
 
 
 def shutil_which(name):
-    import shutil
-
     return shutil.which(name)
+
+
+def helm_cmd():
+    if shutil_which("helm"):
+        return ["helm"]
+    if shutil_which("uds"):
+        return ["uds", "zarf", "tools", "helm"]
+    if shutil_which("zarf"):
+        return ["zarf", "tools", "helm"]
+    return ["./zarf", "tools", "helm"]
+
+
+def parse_plugin_memory(payload, default_request=DEFAULT_PLUGIN_REQUEST, default_limit=DEFAULT_PLUGIN_LIMIT):
+    """Memory from takserver.plugins.resources. The chart does not render it."""
+    plugins = {}
+    if isinstance(payload, dict):
+        tak = payload.get("takserver")
+        if isinstance(tak, dict):
+            block = tak.get("plugins")
+            if isinstance(block, dict):
+                resources = block.get("resources")
+                if isinstance(resources, dict):
+                    plugins = resources
+    requests = plugins.get("requests") if isinstance(plugins.get("requests"), dict) else {}
+    limits = plugins.get("limits") if isinstance(plugins.get("limits"), dict) else {}
+    request = requests.get("memory") or default_request
+    limit = limits.get("memory") or default_limit
+    for label, value in (("request", request), ("limit", limit)):
+        if _MEMORY.match(str(value)) is None:
+            raise SystemExit(f"plugins memory {label} {value} is not a size")
+    return str(request), str(limit)
+
+
+def plugin_memory():
+    result = subprocess.run(
+        helm_cmd() + ["get", "values", "takserver", "-n", NAMESPACE, "-o", "json"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        print(
+            f"helm get values failed; plugins memory stays {DEFAULT_PLUGIN_REQUEST}/{DEFAULT_PLUGIN_LIMIT}",
+            file=sys.stderr,
+        )
+        return DEFAULT_PLUGIN_REQUEST, DEFAULT_PLUGIN_LIMIT
+    raw = (result.stdout or "").strip() or "{}"
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        print(f"helm values were not JSON ({error}); using the default plugins memory", file=sys.stderr)
+        return DEFAULT_PLUGIN_REQUEST, DEFAULT_PLUGIN_LIMIT
+    if payload is None:
+        payload = {}
+    return parse_plugin_memory(payload)
 
 
 def kc(*args, check=True, attempts=5):
@@ -577,6 +637,10 @@ def import_init(config_image, host):
 def patch_plugins(config_image):
     scale_deploy("takserver-plugins", 1)
     name = container_name("takserver-plugins")
+    # The chart template copies the API CPU limit and drops memory. Read the
+    # memory from the Helm release so a values profile can change it.
+    request, limit = plugin_memory()
+    print(f"plugins memory request {request} limit {limit}")
     strategic_patch(
         "takserver-plugins",
         {
@@ -589,14 +653,9 @@ def patch_plugins(config_image):
                         "containers": [
                             {
                                 "name": name,
-                                # The chart template copies the API CPU limit and
-                                # drops memory. 128m is the plugin heap. Steady
-                                # working set on run 40174810574 was 263Mi
-                                # amd64 and 260Mi arm64, so the request is
-                                # 320Mi and the limit is 512Mi.
                                 "resources": {
-                                    "requests": {"memory": "320Mi"},
-                                    "limits": {"memory": "512Mi"},
+                                    "requests": {"memory": request},
+                                    "limits": {"memory": limit},
                                 },
                             }
                         ],

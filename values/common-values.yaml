@@ -71,11 +71,16 @@ takserver:
       repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
     replicas: 1
+    # The upstream template ignores plugins memory. patch-oidc-pods.py reads
+    # these keys from the Helm release after install. Steady working set on
+    # run 40174810574 was 263Mi. The heap is -Xmx128m.
     resources:
       requests:
         cpu: "50m"
+        memory: 320Mi
       limits:
         cpu: "500m"
+        memory: 512Mi
   takserverDatabaseSetup:
     image:
       repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup

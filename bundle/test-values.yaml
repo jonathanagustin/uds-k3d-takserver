@@ -24,8 +24,9 @@
 #
 # The plugins Deployment reads only the CPU request and then copies the API
 # CPU limit. It does not read a plugins memory value. The post-helm patch
-# sets that memory from the steady 263Mi (amd64) and 260Mi (arm64) on the
-# same run: request 320Mi, limit 512Mi.
+# reads takserver.plugins.resources memory from the Helm release. Steady
+# use on the same run was 263Mi amd64 and 260Mi arm64: request 320Mi,
+# limit 512Mi.
 takserver:
   config:
     replicas: 1

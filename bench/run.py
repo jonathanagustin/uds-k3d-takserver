@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
+from bench.tester_exit import bind_tester, reap
 
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
 
@@ -278,23 +279,43 @@ def run_load(clients, duration, password, tester):
         # any client starts. The printer sleeps for --send-metrics-interval
         # before the first line, so that interval has to land inside duration.
         interval = max(1, duration // 3)
+        patched_dir = Path(tempfile.mkdtemp(prefix="bench-tester-"))
+        patched = patched_dir / "tak_tester.py"
+        patched.write_text(bind_tester(tester.read_text(encoding="utf-8")), encoding="utf-8")
+        env = os.environ.copy()
+        env["TAK_TESTER_DURATION"] = str(duration)
+        env["PYTHONPATH"] = str(tester.parent) + os.pathsep + env.get("PYTHONPATH", "")
         command = [
-            sys.executable, "-u", str(tester),
+            sys.executable, "-u", str(patched),
             "--test-pytak", "--tls", "18089", "--host", "127.0.0.1",
             "--cert", str(p12), "--password", password,
             "--clients", str(clients), "--ping", "true",
             "--skip-mission-api",
             "--send-metrics-interval", str(interval),
         ]
-        proc = subprocess.Popen(command, cwd=tester.parent, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # New session so the client processes share a group we can kill.
+        # The patched tester exits at TAK_TESTER_DURATION. reap is the
+        # hard stop when a child join still outlives that deadline.
+        proc = subprocess.Popen(
+            command,
+            cwd=tester.parent,
+            env=env,
+            start_new_session=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
         try:
-            stdout, _ = proc.communicate(timeout=duration)
-        except subprocess.TimeoutExpired:
-            proc.terminate()
-            stdout, _ = proc.communicate(timeout=20)
+            text = reap(proc, duration + 20)
         finally:
-            forward.terminate()
-        text = stdout or ""
+            if forward.poll() is None:
+                forward.terminate()
+                try:
+                    forward.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    forward.kill()
+                    forward.wait(timeout=5)
+            shutil.rmtree(patched_dir, ignore_errors=True)
         try:
             return parse(text)
         except ValueError as error:

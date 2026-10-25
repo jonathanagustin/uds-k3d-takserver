@@ -5,8 +5,12 @@
 
 import importlib.util
 import os
+import signal
 import subprocess
 import sys
+import tempfile
+import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -22,6 +26,7 @@ def load(name, relative):
 report = load("bench_report", "bench/report.py")
 loadlog = load("bench_loadlog", "bench/loadlog.py")
 runner = load("bench_run", "bench/run.py")
+tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
 
 
 def record(config, arch, rss, received, duration, mean, ready):
@@ -158,6 +163,100 @@ class ImageRefTests(unittest.TestCase):
         text = (Path(__file__).resolve().parents[1] / "zarf.yaml").read_text(encoding="utf-8")
         refs = runner.image_refs(text)
         self.assertTrue(any(ref.startswith("ghcr.io/") and "takserver-api" in ref for ref in refs))
+
+
+def tester_fixture():
+    exit_mod = tester_exit
+    return "".join([
+        exit_mod.ANCHOR,
+        exit_mod.STREAM_LOOP * 3,
+        exit_mod.TLS_LOOP,
+        exit_mod.START_JOIN * 3,
+        exit_mod.TLS_START_JOIN,
+        exit_mod.OFFSET_SLEEP * 4,
+        "def test_udp():\n",
+        exit_mod.UDP_LOOP,
+        "                pass\n",
+        exit_mod.UDP_TAIL,
+        "def test_tcp():\n",
+        exit_mod.TCP_LOOP,
+        "                pass\n",
+    ])
+
+
+class TesterExitTests(unittest.TestCase):
+    def test_the_upstream_loops_gain_a_deadline_and_a_stop(self):
+        bound = tester_exit.bind_tester(tester_fixture())
+        self.assertIn("_tak_tester_stop_procs", bound)
+        self.assertNotIn("while True:", bound)
+        self.assertNotIn("p.join()", bound)
+        self.assertIn("sock.close()", bound)
+        again = tester_exit.bind_tester(bound)
+        self.assertEqual(again, bound)
+
+    def test_a_short_deadline_closes_the_client_socket(self):
+        script = "import time\n" + tester_exit.HELPER + textwrap.dedent(
+            """
+            import socket
+            class Client:
+                def __init__(self):
+                    self.sock = socket.socket()
+                    self.sock.bind(("127.0.0.1", 0))
+                    self.alive = True
+                    self.terminated = False
+                def is_alive(self):
+                    return self.alive
+                def terminate(self):
+                    self.terminated = True
+                    self.alive = False
+                def join(self, timeout=None):
+                    return None
+            procs = [Client()]
+            while not _tak_tester_should_stop():
+                time.sleep(0.05)
+            _tak_tester_stop_procs(procs)
+            print("terminated", int(procs[0].terminated))
+            fd = procs[0].sock.fileno()
+            print("socket-closed" if fd < 0 else "socket-open")
+            """
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bounded.py"
+            path.write_text(script, encoding="utf-8")
+            env = os.environ.copy()
+            env["TAK_TESTER_DURATION"] = "1"
+            started = time.monotonic()
+            completed = subprocess.run(
+                [sys.executable, "-u", str(path)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=8,
+                env=env,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertIn("terminated 1", completed.stdout)
+        self.assertIn("socket-closed", completed.stdout)
+
+    def test_reap_kills_a_process_that_ignores_sigterm(self):
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)",
+            ],
+            start_new_session=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        started = time.monotonic()
+        tester_exit.reap(proc, 0.3)
+        self.assertIsNotNone(proc.poll())
+        self.assertLess(time.monotonic() - started, 8)
+        self.assertNotEqual(proc.returncode, 0)
+        # The group is gone. A second signal finds nobody to kill.
+        self.assertFalse(tester_exit.kill_group(proc.pid, signal.SIGKILL))
 
 
 if __name__ == "__main__":

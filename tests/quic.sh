@@ -103,6 +103,11 @@ fi
 cert_dir="$("${script_dir}/extract-certs.sh" "${work}/certs")"
 export TAK_CLIENT_KEY_PASSPHRASE
 TAK_CLIENT_KEY_PASSPHRASE="$("${script_dir}/keystore-pass.sh")"
+# sudo nsenter drops the environment, so the client reads the passphrase
+# from a file in this mount namespace instead of from the variable.
+key_pass_file="${work}/key-pass"
+printf '%s' "${TAK_CLIENT_KEY_PASSPHRASE}" > "${key_pass_file}"
+chmod 600 "${key_pass_file}"
 
 echo "client without a certificate"
 if ! run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" reject --host "${gw_ip}" --port "${gw_port}"; then
@@ -116,6 +121,7 @@ stop="${work}/stop"
 run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" roundtrip \
   --host "${gw_ip}" --port "${gw_port}" \
   --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" \
+  --pass-file "${key_pass_file}" \
   --uid "${uid}" --ready "${ready}" --stop "${stop}" &
 hold_pid=$!
 

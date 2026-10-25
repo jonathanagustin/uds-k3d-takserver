@@ -140,13 +140,17 @@ def main():
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--cert")
     parser.add_argument("--key")
+    parser.add_argument("--pass-file")
     parser.add_argument("--uid")
     parser.add_argument("--ready")
     parser.add_argument("--stop")
     args = parser.parse_args()
     password = None
     if args.mode == "roundtrip":
-        password = os.environ.get("TAK_CLIENT_KEY_PASSPHRASE", "")
+        if args.pass_file:
+            password = Path(args.pass_file).read_text()
+        else:
+            password = os.environ.get("TAK_CLIENT_KEY_PASSPHRASE", "")
         code = asyncio.run(
             roundtrip(args.host, args.port, args.cert, args.key, password, args.uid, args.ready, args.stop)
         )

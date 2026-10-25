@@ -36,19 +36,27 @@ fi
 
 say "uptime: ATAK viewer probe is not in this job; the full bundle does not deploy atak/deploy/device.yaml"
 
+# The operator writes each Probe into the package namespace. TAK is
+# uds-takserver-tenant-uptime in takserver (https://takserver.<domain>/).
+# CloudTAK is uds-map-tenant-uptime in cloudtak (https://map.<domain>/login).
+# The monitoring namespace has the blackbox exporter, not these Probes.
+tak_probe=""
+map_probe=""
 listed=0
 for _ in $(seq 1 18); do
-  k get probes.monitoring.coreos.com -n monitoring -o wide >"${log}.list" 2>/dev/null || true
-  if grep -Ei 'takserver|cloudtak|map' "${log}.list" >/dev/null 2>&1; then
+  tak_probe="$(k get probes.monitoring.coreos.com uds-takserver-tenant-uptime -n takserver -o jsonpath='{.spec.targets.staticConfig.static[*]}' 2>/dev/null || true)"
+  map_probe="$(k get probes.monitoring.coreos.com uds-map-tenant-uptime -n cloudtak -o jsonpath='{.spec.targets.staticConfig.static[*]}' 2>/dev/null || true)"
+  if [[ -n "${tak_probe}" && -n "${map_probe}" ]]; then
     listed=1
     break
   fi
   sleep 10
 done
-say "kubectl get probes -n monitoring"
-tee -a "${log}" < "${log}.list"
+say "probe takserver/uds-takserver-tenant-uptime: ${tak_probe:-missing}"
+say "probe cloudtak/uds-map-tenant-uptime: ${map_probe:-missing}"
 if [[ "${listed}" -ne 1 ]]; then
-  say "monitoring probes do not include TAK or CloudTAK" >&2
+  say "TAK or CloudTAK uptime probe was not created in its package namespace" >&2
+  k get probes.monitoring.coreos.com -A -o wide >>"${log}" 2>&1 || true
   exit 1
 fi
 

@@ -155,10 +155,9 @@ tasks:
       - task: create:test-bundle
         with:
           path: bundle/full
-      - task: deploy:test-bundle
-        with:
-          path: bundle/full
-          options: "--force-conflicts"
+      # The in-cluster registry has died mid-push on arm64. Retry after the API answers.
+      - description: Deploy the full bundle, retrying when the registry or API drops
+        cmd: ./.github/scripts/deploy-full-bundle.sh
       - task: setup:keycloak-user
         with:
           group: "/UDS Core/Admin"

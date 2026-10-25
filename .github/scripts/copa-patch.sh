@@ -21,6 +21,12 @@ if [[ "$#" -lt 1 ]]; then
 fi
 
 trivy_image="${TRIVY_IMAGE:-aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c}"
+registry_image="${COPA_REGISTRY_IMAGE:-docker.io/library/registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373}"
+registry_name="copa-registry"
+registry_port="5000"
+builder_name="copa-patch"
+started_registry=0
+started_builder=0
 copa_version="0.15.0"
 
 case "$(uname -m)" in
@@ -40,6 +46,12 @@ esac
 
 work="$(mktemp -d)"
 cleanup() {
+  if [[ "${started_builder}" -eq 1 ]]; then
+    docker buildx rm -f "${builder_name}" >/dev/null 2>&1 || true
+  fi
+  if [[ "${started_registry}" -eq 1 ]]; then
+    docker rm -f "${registry_name}" >/dev/null 2>&1 || true
+  fi
   # Trivy runs as root and leaves a cache this user cannot remove.
   docker run --rm --entrypoint /bin/rm \
     -v "${work}:/work" \
@@ -90,6 +102,73 @@ scan() {
     "${image}"
 }
 
+# setup-buildx-action's container builder has the docker exporter Copa uses
+# to load a patched image, and it cannot read a tag that was only loaded
+# into the daemon. The engine buildkit can read that tag, and the GitHub
+# runner's engine buildkit has no docker exporter. Publish the tag to a
+# registry on the host and patch it with a host-network builder, which can
+# pull 127.0.0.1 and still has the exporter.
+ensure_registry() {
+  local ready i state
+  state="$(docker inspect -f '{{.State.Running}}' "${registry_name}" 2>/dev/null || true)"
+  if [[ "${state}" != "true" ]]; then
+    docker rm -f "${registry_name}" >/dev/null 2>&1 || true
+    docker run -d --name "${registry_name}" \
+      -p "127.0.0.1:${registry_port}:5000" \
+      "${registry_image}" >/dev/null
+    started_registry=1
+  fi
+  ready=0
+  i=0
+  while [[ "${i}" -lt 30 ]]; do
+    if curl -fsS "http://127.0.0.1:${registry_port}/v2/" >/dev/null; then
+      ready=1
+      break
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  if [[ "${ready}" -ne 1 ]]; then
+    echo "local registry did not start" >&2
+    exit 1
+  fi
+}
+
+ensure_builder() {
+  if docker buildx inspect "${builder_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+  docker buildx create \
+    --name "${builder_name}" \
+    --driver docker-container \
+    --driver-opt network=host >/dev/null
+  started_builder=1
+  docker buildx inspect --bootstrap "${builder_name}" >/dev/null
+}
+
+apply_patch() {
+  local image="$1"
+  local report="$2"
+  local src="127.0.0.1:${registry_port}/copa:src"
+  local dst="127.0.0.1:${registry_port}/copa:dst"
+  ensure_registry
+  ensure_builder
+  docker tag "${image}" "${src}"
+  docker push "${src}"
+  # The builder cannot see this daemon tag. Drop it so the pull is the copy
+  # the builder reads.
+  docker rmi "${src}" >/dev/null
+  "${copa}" patch \
+    -i "${src}" \
+    -r "${report}" \
+    -t "${dst}" \
+    --addr "buildx://${builder_name}" \
+    --timeout "${COPA_TIMEOUT:-15m}"
+  docker image inspect "${dst}" >/dev/null
+  docker tag "${dst}" "${image}"
+  docker rmi "${dst}" >/dev/null
+}
+
 for image in "$@"; do
   docker image inspect "${image}" >/dev/null
   before_report="${work}/reports/before.json"
@@ -99,16 +178,7 @@ for image in "$@"; do
   if [[ "${before}" -eq 0 ]]; then
     continue
   fi
-  # setup-buildx-action leaves a docker-container builder current. Copa
-  # uses that builder when it does not stay on the engine, and a container
-  # builder cannot read an image that was only loaded into the daemon.
-  # docker:// is the engine's buildkit, which can.
-  "${copa}" patch \
-    -i "${image}" \
-    -r "${before_report}" \
-    -t "${image}" \
-    --addr docker:// \
-    --timeout "${COPA_TIMEOUT:-15m}"
+  apply_patch "${image}" "${before_report}"
   after_report="${work}/reports/after.json"
   scan "${image}" "${after_report}"
   after="$(count_fixable "${after_report}")"

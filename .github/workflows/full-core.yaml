@@ -74,7 +74,9 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    # The keyed images and the full deploy can each take most of 180 minutes.
+    # The job has to cover the wait and the deploy.
+    timeout-minutes: 360
     permissions:
       actions: write
       contents: read
@@ -139,6 +141,23 @@ jobs:
           --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
+
+      # pin-image-tags.sh points the package at <version>-<key>. Those tags
+      # do not exist until Container, CloudTAK and PostGIS publish them.
+      # Creating the package first fails with "reference does not exist".
+      # A keyed tag that is already published returns immediately.
+      - name: Wait for the six TAK images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
 
       - name: Use this commit's TAK, CloudTAK and PostGIS images
         run: ./.github/scripts/pin-image-tags.sh

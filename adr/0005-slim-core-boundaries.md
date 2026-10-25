@@ -21,3 +21,5 @@ The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, the
 ## Consequences
 
 Metrics, cluster log search, and scheduled backups are properties of the standard core package, not of this one. A cluster that installs that package collects TAK stdout and can back up the namespace. This package does not grow a sidecar or a forked Deployment to imitate those features.
+
+The per-PR gate stays on the slim bundle. The functional layers run in a separate workflow, on main, nightly, and on pull requests labeled `full-core`. See [ADR 0015](0015-full-core-is-a-scheduled-gate.md).

@@ -136,6 +136,34 @@ tasks:
           fi
       - cmd: ./demo/assemble.sh
 
+  - name: test-full-core
+    description: Deploy the functional layers on the slim checkpoint and run the full-core checks
+    actions:
+      - task: create-dev-package
+      # The checkpoint script still defaults to 1.15.0. The full bundle pins 1.15.2.
+      - description: Deploy the slim checkpoint at the bundle's Core version
+        cmd: SLIM_CORE_VERSION=1.15.2 ./.github/scripts/deploy-slim-core.sh
+      - description: Validate Keycloak endpoint
+        wait:
+          network:
+            protocol: https
+            address: sso.uds.dev
+            code: 200
+      - task: fit-runner
+      - task: create:test-bundle
+        with:
+          path: bundle/full
+      - task: deploy:test-bundle
+        with:
+          path: bundle/full
+          options: "--force-conflicts"
+      - task: setup:keycloak-user
+        with:
+          group: "/UDS Core/Admin"
+      - cmd: python3 ./tests/ensure-tak-group.py
+      - task: test:all
+      - task: test:full-core
+
   - name: test-upgrade
     description: Upgrade a cluster from the latest published package to this branch
     actions:

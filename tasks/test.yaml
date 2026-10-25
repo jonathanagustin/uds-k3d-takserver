@@ -521,9 +521,14 @@ tasks:
           trap 'kill ${pf_pid} >/dev/null 2>&1 || true' EXIT
           query='{namespace="takserver"}'
           encoded="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' "${query}")"
+          # An instant query rejects a stream selector. query_range start and
+          # end are Unix seconds; nanoseconds are read as seconds and the
+          # window never finishes.
           found=0
           for _ in $(seq 1 15); do
-            if curl -fsS --max-time 5 "http://127.0.0.1:3100/loki/api/v1/query?query=${encoded}" | grep -q 'takserver'; then
+            end="$(python3 -c 'import time; print(int(time.time()))')"
+            start="$((end - 3600))"
+            if curl -fsS --max-time 20 "http://127.0.0.1:3100/loki/api/v1/query_range?query=${encoded}&start=${start}&end=${end}&limit=100&direction=backward" | grep -q 'takserver'; then
               found=1
               break
             fi
@@ -659,6 +664,11 @@ tasks:
     description: CPU and memory each TAK, CloudTAK and Pepr container uses at the end of the tests, next to its requests and limits
     actions:
       - cmd: ./tests/usage.sh
+
+  - name: full-core
+    description: Functional-layer pods are Ready, and kubectl top returns numbers for TAK and CloudTAK
+    actions:
+      - cmd: ./.github/scripts/check-full-core.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented

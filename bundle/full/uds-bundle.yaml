@@ -1,0 +1,122 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/uds.schema.json
+# Functional layers on a cluster that already has k3d-core-slim-dev.
+# uds-common create:test-bundle looks for uds-bundle.yaml in its path
+# directory, so this file lives in bundle/full/ rather than as
+# bundle/uds-bundle-full.yaml. `uds run test-full-core` passes that path.
+# The slim checkpoint stays the starting point. This bundle upgrades
+# core-base the same way bundle/uds-bundle.yaml does, then adds the layers.
+# core-monitoring and core-portal need Identity, which the checkpoint
+# already installed. See adr/0015-full-core-is-a-scheduled-gate.md.
+kind: UDSBundle
+metadata:
+  name: takserver-full
+  description: TAK Server on the UDS Core functional layers
+  version: dev
+
+packages:
+  - name: core-base
+    repository: ghcr.io/defenseunicorns/packages/uds/core-base
+    ref: 1.15.2-upstream
+    optionalComponents:
+      - istio-passthrough-gateway
+    keylessVerification:
+      certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      certificateOIDCIssuer: https://token.actions.githubusercontent.com
+    overrides:
+      pepr-uds-core:
+        module:
+          values:
+            - path: watcher.resources.requests.cpu
+              value: 100m
+            - path: watcher.resources.requests.memory
+              value: 64Mi
+            - path: admission.resources.requests.cpu
+              value: 100m
+            - path: admission.resources.requests.memory
+              value: 64Mi
+      istio-controlplane:
+        istiod:
+          values:
+            - path: resources.requests.cpu
+              value: 100m
+            - path: resources.requests.memory
+              value: 1024Mi
+            - path: rollingMaxSurge
+              value: "0%"
+            - path: rollingMaxUnavailable
+              value: "100%"
+      istio-passthrough-gateway:
+        gateway:
+          values:
+            - path: resources.requests.cpu
+              value: 50m
+            - path: service.ports
+              value:
+                - name: status-port
+                  port: 15021
+                  protocol: TCP
+                  targetPort: 15021
+                - name: http2
+                  port: 80
+                  protocol: TCP
+                  targetPort: 80
+                - name: https
+                  port: 443
+                  protocol: TCP
+                  targetPort: 443
+                - name: tls-tak-cert
+                  port: 8446
+                  protocol: TCP
+                  targetPort: 8446
+                - name: tls-tak-stream
+                  port: 8089
+                  protocol: TCP
+                  targetPort: 8089
+            - path: autoscaling.enabled
+              value: false
+
+  - name: core-metrics-server
+    repository: ghcr.io/defenseunicorns/packages/uds/core-metrics-server
+    ref: 1.15.2-upstream
+    keylessVerification: &core-keyless
+      certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      certificateOIDCIssuer: https://token.actions.githubusercontent.com
+
+  - name: core-logging
+    repository: ghcr.io/defenseunicorns/packages/uds/core-logging
+    ref: 1.15.2-upstream
+    keylessVerification: *core-keyless
+
+  - name: core-runtime-security
+    repository: ghcr.io/defenseunicorns/packages/uds/core-runtime-security
+    ref: 1.15.2-upstream
+    keylessVerification: *core-keyless
+
+  - name: core-backup-restore
+    repository: ghcr.io/defenseunicorns/packages/uds/core-backup-restore
+    ref: 1.15.2-upstream
+    keylessVerification: *core-keyless
+
+  - name: core-monitoring
+    repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring
+    ref: 1.15.2-upstream
+    keylessVerification: *core-keyless
+
+  - name: core-portal
+    repository: ghcr.io/defenseunicorns/packages/uds/core-portal
+    ref: 1.15.2-upstream
+    keylessVerification: *core-keyless
+
+  - name: takserver
+    path: ../../
+    ref: dev
+    optionalComponents:
+      - cloudtak
+    overrides:
+      takserver:
+        takserver:
+          valuesFiles:
+            - ../test-values.yaml

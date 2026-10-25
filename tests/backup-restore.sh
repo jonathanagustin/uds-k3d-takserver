@@ -342,7 +342,9 @@ if [[ "${tak_note}" != "${note}" || "${ct_note}" != "${note}" ]]; then
 fi
 say "marker ${note} read back from both databases"
 
-for name in takserver-api takserver-messaging takserver-plugins takserver-config; do
+# Start order follows the wait-deps init containers: messaging and the API wait
+# for config, and plugins waits for config, messaging, and the API.
+for name in takserver-config takserver-messaging takserver-api takserver-plugins; do
   k scale "deploy/${name}" -n takserver --replicas=1
   k rollout status "deploy/${name}" -n takserver --timeout=600s
 done

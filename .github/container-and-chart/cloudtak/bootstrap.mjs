@@ -62,7 +62,7 @@ const adminCert = fs.readFileSync(`${certDir}/admin.pem`, 'utf8');
 // stores a key it can load without one, so hand it an unencrypted PKCS#8 copy.
 const adminKey = crypto.createPrivateKey({
     key: fs.readFileSync(`${certDir}/admin.key`, 'utf8'),
-    passphrase: env('TAK_ADMIN_KEY_PASSPHRASE', 'atakatak'),
+    passphrase: env('TAK_ADMIN_KEY_PASSPHRASE'),
 }).export({ type: 'pkcs8', format: 'pem' });
 
 function request(url, { method = 'GET', headers = {}, body, tls = {} } = {}) {

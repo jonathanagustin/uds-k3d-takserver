@@ -12,7 +12,11 @@ set -euo pipefail
 
 service="${WEB_SERVICE:?WEB_SERVICE is not set}"
 key_name="${WEB_KEYSTORE:-takserver-web.jks}"
-pass="${CAPASS:-atakatak}"
+if [[ -z "${CAPASS:-}" ]]; then
+  echo "CAPASS is not set. Secret takserver-keystore did not reach this Job." >&2
+  exit 1
+fi
+pass="${CAPASS}"
 
 ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
 token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
@@ -35,9 +39,23 @@ if [[ -n "$(field "${key_name}")" ]]; then
 fi
 
 field ca.pem | base64 -d > "${work}/ca.pem"
-field ca-do-not-share.key | base64 -d > "${work}/ca.key"
+# The CA key is not left in the ConfigMap TAK pods mount. A fresh install
+# still has it on local disk. An older ConfigMap, or Secret takserver-ca-key,
+# covers the upgrade and a Job retry.
+if [[ -s /opt/tak/certs/files/ca-do-not-share.key ]]; then
+  cp /opt/tak/certs/files/ca-do-not-share.key "${work}/ca.key"
+else
+  key_b64="$(curl -sS --cacert "${ca}" -H "Authorization: Bearer ${token}" \
+    "https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets/takserver-ca-key" \
+    | grep -o '"ca-do-not-share.key": *"[^"]*"' | head -n 1 | sed 's/.*: *"\(.*\)"/\1/' || true)"
+  if [[ -n "${key_b64}" ]]; then
+    printf '%s' "${key_b64}" | base64 -d > "${work}/ca.key"
+  else
+    field ca-do-not-share.key | base64 -d > "${work}/ca.key"
+  fi
+fi
 if [[ ! -s "${work}/ca.pem" ]] || [[ ! -s "${work}/ca.key" ]]; then
-  echo "ConfigMap cert-migration has no ca.pem or ca-do-not-share.key" >&2
+  echo "Could not read ca.pem and the CA key for the web certificate" >&2
   exit 1
 fi
 

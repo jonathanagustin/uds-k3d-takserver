@@ -254,13 +254,15 @@ components:
               ca="$(get 'ca\.pem')"
               cert="$(get 'admin\.pem')"
               key="$(get 'admin\.key')"
-              if [ -z "${ca}" ] || [ -z "${cert}" ] || [ -z "${key}" ]; then
-                echo "ConfigMap takserver/cert-migration has no ca.pem, admin.pem, or admin.key" >&2
+              # Already base64, same as the certificate fields. Do not decode it.
+              pass="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}')"
+              if [ -z "${ca}" ] || [ -z "${cert}" ] || [ -z "${key}" ] || [ -z "${pass}" ]; then
+                echo "TAK admin material or Secret takserver-keystore is missing" >&2
                 exit 1
               fi
               k create namespace cloudtak --dry-run=client -o yaml | k apply -f -
-              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"cloudtak-tak-admin","namespace":"cloudtak","labels":{"app.kubernetes.io/part-of":"cloudtak"}},"type":"Opaque","data":{"ca.pem":"%s","admin.pem":"%s","admin.key":"%s"}}' \
-                "${ca}" "${cert}" "${key}" | k apply -f - >/dev/null
+              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"cloudtak-tak-admin","namespace":"cloudtak","labels":{"app.kubernetes.io/part-of":"cloudtak"}},"type":"Opaque","data":{"ca.pem":"%s","admin.pem":"%s","admin.key":"%s","CAPASS":"%s"}}' \
+                "${ca}" "${cert}" "${key}" "${pass}" | k apply -f - >/dev/null
               echo "Secret cloudtak/cloudtak-tak-admin is up to date"
     images:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.112.3" # cloudtak-version

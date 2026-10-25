@@ -64,15 +64,20 @@ work="$(mktemp -d)"
 trap 'kill ${pf} 2>/dev/null || true; rm -rf "${work}"' EXIT
 sleep 3
 cert_dir="$("${here}/../tests/extract-certs.sh")"
+key_pass="$("${here}/../tests/keystore-pass.sh")"
 admin() {
-  curl -k -sS --max-time 20 --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass atakatak \
+  curl -k -sS --max-time 20 --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass "${key_pass}" \
     --resolve "takserver-api.${DOMAIN}:28443:127.0.0.1" "$@"
 }
 DEVICE_USER="${DEVICE_USER:-atak-device}"
 DEVICE_GROUP="${DEVICE_GROUP:-Operators}"
 cm() { k get configmap cert-migration -n takserver -o "go-template={{index .binaryData \"$1\"}}" | base64 -d; }
 cm ca.pem > "${work}/ca.pem"
-cm ca-do-not-share.key > "${work}/ca.key"
+if k get secret takserver-ca-key -n takserver >/dev/null 2>&1; then
+  k get secret takserver-ca-key -n takserver -o jsonpath='{.data.ca-do-not-share\.key}' | base64 -d > "${work}/ca.key"
+else
+  cm ca-do-not-share.key > "${work}/ca.key"
+fi
 cat > "${work}/ext.cnf" <<CNF
 basicConstraints = CA:FALSE
 keyUsage = critical, digitalSignature, keyEncipherment
@@ -81,7 +86,7 @@ CNF
 openssl req -new -newkey rsa:2048 -nodes -keyout "${work}/device.key" -out "${work}/device.csr" \
   -subj "/CN=${DEVICE_USER}/O=TAK/OU=UDS"
 openssl x509 -req -in "${work}/device.csr" -days 30 -sha256 \
-  -CA "${work}/ca.pem" -CAkey "${work}/ca.key" -passin pass:atakatak \
+  -CA "${work}/ca.pem" -CAkey "${work}/ca.key" -passin "pass:${key_pass}" \
   -set_serial "0x$(openssl rand -hex 16)" -extfile "${work}/ext.cnf" -out "${work}/device.pem"
 rm -f "${work}/ca.key"
 openssl verify -CAfile "${work}/ca.pem" "${work}/device.pem"

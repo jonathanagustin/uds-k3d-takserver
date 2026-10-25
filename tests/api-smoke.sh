@@ -77,7 +77,7 @@ expected_version="${TAK_VERSION:-5.7}"
 cert_dir="$("${script_dir}/extract-certs.sh")"
 admin_cert="${TAK_CLIENT_CERT:-${cert_dir}/admin.pem}"
 admin_key="${TAK_CLIENT_KEY:-${cert_dir}/admin.key}"
-admin_pass="${TAK_CLIENT_KEY_PASSPHRASE:-atakatak}"
+admin_pass="$("${script_dir}/keystore-pass.sh")"
 
 # request <body-file> -- curl args
 # Sets REPLY_CODE. A transport error is code 000.

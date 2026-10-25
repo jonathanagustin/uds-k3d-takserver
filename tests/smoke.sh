@@ -22,6 +22,7 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cert_dir="$("${script_dir}/extract-certs.sh")"
+TAK_CLIENT_KEY_PASSPHRASE="$("${script_dir}/keystore-pass.sh")"
 
 check_endpoint() {
   local name="$1"
@@ -32,7 +33,7 @@ check_endpoint() {
   local cert="${TAK_CLIENT_CERT:-${cert_dir}/admin.pem}"
   local key="${TAK_CLIENT_KEY:-${cert_dir}/admin.key}"
   # generateClusterCerts.sh encrypts the key with the CoreConfig password.
-  local pass="${TAK_CLIENT_KEY_PASSPHRASE:-atakatak}"
+  local pass="${TAK_CLIENT_KEY_PASSPHRASE}"
 
   echo "TLS handshake and HTTP status for ${name} (${url}, service port ${port})"
   # 8443 requires a client certificate. 8446 does not. With OAuth configured,
@@ -80,7 +81,7 @@ accept_with_cert() {
   local sni="$2"
   local out
   out="$(echo | openssl s_client -brief -connect "127.0.0.1:${port}" -servername "${sni}" \
-    -cert "${cert_dir}/admin.pem" -key "${cert_dir}/admin.key" -pass "pass:atakatak" 2>&1 || true)"
+    -cert "${cert_dir}/admin.pem" -key "${cert_dir}/admin.key" -pass "pass:${TAK_CLIENT_KEY_PASSPHRASE}" 2>&1 || true)"
   if ! grep -q "CONNECTION ESTABLISHED" <<< "${out}"; then
     echo "${name} did not complete TLS with the admin certificate" >&2
     printf '%s\n' "${out}" >&2

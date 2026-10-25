@@ -63,9 +63,13 @@ export STATE="${STATE:-VA}"
 export CITY="${CITY:-Arlington}"
 export ORGANIZATION="${ORGANIZATION:-TAK}"
 export ORGANIZATIONAL_UNIT="${ORGANIZATIONAL_UNIT:-UDS}"
-# cert-metadata.sh defaults CAPASS and PASS to atakatak, the password in CoreConfig.xml.
-export CAPASS="${CAPASS:-atakatak}"
-export PASS="${PASS:-${CAPASS}}"
+# CAPASS and PASS come from Secret takserver-keystore. There is no default:
+# a fresh install must not fall back to the upstream example password.
+if [[ -z "${CAPASS:-}" || -z "${PASS:-}" ]]; then
+  echo "CAPASS and PASS must be set from Secret takserver-keystore" >&2
+  exit 1
+fi
+export CAPASS PASS
 export HOME=/tmp
 
 # PKCS12_FORMAT=modern (the default) passes TAK's --fips flag, so every .p12
@@ -157,6 +161,10 @@ fi
   for file in files/*; do
     [[ -f "${file}" ]] || continue
     name="$(basename "${file}")"
+    # TAK pods mount this ConfigMap. The CA key stays in Secret takserver-ca-key.
+    if [[ "${name}" == "ca-do-not-share.key" ]]; then
+      continue
+    fi
     b64="$(base64 -w 0 "${file}")"
     if [[ "${first}" -eq 0 ]]; then
       printf '%s\n' ','
@@ -181,3 +189,26 @@ if [[ "${code}" != "201" ]] && [[ "${code}" != "200" ]] && [[ "${code}" != "409"
   exit 1
 fi
 echo "Created ConfigMap cert-migration"
+
+# The CA key is not in the ConfigMap. The cert Job's ServiceAccount can write
+# this Secret. Do not print the key.
+ca_key="files/ca-do-not-share.key"
+if [[ ! -s "${ca_key}" ]]; then
+  echo "ca-do-not-share.key was not written" >&2
+  exit 1
+fi
+secret_body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"takserver-ca-key"},"type":"Opaque","data":{"ca-do-not-share.key":"%s"}}' "$(base64 -w 0 "${ca_key}")")"
+secrets_api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
+code="$(curl -sS -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
+  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
+  -X POST --data-binary "${secret_body}" "${secrets_api}")"
+if [[ "${code}" == "409" ]]; then
+  code="$(curl -sS -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
+    -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
+    -X PUT --data-binary "${secret_body}" "${secrets_api}/takserver-ca-key")"
+fi
+if [[ "${code}" != "200" && "${code}" != "201" ]]; then
+  echo "Secret takserver-ca-key returned HTTP ${code}" >&2
+  exit 1
+fi
+echo "Secret takserver-ca-key holds the CA key"

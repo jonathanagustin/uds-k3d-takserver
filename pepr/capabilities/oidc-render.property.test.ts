@@ -23,7 +23,7 @@ import {
 } from "./oidc-render.ts";
 
 const IMAGE = "registry.example/takserver-config:1";
-const RENDER_VOLUMES = [CONFIG_MOUNT, "oidc-script", "oidc-template", "oidc-secret"];
+const RENDER_VOLUMES = [CONFIG_MOUNT, "oidc-script", "oidc-template", "oidc-secret", "keystore-secret"];
 const NON_TAK_APPS = ["takserver-ignite", "takserver-nats", "takserver-postgresql"];
 
 // Names that may collide with the ones addRender adds, plus arbitrary ones.

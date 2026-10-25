@@ -7,8 +7,10 @@
 // to Roles, and the ClusterRole keeps what cannot be namespaced.
 //
 // What stays cluster-scoped:
-// - Namespace `get` is limited to `cloudtak`. Namespace `create` cannot take
-//   resourceNames, and Namespace is cluster-scoped, so create stays here.
+// - Namespace get and create. Namespace is cluster-scoped. The chart schema
+//   rejects `resourceNames` on `values.rbac` (Helm: additional properties
+//   'resourceNames' not allowed), so this rule cannot name `cloudtak`.
+//   The watcher still only reads that namespace.
 // - `customresourcedefinitions` create/patch. Pepr registers its store CRD.
 // - `peprstores`. Pepr's own Role sets resourceNames to an empty string, so
 //   the grant that works is still this ClusterRole rule.
@@ -183,36 +185,21 @@ export function clusterRules(rules: ChartRule[]): ChartRule[] {
   }
   const namespaces = rules.filter(rule => (rule.resources ?? []).includes("namespaces"));
   if (namespaces.length !== 1) {
-    throw new Error("pepr rbac no longer has one namespaces rule to split");
+    throw new Error("pepr rbac no longer has one namespaces rule");
   }
   const moved = rules.some(rule => (rule.resources ?? []).some(resource => MOVED.has(resource)));
   if (!moved) {
     throw new Error("pepr rbac no longer includes the watched resources that move into Roles");
   }
-  const [namespaceRule] = namespaces;
-  const verbs = [...(namespaceRule.verbs ?? [])];
-  const split: ChartRule[] = [];
-  if (verbs.includes("get")) {
-    split.push({
-      apiGroups: [...(namespaceRule.apiGroups ?? [])],
-      resources: ["namespaces"],
-      resourceNames: ["cloudtak"],
-      verbs: ["get"],
-    });
-  }
-  const rest = verbs.filter(verb => verb !== "get").sort();
-  if (rest.length > 0) {
-    split.push({
-      apiGroups: [...(namespaceRule.apiGroups ?? [])],
-      resources: ["namespaces"],
-      verbs: rest,
-    });
-  }
-  const kept = rules.filter(rule => {
-    const resources = rule.resources ?? [];
-    return !resources.includes("namespaces") && !resources.some(resource => MOVED.has(resource));
-  });
-  return [...split, ...kept];
+  // values.rbac is checked by the chart schema, which has no resourceNames
+  // property. Drop it here. The Role manifests below still name their objects.
+  return rules
+    .filter(rule => !(rule.resources ?? []).some(resource => MOVED.has(resource)))
+    .map(rule => ({
+      apiGroups: rule.apiGroups,
+      resources: rule.resources,
+      verbs: rule.verbs,
+    }));
 }
 
 function rulesFrom(value: unknown): ChartRule[] {

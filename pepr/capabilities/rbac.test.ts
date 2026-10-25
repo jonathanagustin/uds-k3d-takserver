@@ -89,10 +89,9 @@ test("the chart moves watched objects into namespaced Roles", () => {
   for (const moved of ["configmaps", "pods", "secrets", "services", "deployments", "deployments/scale", "statefulsets", "destinationrules"]) {
     assert.equal(resources.includes(moved), false, moved);
   }
-  const namespaceGet = scoped.find(rule => rule.resources?.[0] === "namespaces" && rule.verbs?.includes("get"));
-  assert.deepEqual(namespaceGet?.resourceNames, ["cloudtak"]);
-  const namespaceCreate = scoped.find(rule => rule.resources?.[0] === "namespaces" && rule.verbs?.includes("create"));
-  assert.equal(namespaceCreate?.resourceNames, undefined);
+  const namespaceRule = scoped.find(rule => rule.resources?.[0] === "namespaces");
+  assert.deepEqual(namespaceRule?.verbs, ["create", "get"]);
+  assert.equal(scoped.every(rule => rule.resourceNames === undefined), true);
   assert.equal(scoped.some(rule => rule.resources?.[0] === "peprstores"), true);
   const text = roleManifest();
   for (const name of [

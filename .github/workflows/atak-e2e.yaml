@@ -119,12 +119,29 @@ jobs:
         shell: bash
         timeout-minutes: 90
 
+      # core-monitoring is the same layer full-core adds beside TAK. The
+      # device VM is already on this runner, so give it the swap that job uses.
+      - name: Add swap
+        run: ./.github/scripts/add-runner-swap.sh
+
+      - name: Deploy core-monitoring so the viewer probe can be created
+        run: |
+          set -euo pipefail
+          export UDS_CONFIG="${UDS_CONFIG:-bundle/uds-config.yaml}"
+          uds create atak/ci/monitoring --confirm --no-progress --architecture=amd64
+          uds deploy atak/ci/monitoring/uds-bundle-atak-monitoring-amd64-dev.tar.zst --confirm --no-progress --force-conflicts
+        timeout-minutes: 40
+
       - name: ATAK device end to end
         run: |
           # Playwright from atak/ci/package-lock.json.
           npm ci --prefix atak/ci --no-audit --no-fund >/dev/null
           NODE_PATH="${PWD}/atak/ci/node_modules" OUT=out ./atak/ci/e2e.sh
         timeout-minutes: 90
+
+      - name: ATAK viewer uptime probe
+        run: ./tests/atak-uptime.sh
+        timeout-minutes: 15
 
       - name: Publish the device images
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -138,6 +155,7 @@ jobs:
         if: failure()
         run: |
           uds zarf tools kubectl get pods -A -o wide || true
+          uds zarf tools kubectl get probes.monitoring.coreos.com -A -o wide || true
           uds zarf tools kubectl get vm,vmi -n atak -o yaml || true
           uds zarf tools kubectl get events -n atak --sort-by=.lastTimestamp || true
           uds zarf tools kubectl get events -n kubevirt --sort-by=.lastTimestamp || true

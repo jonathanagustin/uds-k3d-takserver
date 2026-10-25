@@ -34,7 +34,7 @@ if ! k api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q '^p
   exit 0
 fi
 
-say "uptime: ATAK viewer probe is not in this job; the full bundle does not deploy atak/deploy/device.yaml"
+say "uptime: ATAK viewer probe is checked by tests/atak-uptime.sh in the ATAK e2e job"
 
 listed=0
 for _ in $(seq 1 18); do

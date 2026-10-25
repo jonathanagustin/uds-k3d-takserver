@@ -149,8 +149,10 @@ spec:
         port: 8000
         # /phone.html is the page the viewer serves. The expose is behind
         # Authservice, so the operator's probe client is what gets a 2xx.
-        # The full-core bundle does not deploy this package, so the probe
-        # is not in that job. Passthrough TAK ports stay without an HTTP probe.
+        # The ATAK e2e job deploys core-monitoring and then this package, and
+        # tests/atak-uptime.sh requires probe_success 1. The full-core bundle
+        # does not deploy this package. Passthrough TAK ports stay without an
+        # HTTP probe.
         uptime:
           checks:
             paths:

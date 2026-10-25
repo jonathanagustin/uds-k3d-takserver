@@ -745,11 +745,12 @@ tasks:
       - cmd: ./tests/usage.sh
 
   - name: full-core
-    description: Functional-layer pods are Ready, kubectl top returns numbers, uptime probes succeed, and Grafana lists the TAK dashboard
+    description: Functional-layer pods are Ready, kubectl top returns numbers, uptime probes succeed, Grafana lists the TAK dashboard, and Portal lists the TAK tiles
     actions:
       - cmd: ./.github/scripts/check-full-core.sh
       - cmd: ./tests/uptime-probes.sh
       - cmd: ./tests/grafana-alerts.sh
+      - cmd: ./tests/portal.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented

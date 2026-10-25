@@ -1,7 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>defenseunicorns/uds-common//config/renovate.json5",
+    ":dependencyDashboard",
+    "config:base",
+    "helpers:pinGitHubActionDigests",
+    "helpers:pinGitHubActionDigestsToSemver",
     ":semanticCommits",
     ":semanticPrefixFixDepsChoreOthers",
     "group:all",
@@ -11,6 +14,20 @@
   "ignorePresets": [
     ":ignoreModulesAndTests"
   ],
+  "timezone": "America/New_York",
+  "helm-values": {
+    "managerFilePatterns": [
+      "/.*\\.ya?ml$/"
+    ]
+  },
+  "kubernetes": {
+    "managerFilePatterns": [
+      "/.*\\.ya?ml$/"
+    ],
+    "ignorePaths": [
+      ".github"
+    ]
+  },
   "separateMajorMinor": true,
   "reviewersFromCodeOwners": false,
   "rebaseWhen": "conflicted",

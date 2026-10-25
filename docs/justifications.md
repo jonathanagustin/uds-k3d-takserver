@@ -84,6 +84,14 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 - **ATAK viewer.** No ATAK-CIV image showed up on repo1. The viewer is a separate package, built here.
 - **What changes it:** Iron Bank images that match those names and tags, and chart values that can point at them without forking the upstream chart. Until then the package does not pretend a values overlay is a `registry1` flavor.
 
+## Falco
+
+UDS Core's runtime security layer is Falco. Only the stable ruleset is on, and alerts go to Loki through Falcosidekick. UDS already disables `Contact K8S API Server From Container` for the whole cluster. This package does not disable another rule.
+
+The full bundle adds one custom rule, `TAK cert write outside the JVM`, on the `uds-falco-config` value `extraRules`. It matches a write under `/opt/tak/certs` in the `takserver` namespace by a process whose name is not `java`. `tests/falco-events.sh` creates `/opt/tak/certs/falco-probe-test` with `touch` in the API container and requires that file name in Loki.
+
+The same script writes every Falco event whose payload names `takserver`, `cloudtak`, or `pepr-system` to `out/falco-events.txt`. The full-core job uploads that file. No exception is added from those events here. The first artifact is what a follow-up uses to decide which rules are expected TAK behavior. An exception written before that run would be a guess, and failing the job on every event would block the full-core gate before the list exists.
+
 ## Adding an exemption
 
 1. Keep the matcher as narrow as it can be. Never use `.*`.

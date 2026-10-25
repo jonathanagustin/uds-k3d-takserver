@@ -92,8 +92,9 @@ print(pods[0]["metadata"]["name"])
 '
 }
 cloudtak_sql() {
-  k exec -i -n cloudtak "$(cloudtak_pod)" -c postgis -- \
-    sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -w -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At'
+  # The single quotes are the script that runs inside the pod.
+  # shellcheck disable=SC2016
+  k exec -i -n cloudtak "$(cloudtak_pod)" -c postgis -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -w -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At'
 }
 pvc_snapshot() {
   local ns="${1:-takserver}"

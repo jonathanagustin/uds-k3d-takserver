@@ -10,6 +10,15 @@ image:
   repository: ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak
   tag: v13.112.3 # cloudtak-version
 
+# Logical pg_dump of the CloudTAK database into Secret cloudtak-db-dump.
+# Off unless a bundle sets backup.dump.enabled. See adr/0016-logical-db-dump.md.
+backup:
+  dump:
+    enabled: false
+    schedule: "20 2 * * *"
+    # Writes the Secret. The PostGIS image has pg_dump and no curl.
+    publishImage: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
+
 postgis:
   # The image the TAK chart already uses. One image covers both databases.
   # Built in this repository for amd64 and arm64

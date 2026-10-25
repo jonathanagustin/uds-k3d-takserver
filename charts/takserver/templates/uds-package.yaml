@@ -177,6 +177,33 @@ spec:
         remoteGenerated: KubeAPI
         description: "Ignite Kubernetes discovery for {{ .app }}"
       {{- end }}
+      {{- if .Values.backup.dump.enabled }}
+      # The logical dump CronJob. It is off unless a bundle sets
+      # backup.dump.enabled, so a slim install has neither the pod nor these
+      # rules. See adr/0016-logical-db-dump.md.
+      - direction: Egress
+        selector:
+          app: tak-db-dump
+        remoteSelector:
+          app.kubernetes.io/name: postgresql
+          app.kubernetes.io/component: primary
+        port: 5432
+        description: "Egress 5432 from the logical dump to Postgres"
+      - direction: Ingress
+        selector:
+          app.kubernetes.io/name: postgresql
+          app.kubernetes.io/component: primary
+        remoteSelector:
+          app: tak-db-dump
+        remoteServiceAccount: tak-db-dump
+        port: 5432
+        description: "Ingress 5432 to Postgres from the logical dump"
+      - direction: Egress
+        selector:
+          app: tak-db-dump
+        remoteGenerated: KubeAPI
+        description: "Logical dump writes Secret tak-db-dump"
+      {{- end }}
 
       # Ignite discovery (47500), communication (47100), and the thin client
       # (10800) are bidirectional. A missing return path stalls until

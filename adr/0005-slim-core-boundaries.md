@@ -14,7 +14,7 @@ The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, the
 
 - No Package `monitor` entry and no scrape allow rule. A ServiceMonitor would not receive Prometheus text. See [ADR 0003](0003-no-prometheus-monitor.md).
 - No log agent in this package. TAK logs to stdout. The test requires that stream. A Loki query runs only when a Loki Service exists. Slim-dev does not install one.
-- No Velero objects. Backup notes for the Postgres volume and ConfigMap `cert-migration` are in [Data](../docs/data.md). Enable Velero from the standard core package when a cluster needs it.
+- No Velero objects on the slim bundle. The full bundle installs `core-backup-restore` and a logical database dump. See [ADR 0016](0016-logical-db-dump.md) and [Data](../docs/data.md).
 - No `runAsNonRoot` or read-only root filesystem. The upstream Deployments cannot express that, and TAK writes `/certs`, `/logs`, and `/conf`.
 - Per-workload, per-port allow rules cover Postgres, NATS, Ignite, and the TAK processes. There is no namespace-wide allow rule. See [ADR 0007](0007-per-workload-network-rules.md). Keycloak egress is only the API and messaging selectors to the tenant gateway on port 443. There is no `remoteGenerated: Anywhere`.
 

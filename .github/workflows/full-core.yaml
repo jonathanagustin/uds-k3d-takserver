@@ -231,6 +231,16 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Upload backup restore log
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backup-restore-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
+          path: out/backup-restore.txt
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload debug logs
         if: always()
         timeout-minutes: 2

@@ -33,6 +33,10 @@ jobs:
       # sha256 of k3d-linux-amd64 for K3D_VERSION, from the release's
       # checksums.txt. Update both together.
       K3D_SHA256: dbaa79a76ace7f4ca230a1ff41dc7d8a5036a8ad0309e9c54f9bf3836dbe853e
+      # sha256 of the v1.8.4 release assets. Update these with KUBEVIRT_VERSION.
+      VIRTCTL_SHA256: 7125d69c3b3e9c8185c106d9cdf77a817491e4657ac47f4509fb40d7aea59cca
+      KUBEVIRT_OPERATOR_SHA256: d1d8264eec5b802c122bec6c54d8c3b11e119ee2a5c75602aaa8b53ea3857eda
+      KUBEVIRT_CR_SHA256: 43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
       IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
       VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
     steps:
@@ -74,6 +78,7 @@ jobs:
 
       - name: k3d and KubeVirt
         run: |
+          set -euo pipefail
           curl -fsSLo "${RUNNER_TEMP}/k3d" "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
           echo "${K3D_SHA256}  ${RUNNER_TEMP}/k3d" | sha256sum -c -
           sudo install -m 0755 "${RUNNER_TEMP}/k3d" /usr/local/bin/k3d
@@ -82,8 +87,13 @@ jobs:
           start=$(date +%s)
           k3d image import -c atak "${IMAGE}" "${VIEWER_IMAGE}"
           echo "import seconds: $(( $(date +%s) - start ))"
-          kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
-          kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
+          base="https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}"
+          curl -fsSLo "${RUNNER_TEMP}/kubevirt-operator.yaml" "${base}/kubevirt-operator.yaml"
+          curl -fsSLo "${RUNNER_TEMP}/kubevirt-cr.yaml" "${base}/kubevirt-cr.yaml"
+          echo "${KUBEVIRT_OPERATOR_SHA256}  ${RUNNER_TEMP}/kubevirt-operator.yaml" | sha256sum -c -
+          echo "${KUBEVIRT_CR_SHA256}  ${RUNNER_TEMP}/kubevirt-cr.yaml" | sha256sum -c -
+          kubectl apply -f "${RUNNER_TEMP}/kubevirt-operator.yaml"
+          kubectl apply -f "${RUNNER_TEMP}/kubevirt-cr.yaml"
           kubectl -n kubevirt wait kv kubevirt --for condition=Available --timeout=15m
 
       - name: Boot Android and reach it over adb
@@ -96,10 +106,14 @@ jobs:
         if: failure()
         run: |
           mkdir -p out
-          curl -fsSL -o /usr/local/bin/virtctl "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64" 2>/dev/null \
-            || sudo curl -fsSL -o /usr/local/bin/virtctl "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64"
-          sudo chmod +x /usr/local/bin/virtctl || true
-          virtctl vnc screenshot -n atak atak-device --file out/vnc.png || true
+          # A bad virtctl download stops only the screenshot. The logs below still run.
+          if curl -fsSL -o "${RUNNER_TEMP}/virtctl" "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/virtctl-${KUBEVIRT_VERSION}-linux-amd64" \
+            && echo "${VIRTCTL_SHA256}  ${RUNNER_TEMP}/virtctl" | sha256sum -c -; then
+            sudo install -m 0755 "${RUNNER_TEMP}/virtctl" /usr/local/bin/virtctl
+            virtctl vnc screenshot -n atak atak-device --file out/vnc.png || true
+          else
+            echo "virtctl download did not match ${VIRTCTL_SHA256}" >&2
+          fi
           kubectl get pods -A -o wide || true
           kubectl get vm,vmi -n atak -o yaml || true
           kubectl get events -n atak --sort-by=.lastTimestamp || true

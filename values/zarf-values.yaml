@@ -1,0 +1,13 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Package values. Zarf Values is beta. `uds zarf package deploy --set-values`
+# and `--values` override this file. The variables in zarf.yaml stay so a
+# UDS CLI 0.40 bundle can still `--set` them. See docs/configuration.md.
+global:
+  domain: uds.dev
+tak:
+  imageTag: "5.7-RELEASE-14"
+dns:
+  inCluster: "true"
+  passthroughHosts: "takserver-api takserver-stream"

@@ -6,14 +6,16 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 
 ## Values
 
-`values/common-values.yaml` is the overlay. `values/upstream-values.yaml` is an extra values file on the chart. Zarf replaces `###ZARF_VAR_DOMAIN###` and `###ZARF_VAR_TAK_IMAGE_TAG###` when the package is created.
+`values/zarf-values.yaml` is the package values file. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each TAK image tag. The watcher env is a templated values file, so it reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. `uds zarf package deploy --set-values global.domain=example.com` overrides the file. `values/common-values.yaml` is still the upstream overlay, and `values/upstream-values.yaml` is an extra values file on that chart.
 
-| Variable | Default | Used for |
-| --- | --- | --- |
-| `DOMAIN` | `uds.dev` | Gateway hosts, such as `takserver.uds.dev` |
-| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
-| `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
-| `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
+The four Zarf variables stay. UDS CLI 0.40 bundles set variables (`bundle/uds-config.yaml`, `uds deploy --set`) and cannot pass package values. The `images:` list is parsed before either substitution, so those refs stay literal. `charts/takserver/values.yaml` `certs.image` is one string, so it still contains `###ZARF_VAR_TAK_IMAGE_TAG###`. `pin-image-tags.sh` writes the commit tag into both `tak.imageTag` and `TAK_IMAGE_TAG`. On a mapped key the package value wins over the variable.
+
+| Name | Default | Helm reads | Variable still used for |
+| --- | --- | --- | --- |
+| `global.domain` / `DOMAIN` | `uds.dev` | package value | ATAK device manifest and any unmapped `###ZARF_VAR_DOMAIN###` |
+| `tak.imageTag` / `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | package value for the tag keys and the watcher image | `images:` literals and `certs.image` |
+| `dns.inCluster` / `IN_CLUSTER_DNS` | `true` | package value | `--set IN_CLUSTER_DNS=` still names the variable. The watcher does not read it |
+| `dns.passthroughHosts` / `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | package value | same, for `PASSTHROUGH_HOSTS` |
 
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md). NATS stays the images rendered by the upstream NATS chart. This repository does not build those.
 

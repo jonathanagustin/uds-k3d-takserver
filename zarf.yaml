@@ -53,10 +53,11 @@ components:
       - name: takserver
         valuesFiles:
           - values/upstream-values.yaml
-    # The watcher creates this ConfigMap only after the ordered Ignite
-    # restart has finished and the four TAK Deployments are Available.
-    # A ConfigMap has no status, so Zarf treats it as healthy once it exists.
-    # Deployment checks alone can pass before that restart scales them down.
+    # The watcher creates this ConfigMap once the four TAK Deployments are
+    # Available. Admission shapes those Deployments, the Ignite config, and
+    # the Ignite StatefulSet before the first pod, so a cold install does not
+    # scale them down. A ConfigMap has no status, so Zarf treats it as healthy
+    # once it exists.
     healthChecks:
       - apiVersion: v1
         kind: ConfigMap

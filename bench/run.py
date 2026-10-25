@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
+from bench.startup import max_generation, max_restarts
 from bench.tester_exit import bind_tester, reap
 
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
@@ -136,6 +137,30 @@ def footprint():
         "cpu_limits_m": cpu_lim if cpu_limits_complete else None,
         "memory_limits_bytes": mem_lim if limits_complete else None,
     }, errors
+
+
+def startup_shape():
+    """Generation and restarts for the four TAK Deployments. Null when unread."""
+    errors = []
+    try:
+        raw = kubectl("get", "deploy", "-n", "takserver", "-o", "json").stdout
+        pods = kubectl(
+            "get", "pods", "-n", "takserver",
+            "-l", "app in (takserver-api,takserver-messaging,takserver-config,takserver-plugins)",
+            "-o", "json",
+        ).stdout
+    except (RuntimeError, subprocess.CalledProcessError) as error:
+        return {"max_generation": None, "max_restart_count": None}, [str(error)]
+    try:
+        generations = max_generation(json.loads(raw).get("items", []))
+        restarts = max_restarts(json.loads(pods).get("items", []))
+    except json.JSONDecodeError as error:
+        return {"max_generation": None, "max_restart_count": None}, [f"startup: {error}"]
+    if generations is None:
+        errors.append("no TAK deployment generation")
+    if restarts is None:
+        errors.append("no TAK container restart count")
+    return {"max_generation": generations, "max_restart_count": restarts}, errors
 
 
 def ready_age():
@@ -351,6 +376,7 @@ def blank(arch, config, clients, duration):
         "images": None,
         "package_bytes": None,
         "time_to_ready": {"cold_s": None, "warm_s": None},
+        "startup": {"max_generation": None, "max_restart_count": None},
         "load": {
             "clients": clients,
             "duration_s": duration,
@@ -442,6 +468,9 @@ def one(config, clients, out_dir, tester, cold):
         fp, fp_errors = footprint()
         record["footprint"] = fp
         record["errors"].extend(fp_errors)
+        shape, shape_errors = startup_shape()
+        record["startup"] = shape
+        record["errors"].extend(shape_errors)
         record["package_bytes"] = package_bytes()
         if record["package_bytes"] is None:
             record["errors"].append("no zarf-package-takserver tarball to stat")

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # List the TAK and CloudTAK blackbox probes (in their own namespaces), require probe_success 1, then
-# delete the CloudTAK pod and record the drop and the recovery.
+# scale CloudTAK to zero and back, and record the drop and the recovery.
 # The ATAK viewer probe is on atak/deploy/device.yaml. The full bundle does
 # not deploy that package, so this job does not list it.
 # Skips when the Probe CRD is absent.
@@ -155,8 +155,19 @@ if [[ "${up}" -ne 1 ]]; then
 fi
 say "uptime: probe_success is 1 for TAK and CloudTAK"
 
-say "uptime: deleting the CloudTAK pod so the probe can drop"
-k delete pod -n cloudtak -l app=cloudtak --wait=false
+# Deleting the pod is not enough: it is back within one scrape interval, so the
+# probe can miss the outage. Scale to zero so the drop lasts until scale-up.
+replicas="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.replicas}')"
+replicas="${replicas:-1}"
+if [[ "${replicas}" -lt 1 ]]; then
+  replicas=1
+fi
+restore_cloudtak() {
+  k scale deploy/cloudtak -n cloudtak --replicas="${replicas}" >/dev/null 2>&1 || true
+}
+trap 'restore_cloudtak; cleanup' EXIT
+say "uptime: scaling CloudTAK to zero so the probe can drop"
+k scale deploy/cloudtak -n cloudtak --replicas=0
 
 dropped=0
 for _ in $(seq 1 48); do
@@ -173,6 +184,9 @@ if [[ "${dropped}" -ne 1 ]]; then
   series | tee -a "${log}" >&2 || true
   exit 1
 fi
+
+say "uptime: scaling CloudTAK back to ${replicas}"
+restore_cloudtak
 
 recovered=0
 for _ in $(seq 1 48); do

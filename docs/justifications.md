@@ -4,7 +4,7 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 `.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. hk runs it when the chart, `atak/deploy/`, this page or the script changes. Add the section in the same change that adds the exemption.
 
-`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails when an `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard, and when a pod in those namespaces is annotated `exempted` without a matching expected exemption. It prints the exempted-resource list and the security context of each TAK pod.
+`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails in either of these cases. An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard. A pod in those namespaces is annotated `exempted` without a matching expected exemption. It prints the exempted-resource list and the security context of each TAK pod.
 
 ## Exemptions
 
@@ -65,7 +65,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`, and two of them run `python3`: one writes the CoreDNS rewrite patch as JSON, and one runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
+- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`. Two of them run `python3`. One writes the CoreDNS rewrite patch as JSON. The other runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
 - **What removes it:** Moving the init containers into the `takserver-oidc` Pepr module or an upstream chart value, and building the CoreDNS patch with `./zarf tools yq`.
 
 ### Version scheme

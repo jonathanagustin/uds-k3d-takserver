@@ -48,7 +48,7 @@ People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page
 1. `https://map.<domain>/` loads the CloudTAK app. With no session, the app routes to `/login`. nginx adds `/api/login/oidc/auto.js` to the app's HTML pages, and that script sends `/login` straight on to `/api/login/oidc`.
 2. `/api/login/oidc` starts an authorization code flow with PKCE (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin`, the same gate as the TAK client.
 3. Keycloak returns to `https://map.<domain>/api/login/oidc/callback`. The `sso` container exchanges the code at Keycloak's token endpoint, in the cluster. `sso.<domain>` resolves to the tenant gateway through the in-cluster CoreDNS rewrite (see [Networking](networking.md)), and the Keycloak certificate is checked against the system trust store.
-4. It enrols a TAK client certificate for the user on TAK's 8447 with the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)), so the certificate is the Keycloak user's own TAK identity with that user's TAK groups.
+4. It enrols a TAK client certificate for the user on TAK's 8447. It sends the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)). The certificate is the Keycloak user's own TAK identity, with that user's TAK groups.
 5. It creates or updates the CloudTAK profile for that username with the certificate, and opens a CloudTAK login session with CloudTAK's own session code. Members of `sso.adminGroup` (default `/UDS Core/Admin`) become CloudTAK system administrators.
 6. The browser gets the session (login token, refresh token, session id) in the URL fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
 
@@ -113,7 +113,7 @@ All rules are explicit. There is no `IntraNamespace` and no `Anywhere` rule in e
 | `cloudtak` | tenant gateway (Keycloak) | 443 | `cloudtak` Egress |
 | `cloudtak` (service account `cloudtak`) | `tile.openstreetmap.org` | 443 | `cloudtak` Egress `remoteHost`, only with `basemap.enabled` |
 
-The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`, where the UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `charts/takserver/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
+The namespace has no waypoint of its own: it is ambient and Authservice is not enabled. The basemap rule uses UDS Core's shared egress waypoint in `istio-egress-ambient`. The UDS operator creates a ServiceEntry for the tile host and an AuthorizationPolicy that admits only the `cloudtak` service account. `charts/takserver/values.yaml` `cloudtak.enabled` renders the three `takserver` Ingress rules. They stay in place if the `cloudtak` component is not deployed, and then match no pods.
 
 `additionalNetworkAllow` in `charts/cloudtak/values.yaml` appends deployer rules after these, the same as in the `takserver` chart. Each entry needs a unique `description`.
 
@@ -178,4 +178,4 @@ CloudTAK is licensed under AGPL-3.0. This repository does not include its source
 
 ## Resources
 
-On the test node, CloudTAK requests 100m CPU and 384Mi memory with a 1Gi limit, the `sso` container 10m and 192Mi with a 512Mi limit (it loads CloudTAK's modules and sits near 270 MB), the bootstrap container 10m and 48Mi, and PostGIS 50m and 128Mi. The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.
+On the test node, CloudTAK requests 100m CPU and 384Mi memory, with a 1Gi limit. The `sso` container requests 10m and 192Mi, with a 512Mi limit. It loads CloudTAK's modules and sits near 270 MB. The bootstrap container requests 10m and 48Mi. PostGIS requests 50m and 128Mi. The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.

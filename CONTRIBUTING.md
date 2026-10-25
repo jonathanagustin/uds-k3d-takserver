@@ -26,7 +26,7 @@ Do not report security vulnerabilities in a public issue. Follow [SECURITY.md](S
 5. CI runs lint, CodeQL, dependency review, and the k3d install test. All required checks must pass.
 6. The maintainer reviews the pull request. When it is approved and green, it is squash-merged, so the pull request title becomes the commit message on `main`.
 
-Release Please builds the changelog and release pull requests from the merged titles, so you don't edit `CHANGELOG.md` or version numbers yourself.
+Release Please builds the changelog and the release pull requests from the merged titles. Leave `CHANGELOG.md` and the version numbers for that pull request.
 
 ## Requirements for a pull request
 

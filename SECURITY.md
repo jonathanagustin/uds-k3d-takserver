@@ -15,6 +15,6 @@ Include the affected version or commit, the component (TAK images, CloudTAK imag
 
 ## What to expect
 
-- A first response within 14 days of the report.
-- An assessment and, if confirmed, a fix plan or mitigation within 90 days. Fixes ship in a new release and the advisory is published after the fix is available.
+- Expect a first response within 14 days of the report.
+- Expect an assessment within 90 days. If the report is confirmed, that assessment includes a fix plan or a mitigation. Fixes ship in a new release. The advisory is published after the fix is available.
 - Report vulnerabilities in TAK Server or CloudTAK code to those projects. This repository picks up their fixes.

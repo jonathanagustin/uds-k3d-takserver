@@ -33,3 +33,10 @@ pepr/coverage/
 # Python coverage data.
 .coverage
 __pycache__/
+
+# Docs site. The pages under src/content/docs are copied from the
+# repository markdown at build time.
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
+docs-site/src/content/docs/

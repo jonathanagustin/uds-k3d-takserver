@@ -153,6 +153,14 @@ test("the chart moves watched objects into namespaced Roles", () => {
       }
     }
   }
+  const takserver = roles.find(role => role.kind === "Role" && role.metadata.namespace === "takserver");
+  assert.ok(takserver);
+  const startupDelete = (takserver.rules ?? []).find(
+    (rule: ManifestRule) =>
+      (rule.resources ?? []).join(",") === "configmaps" && (rule.verbs ?? []).includes("delete"),
+  );
+  assert.deepEqual(startupDelete?.resourceNames, ["takserver-startup"]);
+  assert.deepEqual(startupDelete?.verbs, ["delete"]);
   const clusterWatch = roles.find(role => role.kind === "ClusterRole");
   assert.ok(clusterWatch);
   assert.equal(

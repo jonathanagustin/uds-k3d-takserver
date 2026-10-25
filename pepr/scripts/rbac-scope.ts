@@ -24,6 +24,11 @@
 // - Pod `get`/`list` in takserver. The list is by label, so resourceNames
 //   would deny it.
 //
+// ConfigMap `delete` of `takserver-startup` is named. The Ignite reconcile
+// removes that marker before a restart. The API authorizes delete before it
+// looks the object up, so a missing marker is still forbidden without the
+// verb and the reconcile never reaches the create.
+//
 // The watcher itself does not use that namespaced URL. Pepr 2.0.5 spreads the
 // binding filters into the client, and those filters carry `namespaces` (the
 // capability filter) rather than `namespace` (what the client puts on the
@@ -72,6 +77,12 @@ const ROLE_RULES = [
         verbs: ["get", "list", "patch", "watch"],
       },
       { apiGroups: [""], resources: ["configmaps"], verbs: ["create"] },
+      {
+        apiGroups: [""],
+        resources: ["configmaps"],
+        resourceNames: ["takserver-startup"],
+        verbs: ["delete"],
+      },
       { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-keystore"], verbs: ["get", "list", "watch"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },

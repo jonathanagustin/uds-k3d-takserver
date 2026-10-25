@@ -30,7 +30,7 @@ PUSH_IMAGES=true ./.github/container-and-chart/docker/build.sh
 
 You do not need a JDK, Gradle, protoc, or Node on the host. The Dockerfile's builder stage is Temurin 17.0.20, pinned by the image digest. Gradle is the upstream wrapper, 8.10.2. protoc 3.25.8 and the UI's Node downloads come from Gradle. The Gradle cache is a BuildKit cache mount at `/gradle`, so a rebuild on the same builder does not download everything again. In GitHub Actions that cache is also stored with the Actions cache.
 
-The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well.
+The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well. The pin is `ubi9/openjdk-17:1.24-3.1791779556` (built 2026-10-12), which is the newest tag on that repository. Trivy 0.76.1 reports 17 fixable OS vulnerabilities in that base (1 critical, 7 high). Copa 0.15.0 clears those 17 on the base. The TAK image adds more packages, so [`.github/scripts/copa-patch.sh`](../.github/scripts/copa-patch.sh) runs after a single-architecture build and replaces the tag with the patched image before the push. A multi-arch push does not load an image Copa can patch. CI builds one architecture per runner. NATS and PostGIS stay on their upstream tags. This repository does not publish patched copies of those.
 
 The six tags match `zarf.yaml`:
 

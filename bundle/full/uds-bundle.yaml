@@ -94,6 +94,24 @@ packages:
     repository: ghcr.io/defenseunicorns/packages/uds/core-runtime-security
     ref: 1.15.2-upstream
     keylessVerification: *core-keyless
+    # One custom rule. No disabledRules entry and no exception: the full-core
+    # artifact has to show which stable rules actually fire before any of
+    # them is narrowed. UDS already disables "Contact K8S API Server From
+    # Container" for the whole cluster; this package does not add another.
+    overrides:
+      falco:
+        uds-falco-config:
+          values:
+            - path: extraRules
+              value:
+                - rule: TAK cert write outside the JVM
+                  desc: A process other than the TAK JVM wrote a file under /opt/tak/certs in the takserver namespace.
+                  condition: 'open_write and fd.name startswith "/opt/tak/certs" and proc.name != "java" and k8s.ns.name = "takserver"'
+                  output: 'TAK cert write outside the JVM (user=%user.name file=%fd.name command=%proc.cmdline container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)'
+                  priority: WARNING
+                  tags:
+                    - tak
+                  source: syscall
 
   - name: core-backup-restore
     repository: ghcr.io/defenseunicorns/packages/uds/core-backup-restore

@@ -76,15 +76,20 @@ jobs:
         env:
           TRIM_SKIP_ABOVE_GB: "60"
 
+      # Exact key only. A prefix match restores a cache built from a different
+      # values hash. On 2026-10-25 the amd64 nightly's exact key did not exist
+      # until the Test workflow saved it, after this restore had already
+      # spent as long as a multi-GB download. The install then exited 1 and
+      # the log was never uploaded.
       - name: Restore the Zarf cache
+        id: zarf-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/zarf-cache
           key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Point Zarf at the restored cache
+        if: steps.zarf-cache.outputs.cache-hit == 'true'
         run: |
           set -euo pipefail
           mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
@@ -109,6 +114,44 @@ jobs:
       - name: Install the current branch
         run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         timeout-minutes: 110
+
+      # The amd64 install log from run 40182005417 was never uploaded. Keep
+      # the same debug the Test workflow keeps, before the record upload.
+      - name: Disk use after the install
+        if: failure()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          df -h /
+          sudo timeout 60 docker system df || true
+
+      - name: Debug output
+        if: failure()
+        timeout-minutes: 2
+        run: uds run actions:debug-output
+        shell: bash
+
+      - name: Save logs
+        if: failure()
+        timeout-minutes: 2
+        run: uds run actions:save-logs
+        shell: bash
+
+      - name: Upload the debug logs
+        if: failure()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-debug-${{ matrix.arch }}
+          path: |
+            /tmp/zarf-*.log
+            /tmp/uds-*.log
+            /tmp/maru-*.log
+            /tmp/debug-*.log
+            /tmp/uds-containerd-logs
+            /tmp/k3d-uds-*.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Fetch the upstream load tester
         run: |
@@ -144,7 +187,9 @@ jobs:
   summary:
     name: benchmark-summary
     needs: [benchmark]
-    if: needs.benchmark.result == 'success'
+    # A failed arch still leaves the other arch's JSON. Skip only when the
+    # benchmark job itself did not run.
+    if: always() && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
       actions: read

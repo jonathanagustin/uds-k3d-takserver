@@ -177,7 +177,7 @@ spec:
 {{- $core = replace "<!-- TAK_OAUTH -->" "" $core }}
 {{- end }}
 {{- if .Values.quic.enabled }}
-{{- $quic := printf "\t\t<input _name=\"quic\" protocol=\"quic\" port=\"%d\"/>" (int .Values.quic.port) }}
+{{- $quic := printf "\t\t<input _name=\"quic\" protocol=\"quic\" port=\"%d\" coreVersion=\"2\"/>" (int .Values.quic.port) }}
 {{- $core = replace "<!-- TAK_QUIC -->" $quic $core }}
 {{- else }}
 {{- $core = replace "<!-- TAK_QUIC -->" "" $core }}

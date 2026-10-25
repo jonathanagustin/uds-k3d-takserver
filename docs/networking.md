@@ -27,7 +27,7 @@ Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In
 
 ### QUIC
 
-`quic.enabled` defaults to false. With it true, CoreConfig adds `<input _name="quic" protocol="quic" port="8090"/>` and Service `takserver-messaging-quic` publishes UDP 8090. The Package expose entry sets `protocol: UDP` and no host. UDS Core routes that through Envoy Gateway. Istio AuthorizationPolicy does not apply. TAK 5.7-RELEASE-14 still requires a client certificate: the QUIC context uses `ClientAuth.REQUIRE` and the input's `auth` defaults to `x509`, the same default as 8089. The anonymous UDP input on 8087 is not added.
+`quic.enabled` defaults to false. With it true, CoreConfig adds `<input _name="quic" protocol="quic" port="8090" coreVersion="2"/>` and Service `takserver-messaging-quic` publishes UDP 8090. The Package expose entry sets `protocol: UDP` and no host. UDS Core routes that through Envoy Gateway. Istio AuthorizationPolicy does not apply. TAK 5.7-RELEASE-14 still requires a client certificate: the QUIC context uses `ClientAuth.REQUIRE` and the input's `auth` defaults to `x509`, the same default as 8089. The anonymous UDP input on 8087 is not added.
 
 The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave both off, so they have no UDP Service. `tests/quic.sh` exits immediately when that Service is missing. When it is present, the script refuses a client with no certificate and streams a CoT event with the admin certificate through the gateway's UDP 8090. See [ADR 16](../adr/0016-quic-through-envoy-gateway.md).
 

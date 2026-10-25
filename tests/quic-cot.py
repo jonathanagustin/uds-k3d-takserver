@@ -93,8 +93,11 @@ async def reject(host, port):
             open_stream(host, port, configuration(None, None, None)),
             15,
         )
+    except TimeoutError:
+        print("no QUIC response without a certificate", file=sys.stderr)
+        return 1
     except Exception as exc:
-        print(f"refused without a certificate: {type(exc).__name__}")
+        print(f"refused without a certificate: {type(exc).__name__}: {exc}")
         return 0
     finally:
         if transport is not None:

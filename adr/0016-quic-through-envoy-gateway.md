@@ -18,7 +18,7 @@ The plaintext UDP input on 8087 and the multicast inputs set `auth="anonymous"`.
 
 `quic.enabled` defaults to false. Nothing in CoreConfig, the chart, or the Package changes while it is false, and there is no UDP Service.
 
-When it is true, CoreConfig gains `<input _name="quic" protocol="quic" port="8090"/>`, Service `takserver-messaging-quic` publishes UDP 8090 to the messaging pods, and the Package exposes that service with `protocol: UDP` and one ingress allow from the Envoy default gateway proxy. The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets the flag. The controller request is 50m CPU and 256Mi. The proxy that Envoy Gateway 1.9.2 creates for a UDP listener requests 100m CPU and 512Mi, plus a 10m/32Mi shutdown manager. `tests/quic.sh` connects through that gateway with the admin certificate, checks that a client without a certificate is refused, and waits for the CoT uid in `/Marti/api/subscriptions/all`.
+When it is true, CoreConfig gains `<input _name="quic" protocol="quic" port="8090" coreVersion="2"/>`, Service `takserver-messaging-quic` publishes UDP 8090 to the messaging pods, and the Package exposes that service with `protocol: UDP` and one ingress allow from the Envoy default gateway proxy. The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets the flag. The controller request is 50m CPU and 256Mi. The proxy that Envoy Gateway 1.9.2 creates for a UDP listener requests 100m CPU and 512Mi, plus a 10m/32Mi shutdown manager. `tests/quic.sh` connects through that gateway with the admin certificate, checks that a client without a certificate is refused, and waits for the CoT uid in `/Marti/api/subscriptions/all`.
 
 ## Consequences
 

@@ -22,7 +22,11 @@ const sidebar = new Set(["My Account", "Your Apps", "Admin Apps"]);
 
 const hidden = ["takserver-api", "takserver-stream", "8443", "8446", "8089"];
 
-async function signIn(page: Page, username: string, password: string) {
+// A user with no groups still signs in at Keycloak, but the portal renders no
+// Your Apps page for that account (a blank page at /auth). allowEmpty accepts
+// that: the account has to come back to the portal origin, and the caller then
+// checks that no tile is shown.
+async function signIn(page: Page, username: string, password: string, allowEmpty = false) {
   const heading = page.getByRole("heading", { name: "Your Apps" });
   const userField = page.getByLabel("Username or email");
   await expect(heading.or(userField)).toBeVisible({ timeout: 60_000 });
@@ -32,6 +36,11 @@ async function signIn(page: Page, username: string, password: string) {
     await page.getByRole("button", { name: "Sign In" }).click();
   }
   try {
+    if (allowEmpty) {
+      await page.waitForURL(`${portalUrl}/**`, { timeout: 90_000 });
+      await heading.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+      return;
+    }
     await expect(heading).toBeVisible({ timeout: 90_000 });
   } catch {
     const text = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
@@ -70,7 +79,7 @@ test.describe("portal tiles", () => {
     });
     const page = await context.newPage();
     await page.goto(portalUrl);
-    await signIn(page, outsider, outsiderPassword);
+    await signIn(page, outsider, outsiderPassword, true);
     const names = await packageTiles(page);
     await page.screenshot({ path: `${shots}/portal-outsider.png`, fullPage: true });
     expect(names).not.toContain("TAK Server");

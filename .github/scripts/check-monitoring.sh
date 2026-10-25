@@ -36,5 +36,14 @@ fi
 if ! grep -q 'jvm_memory_used_bytes' <<< "${rendered}"; then
   fail "JVM heap panel was removed"
 fi
+if ! grep -q 'TAKDeploymentUnavailable' <<< "${rendered}"; then
+  fail "TAKDeploymentUnavailable is missing"
+fi
+if ! grep -q 'deployment=~"takserver-api|takserver-messaging"} == 1' <<< "${rendered}"; then
+  fail "TAKDeploymentUnavailable does not require spec replicas 1"
+fi
+if ! grep -A 2 'alert: TAKDeploymentUnavailable' <<< "${rendered}" | grep -q 'for: 10m'; then
+  fail "TAKDeploymentUnavailable for is not 10m"
+fi
 
 echo "monitoring: target-down uses kube-state-metrics and there is no ServiceMonitor"

@@ -150,7 +150,8 @@ for _ in $(seq 1 18); do
     && grep -q 'TAKAPITargetDown' out/prometheus-tak-rules.json \
     && grep -q 'TAKMessagingTargetDown' out/prometheus-tak-rules.json \
     && grep -q 'TAKJVMHeapHigh' out/prometheus-tak-rules.json \
-    && grep -q 'TAKPodRestartLoop' out/prometheus-tak-rules.json; then
+    && grep -q 'TAKPodRestartLoop' out/prometheus-tak-rules.json \
+    && grep -q 'TAKDeploymentUnavailable' out/prometheus-tak-rules.json; then
     rules_ok=1
     break
   fi

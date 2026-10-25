@@ -41,6 +41,13 @@ spec:
             severity: critical
           annotations:
             summary: TAK messaging has been scaled to 0
+        - alert: TAKDeploymentUnavailable
+          expr: kube_deployment_spec_replicas{namespace="takserver", deployment=~"takserver-api|takserver-messaging"} == 1 and kube_deployment_status_replicas_available{namespace="takserver", deployment=~"takserver-api|takserver-messaging"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: TAK API or messaging has spec replicas 1 and no available pods
         - alert: TAKJVMHeapHigh
           expr: |
             (

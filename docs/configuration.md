@@ -84,7 +84,7 @@ Older commits of this branch still contain the keystores that used to live in `c
 
 ## Metrics
 
-TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. The image adds `micrometer-registry-prometheus` 1.13.8 on `/opt/tak/metrics` and the API and messaging scripts load it with `-Dloader.path`. Those two scripts also set `-Dmanagement.server.port=9100`, so Actuator's Prometheus text is on plaintext 9100 at `/actuator/prometheus`. The Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not bind it. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 16](../adr/0016-prometheus-monitors.md).
+TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. The image adds `micrometer-registry-prometheus` 1.13.8 on `/opt/tak/metrics` and the API and messaging scripts load it with `-Dloader.path`. Those two scripts also set `-Dmanagement.server.port=9100`, so Actuator's Prometheus text is on plaintext 9100 at `/actuator/prometheus`. The Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not bind it. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 17](../adr/0017-prometheus-monitors.md).
 
 ## Monitoring
 
@@ -132,7 +132,7 @@ Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver`
 - [OAuth discovery](../adr/0004-tak-oauth-uses-openid-discovery.md)
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
-- [Prometheus monitors](../adr/0016-prometheus-monitors.md)
+- [Prometheus monitors](../adr/0017-prometheus-monitors.md)
 
 The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
 

@@ -8,11 +8,11 @@ Accepted
 
 ## Context
 
-The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, the UDS operator, Pepr) and `core-identity-authorization` (Keycloak, Authservice). The standard `core` package is the one that adds Vector, Loki, Prometheus, and optional Velero. The stock TAK chart has no `securityContext` values and no Prometheus port. The metrics port is added at admission time. See [ADR 0016](0016-prometheus-monitors.md).
+The tested bundle is `k3d-core-slim-dev`, which installs `core-base` (Istio, the UDS operator, Pepr) and `core-identity-authorization` (Keycloak, Authservice). The standard `core` package is the one that adds Vector, Loki, Prometheus, and optional Velero. The stock TAK chart has no `securityContext` values and no Prometheus port. The metrics port is added at admission time. See [ADR 0017](0017-prometheus-monitors.md).
 
 ## Decision
 
-- Package `monitor` entries for the API and messaging metrics ports, and a PodMonitor for the Pepr module, only when `monitoring.coreos.com/v1` is installed. Slim omits them. See [ADR 0016](0016-prometheus-monitors.md).
+- Package `monitor` entries for the API and messaging metrics ports, and a PodMonitor for the Pepr module, only when `monitoring.coreos.com/v1` is installed. Slim omits them. See [ADR 0017](0017-prometheus-monitors.md).
 - No log agent in this package. TAK logs to stdout. The test requires that stream. A Loki query runs only when a Loki Service exists. Slim-dev does not install one.
 - No Velero objects on the slim bundle. The full bundle installs `core-backup-restore` and a logical database dump. See [ADR 0016](0016-logical-db-dump.md) and [Data](../docs/data.md).
 - No `runAsNonRoot` or read-only root filesystem. The upstream Deployments cannot express that, and TAK writes `/certs`, `/logs`, and `/conf`.

@@ -59,7 +59,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 
 - **Requirement:** Implement a monitor for each application metrics endpoint, unless the application provides no metrics.
 - **Status:** Met for the TAK API, TAK messaging, and the `takserver-oidc` module when the monitoring API is installed. Slim omits the monitors. Postgres and NATS are not scraped. Their exporter images are not built here.
-- **Details:** [ADR 16](../adr/0016-prometheus-monitors.md) and [Configuration](configuration.md).
+- **Details:** [ADR 17](../adr/0017-prometheus-monitors.md) and [Configuration](configuration.md).
 - **What changes it:** Building multi-arch Postgres and NATS exporter images, and enabling them without an upstream chart change that this package does not carry.
 
 ### Commands in Zarf actions

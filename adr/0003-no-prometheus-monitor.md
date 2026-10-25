@@ -4,7 +4,7 @@ Date: 2026-10-18
 
 ## Status
 
-Superseded by [ADR 0016](0016-prometheus-monitors.md)
+Superseded by [ADR 0017](0017-prometheus-monitors.md)
 
 ## Context
 

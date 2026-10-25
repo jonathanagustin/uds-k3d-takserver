@@ -2,3 +2,4 @@
 !Dockerfile
 !UserAuthenticationFile.xml
 !publish-cert-configmap.sh
+!cacheconfig-listener.patch

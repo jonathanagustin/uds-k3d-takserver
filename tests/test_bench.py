@@ -78,17 +78,20 @@ class BenchReportTests(unittest.TestCase):
 
 
 class LoadLogTests(unittest.TestCase):
-    def test_last_line_per_uid_is_the_total(self):
+    def test_intervals_are_added(self):
         text = "\n".join([
-            "Info that would be sent to CloudWatch if it was enabled, uid: PyTAK-0000, stats: {'messages_sent': 1, 'messages_received': 1, 'connect_count': 1, 'disconnect_count': 0, 'ping_count': 1, 'pong_count': 1, 'time_between_ping_pong': 10}",
-            "Info that would be sent to CloudWatch if it was enabled, uid: PyTAK-0000, stats: {'messages_sent': 3, 'messages_received': 2, 'connect_count': 1, 'disconnect_count': 0, 'ping_count': 2, 'pong_count': 2, 'time_between_ping_pong': 30}",
-            "Info that would be sent to CloudWatch if it was enabled, uid: PyTAK-0001, stats: {'messages_sent': 4, 'messages_received': 4, 'connect_count': 1, 'disconnect_count': 1, 'ping_count': 1, 'pong_count': 0, 'time_between_ping_pong': 0}",
+            "Info that would be sent to CloudWatch if it was enabled, uid: cot_client_0, stats: {'messages_sent': 1, 'messages_received': 1, 'connect_event_count': 1, 'disconnect_event_count': 0, 'ping_count': 1, 'pong_count': 1, 'time_between_ping_pong': 10}",
+            "Info that would be sent to CloudWatch if it was enabled, uid: cot_client_0, stats: {'messages_sent': 3, 'messages_received': 2, 'connect_event_count': 1, 'disconnect_event_count': 0, 'ping_count': 2, 'pong_count': 2, 'time_between_ping_pong': 30}",
+            "Info that would be sent to CloudWatch if it was enabled, uid: cot_client_1, stats: {'messages_sent': 4, 'messages_received': 4, 'connect_event_count': 1, 'disconnect_event_count': 1, 'ping_count': 1, 'pong_count': 0, 'time_between_ping_pong': 0}",
         ])
         parsed = loadlog.parse(text)
-        self.assertEqual(parsed["messages_sent"], 7)
-        self.assertEqual(parsed["messages_received"], 6)
-        self.assertEqual(parsed["pong_count"], 2)
-        self.assertEqual(parsed["ping_pong_ms_mean"], 15)
+        self.assertEqual(parsed["messages_sent"], 8)
+        self.assertEqual(parsed["messages_received"], 7)
+        self.assertEqual(parsed["connects"], 3)
+        self.assertEqual(parsed["disconnects"], 1)
+        self.assertEqual(parsed["pong_count"], 3)
+        self.assertEqual(parsed["ping_pong_ms_sum"], 40)
+        self.assertEqual(parsed["ping_pong_ms_mean"], 40 / 3)
         self.assertIsNone(parsed["p95_ms"])
 
     def test_a_log_without_stats_is_an_error(self):

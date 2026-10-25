@@ -28,12 +28,12 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
 | `load.clients` | count | the client count this record ran |
 | `load.duration_s` | seconds | how long `tak_tester.py` was left running |
-| `load.messages_sent` | count | sum of the last per-uid counter printed by the tester |
-| `load.messages_received` | count | same |
-| `load.connects` | count | same |
-| `load.disconnects` | count | same |
-| `load.pong_count` | count | same |
-| `load.ping_pong_ms_sum` | milliseconds | the tester's cumulative ping-to-pong sum |
+| `load.messages_sent` | count | sum of every per-uid `messages_sent` the tester printed |
+| `load.messages_received` | count | same, for `messages_received` |
+| `load.connects` | count | same, for `connect_event_count` |
+| `load.disconnects` | count | same, for `disconnect_event_count` |
+| `load.pong_count` | count | same, for `pong_count` |
+| `load.ping_pong_ms_sum` | milliseconds | same, for `time_between_ping_pong` |
 | `load.ping_pong_ms_mean` | milliseconds | `ping_pong_ms_sum / pong_count`, null when `pong_count` is 0 |
 | `load.p95_ms` | always null | this tester build stores a sum, not a latency histogram, so a p95 is not available |
 | `ci.wall_clock_s` | seconds | filled by the summary job from the GitHub Actions job timestamps. Null in the per-arch file |
@@ -58,3 +58,9 @@ is not run. `gc-serial` is skipped because the image already passes
 `UseG1GC` on the java command, after `JDK_JAVA_OPTIONS`, and a second
 collector makes the JVM exit. CloudWatch export stays off. `--send-metrics`
 is omitted because the tester's `type=bool` treats any present value as true.
+`--skip-mission-api` is set because a run without a config file leaves
+`mission_api_config` unset, and `tak_tester.py` 5.7-RELEASE-14 exits before
+any client starts. `--send-metrics-interval` is one third of the duration, in
+seconds, so a line is printed before the process is stopped. The printer
+zeroes each counter after the line, so the record adds every line. Python is
+started with `-u` so that line is not left in a block buffer.

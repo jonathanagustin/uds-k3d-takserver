@@ -273,11 +273,18 @@ def run_load(clients, duration, password, tester):
         time.sleep(2)
         # --send-metrics is omitted on purpose. The tester declares it as
         # type=bool, and argparse treats every present string as true.
+        # Without a config file, mission_api_config is set only when
+        # --skip-mission-api is passed. Otherwise the process exits before
+        # any client starts. The printer sleeps for --send-metrics-interval
+        # before the first line, so that interval has to land inside duration.
+        interval = max(1, duration // 3)
         command = [
-            sys.executable, str(tester),
+            sys.executable, "-u", str(tester),
             "--test-pytak", "--tls", "18089", "--host", "127.0.0.1",
             "--cert", str(p12), "--password", password,
             "--clients", str(clients), "--ping", "true",
+            "--skip-mission-api",
+            "--send-metrics-interval", str(interval),
         ]
         proc = subprocess.Popen(command, cwd=tester.parent, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         try:
@@ -287,7 +294,14 @@ def run_load(clients, duration, password, tester):
             stdout, _ = proc.communicate(timeout=20)
         finally:
             forward.terminate()
-        return parse(stdout or "")
+        text = stdout or ""
+        try:
+            return parse(text)
+        except ValueError as error:
+            tail = "\n".join(text.splitlines()[-12:])
+            if tail:
+                raise ValueError(f"{error}\n{tail}") from error
+            raise
     finally:
         shutil.rmtree(cert_dir, ignore_errors=True)
 

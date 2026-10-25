@@ -90,9 +90,9 @@ TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` i
 
 When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds three objects. Slim does not have that API, so it does not get them, and the chart still adds no ServiceMonitor or PodMonitor.
 
-ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". Its panels are JVM heap, GC, HTTP rate, Postgres up, and pod restarts. Those series are empty until TAK exports Prometheus text.
+ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". JVM heap, GC, and HTTP rate stay empty until TAK exports Prometheus text. Postgres ready, pod restarts, messaging replicas, and container memory read kube-state-metrics and cAdvisor, which the full bundle already scrapes.
 
-PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. A target-down alert can fire only after a monitor exists. Scaling messaging to 0 does not create a down target today.
+PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. The two target-down rules are `kube_deployment_spec_replicas == 0` for two minutes. That fires when the Deployment is scaled to 0. It does not fire while a Deployment is starting with spec replicas still at 1. There is still no ServiceMonitor. `tests/grafana-alerts.sh` scales `takserver-messaging` to 0, waits until Alertmanager reports `TAKMessagingTargetDown` active, writes `tests/.playwright/screenshots/tak-dashboard.png`, and scales the Deployment back to 1.
 
 ConfigMap `takserver-loki-rules` is labeled `loki_rule: "1"`. The ruler alerts when a TAK pod logs `error pulling auth file` more than three times in five minutes. That string is the one the API log check already rejects.
 

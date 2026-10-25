@@ -189,6 +189,12 @@ else
   exit 1
 fi
 
+# The dev stack gives Velero and Loki one bucket, and Loki writes its chunks
+# under fake/ there. Velero marks a bucket Unavailable when it holds a
+# top-level directory it does not own, so keep Velero under its own prefix.
+k patch backupstoragelocations.velero.io default -n velero --type merge \
+  -p '{"spec":{"objectStorage":{"prefix":"velero"}}}'
+
 bsl_ok=0
 for _ in $(seq 1 30); do
   phase="$(k get backupstoragelocations.velero.io default -n velero -o jsonpath='{.status.phase}' 2>/dev/null || true)"

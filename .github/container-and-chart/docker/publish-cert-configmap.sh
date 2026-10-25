@@ -5,6 +5,24 @@
 # Create ConfigMap cert-migration with TAK's certificate scripts.
 # The scripts live in this image at /opt/tak/certs (TAK Server 5.7-RELEASE-14).
 # A ConfigMap that already exists is left alone so an operator can supply certs.
+
+# Retry a refused or reset handshake. Five tries, one second apart.
+# --retry-all-errors covers a TLS reset (curl 35 or 56). --retry-connrefused
+# covers ECONNREFUSED. An HTTP status is not an error unless the caller
+# passes -f, so 409 still returns to the caller. The config image is UBI9,
+# whose curl is new enough for --retry-all-errors.
+api_curl() {
+  curl \
+    --silent \
+    --show-error \
+    --retry 5 \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --retry-connrefused \
+    --connect-timeout 5 \
+    "$@"
+}
+
 set -euo pipefail
 
 ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
@@ -28,11 +46,11 @@ publish_ignite_extensions() {
     printf '%s\n' '}}'
   } > /tmp/ignite-extensions.json
   local code
-  code="$(curl -sS -o /tmp/ignite-extensions-response -w '%{http_code}' --cacert "${ca}" \
+  code="$(api_curl -o /tmp/ignite-extensions-response -w '%{http_code}' --cacert "${ca}" \
     -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
     -X POST --data-binary @/tmp/ignite-extensions.json "${api}")"
   if [[ "${code}" = "409" ]]; then
-    code="$(curl -sS -o /tmp/ignite-extensions-response -w '%{http_code}' --cacert "${ca}" \
+    code="$(api_curl -o /tmp/ignite-extensions-response -w '%{http_code}' --cacert "${ca}" \
       -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
       -X PUT --data-binary @/tmp/ignite-extensions.json "${api}/ignite-extensions")"
   fi
@@ -45,7 +63,7 @@ publish_ignite_extensions() {
 }
 publish_ignite_extensions
 
-existing="$(curl -sS -o /dev/null -w '%{http_code}' --cacert "${ca}" \
+existing="$(api_curl -o /dev/null -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" \
   "${api}/cert-migration")"
 if [[ "${existing}" = "200" ]]; then
@@ -177,7 +195,7 @@ fi
 } > /tmp/cert-migration.json
 
 resp="/tmp/cert-migration-response"
-code="$(curl -sS -o "${resp}" -w '%{http_code}' --cacert "${ca}" \
+code="$(api_curl -o "${resp}" -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/json" \
   -X POST \
@@ -199,11 +217,11 @@ if [[ ! -s "${ca_key}" ]]; then
 fi
 secret_body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"takserver-ca-key"},"type":"Opaque","data":{"ca-do-not-share.key":"%s"}}' "$(base64 -w 0 "${ca_key}")")"
 secrets_api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
-code="$(curl -sS -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
+code="$(api_curl -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
   -X POST --data-binary "${secret_body}" "${secrets_api}")"
 if [[ "${code}" == "409" ]]; then
-  code="$(curl -sS -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
+  code="$(api_curl -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
     -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
     -X PUT --data-binary "${secret_body}" "${secrets_api}/takserver-ca-key")"
 fi

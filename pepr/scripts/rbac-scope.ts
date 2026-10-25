@@ -19,14 +19,23 @@
 // - ConfigMap `create` in takserver (the startup marker). `create` ignores
 //   resourceNames.
 // - Secret `create` in cloudtak and istio-tenant-gateway, for the same reason.
-//   get/list/patch/watch name the objects. list sits beside every watch:
-//   the client lists with `?fieldSelector=metadata.name=` before it watches,
-//   and a named rule that lacks list rejects that call. An object that is
-//   not there yet then sends no watch event, the client gives up after five
-//   tries, and the process exits. A field selector for a different name
-//   stays forbidden.
+//   get/list/patch/watch on the Role name the objects. list sits beside watch
+//   because a namespaced list with `?fieldSelector=metadata.name=` needs it.
 // - Pod `get`/`list` in takserver. The list is by label, so resourceNames
 //   would deny it.
+//
+// The watcher itself does not use that namespaced URL. Pepr 2.0.5 spreads the
+// binding filters into the client, and those filters carry `namespaces` (the
+// capability filter) rather than `namespace` (what the client puts on the
+// path). The list and the watch are therefore cluster-scoped, with
+// `?fieldSelector=metadata.name=`. A Role never matches a cluster-scoped
+// request. After the watched resources left the chart ClusterRole, both calls
+// were forbidden, the client gave up after five tries (about 30s), and the
+// process exited before it could create `takserver-startup`. The same names
+// are granted `list` and `watch` on a second ClusterRole. A field selector
+// for a different name stays forbidden, and an unfiltered list stays
+// forbidden. The chart schema still rejects `resourceNames` on `values.rbac`,
+// so this ClusterRole is its own manifest.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -175,8 +184,66 @@ function bindingDoc(namespace: string) {
   };
 }
 
+// One rule per resource. Every name the Roles grant `watch` is listed here,
+// because the watcher asks for each of those names at cluster scope.
+function watchClusterRules(): ChartRule[] {
+  const grouped = new Map<string, ChartRule>();
+  for (const entry of ROLE_RULES) {
+    for (const rule of entry.rules) {
+      if (!(rule.verbs ?? []).includes("watch")) {
+        continue;
+      }
+      if (!rule.resourceNames || rule.resourceNames.length === 0) {
+        throw new Error(`watch rule for ${(rule.resources ?? []).join(",")} has no resourceNames`);
+      }
+      const key = `${(rule.apiGroups ?? []).join(",")}|${(rule.resources ?? []).join(",")}`;
+      const found = grouped.get(key);
+      if (!found) {
+        grouped.set(key, {
+          apiGroups: rule.apiGroups,
+          resources: rule.resources,
+          resourceNames: [...(rule.resourceNames ?? [])],
+          verbs: ["list", "watch"],
+        });
+        continue;
+      }
+      const names = found.resourceNames ?? [];
+      for (const name of rule.resourceNames ?? []) {
+        if (!names.includes(name)) {
+          names.push(name);
+        }
+      }
+      found.resourceNames = names;
+    }
+  }
+  return [...grouped.values()];
+}
+
+function clusterWatchDoc(rules: ChartRule[]) {
+  return {
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "ClusterRole",
+    metadata: { name: "{{ .Values.uuid }}-watch" },
+    rules,
+  };
+}
+
+function clusterWatchBindingDoc() {
+  return {
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "ClusterRoleBinding",
+    metadata: { name: "{{ .Values.uuid }}-watch" },
+    roleRef: {
+      apiGroup: "rbac.authorization.k8s.io",
+      kind: "ClusterRole",
+      name: "{{ .Values.uuid }}-watch",
+    },
+    subjects: [{ kind: "ServiceAccount", name: "{{ .Values.uuid }}", namespace: "pepr-system" }],
+  };
+}
+
 export function roleManifest(): string {
-  const docs: object[] = [];
+  const docs: object[] = [clusterWatchDoc(watchClusterRules()), clusterWatchBindingDoc()];
   for (const entry of ROLE_RULES) {
     docs.push(roleDoc(entry.namespace, entry.rules));
     docs.push(bindingDoc(entry.namespace));

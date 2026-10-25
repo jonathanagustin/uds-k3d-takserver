@@ -3,7 +3,8 @@
 
 // The chart's ClusterRole is what `pepr build` emits from the capability
 // bindings plus package.json `pepr.rbac`. Watch bindings only grant `watch`.
-// finalize-chart.mjs then moves those watches into namespaced Roles.
+// finalize-chart.mjs then moves those watches into namespaced Roles and adds
+// a name-scoped ClusterRole, because the watcher lists at cluster scope.
 // `npm test` sets PEPR_MODE=build, which is what registers the watches.
 
 import assert from "node:assert/strict";
@@ -130,7 +131,7 @@ test("the chart moves watched objects into namespaced Roles", () => {
         parse(part) as {
           kind: string;
           metadata: { namespace?: string };
-          rules?: { resources?: string[]; verbs?: string[] }[];
+          rules?: { resources?: string[]; verbs?: string[]; resourceNames?: string[] }[];
         },
     );
   for (const role of roles) {
@@ -145,6 +146,43 @@ test("the chart moves watched objects into namespaced Roles", () => {
           `${role.metadata.namespace ?? ""} ${(rule.resources ?? []).join(",")} watch without list`,
         );
       }
+    }
+  }
+  const clusterWatch = roles.find(role => role.kind === "ClusterRole");
+  assert.ok(clusterWatch);
+  assert.equal(
+    roles.some(role => role.kind === "ClusterRoleBinding"),
+    true,
+  );
+  for (const rule of clusterWatch.rules ?? []) {
+    assert.deepEqual(rule.verbs, ["list", "watch"]);
+    assert.equal((rule.resources ?? []).includes("pods"), false);
+    assert.ok((rule.resourceNames ?? []).length > 0);
+  }
+  const watched = new Map<string, string[]>();
+  for (const role of roles) {
+    if (role.kind !== "Role") {
+      continue;
+    }
+    for (const rule of role.rules ?? []) {
+      if (!(rule.verbs ?? []).includes("watch")) {
+        continue;
+      }
+      const key = (rule.resources ?? []).join(",");
+      const names = watched.get(key) ?? [];
+      for (const name of rule.resourceNames ?? []) {
+        if (!names.includes(name)) {
+          names.push(name);
+        }
+      }
+      watched.set(key, names);
+    }
+  }
+  for (const [resource, names] of watched) {
+    const rule = (clusterWatch.rules ?? []).find(item => (item.resources ?? []).join(",") === resource);
+    assert.ok(rule, resource);
+    for (const name of names) {
+      assert.equal((rule.resourceNames ?? []).includes(name), true, `${resource} ${name}`);
     }
   }
   assert.equal(text.includes("*"), false);

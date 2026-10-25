@@ -31,7 +31,7 @@ jobs:
         with:
           # Names have to match mise.toml. yamllint and codespell are PyPI tools
           # and need uv installed first. uds-cli is only in the aqua registry.
-          install_args: hk shellcheck actionlint helm node pypi:yamllint pypi:codespell aqua:defenseunicorns/uds-cli aqua:gitleaks/gitleaks aqua:hadolint/hadolint
+          install_args: hk shellcheck actionlint helm node pypi:yamllint pypi:codespell aqua:defenseunicorns/uds-cli aqua:gitleaks/gitleaks aqua:hadolint/hadolint aqua:google/osv-scanner
           cache: true
 
       - name: hk check

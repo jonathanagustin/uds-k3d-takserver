@@ -41,7 +41,14 @@ def kubectl_cmd():
 
 
 def kubectl(*args, check=True):
-    return subprocess.run([*kubectl_cmd(), *args], check=check, capture_output=True, text=True)
+    result = subprocess.run([*kubectl_cmd(), *args], check=False, capture_output=True, text=True)
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        command = " ".join(str(part) for part in result.args)
+        if detail:
+            raise RuntimeError(f"{command}: {detail}")
+        raise RuntimeError(f"{command} exited {result.returncode}")
+    return result
 
 
 def quantity(value):
@@ -348,20 +355,28 @@ def image_refs(text):
     return refs
 
 
+def manifest_command(image, arch, which=shutil.which):
+    platform_name = f"linux/{arch}"
+    crane = which("crane")
+    if crane:
+        return [crane, "--platform", platform_name, "manifest", image]
+    uds = which("uds")
+    if uds:
+        return [uds, "zarf", "tools", "registry", "--platform", platform_name, "manifest", image]
+    raise RuntimeError("crane is not installed and uds is not on PATH")
+
+
 def image_bytes():
-    crane = shutil.which("crane")
-    if not crane:
-        raise RuntimeError("crane is not installed")
     images = image_refs((ROOT / "zarf.yaml").read_text(encoding="utf-8"))
     if not images:
         raise RuntimeError("zarf.yaml listed no images")
     seen = {}
     total = 0
     for image in images:
-        manifest = json.loads(subprocess.check_output([crane, "manifest", image], text=True))
+        manifest = json.loads(subprocess.check_output(manifest_command(image, arch_name()), text=True))
         layers = manifest.get("layers") or []
         if manifest.get("mediaType", "").endswith("list") or "manifests" in manifest:
-            raise RuntimeError(f"{image} is an index; crane manifest did not return one platform")
+            raise RuntimeError(f"{image} is an index; the manifest command did not return one platform")
         for layer in layers:
             size = layer.get("size")
             digest = layer.get("digest")
@@ -445,6 +460,10 @@ def main(argv):
         return 2
     for path in configs:
         original = load_config(path)
+        if original.get("skip"):
+            reason = original.get("reason") or "skipped"
+            print(f"skip {original['name']}: {reason}")
+            continue
         counts = selected_clients(original)
         for index, clients in enumerate(counts):
             # The first client count keeps the config name. Further counts

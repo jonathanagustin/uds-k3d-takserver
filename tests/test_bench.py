@@ -96,6 +96,27 @@ class LoadLogTests(unittest.TestCase):
             loadlog.parse("tester started\n")
 
 
+class ManifestCommandTests(unittest.TestCase):
+    def test_crane_is_used_when_it_is_installed(self):
+        command = runner.manifest_command(
+            "example/app:1", "amd64", lambda name: "/bin/crane" if name == "crane" else None,
+        )
+        self.assertEqual(command, ["/bin/crane", "--platform", "linux/amd64", "manifest", "example/app:1"])
+
+    def test_uds_registry_is_used_when_crane_is_absent(self):
+        command = runner.manifest_command(
+            "example/app:1", "arm64", lambda name: "/bin/uds" if name == "uds" else None,
+        )
+        self.assertEqual(
+            command,
+            ["/bin/uds", "zarf", "tools", "registry", "--platform", "linux/arm64", "manifest", "example/app:1"],
+        )
+
+    def test_a_missing_tool_is_an_error(self):
+        with self.assertRaises(RuntimeError):
+            runner.manifest_command("example/app:1", "amd64", lambda name: None)
+
+
 class ScriptPathTests(unittest.TestCase):
     def test_launching_the_file_can_import_the_parser(self):
         root = Path(__file__).resolve().parents[1]

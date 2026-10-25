@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: gc-serial
-description: JDK_JAVA_OPTIONS selects Serial GC and keeps the 512m heap on api, messaging, and config.
+description: Serial GC on api, messaging, and config. Not run.
+skip: true
+reason: The image command passes UseG1GC after JDK_JAVA_OPTIONS. Adding UseSerialGC makes the JVM exit, and the rollout never becomes Ready.
 clients: [10, 50, 200]
 duration_s: 60
 restart: true

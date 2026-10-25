@@ -21,7 +21,7 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `kubelet.steady_rss_bytes` | bytes | working set of the last sample |
 | `kubelet.peak_cpu_nanocores` | nanocores | max of the kubelet's recent CPU average |
 | `kubelet.steady_cpu_nanocores` | nanocores | last sample |
-| `images.sum_bytes` | bytes | sum of layer sizes from `crane manifest` for every image in `zarf.yaml` |
+| `images.sum_bytes` | bytes | sum of layer sizes for this runner's platform, from `crane manifest` or `uds zarf tools registry manifest`, for every image in `zarf.yaml` |
 | `images.unique_bytes` | bytes | same layers counted once, by digest |
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
@@ -53,6 +53,8 @@ in the job summary and drawn as open circles in the SVG.
 Client certs are built at run time from `tests/extract-certs.sh` and are not
 written into the repository or the image. The nightly workflow runs client
 count 10. `bench/configs/*.yaml` lists 10, 50, and 200; set the workflow
-input `clients` to `10,50,200` to run the full list. CloudWatch export stays
-off. `--send-metrics` is omitted because the tester's `type=bool` treats any
-present value as true.
+input `clients` to `10,50,200` to run the full list. A config with `skip: true`
+is not run. `gc-serial` is skipped because the image already passes
+`UseG1GC` on the java command, after `JDK_JAVA_OPTIONS`, and a second
+collector makes the JVM exit. CloudWatch export stays off. `--send-metrics`
+is omitted because the tester's `type=bool` treats any present value as true.

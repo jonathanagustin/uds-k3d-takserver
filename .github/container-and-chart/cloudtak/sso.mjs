@@ -289,9 +289,12 @@ const FINISH_JS = `(function () {
 
 // Loaded into every CloudTAK page by nginx. When the app routes to its
 // login page, a stored ID token ends the Keycloak session and Keycloak
-// returns to the sign-in route. Keycloak shows a confirmation page and
-// does not follow post_logout_redirect_uri when id_token_hint is absent,
-// so a first visit goes straight to the authorization request.
+// returns to the sign-in route. The same step drops the CloudTAK login
+// token, refresh token, and session id. Boot restores a session from
+// those keys, and this script runs before the app can remove them.
+// Keycloak shows a confirmation page and does not follow
+// post_logout_redirect_uri when id_token_hint is absent, so a first
+// visit goes straight to the authorization request.
 // /login?sso=off shows the page as is. A second redirect within 30 seconds
 // with no ID token also shows the page, so a session the app rejects cannot loop.
 const AUTO_JS = `(function () {
@@ -308,6 +311,9 @@ const AUTO_JS = `(function () {
         sent = true;
         if (hint) {
             localStorage.removeItem('cloudtak_sso_id_token');
+            localStorage.removeItem('CapacitorStorage.token');
+            localStorage.removeItem('CapacitorStorage.refresh');
+            localStorage.removeItem('CapacitorStorage.sessionId');
             location.replace('${BASE}/logout?id_token_hint=' + encodeURIComponent(hint));
             return;
         }

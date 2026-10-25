@@ -315,7 +315,9 @@ jobs:
             runner: ubuntu-24.04-arm
     name: validate-install (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    # A healthy install finishes in about 20 minutes. This job limit is what
+    # stops a step whose own timeout does not, such as actions/upload-artifact.
+    timeout-minutes: 60
     permissions:
       actions: write
       contents: read
@@ -412,14 +414,16 @@ jobs:
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install')
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
-        # A normal run takes about 25 minutes. Without this a hang runs into the
-        # 180 minute job limit, which also cancels the log and dump steps below.
-        timeout-minutes: 90
+        # A normal install test takes about 20 minutes. This fires before the
+        # job limit so the log and dump steps below still run.
+        timeout-minutes: 40
 
       - name: Upgrade from the released package and check retained state
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'upgrade')
         run: bash tests/upgrade.sh "${RUNNER_TEMP}/tak-upgrade-baseline.json"
-        timeout-minutes: 90
+        # A normal upgrade takes about 30 minutes. This fires before the job
+        # limit so the log and dump steps below still run.
+        timeout-minutes: 55
 
       # The trim step deletes toolchains to keep disk headroom. This is the other
       # half of that number: how much of the disk the test used by its end.
@@ -502,6 +506,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        timeout-minutes: 2
         with:
           name: playwright-report-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
           path: |
@@ -515,7 +520,9 @@ jobs:
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 180
+    # A healthy upgrade finishes in about 30 minutes. This job limit is what
+    # stops a step whose own timeout does not, such as actions/upload-artifact.
+    timeout-minutes: 75
     permissions:
       actions: write
       contents: read

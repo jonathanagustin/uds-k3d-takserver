@@ -74,7 +74,9 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    # A healthy full-core run finishes in about 30 minutes. This job limit is
+    # what stops a step whose own timeout does not, such as actions/upload-artifact.
+    timeout-minutes: 75
     permissions:
       actions: write
       contents: read
@@ -146,7 +148,9 @@ jobs:
       - name: Deploy full core and test
         run: uds run test-full-core --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         shell: bash
-        timeout-minutes: 150
+        # A normal deploy takes about 30 minutes. This fires before the job
+        # limit so the log and dump steps below still run.
+        timeout-minutes: 55
 
       - name: Disk use after the test
         if: always()

@@ -226,10 +226,33 @@ async function callback(req, res, url) {
         token: session.token,
         refresh: session.refresh,
         session: session.session,
+        id_token: tokens.id_token || '',
         redirect: saved.redirect,
     });
     send(res, 302, {
         Location: `${BASE}/finish#${fragment}`,
+        'Set-Cookie': setCookie('', 0),
+    });
+}
+
+// Browser logout. CloudTAK clears its own session and opens /login. auto.js
+// sends that here so Keycloak's session ends before the next sign-in.
+// post_logout_redirect_uri is this route's start path, which is registered
+// on the client. Keycloak then comes back and the authorization request
+// shows the login page.
+async function logout(_req, res, url) {
+    const doc = await oidc();
+    if (!doc.end_session_endpoint) return fail(res, 'no end_session_endpoint');
+    const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        post_logout_redirect_uri: `${PUBLIC_URL}${BASE}`,
+    });
+    const hint = url.searchParams.get('id_token_hint');
+    if (hint) params.set('id_token_hint', hint);
+    const target = new URL(doc.end_session_endpoint);
+    target.search = params.toString();
+    send(res, 302, {
+        Location: target.toString(),
         'Set-Cookie': setCookie('', 0),
     });
 }
@@ -256,13 +279,17 @@ const FINISH_JS = `(function () {
     localStorage.setItem('CapacitorStorage.token', token);
     localStorage.setItem('CapacitorStorage.refresh', refresh);
     localStorage.setItem('CapacitorStorage.sessionId', session);
+    var idToken = p.get('id_token');
+    if (idToken) localStorage.setItem('cloudtak_sso_id_token', idToken);
     if (redirect.charAt(0) !== '/' || redirect.charAt(1) === '/') redirect = '/';
     location.replace(redirect);
 })();
 `;
 
 // Loaded into every CloudTAK page by nginx. When the app routes to its
-// login page, go straight to Keycloak instead of showing the button.
+// login page, end the Keycloak session and then show the Keycloak login.
+// A visit that is already signed in at Keycloak must not bounce back onto
+// the map without a password.
 // /login?sso=off shows the page as is. A second redirect within 30 seconds
 // also shows the page, so a session the app rejects cannot loop.
 const AUTO_JS = `(function () {
@@ -276,8 +303,11 @@ const AUTO_JS = `(function () {
         if (Date.now() - last < 30000) return;
         sessionStorage.setItem(KEY, String(Date.now()));
         sent = true;
-        var r = p.get('redirect');
-        location.replace('${BASE}' + (r ? '?redirect=' + encodeURIComponent(r) : ''));
+        var hint = localStorage.getItem('cloudtak_sso_id_token') || '';
+        localStorage.removeItem('cloudtak_sso_id_token');
+        var logout = '${BASE}/logout';
+        if (hint) logout += '?id_token_hint=' + encodeURIComponent(hint);
+        location.replace(logout);
     }
     check();
     setInterval(check, 250);
@@ -293,6 +323,8 @@ const server = http.createServer(async (req, res) => {
             return await start(req, res, url);
         case `${BASE}/callback`:
             return await callback(req, res, url);
+        case `${BASE}/logout`:
+            return await logout(req, res, url);
         case `${BASE}/finish`:
             return send(res, 200, { 'Content-Type': 'text/html; charset=utf-8' }, FINISH_HTML);
         case `${BASE}/finish.js`:

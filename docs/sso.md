@@ -82,6 +82,14 @@ The webhook fails closed and is scoped to the `takserver` namespace and those fo
 
 `/UDS Core/Admin` sends `HomeApi` to `/Marti`. The test user is also in `/TAK/Operators_READ`, and `GET /Marti/api/groups/all` is what shows that mapped group. There is no route named whoami.
 
+## Client id and session
+
+The display names are `TAK Server Login` and `CloudTAK Login`. The client ids stay `uds-takserver` and `uds-cloudtak`. The template's `uds-<group>-<app>` form would be a second client. The pods, CoreConfig, and the CloudTAK sign-in route already use these ids, and an existing cluster already has the clients. Renaming them would leave the old clients in the realm and break the secret the pods mount.
+
+Both clients set `client.session.idle.timeout` to `1800` and `client.session.max.lifespan` to `36000`. Those are Keycloak's defaults. UDS Core 1.15.2 does not set `SSO_SESSION_IDLE_TIMEOUT` or `SSO_SESSION_MAX_LIFESPAN` on the realm, so the clients expire on the realm's schedule. A longer client value would be ignored.
+
+`/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it. This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/sso-clients.py` reads the client attributes back from the admin API.
+
 ## What TAK does not check
 
 TAK verifies the RS256 signature and nothing else about the token:
@@ -89,7 +97,7 @@ TAK verifies the RS256 signature and nothing else about the token:
 - No issuer check. Discovery stores the signing key and clears `issuer`. Any token from the `uds` realm whose signature matches that key is accepted, including a token minted for a different client, as long as the group claims match.
 - No audience check.
 - No PKCE. The client does not set `pkce.code.challenge.method`.
-- Logout clears the access-token cookie and redirects inside TAK (`AuthCookieUtils.logout`). It does not call the Keycloak end-session endpoint, so the Keycloak session stays logged in.
+- Logout clears the access-token cookie and redirects inside TAK (`AuthCookieUtils.logout`). TAK still does not call the Keycloak end-session endpoint. The client registers `post.logout.redirect.uris` anyway, so a caller that does end the session can return to `/login/redirect`. CloudTAK's sign-in route does call end-session. See [CloudTAK](cloudtak.md).
 - One IdP. A second `openIdDiscoveryConfiguration` is not a failover list. TAK picks one entry at random.
 - Port 8089 does not take a browser cookie. With `x509tokenAuth`, a certificate that was enrolled on 8446 with a bearer token is authenticated as that token's user.
 - Cookies set on 8447 are marked Secure. `AuthCookieUtils` uses `request.isSecure()`, which is true because the gateway reaches 8447 over TLS. With `api.web.backendTLS.enabled=false` the connector is plaintext and the cookies are not Secure.

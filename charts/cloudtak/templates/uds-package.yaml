@@ -22,6 +22,9 @@ spec:
       fullScopeAllowed: false
       attributes:
         pkce.code.challenge.method: S256
+        client.session.idle.timeout: {{ .Values.sso.sessionIdleTimeout | quote }}
+        client.session.max.lifespan: {{ .Values.sso.sessionMaxLifespan | quote }}
+        post.logout.redirect.uris: "{{ include "cloudtak.url" . }}/api/login/oidc"
       defaultClientScopes:
         - openid
         - profile

@@ -30,7 +30,7 @@ Authservice in front of CloudTAK was the other option. It would gate the page, b
 - One sign-in, on the UDS Keycloak page. The Keycloak user is the CloudTAK user and the subject of the TAK certificate CloudTAK uses for them, so TAK's audit trail and group membership follow the Keycloak user and their `/TAK/` groups.
 - The sign-in route imports CloudTAK's compiled modules and writes CloudTAK's session the way CloudTAK does. A CloudTAK release that changes those modules can break sign-in. The CI sign-in test runs on each Renovate pull request for CloudTAK. If upstream adds an OIDC route (issue #661), the `sso` container can go.
 - The redirect from CloudTAK's login page to Keycloak is a script nginx adds to the page, because CloudTAK has no setting for it.
-- A CloudTAK session outlives the Keycloak session (CloudTAK's refresh lifetime), and CloudTAK logout does not end the Keycloak session.
+- Opening `/login` ends the Keycloak session through the end-session endpoint. A CloudTAK refresh token can still outlive that session until the browser drops it.
 - TAK file users live in a file in the API pod. The bootstrap container recreates the account every five minutes if a restart lost it, so the admin connection can lose its account for up to five minutes after the TAK API pod restarts. Keycloak users do not depend on that file.
 - CloudTAK stores the TAK admin certificate and key in its database for its admin connection. The database is a place a TAK admin credential lives.
 - No basemap without egress, and no file features without S3. Both are additions, not configuration of this component. ADR 11 adds a default basemap with egress to one tile host.

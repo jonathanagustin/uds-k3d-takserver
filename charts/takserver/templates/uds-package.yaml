@@ -27,6 +27,9 @@ spec:
       # TAK does not send PKCE. Do not set pkce.code.challenge.method.
       attributes:
         use.refresh.tokens: "true"
+        client.session.idle.timeout: {{ .Values.sso.sessionIdleTimeout | quote }}
+        client.session.max.lifespan: {{ .Values.sso.sessionMaxLifespan | quote }}
+        post.logout.redirect.uris: {{ include "takserver.redirectUri" . | quote }}
       defaultClientScopes:
         - openid
         - profile

@@ -34,7 +34,7 @@ TAK startup, from the API process:
 {namespace="takserver"} |= "Started TAK Server"
 ```
 
-`TAK Server version` and `Tomcat started on port` are the same startup stream.
+`TAK Server version` and `Tomcat started on port` are the same startup stream. Keep a line filter on this selector. `{namespace="takserver"}` alone is mostly Postgres, and a limit of a few hundred lines returns checkpoints before it returns the API startup line.
 
 CloudTAK writes two lines of its own. `bootstrap.mjs` logs `ok - TAK user` after it creates the TAK user. `basemap.mjs` logs `basemap:` when it writes the tile proxy.
 

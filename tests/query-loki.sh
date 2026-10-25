@@ -8,6 +8,10 @@
 # uses query_range. start and end are Unix seconds: Loki's parser passes the
 # number to time.Unix, and a nanosecond value becomes a range of tens of
 # thousands of years that never finishes.
+#
+# The match strings are also a line filter. {namespace="takserver"} with
+# limit 200 is filled by Postgres checkpoints, and the API startup line is
+# dropped before the body is searched.
 set -euo pipefail
 
 body_has_match() {
@@ -20,6 +24,23 @@ body_has_match() {
     fi
   done
   return 1
+}
+
+# RE2 metacharacters only. re.escape also quotes spaces, and Loki rejects
+# that pattern.
+filtered_query() {
+  local query="${1}"
+  shift
+  python3 -c 'import json, sys
+query = sys.argv[1]
+special = set(r"\.+*?()|[]{}^$")
+
+def escape(text):
+    return "".join("\\" + ch if ch in special else ch for ch in text)
+
+pattern = "|".join(escape(needle) for needle in sys.argv[2:])
+print(query + " |~ " + json.dumps(pattern))
+' "${query}" "${@}"
 }
 
 loki_query_url() {
@@ -95,10 +116,11 @@ trap cleanup EXIT
 found="0"
 try="1"
 body=""
+filtered="$(filtered_query "${query}" "${matches[@]}")"
 while [[ "${try}" -le "${attempts}" ]]; do
   end="$(python3 -c 'import time; print(int(time.time()))')"
   start="$((end - 3600))"
-  url="$(loki_query_url "${query}" "${start}" "${end}")"
+  url="$(loki_query_url "${filtered}" "${start}" "${end}")"
   body="$(curl -sS --max-time 20 "${url}" || true)"
   if body_has_match "${body}" "${matches[@]}"; then
     found="1"
@@ -112,7 +134,7 @@ done
 
 if [[ "${found}" != "1" ]]; then
   echo "Loki query did not return a matching line" >&2
-  echo "query: ${query}" >&2
+  echo "query: ${filtered}" >&2
   if [[ -n "${body}" ]]; then
     printf '%s\n' "${body}" | head -c 500 >&2
     echo >&2

@@ -20,6 +20,17 @@ if body_has_match '{"stream":{"namespace":"takserver"},"values":[]}' "Started TA
   exit 1
 fi
 
+filtered="$(filtered_query '{namespace="takserver"}' "Started TAK Server" "TAK Server version" "Tomcat started on port")"
+if [[ "${filtered}" != '{namespace="takserver"} |~ "Started TAK Server|TAK Server version|Tomcat started on port"' ]]; then
+  echo "startup filter was ${filtered}" >&2
+  exit 1
+fi
+dotted="$(filtered_query '{namespace="takserver"} |= "uds.std"' "uds.std")"
+if [[ "${dotted}" != '{namespace="takserver"} |= "uds.std" |~ "uds\\.std"' ]]; then
+  echo "dotted filter was ${dotted}" >&2
+  exit 1
+fi
+
 url="$(loki_query_url '{namespace="takserver"} |= "uds-std-ports-1"' "10" "20")"
 case "${url}" in
   http://127.0.0.1:3100/loki/api/v1/query_range\?query=*) ;;

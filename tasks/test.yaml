@@ -451,7 +451,6 @@ tasks:
           deny_other_sa() {
             local host="$1" image code
             image="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="cloudtak")].image}')"
-            # shellcheck disable=SC2329 # trap RETURN runs this on the way out
             cleanup_denied() {
               k delete pod basemap-denied -n cloudtak --ignore-not-found --wait=false >/dev/null 2>&1 || true
               k delete sa basemap-denied -n cloudtak --ignore-not-found >/dev/null 2>&1 || true
@@ -519,6 +518,7 @@ tasks:
               return 1
             fi
             echo "ServiceAccount basemap-denied did not reach ${host} (exit ${code})"
+            cleanup_denied
           }
 
           # Default basemap. With it on, the Package has one remoteHost rule,

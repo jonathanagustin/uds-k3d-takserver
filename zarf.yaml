@@ -53,9 +53,15 @@ components:
       - name: takserver
         valuesFiles:
           - values/upstream-values.yaml
-    # The TAK Deployments are not listed. Their startup probes allow 800s,
-    # and tasks/test.yaml health-check waits for them.
+    # The watcher creates this ConfigMap only after the ordered Ignite
+    # restart has finished and the four TAK Deployments are Available.
+    # A ConfigMap has no status, so Zarf treats it as healthy once it exists.
+    # Deployment checks alone can pass before that restart scales them down.
     healthChecks:
+      - apiVersion: v1
+        kind: ConfigMap
+        name: takserver-startup
+        namespace: takserver
       - apiVersion: uds.dev/v1alpha1
         kind: Package
         name: takserver

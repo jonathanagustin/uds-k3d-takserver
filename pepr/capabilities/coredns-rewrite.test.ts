@@ -11,7 +11,9 @@ import {
   OVERRIDE_KEY,
   readCoreDnsEnv,
   reconcileCoreDns,
+  rolloutDone,
   sameOverride,
+  waitRollout,
   type CoreDnsEnv,
 } from "./coredns-rewrite.ts";
 
@@ -55,11 +57,19 @@ function cluster(opts: {
     },
     getDeployment: async () => {
       recorded.deployments += 1;
-      return opts.deployment;
+      if (!opts.deployment) {
+        return opts.deployment;
+      }
+      const spec = opts.deployment.spec ?? {};
+      return {
+        spec: { replicas: 1, ...spec },
+        status: { updatedReplicas: 1, availableReplicas: 1 },
+      };
     },
     restartDeployment: async (_ns: string, name: string, hasAnnotations: boolean) => {
       recorded.restarted.push({ name, hasAnnotations });
     },
+    sleep: async () => undefined,
   };
   return { cluster: fake as unknown as Cluster, recorded };
 }
@@ -157,6 +167,52 @@ test("an existing key is replaced, and annotations are preserved", async () => {
   await reconcileCoreDns(fake, env());
   assert.equal(recorded.patched[0].present, true);
   assert.deepEqual(recorded.restarted, [{ name: "coredns", hasAnnotations: true }]);
+});
+
+test("a CoreDNS rollout is done only when the new pods are Available", () => {
+  assert.equal(rolloutDone(undefined), false);
+  assert.equal(rolloutDone({ status: { updatedReplicas: 1, availableReplicas: 1 } }), true);
+  assert.equal(rolloutDone({ spec: { replicas: 2 }, status: { updatedReplicas: 1, availableReplicas: 1 } }), false);
+  assert.equal(
+    rolloutDone({ metadata: { generation: 3 }, spec: { replicas: 1 }, status: { observedGeneration: 2, updatedReplicas: 1, availableReplicas: 1 } }),
+    false,
+  );
+  assert.equal(
+    rolloutDone({ metadata: { generation: 3 }, spec: { replicas: 1 }, status: { observedGeneration: 3, updatedReplicas: 1, availableReplicas: 1 } }),
+    true,
+  );
+  assert.equal(rolloutDone({ metadata: { generation: 3 }, status: { updatedReplicas: 1, availableReplicas: 1 } }), true);
+});
+
+test("waitRollout polls until the Deployment is Available", async () => {
+  let reads = 0;
+  let slept = false;
+  const cluster = {
+    getDeployment: async () => {
+      reads += 1;
+      if (reads === 1) {
+        return { spec: { replicas: 1 }, status: { updatedReplicas: 0, availableReplicas: 0 } };
+      }
+      return { spec: { replicas: 1 }, status: { updatedReplicas: 1, availableReplicas: 1 } };
+    },
+    sleep: async () => {
+      slept = true;
+    },
+  } as unknown as Cluster;
+  await waitRollout(cluster, "kube-system", "coredns", 10_000);
+  assert.equal(slept, true);
+  await assert.rejects(
+    waitRollout(
+      {
+        getDeployment: async () => ({ spec: { replicas: 1 } }),
+        sleep: async () => undefined,
+      } as unknown as Cluster,
+      "kube-system",
+      "coredns",
+      0,
+    ),
+    /rollout did not finish/,
+  );
 });
 
 test("a missing CoreDNS Deployment fails after the ConfigMap write", async () => {

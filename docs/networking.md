@@ -70,7 +70,7 @@ Inside the cluster, `sso.<domain>` resolves to the ClusterIP of `tenant-ingressg
 
 Public DNS for `*.uds.dev` answers `127.0.0.1`. From inside a pod that is the pod itself, so a pod cannot reach `sso.uds.dev` or `takserver.uds.dev` by name without help. uds-k3d ships ConfigMap `kube-system/coredns-custom` with key `uds.override`, which rewrites `*.admin.uds.dev` to the admin gateway and every other `*.uds.dev` name to the tenant gateway. It has no rule for passthrough hosts and only covers `uds.dev`.
 
-The `takserver-oidc` watcher writes key `00-takserver.override` on that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, and restarts CoreDNS when the key changed:
+The `takserver-oidc` watcher writes key `00-takserver.override` on that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, restarts CoreDNS when the key changed, and waits until that Deployment is Available:
 
 | Name | Answer |
 | --- | --- |

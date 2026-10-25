@@ -5,7 +5,7 @@
 // CoreDNS imports *.override in name order, and the first matching
 // `rewrite stop` wins, so 00-takserver.override runs before uds.override.
 
-import type { Cluster } from "../cluster.ts";
+import type { Cluster, DeploymentDoc } from "../cluster.ts";
 
 export const OVERRIDE_KEY = "00-takserver.override";
 export const COREDNS_NAMESPACE = "kube-system";
@@ -106,4 +106,33 @@ export async function reconcileCoreDns(cluster: Cluster, env: CoreDnsEnv): Promi
   }
   const hasAnnotations = deployment.spec?.template?.metadata?.annotations !== undefined;
   await cluster.restartDeployment(COREDNS_NAMESPACE, COREDNS_DEPLOYMENT, hasAnnotations);
+  await waitRollout(cluster, COREDNS_NAMESPACE, COREDNS_DEPLOYMENT);
+}
+
+export function rolloutDone(deploy: DeploymentDoc | undefined): boolean {
+  if (!deploy) {
+    return false;
+  }
+  const want = deploy.spec?.replicas ?? 1;
+  const updated = deploy.status?.updatedReplicas ?? 0;
+  const available = deploy.status?.availableReplicas ?? 0;
+  const generation = deploy.metadata?.generation;
+  const observed = deploy.status?.observedGeneration;
+  if (typeof generation === "number" && typeof observed === "number" && observed < generation) {
+    return false;
+  }
+  return updated >= want && available >= want;
+}
+
+export async function waitRollout(cluster: Cluster, namespace: string, name: string, timeoutMs = 180_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (rolloutDone(await cluster.getDeployment(namespace, name))) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`${namespace}/${name} rollout did not finish within ${timeoutMs / 1000}s`);
+    }
+    await cluster.sleep(3_000);
+  }
 }

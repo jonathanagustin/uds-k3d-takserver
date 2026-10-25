@@ -19,7 +19,8 @@ When(a.Pod)
   .InNamespace(NAMESPACE)
   .Mutate(request => {
     // A pod admitted without the init containers would start unrendered, so a
-    // missing image is a rejection and not a skip. The module's onError is
-    // reject, which turns this throw into a denied admission.
+    // missing image is a rejection and not a skip. preparePod retries a
+    // transient CoreConfig read. The module's onError is reject, which turns
+    // a remaining throw into a denied admission.
     return preparePod(request.Raw as unknown as PodLike, process.env, runtime.cluster);
   });

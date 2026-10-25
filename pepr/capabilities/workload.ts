@@ -6,7 +6,7 @@
 // init containers, probes, or the Ignite SPI timeouts. Admission applies the
 // same pod shape, so a pod created before the Deployment reconcile still waits.
 
-import type { Cluster, JsonOp, StatefulSetDoc } from "../cluster.ts";
+import type { Cluster, DeploymentDoc, JsonOp, StatefulSetDoc } from "../cluster.ts";
 import { addRender, RELOAD_LABEL, RELOAD_VALUE, type PodLike } from "./oidc-render.ts";
 
 export const TAK_DEPLOYS = [
@@ -23,6 +23,13 @@ const START_ORDER = ["takserver-config", "takserver-messaging", "takserver-api",
 
 const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
 const IGNITE_STATEFULSET = "takserver-ignite";
+export const CORE_CONFIGMAP = "core-config";
+export const STARTUP_CONFIGMAP = "takserver-startup";
+export const STARTUP_ANNOTATION = "uds.dev/tak-startup";
+const STARTUP_VALUE = "complete";
+const REPLICA_ANNOTATION = "uds.dev/tak-replicas";
+const READY_TIMEOUT_MS = 1_200_000;
+const ISSUER_TRIES = 3;
 const IGNITE_XML = "ignite-config.xml";
 const SPI = '<bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">';
 const DISCOVERY = '<property name="discoverySpi">';
@@ -398,6 +405,209 @@ export function shapeDeployment(deploy: WorkloadDeploy, ctx: StartupContext): { 
   return { next, changed };
 }
 
+const OWNED_VOLUMES = new Set(["oidc-script", "jvm-trust", "uds-trust"]);
+const OWNED_INITS = new Set(["wait-deps", "import-trust"]);
+const PROBE_FIELDS = ["startupProbe", "livenessProbe", "readinessProbe"] as const;
+
+function escapeJsonPointer(key: string): string {
+  return key.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+
+function pushValue(ops: JsonOp[], path: string, before: unknown, after: unknown): void {
+  if (JSON.stringify(before) === JSON.stringify(after)) {
+    return;
+  }
+  if (before === undefined) {
+    ops.push({ op: "add", path, value: after });
+    return;
+  }
+  if (after === undefined) {
+    ops.push({ op: "remove", path });
+    return;
+  }
+  ops.push({ op: "replace", path, value: after });
+}
+
+function labelOps(before: WorkloadDeploy["spec"], after: WorkloadDeploy["spec"]): JsonOp[] {
+  const want = after?.template?.metadata?.labels?.[RELOAD_LABEL];
+  if (want === undefined) {
+    return [];
+  }
+  const metadata = before?.template?.metadata;
+  const labels = metadata?.labels;
+  if (!metadata) {
+    return [{ op: "add", path: "/spec/template/metadata", value: { labels: { [RELOAD_LABEL]: want } } }];
+  }
+  if (!labels) {
+    return [{ op: "add", path: "/spec/template/metadata/labels", value: { [RELOAD_LABEL]: want } }];
+  }
+  if (labels[RELOAD_LABEL] === want) {
+    return [];
+  }
+  return [{
+    op: labels[RELOAD_LABEL] === undefined ? "add" : "replace",
+    path: `/spec/template/metadata/labels/${escapeJsonPointer(RELOAD_LABEL)}`,
+    value: want,
+  }];
+}
+
+function volumeOps(before: VolumeDoc[] | undefined, after: VolumeDoc[] | undefined): JsonOp[] {
+  const owned = (after ?? []).filter(volume => OWNED_VOLUMES.has(volume.name));
+  if (owned.length === 0) {
+    return [];
+  }
+  if (!before) {
+    return [{ op: "add", path: "/spec/template/spec/volumes", value: owned }];
+  }
+  const ops: JsonOp[] = [];
+  for (const volume of owned) {
+    const index = before.findIndex(item => item.name === volume.name);
+    if (index < 0) {
+      ops.push({ op: "add", path: "/spec/template/spec/volumes/-", value: volume });
+    } else if (!covers(before[index], volume)) {
+      ops.push({ op: "replace", path: `/spec/template/spec/volumes/${index}`, value: volume });
+    }
+  }
+  return ops;
+}
+
+function initOps(before: ContainerDoc[] | undefined, after: ContainerDoc[] | undefined): JsonOp[] {
+  const ownedAfter = (after ?? []).filter(init => init.name !== undefined && OWNED_INITS.has(init.name));
+  if (ownedAfter.length === 0) {
+    return [];
+  }
+  if (!before?.length) {
+    return [{ op: "add", path: "/spec/template/spec/initContainers", value: ownedAfter }];
+  }
+  const prefixOk = ownedAfter.every((init, index) => before[index]?.name === init.name);
+  if (prefixOk) {
+    const ops: JsonOp[] = [];
+    ownedAfter.forEach((init, index) => {
+      if (!covers(before[index], init)) {
+        ops.push({ op: "replace", path: `/spec/template/spec/initContainers/${index}`, value: init });
+      }
+    });
+    return ops;
+  }
+  const extras = before.filter(init => init.name === undefined || !OWNED_INITS.has(init.name));
+  return [{ op: "replace", path: "/spec/template/spec/initContainers", value: [...ownedAfter, ...extras] }];
+}
+
+function envOps(before: ContainerDoc | undefined, after: ContainerDoc | undefined): JsonOp[] {
+  const want = after?.env?.find(item => item.name === "JAVA_TOOL_OPTIONS");
+  if (!want) {
+    return [];
+  }
+  const env = before?.env;
+  if (!env) {
+    return [{ op: "add", path: "/spec/template/spec/containers/0/env", value: [want] }];
+  }
+  const index = env.findIndex(item => item.name === "JAVA_TOOL_OPTIONS");
+  if (index < 0) {
+    return [{ op: "add", path: "/spec/template/spec/containers/0/env/-", value: want }];
+  }
+  if (env[index]?.value === want.value) {
+    return [];
+  }
+  return [{ op: "replace", path: `/spec/template/spec/containers/0/env/${index}/value`, value: want.value }];
+}
+
+function mountOps(before: ContainerDoc | undefined, after: ContainerDoc | undefined): JsonOp[] {
+  const want = after?.volumeMounts?.find(item => item.name === "jvm-trust");
+  if (!want) {
+    return [];
+  }
+  const mounts = before?.volumeMounts;
+  if (!mounts) {
+    return [{ op: "add", path: "/spec/template/spec/containers/0/volumeMounts", value: [want] }];
+  }
+  const index = mounts.findIndex(item => item.name === "jvm-trust");
+  if (index < 0) {
+    return [{ op: "add", path: "/spec/template/spec/containers/0/volumeMounts/-", value: want }];
+  }
+  if (covers(mounts[index], want)) {
+    return [];
+  }
+  return [{ op: "replace", path: `/spec/template/spec/containers/0/volumeMounts/${index}`, value: want }];
+}
+
+function memoryOps(before: ContainerDoc | undefined, after: ContainerDoc | undefined): JsonOp[] {
+  const wantRequests = after?.resources?.requests?.memory;
+  const wantLimits = after?.resources?.limits?.memory;
+  if (!wantRequests && !wantLimits) {
+    return [];
+  }
+  const resources = before?.resources;
+  if (!resources) {
+    return [{ op: "add", path: "/spec/template/spec/containers/0/resources", value: after?.resources }];
+  }
+  const ops: JsonOp[] = [];
+  if (wantRequests) {
+    if (!resources.requests) {
+      ops.push({ op: "add", path: "/spec/template/spec/containers/0/resources/requests", value: { memory: wantRequests } });
+    } else if (resources.requests.memory !== wantRequests) {
+      ops.push({
+        op: resources.requests.memory === undefined ? "add" : "replace",
+        path: "/spec/template/spec/containers/0/resources/requests/memory",
+        value: wantRequests,
+      });
+    }
+  }
+  if (wantLimits) {
+    if (!resources.limits) {
+      ops.push({ op: "add", path: "/spec/template/spec/containers/0/resources/limits", value: { memory: wantLimits } });
+    } else if (resources.limits.memory !== wantLimits) {
+      ops.push({
+        op: resources.limits.memory === undefined ? "add" : "replace",
+        path: "/spec/template/spec/containers/0/resources/limits/memory",
+        value: wantLimits,
+      });
+    }
+  }
+  return ops;
+}
+
+function containerOps(before: ContainerDoc[] | undefined, after: ContainerDoc[] | undefined): JsonOp[] {
+  const next = after?.[0];
+  if (!next) {
+    return [];
+  }
+  if (!before?.length) {
+    return [{ op: "add", path: "/spec/template/spec/containers", value: after }];
+  }
+  const current = before[0];
+  const ops: JsonOp[] = [];
+  ops.push(...envOps(current, next));
+  ops.push(...mountOps(current, next));
+  for (const field of PROBE_FIELDS) {
+    if (next[field] !== undefined) {
+      pushValue(ops, `/spec/template/spec/containers/0/${field}`, current?.[field], next[field]);
+    }
+  }
+  ops.push(...memoryOps(current, next));
+  return ops;
+}
+
+function specOps(before: WorkloadDeploy["spec"], after: WorkloadDeploy["spec"]): JsonOp[] {
+  const next = after?.template?.spec;
+  if (!next) {
+    return [];
+  }
+  const current = before?.template?.spec;
+  if (!current) {
+    return [{ op: "add", path: "/spec/template/spec", value: next }];
+  }
+  const ops: JsonOp[] = [];
+  pushValue(ops, "/spec/template/spec/automountServiceAccountToken", current.automountServiceAccountToken, next.automountServiceAccountToken);
+  pushValue(ops, "/spec/template/spec/hostAliases", current.hostAliases, next.hostAliases);
+  ops.push(...volumeOps(current.volumes, next.volumes));
+  ops.push(...initOps(current.initContainers, next.initContainers));
+  ops.push(...containerOps(current.containers, next.containers));
+  return ops;
+}
+
+// Patches the fields shapeDeployment owns. A Helm-owned Deployment keeps its
+// container image, args, and every other field this watcher does not set.
 export function deploymentOps(current: WorkloadDeploy, next: WorkloadDeploy): JsonOp[] {
   const ops: JsonOp[] = [];
   const before = current.spec;
@@ -405,11 +615,10 @@ export function deploymentOps(current: WorkloadDeploy, next: WorkloadDeploy): Js
   if (!after) {
     return ops;
   }
-  const progress = "/spec/progressDeadlineSeconds";
   if (before?.progressDeadlineSeconds !== after.progressDeadlineSeconds) {
     ops.push({
       op: before?.progressDeadlineSeconds === undefined ? "add" : "replace",
-      path: progress,
+      path: "/spec/progressDeadlineSeconds",
       value: after.progressDeadlineSeconds,
     });
   }
@@ -420,23 +629,51 @@ export function deploymentOps(current: WorkloadDeploy, next: WorkloadDeploy): Js
       value: { type: "Recreate" },
     });
   }
-  if (JSON.stringify(before?.template) !== JSON.stringify(after.template)) {
-    ops.push({
-      op: before?.template === undefined ? "add" : "replace",
-      path: "/spec/template",
-      value: after.template,
-    });
+  if (!after.template) {
+    return ops;
   }
+  if (!before?.template) {
+    ops.push({ op: "add", path: "/spec/template", value: after.template });
+    return ops;
+  }
+  ops.push(...labelOps(before, after));
+  ops.push(...specOps(before, after));
   return ops;
 }
 
-async function readIssuer(cluster: Cluster): Promise<string> {
-  const configMap = await cluster.getConfigMap("takserver", "core-config");
-  const xml = configMap?.data?.["CoreConfig.xml"];
+function issuerFrom(xml: string | undefined): string {
   if (!xml) {
     throw new Error("CoreConfig has no openId configurationUri");
   }
   return issuerHost(xml);
+}
+
+function issuerMissing(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("configurationUri");
+}
+
+// A missing CoreConfig is a real rejection. A thrown read is retried so one
+// apiserver blip does not deny the pod; admission is not retried by itself.
+async function readIssuer(cluster: Cluster): Promise<string> {
+  let last: unknown;
+  for (let attempt = 0; attempt < ISSUER_TRIES; attempt++) {
+    try {
+      const configMap = await cluster.getConfigMap("takserver", CORE_CONFIGMAP);
+      return issuerFrom(configMap?.data?.["CoreConfig.xml"]);
+    } catch (err) {
+      if (issuerMissing(err)) {
+        throw err;
+      }
+      last = err;
+      if (attempt + 1 < ISSUER_TRIES) {
+        await cluster.sleep(250);
+      }
+    }
+  }
+  if (last instanceof Error) {
+    throw last;
+  }
+  throw new Error("CoreConfig read failed");
 }
 
 export async function reconcileDeployment(
@@ -494,6 +731,121 @@ export async function waitGone(cluster: Cluster, app: string, timeoutMs = 180_00
   }
 }
 
+export function desiredReplicas(deploy: DeploymentDoc): number {
+  const spec = deploy.spec?.replicas;
+  if (spec === undefined) {
+    return 1;
+  }
+  if (spec > 0) {
+    return spec;
+  }
+  const saved = Number(deploy.metadata?.annotations?.[REPLICA_ANNOTATION]);
+  if (Number.isInteger(saved) && saved > 0) {
+    return saved;
+  }
+  return 0;
+}
+
+function rememberReplicaOps(deploy: DeploymentDoc, count: number): JsonOp[] {
+  const value = String(count);
+  const annotations = deploy.metadata?.annotations;
+  if (annotations?.[REPLICA_ANNOTATION] === value) {
+    return [];
+  }
+  if (!annotations) {
+    return [{ op: "add", path: "/metadata/annotations", value: { [REPLICA_ANNOTATION]: value } }];
+  }
+  return [{
+    op: annotations[REPLICA_ANNOTATION] === undefined ? "add" : "replace",
+    path: `/metadata/annotations/${escapeJsonPointer(REPLICA_ANNOTATION)}`,
+    value,
+  }];
+}
+
+export async function waitReady(cluster: Cluster, timeoutMs = READY_TIMEOUT_MS): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const pending: string[] = [];
+    for (const name of START_ORDER) {
+      const deploy = await cluster.getDeployment("takserver", name);
+      const want = deploy?.spec?.replicas ?? 1;
+      const available = deploy?.status?.availableReplicas ?? 0;
+      const updated = deploy?.status?.updatedReplicas ?? 0;
+      if (!deploy || available < want || updated < want) {
+        pending.push(name);
+      }
+    }
+    if (pending.length === 0) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`TAK deployments not Available within ${timeoutMs / 1000}s: ${pending.join(", ")}`);
+    }
+    await cluster.sleep(3_000);
+  }
+}
+
+async function stopConsumers(cluster: Cluster): Promise<Map<string, number>> {
+  const desired = new Map<string, number>();
+  for (const name of STOP_ORDER) {
+    const deploy = await cluster.getDeployment("takserver", name);
+    if (!deploy) {
+      continue;
+    }
+    const count = desiredReplicas(deploy);
+    desired.set(name, count);
+    if ((deploy.spec?.replicas ?? 1) === 0) {
+      continue;
+    }
+    const ops = rememberReplicaOps(deploy, count);
+    if (ops.length > 0) {
+      await cluster.patchDeployment("takserver", name, ops);
+    }
+    await cluster.scaleDeployment("takserver", name, 0);
+    await waitGone(cluster, name);
+  }
+  return desired;
+}
+
+async function startConsumers(cluster: Cluster, desired: Map<string, number>): Promise<void> {
+  for (const name of START_ORDER) {
+    const count = desired.get(name);
+    if (count === undefined || count === 0) {
+      continue;
+    }
+    await cluster.scaleDeployment("takserver", name, count);
+  }
+}
+
+// A previous pass can die after the scale-down. spec.replicas is then 0, and
+// the annotation written before the scale-down is the count to restore.
+async function resumeReplicas(cluster: Cluster): Promise<void> {
+  for (const name of START_ORDER) {
+    const deploy = await cluster.getDeployment("takserver", name);
+    if (!deploy) {
+      continue;
+    }
+    const count = desiredReplicas(deploy);
+    const current = deploy.spec?.replicas ?? 1;
+    if (count > 0 && current !== count) {
+      await cluster.scaleDeployment("takserver", name, count);
+    }
+  }
+}
+
+async function stampStartup(cluster: Cluster): Promise<void> {
+  const current = await cluster.getConfigMap("takserver", STARTUP_CONFIGMAP);
+  if (current?.metadata?.annotations?.[STARTUP_ANNOTATION] === STARTUP_VALUE) {
+    return;
+  }
+  await cluster.applyConfigMap(
+    "takserver",
+    STARTUP_CONFIGMAP,
+    { [STARTUP_ANNOTATION]: STARTUP_VALUE },
+    { ready: "true" },
+  );
+}
+
 function automountOps(sts: StatefulSetDoc): JsonOp[] {
   const current = sts.spec?.template?.spec?.automountServiceAccountToken;
   return [
@@ -505,7 +857,7 @@ function automountOps(sts: StatefulSetDoc): JsonOp[] {
   ];
 }
 
-export async function reconcileIgnite(phase: string, cluster: Cluster): Promise<void> {
+export async function reconcileIgnite(phase: string, cluster: Cluster, readyTimeoutMs = READY_TIMEOUT_MS): Promise<void> {
   if (phase === "DELETED") {
     return;
   }
@@ -520,14 +872,11 @@ export async function reconcileIgnite(phase: string, cluster: Cluster): Promise<
     return;
   }
   const automount = sts.spec?.template?.spec?.automountServiceAccountToken === true;
-  if (tuned === xml && automount) {
-    return;
-  }
-  try {
-    for (const name of STOP_ORDER) {
-      await cluster.scaleDeployment("takserver", name, 0);
-      await waitGone(cluster, name);
-    }
+  if (tuned !== xml || !automount) {
+    // Drop the marker before the restart so a Zarf wait cannot succeed on the
+    // previous run's ConfigMap while these Deployments are scaled down.
+    await cluster.deleteConfigMap("takserver", STARTUP_CONFIGMAP);
+    const desired = await stopConsumers(cluster);
     if (tuned !== xml) {
       await cluster.patchConfigMapKey("takserver", IGNITE_CONFIGMAP, IGNITE_XML, tuned, true);
     }
@@ -536,11 +885,11 @@ export async function reconcileIgnite(phase: string, cluster: Cluster): Promise<
     }
     const hasAnnotations = sts.spec?.template?.metadata?.annotations !== undefined;
     await cluster.restartStatefulSet("takserver", IGNITE_STATEFULSET, hasAnnotations);
-  } finally {
-    for (const name of START_ORDER) {
-      await cluster.scaleDeployment("takserver", name, 1);
-    }
+    await startConsumers(cluster, desired);
   }
+  await resumeReplicas(cluster);
+  await waitReady(cluster, readyTimeoutMs);
+  await stampStartup(cluster);
 }
 
 let igniteTail: Promise<void> = Promise.resolve();

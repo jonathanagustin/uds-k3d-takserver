@@ -9,6 +9,7 @@ import { INIT_NAME, type PodLike } from "./oidc-render.ts";
 import { onDeployment, onIgnite, Workload } from "./workload-capability.ts";
 import {
   deploymentOps,
+  desiredReplicas,
   enqueueIgnite,
   issuerHost,
   preparePod,
@@ -16,9 +17,11 @@ import {
   reconcileIgnite,
   resetIgniteQueue,
   shapeDeployment,
+  STARTUP_ANNOTATION,
   tuneIgniteXml,
   waitGone,
   waitMode,
+  waitReady,
   type WorkloadDeploy,
   type WorkloadPodSpec,
 } from "./workload.ts";
@@ -174,11 +177,28 @@ test("an empty image is an error, and other deployments are ignored", () => {
 });
 
 test("deployment patch ops add missing fields and replace a rolling update", () => {
-  const current = deploy("takserver-api");
+  const current = deploy("takserver-api", {
+    containers: [{ name: "api", image: "helm.example/api:1", env: [{ name: "KEEP", value: "yes" }] }],
+    hostAliases: [{ ip: "10.0.0.1" }],
+    volumes: [{ name: "kept", emptyDir: {} }, { name: "oidc-script", configMap: { name: "other" } }],
+    initContainers: [{ name: "other" }, { name: "wait-deps", image: "old" }],
+    automountServiceAccountToken: false,
+  });
+  current.spec!.template!.metadata = { labels: { app: "takserver-api", "uds.dev/oidc-reload": "stale" } };
   const next = shaped("takserver-api");
   const ops = deploymentOps(current, next);
+  assert.equal(ops.some(op => op.path === "/spec/template"), false);
   assert.equal(ops.some(op => op.path === "/spec/progressDeadlineSeconds" && op.op === "add"), true);
   assert.equal(ops.some(op => op.path === "/spec/strategy" && op.op === "add"), true);
+  assert.equal(ops.some(op => op.path.endsWith("/uds.dev~1oidc-reload") && op.op === "replace" && op.value === "takserver"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/automountServiceAccountToken" && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/hostAliases" && op.op === "remove"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/volumes/-"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/volumes/1" && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/initContainers" && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/containers/0/env/-"), true);
+  assert.equal(JSON.stringify(ops).includes("helm.example/api"), false);
+  assert.equal(JSON.stringify(ops).includes("\"KEEP\""), false);
   const rolling: WorkloadDeploy = {
     ...current,
     spec: { ...current.spec, progressDeadlineSeconds: 600, strategy: { type: "RollingUpdate", rollingUpdate: { maxUnavailable: 1 } } },
@@ -186,9 +206,48 @@ test("deployment patch ops add missing fields and replace a rolling update", () 
   const replaced = deploymentOps(rolling, next);
   assert.equal(replaced.find(op => op.path === "/spec/progressDeadlineSeconds")?.op, "replace");
   assert.equal(replaced.find(op => op.path === "/spec/strategy")?.op, "replace");
+  assert.equal(replaced.some(op => op.path === "/spec/template"), false);
   assert.deepEqual(deploymentOps({}, {}), [] as JsonOp[]);
   const added = deploymentOps({ spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" } } }, next);
   assert.equal(added.find(op => op.path === "/spec/template")?.op, "add");
+  const keyed = deploy("takserver-config");
+  keyed.spec!.template!.metadata = { labels: { app: "takserver-config" } };
+  const keyAdd = deploymentOps(keyed, shaped("takserver-config"));
+  assert.equal(keyAdd.some(op => op.path.endsWith("/uds.dev~1oidc-reload") && op.op === "add"), true);
+  const labeled = deploy("takserver-config");
+  labeled.spec!.template!.metadata = { annotations: { kept: "yes" } };
+  const labelAdd = deploymentOps(labeled, shaped("takserver-config"));
+  assert.equal(labelAdd.some(op => op.path === "/spec/template/metadata/labels" && op.op === "add"), true);
+  const bareMeta = deploy("takserver-config");
+  delete bareMeta.spec!.template!.metadata;
+  const metaAdd = deploymentOps(bareMeta, shaped("takserver-config"));
+  assert.equal(metaAdd.some(op => op.path === "/spec/template/metadata" && op.op === "add"), true);
+  const held = shaped("takserver-api");
+  held.spec!.template!.spec!.containers![0]!.startupProbe = { tcpSocket: { port: 1 } };
+  const probe = deploymentOps(held, shaped("takserver-api"));
+  assert.equal(probe.some(op => op.path.endsWith("/startupProbe") && op.op === "replace"), true);
+  assert.equal(probe.some(op => op.path.includes("oidc-reload")), false);
+  const plugins = deploy("takserver-plugins", {
+    containers: [{ name: "plugins", resources: { requests: { cpu: "10m" }, limits: { cpu: "20m" } } }],
+  });
+  const memory = deploymentOps(plugins, shaped("takserver-plugins"));
+  assert.equal(memory.some(op => op.path.endsWith("/requests/memory") && op.op === "add"), true);
+  assert.equal(memory.some(op => op.path.endsWith("/limits/memory") && op.op === "add"), true);
+  assert.equal(JSON.stringify(memory).includes("10m"), false);
+  const noSpec = deploy("takserver-config");
+  delete noSpec.spec!.template!.spec;
+  const specAdd = deploymentOps(noSpec, shaped("takserver-config"));
+  assert.equal(specAdd.some(op => op.path === "/spec/template/spec" && op.op === "add"), true);
+  const idle = deploymentOps(
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: { spec: { containers: [{ name: "x" }] } } } },
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: { spec: { containers: [{ name: "x" }] } } } },
+  );
+  assert.deepEqual(idle, [] as JsonOp[]);
+  const noTemplate = deploymentOps(
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" } } },
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" } } },
+  );
+  assert.deepEqual(noTemplate, [] as JsonOp[]);
 });
 
 function recordedCluster(over: Partial<Cluster> = {}): { cluster: Cluster; calls: string[] } {
@@ -279,6 +338,121 @@ test("preparePod orders wait-deps, import-trust, then the OIDC render", async ()
   );
 });
 
+test("owned fields patch in place when the prefix is already there", () => {
+  const current = shaped("takserver-api");
+  const spec = current.spec!.template!.spec!;
+  spec.initContainers![0]!.image = "old";
+  spec.containers![0]!.env![0]!.value = "old";
+  spec.containers![0]!.volumeMounts![0]!.mountPath = "/wrong";
+  spec.volumes = [
+    { name: "oidc-script", configMap: { name: "takserver-oidc-render" }, extra: true },
+    { name: "jvm-trust", emptyDir: {} },
+    { name: "uds-trust", configMap: { name: "uds-trust-bundle", optional: true } },
+  ];
+  const ops = deploymentOps(current, shaped("takserver-api"));
+  assert.equal(ops.some(op => op.path === "/spec/template/spec/initContainers/0" && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path.endsWith("/env/0/value") && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path.endsWith("/volumeMounts/0") && op.op === "replace"), true);
+  assert.equal(ops.some(op => op.path.includes("/volumes")), false);
+  const mountless = shaped("takserver-api");
+  delete mountless.spec!.template!.spec!.containers![0]!.volumeMounts;
+  const addedMount = deploymentOps(mountless, shaped("takserver-api"));
+  assert.equal(addedMount.some(op => op.path.endsWith("/volumeMounts") && op.op === "add"), true);
+  const withMount = shaped("takserver-api");
+  withMount.spec!.template!.spec!.containers![0]!.volumeMounts = [{ name: "other", mountPath: "/other" }];
+  const appended = deploymentOps(withMount, shaped("takserver-api"));
+  assert.equal(appended.some(op => op.path.endsWith("/volumeMounts/-")), true);
+  const plugins = deploy("takserver-plugins", { containers: [{ name: "plugins" }] });
+  plugins.spec!.template!.spec!.containers![0]!.resources = { limits: { cpu: "20m" } };
+  const limits = deploymentOps(plugins, {
+    spec: {
+      progressDeadlineSeconds: 1200,
+      strategy: { type: "Recreate" },
+      template: { spec: { containers: [{ name: "plugins", resources: { limits: { memory: "384Mi" } } }] } },
+    },
+  });
+  assert.equal(limits.some(op => op.path.endsWith("/limits/memory") && op.op === "add"), true);
+  const requestsOnly = deploy("takserver-plugins", { containers: [{ name: "plugins", resources: { requests: { memory: "64Mi" } } }] });
+  const requests = deploymentOps(requestsOnly, {
+    spec: {
+      progressDeadlineSeconds: 1200,
+      strategy: { type: "Recreate" },
+      template: { spec: { containers: [{ name: "plugins", resources: { requests: { memory: "128Mi" } } }] } },
+    },
+  });
+  assert.equal(requests.some(op => op.path.endsWith("/requests/memory") && op.op === "replace"), true);
+  const emptyContainers = deploy("takserver-config");
+  emptyContainers.spec!.template!.spec!.containers = [];
+  const containerAdd = deploymentOps(emptyContainers, shaped("takserver-config"));
+  assert.equal(containerAdd.some(op => op.path === "/spec/template/spec/containers" && op.op === "add"), true);
+  const barePlugins = deploymentOps(deploy("takserver-plugins"), shaped("takserver-plugins"));
+  assert.equal(barePlugins.some(op => op.path.endsWith("/resources") && op.op === "add"), true);
+  const noRequests = deploy("takserver-plugins", { containers: [{ name: "plugins", resources: { limits: { memory: "384Mi" } } }] });
+  const addedRequests = deploymentOps(noRequests, shaped("takserver-plugins"));
+  assert.equal(addedRequests.some(op => op.path.endsWith("/resources/requests") && op.op === "add"), true);
+  const noLimits = deploy("takserver-plugins", { containers: [{ name: "plugins", resources: { requests: { memory: "128Mi" } } }] });
+  const addedLimits = deploymentOps(noLimits, shaped("takserver-plugins"));
+  assert.equal(addedLimits.some(op => op.path.endsWith("/resources/limits") && op.op === "add"), true);
+  const wrongLimits = deploy("takserver-plugins", {
+    containers: [{ name: "plugins", resources: { requests: { memory: "128Mi" }, limits: { memory: "64Mi" } } }],
+  });
+  const replacedLimits = deploymentOps(wrongLimits, shaped("takserver-plugins"));
+  assert.equal(replacedLimits.some(op => op.path.endsWith("/limits/memory") && op.op === "replace"), true);
+  const emptySpec = deploymentOps(
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: { spec: { containers: [{ name: "x" }] } } } },
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: {} } },
+  );
+  assert.deepEqual(emptySpec, [] as JsonOp[]);
+  const noContainers = deploymentOps(
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: { spec: { containers: [{ name: "x" }] } } } },
+    { spec: { progressDeadlineSeconds: 1200, strategy: { type: "Recreate" }, template: { spec: {} } } },
+  );
+  assert.deepEqual(noContainers, [] as JsonOp[]);
+});
+
+test("preparePod retries a transient CoreConfig read and still rejects a missing issuer", async () => {
+  let reads = 0;
+  let sleeps = 0;
+  const flaky = recordedCluster({
+    getConfigMap: async () => {
+      reads += 1;
+      if (reads < 3) {
+        throw new Error("busy");
+      }
+      return { data: { "CoreConfig.xml": CORE } };
+    },
+    sleep: async () => {
+      sleeps += 1;
+    },
+  });
+  const pod: PodLike = { metadata: { labels: { app: "takserver-api" } }, spec: { containers: [{ name: "api" }] } };
+  await preparePod(pod, { RENDER_IMAGE: IMAGE }, flaky.cluster);
+  assert.equal(pod.spec?.initContainers?.[1]?.name, "import-trust");
+  assert.equal(sleeps, 2);
+  const down = recordedCluster({
+    getConfigMap: async () => {
+      throw new Error("still busy");
+    },
+    sleep: async () => undefined,
+  });
+  await assert.rejects(preparePod(pod, { RENDER_IMAGE: IMAGE }, down.cluster), /still busy/);
+  const broken = recordedCluster({
+    getConfigMap: async () => {
+      throw "busy";
+    },
+  });
+  await assert.rejects(preparePod(pod, { RENDER_IMAGE: IMAGE }, broken.cluster), /CoreConfig read failed/);
+  let missed = 0;
+  const missing = recordedCluster({
+    getConfigMap: async () => ({}),
+    sleep: async () => {
+      missed += 1;
+    },
+  });
+  await assert.rejects(preparePod(pod, { RENDER_IMAGE: IMAGE }, missing.cluster), /configurationUri/);
+  assert.equal(missed, 0);
+});
+
 test("preparePod rejects a missing image and ignores pods that do not read CoreConfig", async () => {
   const pod: PodLike = { metadata: { labels: { app: "takserver-ignite" } }, spec: { containers: [{ name: "ignite" }] } };
   const before = structuredClone(pod);
@@ -322,17 +496,81 @@ test("waitGone returns when the pods are gone and fails when they are not", asyn
 
 const IGNITE_XML = `<property name="discoverySpi">\n    <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">\n    </bean>\n</property>`;
 
+const TAK_NAMES = ["takserver-plugins", "takserver-api", "takserver-messaging", "takserver-config"] as const;
+
 function igniteCluster(opts: {
   xml?: string;
   automount?: boolean;
   annotations?: Record<string, string>;
   sts?: boolean;
+  replicas?: number;
+  deployAnnotations?: Record<string, string>;
+  missingDeployment?: boolean;
+  omitReplicas?: boolean;
+  startup?: { metadata?: { annotations?: Record<string, string> } };
+  ready?: boolean;
   listPods?: () => Promise<{ metadata?: { deletionTimestamp?: string }; status?: { phase?: string } }[]>;
 }) {
   const calls: string[] = [];
   const ops: JsonOp[] = [];
+  const replicaOps: JsonOp[] = [];
+  const counts = new Map<string, number>();
+  const notes = new Map<string, Record<string, string>>();
+  for (const name of TAK_NAMES) {
+    if (!opts.omitReplicas) {
+      counts.set(name, opts.replicas ?? 1);
+    }
+    if (opts.deployAnnotations) {
+      notes.set(name, { ...opts.deployAnnotations });
+    }
+  }
   const cluster = {
-    getConfigMap: async () => (opts.xml === undefined ? undefined : { data: { "ignite-config.xml": opts.xml } }),
+    getConfigMap: async (_ns: string, name: string) => {
+      if (name === "takserver-startup") {
+        return opts.startup;
+      }
+      if (opts.xml === undefined) {
+        return undefined;
+      }
+      return { data: { "ignite-config.xml": opts.xml } };
+    },
+    deleteConfigMap: async () => {
+      calls.push("delete-startup");
+    },
+    applyConfigMap: async () => {
+      calls.push("stamp");
+    },
+    getDeployment: async (_ns: string, name: string) => {
+      if (opts.missingDeployment) {
+        return undefined;
+      }
+      if (!counts.has(name)) {
+        return { metadata: { name, annotations: notes.get(name) }, spec: {}, status: { availableReplicas: 1, updatedReplicas: 1 } };
+      }
+      const replicas = counts.get(name) ?? 0;
+      const ready = opts.ready !== false;
+      return {
+        metadata: { name, annotations: notes.get(name) },
+        spec: { replicas },
+        status: {
+          availableReplicas: ready ? replicas : 0,
+          updatedReplicas: ready ? replicas : 0,
+        },
+      };
+    },
+    patchDeployment: async (_ns: string, name: string, patch: JsonOp[]) => {
+      replicaOps.push(...patch);
+      calls.push(`annotate ${name}`);
+      const current = { ...(notes.get(name) ?? {}) };
+      for (const op of patch) {
+        if (op.path === "/metadata/annotations" && typeof op.value === "object" && op.value) {
+          Object.assign(current, op.value as Record<string, string>);
+        } else if (typeof op.value === "string") {
+          current["uds.dev/tak-replicas"] = op.value;
+        }
+      }
+      notes.set(name, current);
+    },
     getStatefulSet: async () => {
       if (opts.sts === false) {
         return undefined;
@@ -348,6 +586,7 @@ function igniteCluster(opts: {
     },
     scaleDeployment: async (_ns: string, name: string, replicas: number) => {
       calls.push(`scale ${name} ${replicas}`);
+      counts.set(name, replicas);
     },
     listPods: opts.listPods ?? (async () => []),
     patchConfigMapKey: async () => {
@@ -362,14 +601,54 @@ function igniteCluster(opts: {
     },
     sleep: async () => undefined,
   };
-  return { cluster: cluster as unknown as Cluster, calls, ops };
+  return { cluster: cluster as unknown as Cluster, calls, ops, replicaOps };
 }
 
-test("ignite reconcile is a no-op when the XML and automount are already set", async () => {
+test("an already tuned ignite config stamps startup once the deployments are Available", async () => {
   const tuned = tuneIgniteXml(IGNITE_XML);
   const { cluster, calls } = igniteCluster({ xml: tuned, automount: true });
   await reconcileIgnite("ADDED", cluster);
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ["stamp"]);
+  const again = igniteCluster({
+    xml: tuned,
+    automount: true,
+    startup: { metadata: { annotations: { [STARTUP_ANNOTATION]: "complete" } } },
+  });
+  await reconcileIgnite("ADDED", again.cluster);
+  assert.deepEqual(again.calls, []);
+});
+
+test("desired replica counts prefer the live spec, then the annotation", () => {
+  assert.equal(desiredReplicas({}), 1);
+  assert.equal(desiredReplicas({ spec: { replicas: 2 } }), 2);
+  assert.equal(desiredReplicas({ spec: { replicas: 0 }, metadata: { annotations: { "uds.dev/tak-replicas": "3" } } }), 3);
+  assert.equal(desiredReplicas({ spec: { replicas: 0 }, metadata: { annotations: { "uds.dev/tak-replicas": "nope" } } }), 0);
+  assert.equal(desiredReplicas({ spec: { replicas: 0 } }), 0);
+});
+
+test("waitReady returns when the four deployments are Available", async () => {
+  const names = ["takserver-config", "takserver-messaging", "takserver-api", "takserver-plugins"];
+  let round = 0;
+  let slept = false;
+  const cluster = {
+    getDeployment: async (_ns: string, name: string) => {
+      if (round === 0 && name === "takserver-api") {
+        return { spec: { replicas: 1 }, status: { availableReplicas: 0, updatedReplicas: 1 } };
+      }
+      if (round === 1 && name === "takserver-api") {
+        return { spec: { replicas: 1 }, status: { availableReplicas: 1, updatedReplicas: 0 } };
+      }
+      return { spec: { replicas: 1 }, status: { availableReplicas: 1, updatedReplicas: 1 } };
+    },
+    sleep: async () => {
+      slept = true;
+      round += 1;
+    },
+  } as unknown as Cluster;
+  await waitReady(cluster, 10_000);
+  assert.equal(slept, true);
+  await assert.rejects(waitReady({ getDeployment: async () => undefined, sleep: async () => undefined } as unknown as Cluster, 0), /not Available/);
+  assert.deepEqual(names.length, 4);
 });
 
 test("a missing config or StatefulSet waits", async () => {
@@ -384,32 +663,43 @@ test("a missing config or StatefulSet waits", async () => {
   assert.deepEqual(calls, []);
 });
 
-test("an ignite change scales consumers down, patches, restarts, and scales back up", async () => {
-  const { cluster, calls, ops } = igniteCluster({ xml: IGNITE_XML, automount: false, annotations: { kept: "yes" } });
+test("an ignite change scales consumers down, patches, restarts, and restores their replica count", async () => {
+  const { cluster, calls, ops, replicaOps } = igniteCluster({
+    xml: IGNITE_XML,
+    automount: false,
+    annotations: { kept: "yes" },
+    replicas: 2,
+  });
   await reconcileIgnite("ADDED", cluster);
-  assert.deepEqual(calls.slice(0, 4), [
-    "scale takserver-plugins 0",
-    "scale takserver-api 0",
-    "scale takserver-messaging 0",
-    "scale takserver-config 0",
-  ]);
+  assert.equal(calls[0], "delete-startup");
+  assert.deepEqual(
+    calls.filter(call => call.startsWith("scale")),
+    [
+      "scale takserver-plugins 0",
+      "scale takserver-api 0",
+      "scale takserver-messaging 0",
+      "scale takserver-config 0",
+      "scale takserver-config 2",
+      "scale takserver-messaging 2",
+      "scale takserver-api 2",
+      "scale takserver-plugins 2",
+    ],
+  );
   assert.equal(calls.includes("patch-xml"), true);
   assert.equal(calls.includes("patch-sts"), true);
   assert.equal(ops[0]?.op, "replace");
+  assert.equal(replicaOps[0]?.op, "add");
   assert.equal(calls.includes("restart true"), true);
-  assert.deepEqual(calls.slice(-4), [
-    "scale takserver-config 1",
-    "scale takserver-messaging 1",
-    "scale takserver-api 1",
-    "scale takserver-plugins 1",
-  ]);
+  assert.equal(calls.at(-1), "stamp");
 });
 
-test("a new automount field is added, and a failure still scales the consumers back", async () => {
+test("a new automount field is added, and a failed stop does not scale the consumers back", async () => {
   const added = igniteCluster({ xml: tuneIgniteXml(IGNITE_XML) });
   await reconcileIgnite("ADDED", added.cluster);
   assert.equal(added.ops[0]?.op, "add");
   assert.equal(added.calls.includes("patch-xml"), false);
+  assert.equal(added.calls.includes("restart false"), true);
+  assert.equal(added.calls.at(-1), "stamp");
   const failing = igniteCluster({
     xml: IGNITE_XML,
     automount: true,
@@ -418,7 +708,62 @@ test("a new automount field is added, and a failure still scales the consumers b
     },
   });
   await assert.rejects(reconcileIgnite("ADDED", failing.cluster), /list failed/);
-  assert.equal(failing.calls.includes("scale takserver-config 1"), true);
+  assert.deepEqual(
+    failing.calls.filter(call => call.startsWith("scale")),
+    ["scale takserver-plugins 0"],
+  );
+  assert.equal(failing.calls.includes("stamp"), false);
+  const remembered = igniteCluster({
+    xml: IGNITE_XML,
+    automount: true,
+    replicas: 2,
+    deployAnnotations: { "uds.dev/tak-replicas": "2" },
+  });
+  await reconcileIgnite("ADDED", remembered.cluster);
+  assert.equal(remembered.calls.some(call => call.startsWith("annotate")), false);
+  const replaced = igniteCluster({
+    xml: IGNITE_XML,
+    automount: true,
+    replicas: 2,
+    deployAnnotations: { kept: "yes", "uds.dev/tak-replicas": "1" },
+  });
+  await reconcileIgnite("ADDED", replaced.cluster);
+  assert.equal(replaced.replicaOps.some(op => op.op === "replace"), true);
+  const stopped = igniteCluster({
+    xml: tuneIgniteXml(IGNITE_XML),
+    automount: true,
+    replicas: 0,
+    deployAnnotations: { "uds.dev/tak-replicas": "2" },
+  });
+  await reconcileIgnite("ADDED", stopped.cluster);
+  assert.deepEqual(stopped.calls.filter(call => call.startsWith("scale")), [
+    "scale takserver-config 2",
+    "scale takserver-messaging 2",
+    "scale takserver-api 2",
+    "scale takserver-plugins 2",
+  ]);
+  const extra = igniteCluster({
+    xml: IGNITE_XML,
+    automount: true,
+    deployAnnotations: { kept: "yes" },
+  });
+  await reconcileIgnite("ADDED", extra.cluster);
+  assert.equal(extra.replicaOps.some(op => op.op === "add" && op.path.includes("~1")), true);
+  const unset = igniteCluster({ xml: tuneIgniteXml(IGNITE_XML), automount: true, omitReplicas: true });
+  await reconcileIgnite("ADDED", unset.cluster);
+  assert.equal(unset.calls.some(call => call.startsWith("scale")), false);
+  const implied = igniteCluster({ xml: IGNITE_XML, automount: true, omitReplicas: true });
+  await reconcileIgnite("ADDED", implied.cluster);
+  assert.equal(implied.calls.includes("scale takserver-plugins 0"), true);
+  assert.equal(implied.calls.includes("scale takserver-config 1"), true);
+  const zero = igniteCluster({ xml: IGNITE_XML, automount: true, replicas: 0 });
+  await reconcileIgnite("ADDED", zero.cluster);
+  assert.equal(zero.calls.some(call => call.startsWith("scale")), false);
+  assert.equal(zero.calls.at(-1), "stamp");
+  const absent = igniteCluster({ xml: IGNITE_XML, automount: true, missingDeployment: true });
+  await assert.rejects(reconcileIgnite("ADDED", absent.cluster, 0), /not Available/);
+  assert.equal(absent.calls.includes("stamp"), false);
+  assert.equal(absent.calls.some(call => call.startsWith("scale")), false);
 });
 
 test("bad ignite XML does not scale anything", async () => {

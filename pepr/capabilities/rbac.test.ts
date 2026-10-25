@@ -3,14 +3,18 @@
 
 // The chart's ClusterRole is what `pepr build` emits from the capability
 // bindings plus package.json `pepr.rbac`. Watch bindings only grant `watch`.
-// This locks the merged list: a new verb or resource fails the test.
+// finalize-chart.mjs then moves those watches into namespaced Roles.
 // `npm test` sets PEPR_MODE=build, which is what registers the watches.
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
+import { applyChartRbac, clusterRules, roleManifest } from "../scripts/rbac-scope.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -21,16 +25,14 @@ interface Rule {
 }
 
 const EXPECTED: Rule[] = [
-  { apiGroups: [""], resources: ["configmaps"], verbs: ["get", "patch", "watch"] },
+  { apiGroups: [""], resources: ["configmaps"], verbs: ["watch"] },
   { apiGroups: [""], resources: ["namespaces"], verbs: ["create", "get"] },
-  { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
-  { apiGroups: [""], resources: ["secrets"], verbs: ["create", "get", "patch", "watch"] },
-  { apiGroups: [""], resources: ["services"], verbs: ["get", "watch"] },
+  { apiGroups: [""], resources: ["secrets"], verbs: ["watch"] },
+  { apiGroups: [""], resources: ["services"], verbs: ["watch"] },
   { apiGroups: ["apiextensions.k8s.io"], resources: ["customresourcedefinitions"], verbs: ["create", "patch"] },
-  { apiGroups: ["apps"], resources: ["deployments"], verbs: ["get", "patch", "watch"] },
-  { apiGroups: ["apps"], resources: ["deployments/scale"], verbs: ["get", "patch", "update"] },
-  { apiGroups: ["apps"], resources: ["statefulsets"], verbs: ["get", "patch", "watch"] },
-  { apiGroups: ["networking.istio.io"], resources: ["destinationrules"], verbs: ["get", "watch"] },
+  { apiGroups: ["apps"], resources: ["deployments"], verbs: ["watch"] },
+  { apiGroups: ["apps"], resources: ["statefulsets"], verbs: ["watch"] },
+  { apiGroups: ["networking.istio.io"], resources: ["destinationrules"], verbs: ["watch"] },
   { apiGroups: ["pepr.dev"], resources: ["peprstores"], verbs: ["create", "get", "patch", "watch"] },
 ];
 
@@ -79,4 +81,59 @@ test("the generated ClusterRole matches the scoped allow list", () => {
     }
   }
   assert.deepEqual(rules, EXPECTED);
+});
+
+test("the chart moves watched objects into namespaced Roles", () => {
+  const scoped = clusterRules(EXPECTED);
+  const resources = scoped.flatMap(rule => rule.resources);
+  for (const moved of ["configmaps", "pods", "secrets", "services", "deployments", "deployments/scale", "statefulsets", "destinationrules"]) {
+    assert.equal(resources.includes(moved), false, moved);
+  }
+  const namespaceGet = scoped.find(rule => rule.resources?.[0] === "namespaces" && rule.verbs?.includes("get"));
+  assert.deepEqual(namespaceGet?.resourceNames, ["cloudtak"]);
+  const namespaceCreate = scoped.find(rule => rule.resources?.[0] === "namespaces" && rule.verbs?.includes("create"));
+  assert.equal(namespaceCreate?.resourceNames, undefined);
+  assert.equal(scoped.some(rule => rule.resources?.[0] === "peprstores"), true);
+  const text = roleManifest();
+  for (const name of [
+    "core-config",
+    "cert-migration",
+    "takserver-ignite-configmap",
+    "takserver-startup",
+    "takserver-keystore",
+    "cloudtak-tak-admin",
+    "takserver-web-ca",
+    "coredns-custom",
+    "coredns",
+    "takserver-web",
+    "takserver-config",
+    "takserver-messaging",
+    "takserver-api",
+    "takserver-plugins",
+    "takserver-ignite",
+    "tenant-ingressgateway",
+    "passthrough-ingressgateway",
+    "admin-ingressgateway",
+    "istio-tenant-gateway",
+    "istio-passthrough-gateway",
+    "istio-admin-gateway",
+    "kube-system",
+    "cloudtak",
+  ]) {
+    assert.equal(text.includes(name), true, name);
+  }
+  assert.equal(text.includes("*"), false);
+  const dir = mkdtempSync(join(tmpdir(), "pepr-rbac-"));
+  mkdirSync(join(dir, "templates"));
+  writeFileSync(
+    join(dir, "values.yaml"),
+    "image: example\nrbac:\n  - apiGroups: [\"\"]\n    resources: [\"namespaces\"]\n    verbs: [\"get\", \"create\"]\n  - apiGroups: [\"\"]\n    resources: [\"secrets\"]\n    verbs: [\"watch\"]\n",
+  );
+  applyChartRbac(dir);
+  const values = parse(readFileSync(join(dir, "values.yaml"), "utf8")) as { image: string; rbac: Rule[] };
+  assert.equal(values.image, "example");
+  assert.equal(values.rbac.some(rule => rule.resources.includes("secrets")), false);
+  assert.equal(readFileSync(join(dir, "templates", "namespaced-roles.yaml"), "utf8").includes("takserver-keystore"), true);
+  assert.throws(() => clusterRules([]), /empty/);
+  assert.throws(() => clusterRules([{ apiGroups: [""], resources: ["namespaces"], verbs: ["get"] }]), /watched resources/);
 });

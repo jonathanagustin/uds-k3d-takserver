@@ -9,7 +9,6 @@ tasks:
       - task: startup
       - task: dns
       - task: oidc-render
-      - task: cert-rotation
       - task: mesh
       - task: web-tls
       - task: pkcs12
@@ -24,6 +23,7 @@ tasks:
       - task: ui
       - task: flows
       - task: usage
+      - task: cert-rotation
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -75,7 +75,7 @@ tasks:
           exit 1
 
   - name: cert-rotation
-    description: Rotating cert-migration updates the copied CA Secrets without a redeploy
+    description: After the CloudTAK tests, rotating cert-migration updates the copied CA Secrets without a redeploy
     actions:
       - shell:
           linux: bash

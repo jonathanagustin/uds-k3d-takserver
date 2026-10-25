@@ -20,6 +20,7 @@ RegisterKind(DestinationRule, {
 });
 
 export interface ConfigMapDoc {
+  metadata?: { annotations?: Record<string, string> };
   data?: Record<string, string>;
   binaryData?: Record<string, string>;
 }
@@ -43,7 +44,7 @@ export interface PodDoc {
 }
 
 export interface DeploymentDoc {
-  metadata?: { name?: string; namespace?: string };
+  metadata?: { name?: string; namespace?: string; generation?: number; annotations?: Record<string, string> };
   spec?: {
     replicas?: number;
     progressDeadlineSeconds?: number;
@@ -52,6 +53,11 @@ export interface DeploymentDoc {
       metadata?: { labels?: Record<string, string>; annotations?: Record<string, string> };
       spec?: Record<string, unknown>;
     };
+  };
+  status?: {
+    observedGeneration?: number;
+    availableReplicas?: number;
+    updatedReplicas?: number;
   };
 }
 
@@ -72,6 +78,13 @@ export interface JsonOp {
 
 export interface Cluster {
   getConfigMap(namespace: string, name: string): Promise<ConfigMapDoc | undefined>;
+  deleteConfigMap(namespace: string, name: string): Promise<void>;
+  applyConfigMap(
+    namespace: string,
+    name: string,
+    annotations: Record<string, string>,
+    data: Record<string, string>,
+  ): Promise<void>;
   patchConfigMapKey(namespace: string, name: string, key: string, value: string, present: boolean): Promise<void>;
   serviceExists(namespace: string, name: string): Promise<boolean>;
   restartDeployment(namespace: string, name: string, hasAnnotations: boolean): Promise<void>;
@@ -125,6 +138,24 @@ function restartOps(hasAnnotations: boolean): JsonOp[] {
 
 const live: Cluster = {
   getConfigMap: (namespace, name) => read(() => K8s(kind.ConfigMap).InNamespace(namespace).Get(name)),
+  deleteConfigMap: async (namespace, name) => {
+    try {
+      await K8s(kind.ConfigMap).InNamespace(namespace).Delete(name);
+    } catch (err) {
+      if (isNotFound(err)) {
+        return;
+      }
+      throw err;
+    }
+  },
+  applyConfigMap: async (namespace, name, annotations, data) => {
+    await K8s(kind.ConfigMap).Apply({
+      apiVersion: "v1",
+      kind: "ConfigMap",
+      metadata: { name, namespace, annotations },
+      data,
+    });
+  },
   patchConfigMapKey: async (namespace, name, key, value, present) => {
     const op = present ? "replace" : "add";
     await K8s(kind.ConfigMap, { namespace, name }).Patch([{ op, path: `/data/${pointer(key)}`, value }]);

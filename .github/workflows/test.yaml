@@ -348,6 +348,15 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
         run: test "${IMAGE_RESULT}" = success
 
+      # Toolchain deletes do not need Docker. On the runner that still had
+      # them (run 39686333898) Android alone took 136s of the 244s amd64
+      # trim, so this starts while Compose and the UDS CLI install.
+      - name: Start trimming the runner
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
+        run: ./.github/scripts/trim-runner.sh start
+        env:
+          TRIM_SKIP_ABOVE_GB: "60"
+
       - name: Install Docker Compose
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
@@ -363,10 +372,11 @@ jobs:
 
       - name: Trim the runner
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
-        run: ./.github/scripts/trim-runner.sh
+        run: ./.github/scripts/trim-runner.sh finish
         env:
           # The test uses about 30 GB (see "Disk use after the test"), so a
-          # runner with this much free needs no deletes.
+          # runner with this much free needs no deletes. Run 40174810574 had
+          # 86 GB free on amd64 and 108 GB free on arm64, so this skipped.
           TRIM_SKIP_ABOVE_GB: "60"
 
       # Restore only. Install and upgrade run together, and a second save of

@@ -6,6 +6,23 @@ name: Package
 on:
   workflow_dispatch:
   pull_request:
+    # Doc-only changes do not alter the package inputs. The Test workflow
+    # uses the same list and already skips the cluster jobs.
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "docs/**"
+      - "adr/**"
+      - ".gitignore"
+      - "LICENSE"
+      - "renovate.json"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
+      - "CODEOWNERS"
+      - "SECURITY.md"
 
 permissions:
   actions: read

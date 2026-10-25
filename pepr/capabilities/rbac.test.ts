@@ -25,6 +25,18 @@ interface Rule {
   verbs: string[];
 }
 
+interface ManifestRule {
+  resources?: string[];
+  verbs?: string[];
+  resourceNames?: string[];
+}
+
+interface ManifestDoc {
+  kind: string;
+  metadata: { namespace?: string };
+  rules?: ManifestRule[];
+}
+
 const EXPECTED: Rule[] = [
   { apiGroups: [""], resources: ["configmaps"], verbs: ["watch"] },
   { apiGroups: [""], resources: ["namespaces"], verbs: ["create", "get"] },
@@ -126,14 +138,7 @@ test("the chart moves watched objects into namespaced Roles", () => {
     .split(/^---\n/m)
     .map(part => part.trim())
     .filter(part => part.startsWith("apiVersion"))
-    .map(
-      part =>
-        parse(part) as {
-          kind: string;
-          metadata: { namespace?: string };
-          rules?: { resources?: string[]; verbs?: string[]; resourceNames?: string[] }[];
-        },
-    );
+    .map(part => parse(part) as ManifestDoc);
   for (const role of roles) {
     if (role.kind !== "Role") {
       continue;
@@ -179,10 +184,12 @@ test("the chart moves watched objects into namespaced Roles", () => {
     }
   }
   for (const [resource, names] of watched) {
-    const rule = (clusterWatch.rules ?? []).find(item => (item.resources ?? []).join(",") === resource);
-    assert.ok(rule, resource);
+    const match: ManifestRule | undefined = (clusterWatch.rules ?? []).find(
+      (item: ManifestRule) => (item.resources ?? []).join(",") === resource,
+    );
+    assert.ok(match, resource);
     for (const name of names) {
-      assert.equal((rule.resourceNames ?? []).includes(name), true, `${resource} ${name}`);
+      assert.equal((match.resourceNames ?? []).includes(name), true, `${resource} ${name}`);
     }
   }
   assert.equal(text.includes("*"), false);

@@ -18,6 +18,7 @@ tasks:
       - task: gateway
       - task: smoke
       - task: api-smoke
+      - task: loki-client
       - task: cloudtak
       - task: ui
       - task: flows
@@ -482,7 +483,7 @@ tasks:
           fi
 
   - name: logs
-    description: Confirm TAK writes stdout logs for UDS Core logging
+    description: Confirm TAK writes stdout logs, and query Loki when core-logging is installed
     actions:
       - shell:
           linux: bash
@@ -512,34 +513,33 @@ tasks:
             exit 1
           fi
           echo "API stdout has a TAK startup line"
-          if ! uds zarf tools kubectl get svc -A -o name 2>/dev/null | grep -qi loki; then
+          svcs="$(uds zarf tools kubectl get svc -A -o name 2>/dev/null || true)"
+          if ! grep -qi 'loki' <<< "${svcs}"; then
             echo "k3d-core-slim-dev does not install Vector or Loki. Stdout is the stream the standard core logging package collects."
             exit 0
           fi
-          uds zarf tools kubectl port-forward -n loki svc/loki-gateway 3100:80 >/tmp/loki-pf.log 2>&1 &
-          pf_pid=$!
-          trap 'kill ${pf_pid} >/dev/null 2>&1 || true' EXIT
-          query='{namespace="takserver"}'
-          encoded="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' "${query}")"
-          # An instant query rejects a stream selector. query_range start and
-          # end are Unix seconds; nanoseconds are read as seconds and the
-          # window never finishes.
-          found=0
-          for _ in $(seq 1 15); do
-            end="$(python3 -c 'import time; print(int(time.time()))')"
-            start="$((end - 3600))"
-            if curl -fsS --max-time 20 "http://127.0.0.1:3100/loki/api/v1/query_range?query=${encoded}&start=${start}&end=${end}&limit=100&direction=backward" | grep -q 'takserver'; then
-              found=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "${found}" -ne 1 ]; then
-            echo "Loki did not return TAK logs" >&2
-            cat /tmp/loki-pf.log >&2 || true
-            exit 1
-          fi
+          # Match the startup line, not the namespace label on an empty stream.
+          ./tests/query-loki.sh \
+            --query '{namespace="takserver"}' \
+            --match 'Started TAK Server' \
+            --match 'TAK Server version' \
+            --match 'Tomcat started on port' \
+            --attempts 15 \
+            --pause 2
           echo "Loki returned TAK logs"
+          if ! uds zarf tools kubectl get deploy cloudtak -n cloudtak >/dev/null 2>&1; then
+            echo "cloudtak is not deployed. Skipping the CloudTAK Loki query."
+            exit 0
+          fi
+          uds zarf tools kubectl rollout status deployment/cloudtak -n cloudtak --timeout=600s
+          # bootstrap.mjs logs the TAK user line. basemap.mjs logs the basemap line.
+          ./tests/query-loki.sh \
+            --query '{namespace="cloudtak"}' \
+            --match 'ok - TAK user' \
+            --match 'basemap:' \
+            --attempts 24 \
+            --pause 5
+          echo "Loki returned CloudTAK logs"
 
   - name: gateway
     description: Wait for the passthrough gateway selected by the test bundle
@@ -689,6 +689,11 @@ tasks:
     description: Marti API on 8443, 8447, 8446, and 8089 after install and upgrade
     actions:
       - cmd: ./tests/api-smoke.sh
+
+  - name: loki-client
+    description: The standard-port streaming client from the API smoke is searchable in Loki by callsign
+    actions:
+      - cmd: ./tests/loki-client.sh
 
   - name: ui
     description: Playwright checks for the TAK web UI and the gateway endpoints

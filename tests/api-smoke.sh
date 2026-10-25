@@ -16,7 +16,8 @@
 # client that presents none.
 # When the gateway also listens on the standard TAK ports, a second client
 # enrolls on <host>:8446 and streams CoT on <host>:8089 until it is listed in
-# /Marti/api/clientEndPoints.
+# /Marti/api/clientEndPoints. That client's callsign is written to
+# /tmp/tak-stream-uid so the Loki check can search for it.
 #
 # Each check prints PASS or FAIL. The last line is the count. Exit status is
 # non-zero when any check fails.
@@ -508,6 +509,7 @@ fi
 # enrolled certificate. The test task port-forwards the gateway Service's 8446
 # and 8089 and writes the local ports to /tmp/tak-std-ports.
 if [[ -f /tmp/tak-std-ports ]] && [[ "${#token}" -ge 20 ]]; then
+  rm -f /tmp/tak-stream-uid
   read -r std_cert std_stream < /tmp/tak-std-ports
   std_host="${TAK_STD_HOST:-takserver.uds.dev}"
   openssl req -new -newkey rsa:2048 -nodes \
@@ -573,6 +575,7 @@ sys.exit(0 if found else 1)
 PY
     then
       pass "standard port 8089 on ${std_host}: client ${std_uid} listed in /Marti/api/clientEndPoints"
+      printf '%s\n' "${std_uid}" > /tmp/tak-stream-uid
     else
       fail "standard port 8089 on ${std_host}: client not listed in /Marti/api/clientEndPoints"
     fi

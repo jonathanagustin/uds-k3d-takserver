@@ -104,6 +104,14 @@ packages:
     repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring
     ref: 1.15.2-upstream
     keylessVerification: *core-keyless
+    overrides:
+      grafana:
+        grafana:
+          values:
+            - path: sidecar.dashboards.folderAnnotation
+              value: grafana_folder
+            - path: sidecar.dashboards.provider.foldersFromFilesStructure
+              value: true
 
   - name: core-portal
     repository: ghcr.io/defenseunicorns/packages/uds/core-portal

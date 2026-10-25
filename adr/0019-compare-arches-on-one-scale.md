@@ -1,4 +1,4 @@
-# 18. Compare amd64 and arm64 on one scale
+# 19. Compare amd64 and arm64 on one scale
 
 Date: 2026-10-25
 

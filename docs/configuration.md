@@ -64,7 +64,7 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 
 The upstream `post-install-hook-postgres.yaml` Job is named `takserver-db-setup` and sets `proxy.istio.io/config` to `{ "holdApplicationUntilProxyStarts": true }`. There is no values key for that annotation. UDS `RestrictIstioSidecarOverrides` denied every pod the Job created, so the schema hook never ran and Helm hit its 15 minute deadline with the Job still `0/1`. The Exemption matches pods `^takserver-db-setup-.*` in the release namespace and allows only that policy. Probes stay the upstream delays and ports. The messaging restarts on that run were the 1Gi OOM above, not the TCP liveness timing: the container exited about 15 seconds after UserManager started, before six liveness failures could accumulate.
 
-`core-config` is the upstream cluster example. The Postgres URL is `jdbc:postgresql://takserver-postgresql:5432/cot` with user and password `postgres`. The chart mounts `CoreConfig.xml` read-only, so that URL is already substituted.
+`core-config` is the upstream cluster example. The Postgres URL is `jdbc:postgresql://takserver-postgresql:5432/cot` with user and password `postgres`. The chart mounts `CoreConfig.xml` read-only, so that URL is already substituted. `<cluster cacheConfig="false">` is set in that file. The TAK image registers the configuration continuous query only when `cacheConfig` is true, so a save on one node does not replace another node's file. See [Single sign-on](sso.md#render-at-admission).
 
 ## Certificates
 

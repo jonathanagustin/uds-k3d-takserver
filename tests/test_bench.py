@@ -26,6 +26,7 @@ def load(name, relative):
 report = load("bench_report", "bench/report.py")
 loadlog = load("bench_loadlog", "bench/loadlog.py")
 runner = load("bench_run", "bench/run.py")
+startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
 
 
@@ -257,6 +258,23 @@ class TesterExitTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         # The group is gone. A second signal finds nobody to kill.
         self.assertFalse(tester_exit.kill_group(proc.pid, signal.SIGKILL))
+
+
+class StartupShapeTests(unittest.TestCase):
+    def test_generation_and_restarts_use_the_highest_count(self):
+        generations = startup.max_generation([
+            {"metadata": {"generation": 1}},
+            {"metadata": {"generation": 2}},
+            {"metadata": {}},
+        ])
+        restarts = startup.max_restarts([
+            {"status": {"containerStatuses": [{"restartCount": 0}], "initContainerStatuses": [{"restartCount": 1}]}},
+            {"status": {"containerStatuses": [{"restartCount": "nope"}]}},
+        ])
+        self.assertEqual(generations, 2)
+        self.assertEqual(restarts, 1)
+        self.assertIsNone(startup.max_generation([]))
+        self.assertIsNone(startup.max_restarts([{"status": {}}]))
 
 
 if __name__ == "__main__":

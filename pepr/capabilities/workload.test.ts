@@ -6,12 +6,22 @@ import { afterEach, test } from "node:test";
 import type { Cluster, JsonOp } from "../cluster.ts";
 import { runtime } from "../cluster.ts";
 import { INIT_NAME, type PodLike } from "./oidc-render.ts";
-import { onDeployment, onIgnite, Workload } from "./workload-capability.ts";
+import {
+  onDeployment,
+  onDeploymentMutate,
+  onIgnite,
+  onIgniteConfigMutate,
+  onIgniteSetMutate,
+  Workload,
+} from "./workload-capability.ts";
 import {
   deploymentOps,
   desiredReplicas,
   enqueueIgnite,
   issuerHost,
+  prepareDeployment,
+  prepareIgniteConfigMap,
+  prepareIgniteStatefulSet,
   preparePod,
   reconcileDeployment,
   reconcileIgnite,
@@ -799,24 +809,96 @@ afterEach(() => {
   resetIgniteQueue();
 });
 
-test("the capability watches the four deployments, the ignite config, and the StatefulSet", async () => {
+test("admission writes the startup shape before the objects are stored", async () => {
+  const config = deploy("takserver-config");
+  await prepareDeployment(config, { RENDER_IMAGE: IMAGE }, recordedCluster().cluster);
+  assert.equal(config.spec?.template?.spec?.initContainers?.[0]?.name, "wait-deps");
+  assert.equal(config.spec?.strategy?.type, "Recreate");
+  const again = structuredClone(config);
+  await prepareDeployment(again, { RENDER_IMAGE: IMAGE }, recordedCluster().cluster);
+  assert.deepEqual(again, config);
+  await assert.rejects(prepareDeployment(deploy("takserver-config"), {}, recordedCluster().cluster), /RENDER_IMAGE/);
+  const messaging = deploy("takserver-messaging");
+  await prepareDeployment(messaging, { RENDER_IMAGE: IMAGE }, recordedCluster().cluster);
+  assert.equal(messaging.spec?.template?.spec?.initContainers?.[1]?.name, "import-trust");
+  const plugins = deploy("takserver-plugins");
+  await prepareDeployment(plugins, { RENDER_IMAGE: IMAGE }, recordedCluster().cluster);
+  assert.equal(plugins.spec?.template?.spec?.initContainers?.[0]?.name, "wait-deps");
+  assert.equal(plugins.spec?.template?.spec?.initContainers?.some(item => item.name === "import-trust"), false);
+  const other = deploy("postgres");
+  await prepareDeployment(other, { RENDER_IMAGE: IMAGE }, recordedCluster().cluster);
+  assert.equal(other.spec?.template?.spec?.initContainers, undefined);
+  const xml = `<property name="discoverySpi">\n    <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">\n    </bean>\n</property>`;
+  const configMap: { data?: Record<string, string> } = { data: { "ignite-config.xml": xml } };
+  prepareIgniteConfigMap(configMap);
+  assert.equal(configMap.data?.["ignite-config.xml"]?.includes('name="networkTimeout"'), true);
+  const tuned = configMap.data?.["ignite-config.xml"] ?? "";
+  prepareIgniteConfigMap(configMap);
+  assert.equal(configMap.data?.["ignite-config.xml"], tuned);
+  prepareIgniteConfigMap({});
+  prepareIgniteConfigMap({ data: { other: "kept" } });
+  assert.throws(() => prepareIgniteConfigMap({ data: { "ignite-config.xml": "<ignite></ignite>" } }), /TcpDiscoverySpi/);
+  const sts: { spec?: { template?: { spec?: { automountServiceAccountToken?: boolean } } } } = {};
+  prepareIgniteStatefulSet(sts);
+  assert.equal(sts.spec?.template?.spec?.automountServiceAccountToken, true);
+  prepareIgniteStatefulSet(sts);
+  assert.equal(sts.spec?.template?.spec?.automountServiceAccountToken, true);
+});
+
+test("the capability admits and reconciles the four deployments, the ignite config, and the StatefulSet", async () => {
   const registered = Workload as unknown as {
-    bindings: { filters: { name: string }; kind: { kind: string } }[];
+    bindings: { isMutate?: boolean; filters: { name: string }; kind: { kind: string } }[];
   };
   assert.deepEqual(
-    registered.bindings.map(binding => `${binding.kind.kind}/${binding.filters.name}`),
+    registered.bindings.map(binding => `${binding.isMutate ? "mutate" : "reconcile"}/${binding.kind.kind}/${binding.filters.name}`),
     [
-      "Deployment/takserver-config",
-      "Deployment/takserver-messaging",
-      "Deployment/takserver-api",
-      "Deployment/takserver-plugins",
-      "ConfigMap/takserver-ignite-configmap",
-      "StatefulSet/takserver-ignite",
+      "mutate/Deployment/takserver-config",
+      "reconcile/Deployment/takserver-config",
+      "mutate/Deployment/takserver-messaging",
+      "reconcile/Deployment/takserver-messaging",
+      "mutate/Deployment/takserver-api",
+      "reconcile/Deployment/takserver-api",
+      "mutate/Deployment/takserver-plugins",
+      "reconcile/Deployment/takserver-plugins",
+      "mutate/ConfigMap/takserver-ignite-configmap",
+      "reconcile/ConfigMap/takserver-ignite-configmap",
+      "mutate/StatefulSet/takserver-ignite",
+      "reconcile/StatefulSet/takserver-ignite",
     ],
   );
   delete process.env.RENDER_IMAGE;
   runtime.cluster = recordedCluster().cluster;
   await onDeployment(deploy("postgres"), "ADDED");
+  process.env.RENDER_IMAGE = IMAGE;
+  await onDeploymentMutate(deploy("takserver-config"));
+  const admitted = { data: { "ignite-config.xml": IGNITE_XML } };
+  onIgniteConfigMutate(admitted);
+  assert.equal(admitted.data["ignite-config.xml"].includes('name="networkTimeout"'), true);
+  const igniteSet: { spec?: { template?: { spec?: { automountServiceAccountToken?: boolean } } } } = {};
+  onIgniteSetMutate(igniteSet);
+  assert.equal(igniteSet.spec?.template?.spec?.automountServiceAccountToken, true);
+  const callbacks = Workload as unknown as {
+    bindings: { isMutate?: boolean; kind: { kind: string }; mutateCallback: (request: { Raw: object }) => unknown }[];
+  };
+  const seen = new Set<string>();
+  for (const binding of callbacks.bindings) {
+    if (!binding.isMutate || seen.has(binding.kind.kind)) {
+      continue;
+    }
+    seen.add(binding.kind.kind);
+    if (binding.kind.kind === "Deployment") {
+      await binding.mutateCallback({ Raw: deploy("takserver-config") });
+    } else if (binding.kind.kind === "ConfigMap") {
+      const raw = { data: { "ignite-config.xml": IGNITE_XML } };
+      binding.mutateCallback({ Raw: raw });
+      assert.equal(raw.data["ignite-config.xml"].includes('name="failureDetectionTimeout"'), true);
+    } else if (binding.kind.kind === "StatefulSet") {
+      const raw: { spec?: { template?: { spec?: { automountServiceAccountToken?: boolean } } } } = {};
+      binding.mutateCallback({ Raw: raw });
+      assert.equal(raw.spec?.template?.spec?.automountServiceAccountToken, true);
+    }
+  }
+  assert.deepEqual([...seen].sort(), ["ConfigMap", "Deployment", "StatefulSet"]);
   runtime.cluster = igniteCluster({ xml: tuneIgniteXml(IGNITE_XML), automount: true }).cluster;
   await onIgnite({}, "ADDED");
 });

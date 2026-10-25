@@ -65,8 +65,8 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers, writes the CoreDNS rewrite, copies the gateway CA and the CloudTAK admin material, and restarts TAK in order. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
-- **What removes it:** Nothing further. The init containers, the CoreDNS rewrite, and the ordered restart now live in the Pepr module.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers at admission, writes the CoreDNS rewrite, and copies the gateway CA and the CloudTAK admin material. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **What removes it:** Nothing further. The init containers and the CoreDNS rewrite live in the Pepr module. A scale-down remains only when Ignite was admitted without the tuned config.
 
 ### Version scheme
 

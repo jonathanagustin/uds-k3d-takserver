@@ -26,6 +26,8 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
+| `startup.max_generation` | count | highest `metadata.generation` on the TAK Deployments. 1 is a single rollout |
+| `startup.max_restart_count` | count | highest container or init restart count on the four TAK apps |
 | `load.clients` | count | the client count this record ran |
 | `load.duration_s` | seconds | how long `tak_tester.py` was left running |
 | `load.messages_sent` | count | sum of every per-uid `messages_sent` the tester printed |
@@ -43,6 +45,8 @@ Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 `kubelet.steady_rss_bytes`. Ready time is `warm_s` when it was measured and
 `cold_s` otherwise.
+
+Run 39556568533 measured the old scale-down on validate-install. amd64 job 119079081806 spent 103s in Helm and then 5m21s restarting config, messaging, api, and plugins. arm64 job 119079081713 spent 98s in Helm and then 5m08s. `startup.max_generation` and `startup.max_restart_count` are how a later run shows that second rollout is gone. This file does not store that later run.
 
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint

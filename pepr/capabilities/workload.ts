@@ -3,8 +3,11 @@
 
 // The startup shape that patch-oidc-pods.py used to strategic-merge onto the
 // TAK Deployments after Helm. The upstream chart has no values for these
-// init containers, probes, or the Ignite SPI timeouts. Admission applies the
-// same pod shape, so a pod created before the Deployment reconcile still waits.
+// init containers, probes, or the Ignite SPI timeouts. Admission writes that
+// shape onto the Deployments, the Ignite ConfigMap, and the Ignite
+// StatefulSet before they are stored, so a cold install rolls each
+// Deployment once. The scale-down remains for a stored Ignite config that
+// was admitted without this webhook.
 
 import type { Cluster, DeploymentDoc, JsonOp, StatefulSetDoc } from "../cluster.ts";
 import { addRender, RELOAD_LABEL, RELOAD_VALUE, type PodLike } from "./oidc-render.ts";
@@ -117,6 +120,28 @@ export function tuneIgniteXml(xml: string): string {
     throw new Error("Ignite server config has a property the 2.17 classes do not use");
   }
   return next;
+}
+
+export interface IgniteConfigMapDoc {
+  data?: Record<string, string>;
+}
+
+// Admission writes the tuned XML. A ConfigMap with no ignite-config.xml is
+// left alone; the reconcile waits until the key exists.
+export function prepareIgniteConfigMap(configMap: IgniteConfigMapDoc): void {
+  const data = configMap.data;
+  const xml = data?.[IGNITE_XML];
+  if (!data || xml === undefined) {
+    return;
+  }
+  data[IGNITE_XML] = tuneIgniteXml(xml);
+}
+
+export function prepareIgniteStatefulSet(sts: { spec?: StatefulSetDoc["spec"] }): void {
+  const spec = (sts.spec ??= {});
+  const template = (spec.template ??= {});
+  const pod = (template.spec ??= {});
+  pod.automountServiceAccountToken = true;
 }
 
 function covers(current: unknown, desired: unknown): boolean {
@@ -403,6 +428,22 @@ export function shapeDeployment(deploy: WorkloadDeploy, ctx: StartupContext): { 
     changed = true;
   }
   return { next, changed };
+}
+
+// Mutates the Deployment in place. The stored object is what the ReplicaSet
+// is created from, so the first pods already have wait-deps and the probes.
+export async function prepareDeployment(
+  deploy: WorkloadDeploy,
+  env: NodeJS.ProcessEnv,
+  cluster: Cluster,
+): Promise<void> {
+  const name = deploy.metadata?.name;
+  if (!isTakDeploy(name)) {
+    return;
+  }
+  const issuer = name === "takserver-config" || name === "takserver-plugins" ? undefined : await readIssuer(cluster);
+  const { next } = shapeDeployment(deploy, { image: env.RENDER_IMAGE ?? "", issuerHost: issuer });
+  deploy.spec = next.spec;
 }
 
 const OWNED_VOLUMES = new Set(["oidc-script", "jvm-trust", "uds-trust"]);

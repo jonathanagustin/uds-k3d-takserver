@@ -143,7 +143,13 @@ pvc_snapshot > "${work}/postgres-pvc.after"
 diff -u "${work}/postgres-pvc.before" "${work}/postgres-pvc.after"
 actual="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade_test.retained_state;')"
 [[ "${actual}" = "${expected}" ]]
-echo "PASS PostgreSQL row, creation timestamp, and persistent volume survived the upgrade"
+server_version="$(sql <<< 'SHOW server_version_num;')"
+postgis_version="$(sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
+if [[ "${server_version}" -lt 180000 || "${postgis_version}" != 3.6.* ]]; then
+  echo "expected PostgreSQL 18 and PostGIS 3.6 after the upgrade, got ${server_version:-unset} and ${postgis_version:-unset}" >&2
+  exit 1
+fi
+echo "PASS PostgreSQL row, creation timestamp, and persistent volume survived the upgrade to ${server_version} / PostGIS ${postgis_version}"
 sha256sum --check "${work}/certs.sha256"
 gateway
 stream

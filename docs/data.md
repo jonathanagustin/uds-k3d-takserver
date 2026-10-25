@@ -12,11 +12,32 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 | User | `postgres` |
 | Password | the upstream example value `postgres` |
 | JDBC | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
-| Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` (amd64 and arm64) |
+| Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64) |
+| Data directory | `/bitnami/postgresql/data` |
 
 The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Postgres uses the Bitnami chart defaults.
 
 The password is not a production secret. Replace it, and the matching JDBC password, before a shared cluster.
+
+CloudTAK's database is the same image. Its data directory is `/var/lib/postgresql/data/pgdata` on the `data-cloudtak-postgis-0` volume. See [CloudTAK](cloudtak.md).
+
+## Upgrading from PostgreSQL 15
+
+`18-3.6` is PostgreSQL 18 and PostGIS 3.6.4. Tag `15-3.4` stays in the registry. A deployment that has not moved keeps running that tag. A new install of `18-3.6` creates an empty cluster and loads PostGIS from the image's init script.
+
+An existing volume is a PostgreSQL 15 cluster. On the first start, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The PVC is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
+
+`pg_upgrade --link` shares the table files with the new cluster and the entrypoint deletes the old directory after the new server has started. That directory is not something you can point PostgreSQL 15 at afterwards.
+
+Before you roll the new image out:
+
+1. Snapshot the volume, or run `pg_dumpall` from the PostgreSQL 15 pod and store the dump outside the cluster.
+2. Deploy `18-3.6`.
+3. Confirm `SHOW server_version_num` is 18 and `SELECT extversion FROM pg_extension WHERE extname = 'postgis'` is 3.6.
+
+Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start. Do not point `15-3.4` at a data directory PostgreSQL 18 has already written. A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
+
+The upgrade test deploys the last release (PostgreSQL 15), writes a row, then deploys this branch and checks the row, its timestamp, the PVC, the server major, and the PostGIS version.
 
 ## Backup
 

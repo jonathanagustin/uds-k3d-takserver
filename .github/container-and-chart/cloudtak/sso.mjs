@@ -226,10 +226,34 @@ async function callback(req, res, url) {
         token: session.token,
         refresh: session.refresh,
         session: session.session,
+        id_token: tokens.id_token || '',
         redirect: saved.redirect,
     });
     send(res, 302, {
         Location: `${BASE}/finish#${fragment}`,
+        'Set-Cookie': setCookie('', 0),
+    });
+}
+
+// Browser logout. CloudTAK clears its own session and opens /login. auto.js
+// sends that here with the ID token so Keycloak's session ends before the
+// next sign-in. post_logout_redirect_uri is this route's start path, which
+// is registered on the client. The client sets logout.confirmation.enabled
+// to false, so Keycloak follows this redirect when id_token_hint is present
+// instead of stopping on the "You are logged out" page.
+async function logout(_req, res, url) {
+    const doc = await oidc();
+    if (!doc.end_session_endpoint) return fail(res, 'no end_session_endpoint');
+    const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        post_logout_redirect_uri: `${PUBLIC_URL}${BASE}`,
+    });
+    const hint = url.searchParams.get('id_token_hint');
+    if (hint) params.set('id_token_hint', hint);
+    const target = new URL(doc.end_session_endpoint);
+    target.search = params.toString();
+    send(res, 302, {
+        Location: target.toString(),
         'Set-Cookie': setCookie('', 0),
     });
 }
@@ -256,15 +280,23 @@ const FINISH_JS = `(function () {
     localStorage.setItem('CapacitorStorage.token', token);
     localStorage.setItem('CapacitorStorage.refresh', refresh);
     localStorage.setItem('CapacitorStorage.sessionId', session);
+    var idToken = p.get('id_token');
+    if (idToken) localStorage.setItem('cloudtak_sso_id_token', idToken);
     if (redirect.charAt(0) !== '/' || redirect.charAt(1) === '/') redirect = '/';
     location.replace(redirect);
 })();
 `;
 
 // Loaded into every CloudTAK page by nginx. When the app routes to its
-// login page, go straight to Keycloak instead of showing the button.
+// login page, a stored ID token ends the Keycloak session and Keycloak
+// returns to the sign-in route. The same step drops the CloudTAK login
+// token, refresh token, and session id. Boot restores a session from
+// those keys, and this script runs before the app can remove them.
+// Keycloak shows a confirmation page and does not follow
+// post_logout_redirect_uri when id_token_hint is absent, so a first
+// visit goes straight to the authorization request.
 // /login?sso=off shows the page as is. A second redirect within 30 seconds
-// also shows the page, so a session the app rejects cannot loop.
+// with no ID token also shows the page, so a session the app rejects cannot loop.
 const AUTO_JS = `(function () {
     var sent = false;
     var KEY = 'cloudtak-sso-redirect';
@@ -272,12 +304,20 @@ const AUTO_JS = `(function () {
         if (sent || location.pathname !== '/login') return;
         var p = new URLSearchParams(location.search);
         if (p.get('sso') === 'off') return;
+        var hint = localStorage.getItem('cloudtak_sso_id_token') || '';
         var last = Number(sessionStorage.getItem(KEY) || 0);
-        if (Date.now() - last < 30000) return;
+        if (!hint && Date.now() - last < 30000) return;
         sessionStorage.setItem(KEY, String(Date.now()));
         sent = true;
-        var r = p.get('redirect');
-        location.replace('${BASE}' + (r ? '?redirect=' + encodeURIComponent(r) : ''));
+        if (hint) {
+            localStorage.removeItem('cloudtak_sso_id_token');
+            localStorage.removeItem('CapacitorStorage.token');
+            localStorage.removeItem('CapacitorStorage.refresh');
+            localStorage.removeItem('CapacitorStorage.sessionId');
+            location.replace('${BASE}/logout?id_token_hint=' + encodeURIComponent(hint));
+            return;
+        }
+        location.replace('${BASE}');
     }
     check();
     setInterval(check, 250);
@@ -293,6 +333,8 @@ const server = http.createServer(async (req, res) => {
             return await start(req, res, url);
         case `${BASE}/callback`:
             return await callback(req, res, url);
+        case `${BASE}/logout`:
+            return await logout(req, res, url);
         case `${BASE}/finish`:
             return send(res, 200, { 'Content-Type': 'text/html; charset=utf-8' }, FINISH_HTML);
         case `${BASE}/finish.js`:

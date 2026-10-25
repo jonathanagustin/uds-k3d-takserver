@@ -825,6 +825,8 @@ tasks:
             -v "${cert_dir}:/certs:ro" \
             -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
             -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \
+            -e KEYCLOAK_OUTSIDER="${KEYCLOAK_OUTSIDER:-outsider}" \
+            -e KEYCLOAK_OUTSIDER_PASSWORD="${KEYCLOAK_OUTSIDER_PASSWORD:-outsider123!@#UN}" \
             -v "$(pwd)/tests:/app" \
             -w /app \
             mcr.microsoft.com/playwright:v1.64.1 \

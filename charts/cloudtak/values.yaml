@@ -23,6 +23,9 @@ postgis:
 # straight to the UDS Keycloak login. See docs/cloudtak.md.
 sso:
   clientId: uds-cloudtak
+  # Same realm limits as the TAK client. See charts/takserver/values.yaml.
+  sessionIdleTimeout: "600"
+  sessionMaxLifespan: "36000"
   # Secret the UDS operator writes with the client secret.
   secretName: cloudtak-sso
   realm: uds

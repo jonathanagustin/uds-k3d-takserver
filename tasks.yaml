@@ -60,6 +60,8 @@ tasks:
       # setup:keycloak-user takes one group. Operators_READ is the TAK group
       # the SSO test reads back from /Marti/api/groups/all.
       - cmd: python3 ./tests/ensure-tak-group.py
+      - cmd: python3 ./tests/ensure-outsider.py
+      - cmd: python3 ./tests/sso-clients.py
       - task: test:all
 
   - name: default

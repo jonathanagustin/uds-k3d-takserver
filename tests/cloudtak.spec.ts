@@ -189,4 +189,39 @@ test.describe("CloudTAK", () => {
 
     await context.close();
   });
+
+  test("logout returns to the Keycloak login page", async ({ browser }) => {
+    test.setTimeout(240_000);
+    const context = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1440, height: 900 },
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await context.newPage();
+    await page.goto(cloudtakUrl);
+    await page.waitForURL(/openid-connect\/auth/, { timeout: 60_000 });
+    await page.getByLabel("Username or email").fill(keycloakUser);
+    await page.getByLabel("Password").fill(keycloakPassword);
+    await page.getByRole("button", { name: "Sign In" }).click();
+    await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 120_000 });
+
+    // CloudTAK opens /login after it clears its session. auto.js turns that
+    // into Keycloak end-session.
+    await page.goto(`${new URL(cloudtakUrl).origin}/login`);
+    for (const name of ["Logout", "Log out", "Yes"]) {
+      const button = page.getByRole("button", { name, exact: true });
+      if (await button.isVisible().catch(() => false)) {
+        await button.click();
+        break;
+      }
+    }
+    await page.waitForURL(/openid-connect\/auth/, { timeout: 60_000 });
+    await expect(page.getByLabel("Username or email")).toBeVisible();
+
+    await page.goto(cloudtakUrl);
+    await page.waitForURL(/openid-connect\/auth/, { timeout: 60_000 });
+    await expect(page.getByLabel("Username or email")).toBeVisible();
+    await expect(page.locator("canvas.maplibregl-canvas")).toHaveCount(0);
+    await context.close();
+  });
 });

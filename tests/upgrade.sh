@@ -54,7 +54,11 @@ if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
 fi
 rm -rf "${work}/bundle-wrong-signer"
 uds create "${work}/bundle" --architecture=amd64 --confirm --no-progress
-uds run deploy-slim-core --no-progress
+# Release 0.6.0's admission chart asks for Pepr controller v2.0.3. The 1.15.2
+# checkpoint only publishes v2.0.5, so the baseline cluster has to start from
+# 1.15.0, which still has v2.0.3. The released bundle then deploys core 1.15.2
+# and leaves v2.0.5 in the registry for this branch.
+SLIM_CORE_VERSION=1.15.0 uds run deploy-slim-core --no-progress
 uds run fit-runner --no-progress
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')
 [[ "${#bundles[@]}" -eq 1 ]]

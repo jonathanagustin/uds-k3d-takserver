@@ -25,6 +25,7 @@ def load(name, relative):
 
 report = load("bench_report", "bench/report.py")
 loadlog = load("bench_loadlog", "bench/loadlog.py")
+phases = load("bench_phases", "bench/phases.py")
 runner = load("bench_run", "bench/run.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
 
@@ -257,6 +258,60 @@ class TesterExitTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         # The group is gone. A second signal finds nobody to kill.
         self.assertFalse(tester_exit.kill_group(proc.pid, signal.SIGKILL))
+
+
+class StartPhaseTests(unittest.TestCase):
+    def test_phases_split_pull_init_jvm_and_ready(self):
+        pod = {
+            "metadata": {"creationTimestamp": "2026-10-25T06:53:00Z"},
+            "status": {
+                "initContainerStatuses": [
+                    {
+                        "name": "wait-deps",
+                        "state": {"terminated": {
+                            "startedAt": "2026-10-25T06:53:05Z",
+                            "finishedAt": "2026-10-25T06:53:20Z",
+                        }},
+                    },
+                ],
+                "containerStatuses": [
+                    {"name": "api", "state": {"running": {"startedAt": "2026-10-25T06:53:21Z"}}},
+                ],
+                "conditions": [
+                    {"type": "Ready", "status": "True", "lastTransitionTime": "2026-10-25T06:55:10Z"},
+                ],
+            },
+        }
+        events = [
+            {"reason": "Pulling", "firstTimestamp": "not-a-time"},
+            {"reason": "Pulling", "eventTime": "2026-10-25T06:53:01Z"},
+            {"reason": "Pulled", "firstTimestamp": "2026-10-25T06:53:04Z"},
+            {"reason": "Pulled", "firstTimestamp": "2026-10-25T06:53:09Z"},
+        ]
+        log = "noise\n2026-10-25T06:54:59.123456789Z Started TAK Server\n"
+        got = phases.pod_phases(pod, events, log)
+        self.assertEqual(got["image_pull_s"], 3.0)
+        self.assertEqual(got["inits"], [{"name": "wait-deps", "seconds": 15.0}])
+        self.assertEqual(got["jvm_to_log_s"], 98.123)
+        self.assertEqual(got["log_to_ready_s"], 10.877)
+
+    def test_missing_inputs_stay_unset(self):
+        self.assertIsNone(phases.parse_time(None))
+        self.assertIsNone(phases.parse_time("nope"))
+        self.assertIsNone(phases.elapsed(None, phases.parse_time("2026-10-25T00:00:00Z")))
+        self.assertIsNone(phases.first_log_time("", ("Started TAK Server",)))
+        self.assertIsNone(phases.first_log_time("no stamp here Started TAK Server", ("Started TAK Server",)))
+        self.assertIsNone(phases.first_log_time("2026-10-25T00:00:00Z other", ("Started TAK Server",)))
+        got = phases.pod_phases({}, [], "")
+        self.assertIsNone(got["image_pull_s"])
+        self.assertEqual(got["inits"], [])
+        self.assertIsNone(got["jvm_to_log_s"])
+        self.assertIsNone(got["log_to_ready_s"])
+        self.assertIsNone(phases.pod_phases(
+            {"status": {"containerStatuses": [{"state": {}}]}},
+            [{"reason": "Pulling"}],
+            "2026-10-25T00:00:01Z Tomcat started on port 8443",
+        )["jvm_to_log_s"])
 
 
 if __name__ == "__main__":

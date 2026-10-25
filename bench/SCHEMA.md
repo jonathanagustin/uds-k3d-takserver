@@ -24,6 +24,10 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `images.sum_bytes` | bytes | sum of layer sizes for this runner's platform, from `crane manifest` or `uds zarf tools registry manifest`, for every image in `zarf.yaml` |
 | `images.unique_bytes` | bytes | same layers counted once, by digest |
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
+| `start_phases.<app>.image_pull_s` | seconds | kubelet `Pulling` to `Pulled` for that pod. Null when the image was already present and no pull event was recorded |
+| `start_phases.<app>.inits` | list | each init container's `name` and `seconds` from its state timestamps |
+| `start_phases.<app>.jvm_to_log_s` | seconds | main container `startedAt` to the first `Started TAK Server` or `Tomcat started on port` log line |
+| `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition. This is the probe lag |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
 | `load.clients` | count | the client count this record ran |
@@ -43,6 +47,8 @@ Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 `kubelet.steady_rss_bytes`. Ready time is `warm_s` when it was measured and
 `cold_s` otherwise.
+
+`<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s, so Ready can lag the process by at most one period, about 8% of those restarts. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. If `jvm_to_log_s` is most of the start on a later run, that archive is the next change.
 
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint

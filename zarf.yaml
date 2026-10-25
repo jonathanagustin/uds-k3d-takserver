@@ -35,7 +35,7 @@ variables:
     description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package.
     default: 5.7-RELEASE-14
   - name: IN_CLUSTER_DNS
-    description: On a uds-k3d cluster, add CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist.
+    description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist.
     default: "true"
   - name: PASSTHROUGH_HOSTS
     description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host.
@@ -53,9 +53,8 @@ components:
       - name: takserver
         valuesFiles:
           - values/upstream-values.yaml
-    # The TAK Deployments are not listed. This component's onDeploy.after
-    # action adds the OIDC init container to them, so they are not final here.
-    # tasks/test.yaml health-check waits on them.
+    # The TAK Deployments are not listed. Their startup probes allow 800s,
+    # and tasks/test.yaml health-check waits for them.
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package
@@ -67,130 +66,7 @@ components:
           - description: Build the OIDC render admission module
             dir: pepr
             cmd: ./build.sh
-      onDeploy:
-        before:
-          # uds-k3d's dev DNS (*.uds.dev) answers 127.0.0.1, which inside a
-          # pod is the pod itself. uds-k3d already rewrites *.uds.dev to the
-          # tenant gateway in ConfigMap kube-system/coredns-custom (key
-          # uds.override). This adds key 00-takserver.override for DOMAIN:
-          # the passthrough SNI hosts go to the passthrough gateway, the
-          # admin hosts to the admin gateway, and every other host to the
-          # tenant gateway. CoreDNS imports the *.override keys in name
-          # order and the first `rewrite stop` that matches wins, so these
-          # rules run before uds.override. Real DNS is left alone: without
-          # coredns-custom this does nothing. See docs/networking.md.
-          - description: Resolve DOMAIN hosts to the Istio gateways inside the cluster
-            cmd: |
-              set -eu
-              if command -v kubectl >/dev/null 2>&1; then
-                k() { kubectl "$@"; }
-              elif command -v zarf >/dev/null 2>&1; then
-                k() { zarf tools kubectl "$@"; }
-              elif [ -x ./zarf ]; then
-                k() { ./zarf tools kubectl "$@"; }
-              else
-                echo "kubectl is not available" >&2
-                exit 1
-              fi
-              if [ "${ZARF_VAR_IN_CLUSTER_DNS:-true}" != "true" ]; then
-                echo "IN_CLUSTER_DNS is not true. Skipping."
-                exit 0
-              fi
-              if ! k get configmap coredns-custom -n kube-system >/dev/null 2>&1; then
-                echo "kube-system/coredns-custom does not exist. Not a uds-k3d cluster. Skipping."
-                exit 0
-              fi
-              domain="${ZARF_VAR_DOMAIN:?DOMAIN is not set}"
-              re="$(printf '%s' "${domain}" | sed 's/\./\\./g')"
-              rules=""
-              add() {
-                # $1: regex for the name, $2: namespace, $3: Service
-                if k get svc "$3" -n "$2" >/dev/null 2>&1; then
-                  rules="${rules}rewrite stop {
-                name regex ($1) $3.$2.svc.cluster.local answer auto
-              }
-              "
-                else
-                  echo "Service $2/$3 does not exist. No rule for $1."
-                fi
-              }
-              hosts=""
-              for h in ${ZARF_VAR_PASSTHROUGH_HOSTS:-}; do
-                hosts="${hosts:+${hosts}|}$(printf '%s' "${h}" | sed 's/\./\\./g')"
-              done
-              if [ -n "${hosts}" ]; then
-                add "(${hosts})\\.${re}" istio-passthrough-gateway passthrough-ingressgateway
-              fi
-              add ".*\\.admin\\.${re}" istio-admin-gateway admin-ingressgateway
-              add ".*\\.${re}" istio-tenant-gateway tenant-ingressgateway
-              current="$(k get configmap coredns-custom -n kube-system -o 'jsonpath={.data.00-takserver\.override}')"
-              # $(...) drops trailing newlines on both sides.
-              if [ "${current}" = "$(printf '%s' "${rules}")" ]; then
-                echo "CoreDNS rewrites for ${domain} are current"
-                exit 0
-              fi
-              printf '%s' "${rules}"
-              RULES="${rules}" python3 -c 'import json, os; print(json.dumps({"data": {"00-takserver.override": os.environ["RULES"]}}))' > /tmp/takserver-coredns.json
-              k patch configmap coredns-custom -n kube-system --type merge --patch-file /tmp/takserver-coredns.json
-              k rollout restart deployment/coredns -n kube-system
-              k rollout status deployment/coredns -n kube-system --timeout=180s
-        after:
-          # The tenant gateway verifies 8447 against the deploy-time CA. A
-          # gateway reads credentialName Secrets only from its own namespace,
-          # so copy the CA certificate (never the key) there. Names come from
-          # the DestinationRule the chart renders when backendTLS is on.
-          - description: Copy the TAK CA certificate to the tenant gateway
-            cmd: |
-              set -eu
-              if command -v kubectl >/dev/null 2>&1; then
-                k() { kubectl "$@"; }
-              elif command -v zarf >/dev/null 2>&1; then
-                k() { zarf tools kubectl "$@"; }
-              elif [ -x ./zarf ]; then
-                k() { ./zarf tools kubectl "$@"; }
-              else
-                echo "kubectl is not available" >&2
-                exit 1
-              fi
-              if ! k get destinationrule.networking.istio.io takserver-web -n takserver >/dev/null 2>&1; then
-                echo "Backend TLS is off. Skipping."
-                exit 0
-              fi
-              gw_ns="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.exportTo[0]}')"
-              secret="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.trafficPolicy.portLevelSettings[0].tls.credentialName}')"
-              ca_b64="$(k get configmap cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}')"
-              if [ -z "${gw_ns}" ] || [ -z "${secret}" ] || [ -z "${ca_b64}" ]; then
-                echo "Missing gateway namespace, Secret name, or ca.pem" >&2
-                exit 1
-              fi
-              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","namespace":"%s","labels":{"app.kubernetes.io/part-of":"takserver"}},"type":"Opaque","data":{"cacert":"%s"}}' \
-                "${secret}" "${gw_ns}" "${ca_b64}" | k apply -f -
-          # The upstream Deployments cannot grow an init container through
-          # values. Helm has already created them. This reads the image names
-          # from those Deployments and strategic-merges the envsubst init
-          # container, then waits for the new pods.
-          - description: Render the OIDC client secret and wait for TAK
-            cmd: |
-              set -eu
-              if command -v kubectl >/dev/null 2>&1; then
-                export KUBECTL=kubectl
-                k() { kubectl "$@"; }
-              elif command -v zarf >/dev/null 2>&1; then
-                export KUBECTL="zarf tools kubectl"
-                k() { zarf tools kubectl "$@"; }
-              elif [ -x ./zarf ]; then
-                export KUBECTL="./zarf tools kubectl"
-                k() { ./zarf tools kubectl "$@"; }
-              else
-                echo "kubectl is not available" >&2
-                exit 1
-              fi
-              if ! k get cm -n takserver takserver-oidc-render >/dev/null 2>&1; then
-                echo "OIDC render ConfigMap is absent. Skipping."
-                exit 0
-              fi
-              k get cm -n takserver takserver-oidc-render -o 'jsonpath={.data.patch-oidc-pods\.py}' > /tmp/patch-oidc-pods.py
-              python3 -u /tmp/patch-oidc-pods.py
+
     # TAK images are built from the upstream source and published under this
     # repository. The tag is literal. Zarf 0.87 parses image refs before it
     # applies ###ZARF_VAR_*###, so a variable here is not a valid reference.
@@ -230,40 +106,6 @@ components:
         kind: Deployment
         name: cloudtak
         namespace: cloudtak
-    actions:
-      onDeploy:
-        before:
-          # CloudTAK keeps the TAK admin certificate in its own database to
-          # run its admin connection. The pod reads the CA, the admin
-          # certificate, and its key from this Secret. They are created at
-          # deploy time in ConfigMap cert-migration and are never in git.
-          - description: Copy the TAK CA and admin certificate to the cloudtak namespace
-            cmd: |
-              set -eu
-              if command -v kubectl >/dev/null 2>&1; then
-                k() { kubectl "$@"; }
-              elif command -v zarf >/dev/null 2>&1; then
-                k() { zarf tools kubectl "$@"; }
-              elif [ -x ./zarf ]; then
-                k() { ./zarf tools kubectl "$@"; }
-              else
-                echo "kubectl is not available" >&2
-                exit 1
-              fi
-              get() { k get configmap cert-migration -n takserver -o "jsonpath={.binaryData.$1}"; }
-              ca="$(get 'ca\.pem')"
-              cert="$(get 'admin\.pem')"
-              key="$(get 'admin\.key')"
-              # Already base64, same as the certificate fields. Do not decode it.
-              pass="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}')"
-              if [ -z "${ca}" ] || [ -z "${cert}" ] || [ -z "${key}" ] || [ -z "${pass}" ]; then
-                echo "TAK admin material or Secret takserver-keystore is missing" >&2
-                exit 1
-              fi
-              k create namespace cloudtak --dry-run=client -o yaml | k apply -f -
-              printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"cloudtak-tak-admin","namespace":"cloudtak","labels":{"app.kubernetes.io/part-of":"cloudtak"}},"type":"Opaque","data":{"ca.pem":"%s","admin.pem":"%s","admin.key":"%s","CAPASS":"%s"}}' \
-                "${ca}" "${cert}" "${key}" "${pass}" | k apply -f - >/dev/null
-              echo "Secret cloudtak/cloudtak-tak-admin is up to date"
     images:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.112.3" # cloudtak-version
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4"

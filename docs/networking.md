@@ -70,7 +70,7 @@ Inside the cluster, `sso.<domain>` resolves to the ClusterIP of `tenant-ingressg
 
 Public DNS for `*.uds.dev` answers `127.0.0.1`. From inside a pod that is the pod itself, so a pod cannot reach `sso.uds.dev` or `takserver.uds.dev` by name without help. uds-k3d ships ConfigMap `kube-system/coredns-custom` with key `uds.override`, which rewrites `*.admin.uds.dev` to the admin gateway and every other `*.uds.dev` name to the tenant gateway. It has no rule for passthrough hosts and only covers `uds.dev`.
 
-The `takserver` component's first `onDeploy` action adds key `00-takserver.override` to that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, and restarts CoreDNS when the key changed:
+The `takserver-oidc` watcher writes key `00-takserver.override` on that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, and restarts CoreDNS when the key changed:
 
 | Name | Answer |
 | --- | --- |
@@ -84,4 +84,4 @@ Each rule is a CoreDNS `rewrite stop` with `answer auto`, the same form uds-k3d 
 
 Pods in an ambient namespace can get a different, equally correct answer. The UDS operator writes a `MeshInternal` ServiceEntry for every exposed host, with the gateway Service as its endpoint. ztunnel's DNS proxy answers names that have a ServiceEntry before CoreDNS sees the query. It allocates an address from `240.240.0.0/16` and routes connections to that address to the ServiceEntry endpoint, the same gateway. Names without a ServiceEntry, and pods outside the mesh, get the CoreDNS answer. On a cluster without `coredns-custom` the ServiceEntries alone still steer ambient pods, as long as public DNS answers the name at all.
 
-The action does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`. `uds run test:dns` checks the answers from inside the API pod and that the API Deployment has no `hostAliases`. It accepts the gateway ClusterIP, or a `240.240.0.0/16` address when the name's ServiceEntry points at the expected gateway Service. Earlier versions of this package gave the API pod a hostAlias for `sso.<domain>`. An upgrade removes it.
+The reconcile does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`. `uds run test:dns` checks the answers from inside the API pod and that the API Deployment has no `hostAliases`. It accepts the gateway ClusterIP, or a `240.240.0.0/16` address when the name's ServiceEntry points at the expected gateway Service. Earlier versions of this package gave the API pod a hostAlias for `sso.<domain>`. An upgrade removes it.

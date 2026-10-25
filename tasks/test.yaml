@@ -451,6 +451,7 @@ tasks:
           deny_other_sa() {
             local host="$1" image code
             image="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="cloudtak")].image}')"
+            # shellcheck disable=SC2329 # trap RETURN runs this on the way out
             cleanup_denied() {
               k delete pod basemap-denied -n cloudtak --ignore-not-found --wait=false >/dev/null 2>&1 || true
               k delete sa basemap-denied -n cloudtak --ignore-not-found >/dev/null 2>&1 || true
@@ -459,7 +460,7 @@ tasks:
             k delete pod basemap-denied -n cloudtak --ignore-not-found --wait=true >/dev/null 2>&1 || true
             k delete sa basemap-denied -n cloudtak --ignore-not-found >/dev/null 2>&1 || true
             k create sa basemap-denied -n cloudtak
-            IMAGE="${image}" HOST="${host}" python3 - <<'PY' > /tmp/basemap-denied.json
+            IMAGE="${image}" HOST="${host}" python3 -c '
           import json, os
           json.dump({
             "apiVersion": "v1",
@@ -480,7 +481,7 @@ tasks:
                 "name": "basemap-denied",
                 "image": os.environ["IMAGE"],
                 "imagePullPolicy": "IfNotPresent",
-                "command": ["node", "-e", "fetch('https://' + process.env.HOST + '/', {signal: AbortSignal.timeout(8000)}).then(r => { console.log(r.status); process.exit(0); }).catch(e => { console.error(String(e)); process.exit(1); })"],
+                "command": ["node", "-e", "fetch(\"https://\" + process.env.HOST + \"/\", {signal: AbortSignal.timeout(8000)}).then(r => { console.log(r.status); process.exit(0); }).catch(e => { console.error(String(e)); process.exit(1); })"],
                 "env": [{"name": "HOST", "value": os.environ["HOST"]}],
                 "securityContext": {
                   "allowPrivilegeEscalation": False,
@@ -493,7 +494,7 @@ tasks:
               "volumes": [{"name": "tmp", "emptyDir": {}}],
             },
           }, open("/dev/stdout", "w"))
-          PY
+          ' > /tmp/basemap-denied.json
             k apply -f /tmp/basemap-denied.json
             code=""
             for _ in $(seq 1 30); do

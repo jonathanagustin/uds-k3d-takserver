@@ -71,7 +71,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Version scheme
 
 - **Requirement:** Versions follow `<upstream-app-version>-uds.<n>`, or Semantic Versioning when that scheme does not apply.
-- **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK (the `appVersion` in `charts/cloudtak/Chart.yaml`), so no single application version leads the tag.
+- **Status:** Semantic Versioning. release-please sets the version from Conventional Commits, and the published package tag is `<version>-upstream`, for example `0.3.0-upstream`. The package ships two upstream applications with separate versions, TAK Server `5.7-RELEASE-14` and CloudTAK (the `appVersion` in `charts/cloudtak/Chart.yaml`), so no single application version leads the tag. release-please stays instead of the template's `<upstream-app-version>-uds.<n>` tag and `uds-pk release` flow, because that second publisher would also have to bump `charts/takserver/Chart.yaml`, `common/zarf.yaml`, and `README.md`, which release-please already owns.
 
 ## Adding an exemption
 

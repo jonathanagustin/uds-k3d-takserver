@@ -1,0 +1,67 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: production
+description: >
+  Memory requests and limits from values/profiles/production.yaml and
+  production-cloudtak.yaml. Messaging copies the API memory limit, so both
+  are 2Gi. Plugin memory on the package patch is still 128Mi / 384Mi; this
+  run sets 320Mi / 512Mi, the same as small, because there is no measured
+  plugin peak above 263Mi. CPU stays at whatever the install set. Steady
+  working set is run 40174810574. Replicas are not changed here. Not a front
+  until this record is compared.
+clients: [10, 50, 200]
+duration_s: 60
+restart: true
+env: []
+resources:
+  - workload: deployment/takserver-api
+    namespace: takserver
+    container: takserver-api
+    memory_request: 1536Mi
+    memory_limit: 2Gi
+  - workload: deployment/takserver-messaging
+    namespace: takserver
+    container: takserver-messaging
+    memory_request: 1536Mi
+    memory_limit: 2Gi
+  - workload: deployment/takserver-config
+    namespace: takserver
+    container: takserver-config
+    memory_request: 1Gi
+    memory_limit: 1536Mi
+  - workload: deployment/takserver-plugins
+    namespace: takserver
+    container: takserver-plugins
+    memory_request: 320Mi
+    memory_limit: 512Mi
+  - workload: statefulset/takserver-postgresql
+    namespace: takserver
+    container: postgresql
+    memory_request: 256Mi
+    memory_limit: 512Mi
+  - workload: statefulset/takserver-ignite
+    namespace: takserver
+    container: ignite
+    memory_request: 768Mi
+    memory_limit: 1536Mi
+  - workload: deployment/cloudtak
+    namespace: cloudtak
+    container: cloudtak
+    memory_request: 512Mi
+    memory_limit: 1Gi
+  - workload: deployment/cloudtak
+    namespace: cloudtak
+    container: sso
+    memory_request: 256Mi
+    memory_limit: 512Mi
+  - workload: deployment/cloudtak
+    namespace: cloudtak
+    container: bootstrap
+    memory_request: 64Mi
+    memory_limit: 128Mi
+  - workload: statefulset/cloudtak-postgis
+    namespace: cloudtak
+    container: postgis
+    memory_request: 256Mi
+    memory_limit: 1Gi

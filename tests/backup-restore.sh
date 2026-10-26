@@ -300,6 +300,28 @@ for name in takserver-api takserver-messaging takserver-plugins takserver-config
 done
 k scale deploy/cloudtak -n cloudtak --replicas=0
 
+# The restored CloudTAK pod can still be running its migrations when it is
+# scaled down. If it is still connected when the database is recreated, it
+# migrates into the new empty database and the reload then fails with
+# 'schema "drizzle" already exists'. Wait until the app pods are gone first.
+wait_pods_gone() {
+  local ns="$1"
+  local pattern="$2"
+  local left
+  local _
+  for _ in $(seq 1 90); do
+    left="$(k get pods -n "${ns}" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | grep -E "${pattern}" || true)"
+    if [[ -z "${left}" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  say "pods still present in ${ns} after scale-down: ${left}" >&2
+  return 1
+}
+wait_pods_gone cloudtak '^cloudtak-[a-z0-9]{6,10}-[a-z0-9]{5}$'
+wait_pods_gone takserver '^takserver-(api|messaging|plugins|config)-'
+
 k wait --for=condition=ready pod -n takserver -l app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary --timeout=300s
 k wait --for=condition=ready pod -n cloudtak -l app=cloudtak-postgis --timeout=300s
 

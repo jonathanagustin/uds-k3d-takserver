@@ -179,7 +179,17 @@ nats:
   # the install test (tests/usage.sh): nats 0-1m CPU and 6-9Mi, the reloader
   # 0-1m and 2-5Mi. The limits leave room for TAK message traffic, which the
   # tests do not load.
+  #
+  # Chart 1.0.1 still defaults to nats:2.9.21-alpine and
+  # natsio/nats-server-config-reloader:0.11.0. These tags override that so the
+  # pod asks for the same images zarf.yaml packages. Clustering and JetStream
+  # stay off. 2.15.1 starts on that rendered config, and reloader 0.25.0 still
+  # takes -pid and -config. There is no JetStream volume, so an upgrade
+  # replaces the pod and clients reconnect.
   container:
+    image:
+      repository: nats
+      tag: 2.15.1-alpine
     merge:
       resources:
         requests:
@@ -189,6 +199,9 @@ nats:
           cpu: 250m
           memory: 128Mi
   reloader:
+    image:
+      repository: natsio/nats-server-config-reloader
+      tag: 0.25.0
     merge:
       resources:
         requests:

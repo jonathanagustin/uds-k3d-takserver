@@ -19,6 +19,7 @@ tasks:
       - task: smoke
       - task: api-smoke
       - task: loki-client
+      - task: quic
       - task: cloudtak
       - task: ui
       - task: flows
@@ -780,6 +781,11 @@ tasks:
     description: The standard-port streaming client from the API smoke is searchable in Loki by callsign
     actions:
       - cmd: ./tests/loki-client.sh
+
+  - name: quic
+    description: QUIC on 8090 through Envoy Gateway when quic.enabled is true
+    actions:
+      - cmd: ./tests/quic.sh
 
   - name: ui
     description: Playwright checks for the TAK web UI and the gateway endpoints

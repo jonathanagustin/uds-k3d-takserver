@@ -24,6 +24,8 @@ The overlay turns the chart's nginx ingress off. The UDS Package in `charts/taks
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
+`quic.enabled` (default `false`) adds a QUIC input on UDP 8090 and a Package expose entry with `protocol: UDP`. That traffic goes through Envoy Gateway, not Istio. The test bundle is what turns the flag on. See [Networking](networking.md#quic) and [ADR 16](../adr/0016-quic-through-envoy-gateway.md).
+
 `k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory to fit a 2 vCPU, 8 GB runner. The CI runners have 4 CPU and 16 GB on both architectures.
 
 ## Upstream chart values

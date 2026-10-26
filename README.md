@@ -286,7 +286,7 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | Streaming (ATAK, WinTAK) | `takserver-stream.<domain>` | passthrough, 443 SNI or 8089 | 8089 |
 | ATAK test device screen (optional) | `atak.<domain>` | tenant, 443 | 8000 in namespace `atak` |
 
-`<domain>` defaults to `uds.dev`. Ports 8443 and 8089 require a client certificate. A client can enroll on `<host>:8446` and stream to the same `<host>:8089`, the way ATAK expects ([ADR 12](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)).
+`<domain>` defaults to `uds.dev`. Ports 8443 and 8089 require a client certificate. A client can enroll on `<host>:8446` and stream to the same `<host>:8089`, the way ATAK expects ([ADR 12](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)). QUIC on UDP 8090 is off unless `quic.enabled` is set. It uses the same client-certificate check and is reached through Envoy Gateway, not Istio ([ADR 16](adr/0016-quic-through-envoy-gateway.md)).
 
 **Browser sign-in:** members of the Keycloak group `/UDS Core/Admin` get `ROLE_ADMIN`. Groups under `/TAK/` with a `_READ` or `_WRITE` suffix become TAK groups. For example, `/TAK/Operators_READ` becomes the TAK group `Operators`.
 

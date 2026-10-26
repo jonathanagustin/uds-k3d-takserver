@@ -55,6 +55,13 @@ messaging:
     host: takserver-stream
     port: 8089
 
+# QUIC streaming (UDP 8090). Off by default: no input in CoreConfig, no UDP
+# Service, and no Package expose entry. The test bundle turns it on and
+# selects Envoy Gateway. See adr/0016-quic-through-envoy-gateway.md.
+quic:
+  enabled: false
+  port: 8090
+
 # Standard TAK ports (8446 enrollment, 8089 streaming) on the passthrough
 # gateway for any of these hosts, so a client uses one host for both. The
 # 443 SNI routes above stay as they are. takserver-stream is listed because

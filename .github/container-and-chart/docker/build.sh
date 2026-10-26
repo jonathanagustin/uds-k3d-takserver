@@ -184,6 +184,9 @@ save_gradle_cache() {
 if [[ "${use_bake}" = "true" ]]; then
   echo "Building ${targets} for ${PLATFORMS} with buildx bake"
   if [[ "${multi}" = "true" ]] && [[ "${push}" = "true" ]]; then
+    # Copa patches the image in the local daemon. A multi-arch push never
+    # loads one, so this path stays unpatched. CI builds one architecture.
+    echo "Skipping OS package patching for a multi-arch push." >&2
     bake --push
     for target in ${targets}; do
       record_push "${repo}/${target}:${tag}"
@@ -194,8 +197,14 @@ if [[ "${use_bake}" = "true" ]]; then
       bake "${target}" --set "${target}.output=type=oci,dest=${root}/build/oci/${target}.tar"
     done
   else
-    # --load keeps the tags in the local daemon for the Grype scan.
+    # --load keeps the tags in the local daemon for the OS patch and the
+    # Grype scan. The patch replaces the tag before it is pushed.
     bake --load
+    images=()
+    for target in ${targets}; do
+      images+=("${repo}/${target}:${tag}")
+    done
+    "${root}/.github/scripts/copa-patch.sh" "${images[@]}"
     if [[ "${push}" = "true" ]]; then
       for target in ${targets}; do
         "${runtime}" push "${repo}/${target}:${tag}"
@@ -237,6 +246,7 @@ for target in ${targets}; do
   fi
   echo "${runtime} has no buildx. Falling back to '${runtime} build' for ${PLATFORMS}." >&2
   "${runtime}" build "$@"
+  "${root}/.github/scripts/copa-patch.sh" "${image}"
   if [[ "${push}" = "true" ]]; then
     "${runtime}" push "${image}"
     record_push "${image}"

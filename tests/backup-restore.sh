@@ -143,9 +143,11 @@ store_secret() {
   local ns="$1"
   local name="$2"
   local file="$3"
+  # Server-side apply: client-side apply copies the whole Secret into the
+  # last-applied annotation, which is capped at 256KiB.
   k create secret generic "${name}" -n "${ns}" \
     --from-file=dump.sql="${file}" \
-    --dry-run=client -o yaml | k apply -f -
+    --dry-run=client -o yaml | k apply --server-side --force-conflicts -f -
   say "Secret ${ns}/${name} stored"
 }
 
@@ -188,6 +190,12 @@ else
   say "Deployment uds-dev-stack/minio is missing; Velero's default bucket has nowhere to go" >&2
   exit 1
 fi
+
+# The dev stack gives Velero and Loki one bucket, and Loki writes its chunks
+# under fake/ there. Velero marks a bucket Unavailable when it holds a
+# top-level directory it does not own, so keep Velero under its own prefix.
+k patch backupstoragelocations.velero.io default -n velero --type merge \
+  -p '{"spec":{"objectStorage":{"prefix":"velero"}}}'
 
 bsl_ok=0
 for _ in $(seq 1 30); do
@@ -258,6 +266,10 @@ spec:
     - takserver
     - cloudtak
   includeClusterResources: false
+  # The backup holds no volumes. A restored claim would point at the deleted
+  # volume and stay Pending, so let the StatefulSets create fresh claims.
+  excludedResources:
+    - persistentvolumeclaims
 EOF
 
 wait_phase restore.velero.io "${restore_name}" 60
@@ -330,7 +342,9 @@ if [[ "${tak_note}" != "${note}" || "${ct_note}" != "${note}" ]]; then
 fi
 say "marker ${note} read back from both databases"
 
-for name in takserver-api takserver-messaging takserver-plugins takserver-config; do
+# Start order follows the wait-deps init containers: messaging and the API wait
+# for config, and plugins waits for config, messaging, and the API.
+for name in takserver-config takserver-messaging takserver-api takserver-plugins; do
   k scale "deploy/${name}" -n takserver --replicas=1
   k rollout status "deploy/${name}" -n takserver --timeout=600s
 done

@@ -74,7 +74,9 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    # A healthy full-core run finishes in about 30 minutes. This job limit is
+    # what stops a step whose own timeout does not, such as actions/upload-artifact.
+    timeout-minutes: 75
     permissions:
       actions: write
       contents: read
@@ -84,7 +86,7 @@ jobs:
       TEST_FLAVOR: upstream
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -114,7 +116,7 @@ jobs:
       # crowds the repository cache.
       - name: Restore the Zarf cache
         id: zarf-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/zarf-cache
           key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
@@ -146,7 +148,9 @@ jobs:
       - name: Deploy full core and test
         run: uds run test-full-core --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         shell: bash
-        timeout-minutes: 150
+        # A normal deploy takes about 30 minutes. This fires before the job
+        # limit so the log and dump steps below still run.
+        timeout-minutes: 55
 
       - name: Disk use after the test
         if: always()

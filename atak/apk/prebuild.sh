@@ -14,7 +14,8 @@ SRC=${SRC:-/src/atak-civ}
 RECIPES=${RECIPES:-$(cd "$(dirname "$0")" && pwd)/conan}
 ABI=${ABI:-x86_64}
 JOBS=${JOBS:-$(nproc)}
-CESIUM_REF=${CESIUM_REF:-v0.40.1}
+# v0.40.1. A tag can move, so the clone uses the commit.
+CESIUM_REF=${CESIUM_REF:-f8b38abbbaa24ec2984ff663182240d06285b36c}
 
 case "${ABI}" in
   x86_64) CARCH=x86_64 ;;
@@ -114,8 +115,12 @@ headers() {
 cesium() {
   cd "${SRC}/cesium-native"
   if [[ ! -d cesium-native ]]; then
-    git clone -q --depth 1 --branch "${CESIUM_REF}" --recurse-submodules --shallow-submodules \
-      https://github.com/CesiumGS/cesium-native.git cesium-native
+    # clone --branch accepts a tag or a branch, not a commit.
+    git init -q cesium-native
+    git -C cesium-native remote add origin https://github.com/CesiumGS/cesium-native.git
+    git -C cesium-native fetch -q --depth 1 origin "${CESIUM_REF}"
+    git -C cesium-native checkout -q --detach FETCH_HEAD
+    git -C cesium-native submodule update --init --depth 1 --recursive -q
   fi
   # stage.sh pulls the zlib-ng port from vcpkg master. Pin it to the vcpkg
   # release cesium-native itself builds against (ezvcpkg_fetch COMMIT).

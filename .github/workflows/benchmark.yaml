@@ -55,7 +55,7 @@ jobs:
       BENCH_CLIENTS: ${{ github.event.inputs.clients || '10' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -77,7 +77,7 @@ jobs:
           TRIM_SKIP_ABOVE_GB: "60"
 
       - name: Restore the Zarf cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/zarf-cache
           key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
@@ -113,12 +113,16 @@ jobs:
       - name: Fetch the upstream load tester
         run: |
           set -euo pipefail
-          git clone --depth 1 --filter=blob:none --sparse --branch 5.7-RELEASE-14 \
-            https://github.com/TAK-Product-Center/Server.git "${RUNNER_TEMP}/tak-load"
+          # Same commit as the upstream/takserver submodule (5.7-RELEASE-14).
+          git init -q "${RUNNER_TEMP}/tak-load"
+          git -C "${RUNNER_TEMP}/tak-load" remote add origin https://github.com/TAK-Product-Center/Server.git
+          git -C "${RUNNER_TEMP}/tak-load" sparse-checkout init --cone
           git -C "${RUNNER_TEMP}/tak-load" sparse-checkout set src/testing/load_test
+          git -C "${RUNNER_TEMP}/tak-load" fetch --depth 1 origin 5187abd46d827d37cfc5708805eced197a837e49
+          git -C "${RUNNER_TEMP}/tak-load" checkout --detach FETCH_HEAD
           python3 -m venv "${RUNNER_TEMP}/bench-venv"
-          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check \
-            -r "${RUNNER_TEMP}/tak-load/src/testing/load_test/requirements.txt"
+          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check --require-hashes \
+            -r bench/load-test-requirements.txt
 
       - name: Run the sweep
         env:
@@ -128,7 +132,6 @@ jobs:
           # A workflow env PATH is not a shell, so ${PATH:-} was stored literally
           # and hid bash, openssl, and uds.
           export PATH="${RUNNER_TEMP}/bench-venv/bin:${GITHUB_WORKSPACE}/.local/bin:${PATH}"
-          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check 'pyyaml==6.0.2'
           "${RUNNER_TEMP}/bench-venv/bin/python" bench/run.py
 
       - name: Upload the records
@@ -151,7 +154,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download the records
         env:

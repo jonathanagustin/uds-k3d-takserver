@@ -299,7 +299,7 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | `DOMAIN` | `uds.dev` | Domain suffix for gateway hosts |
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
 
-`values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle and sizes TAK Server for a small node. See [docs/configuration.md](docs/configuration.md).
+`values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle. Named `small` and `production` overlays are in [docs/profiles.md](docs/profiles.md). See [docs/configuration.md](docs/configuration.md).
 
 ## Supported architectures
 

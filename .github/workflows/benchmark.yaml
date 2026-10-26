@@ -113,12 +113,16 @@ jobs:
       - name: Fetch the upstream load tester
         run: |
           set -euo pipefail
-          git clone --depth 1 --filter=blob:none --sparse --branch 5.7-RELEASE-14 \
-            https://github.com/TAK-Product-Center/Server.git "${RUNNER_TEMP}/tak-load"
+          # Same commit as the upstream/takserver submodule (5.7-RELEASE-14).
+          git init -q "${RUNNER_TEMP}/tak-load"
+          git -C "${RUNNER_TEMP}/tak-load" remote add origin https://github.com/TAK-Product-Center/Server.git
+          git -C "${RUNNER_TEMP}/tak-load" sparse-checkout init --cone
           git -C "${RUNNER_TEMP}/tak-load" sparse-checkout set src/testing/load_test
+          git -C "${RUNNER_TEMP}/tak-load" fetch --depth 1 origin 5187abd46d827d37cfc5708805eced197a837e49
+          git -C "${RUNNER_TEMP}/tak-load" checkout --detach FETCH_HEAD
           python3 -m venv "${RUNNER_TEMP}/bench-venv"
-          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check \
-            -r "${RUNNER_TEMP}/tak-load/src/testing/load_test/requirements.txt"
+          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check --require-hashes \
+            -r bench/load-test-requirements.txt
 
       - name: Run the sweep
         env:
@@ -128,7 +132,6 @@ jobs:
           # A workflow env PATH is not a shell, so ${PATH:-} was stored literally
           # and hid bash, openssl, and uds.
           export PATH="${RUNNER_TEMP}/bench-venv/bin:${GITHUB_WORKSPACE}/.local/bin:${PATH}"
-          "${RUNNER_TEMP}/bench-venv/bin/pip" install --disable-pip-version-check 'pyyaml==6.0.2'
           "${RUNNER_TEMP}/bench-venv/bin/python" bench/run.py
 
       - name: Upload the records

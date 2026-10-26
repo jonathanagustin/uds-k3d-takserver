@@ -32,6 +32,8 @@ You do not need a JDK, Gradle, protoc, or Node on the host. The Dockerfile's bui
 
 The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well. The pin is `ubi9/openjdk-17:1.24-3.1791779556` (built 2026-10-12), which is the newest tag on that repository. Trivy 0.76.1 reports 17 fixable OS vulnerabilities in that base (1 critical, 7 high). Copa 0.15.0 clears those 17 on the base. The TAK image adds more packages, so [`.github/scripts/copa-patch.sh`](../.github/scripts/copa-patch.sh) runs after a single-architecture build and replaces the tag with the patched image before the push. A multi-arch push does not load an image Copa can patch. CI builds one architecture per runner. NATS and PostGIS stay on their upstream tags. This repository does not publish patched copies of those.
 
+The builder stays on Java 17. TAK Server 5.7-RELEASE-14, commit `5187abd46d827d37cfc5708805eced197a837e49`, is still the newest public tag. Its Gradle wrapper is 8.10.2, and that Gradle cannot run on Java 25: Groovy stops in the build script with `Unsupported class file major version 69`. TAK 5.7 targets Java 17, and the runtime image is OpenJDK 17, so `mise.toml` pins Temurin 17 as well. Moving the builder means a newer upstream wrapper, or a wrapper bump in this repository that still emits Java 17 bytecode and passes the install and upgrade tests.
+
 The six tags match `zarf.yaml`:
 
 - `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:5.7-RELEASE-14`
@@ -47,7 +49,7 @@ Pull requests scan the loaded images with Grype and Trivy. A push of these files
 
 ## Docker Hub rate limits
 
-The Zarf package pulls three images from `docker.io`: Postgres (`imresamu/postgis`), NATS, and the NATS config reloader. Docker Hub limits anonymous pulls per IP address, so a shared runner or sandbox can fail package creation with `429 toomanyrequests`. Pull them through a mirror:
+The Zarf package pulls three images from `docker.io`: Postgres (`imresamu/postgis`), NATS (`library/nats:2.15.1-alpine`), and the NATS config reloader (`natsio/nats-server-config-reloader:0.25.0`). Docker Hub limits anonymous pulls per IP address, so a shared runner or sandbox can fail package creation with `429 toomanyrequests`. Pull them through a mirror:
 
 ```bash
 uds run create-dev-package --set CREATE_OPTIONS="--registry-override docker.io=mirror.gcr.io"

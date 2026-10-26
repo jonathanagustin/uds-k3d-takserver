@@ -47,8 +47,10 @@ latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint
 against throughput, footprint against mean latency, and footprint against
-ready time. arm64 and amd64 are separate series. Dominated configs are marked
-in the job summary and drawn as open circles in the SVG.
+ready time. arm64 and amd64 are separate series on one scale per view, so a
+circle can be compared across architectures. Dominance is still decided
+inside one architecture. Dominated configs are marked in the job summary and
+drawn as open circles in the SVG.
 
 Client certs are built at run time from `tests/extract-certs.sh` and are not
 written into the repository or the image. The nightly workflow runs client

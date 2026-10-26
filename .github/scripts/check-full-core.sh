@@ -78,8 +78,20 @@ for ns in takserver cloudtak; do
   for _ in $(seq 1 36); do
     if k top pods -n "${ns}" --no-headers > "${work}/top-${ns}.txt" 2>"${work}/top-${ns}.err"; then
       if [[ -s "${work}/top-${ns}.txt" ]] && grep -Eq '[0-9]+(Ki|Mi|Gi)' "${work}/top-${ns}.txt"; then
-        got=1
-        break
+        # A pod replaced a moment ago (the NATS restart test does this) has no
+        # metrics sample yet. Wait until every Running pod has a row.
+        missing=0
+        while read -r pod_name; do
+          [[ -z "${pod_name}" ]] && continue
+          if ! awk -v n="${pod_name}" '$1 == n { found = 1 } END { exit !found }' "${work}/top-${ns}.txt"; then
+            missing=1
+            echo "waiting for kubectl top to report ${ns}/${pod_name}" >&2
+          fi
+        done < <(k get pods -n "${ns}" --field-selector=status.phase=Running -o custom-columns=NAME:.metadata.name --no-headers 2>/dev/null || true)
+        if [[ "${missing}" -eq 0 ]]; then
+          got=1
+          break
+        fi
       fi
     fi
     sleep 10

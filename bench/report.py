@@ -90,6 +90,8 @@ def markdown(records):
     if not by_arch:
         lines.append("No records.")
         return "\n".join(lines) + "\n"
+    lines.append("The plot uses one scale per view for every architecture. Dominance below is per architecture.")
+    lines.append("")
     for arch, points in sorted(by_arch.items()):
         lines.append(f"## {arch}")
         lines.append("")
@@ -134,17 +136,19 @@ def svg(records):
     offset = 0
     for x_key, y_key, x_higher, y_higher, title in VIEWS:
         parts.append(f'<text x="16" y="{offset + 18}" font-family="sans-serif" font-size="14">{title}</text>')
+        plotted = []
         for arch, points in sorted(by_arch.items()):
             kept, dominated = front(points, x_key, y_key, x_higher, y_higher)
-            usable = kept + dominated
-            if not usable:
-                continue
-            xs = _scale([p[x_key] for p in usable], 40, width - 20)
-            ys = _scale([p[y_key] for p in usable], offset + panel - 16, offset + 36)
-            front_ids = {id(p) for p in kept}
-            for item in usable:
+            for item in kept:
+                plotted.append((arch, item, True))
+            for item in dominated:
+                plotted.append((arch, item, False))
+        if plotted:
+            xs = _scale([row[1][x_key] for row in plotted], 40, width - 20)
+            ys = _scale([row[1][y_key] for row in plotted], offset + panel - 16, offset + 36)
+            for arch, item, on_front in plotted:
                 fill = colors.get(arch, "#333")
-                if id(item) in front_ids:
+                if on_front:
                     attrs = f'fill="{fill}"'
                 else:
                     attrs = f'fill="none" stroke="{fill}" stroke-width="2"'

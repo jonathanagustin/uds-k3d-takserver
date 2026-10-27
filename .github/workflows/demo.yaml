@@ -50,7 +50,7 @@ env:
 jobs:
   record:
     if: ${{ !inputs.sign_only }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 240
     permissions:
       attestations: read
@@ -79,7 +79,7 @@ jobs:
           echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04'
         run: ./.github/scripts/trim-runner.sh
 
       # Same steps as the ATAK e2e workflow: the registry build cache keeps
@@ -351,7 +351,7 @@ jobs:
   publish:
     needs: record
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
@@ -396,7 +396,7 @@ jobs:
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
       && (inputs.sign_only || needs.publish.result == 'success')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write

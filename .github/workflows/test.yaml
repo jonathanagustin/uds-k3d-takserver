@@ -58,7 +58,7 @@ concurrency:
 
 jobs:
   images:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       actions: read
@@ -131,7 +131,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: cloudtak-image (${{ matrix.arch }})
@@ -173,7 +173,7 @@ jobs:
   # entry for the package architecture.
   cloudtak-index:
     needs: cloudtak-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -214,7 +214,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: postgis-image (${{ matrix.arch }})
@@ -253,7 +253,7 @@ jobs:
 
   postgis-index:
     needs: postgis-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -285,7 +285,7 @@ jobs:
           include-platforms: "false"
 
   check-flavor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -310,7 +310,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: validate-install (${{ matrix.arch }})
@@ -354,7 +354,7 @@ jobs:
       # them (run 39686333898) Android alone took 136s of the 244s amd64
       # trim, so this starts while Compose and the UDS CLI install.
       - name: Start trimming the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh start
         env:
           TRIM_SKIP_ABOVE_GB: "60"
@@ -373,7 +373,7 @@ jobs:
           version: v0.40.0
 
       - name: Trim the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh finish
         env:
           # The test uses about 30 GB (see "Disk use after the test"), so a
@@ -529,7 +529,7 @@ jobs:
     needs: [images, cloudtak-index, postgis-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
     # A healthy upgrade finishes in about 30 minutes. This job limit is what
     # stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 75
@@ -545,7 +545,7 @@ jobs:
     steps: *validate-steps
 
   verify-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [validate-install, validate-upgrade]
     if: always()
     permissions:

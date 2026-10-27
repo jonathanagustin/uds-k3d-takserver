@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Add swap on a GitHub-hosted runner. Workflows in this repo run on
-# ubuntu-latest or ubuntu-24.04-arm unless vars.TEST_RUNNER names something
+# ubuntu-24.04 or ubuntu-24.04-arm unless vars.TEST_RUNNER names something
 # else. None of them name a larger hosted runner. The full-core layers plus
 # TAK need more memory than that VM keeps free. Outside CI this exits 0.
 set -euo pipefail

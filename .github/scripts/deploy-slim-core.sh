@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
-slim_core_version=1.15.2
+slim_core_version=1.16.0
 version="${SLIM_CORE_VERSION:-${slim_core_version}}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"

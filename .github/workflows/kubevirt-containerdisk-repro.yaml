@@ -12,6 +12,8 @@ on:
   push:
     branches:
       - cursor/kubevirt-191-containerdisk-repro-3d28
+    paths:
+      - .github/workflows/kubevirt-containerdisk-repro.yaml
 
 permissions:
   contents: read

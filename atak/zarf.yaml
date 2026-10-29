@@ -29,7 +29,7 @@ variables:
 components:
   - name: kubevirt
     required: true
-    description: KubeVirt v1.8.4 and the UDS policy exemption it needs
+    description: KubeVirt v1.9.1 and the UDS policy exemption it needs
     only:
       cluster:
         architecture: amd64
@@ -37,25 +37,24 @@ components:
       - name: kubevirt-exemption
         files:
           - deploy/kubevirt-exemption.yaml
-      # v1.8.4 publishes the VMI checksum fields with uint32 bounds (v1.6.6 and v1.7.4 do not).
-      # Kubernetes 1.37 (k3s v1.37.1 in CI) enforces numeric formats, and older releases publish
-      # the kernel and containerDisk checksums as int32, so virt-handler can
-      # never move the VMI past Scheduled. v1.9.1 fails to start containerDisk
-      # VMs (the container-disk binary is missing from the launcher).
+      # v1.6.x and v1.7.x publish the kernel and containerDisk checksums as int32.
+      # Kubernetes 1.37 (k3s v1.37.1 in CI) rejects those, so the VMI stays Scheduled.
+      # v1.9.1 is the candidate that replaces the v1.8.4 pin. See
+      # docs/rca/kubevirt-1.9.1-containerdisk.md.
       - name: kubevirt-operator
         files:
-          - https://github.com/kubevirt/kubevirt/releases/download/v1.8.4/kubevirt-operator.yaml@d1d8264eec5b802c122bec6c54d8c3b11e119ee2a5c75602aaa8b53ea3857eda
+          - https://github.com/kubevirt/kubevirt/releases/download/v1.9.1/kubevirt-operator.yaml@9ac45a436c49d32e6fc21d542bcb7600b970705297b9e6752f3ef9b0a1d292da
       - name: kubevirt-cr
         files:
-          - https://github.com/kubevirt/kubevirt/releases/download/v1.8.4/kubevirt-cr.yaml@43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
+          - https://github.com/kubevirt/kubevirt/releases/download/v1.9.1/kubevirt-cr.yaml@43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
     images:
-      - quay.io/kubevirt/virt-operator:v1.8.4
-      - quay.io/kubevirt/virt-api:v1.8.4
-      - quay.io/kubevirt/virt-controller:v1.8.4
-      - quay.io/kubevirt/virt-handler:v1.8.4
-      - quay.io/kubevirt/virt-launcher:v1.8.4
-      - quay.io/kubevirt/virt-exportproxy:v1.8.4
-      - quay.io/kubevirt/virt-exportserver:v1.8.4
+      - quay.io/kubevirt/virt-operator:v1.9.1
+      - quay.io/kubevirt/virt-api:v1.9.1
+      - quay.io/kubevirt/virt-controller:v1.9.1
+      - quay.io/kubevirt/virt-handler:v1.9.1
+      - quay.io/kubevirt/virt-launcher:v1.9.1
+      - quay.io/kubevirt/virt-exportproxy:v1.9.1
+      - quay.io/kubevirt/virt-exportserver:v1.9.1
     actions:
       onDeploy:
         after:

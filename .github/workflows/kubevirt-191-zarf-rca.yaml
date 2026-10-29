@@ -1,0 +1,466 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Diagnostic only. Deploys the atak KubeVirt package the way this repo does:
+# Zarf init (internal registry and mutating agent) and, in one case, the
+# k3d-core-slim-dev checkpoint (Pepr and the UDS operator). Runs on this branch.
+
+name: KubeVirt 1.9.1 Zarf RCA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/kubevirt-191-containerdisk-repro-3d28
+    paths:
+      - .github/workflows/kubevirt-191-zarf-rca.yaml
+      - atak/zarf.yaml
+      - atak/deploy/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubevirt-191-zarf-rca-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rca:
+    name: ${{ matrix.id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: zarf-init-191
+            stack: zarf
+          - id: uds-core-191
+            stack: uds
+    env:
+      CASE_ID: ${{ matrix.id }}
+      STACK: ${{ matrix.stack }}
+      K3D_VERSION: v5.9.0
+      K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+      KUBECTL_SHA256: 65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
+      K3S_IMAGE: rancher/k3s:v1.37.1-k3s1
+      SLIM_REF: oci://ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev:1.15.2
+      ZARF_INIT_REF: oci://ghcr.io/zarf-dev/packages/init:v0.87.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Free runner disk
+        run: ./.github/scripts/trim-runner.sh finish
+
+      - name: Let the runner use KVM
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          printf 'case=%s\nstack=%s\n' "${CASE_ID}" "${STACK}" > evidence/case.env
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          if [[ ! -c /dev/kvm ]]; then
+            echo "host /dev/kvm is missing" >&2
+            exit 1
+          fi
+          ls -l /dev/kvm
+          df -h /
+          free -h
+
+      - name: Install k3d and kubectl
+        run: |
+          set -euo pipefail
+          check_sha256() {
+            local file="$1"
+            local want="$2"
+            local got
+            got="$(sha256sum "${file}" | awk '{print $1}')"
+            if [[ "${got}" != "${want}" ]]; then
+              echo "checksum mismatch for ${file}" >&2
+              echo "got  ${got}" >&2
+              echo "want ${want}" >&2
+              exit 1
+            fi
+          }
+          curl -fsSLo "${RUNNER_TEMP}/k3d" "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+          check_sha256 "${RUNNER_TEMP}/k3d" "${K3D_SHA256}"
+          sudo install -m 0755 "${RUNNER_TEMP}/k3d" /usr/local/bin/k3d
+          k3d version
+          curl -fsSLo "${RUNNER_TEMP}/kubectl" "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl"
+          check_sha256 "${RUNNER_TEMP}/kubectl" "${KUBECTL_SHA256}"
+          sudo install -m 0755 "${RUNNER_TEMP}/kubectl" /usr/local/bin/kubectl
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.40.0
+
+      - name: Record tool versions
+        run: |
+          set -euo pipefail
+          {
+            uds version
+            uds zarf version
+          } | tee evidence/tool-versions.txt
+
+      - name: Create the cluster
+        run: |
+          set -euo pipefail
+          if [[ "${STACK}" == "zarf" ]]; then
+            k3d cluster create kvdiag \
+              --image "${K3S_IMAGE}" \
+              --agents 0 \
+              --k3s-arg "--disable=traefik@server:0" \
+              --volume "/dev/kvm:/dev/kvm@server:0" \
+              --timeout 600s \
+              --wait
+            printf '%s\n' "k3d-kvdiag-server-0" > evidence/node-container.txt
+            uds zarf package deploy "${ZARF_INIT_REF}" --confirm
+          else
+            mkdir -p "${RUNNER_TEMP}/slim"
+            uds zarf package pull "${SLIM_REF}" --output-directory "${RUNNER_TEMP}/slim"
+            mapfile -t pkgs < <(find "${RUNNER_TEMP}/slim" -name 'zarf-package-k3d-core-slim-dev-*.tar.zst')
+            if (( ${#pkgs[@]} != 1 )); then
+              echo "expected one slim checkpoint, found ${#pkgs[@]}" >&2
+              printf '%s\n' "${pkgs[@]}" >&2
+              exit 1
+            fi
+            uds zarf package inspect definition "${pkgs[0]}" > evidence/slim-definition.yaml
+            extra=()
+            if grep -q 'K3D_EXTRA_ARGS' evidence/slim-definition.yaml; then
+              extra+=(--set 'K3D_EXTRA_ARGS=--volume /dev/kvm:/dev/kvm@server:0')
+              echo "passing K3D_EXTRA_ARGS for /dev/kvm"
+            else
+              echo "checkpoint definition has no K3D_EXTRA_ARGS variable"
+            fi
+            uds zarf package deploy "${pkgs[0]}" --confirm --features values=true "${extra[@]}"
+            printf '%s\n' "k3d-uds-server-0" > evidence/node-container.txt
+          fi
+          kubectl get nodes -o wide
+          node="$(cat evidence/node-container.txt)"
+          docker exec "${node}" sh -c 'ls -l /dev/kvm || true; k3s --version || true'
+
+      - name: Package KubeVirt and the cirros disk
+        run: |
+          set -euo pipefail
+          uds zarf package create atak --confirm --skip-sbom --components kubevirt --set ATAK_TAG=rca
+          uds zarf package inspect images zarf-package-atak-device-amd64-rca.tar.zst | tee evidence/kubevirt-images.txt
+          mkdir -p "${RUNNER_TEMP}/cirros-pkg"
+          cat > "${RUNNER_TEMP}/cirros-pkg/zarf.yaml" <<'EOF'
+          kind: ZarfPackageConfig
+          metadata:
+            name: cirros-disk
+            description: containerDisk image mirrored the way atak-civ-vm is
+            version: rca
+            architecture: amd64
+          components:
+            - name: cirros
+              required: true
+              images:
+                - quay.io/kubevirt/cirros-container-disk-demo
+          EOF
+          uds zarf package create "${RUNNER_TEMP}/cirros-pkg" --confirm --skip-sbom
+          uds zarf package inspect images zarf-package-cirros-disk-amd64-rca.tar.zst | tee evidence/cirros-images.txt
+
+      - name: Deploy the packages
+        run: |
+          set -euo pipefail
+          kubectl create namespace uds-policy-exemptions --dry-run=client -o yaml | kubectl apply -f -
+          if [[ "${STACK}" == "zarf" ]]; then
+            # The atak package applies an Exemption. Pepr is absent in this case,
+            # so install a permissive CRD and let the object sit unused.
+            kubectl apply -f - <<'EOF'
+          apiVersion: apiextensions.k8s.io/v1
+          kind: CustomResourceDefinition
+          metadata:
+            name: exemptions.uds.dev
+          spec:
+            group: uds.dev
+            scope: Namespaced
+            names:
+              plural: exemptions
+              singular: exemption
+              kind: Exemption
+            versions:
+              - name: v1alpha1
+                served: true
+                storage: true
+                schema:
+                  openAPIV3Schema:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+          EOF
+          fi
+          uds zarf package deploy zarf-package-atak-device-amd64-rca.tar.zst --components kubevirt --confirm
+          uds zarf package deploy zarf-package-cirros-disk-amd64-rca.tar.zst --confirm
+          kubectl -n kubevirt wait kv kubevirt --for=condition=Available --timeout=20m
+          kubectl get kv kubevirt -n kubevirt -o yaml > evidence/kubevirt-cr.yaml
+          kubectl get exemption -A -o yaml > evidence/exemptions.yaml || true
+          if [[ "${STACK}" == "uds" ]]; then
+            kubectl create namespace atak --dry-run=client -o yaml | kubectl apply -f -
+            kubectl apply -f - <<'EOF'
+          apiVersion: uds.dev/v1alpha1
+          kind: Package
+          metadata:
+            name: atak
+            namespace: atak
+          spec:
+            network:
+              allow:
+                - direction: Egress
+                  selector:
+                    app.kubernetes.io/name: atak-device
+                  remoteNamespace: istio-passthrough-gateway
+                  remoteSelector:
+                    app: passthrough-ingressgateway
+                  port: 8089
+                  description: Device to TAK streaming
+          EOF
+            sleep 5
+            kubectl get networkpolicy -n atak -o yaml > evidence/networkpolicies.yaml || true
+          fi
+
+      - name: Boot the containerDisk VMI
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/default evidence/fix
+          write_vmi() {
+            local dest="$1"
+            cat > "${dest}" <<'EOF'
+          apiVersion: kubevirt.io/v1
+          kind: VirtualMachineInstance
+          metadata:
+            name: atak-device
+            namespace: atak
+            labels:
+              app.kubernetes.io/name: atak-device
+          spec:
+            domain:
+              cpu:
+                cores: 1
+              resources:
+                requests:
+                  memory: 128Mi
+              devices:
+                autoattachPodInterface: false
+                logSerialConsole: true
+                disks:
+                  - name: containerdisk
+                    disk:
+                      bus: virtio
+            volumes:
+              - name: containerdisk
+                containerDisk:
+                  image: quay.io/kubevirt/cirros-container-disk-demo
+          EOF
+          }
+          snapshot() {
+            local dest="$1"
+            mkdir -p "${dest}"
+            kubectl get vmi atak-device -n atak -o yaml > "${dest}/vmi.yaml" 2>"${dest}/vmi.err" || true
+            kubectl get pods -n atak -l kubevirt.io=virt-launcher -o yaml > "${dest}/launcher.yaml" 2>"${dest}/launcher.err" || true
+            kubectl describe pods -n atak -l kubevirt.io=virt-launcher > "${dest}/launcher-describe.txt" 2>>"${dest}/launcher.err" || true
+            kubectl get events -n atak --sort-by=.lastTimestamp > "${dest}/events.txt" 2>"${dest}/events.err" || true
+          }
+          outcome() {
+            local dest="$1"
+            local status="$2"
+            local detail="$3"
+            printf 'result=%s\ndetail=%s\n' "${status}" "${detail}" > "${dest}/result.txt"
+            echo "${status}: ${detail}"
+          }
+          detail_of() {
+            python3 - <<'PY'
+          import json
+          import subprocess
+
+          def kubectl(*args):
+              try:
+                  return subprocess.check_output(["kubectl", *args], text=True, stderr=subprocess.DEVNULL)
+              except subprocess.CalledProcessError:
+                  return ""
+
+          parts = []
+          raw = kubectl("get", "vmi", "atak-device", "-n", "atak", "-o", "json")
+          if raw:
+              status = json.loads(raw).get("status") or {}
+              parts.append("phase=" + str(status.get("phase", "")))
+              for condition in status.get("conditions") or []:
+                  message = (condition.get("message") or "").replace("\n", " ")
+                  if condition.get("status") == "False" or condition.get("type") == "Ready":
+                      parts.append(
+                          f"{condition.get('type')}={condition.get('status')} reason={condition.get('reason') or ''} message={message}"
+                      )
+          raw = kubectl("get", "pods", "-n", "atak", "-l", "kubevirt.io=virt-launcher", "-o", "json")
+          if raw:
+              for pod in json.loads(raw).get("items") or []:
+                  pod_status = pod.get("status") or {}
+                  for key in ("initContainerStatuses", "containerStatuses"):
+                      for container in pod_status.get(key) or []:
+                          for which in ("state", "lastState"):
+                              state = container.get(which) or {}
+                              for kind in ("waiting", "terminated"):
+                                  info = state.get(kind) or {}
+                                  message = (info.get("message") or "").replace("\n", " ")
+                                  reason = info.get("reason") or ""
+                                  if reason or message:
+                                      parts.append(
+                                          f"{container.get('name')} {which}.{kind} reason={reason} message={message}"
+                                      )
+          print((" | ".join(parts) if parts else "VMI did not become Ready")[:2000])
+          PY
+          }
+          wait_ready() {
+            local dest="$1"
+            local deadline=$((SECONDS + 480))
+            local stable=0
+            local last=""
+            local phase=""
+            local ready=""
+            while (( SECONDS < deadline )); do
+              phase="$(kubectl get vmi atak-device -n atak -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+              ready="$(kubectl get vmi atak-device -n atak -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+              echo "t=${SECONDS} phase=${phase:-none} ready=${ready:-none}"
+              snapshot "${dest}"
+              if [[ "${phase}" == "Running" && "${ready}" == "True" ]]; then
+                outcome "${dest}" PASS "VMI Running and Ready"
+                return 0
+              fi
+              if [[ "${phase}" == "Failed" ]]; then
+                break
+              fi
+              local sig
+              sig="$(kubectl get pods -n atak -l kubevirt.io=virt-launcher -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.status.phase}{" "}{range .status.initContainerStatuses[*]}{.name}{"="}{.state.waiting.reason}{" "}{end}{range .status.containerStatuses[*]}{.name}{"="}{.state.waiting.reason}{" "}{end}{"\n"}{end}' 2>/dev/null || true)"
+              printf 'pod %s\n' "${sig:-none}"
+              if [[ "${sig}" == *CrashLoopBackOff* || "${sig}" == *CreateContainerError* || "${sig}" == *CreateContainerConfigError* || "${sig}" == *RunContainerError* || "${sig}" == *StartError* || "${sig}" == *ImagePullBackOff* ]]; then
+                if [[ "${sig}" == "${last}" ]]; then
+                  stable=$((stable + 1))
+                else
+                  stable=1
+                  last="${sig}"
+                fi
+                if (( stable >= 3 )); then
+                  echo "launcher error persisted: ${sig}"
+                  break
+                fi
+              else
+                stable=0
+                last=""
+              fi
+              sleep 10
+            done
+            snapshot "${dest}"
+            outcome "${dest}" FAIL "$(detail_of)"
+            return 1
+          }
+          kubectl create namespace atak --dry-run=client -o yaml | kubectl apply -f -
+          write_vmi evidence/vmi-spec.yaml
+          kubectl apply -f evidence/vmi-spec.yaml
+          if wait_ready evidence/default; then
+            echo "default config passed"
+            exit 0
+          fi
+          echo "default config failed; disabling ImageVolume and retrying"
+          kubectl patch kv kubevirt -n kubevirt --type merge -p '{"spec":{"configuration":{"developerConfiguration":{"disabledFeatureGates":["ImageVolume"]}}}}'
+          kubectl -n kubevirt rollout status daemonset/virt-handler --timeout=10m
+          kubectl -n kubevirt rollout status deploy/virt-controller --timeout=10m
+          kubectl delete vmi atak-device -n atak --wait=true --timeout=180s || true
+          kubectl apply -f evidence/vmi-spec.yaml
+          if wait_ready evidence/fix; then
+            echo "ImageVolume disabled passed"
+          else
+            echo "ImageVolume disabled failed"
+          fi
+          exit 1
+
+      - name: Collect evidence
+        if: always()
+        run: |
+          set -u
+          mkdir -p evidence
+          capture() {
+            local dest="$1"
+            shift
+            if "$@" >"${dest}" 2>"${dest}.err"; then
+              rm -f "${dest}.err"
+            fi
+            return 0
+          }
+          {
+            echo "=== case ==="
+            cat evidence/case.env 2>/dev/null || true
+            echo "=== tools ==="
+            cat evidence/tool-versions.txt 2>/dev/null || true
+            echo "=== nodes ==="
+            kubectl get nodes -o wide || true
+            echo "=== kvm ==="
+            if [[ -s evidence/node-container.txt ]]; then
+              node="$(cat evidence/node-container.txt)"
+              echo "container=${node}"
+              docker exec "${node}" sh -c 'ls -l /dev/kvm || true; k3s --version || true; containerd --version || true' || true
+            fi
+          } > evidence/versions.txt
+          capture evidence/pods.txt kubectl get pods -A -o wide
+          capture evidence/events.txt kubectl get events -A --sort-by=.lastTimestamp
+          capture evidence/kubevirt.yaml kubectl get kv kubevirt -n kubevirt -o yaml
+          capture evidence/launcher-default.yaml kubectl get pods -n atak -l kubevirt.io=virt-launcher -o yaml
+          for ns in zarf pepr-system kubevirt atak; do
+            capture "evidence/pods-${ns}.txt" kubectl get pods -n "${ns}" -o wide
+            while IFS= read -r pod; do
+              [[ -z "${pod}" ]] && continue
+              name="${pod#pod/}"
+              capture "evidence/${ns}-${name}.log" kubectl logs -n "${ns}" "${name}" --all-containers --tail=400
+            done < <(kubectl get pods -n "${ns}" -o name 2>/dev/null || true)
+          done
+          python3 - <<'PY' > evidence/summary.txt
+          from pathlib import Path
+
+          def read(path):
+              file = Path(path)
+              return file.read_text(errors="replace") if file.is_file() else ""
+
+          lines = [read("evidence/case.env").strip()]
+          for phase in ("default", "fix"):
+              result = read(f"evidence/{phase}/result.txt").strip()
+              lines.append(f"[{phase}]")
+              lines.append(result or "not run")
+              launcher = read(f"evidence/{phase}/launcher.yaml")
+              if "image:" in launcher or "reference:" in launcher:
+                  for raw in launcher.splitlines():
+                      text = raw.strip()
+                      if text.startswith(("image:", "reference:", "command:", "args:", "- name:")) or "zarf.dev/original" in text or "container-disk" in text:
+                          lines.append("  " + text)
+          events = read("evidence/default/events.txt") + "\n" + read("evidence/events.txt")
+          lines.append("events of interest:")
+          kept = 0
+          for raw in events.splitlines():
+              low = raw.lower()
+              if any(word in low for word in ("error", "fail", "deny", "container-disk", "image", "pull", "volume")):
+                  lines.append("  " + raw[:500])
+                  kept += 1
+                  if kept >= 40:
+                      break
+          if kept == 0:
+              lines.append("  none")
+          print("\n".join(lines))
+          PY
+          echo "===== summary ====="
+          cat evidence/summary.txt
+          {
+            echo "### ${CASE_ID}"
+            echo
+            echo '```'
+            cat evidence/summary.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kubevirt-zarf-rca-${{ matrix.id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14

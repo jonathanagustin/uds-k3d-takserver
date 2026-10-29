@@ -1,0 +1,629 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Diagnostic only. Compares containerDisk startup across KubeVirt v1.9.1
+# (default and with ImageVolume disabled) and v1.8.4, on k3s v1.37.1 and
+# kind. Push to this branch runs it. It does not call any other workflow.
+
+name: KubeVirt containerDisk repro
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/kubevirt-191-containerdisk-repro-3d28
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubevirt-containerdisk-repro-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repro:
+    name: ${{ matrix.id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: k3s-191-default
+            runtime: k3d
+            kv: v1.9.1
+            disable_image_volume: "false"
+          - id: k3s-191-no-imagevolume
+            runtime: k3d
+            kv: v1.9.1
+            disable_image_volume: "true"
+          - id: k3s-184-baseline
+            runtime: k3d
+            kv: v1.8.4
+            disable_image_volume: "false"
+          - id: kind-191-default
+            runtime: kind
+            kv: v1.9.1
+            disable_image_volume: "false"
+          - id: kind-191-no-imagevolume
+            runtime: kind
+            kv: v1.9.1
+            disable_image_volume: "true"
+          - id: kind-184-baseline
+            runtime: kind
+            kv: v1.8.4
+            disable_image_volume: "false"
+    env:
+      CASE_ID: ${{ matrix.id }}
+      RUNTIME: ${{ matrix.runtime }}
+      KV_VERSION: ${{ matrix.kv }}
+      DISABLE_IMAGE_VOLUME: ${{ matrix.disable_image_volume }}
+      # sha256 of kubevirt-cr.yaml. v1.8.4 and v1.9.1 publish the same file.
+      KUBEVIRT_CR_SHA256: 43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
+      KUBECTL_SHA256: 65691ff77eb6fa44c908b77a1082c3b9733b5cefabec0d1104890e21a8
+      K3D_VERSION: v5.9.0
+      K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+      KIND_VERSION: v0.33.0
+      KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+      KIND_NODE: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+      K3S_IMAGE: rancher/k3s:v1.37.1-k3s1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Let the runner use KVM
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          cat > evidence/case.env <<EOF
+          case=${CASE_ID}
+          runtime=${RUNTIME}
+          kubevirt=${KV_VERSION}
+          disable_image_volume=${DISABLE_IMAGE_VOLUME}
+          k3s_image=${K3S_IMAGE}
+          kind_node=${KIND_NODE}
+          EOF
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          if [[ ! -c /dev/kvm ]]; then
+            echo "host /dev/kvm is missing; GitHub-hosted runner did not expose KVM" >&2
+            ls -l /dev/kvm || true
+            exit 1
+          fi
+          ls -l /dev/kvm
+
+      - name: Install kubectl and the cluster tool
+        run: |
+          set -euo pipefail
+          curl -fsSLo "${RUNNER_TEMP}/kubectl" "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  ${RUNNER_TEMP}/kubectl" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/kubectl" /usr/local/bin/kubectl
+          kubectl version --client=true
+          case "${RUNTIME}" in
+            k3d)
+              curl -fsSLo "${RUNNER_TEMP}/k3d" "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+              echo "${K3D_SHA256}  ${RUNNER_TEMP}/k3d" | sha256sum -c -
+              sudo install -m 0755 "${RUNNER_TEMP}/k3d" /usr/local/bin/k3d
+              k3d version
+              ;;
+            kind)
+              curl -fsSLo "${RUNNER_TEMP}/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+              echo "${KIND_SHA256}  ${RUNNER_TEMP}/kind" | sha256sum -c -
+              sudo install -m 0755 "${RUNNER_TEMP}/kind" /usr/local/bin/kind
+              kind version
+              ;;
+            *)
+              echo "unknown runtime ${RUNTIME}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Create the cluster
+        run: |
+          set -euo pipefail
+          case "${RUNTIME}" in
+            k3d)
+              k3d cluster create kvdiag \
+                --image "${K3S_IMAGE}" \
+                --agents 0 \
+                --k3s-arg "--disable=traefik@server:0" \
+                --volume "/dev/kvm:/dev/kvm@server:0" \
+                --timeout 600s \
+                --wait
+              node="k3d-kvdiag-server-0"
+              ;;
+            kind)
+              cat > "${RUNNER_TEMP}/kind.yaml" <<EOF
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              image: "${KIND_NODE}"
+              extraMounts:
+                - hostPath: /dev/kvm
+                  containerPath: /dev/kvm
+          EOF
+              kind create cluster --name kvdiag --config "${RUNNER_TEMP}/kind.yaml" --wait 600s
+              node="kvdiag-control-plane"
+              ;;
+            *)
+              echo "unknown runtime ${RUNTIME}" >&2
+              exit 1
+              ;;
+          esac
+          printf '%s\n' "${node}" > evidence/node-container.txt
+          docker exec "${node}" sh -c 'test -c /dev/kvm && ls -l /dev/kvm'
+          kubectl get nodes -o wide
+
+      - name: Install KubeVirt
+        run: |
+          set -euo pipefail
+          case "${KV_VERSION}" in
+            v1.8.4)
+              op_sha="d1d8264eec5b802c122bec6c54d8c3b11e119ee2a5c75602aaa8b53ea3857eda"
+              ;;
+            v1.9.1)
+              op_sha="9ac45a436c49d32e6fc21d542bcb7600b970705297b9e6752f3ef9b0a1d292da"
+              ;;
+            *)
+              echo "unknown kubevirt version ${KV_VERSION}" >&2
+              exit 1
+              ;;
+          esac
+          base="https://github.com/kubevirt/kubevirt/releases/download/${KV_VERSION}"
+          curl -fsSLo "${RUNNER_TEMP}/kubevirt-operator.yaml" "${base}/kubevirt-operator.yaml"
+          curl -fsSLo "${RUNNER_TEMP}/kubevirt-cr.yaml" "${base}/kubevirt-cr.yaml"
+          echo "${op_sha}  ${RUNNER_TEMP}/kubevirt-operator.yaml" | sha256sum -c -
+          echo "${KUBEVIRT_CR_SHA256}  ${RUNNER_TEMP}/kubevirt-cr.yaml" | sha256sum -c -
+          if [[ "${DISABLE_IMAGE_VOLUME}" == "true" ]]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path(os.environ["RUNNER_TEMP"]) / "kubevirt-cr.yaml"
+          text = path.read_text()
+          old = "      featureGates: []\n"
+          new = old + "      disabledFeatureGates:\n        - ImageVolume\n"
+          if old not in text:
+              raise SystemExit("kubevirt-cr.yaml no longer has featureGates: []")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          fi
+          cp "${RUNNER_TEMP}/kubevirt-cr.yaml" evidence/kubevirt-cr.applied.yaml
+          kubectl apply -f "${RUNNER_TEMP}/kubevirt-operator.yaml"
+          applied=1
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if kubectl apply -f "${RUNNER_TEMP}/kubevirt-cr.yaml"; then
+              applied=0
+              break
+            fi
+            sleep 2
+          done
+          if (( applied != 0 )); then
+            echo "KubeVirt CR was not accepted" >&2
+            exit 1
+          fi
+          deadline=$((SECONDS + 1200))
+          phase=""
+          avail=""
+          while (( SECONDS < deadline )); do
+            phase="$(kubectl get kv kubevirt -n kubevirt -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+            avail="$(kubectl get kv kubevirt -n kubevirt -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)"
+            echo "kubevirt phase=${phase:-none} available=${avail:-none}"
+            kubectl get pods -n kubevirt --no-headers || true
+            if [[ "${phase}" == "Deployed" && "${avail}" == "True" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          if [[ "${phase}" != "Deployed" || "${avail}" != "True" ]]; then
+            echo "KubeVirt did not become Deployed and Available" >&2
+            exit 1
+          fi
+          got="$(kubectl get kv kubevirt -n kubevirt -o jsonpath='{.spec.configuration.developerConfiguration.disabledFeatureGates[*]}')"
+          echo "disabledFeatureGates=${got}" | tee evidence/kubevirt-gates.txt
+          if [[ "${DISABLE_IMAGE_VOLUME}" == "true" && " ${got} " != *" ImageVolume "* ]]; then
+            echo "ImageVolume was not disabled on the KubeVirt CR" >&2
+            exit 1
+          fi
+          kubectl -n kubevirt rollout status daemonset/virt-handler --timeout=5m
+          kubectl get node -o json | python3 -c 'import json,sys; node=json.load(sys.stdin)["items"][0]; alloc=node["status"].get("allocatable",{});
+          print("allocatable devices:")
+          [print(f"  {key}={value}") for key, value in sorted(alloc.items()) if "kvm" in key or key in ("cpu", "memory")]'
+
+      - name: Boot the containerDisk VMI
+        run: |
+          set -euo pipefail
+          record() {
+            printf 'result=%s\ndetail=%s\n' "$1" "$2" > evidence/result.txt
+            echo "$1: $2"
+          }
+          python3 - <<'PY'
+          from pathlib import Path
+          Path("evidence/vmi-spec.yaml").write_text("""\
+          apiVersion: kubevirt.io/v1
+          kind: VirtualMachineInstance
+          metadata:
+            name: cirros
+            namespace: default
+          spec:
+            domain:
+              cpu:
+                cores: 1
+              resources:
+                requests:
+                  memory: 128Mi
+              devices:
+                autoattachPodInterface: false
+                logSerialConsole: true
+                disks:
+                  - name: containerdisk
+                    disk:
+                      bus: virtio
+            volumes:
+              - name: containerdisk
+                containerDisk:
+                  image: quay.io/kubevirt/cirros-container-disk-demo
+          """)
+          PY
+          if ! kubectl apply -f evidence/vmi-spec.yaml; then
+            record FAIL "kubectl apply of the VirtualMachineInstance failed"
+            exit 1
+          fi
+          deadline=$((SECONDS + 600))
+          stable=0
+          last=""
+          phase=""
+          ready=""
+          while (( SECONDS < deadline )); do
+            phase="$(kubectl get vmi cirros -n default -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+            ready="$(kubectl get vmi cirros -n default -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+            echo "t=${SECONDS} phase=${phase:-none} ready=${ready:-none}"
+            if [[ "${phase}" == "Running" && "${ready}" == "True" ]]; then
+              record PASS "VMI Running and Ready"
+              exit 0
+            fi
+            if [[ "${phase}" == "Failed" ]]; then
+              break
+            fi
+            sig="$(kubectl get pods -n default -l kubevirt.io=virt-launcher -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.status.phase}{" "}{range .status.initContainerStatuses[*]}{.name}{"="}{.state.waiting.reason}{" "}{end}{range .status.containerStatuses[*]}{.name}{"="}{.state.waiting.reason}{" "}{end}{"\n"}{end}' 2>/dev/null || true)"
+            printf 'pod %s\n' "${sig:-none}"
+            if [[ "${sig}" == *CrashLoopBackOff* || "${sig}" == *CreateContainerError* || "${sig}" == *CreateContainerConfigError* || "${sig}" == *RunContainerError* || "${sig}" == *StartError* ]]; then
+              if [[ "${sig}" == "${last}" ]]; then
+                stable=$((stable + 1))
+              else
+                stable=1
+                last="${sig}"
+              fi
+              if (( stable >= 3 )); then
+                echo "launcher error persisted: ${sig}"
+                break
+              fi
+            else
+              stable=0
+              last=""
+            fi
+            sleep 10
+          done
+          detail="$(python3 - <<'PY'
+          import json
+          import subprocess
+
+          def kubectl(*args):
+              try:
+                  return subprocess.check_output(["kubectl", *args], text=True, stderr=subprocess.DEVNULL)
+              except subprocess.CalledProcessError:
+                  return ""
+
+          parts = []
+          raw = kubectl("get", "vmi", "cirros", "-n", "default", "-o", "json")
+          if raw:
+              status = json.loads(raw).get("status") or {}
+              parts.append("phase=" + str(status.get("phase", "")))
+              for condition in status.get("conditions") or []:
+                  message = (condition.get("message") or "").replace("\n", " ")
+                  reason = condition.get("reason") or ""
+                  if condition.get("status") == "False" or condition.get("type") == "Ready":
+                      parts.append(
+                          f"{condition.get('type')}={condition.get('status')} reason={reason} message={message}"
+                      )
+          raw = kubectl("get", "pods", "-n", "default", "-l", "kubevirt.io=virt-launcher", "-o", "json")
+          if raw:
+              for pod in json.loads(raw).get("items") or []:
+                  pod_status = pod.get("status") or {}
+                  for key in ("initContainerStatuses", "containerStatuses"):
+                      for container in pod_status.get(key) or []:
+                          for which in ("state", "lastState"):
+                              state = container.get(which) or {}
+                              for kind in ("waiting", "terminated"):
+                                  info = state.get(kind) or {}
+                                  message = (info.get("message") or "").replace("\n", " ")
+                                  reason = info.get("reason") or ""
+                                  if reason or message:
+                                      parts.append(
+                                          f"{container.get('name')} {which}.{kind} reason={reason} message={message}"
+                                      )
+          print((" | ".join(parts) if parts else "VMI did not become Ready")[:2000])
+          PY
+          )"
+          record FAIL "${detail:-VMI did not become Ready}"
+          exit 1
+
+      - name: Collect evidence
+        if: always()
+        run: |
+          set -u
+          mkdir -p evidence
+          capture() {
+            local dest="$1"
+            shift
+            if "$@" >"${dest}" 2>"${dest}.err"; then
+              rm -f "${dest}.err"
+              return 0
+            fi
+            if [[ "${dest}" == *.previous.log ]] && grep -q "previous terminated container" "${dest}.err"; then
+              rm -f "${dest}" "${dest}.err"
+            fi
+            return 0
+          }
+          {
+            echo "=== case ==="
+            cat evidence/case.env 2>/dev/null || true
+            echo "=== host ==="
+            uname -a || true
+            nproc || true
+            grep -c -E 'vmx|svm' /proc/cpuinfo || true
+            ls -l /dev/kvm || true
+            df -h / || true
+            echo "=== client ==="
+            kubectl version --client=true -o yaml || true
+            echo "=== server ==="
+            kubectl version -o yaml || true
+            kubectl get nodes -o wide || true
+            kubectl get nodes -o json > evidence/nodes.json 2>evidence/nodes.json.err || true
+            if [[ -s evidence/nodes.json ]]; then
+              rm -f evidence/nodes.json.err
+              python3 - evidence/nodes.json <<'PY' || true
+          import json
+          import sys
+          data = json.load(open(sys.argv[1]))
+          for node in data.get("items") or []:
+              info = node["status"]["nodeInfo"]
+              print(node["metadata"]["name"])
+              for key in ("kubeletVersion", "kubeProxyVersion", "containerRuntimeVersion", "osImage", "kernelVersion", "operatingSystem", "architecture"):
+                  print(f"  {key}: {info.get(key)}")
+              alloc = node["status"].get("allocatable") or {}
+              for key, value in sorted(alloc.items()):
+                  if "kvm" in key or key in ("cpu", "memory"):
+                      print(f"  allocatable {key}: {value}")
+          PY
+            fi
+            echo "=== node container ==="
+            if [[ -s evidence/node-container.txt ]]; then
+              node="$(cat evidence/node-container.txt)"
+              echo "container=${node}"
+              docker exec "${node}" sh -c 'echo -- cmdline --; tr "\0" "\n" < /proc/1/cmdline; echo; echo -- kvm --; ls -l /dev/kvm; echo -- versions --; (k3s --version || true); (containerd --version || true); (crictl version || true); echo -- imagevolume config --; grep -n -i imagevolume /var/lib/kubelet/config.yaml /etc/kubernetes/manifests/kube-apiserver.yaml 2>/dev/null || true; echo -- os --; . /etc/os-release; printf "%s\n" "${PRETTY_NAME}"'
+            else
+              echo "node container was not recorded"
+            fi
+            echo "=== feature metric ==="
+            kubectl get --raw /metrics 2>/dev/null | grep kubernetes_feature_enabled | grep -i image || true
+          } > evidence/versions.txt
+          capture evidence/kubevirt.yaml kubectl get kv kubevirt -n kubevirt -o yaml
+          capture evidence/kubevirt-config.json kubectl get cm kubevirt-config -n kubevirt -o json
+          capture evidence/vmi.yaml kubectl get vmi cirros -n default -o yaml
+          capture evidence/vmi.json kubectl get vmi cirros -n default -o json
+          capture evidence/vmi.describe.txt kubectl describe vmi cirros -n default
+          capture evidence/events.txt kubectl get events -A --sort-by=.lastTimestamp
+          capture evidence/events.json kubectl get events -A -o json
+          capture evidence/pods.txt kubectl get pods -A -o wide
+          capture evidence/launcher-pods.json kubectl get pods -n default -l kubevirt.io=virt-launcher -o json
+          capture evidence/virt-handler.log kubectl logs -n kubevirt -l kubevirt.io=virt-handler --all-containers --prefix --tail=1500
+          capture evidence/virt-controller.log kubectl logs -n kubevirt -l kubevirt.io=virt-controller --all-containers --prefix --tail=1500
+          capture evidence/virt-operator.log kubectl logs -n kubevirt -l kubevirt.io=virt-operator --all-containers --prefix --tail=400
+          if [[ -s evidence/launcher-pods.json ]]; then
+            python3 - evidence/launcher-pods.json <<'PY' > evidence/launcher-pod-names.txt || true
+          import json
+          import sys
+          data = json.load(open(sys.argv[1]))
+          for pod in data.get("items") or []:
+              print(pod["metadata"]["name"])
+          PY
+            while IFS= read -r pod; do
+              [[ -z "${pod}" ]] && continue
+              dir="evidence/launcher/${pod}"
+              mkdir -p "${dir}"
+              capture "${dir}/pod.yaml" kubectl get pod "${pod}" -n default -o yaml
+              capture "${dir}/describe.txt" kubectl describe pod "${pod}" -n default
+              while IFS= read -r cname; do
+                [[ -z "${cname}" ]] && continue
+                capture "${dir}/init-${cname}.log" kubectl logs -n default "${pod}" -c "${cname}" --tail=1000
+                capture "${dir}/init-${cname}.previous.log" kubectl logs -n default "${pod}" -c "${cname}" --previous --tail=400
+              done < <(kubectl get pod "${pod}" -n default -o jsonpath='{range .spec.initContainers[*]}{.name}{"\n"}{end}' || true)
+              while IFS= read -r cname; do
+                [[ -z "${cname}" ]] && continue
+                capture "${dir}/${cname}.log" kubectl logs -n default "${pod}" -c "${cname}" --tail=1000
+                capture "${dir}/${cname}.previous.log" kubectl logs -n default "${pod}" -c "${cname}" --previous --tail=400
+              done < <(kubectl get pod "${pod}" -n default -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' || true)
+            done < evidence/launcher-pod-names.txt
+          fi
+          if ! python3 - <<'PY' > evidence/summary.txt
+          import json
+          from pathlib import Path
+
+          def load_json(path):
+              file = Path(path)
+              if not file.is_file() or file.stat().st_size == 0:
+                  return None
+              try:
+                  return json.loads(file.read_text())
+              except json.JSONDecodeError:
+                  return None
+
+          lines = []
+          case = Path("evidence/case.env")
+          if case.is_file():
+              lines.append(case.read_text().strip())
+          result = Path("evidence/result.txt")
+          if result.is_file():
+              lines.append(result.read_text().strip())
+          else:
+              lines.append("result=SETUP_FAILED")
+              lines.append("detail=the VMI boot step did not record a result")
+          versions = Path("evidence/versions.txt")
+          if versions.is_file():
+              kept = []
+              for line in versions.read_text(errors="replace").splitlines():
+                  if line.startswith("  kubeletVersion:") or line.startswith("  containerRuntimeVersion:") or line.startswith("container=") or line.startswith("k3s version") or line.startswith("containerd "):
+                      kept.append(line.strip())
+              if kept:
+                  lines.append("versions:")
+                  lines.extend(f"  {line}" for line in kept)
+          config = load_json("evidence/kubevirt-config.json")
+          if config:
+              data = (config.get("data") or {})
+              lines.append("kubevirt-config keys: " + ", ".join(sorted(data)))
+              for key, value in sorted(data.items()):
+                  if not isinstance(value, str):
+                      continue
+                  if "ImageVolume" in value or "feature" in key.lower():
+                      text = value.replace("\n", " ")
+                      lines.append(f"config {key}: {text[:1500]}")
+          kubevirt = Path("evidence/kubevirt.yaml")
+          if kubevirt.is_file():
+              text = kubevirt.read_text(errors="replace")
+              for needle in ("disabledFeatureGates:", "featureGates:", "useEmulation:"):
+                  if needle in text:
+                      lines.append("kubevirt yaml contains " + needle)
+          vmi = load_json("evidence/vmi.json")
+          if vmi:
+              status = vmi.get("status") or {}
+              lines.append("vmi phase: " + str(status.get("phase")))
+              for condition in status.get("conditions") or []:
+                  message = (condition.get("message") or "").replace("\n", " ")
+                  lines.append(
+                      f"vmi condition {condition.get('type')}={condition.get('status')} reason={condition.get('reason') or ''} message={message}"
+                  )
+          else:
+              lines.append("vmi: not found")
+          pods = load_json("evidence/launcher-pods.json")
+          image_volumes = []
+          init_rows = []
+          if not pods or not (pods.get("items") or []):
+              lines.append("launcher pods: none")
+          for pod in (pods or {}).get("items") or []:
+              name = pod["metadata"]["name"]
+              lines.append(f"launcher {name} phase={(pod.get('status') or {}).get('phase')}")
+              for volume in (pod.get("spec") or {}).get("volumes") or []:
+                  if "image" in volume:
+                      ref = (volume.get("image") or {}).get("reference")
+                      image_volumes.append(f"{volume.get('name')}={ref}")
+                      lines.append(f"  volume {volume.get('name')} type=image reference={ref}")
+                  elif "emptyDir" in volume:
+                      lines.append(f"  volume {volume.get('name')} type=emptyDir")
+                  elif "hostPath" in volume:
+                      lines.append(f"  volume {volume.get('name')} type=hostPath path={(volume.get('hostPath') or {}).get('path')}")
+                  else:
+                      kinds = [key for key in volume.keys() if key != "name"]
+                      lines.append(f"  volume {volume.get('name')} type={','.join(kinds)}")
+              for container in (pod.get("spec") or {}).get("initContainers") or []:
+                  command = " ".join(container.get("command") or [])
+                  args = " ".join(container.get("args") or [])
+                  mounts = ",".join(
+                      f"{mount.get('name')}:{mount.get('mountPath')}"
+                      for mount in container.get("volumeMounts") or []
+                  )
+                  row = f"{container.get('name')} image={container.get('image')} command={command} args={args} mounts={mounts}"
+                  init_rows.append(row)
+                  lines.append("  init " + row)
+              for container in (pod.get("spec") or {}).get("containers") or []:
+                  lines.append(f"  container {container.get('name')} image={container.get('image')}")
+              pod_status = pod.get("status") or {}
+              for key in ("initContainerStatuses", "containerStatuses"):
+                  for container in pod_status.get(key) or []:
+                      for which in ("state", "lastState"):
+                          state = container.get(which) or {}
+                          for kind in ("waiting", "terminated"):
+                              info = state.get(kind) or {}
+                              message = (info.get("message") or "").replace("\n", " ")
+                              reason = info.get("reason") or ""
+                              if reason or message:
+                                  lines.append(
+                                      f"  status {container.get('name')} {which}.{kind} reason={reason} message={message}"
+                                  )
+          lines.append("image_volumes: " + (", ".join(image_volumes) if image_volumes else "none"))
+          lines.append("init_containers: " + (" || ".join(init_rows) if init_rows else "none"))
+          events = load_json("evidence/events.json")
+          warnings = []
+          if events:
+              for event in events.get("items") or []:
+                  message = (event.get("message") or "").replace("\n", " ")
+                  if event.get("type") == "Warning" or "container-disk" in message or "ImageVolume" in message:
+                      involved = event.get("involvedObject") or {}
+                      warnings.append(
+                          f"{event.get('type')} {involved.get('kind')}/{involved.get('name')} {event.get('reason')}: {message}"
+                      )
+          lines.append("warning events:")
+          lines.extend(f"  {row}" for row in warnings[-40:])
+          if not warnings:
+              lines.append("  none")
+          print("\n".join(lines))
+          PY
+          then
+            echo "summary script failed" > evidence/summary.txt
+          fi
+          echo "===== summary ====="
+          cat evidence/summary.txt
+          {
+            echo "### ${CASE_ID}"
+            echo
+            echo '```'
+            cat evidence/summary.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kubevirt-containerdisk-${{ matrix.id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  report:
+    name: combined summary
+    needs: repro
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download evidence
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: kubevirt-containerdisk-*
+          path: evidence
+
+      - name: Print summaries
+        if: always()
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(evidence/*/summary.txt)
+          if (( ${#files[@]} == 0 )); then
+            echo "No summary.txt artifacts were downloaded."
+            exit 0
+          fi
+          for summary in "${files[@]}"; do
+            echo "======== ${summary} ========"
+            cat "${summary}"
+            {
+              echo "### ${summary}"
+              echo
+              echo '```'
+              cat "${summary}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          done

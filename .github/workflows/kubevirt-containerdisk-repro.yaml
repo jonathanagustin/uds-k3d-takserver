@@ -60,7 +60,7 @@ jobs:
       DISABLE_IMAGE_VOLUME: ${{ matrix.disable_image_volume }}
       # sha256 of kubevirt-cr.yaml. v1.8.4 and v1.9.1 publish the same file.
       KUBEVIRT_CR_SHA256: 43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af
-      KUBECTL_SHA256: 65691ff77eb6fa44c908b77a1082c3b9733b5cefabec0d1104890e21a8
+      KUBECTL_SHA256: 65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
       K3D_VERSION: v5.9.0
       K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
       KIND_VERSION: v0.33.0
@@ -96,20 +96,32 @@ jobs:
       - name: Install kubectl and the cluster tool
         run: |
           set -euo pipefail
+          check_sha256() {
+            local file="$1"
+            local want="$2"
+            local got
+            got="$(sha256sum "${file}" | awk '{print $1}')"
+            if [[ "${got}" != "${want}" ]]; then
+              echo "checksum mismatch for ${file}" >&2
+              echo "got  ${got}" >&2
+              echo "want ${want}" >&2
+              exit 1
+            fi
+          }
           curl -fsSLo "${RUNNER_TEMP}/kubectl" "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl"
-          echo "${KUBECTL_SHA256}  ${RUNNER_TEMP}/kubectl" | sha256sum -c -
+          check_sha256 "${RUNNER_TEMP}/kubectl" "${KUBECTL_SHA256}"
           sudo install -m 0755 "${RUNNER_TEMP}/kubectl" /usr/local/bin/kubectl
           kubectl version --client=true
           case "${RUNTIME}" in
             k3d)
               curl -fsSLo "${RUNNER_TEMP}/k3d" "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
-              echo "${K3D_SHA256}  ${RUNNER_TEMP}/k3d" | sha256sum -c -
+              check_sha256 "${RUNNER_TEMP}/k3d" "${K3D_SHA256}"
               sudo install -m 0755 "${RUNNER_TEMP}/k3d" /usr/local/bin/k3d
               k3d version
               ;;
             kind)
               curl -fsSLo "${RUNNER_TEMP}/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
-              echo "${KIND_SHA256}  ${RUNNER_TEMP}/kind" | sha256sum -c -
+              check_sha256 "${RUNNER_TEMP}/kind" "${KIND_SHA256}"
               sudo install -m 0755 "${RUNNER_TEMP}/kind" /usr/local/bin/kind
               kind version
               ;;

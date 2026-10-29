@@ -73,6 +73,10 @@ steps {
     check = "bash .github/scripts/check-icon.sh"
     glob = List("zarf.yaml", "assets/icon.svg", ".github/scripts/check-icon.sh")
   }
+  ["monitoring"] {
+    check = "bash .github/scripts/check-monitoring.sh"
+    glob = List("charts/takserver/templates/monitoring.yaml", "charts/takserver/dashboards/**", ".github/scripts/check-monitoring.sh")
+  }
   ["exemptions"] {
     check = "bash .github/scripts/check-exemptions.sh"
     glob = List("charts/takserver/**/*.yaml", "charts/takserver/**/*.tpl", "atak/deploy/*.yaml", "docs/justifications.md", ".github/scripts/check-exemptions.sh")

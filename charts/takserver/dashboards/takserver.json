@@ -49,13 +49,13 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Postgres up",
+      "title": "Postgres ready",
       "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "refId": "A",
-          "expr": "up{namespace=\"takserver\", pod=~\"takserver-postgresql.*\"}"
+          "expr": "kube_pod_status_ready{namespace=\"takserver\", pod=~\"takserver-postgresql.*\", condition=\"true\"}"
         }
       ]
     },
@@ -69,6 +69,32 @@
         {
           "refId": "A",
           "expr": "kube_pod_container_status_restarts_total{namespace=\"takserver\"}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Messaging replicas",
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_deployment_status_replicas_available{namespace=\"takserver\", deployment=\"takserver-messaging\"}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Container memory",
+      "gridPos": {"h": 8, "w": 18, "x": 6, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "container_memory_working_set_bytes{namespace=\"takserver\", container!=\"\", container!=\"POD\"}"
         }
       ]
     }

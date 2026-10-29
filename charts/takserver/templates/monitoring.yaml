@@ -4,8 +4,9 @@
 
 # Grafana, Prometheus, and Loki ruler objects. Slim has no
 # monitoring.coreos.com API, so this file renders nothing there.
-# TAK does not export Prometheus text yet, so the dashboard panels stay
-# empty until a monitor exists. No ServiceMonitor is created here.
+# TAK does not export Prometheus text. JVM and HTTP panels stay empty
+# until it does. Postgres, restarts, replicas, and container memory come
+# from kube-state-metrics and cAdvisor. No ServiceMonitor is created here.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -27,19 +28,26 @@ spec:
     - name: takserver.rules
       rules:
         - alert: TAKAPITargetDown
-          expr: up{namespace="takserver", pod=~"takserver-api-.*"} == 0
+          expr: kube_deployment_spec_replicas{namespace="takserver", deployment="takserver-api"} == 0
           for: 2m
           labels:
             severity: critical
           annotations:
-            summary: TAK API target is down
+            summary: TAK API has been scaled to 0
         - alert: TAKMessagingTargetDown
-          expr: up{namespace="takserver", pod=~"takserver-messaging-.*"} == 0
+          expr: kube_deployment_spec_replicas{namespace="takserver", deployment="takserver-messaging"} == 0
           for: 2m
           labels:
             severity: critical
           annotations:
-            summary: TAK messaging target is down
+            summary: TAK messaging has been scaled to 0
+        - alert: TAKDeploymentUnavailable
+          expr: kube_deployment_spec_replicas{namespace="takserver", deployment=~"takserver-api|takserver-messaging"} == 1 and kube_deployment_status_replicas_available{namespace="takserver", deployment=~"takserver-api|takserver-messaging"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: TAK API or messaging has spec replicas 1 and no available pods
         - alert: TAKJVMHeapHigh
           expr: |
             (

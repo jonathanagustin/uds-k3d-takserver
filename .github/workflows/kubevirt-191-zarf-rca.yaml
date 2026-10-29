@@ -164,6 +164,15 @@ jobs:
           uds zarf package create "${pkg}" --confirm --skip-sbom --set ATAK_TAG=rca
           uds zarf package inspect images zarf-package-atak-device-amd64-rca.tar.zst | tee evidence/kubevirt-images.txt
           mkdir -p "${RUNNER_TEMP}/cirros-pkg"
+          cat > "${RUNNER_TEMP}/cirros-pkg/namespace-marker.yaml" <<'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: atak-namespace-marker
+            namespace: atak
+          data:
+            purpose: "zarf creates this namespace and seeds private-registry"
+          EOF
           cat > "${RUNNER_TEMP}/cirros-pkg/zarf.yaml" <<'EOF'
           kind: ZarfPackageConfig
           metadata:
@@ -176,6 +185,11 @@ jobs:
               required: true
               images:
                 - quay.io/kubevirt/cirros-container-disk-demo
+              manifests:
+                - name: atak-namespace
+                  namespace: atak
+                  files:
+                    - namespace-marker.yaml
           EOF
           uds zarf package create "${RUNNER_TEMP}/cirros-pkg" --confirm --skip-sbom
           uds zarf package inspect images zarf-package-cirros-disk-amd64-rca.tar.zst | tee evidence/cirros-images.txt
@@ -372,6 +386,33 @@ jobs:
             return 1
           }
           kubectl create namespace atak --dry-run=client -o yaml | kubectl apply -f -
+          # A namespace created with kubectl does not receive Zarf's registry
+          # pull secret. The atak-device component gets it because its manifest
+          # declares namespace: atak. Seed the same secret before the VMI.
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          raw = subprocess.check_output(
+              ["kubectl", "get", "secret", "private-registry", "-n", "kubevirt", "-o", "json"],
+              text=True,
+          )
+          secret = json.loads(raw)
+          meta = secret["metadata"]
+          clean = {
+              "apiVersion": "v1",
+              "kind": "Secret",
+              "metadata": {
+                  "name": meta["name"],
+                  "namespace": "atak",
+                  "labels": meta.get("labels") or {},
+              },
+              "type": secret.get("type", "kubernetes.io/dockerconfigjson"),
+              "data": secret.get("data") or {},
+          }
+          Path("evidence/atak-private-registry.json").write_text(json.dumps(clean))
+          PY
+          kubectl apply -f evidence/atak-private-registry.json
           write_vmi evidence/vmi-spec.yaml
           kubectl apply -f evidence/vmi-spec.yaml
           if wait_ready evidence/default; then

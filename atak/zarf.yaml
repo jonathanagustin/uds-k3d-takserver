@@ -55,6 +55,12 @@ components:
       - quay.io/kubevirt/virt-launcher:v1.9.1
       - quay.io/kubevirt/virt-exportproxy:v1.9.1
       - quay.io/kubevirt/virt-exportserver:v1.9.1
+      # v1.9.1 also deploys the virt-template workloads. Their images are not
+      # the v1.9.1 tag. Zarf rewrites every pod image to the internal registry,
+      # so these have to be in the package or those pods stay ImagePullBackOff
+      # and the KubeVirt CR never becomes Available.
+      - quay.io/kubevirt/virt-template-apiserver:v0.2.3
+      - quay.io/kubevirt/virt-template-controller:v0.2.3
     actions:
       onDeploy:
         after:

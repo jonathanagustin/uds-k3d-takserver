@@ -19,7 +19,7 @@ packages:
   # .github/scripts/deploy-slim-core.sh.
   - name: core-base
     repository: ghcr.io/defenseunicorns/packages/uds/core-base
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     optionalComponents:
       - istio-passthrough-gateway
     keylessVerification:

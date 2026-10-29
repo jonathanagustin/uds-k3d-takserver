@@ -12,6 +12,13 @@
 # nginx and node run as the image's nginx user (uid 101), and every file
 # written at runtime goes under /tmp, so the pod can run with a read-only
 # root filesystem.
+# cloudtak-upstream is not a registry image. docker-bake.hcl builds
+# upstream/cloudtak's Dockerfile unchanged and passes it in as a named
+# build context. Scorecard's Pinned-Dependencies check reads this file
+# alone and reports the name as an unpinned container image. A digest
+# cannot be added: the name selects that context, and pinning a registry
+# tag would build a different image than the submodule. hadolint DL3006
+# is the same finding.
 # hadolint ignore=DL3006
 FROM cloudtak-upstream AS built
 # The API's package.json lists tsx and drizzle-kit as dependencies, and

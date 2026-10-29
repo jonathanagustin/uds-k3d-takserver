@@ -32,6 +32,12 @@ RUN npm ci --no-audit --no-fund && npm run dist \
 #   docker buildx build -f atak/viewer/Dockerfile --target dist-lock \
 #     --output type=local,dest=atak/viewer .
 #   mv atak/viewer/package-lock.json atak/viewer/dist-package-lock.json
+# Scorecard flags this `npm install` as an unpinned npm command. The stage
+# does not install packages into an image that ships. It writes
+# dist/package-lock.json from the package.json the source stage just
+# edited, so a maintainer can refresh atak/viewer/dist-package-lock.json
+# (`docker build --target dist-lock`). The runtime stage below installs
+# with `npm ci`, which checks that lockfile. `npm ci` cannot create it.
 FROM source AS lock
 RUN cd dist && npm install --omit=dev --package-lock-only --no-audit --no-fund
 

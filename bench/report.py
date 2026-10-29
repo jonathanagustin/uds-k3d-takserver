@@ -89,6 +89,7 @@ def markdown(records):
         by_arch.setdefault(record.get("arch"), []).append(point(record))
     if not by_arch:
         lines.append("No records.")
+        lines.extend(postgres_lines(records))
         return "\n".join(lines) + "\n"
     lines.append("The plot uses one scale per view for every architecture. Dominance below is per architecture.")
     lines.append("")
@@ -109,7 +110,44 @@ def markdown(records):
             else:
                 lines.append("Dominated: none")
             lines.append("")
+    lines.extend(postgres_lines(records))
     return "\n".join(lines)
+
+
+def postgres_lines(records):
+    """Hit ratio, temp files, checkpoints, and RSS beside TAK throughput."""
+    lines = ["## Postgres", ""]
+    found = False
+    for record in records:
+        stats = record.get("postgres")
+        if not stats:
+            continue
+        found = True
+        load = record.get("load") or {}
+        duration = load.get("duration_s")
+        received = load.get("messages_received")
+        throughput = None
+        if duration and received is not None:
+            throughput = round(received / duration, 3)
+        settings = stats.get("settings") or {}
+        lines.append(
+            "- {arch} {config}: hit_ratio {hit}, temp_bytes {temp}, "
+            "checkpoints_req {checks}, rss {rss}, throughput {rate}, "
+            "shared_buffers {buffers}".format(
+                arch=record.get("arch"),
+                config=record.get("config"),
+                hit=stats.get("hit_ratio"),
+                temp=stats.get("temp_bytes"),
+                checks=stats.get("checkpoints_req"),
+                rss=stats.get("steady_rss_bytes"),
+                rate=throughput,
+                buffers=settings.get("shared_buffers"),
+            )
+        )
+    if not found:
+        lines.append("No Postgres stats.")
+    lines.append("")
+    return lines
 
 
 def _scale(values, low, high):

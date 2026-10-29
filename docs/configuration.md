@@ -129,6 +129,6 @@ Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver`
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
 
-The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
+The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami 12.1.6 does not mount that object. The package leaves the server on the chart defaults. See [Data](data.md).
 
 The database password in the overlay is the upstream example value `postgres`. It is not a production secret. The NATS toolbox is disabled in `values/common-values.yaml`.

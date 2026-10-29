@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Conan 1.x for the takkernel build (atak/apk/Dockerfile), pinned with hashes
-# for the builder image's Python 3.10. Regenerate with:
-#   echo "conan==1.65.0" | uv pip compile - --python-version 3.10 \
+# for the builder image's Python 3.10. Conan 1.66 caps bottle<0.13,
+# patch-ng<1.18, six<=1.16.0 and distro<=1.8.0, and pins node-semver==0.6.1.
+# Regenerate this file when the Conan pin moves. Do not bump those packages
+# on their own:
+#   echo "conan==1.66.0" | uv pip compile - --python-version 3.10 \
 #     --python-platform x86_64-unknown-linux-gnu --generate-hashes \
 #     --no-header --no-annotate -o atak/apk/requirements.txt
 bottle==0.12.25 \
@@ -188,8 +191,8 @@ charset-normalizer==3.5.2 \
 colorama==0.4.6 \
     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
-conan==1.65.0 \
-    --hash=sha256:2fc5c8d681d94ccb9c0f273c29e4a8c78a8ea1b25295dc6ca17f9a715935c2df
+conan==1.66.0 \
+    --hash=sha256:04d2ad0f6ec6f055d95fa0a157b55fdea9328ae67f51b11e7d26e9d9d2f76ab9
 distro==1.8.0 \
     --hash=sha256:02e111d1dc6a50abb8eed6bf31c3e48ed8b0830d1ea2a1b78c61765c2513fdd8 \
     --hash=sha256:99522ca3e365cac527b44bde033f64c6945d90eb9f769703caaec52b09bbd3ff

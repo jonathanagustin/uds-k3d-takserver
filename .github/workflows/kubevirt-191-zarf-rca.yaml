@@ -145,7 +145,23 @@ jobs:
       - name: Package KubeVirt and the cirros disk
         run: |
           set -euo pipefail
-          uds zarf package create atak --confirm --skip-sbom --components kubevirt --set ATAK_TAG=rca
+          # package create has no --components flag in this Zarf. Copy the atak
+          # package and drop the device component so create does not pull the
+          # Android images. Deploy still selects the kubevirt component.
+          pkg="${RUNNER_TEMP}/atak-kubevirt"
+          mkdir -p "${pkg}/deploy"
+          cp atak/deploy/kubevirt-exemption.yaml "${pkg}/deploy/"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          text = Path("atak/zarf.yaml").read_text()
+          marker = "\n  - name: atak-device\n"
+          if marker not in text:
+              raise SystemExit("atak/zarf.yaml no longer has an atak-device component to drop")
+          dest = Path(os.environ["RUNNER_TEMP"]) / "atak-kubevirt" / "zarf.yaml"
+          dest.write_text(text.split(marker, 1)[0].rstrip() + "\n")
+          PY
+          uds zarf package create "${pkg}" --confirm --skip-sbom --set ATAK_TAG=rca
           uds zarf package inspect images zarf-package-atak-device-amd64-rca.tar.zst | tee evidence/kubevirt-images.txt
           mkdir -p "${RUNNER_TEMP}/cirros-pkg"
           cat > "${RUNNER_TEMP}/cirros-pkg/zarf.yaml" <<'EOF'

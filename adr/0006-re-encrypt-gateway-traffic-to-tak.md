@@ -15,7 +15,7 @@ The UDS Package CR `expose` entry has no option for a TLS backend. It only takes
 ## Decision
 
 - 8447 is a TLS connector with `clientAuth="false"`. It serves keystore `takserver-web.jks`, not the main `takserver.jks`.
-- The pre-install Job issues that certificate after it generates the TAK certificates. It is signed by the deploy-time CA ([ADR 0002](0002-generate-certificates-at-deploy-time.md)). Its subject alternative names are the in-cluster names of Service `takserver-web`. The keystore is added to ConfigMap `cert-migration`, so it is mounted under `certs/files` like the other keystores. An upgrade keeps the existing certificate.
+- The pre-install Job issues that certificate after it generates the TAK certificates. It is signed by the deploy-time CA ([ADR 0002](0002-generate-certificates-at-deploy-time.md)). Its subject alternative names are the in-cluster names of Service `takserver-web`. The keystore is stored in Secret `takserver-certs` and mounted under `certs/files` like the other keystores. An upgrade keeps the existing certificate.
 - Service `takserver-web` names the port `https` with `appProtocol: https`.
 - The chart adds DestinationRule `takserver-web`. It is outside the Package CR. It sets TLS mode `SIMPLE` on port 8447, SNI and the expected subject alternative name to `takserver-web.<namespace>.svc.cluster.local`, and `credentialName: takserver-web-ca`. It is exported only to the tenant gateway namespace. `insecureSkipVerify` is not used: the gateway checks the certificate against the CA.
 - A gateway reads `credentialName` Secrets only from its own namespace. A Zarf deploy action copies `ca.pem` from `cert-migration` into Secret `takserver-web-ca` (key `cacert`) in `istio-tenant-gateway`. Only the CA certificate is copied. The CA key stays in the TAK namespace.
@@ -30,4 +30,4 @@ This package now ships raw Istio configuration that the UDS operator does not ma
 
 In ambient mode Istio still sends this traffic through the HBONE tunnel, so the hop is TLS inside mutual TLS. Strict mTLS still applies. The cost is a second TLS handshake and encryption on the gateway-to-pod hop.
 
-The CA certificate exists in two places. The deploy action writes it on every deploy, so a new CA reaches the gateway on the next deploy. The web certificate is valid for two years and is not rotated automatically. Delete the `takserver-web.jks` key from `cert-migration` and redeploy to issue a new one.
+The CA certificate exists in two places. The deploy action writes it on every deploy, so a new CA reaches the gateway on the next deploy. The web certificate is valid for two years and is not rotated automatically. Delete the `takserver-web.jks` key from Secret `takserver-certs` and from ConfigMap `cert-migration`, then redeploy to issue a new one.

@@ -40,7 +40,7 @@ The device authenticates with a client certificate, the way a provisioned field 
 
 At run time `atak/ci/e2e.sh`:
 
-1. Reads the deploy-time TAK CA (`ca.pem` and `ca-do-not-share.key`) from ConfigMap `takserver/cert-migration` ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)) and issues a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth`. The CA key stays in a temporary directory on the runner and is deleted after signing.
+1. Reads the deploy-time TAK CA from ConfigMap `takserver/cert-migration` (`ca.pem`) and Secret `takserver/takserver-ca-key` (`ca-do-not-share.key`) ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)) and issues a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth`. The CA key stays in a temporary directory on the runner and is deleted after signing.
 2. Registers the certificate in TAK with `java -jar UserManager.jar certmod -g Operators <cert.pem>` in the messaging pod. Only the public certificate goes into the pod. This is how TAK 5.7 maps a certificate to a user: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `certmod` adds the user with the fingerprint and no password, the same way `enable_admin.sh` adds the admin certificate. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
 3. Builds a standard ATAK connection data package (`atak-device.dpk`): `MANIFEST/manifest.xml`, `certs/server.pref` with one stream `takserver-stream.<domain>:8089:ssl` and its `caLocation0`, `caPassword0`, `certificateLocation0`, and `clientPassword0` entries, the client `certs/atak-device.p12`, and the CA in `certs/truststore.p12`. Both PKCS#12 files use SHA-1/3DES, which Android 9 reads, and a password generated for this run. The CA certificate in the truststore carries a friendlyName (`openssl pkcs12 -export -nokeys -caname ...`); without one, Android's PKCS12 keystore lists no entry and ATAK reports "Unable to validate Truststore".
 
@@ -61,7 +61,7 @@ ATAK always enrolls on 8446 with HTTP Basic (`CertificateEnrollmentClient` passe
 
 For a real device, an operator does the same steps by hand:
 
-1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a CSR with `ca.pem` and `ca-do-not-share.key` from `cert-migration`, as `atak/ci/e2e.sh` does.
+1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a CSR with `ca.pem` from `cert-migration` and `ca-do-not-share.key` from Secret `takserver-ca-key`, as `atak/ci/e2e.sh` does.
 2. Register it: `kubectl exec -n takserver deploy/takserver-messaging -c takserver-messaging -- sh -c 'cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g <group> /tmp/<name>.pem'` after copying the PEM to `/tmp` in the pod. `UserAuthenticationFile.xml` is not on a volume, so run it again after the messaging pod restarts.
 3. Package the `.p12`, the truststore, and a `.pref` as above, and hand the package to the device. Copy it to the device's `Download` folder as `atak*.dpk`, or open it with ATAK's Import Manager.
 

@@ -67,6 +67,14 @@ for app in "${apps[@]}"; do
     code="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.status.initContainerStatuses[?(@.name=="render-oidc")].state.terminated.exitCode}')"
     [[ "${code}" = "0" ]] || fail "${pod}: render-oidc exit code '${code}'"
 
+    # The Deployment still mounts ConfigMap cert-migration. Admission swaps
+    # that volume for Secret takserver-certs before the pod is created.
+    cert_secret="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.spec.volumes[?(@.name=="config")].secret.secretName}')"
+    cert_cm="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.spec.volumes[?(@.name=="config")].configMap.name}')"
+    if [[ "${cert_secret}" != "takserver-certs" || -n "${cert_cm}" ]]; then
+      fail "${pod}: cert volume is secret=${cert_secret:-<none>} configMap=${cert_cm:-<none>}"
+    fi
+
     # TAK rewrites /conf/CoreConfig.xml from its in-memory copy when it saves,
     # so this is the secret the process holds, not only what the init rendered.
     container="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.spec.containers[0].name}')"

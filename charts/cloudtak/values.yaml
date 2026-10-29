@@ -63,8 +63,8 @@ tak:
   messagingService: takserver-messaging-service
   messagingSelector:
     app: takserver-messaging
-  # Secret the cloudtak component's onDeploy action copies from ConfigMap
-  # cert-migration: ca.pem, admin.pem, admin.key.
+  # Secret the cloudtak component's onDeploy action copies from the TAK
+  # namespace: ca.pem, admin.pem, and admin.key from Secret takserver-certs.
   adminSecret: cloudtak-tak-admin
 
 # TAK file user behind CloudTAK's admin connection, and its TAK groups.

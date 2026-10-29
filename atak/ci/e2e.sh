@@ -53,7 +53,7 @@ driver_present || { docker exec k3d-uds-server-0 crictl images >&2 || true; exit
 echo "== device certificate"
 # The device authenticates to 8089 with a client certificate, like a fielded
 # ATAK with a provisioned data package. The certificate is issued here from
-# the deploy-time TAK CA (ConfigMap takserver/cert-migration, ADR 0002) and
+# the deploy-time TAK CA (cert-migration and Secret takserver-ca-key, ADR 0002) and
 # exists only on this runner and in Secret atak/atak-device-dpk. TAK maps a
 # client certificate to a file user by fingerprint or by CN; UserManager
 # certmod adds that user with no password, as enable_admin.sh does for the

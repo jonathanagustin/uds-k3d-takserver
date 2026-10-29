@@ -28,7 +28,9 @@ What a namespace backup contains:
 
 | Object | In the backup |
 | --- | --- |
-| ConfigMap `cert-migration` | Yes. It holds the CA and the server keystores, including private keys, because that is the object the upstream chart mounts. A restored server presents the same CA. |
+| ConfigMap `cert-migration` | Yes. Certificates and truststores. Private keys and keystores are removed from it. |
+| Secret `takserver-certs` | Yes. Private keys and keystores the pods mount. A restored server presents the same CA. |
+| Secrets `takserver-ca-key` and `takserver-keystore` | Yes. The CA key, and the keystore password. |
 | Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |
 | Secrets `tak-db-dump` and `cloudtak-db-dump` | Yes, when the CronJob or `tests/backup-restore.sh` has written them. |
 | Postgres and PostGIS volumes | No. Load the dump after the pods are back. |
@@ -37,12 +39,14 @@ What a namespace backup contains:
 
 A Secret holds about 1Mi. The CronJob refuses a dump over 700000 bytes. A database that large needs a node-agent image and file-system backup, which this package does not add.
 
+Without `takserver-certs`, `takserver-ca-key`, and `takserver-keystore`, enrolled client certificates no longer chain and the pods cannot open the keystores.
+
 Restore, after Velero has put the namespaces back:
 
 1. Scale the TAK API, messaging, plugins, and config Deployments to 0, and scale CloudTAK to 0, so they do not write during the load.
 2. Wait until `takserver-postgresql` and `cloudtak-postgis` are Ready.
 3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty.
-4. Scale the Deployments to 1. Enrolled client certificates still chain, because `cert-migration` came back with the namespace.
+4. Scale the Deployments to 1. Enrolled client certificates still chain, because the cert ConfigMap and Secrets came back with the namespace.
 
 `tests/backup-restore.sh` does this at the end of the full-core job. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. The checkpoint MinIO is scaled to 0 by `fit-runner`; the script scales it back to 1 because Velero's default bucket `uds` is on that MinIO. BackupStorageLocation has to be `Available`.
 

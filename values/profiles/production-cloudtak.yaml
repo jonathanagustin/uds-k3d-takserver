@@ -1,0 +1,36 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Overlay for chart uds-cloudtak. Headroom over small-cloudtak.yaml.
+# The steady set is run 40174810574 (cloudtak 146Mi, sso 67Mi, bootstrap 19Mi,
+# postgis 96Mi). These limits are that set plus room, not a load measurement.
+# One CloudTAK Deployment. The component is already optional in zarf.yaml.
+resources:
+  cloudtak:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  sso:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  bootstrap:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  postgis:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

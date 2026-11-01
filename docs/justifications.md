@@ -4,9 +4,16 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 `.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. hk runs it when the chart, `atak/deploy/`, this page or the script changes. Add the section in the same change that adds the exemption.
 
-`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails in either of these cases. An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard. A pod in those namespaces is annotated `exempted` without a matching expected exemption. It prints the exempted-resource list and the security context of each TAK pod.
+`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails in either of these cases:
+
+- An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard.
+- A pod in those namespaces is annotated `exempted` without a matching expected exemption.
+
+It prints the exempted-resource list and the security context of each TAK pod.
 
 ## Exemptions
+
+Each section below is named after the `Exemption` object it describes.
 
 ## takserver-db-setup
 
@@ -80,7 +87,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 - **TAK Server.** Iron Bank publishes one server image, `registry1.dso.mil/ironbank/tpc/tak/tak-server`. Its README pulls tag `5.5`. It also publishes `tpc/tak/tak-server-db`. This package runs six images built here from `5.7-RELEASE-14`: `takserver-api`, `takserver-messaging`, `takserver-config`, `takserver-plugins`, `takserver-database-setup`, and `takserver-ignite`. Those names are not on Iron Bank, and `5.5` is not this package's release.
 - **CloudTAK.** No CloudTAK project showed up on repo1. The `cloudtak` image is built here from the upstream submodule.
 - **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). TAK and CloudTAK use `postgis:18-3.6`, built here. TAK's chart is still the upstream Bitnami chart; the image override points it at that build.
-- **NATS.** Iron Bank publishes `opensource/synadia/nats-server` and `opensource/synadia/nats-box`. This package pins `docker.io/library/nats:2.9.21-alpine` and `docker.io/natsio/nats-server-config-reloader:0.11.0`. The reloader did not show up on repo1, and the server project is not tag `2.9.21`.
+- **NATS.** Iron Bank publishes `opensource/synadia/nats-server` and `opensource/synadia/nats-box`. This package pins `docker.io/library/nats:2.15.1-alpine` and `docker.io/natsio/nats-server-config-reloader:0.25.0`. The reloader did not show up on repo1, and the server project is not tag `2.15.1`.
 - **ATAK viewer.** No ATAK-CIV image showed up on repo1. The viewer is a separate package, built here.
 - **What changes it:** Iron Bank images that match those names and tags, and chart values that can point at them without forking the upstream chart. Until then the package does not pretend a values overlay is a `registry1` flavor.
 

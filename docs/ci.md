@@ -35,7 +35,20 @@ The image workflows also attest the images they push. See [Verify a release](../
 | --- | --- | --- | --- |
 | ATAK | `atak.yaml` | changes to the APK build or the `upstream/atak-civ` submodule, and by hand | Builds the ATAK-CIV APK and uploads it |
 | ATAK device VM | `atak-vm.yaml` | changes to `atak/vm/`, `atak/ci/`, or `atak/viewer/`, and by hand | Builds the containerDisk and the viewer, boots Android under KubeVirt on k3d, reaches it over adb, and opens the phone view in a browser |
-| ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. A push to `main` publishes the device images. See [ATAK test device](atak-device.md) |
+| ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GHCR when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
+
+### Reused build outputs
+
+The ATAK e2e run reuses anything whose inputs have not changed, so a typical run spends its time on the test, not on builds.
+
+- **Device images.** [`atak/ci/device-images.sh`](../atak/ci/device-images.sh) tags each image with the ATAK version and a short hash of the files it is built from, for example `atak-civ-vm:5.5.1.10-e73f1e6f97ba`. When that tag is in GHCR, the run pulls it. The images are `atak-civ-apk` (the APK alone), `atak-driver`, `atak-civ-vm`, and `atak-viewer`. The `images` job builds and pushes only the missing ones, at the same time as the e2e job deploys UDS Core and TAK Server. Fork pull requests cannot push, so their e2e job builds the images itself before the deploy.
+- **APK build cache.** [`atak/ci/build-apk.sh`](../atak/ci/build-apk.sh) writes each Dockerfile stage to `build-cache:atak-apk-<stage>-<hash>`. A stage whose tag exists is skipped, and a tag is never rewritten.
+- **ATAK Zarf package.** After a passing run, the job publishes the package to `packages/atak-device:5.5.1.10-<hash>`. The next run with the same package inputs and images deploys it from GHCR instead of creating it.
+- **UDS Core slim checkpoint.** [`deploy-slim-core.sh`](../.github/scripts/deploy-slim-core.sh) pulls `k3d-core-slim-dev` from this repository's mirror (`checkpoints/k3d-core-slim-dev`) and checks its digest. The `mirror-checkpoint.yaml` workflow copies new versions from upstream. When the mirror lacks a version, the script pulls from upstream (`ghcr.io/defenseunicorns/dev/uds/checkpoints`). ATAK e2e also keeps the 5.5 GB tarball in the Actions cache. Only `main` and manual runs save it.
+
+A Renovate bump of `slim_core_version` runs the mirror workflow on its pull request. The workflow copies the new version and prints the digest line to add to `slim_core_digests`. Until that line is added, the script pulls the new version by tag and warns.
+
+To force a rebuild of every keyed image, change `KEY_SALT` in `device-images.sh`.
 
 ## Scheduled and opt-in gates
 
@@ -44,6 +57,7 @@ The image workflows also attest the images they push. See [Verify a release](../
 | Full Core | `full-core.yaml` | daily at 07:17, pushes to `main`, by hand, and pull requests labeled `full-core` | Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
 | Benchmark | `benchmark.yaml` | daily at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. See [Benchmarks](benchmarks.md) |
 | Scorecard | `scorecard.yaml` | Saturdays at 01:30, pushes to `main`, branch protection changes, and by hand | OpenSSF Scorecard, through the shared uds-common workflow |
+| Mirror the UDS Core checkpoint | `mirror-checkpoint.yaml` | changes to the checkpoint versions, and by hand | Copies each `k3d-core-slim-dev` version that CI deploys into this repository's GHCR, with the same digest |
 | Demo Video | `demo.yaml` | pull requests that change the demo scripts, and by hand | Records the demo videos. Only a manual run from `main` publishes and signs them. See [Demo videos](../CONTRIBUTING.md#demo-videos) |
 
 A pull request without the `full-core` or `benchmark` label skips that job. Adding the label, or pushing to a pull request that already has it, runs the job.

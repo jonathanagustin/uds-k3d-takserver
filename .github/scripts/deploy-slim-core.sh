@@ -4,14 +4,32 @@
 
 # Deploy the slim UDS Core checkpoint. A tarball of this version in the cache
 # directory skips the OCI pull. The first run pulls k3d-core-slim-dev.
+#
+# The pull comes from this repository's GHCR mirror of the checkpoint
+# (.github/workflows/mirror-checkpoint.yaml copies it byte for byte, so the
+# digest is the upstream one). When the mirror does not have the version,
+# the pull falls back to the upstream Defense Unicorns registry.
+#
+#   SLIM_CORE_MIRROR=""   pull from upstream only
 set -euo pipefail
 
 # renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
 slim_core_version=1.16.0
+# Index digest of each checkpoint version, checked before a pull. A version
+# without an entry (a fresh Renovate bump) is pulled by tag with a warning;
+# the mirror workflow prints the line to add here.
+# 1.15.x are the upgrade-test baselines (tasks.yaml, tests/upgrade.sh).
+declare -A slim_core_digests=(
+  [1.15.0]=sha256:c1ec81725e623a926e5d13b4dc165d93ca4737267853470d60cb8f3e47009d9c
+  [1.15.2]=sha256:28a50932b6924683148615d88a9a475c3e03367df1378342ee4419d2610d2237
+  [1.16.0]=sha256:d47b4ef370fd0e1ca2d5976fb1bedc7132178784e9b7453b28ff228509bb1d51
+)
 version="${SLIM_CORE_VERSION:-${slim_core_version}}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"
-ref="oci://ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev:${version}"
+upstream_repo="ghcr.io/defenseunicorns/dev/uds/checkpoints"
+mirror_repo="${SLIM_CORE_MIRROR-ghcr.io/jonathanagustin/uds-k3d-takserver/checkpoints}"
+want_digest="${slim_core_digests[${version}]:-}"
 
 mkdir -p "${out}"
 # uds bundles zarf and does not leave ./zarf in the repo until a zarf
@@ -31,9 +49,27 @@ shopt -s nullglob
 # The version is part of the name. An older tarball in the same directory
 # must not be deployed in its place.
 files=("${out}"/zarf-package-k3d-core-slim-dev-*-"${version}".tar.zst)
+# Pull from repo $1 when its tag has the pinned digest (or no digest is
+# pinned). Returns 1 without pulling otherwise.
+pull_from() {
+  local ref="$1/k3d-core-slim-dev:${version}" digest
+  if ! digest="$("${zarf[@]}" tools registry digest "${ref}" 2>/dev/null)"; then
+    echo "${ref} is not available"
+    return 1
+  fi
+  if [[ -n "${want_digest}" && "${digest}" != "${want_digest}" ]]; then
+    echo "::warning::${ref} is ${digest}, not the pinned ${want_digest}"
+    return 1
+  fi
+  [[ -n "${want_digest}" ]] || echo "::warning::No digest pinned for k3d-core-slim-dev ${version} in $0; pulling ${ref} (${digest}) by tag"
+  echo "Pulling oci://${ref} (${digest})"
+  "${zarf[@]}" package pull "oci://${ref}" --output-directory "${out}"
+}
+
 if [[ "${#files[@]}" -eq 0 ]]; then
-  echo "Pulling ${ref}"
-  "${zarf[@]}" package pull "${ref}" --output-directory "${out}"
+  if [[ -z "${mirror_repo}" ]] || ! pull_from "${mirror_repo}"; then
+    pull_from "${upstream_repo}"
+  fi
   files=("${out}"/zarf-package-k3d-core-slim-dev-*-"${version}".tar.zst)
 fi
 shopt -u nullglob

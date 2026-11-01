@@ -4,9 +4,16 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 `.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. hk runs it when the chart, `atak/deploy/`, this page or the script changes. Add the section in the same change that adds the exemption.
 
-`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails in either of these cases. An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard. A pod in those namespaces is annotated `exempted` without a matching expected exemption. It prints the exempted-resource list and the security context of each TAK pod.
+`tests/exemptions.sh` (task `test:exemptions`, part of `test:all` on amd64 and arm64) audits the live cluster the way the UDS Core audit guide does. It fails in either of these cases:
+
+- An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard.
+- A pod in those namespaces is annotated `exempted` without a matching expected exemption.
+
+It prints the exempted-resource list and the security context of each TAK pod.
 
 ## Exemptions
+
+Each section below is named after the `Exemption` object it describes.
 
 ## takserver-db-setup
 

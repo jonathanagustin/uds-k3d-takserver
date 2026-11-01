@@ -28,7 +28,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 - `bootstrap.mjs` is the bootstrap container's script. See below.
 - `basemap.mjs` writes the tile proxy's nginx configuration and keeps the default basemap record. See [Basemap](#basemap).
 
-`build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). There is no QEMU:
+`build.sh` refuses to build if the submodule is not at the pinned commit. The image is published for `linux/amd64` and `linux/arm64`, the same way as the TAK images (see [Building the images](building.md)). Each architecture builds on a native runner, without QEMU emulation, and the tags are keyed by the build inputs:
 
 - The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.112.3-<key>`).
 - The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-24.04` and `ubuntu-24.04-arm`). Each job pushes `v13.112.3-<key>-<arch>`, and only when no image with those inputs exists yet.
@@ -48,7 +48,7 @@ People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page
 1. `https://map.<domain>/` loads the CloudTAK app. With no session, the app routes to `/login`. nginx adds `/api/login/oidc/auto.js` to the app's HTML pages. With no stored ID token, that script sends `/login` on to `/api/login/oidc`. After a sign-in it sends `/login` to `/api/login/oidc/logout` with the ID token as `id_token_hint`.
 2. `/api/login/oidc` starts an authorization code flow with PKCE (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin`, the same gate as the TAK client.
 3. Keycloak returns to `https://map.<domain>/api/login/oidc/callback`. The `sso` container exchanges the code at Keycloak's token endpoint, in the cluster. `sso.<domain>` resolves to the tenant gateway through the in-cluster CoreDNS rewrite (see [Networking](networking.md)), and the Keycloak certificate is checked against the system trust store.
-4. It enrols a TAK client certificate for the user on TAK's 8447. It sends the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)). The certificate is the Keycloak user's own TAK identity, with that user's TAK groups.
+4. It enrolls a TAK client certificate for the user on TAK's 8447. It sends the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)). The certificate is the Keycloak user's own TAK identity, with that user's TAK groups.
 5. It creates or updates the CloudTAK profile for that username with the certificate, and opens a CloudTAK login session with CloudTAK's own session code. Members of `sso.adminGroup` (default `/UDS Core/Admin`) become CloudTAK system administrators.
 6. The browser gets the session (login token, refresh token, session id) in the URL fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
 
@@ -63,15 +63,20 @@ CloudTAK 13.112.3 has `oidc::enabled`, `oidc::enforced`, `oidc::name`, and `oidc
 | `oidc::discovery` | `https://sso.<domain>/realms/uds/.well-known/openid-configuration` | The page shows a misconfiguration warning instead of the button without it |
 | `passkey::enabled` | `false` | Hides the passkey button |
 
-The route behind the button is `sso.mjs`, in a second container of the CloudTAK pod that listens only on `127.0.0.1:5002`. `start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). CloudTAK itself is not patched. `sso.mjs` imports CloudTAK's compiled model, user, and session modules from the image, so a CloudTAK upgrade that changes those modules needs a matching change here. The Renovate pull request for a new CloudTAK tag runs the sign-in test below.
+The route behind the button is `sso.mjs`, in a second container of the CloudTAK pod that listens only on `127.0.0.1:5002`.
+
+`start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). CloudTAK itself is not patched.
+
+`sso.mjs` imports CloudTAK's compiled model, user, and session modules from the image, so a CloudTAK upgrade that changes those modules needs a matching change here. The Renovate pull request for a new CloudTAK tag runs the sign-in test below.
 
 CloudTAK cannot redirect to Keycloak on its own. The auto-redirect is the `auto.js` script, loaded with nginx `sub_filter`. `https://map.<domain>/login?sso=off` shows the login page without the redirect, with only the Keycloak button. After a failed Keycloak sign-in the browser lands there, and the `sso` container log has the reason.
 
 ### Trade-offs
 
 - Authservice is not used. Authservice in front of CloudTAK would authenticate the page but CloudTAK would never see the Keycloak user. People would still need a TAK account and a second sign-in, and TAK would see that account instead of the Keycloak user. With the code flow in the pod, the Keycloak user is the CloudTAK user and the TAK certificate subject.
-- The ID token is taken straight from Keycloak's token endpoint over a verified TLS connection, so `sso.mjs` checks its issuer, audience, nonce, and expiry rather than its signature (OpenID Connect Core 3.1.3.7). TAK checks the access token's signature against Keycloak's keys when it enrols the certificate.
-- CloudTAK's own logout clears the CloudTAK session and opens `/login`. `auto.js` sends that to `/api/login/oidc/logout` with the ID token from sign-in as `id_token_hint`. The client sets `logout.confirmation.enabled` to `false`. UDS Core otherwise leaves that on, and Keycloak 26 then shows "You are logged out" instead of following `post_logout_redirect_uri`. With it off, Keycloak ends the session and redirects back to the sign-in route, so the next visit stops on the Keycloak login page. Without the hint Keycloak stays on its confirmation page and does not continue. `auto.js` drops the CloudTAK login token, refresh token, and session id before that redirect, so the next load cannot refresh the old session. A CloudTAK session that never opens `/login` still lasts until its refresh token expires. Password sign-in and passkey sign-in stay off.
+- The ID token is taken straight from Keycloak's token endpoint over a verified TLS connection, so `sso.mjs` checks its issuer, audience, nonce, and expiry rather than its signature (OpenID Connect Core 3.1.3.7). TAK checks the access token's signature against Keycloak's keys when it enrolls the certificate.
+- CloudTAK's own logout clears the CloudTAK session and opens `/login`. `auto.js` sends that to `/api/login/oidc/logout` with the ID token from sign-in as `id_token_hint`. The client sets `logout.confirmation.enabled` to `false`. UDS Core otherwise leaves that on, and Keycloak 26 then shows "You are logged out" instead of following `post_logout_redirect_uri`. With it off, Keycloak ends the session and redirects back to the sign-in route, so the next visit stops on the Keycloak login page. Without the hint Keycloak stays on its confirmation page and does not continue.
+- Before that redirect, `auto.js` drops the CloudTAK login token, refresh token, and session id, so the next load cannot refresh the old session. A CloudTAK session that never opens `/login` still lasts until its refresh token expires. Password sign-in and passkey sign-in stay off.
 - A CloudTAK session lasts as long as CloudTAK's refresh token (`login::refresh::expiry`, 720 hours by default), not the Keycloak session. Removing a user from `/UDS Core/Admin` in Keycloak blocks new sign-ins, not open CloudTAK sessions. Disable the profile in CloudTAK's admin page or revoke the certificate in TAK to cut one off.
 - The TAK certificate is enrolled at each sign-in. CloudTAK keeps it for the session, the way it keeps one from a password sign-in.
 
@@ -81,7 +86,7 @@ CloudTAK's admin connection (connection 0) needs a TAK account and a certificate
 
 ## Bootstrap container
 
-The `bootstrap` container runs [`bootstrap.mjs`](../.github/container-and-chart/cloudtak/bootstrap.mjs) in the CloudTAK pod. It calls CloudTAK on `127.0.0.1:5000`, inside the pod. Every five minutes it:
+The `bootstrap` container runs [`bootstrap.mjs`](../.github/container-and-chart/cloudtak/bootstrap.mjs) in the CloudTAK pod. It calls CloudTAK on `127.0.0.1:5000`, inside the pod. Every five minutes it does the following:
 
 1. Tries the `cloudtak-admin` password against TAK's `/oauth/token` on 8447. If that fails, it creates the user through `/user-management/api/new-user` on 8443 with the admin certificate. TAK stores file users in `UserAuthenticationFile.xml` inside the API pod, and that file does not survive a restart of the API pod, so this check is what recreates the user.
 2. If CloudTAK reports `unconfigured`, it sends `PATCH /api/server` with the TAK URLs, the admin certificate and an unencrypted copy of its key, and the `cloudtak-admin` credentials. CloudTAK accepts that call without a login only while it is unconfigured, so the window closes when the pod starts.
@@ -96,7 +101,7 @@ The admin certificate is mounted only in the bootstrap container. The CloudTAK c
 | --- | --- | --- |
 | `url` | `ssl://takserver-messaging-service.takserver.svc.cluster.local:8089` | CoT streaming with client certificates |
 | `api` | `https://takserver-api-service.takserver.svc.cluster.local:8443` | Marti API with client certificates |
-| `webtak` | `https://takserver-web.takserver.svc.cluster.local:8447` | Certificate enrolment for each Keycloak sign-in (bearer token) and for the admin account (password) |
+| `webtak` | `https://takserver-web.takserver.svc.cluster.local:8447` | Certificate enrollment for each Keycloak sign-in (bearer token) and for the admin account (password) |
 
 `webtak` is 8447, the connector the tenant gateway uses, rather than 8446. 8447 has a certificate whose SANs are the `takserver-web` Service names, so CloudTAK verifies it against the deploy-time CA (`NODE_EXTRA_CA_CERTS`). TAK's generated 8443 and 8089 server certificate names no in-cluster host. CloudTAK's TAK library does not verify the server certificate on its certificate-authenticated connections, as upstream ships it. The bootstrap container checks the 8443 chain against the CA and skips only the host name.
 

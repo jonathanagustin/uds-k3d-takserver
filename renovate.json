@@ -215,6 +215,20 @@
       "enabled": false
     },
     {
+      "description": "atak/apk/requirements.txt is the hash-compiled lock of conan==1.66.0 (see the header in that file). Conan 1.66 caps bottle<0.13, patch-ng<1.18, six<=1.16.0 and distro<=1.8.0, and pins node-semver==0.6.1. Updating those pins on their own makes the APK image pip install fail. Regenerate the file when the Conan pin moves.",
+      "matchFileNames": [
+        "atak/apk/requirements.txt"
+      ],
+      "matchPackageNames": [
+        "bottle",
+        "patch-ng",
+        "six",
+        "distro",
+        "node-semver"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Major updates come in their own pull request, one per dependency, so a breaking upgrade cannot hold back the minor and patch group. group:all turns separateMajorMinor off, so it is turned back on above.",
       "matchUpdateTypes": [
         "major"

@@ -66,8 +66,12 @@ RUN tar xzf depends/assimp-4.0.1-mod.tar.gz -C . \
     && make -C takthirdparty TARGET=android-x86_64 GDAL_USE_KDU=no \
         build_spatialite build_commoncommo build_gdal build_assimp
 
+# Only what the prebuild phases read. build-apk.sh and the scanner config
+# come later or not at all, so an edit to them does not rebuild the native
+# dependencies and cesium-native (about 15 minutes).
 FROM ttp AS deps
-COPY atak/apk /build
+COPY atak/apk/prebuild.sh /build/prebuild.sh
+COPY atak/apk/conan /build/conan
 RUN /build/prebuild.sh conan_profile ttp_pkg laszip liblas draco headers
 
 FROM deps AS cesium
@@ -80,6 +84,7 @@ FROM cesium AS build
 # means "no legacy map source pointers to clean up".
 RUN mkdir -p /src/atak-civ/atak/ATAK/app/src/main/assets/wms \
     && touch /src/atak-civ/atak/ATAK/app/src/main/assets/wms/cleanup.properties
+COPY atak/apk/build-apk.sh /build/build-apk.sh
 RUN /build/build-apk.sh \
     && cp "$(find /src/atak-civ/atak/ATAK/app/build/outputs/apk -name '*.apk' | head -1)" /atak-civ.apk
 

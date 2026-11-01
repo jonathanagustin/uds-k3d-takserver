@@ -113,13 +113,9 @@ jobs:
         timeout-minutes: 120
         run: |
           set -euo pipefail
-          ./atak/ci/build-apk.sh
-          docker buildx build -f atak/apk/Dockerfile --target driver -t "${DRIVER_IMAGE}" --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-apk-apk" .
-          docker buildx build -f atak/vm/Dockerfile -t ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-vm" .
-          docker buildx build -f atak/viewer/Dockerfile -t ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-viewer" .
+          # Pulls the images the ATAK e2e workflow published for these inputs
+          # (atak/ci/device-images.sh) and builds only the ones it has not.
+          ./atak/ci/device-images.sh build
           docker buildx rm --all-inactive --force || true
           docker buildx prune -af || true
           docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f

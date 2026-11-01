@@ -3,7 +3,7 @@
 
 import { a, Capability } from "pepr";
 import { runtime } from "../cluster.ts";
-import { KEYSTORE_SECRET, reconcileCloudtak } from "./cloudtak-admin.ts";
+import { CERTS_SECRET, KEYSTORE_SECRET, reconcileCloudtak } from "./cloudtak-admin.ts";
 import { CERT_CONFIGMAP, TAK_NAMESPACE } from "./gateway-ca.ts";
 
 export const CloudtakAdmin = new Capability({
@@ -28,4 +28,10 @@ When(a.Secret)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
   .WithName(KEYSTORE_SECRET)
+  .Reconcile(onCloudtak);
+
+When(a.Secret)
+  .IsCreatedOrUpdated()
+  .InNamespace(TAK_NAMESPACE)
+  .WithName(CERTS_SECRET)
   .Reconcile(onCloudtak);

@@ -10,7 +10,7 @@
 | StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64, see [ADR 18](../adr/0018-upgrade-postgres-in-place.md)), 2Gi volume |
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
-| Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration` and `CAPASS` from Secret `takserver-keystore` |
+| Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
 Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, CoT from TAK, and the admin pages do.

@@ -6,8 +6,15 @@
 // created, so no TAK pod can
 // start with the unrendered template. A node that did would publish that
 // copy to the others through the Ignite configuration cache.
+//
+// The upstream chart mounts certificates from a ConfigMap. This swaps that
+// volume for Secret takserver-certs before the pod is admitted.
 
 export const NAMESPACE = "takserver";
+
+// The upstream volume name. The chart has no value that mounts a Secret.
+export const CERT_VOLUME = "config";
+export const CERT_SECRET = "takserver-certs";
 
 // Pods that read CoreConfig.xml. Ignite, NATS and Postgres do not.
 export const TAK_APPS = [
@@ -48,6 +55,27 @@ export function isTakPod(pod: PodLike): boolean {
   return app !== undefined && TAK_APPS.includes(app);
 }
 
+function useCertSecret(pod: PodLike): boolean {
+  const volumes = pod.spec?.volumes;
+  if (!volumes) {
+    return false;
+  }
+  let changed = false;
+  for (const volume of volumes) {
+    if (volume.name !== CERT_VOLUME) {
+      continue;
+    }
+    const secret = volume.secret as { secretName?: string } | undefined;
+    if (secret?.secretName === CERT_SECRET && volume.configMap === undefined) {
+      continue;
+    }
+    delete volume.configMap;
+    volume.secret = { secretName: CERT_SECRET };
+    changed = true;
+  }
+  return changed;
+}
+
 function renderVolumes(): Volume[] {
   return [
     { name: CONFIG_MOUNT, emptyDir: {} },
@@ -85,7 +113,7 @@ export function addRender(pod: PodLike, image: string): boolean {
     return false;
   }
   const spec = (pod.spec ??= {});
-  let changed = false;
+  let changed = useCertSecret(pod);
 
   const volumes = (spec.volumes ??= []);
   for (const volume of renderVolumes()) {

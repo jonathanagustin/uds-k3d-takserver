@@ -2,22 +2,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 // Copies the TAK CA, the admin certificate, and its key into the Secret
-// CloudTAK reads. The CA key stays in takserver.
+// CloudTAK reads. The certificates are in ConfigMap cert-migration. The cert
+// Job moves private keys into Secret takserver-certs. A ConfigMap supplied
+// before that split still has the key, and a Secret may hold the
+// certificates, so each falls back to the other. The CA key stays in
+// takserver.
 
 import type { Cluster, ConfigMapDoc, SecretDoc } from "../cluster.ts";
 
 export const CLOUDTAK_NAMESPACE = "cloudtak";
 export const CLOUDTAK_SECRET = "cloudtak-tak-admin";
 export const KEYSTORE_SECRET = "takserver-keystore";
+export const CERTS_SECRET = "takserver-certs";
 
 export function cloudtakData(
   configMap: ConfigMapDoc | undefined,
   keystore: SecretDoc | undefined,
+  certs?: SecretDoc,
 ): Record<string, string> | undefined {
   const binary = configMap?.binaryData;
-  const ca = binary?.["ca.pem"];
-  const cert = binary?.["admin.pem"];
-  const key = binary?.["admin.key"];
+  const secret = certs?.data;
+  const ca = binary?.["ca.pem"] || secret?.["ca.pem"];
+  const cert = binary?.["admin.pem"] || secret?.["admin.pem"];
+  const key = secret?.["admin.key"] || binary?.["admin.key"];
   const pass = keystore?.data?.CAPASS;
   if (!ca || !cert || !key || !pass) {
     return undefined;
@@ -43,7 +50,8 @@ export async function reconcileCloudtak(phase: string, cluster: Cluster): Promis
   }
   const configMap = await cluster.getConfigMap("takserver", "cert-migration");
   const keystore = await cluster.getSecret("takserver", KEYSTORE_SECRET);
-  const data = cloudtakData(configMap, keystore);
+  const certs = await cluster.getSecret("takserver", CERTS_SECRET);
+  const data = cloudtakData(configMap, keystore, certs);
   if (!data) {
     return;
   }

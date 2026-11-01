@@ -4,6 +4,7 @@
 """Pareto and log-parser fixtures. These dicts are not benchmark measurements."""
 
 import importlib.util
+import json
 import os
 import re
 import signal
@@ -290,75 +291,137 @@ class TesterExitTests(unittest.TestCase):
         self.assertFalse(tester_exit.kill_group(proc.pid, signal.SIGKILL))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class PostgresTests(unittest.TestCase):
+    def tearDown(self):
+        runner._postgres_custom = False
 
+    def test_a_bad_setting_is_refused(self):
+        with self.assertRaises(RuntimeError):
+            runner.postgres_statements({"shared_buffers": "128MB; DROP TABLE cot"})
+        with self.assertRaises(RuntimeError):
+            runner.postgres_statements({"shared buffers": "128MB"})
 
-class RestartOrderTest(unittest.TestCase):
-    """bench/run.py restarts workloads in the package's startup order."""
+    def test_reset_then_set(self):
+        lines = runner.postgres_statements({
+            "shared_buffers": "128MB",
+            "checkpoint_timeout": "15min",
+        })
+        self.assertEqual(lines[0], "ALTER SYSTEM RESET ALL")
+        self.assertIn("ALTER SYSTEM SET checkpoint_timeout = '15min'", lines)
+        self.assertIn("ALTER SYSTEM SET shared_buffers = '128MB'", lines)
 
-    def config(self):
-        def item(workload, namespace="takserver", container="c"):
-            return {"workload": workload, "namespace": namespace, "container": container,
-                    "memory_request": "1Gi", "memory_limit": "2Gi"}
-        return {
-            "env": [],
-            "resources": [
-                item("deployment/takserver-api"),
-                item("deployment/takserver-messaging"),
-                item("deployment/takserver-config"),
-                item("deployment/takserver-plugins"),
-                item("statefulset/takserver-postgresql"),
-                item("statefulset/takserver-ignite"),
-                item("deployment/cloudtak", "cloudtak", "cloudtak"),
-                item("deployment/cloudtak", "cloudtak", "sso"),
-            ],
+    def test_hit_ratio_is_null_when_no_blocks_were_read(self):
+        self.assertIsNone(runner.hit_ratio(0, 0))
+        self.assertEqual(runner.hit_ratio(3, 1), 0.75)
+
+    def test_assemble_keeps_rss_and_settings(self):
+        row = {
+            "blks_hit": 3,
+            "blks_read": 1,
+            "temp_files": 0,
+            "temp_bytes": 0,
+            "checkpoints_timed": 1,
+            "checkpoints_req": 2,
+            "checkpoint_write_ms": 4.5,
+            "checkpoint_sync_ms": 1,
+            "buffers_backend": 9,
+            "shared_buffers": "128MB",
+            "work_mem": "4MB",
+            "effective_cache_size": "384MB",
+            "max_wal_size": "256MB",
+            "checkpoint_timeout": "5min",
         }
+        body = runner.assemble_postgres(row, [100, 250])
+        self.assertEqual(body["datname"], "cot")
+        self.assertEqual(body["hit_ratio"], 0.75)
+        self.assertEqual(body["peak_rss_bytes"], 250)
+        self.assertEqual(body["steady_rss_bytes"], 250)
+        self.assertEqual(body["settings"]["shared_buffers"], "128MB")
+        self.assertIsNone(runner.assemble_postgres({**row, "blks_hit": 0, "blks_read": 0}, [])["hit_ratio"])
+        self.assertIsNone(runner.assemble_postgres({**row, "blks_hit": 0, "blks_read": 0}, [])["steady_rss_bytes"])
 
-    def test_workloads_follow_the_startup_order_once_each(self):
-        self.assertEqual(
-            [w for _, w in runner.workloads(self.config())],
-            [
-                "statefulset/takserver-postgresql",
-                "statefulset/takserver-ignite",
-                "deployment/takserver-config",
-                "deployment/takserver-messaging",
-                "deployment/takserver-api",
-                "deployment/takserver-plugins",
-                "deployment/cloudtak",
-            ],
-        )
-
-    def test_only_an_ignite_change_stops_tak(self):
-        self.assertTrue(runner.restarts_ignite(self.config()))
-        heap = {"env": [{"workload": "deployment/takserver-api", "namespace": "takserver",
-                         "container": "takserver-api", "name": "X", "value": "1"}]}
-        self.assertFalse(runner.restarts_ignite(heap))
-
-    def test_tak_comes_back_after_ignite_config_first(self):
+    def test_apply_resets_a_previous_override(self):
         calls = []
 
-        def fake(*args, check=True):
+        def fake(*args):
             calls.append(args)
-            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
-        original = runner.kubectl
-        runner.kubectl = fake
-        try:
-            replicas = {w: 1 for w in runner.TAK_CONSUMERS}
-            runner.rollout(self.config(), replicas)
-        finally:
-            runner.kubectl = original
-        steps = [(a[1], a[2]) if a[0] == "rollout" else (a[0], a[1]) for a in calls if a[0] in ("rollout", "scale") and a[1] != "status"]
-        self.assertEqual(
-            steps,
-            [
-                ("restart", "statefulset/takserver-postgresql"),
-                ("restart", "statefulset/takserver-ignite"),
-                ("scale", "deployment/takserver-config"),
-                ("scale", "deployment/takserver-messaging"),
-                ("scale", "deployment/takserver-api"),
-                ("scale", "deployment/takserver-plugins"),
-                ("restart", "deployment/cloudtak"),
-            ],
+            class Result:
+                stdout = ""
+
+            result = Result()
+            if args[0] == "get":
+                result.stdout = json.dumps({
+                    "items": [{"metadata": {"name": "takserver-postgresql-0"}}],
+                })
+            return result
+
+        self.assertTrue(runner.apply_postgres({"postgres": {"shared_buffers": "64MB"}}, fake))
+        text = " ".join(str(part) for part in calls[-1])
+        self.assertIn("ALTER SYSTEM RESET ALL", text)
+        self.assertIn("ALTER SYSTEM SET shared_buffers = '64MB'", text)
+        self.assertIn("takserver-postgresql-0", calls[-1])
+        calls.clear()
+        self.assertTrue(runner.apply_postgres({"name": "baseline"}, fake))
+        text = " ".join(str(part) for part in calls[-1])
+        self.assertIn("ALTER SYSTEM RESET ALL", text)
+        self.assertNotIn("ALTER SYSTEM SET", text)
+        self.assertFalse(runner._postgres_custom)
+
+    def test_an_untouched_database_is_left_alone(self):
+        def fake(*_args):
+            raise AssertionError("kubectl should not run")
+
+        self.assertFalse(runner.apply_postgres({"name": "baseline"}, fake))
+
+    def test_rollout_restarts_postgres_only_after_a_change(self):
+        plain = runner.rollout_items(
+            {
+                "env": [{"workload": "deployment/takserver-api", "namespace": "takserver"}],
+                "resources": [],
+            },
+            False,
         )
+        self.assertEqual([item["workload"] for item in plain], ["deployment/takserver-api"])
+        changed = runner.rollout_items({"env": [], "resources": []}, True)
+        self.assertEqual(changed[0]["workload"], "statefulset/takserver-postgresql")
+        self.assertEqual(changed[0]["namespace"], "takserver")
+
+    def test_the_sweep_configs_stay_inside_the_limit(self):
+        root = Path(__file__).resolve().parents[1]
+        buffers = runner.load_config(root / "bench" / "configs" / "postgis-buffers.yaml")
+        wal = runner.load_config(root / "bench" / "configs" / "postgis-wal.yaml")
+        self.assertEqual(buffers["postgres"]["shared_buffers"], "128MB")
+        self.assertEqual(wal["postgres"]["shared_buffers"], "64MB")
+        self.assertEqual(wal["postgres"]["checkpoint_timeout"], "15min")
+        self.assertTrue(buffers["restart"])
+        self.assertTrue(wal["restart"])
+        for config in (buffers, wal):
+            for key in runner.POSTGRES_SETTINGS:
+                self.assertIn(key, config["postgres"])
+            runner.postgres_statements(config["postgres"])
+            self.assertLessEqual(int(config["postgres"]["shared_buffers"][:-2]), 128)
+
+    def test_a_record_starts_with_postgres_unset(self):
+        body = runner.blank("amd64", "baseline", 10, 60)
+        self.assertIsNone(body["postgres"])
+        self.assertEqual(body["schema"], 1)
+
+    def test_the_summary_lists_postgres_next_to_throughput(self):
+        sample = record("postgis-buffers", "amd64", 10, 50, 10, 5, 20)
+        sample["postgres"] = {
+            "hit_ratio": 0.9,
+            "temp_bytes": 0,
+            "checkpoints_req": 1,
+            "steady_rss_bytes": 60000000,
+            "settings": {"shared_buffers": "128MB"},
+        }
+        text = report.markdown([sample])
+        self.assertIn("hit_ratio 0.9", text)
+        self.assertIn("throughput 5.0", text)
+        self.assertIn("shared_buffers 128MB", text)
+        self.assertIn("No Postgres stats.", report.markdown([record("baseline", "amd64", 10, 50, 10, 5, 20)]))
+
+
+if __name__ == "__main__":
+    unittest.main()

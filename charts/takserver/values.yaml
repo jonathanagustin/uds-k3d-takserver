@@ -210,5 +210,7 @@ backup:
     enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
     image: docker.io/velero/velero:v1.18.4
     namespace: velero
-    serviceAccount: velero
+    # The ServiceAccount UDS Core's Velero server runs as (the upstream
+    # chart's <fullname>-server). There is no ServiceAccount named velero.
+    serviceAccount: velero-server
     credentialSecret: velero-bucket-credentials

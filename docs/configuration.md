@@ -156,7 +156,7 @@ The Service is headless. The ServiceAccount token is mounted. RBAC can get and l
 
 Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver` namespace. Database `cot`, user `postgres`, Service `takserver-postgresql:5432`. The password in the overlay is the upstream example value `postgres`. It is not a production secret. See [Data](data.md).
 
-The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
+The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami 12.1.6 does not mount that object. The package leaves the server on the chart defaults. See [Data](data.md).
 
 The NATS toolbox is disabled in `values/common-values.yaml`.
 

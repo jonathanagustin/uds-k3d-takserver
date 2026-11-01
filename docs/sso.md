@@ -1,6 +1,8 @@
 # Single sign-on
 
-TAK Server 5.7 has its own OpenID Connect authorization-code flow. The Package registers one Keycloak client. An init container fills the client secret into `CoreConfig.xml` on every start. Authservice is not in front of TAK.
+TAK Server 5.7 has its own OpenID Connect (OIDC) authorization-code flow, so people sign in to the TAK web UI with their UDS Keycloak account. The Package registers one Keycloak client. An init container fills the client secret into `CoreConfig.xml` on every start. Authservice is not in front of TAK.
+
+The Keycloak client:
 
 | Field | Value |
 | --- | --- |
@@ -18,11 +20,13 @@ TAK Server 5.7 has its own OpenID Connect authorization-code flow. The Package r
 | Issuer document | `https://sso.<domain>/realms/uds/.well-known/openid-configuration` |
 | Authservice | not used |
 
-`GET /login/auth` redirects the browser to Keycloak. `GET /login/redirect` exchanges the code. `GET /login/refresh` refreshes the token (`com.bbn.marti.oauth.OAuthApi`). `useTakServerLoginPage` is false, so a 401 on the browser connector is sent to `/login/auth`.
+The sign-in routes: `GET /login/auth` redirects the browser to Keycloak. `GET /login/redirect` exchanges the code. `GET /login/refresh` refreshes the token (`com.bbn.marti.oauth.OAuthApi`). `useTakServerLoginPage` is false, so a 401 on the browser connector is sent to `/login/auth`.
 
 The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates browser TLS and opens a new TLS connection to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
 
 ## Connectors
+
+TAK listens on four TLS connectors. Only 8446 and 8447 take a browser sign-in:
 
 | Port | TLS | Client certificate | UI |
 | --- | --- | --- | --- |
@@ -60,13 +64,19 @@ Bearer tokens and the access-token cookie are accepted only when the local port 
 </auth>
 ```
 
-The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. The `takserver-oidc` Pepr module in `pepr/` adds an init container to the config, messaging, API, and plugins pods when each pod is created. No pod can start with the unrendered file. That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes. The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
+The upstream chart mounts `CoreConfig.xml` read-only and has no init-container value. The `takserver-oidc` Pepr module in `pepr/` adds an init container to the config, messaging, API, and plugins pods when each pod is created. No pod can start with the unrendered file.
 
-`trustAllCerts` is false. The API and messaging init containers copy the JVM trust store and import ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. The init then imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
+That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserver-sso` into `/conf/CoreConfig.xml`. TAK prefers `conf/CoreConfig.xml` over `CoreConfig.xml` (`LocalConfiguration`). The config service is what publishes the file to the other processes.
+
+The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
+
+`trustAllCerts` is false. The API and messaging init containers copy the JVM trust store and import ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. In that case the init container imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
 
 ## Render at admission
 
-A TAK node that holds the unrendered `${TAK_OIDC_CLIENT_SECRET}` placeholder breaks logins for every node. In upstream 5.7-RELEASE-14, `DistributedConfiguration.init()` calls `loadConfigFromCache()` only when `cacheConfig` is true, then registers an Ignite continuous query either way. `registerListener` runs that callback immediately. The callback calls `setConfiguration` and `saveChanges`, so the cached file replaces the local one. One run saved a 25-character `openIdDiscoveryConfiguration` secret on the config pod while the cluster secret was 86 characters.
+A TAK node that holds the unrendered `${TAK_OIDC_CLIENT_SECRET}` placeholder breaks logins for every node. This section explains why, and how the package prevents it.
+
+In upstream 5.7-RELEASE-14, `DistributedConfiguration.init()` calls `loadConfigFromCache()` only when `cacheConfig` is true, then registers an Ignite continuous query either way. `registerListener` runs that callback immediately. The callback calls `setConfiguration` and `saveChanges`, so the cached file replaces the local one. One run saved a 25-character `openIdDiscoveryConfiguration` secret on the config pod while the cluster secret was 86 characters.
 
 The image build applies `.github/container-and-chart/docker/cacheconfig-listener.patch`, which registers that listener only when `cacheConfig` is true. This package sets `cacheConfig="false"`. A save on one node still updates the Ignite cache. It does not rewrite the other nodes' files. Each pod still renders its own secret before the process starts. The plugins pod used to run without a render step, so it held the placeholder for its whole life.
 
@@ -76,7 +86,9 @@ The webhook fails closed and is scoped to the `takserver` namespace and those fo
 
 ## Groups
 
-`OAuthAuthenticator` lowercases `groupprefix` and `LdapAuthenticator.applyGroupPrefixFilter` lowercases the claim before `startsWith`, then keeps the original string. Prefix `/tak/` therefore matches `/TAK/...`. `GroupNameExtractor` compiles the regex `CASE_INSENSITIVE`, so `^/TAK/(.+)$` does not need a lowercase pattern. Names that end in `_READ` or `_WRITE` set the direction and the suffix is removed, so `/TAK/Operators_READ` becomes TAK group `Operators` with direction OUT.
+`OAuthAuthenticator` lowercases `groupprefix` and `LdapAuthenticator.applyGroupPrefixFilter` lowercases the claim before `startsWith`, then keeps the original string. Prefix `/tak/` therefore matches `/TAK/...`. `GroupNameExtractor` compiles the regex `CASE_INSENSITIVE`, so `^/TAK/(.+)$` does not need a lowercase pattern.
+
+Names that end in `_READ` or `_WRITE` set the direction and the suffix is removed, so `/TAK/Operators_READ` becomes TAK group `Operators` with direction OUT.
 
 `/UDS Core/Admin` does not match `/tak/`. It is only the admin claim (`adminTokenClaimName` / `adminTokenClaimValue`), which grants `ROLE_ADMIN` before the prefix filter. The Package `groups.anyOf` list is a Keycloak login gate, not the TAK group map. The group-membership mapper puts full paths in the access token and the ID token. `claim.name` is `groups`. That mapper is already on the UDS default protocol-mapper allowlist, so `SECURITY_HARDENING_ADDITIONAL_PROTOCOL_MAPPERS` is left empty.
 
@@ -88,19 +100,21 @@ The webhook fails closed and is scoped to the `takserver` namespace and those fo
 
 The display names are `TAK Server Login` and `CloudTAK Login`. The client ids stay `uds-takserver` and `uds-cloudtak`. The template's `uds-<group>-<app>` form would be a second client. The pods, CoreConfig, and the CloudTAK sign-in route already use these ids, and an existing cluster already has the clients. Renaming them would leave the old clients in the realm and break the secret the pods mount.
 
-Both clients set `client.session.idle.timeout` to `600` and `client.session.max.lifespan` to `36000`. UDS Core 1.15.2 imports the `uds` realm from uds-identity-config 0.32.3. That import uses an idle timeout of 600 seconds and a max lifespan of 36000 when `REALM_SSO_SESSION_IDLE_TIMEOUT` and `REALM_SSO_SESSION_MAX_LIFESPAN` are unset, which this bundle leaves unset. Keycloak 26 rejects the client when its idle timeout is longer than the realm's. An idle of 1800 did that, and the Package stayed `InProgress`.
+Both clients set `client.session.idle.timeout` to `600` and `client.session.max.lifespan` to `36000`. UDS Core 1.15.2 imports the `uds` realm from uds-identity-config 0.32.3. That import uses an idle timeout of 600 seconds and a max lifespan of 36000 when `REALM_SSO_SESSION_IDLE_TIMEOUT` and `REALM_SSO_SESSION_MAX_LIFESPAN` are unset, which this bundle leaves unset. Keycloak 26 rejects the client when its idle timeout is longer than the realm's. An idle timeout of 1800 did that, and the Package stayed `InProgress`.
 
-`/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it. This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/sso-clients.py` reads the client attributes back from the admin API.
+`/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it.
+
+This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/sso-clients.py` reads the client attributes back from the admin API.
 
 ## What TAK does not check
 
-TAK verifies the RS256 signature and nothing else about the token:
+TAK verifies the token's RS256 signature and nothing else about the token. Plan for these gaps:
 
 - No issuer check. Discovery stores the signing key and clears `issuer`. Any token from the `uds` realm whose signature matches that key is accepted, including a token minted for a different client, as long as the group claims match.
 - No audience check.
-- No PKCE. The client does not set `pkce.code.challenge.method`.
+- No PKCE (Proof Key for Code Exchange). The client does not set `pkce.code.challenge.method`.
 - Logout clears the access-token cookie and redirects inside TAK (`AuthCookieUtils.logout`). TAK still does not call the Keycloak end-session endpoint. The client registers `post.logout.redirect.uris` anyway, so a caller that does end the session can return to `/login/redirect`. CloudTAK's sign-in route does call end-session. See [CloudTAK](cloudtak.md).
-- One IdP. A second `openIdDiscoveryConfiguration` is not a failover list. TAK picks one entry at random.
+- One identity provider (IdP). A second `openIdDiscoveryConfiguration` is not a failover list. TAK picks one entry at random.
 - Port 8089 does not take a browser cookie. With `x509tokenAuth`, a certificate that was enrolled on 8446 with a bearer token is authenticated as that token's user.
 - Cookies set on 8447 are marked Secure. `AuthCookieUtils` uses `request.isSecure()`, which is true because the gateway reaches 8447 over TLS. With `api.web.backendTLS.enabled=false` the connector is plaintext and the cookies are not Secure.
 
@@ -118,14 +132,23 @@ API and messaging pods may connect to the tenant gateway:
 - Pod labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway` (Istio gateway chart 1.31, release name `tenant-ingressgateway`)
 - Port 443
 
-That is the path for the discovery document, the token endpoint, and JWKS. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP. Messaging needs the same path. With `x509tokenAuth`, a certificate enrolled on 8446 with a bearer token is stored with that token, and on 8089 TAK authenticates the stream by validating the token against the issuer's keys. Without the rule and the trust store, TAK logs `Remote host terminated the handshake` for the discovery document and closes the stream right after TLS. The messaging pod gets the same trust-store init container as the API pod. There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
+That is the path for the discovery document, the token endpoint, and the signing keys (JWKS, the JSON Web Key Set). The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP.
+
+Messaging needs the same path. With `x509tokenAuth`, a certificate enrolled on 8446 with a bearer token is stored with that token, and on 8089 TAK authenticates the stream by validating the token against the issuer's keys. Without the rule and the trust store, TAK logs `Remote host terminated the handshake` for the discovery document and closes the stream right after TLS. The messaging pod gets the same trust-store init container as the API pod.
+
+There is no rule to Keycloak's pod on port 8080, and there is no Kubernetes API rule for a render Job. The init container only reads the secret volume.
 
 ## Tests
 
 `uds run test-install` calls `setup:keycloak-user` with `/UDS Core/Admin`, then `tests/ensure-tak-group.py` adds `/TAK/Operators_READ`. Playwright opens `https://takserver.uds.dev/` on the tenant gateway, expects the Keycloak page, signs in as `doug`, and lands on `/Marti/`. TAK has no route named whoami. The test reads `Operators` from `GET /Marti/api/groups/all` and `ROLE_ADMIN` from `GET /Marti/api/util/user/roles`. `GET /Marti/api/util/isAdmin` is true for that user.
 
-Enrollment is `POST /Marti/api/tls/signClient/v2` on 8446 with the access-token cookie value as a bearer token and no client certificate. `CoreConfig` `certificateSigning` uses `certs/files/ca-signing.jks`, which the cert Job builds from the generated root CA. The CSR common name is the Keycloak username. `O` and `OU` are `TAK` and `UDS`.
+Enrollment is `POST /Marti/api/tls/signClient/v2` on 8446 with the access-token cookie value as a bearer token and no client certificate. `CoreConfig` `certificateSigning` uses `certs/files/ca-signing.jks`, which the cert Job builds from the generated root CA. The certificate signing request (CSR) uses the Keycloak username as its common name. `O` and `OU` are `TAK` and `UDS`.
 
 The same spec, and `tests/smoke.sh`, check that 8443 and 8089 reject a handshake with no client certificate. The 8443 Marti check still uses `admin.pem`. If `https://sso.<domain>` does not answer, the job skips the account-console setup and the OAuth spec and still runs the certificate checks.
 
-`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail. On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, groups, and `security/isSecure`, which must return `true`. The access-token cookies must be Secure. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the user and mapped group are `ROLE_ADMIN` and `Operators`. A missing token must be 401 or a redirect. A token with a damaged signature must be 401. On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints. On 8089 that certificate must open a stream that is still up after 8 seconds, and a client with no certificate must be rejected.
+`tests/api-smoke.sh` is the API smoke test. `test:all` runs it after install and after upgrade. It checks each port:
+
+- On 8443 it calls version, groups, contacts, and a mission create, read, and delete with the admin certificate, and the same calls with no certificate must fail.
+- On 8447 it signs in as `doug` through the authorization-code flow (no extra Keycloak client), then calls version, roles, isAdmin, groups, and `security/isSecure`, which must return `true`. The access-token cookies must be Secure. `GET /Marti/api/whoami` is requested too. TAK 5.7 returns 404 for that path, so the test reads the user's role and mapped group (`ROLE_ADMIN` and `Operators`) from the roles and groups calls instead. A missing token must be 401 or a redirect. A token with a damaged signature must be 401.
+- On 8446 the bearer token enrolls a certificate and the OIDC document must name the Keycloak endpoints.
+- On 8089 that certificate must open a stream that is still up after 8 seconds, and a client with no certificate must be rejected.

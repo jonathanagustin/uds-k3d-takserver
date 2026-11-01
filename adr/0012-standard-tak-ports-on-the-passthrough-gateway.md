@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-TAK clients keep one server host. ATAK enrolls for a certificate at `<host>:<apiCertEnrollmentPort>` (default 8446) and opens the streaming connection at `<host>:8089`. The UDS Package CR exposes services on the gateways' port 443 only, routed by SNI, so each TAK port gets its own host (`takserver` for 8446, `takserver-stream` for 8089). With those routes, no single host reaches both ports, and a stock client cannot enroll and then connect.
+TAK clients keep one server host. ATAK enrolls for a certificate at `<host>:<apiCertEnrollmentPort>` (default 8446) and opens the streaming connection at `<host>:8089`. The UDS Package CR exposes services on the gateways' port 443 only, routed by SNI (the TLS Server Name Indication the client sends), so each TAK port gets its own host (`takserver` for 8446, `takserver-stream` for 8089). With those routes, no single host reaches both ports, and a stock client cannot enroll and then connect.
 
 The UDS Core passthrough Gateway is rendered by `uds-istio-config` with servers on 80 and 443 only, and that chart has no value for extra servers. The Istio gateway chart that runs the pods does take a `service.ports` list, and its NetworkPolicy opens every listed port.
 

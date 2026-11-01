@@ -95,13 +95,13 @@
 	  </federation-server>
 	</federation>
 
-	<!-- cacheConfig="false" stops a node loading the config another node put in the
-	     Ignite cache when it starts. It does not stop the runtime sync: each node
-	     still replaces its config when any node publishes one (see issue #3).
-	     Every TAK pod therefore needs its OIDC client secret rendered before it
-	     starts, because an unrendered copy that is published reaches every node.
-	     The takserver-oidc admission module adds the render init container when
-	     each pod is created. -->
+	<!-- cacheConfig="false" keeps this node's file. The image build registers
+	     the Ignite continuous-query listener only when cacheConfig is true, so a
+	     save on another node does not replace this file. Upstream 5.7-RELEASE-14
+	     without that patch still registers the listener and overwrites the local
+	     file. Each TAK pod still renders its own OIDC client secret before it
+	     starts. The takserver-oidc admission module adds that init container
+	     when the pod is created. -->
 	<cluster enabled="true" cacheConfig="false" kubernetes="true" natsClusterID="takserver" natsURL="nats://takserver-nats:4222"/>
 
 </Configuration>

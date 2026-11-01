@@ -1,0 +1,142 @@
+{{- if .Values.backup.dump.enabled }}
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Daily logical dump of database cot into Secret tak-db-dump. Velero's
+# default schedule is 03:00 UTC and does not snapshot volumes, so the Secret
+# is what a restore can bring back. Rendered only when backup.dump.enabled
+# is true. See adr/0016-logical-db-dump.md.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tak-db-dump
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tak-db-dump
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["tak-db-dump"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tak-db-dump
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tak-db-dump
+subjects:
+  - kind: ServiceAccount
+    name: tak-db-dump
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tak-db-dump
+spec:
+  schedule: {{ .Values.backup.dump.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: tak-db-dump
+        spec:
+          serviceAccountName: tak-db-dump
+          restartPolicy: Never
+          automountServiceAccountToken: true
+          securityContext:
+            fsGroup: 999
+          initContainers:
+            - name: dump
+              image: {{ .Values.backup.dump.image | quote }}
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  pg_dump -h takserver-postgresql -p 5432 -U postgres -d cot --no-owner --no-acl > /dump/dump.sql
+                  chmod 644 /dump/dump.sql
+                  bytes="$(wc -c < /dump/dump.sql | tr -d ' ')"
+                  if [ "${bytes}" -gt 700000 ]; then
+                    echo "tak-db-dump is ${bytes} bytes; a Secret holds about 1Mi" >&2
+                    exit 1
+                  fi
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: takserver-postgresql
+                      key: postgres-password
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 999
+                runAsGroup: 999
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+          containers:
+            - name: publish
+              image: {{ .Values.certs.image | quote }}
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                  token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+                  ca="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                  payload="$(base64 -w 0 /dump/dump.sql)"
+                  api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
+                  body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","labels":{"app.kubernetes.io/part-of":"tak-backup"}},"type":"Opaque","data":{"dump.sql":"%s"}}' "${SECRET_NAME}" "${payload}")"
+                  code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data "${body}" "${api}")"
+                  if [[ "${code}" == "409" ]]; then
+                    code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X PUT -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data "${body}" "${api}/${SECRET_NAME}")"
+                  fi
+                  if [[ "${code}" != "200" && "${code}" != "201" ]]; then
+                    echo "writing Secret ${SECRET_NAME} returned HTTP ${code}" >&2
+                    exit 1
+                  fi
+              env:
+                - name: SECRET_NAME
+                  value: tak-db-dump
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                  readOnly: true
+          volumes:
+            - name: dump
+              emptyDir: {}
+{{- end }}

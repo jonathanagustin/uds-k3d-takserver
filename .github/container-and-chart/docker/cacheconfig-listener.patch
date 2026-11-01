@@ -1,0 +1,33 @@
+diff --git a/src/takserver-common/src/main/java/com/bbn/marti/remote/config/DistributedConfiguration.java b/src/takserver-common/src/main/java/com/bbn/marti/remote/config/DistributedConfiguration.java
+index d3295ca..93a148d 100644
+--- a/src/takserver-common/src/main/java/com/bbn/marti/remote/config/DistributedConfiguration.java
++++ b/src/takserver-common/src/main/java/com/bbn/marti/remote/config/DistributedConfiguration.java
+@@ -93,18 +93,18 @@ public class DistributedConfiguration implements CoreConfig, org.apache.ignite.s
+ 	public void init(ServiceContext ctx) throws Exception {
+     	if (getRemoteConfiguration().getCluster().isEnabled() && getRemoteConfiguration().getCluster().isCacheConfig()) {
+     		loadConfigFromCache();
+-    	}
+     	
+-    	IgniteReconnectEventHandler.registerListener(() -> {
+-    		continuousConfigurationQuery.setLocalListener((evts) -> {
+-       	     for (CacheEntryEvent<? extends String, ? extends Configuration> e : evts) {
+-       	    	 this.setConfiguration(e.getValue());
+-       	    	 saveChanges();
+-       	     }
+-         	 });
++    		IgniteReconnectEventHandler.registerListener(() -> {
++    			continuousConfigurationQuery.setLocalListener((evts) -> {
++       		     for (CacheEntryEvent<? extends String, ? extends Configuration> e : evts) {
++       		    	 this.setConfiguration(e.getValue());
++       		    	 saveChanges();
++       		     }
++         		 });
+     		
+-    		getConfigurationCache().query(continuousConfigurationQuery);	
+-    	});
++    			getConfigurationCache().query(continuousConfigurationQuery);	
++    		});
++    	}
+     	
+ 		if (logger.isDebugEnabled()) {
+ 			logger.debug("init method " + getClass().getSimpleName());

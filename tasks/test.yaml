@@ -23,6 +23,7 @@ tasks:
       - task: ui
       - task: flows
       - task: usage
+      - task: nats
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -745,13 +746,15 @@ tasks:
       - cmd: ./tests/usage.sh
 
   - name: full-core
-    description: Functional-layer pods are Ready, kubectl top returns numbers, uptime probes succeed, Grafana lists the TAK dashboard, Portal lists the TAK tiles, and Falco events are collected
+    description: Functional-layer pods are Ready, kubectl top returns numbers, uptime probes succeed, Grafana lists the TAK dashboard, Portal lists the TAK tiles, Falco events are collected, and Velero restores TAK and CloudTAK
     actions:
       - cmd: ./.github/scripts/check-full-core.sh
       - cmd: ./tests/uptime-probes.sh
       - cmd: ./tests/grafana-alerts.sh
       - cmd: ./tests/portal.sh
       - cmd: ./tests/falco-events.sh
+      # Deletes the takserver and cloudtak namespaces. Keep it last.
+      - cmd: ./tests/backup-restore.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented
@@ -825,7 +828,19 @@ tasks:
             -v "${cert_dir}:/certs:ro" \
             -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
             -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \
+            -e KEYCLOAK_OUTSIDER="${KEYCLOAK_OUTSIDER:-outsider}" \
+            -e KEYCLOAK_OUTSIDER_PASSWORD="${KEYCLOAK_OUTSIDER_PASSWORD:-outsider123!@#UN}" \
             -v "$(pwd)/tests:/app" \
             -w /app \
             mcr.microsoft.com/playwright:v1.64.1 \
             bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test'
+
+  - name: nats
+    description: Publish and subscribe on NATS, then again after the pod is replaced
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          python3 tests/nats-roundtrip.py --namespace takserver --service takserver-nats --restart

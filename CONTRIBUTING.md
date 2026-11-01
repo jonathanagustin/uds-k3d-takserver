@@ -23,7 +23,7 @@ Do not report security vulnerabilities in a public issue. Follow [SECURITY.md](S
 2. Make your change, with tests and documentation (see below).
 3. Run the lint checks and the tests that cover your change.
 4. Open a pull request against `main` and fill in the template.
-5. CI runs lint, CodeQL, dependency review, and the k3d install test. All required checks must pass.
+5. CI runs lint, CodeQL, dependency review, and the k3d install test (see [CI workflows](docs/ci.md)). All required checks must pass.
 6. The maintainer reviews the pull request. When it is approved and green, it is squash-merged, so the pull request title becomes the commit message on `main`.
 
 Release Please builds the changelog and the release pull requests from the merged titles. Leave `CHANGELOG.md` and the version numbers for that pull request.
@@ -41,7 +41,7 @@ Release Please builds the changelog and the release pull requests from the merge
 
 - **No secrets.** Never commit private keys, keystores, passwords, or enrolled certificates. Certificates are generated at deploy time ([ADR 2](adr/0002-generate-certificates-at-deploy-time.md)).
 - **Pinned dependencies.** Pin images and GitHub Actions by digest or full commit SHA, with the version in a comment. Renovate keeps them current.
-- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes.
+- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes. The [docs site](https://jonathanagustin.github.io/uds-k3d-takserver/) is built from those files by the Docs workflow. A new page under `docs/` also needs an entry in `docs-site/scripts/sync-docs.mjs` and the sidebar in `docs-site/astro.config.mjs`. Run `npm ci && npm run build` in `docs-site/` to check it: a broken internal link fails the build.
 
 ## Coding standards
 

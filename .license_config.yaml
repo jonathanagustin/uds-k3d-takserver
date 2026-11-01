@@ -8,3 +8,5 @@ ignore:
   - "**/*.jar"
   - "LICENSE"
   - "upstream/**"
+  # Upstream method body. The patch test matches these bytes from the first character.
+  - "tests/fixtures/distributed-configuration-init.java"

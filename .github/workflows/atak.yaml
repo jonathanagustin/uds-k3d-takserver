@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 350
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check out the ATAK submodule and its LFS files
         run: ./atak/ci/fetch-source.sh
@@ -43,16 +43,33 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The ATAK e2e workflow publishes the APK as a scratch image tagged with
+      # the ATAK version and a hash of its inputs (atak/ci/device-images.sh).
+      # When that tag exists, the APK is copied out of it instead of rebuilt.
       - name: Build the APK
         env:
           CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
-        run: ./atak/ci/build-apk.sh
+        run: |
+          set -euo pipefail
+          ref="$(./atak/ci/device-images.sh keys | sed -n 's/^APK_IMAGE_KEYED=//p')"
+          if docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
+            echo "Using ${ref}"
+            docker pull -q "${ref}"
+            mkdir -p out
+            id="$(docker create "${ref}" /atak-civ.apk)"
+            docker cp "${id}:/atak-civ.apk" out/atak-civ.apk
+            docker rm "${id}" >/dev/null
+            ls -la out
+          else
+            ./atak/ci/build-apk.sh
+          fi
+        shell: bash
 
       - name: Upload the APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

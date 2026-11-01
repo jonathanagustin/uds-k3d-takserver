@@ -61,6 +61,15 @@ RUN test -n "${UPSTREAM_SHA}" && test -n "${UPSTREAM_TREE}" \
     && test "$(git -C /src describe --exact-match HEAD)" = "${UPSTREAM_REF}" \
     && test "$(git -C /src rev-parse --abbrev-ref HEAD)" = "HEAD"
 
+# The tree check above still matches the upstream commit. This patch is applied
+# after it. cacheConfig="false" only skipped loadConfigFromCache. The
+# continuous-query listener was registered either way, and registerListener runs
+# that callback immediately, so another node's save replaced this node's file.
+COPY cacheconfig-listener.patch /tmp/cacheconfig-listener.patch
+RUN git -C /src -c apply.whitespace=nowarn apply --check /tmp/cacheconfig-listener.patch \
+    && git -C /src -c apply.whitespace=nowarn apply /tmp/cacheconfig-listener.patch \
+    && test "$(git -C /src diff --name-only)" = "src/takserver-common/src/main/java/com/bbn/marti/remote/config/DistributedConfiguration.java"
+
 WORKDIR /src/src
 
 # The committed gradle.properties asks for 768m. bootWar needs more than that,

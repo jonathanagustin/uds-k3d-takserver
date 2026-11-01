@@ -1,6 +1,6 @@
 # Values profiles
 
-Two named overlays. Neither is the package default, and neither is a point on a harness front yet. The benchmark workflow has no completed load run, so throughput, mean latency, and time-to-ready for these sizes are unmeasured. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
+This page describes two named values overlays, `small` and `production`. Neither is the package default. Neither has been measured as a point on the benchmark's Pareto front yet (see [Benchmarks](benchmarks.md)): the benchmark workflow has no completed load run, so throughput, mean latency, and time-to-ready for these sizes are unmeasured. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
 
 The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
 
@@ -60,4 +60,4 @@ Use `production.yaml` and `production-cloudtak.yaml` the same way.
 
 ## Harness
 
-`bench/configs/small.yaml` and `bench/configs/production.yaml` set the memory request and limit from these profiles on the running cluster. `kubectl set resources` does not take a CPU value, so the CPU numbers exist only in the values files. The nightly job writes `bench/out/<arch>/<config>.json`. Until that artifact exists, do not treat either profile as a front.
+`bench/configs/small.yaml` and `bench/configs/production.yaml` set the memory request and limit from these profiles on the running cluster. `kubectl set resources` does not take a CPU value, so the CPU numbers exist only in the values files. The nightly job writes `bench/out/<arch>/<config>.json`. Until that artifact exists, do not treat either profile as a measured point on the front.

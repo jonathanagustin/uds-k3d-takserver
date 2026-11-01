@@ -1,5 +1,7 @@
 # Building the images
 
+This page explains where the TAK Server image source comes from, how to run the build, and how CI tags and publishes the six TAK images for both architectures.
+
 `uds run build-image` and `mise run build-image` both run [`.github/container-and-chart/docker/build.sh`](../.github/container-and-chart/docker/build.sh). GitHub Actions runs that same script from [`.github/workflows/container.yaml`](../.github/workflows/container.yaml), and only when files under `.github/container-and-chart/`, that workflow, or the `upstream/takserver` pin change.
 
 ## Where the source comes from
@@ -12,7 +14,9 @@ git submodule update --init --depth 1 upstream/takserver
 
 `build.sh` runs that command when the directory is empty. It refuses to build when the submodule is checked out at a different commit than the one this repository pins, or when it has local changes.
 
-`build.sh` passes the submodule work tree to BuildKit as the `takserver-src` build context, with the commit and its tree id as build arguments. The builder stage copies the files, removes the submodule's `.git` pointer file, and commits them again as one commit tagged with the release. TAK's `src/build.gradle` reads its version from `git describe` and the branch name, so the war still reports `5.7-RELEASE-14-HEAD`, the same as a detached clone of the tag. The stage fails unless the tree id of that commit equals the upstream commit's tree id, which proves the files are exactly the pinned commit. The Ignite image copies `ignite.sh` from the same context instead of downloading it.
+`build.sh` passes the submodule work tree to BuildKit as the `takserver-src` build context, with the commit and its tree id as build arguments.
+
+The builder stage copies the files, removes the submodule's `.git` pointer file, and commits them again as one commit tagged with the release. TAK's `src/build.gradle` reads its version from `git describe` and the branch name, so the war still reports `5.7-RELEASE-14-HEAD`, the same as a detached clone of the tag. The stage fails unless the tree id of that commit equals the upstream commit's tree id, which proves the files are exactly the pinned commit. The Ignite image copies `ignite.sh` from the same context instead of downloading it.
 
 Renovate's `git-submodules` manager is on. `.gitmodules` sets `branch = 5.7-RELEASE-14`, so Renovate looks for newer `X.Y-RELEASE-N` tags and moves the pinned commit, the tag in `.gitmodules`, and the other `5.7-RELEASE-14` strings in one pull request. See [ADR 0008](../adr/0008-tak-source-as-a-submodule.md).
 
@@ -30,7 +34,9 @@ PUSH_IMAGES=true ./.github/container-and-chart/docker/build.sh
 
 You do not need a JDK, Gradle, protoc, or Node on the host. The Dockerfile's builder stage is Temurin 17.0.20, pinned by the image digest. Gradle is the upstream wrapper, 8.10.2. protoc 3.25.8 and the UI's Node downloads come from Gradle. The Gradle cache is a BuildKit cache mount at `/gradle`, so a rebuild on the same builder does not download everything again. In GitHub Actions that cache is also stored with the Actions cache.
 
-The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well. The pin is `ubi9/openjdk-17:1.24-3.1791779556` (built 2026-10-12), which is the newest tag on that repository. Trivy 0.76.1 reports 17 fixable OS vulnerabilities in that base (1 critical, 7 high). Copa 0.15.0 clears those 17 on the base. The TAK image adds more packages, so [`.github/scripts/copa-patch.sh`](../.github/scripts/copa-patch.sh) runs after a single-architecture build and replaces the tag with the patched image before the push. A multi-arch push does not load an image Copa can patch. CI builds one architecture per runner. NATS and PostGIS stay on their upstream tags. This repository does not publish patched copies of those.
+The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well. The pin is `ubi9/openjdk-17:1.24-3.1791779556` (built 2026-10-12), which is the newest tag on that repository.
+
+Trivy 0.76.1 reports 17 fixable OS vulnerabilities in that base (1 critical, 7 high). Copa 0.15.0 clears those 17 on the base. The TAK image adds more packages, so [`.github/scripts/copa-patch.sh`](../.github/scripts/copa-patch.sh) runs after a single-architecture build and replaces the tag with the patched image before the push. A multi-arch push does not load an image Copa can patch. CI builds one architecture per runner. NATS and PostGIS stay on their upstream tags. This repository does not publish patched copies of those.
 
 The builder stays on Java 17. TAK Server 5.7-RELEASE-14, commit `5187abd46d827d37cfc5708805eced197a837e49`, is still the newest public tag. Its Gradle wrapper is 8.10.2, and that Gradle cannot run on Java 25: Groovy stops in the build script with `Unsupported class file major version 69`. TAK 5.7 targets Java 17, and the runtime image is OpenJDK 17, so `mise.toml` pins Temurin 17 as well. Moving the builder means a newer upstream wrapper, or a wrapper bump in this repository that still emits Java 17 bytecode and passes the install and upgrade tests.
 

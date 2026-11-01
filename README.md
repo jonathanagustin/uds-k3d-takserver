@@ -6,7 +6,7 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-[TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`) onto UDS Core with Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking. It is built and tested on a local k3d cluster running `k3d-core-slim-dev` (UDS Core 1.15.2), on amd64 and arm64.
+[TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`) onto UDS Core. It adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking. It is built and tested on a local k3d cluster running `k3d-core-slim-dev` (UDS Core 1.15.2), on amd64 and arm64.
 
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
@@ -65,12 +65,16 @@ https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 - **CloudTAK in the browser.** The optional `cloudtak` component (on by default) runs CloudTAK v13.112.3 at `map.<domain>` with its own PostGIS database. Each Keycloak user gets their own TAK certificate. See [docs/cloudtak.md](docs/cloudtak.md).
 - **A real ATAK test device.** `atak/` runs ATAK-CIV 5.5.1.10, built from public source, in an Android VM under KubeVirt. It connects to TAK over mutual TLS on 8089 like a field device. It is a separate package for amd64 nodes with KVM. See [docs/atak-device.md](docs/atak-device.md).
 - **Images built from source.** The six TAK images, CloudTAK, and PostGIS are built here for amd64 and arm64 and published to GHCR. CI tags each build by a hash of its inputs, so a pull request always tests its own images. See [docs/building.md](docs/building.md).
-- **Signed releases.** Each release package is signed keylessly with Sigstore, and its build provenance (SLSA v1) is attested in GHCR and attached to the GitHub release. See [Verify a release](#verify-a-release).
-- **Supply-chain checks.** CI runs Grype scans, SBOMs, CodeQL, dependency review, and OpenSSF Scorecard. Renovate keeps dependencies current.
+- **Signed releases.** Each release package is signed keylessly with Sigstore. Its build provenance (SLSA v1, the Supply-chain Levels for Software Artifacts format) is attested in GHCR and attached to the GitHub release. See [Verify a release](#verify-a-release).
+- **Supply-chain checks.** CI runs Grype scans, software bills of materials (SBOMs), CodeQL, dependency review, and OpenSSF Scorecard. Renovate keeps dependencies current. See [CI workflows](docs/ci.md).
 
 ## Prerequisites
 
-You need Docker, [k3d](https://k3d.io/), and the [UDS CLI](https://github.com/defenseunicorns/uds-cli) (which includes Zarf). kubectl is optional: `uds zarf tools kubectl` does the same job. `python3` is required on the deploy host: the package's `onDeploy` actions use it, and `uds run test-install` runs the checks under `tests/`. The [UDS local demo requirements](https://docs.defenseunicorns.com/core/getting-started/local-demo/basic-requirements/) call for at least 4 CPU, 10 GiB of memory, and 40 GiB of disk for Docker.
+You need Docker, [k3d](https://k3d.io/), and the [UDS CLI](https://github.com/defenseunicorns/uds-cli) (which includes Zarf). kubectl is optional: `uds zarf tools kubectl` does the same job.
+
+You also need `python3` on the deploy host. The package's `onDeploy` actions use it, and `uds run test-install` uses it to run the checks under `tests/`.
+
+The [UDS local demo requirements](https://docs.defenseunicorns.com/core/getting-started/local-demo/basic-requirements/) call for at least 4 CPU, 10 GiB of memory, and 40 GiB of disk for Docker.
 
 The versions below match what this repository pins and tests with: k3d v5.9.0, UDS CLI v0.40.0 (`mise.toml`), and kubectl v1.37.1 for the k3s v1.37.1 cluster that `k3d-core-slim-dev` creates.
 
@@ -143,7 +147,7 @@ uds run test-install
 
 Then open `https://takserver.uds.dev/` for TAK Server and `https://map.uds.dev/` for CloudTAK, and sign in through Keycloak.
 
-Creating the package pulls the published images from GHCR and Docker Hub, so you do not need to build them first. `build.sh` also checks out the TAK source submodule if you cloned without it.
+Creating the package pulls the published images from GitHub Container Registry (GHCR) and Docker Hub, so you do not need to build them first. `build.sh` also checks out the TAK source submodule if you cloned without it.
 
 | Task | What it does |
 | --- | --- |
@@ -286,7 +290,7 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | Streaming (ATAK, WinTAK) | `takserver-stream.<domain>` | passthrough, 443 SNI or 8089 | 8089 |
 | ATAK test device screen (optional) | `atak.<domain>` | tenant, 443 | 8000 in namespace `atak` |
 
-`<domain>` defaults to `uds.dev`. Ports 8443 and 8089 require a client certificate. A client can enroll on `<host>:8446` and stream to the same `<host>:8089`, the way ATAK expects ([ADR 12](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)).
+`<domain>` defaults to `uds.dev`. "443 SNI" means the passthrough gateway routes port 443 by the host name the client sends in TLS Server Name Indication (SNI). Ports 8443 and 8089 require a client certificate. A client can enroll on `<host>:8446` and stream to the same `<host>:8089`, the way ATAK expects ([ADR 12](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)).
 
 **Browser sign-in:** members of the Keycloak group `/UDS Core/Admin` get `ROLE_ADMIN`. Groups under `/TAK/` with a `_READ` or `_WRITE` suffix become TAK groups. For example, `/TAK/Operators_READ` becomes the TAK group `Operators`.
 
@@ -321,12 +325,12 @@ The ATAK test device is amd64 only and needs KVM on the node.
 `uds run test-install` runs the full suite against a new `k3d-core-slim-dev` cluster. The checks are in [`tasks/test.yaml`](tasks/test.yaml) and [`tests/`](tests/):
 
 - Pod health, Istio mesh, UDS policy, and gateway checks.
-- `tests/api-smoke.sh` exercises the Marti API on 8443, 8447, and 8446, and streams a CoT event on 8089.
+- `tests/api-smoke.sh` exercises the Marti API on 8443, 8447, and 8446, and streams a Cursor on Target (CoT) event on 8089.
 - `tests/oidc-render.sh` checks that every TAK pod rendered the OIDC client secret.
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate.
 - The CloudTAK tests go from `map.<domain>` to the Keycloak login and back as that user, and require a live TAK connection with that user's certificate.
 
-In GitHub Actions, the Test workflow runs install on amd64 and arm64 and the upgrade from the last release. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials.
+In GitHub Actions, the Test workflow runs the install test on amd64 and arm64, and the upgrade test from the last release. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
 
 ## Repository layout
 
@@ -358,7 +362,10 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 | [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |
 | [ATAK test device](docs/atak-device.md) | ATAK-CIV in a KubeVirt VM, its certificate, and its test location |
 | [Building the images](docs/building.md) | Image builds, platforms, pins, input-keyed tags, and the build cache |
-| [Data](docs/data.md) | PostgreSQL and what a backup of the namespace must include |
+| [Data](docs/data.md) | PostgreSQL, backup and restore, and how to find TAK logs |
+| [Values profiles](docs/profiles.md) | The `small` and `production` values overlays and how to apply them |
+| [CI workflows](docs/ci.md) | Each GitHub Actions workflow, what starts it, and what it checks |
+| [Benchmarks](docs/benchmarks.md) | The load benchmark, its configs, and the record it writes |
 | [Policy exemptions](docs/justifications.md) | Every UDS policy exemption, why it exists, and the package requirements not met yet |
 | [Decisions](adr/) | Architecture decision records, from certificates at deploy time to the ATAK device |
 

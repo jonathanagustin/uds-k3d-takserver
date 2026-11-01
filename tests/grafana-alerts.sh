@@ -227,7 +227,7 @@ if command -v docker >/dev/null 2>&1; then
     -e GRAFANA_PASSWORD="${pass}" \
     -v "${root}/tests:/app" \
     -w /app \
-    mcr.microsoft.com/playwright:v1.64.1 \
+    mcr.microsoft.com/playwright:v1.64.1@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea \
     bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test grafana.spec.ts'
   echo "grafana-alerts: saved tests/.playwright/screenshots/tak-dashboard.png"
 else

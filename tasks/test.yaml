@@ -23,6 +23,7 @@ tasks:
       - task: ui
       - task: flows
       - task: usage
+      - task: nats
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -833,3 +834,13 @@ tasks:
             -w /app \
             mcr.microsoft.com/playwright:v1.64.1 \
             bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test'
+
+  - name: nats
+    description: Publish and subscribe on NATS, then again after the pod is replaced
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          python3 tests/nats-roundtrip.py --namespace takserver --service takserver-nats --restart

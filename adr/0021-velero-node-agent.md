@@ -19,7 +19,7 @@ The logical dump stays. The full-core deploy turns file-system backup on as well
 - `FILESYSTEM_BACKUP` defaults to `false`. Slim leaves it there. `bundle/full/uds-config.yaml` sets it for the full-core job only.
 - When it is `true`, the config chart renders DaemonSet `node-agent` in the `velero` namespace from `docker.io/velero/velero:v1.18.4`, and Exemption `velero-node-agent` for the host access that DaemonSet needs. The image is in this package so an air-gapped deploy has it.
 - The same switch annotates the Bitnami Postgres pod volume `data` and the CloudTAK PostGIS pod volume `data` with `backup.velero.io/backup-volumes`. Velero then copies those volumes on the existing schedule. The schedule stays `snapshotVolumes: false`.
-- The agent uses ServiceAccount `velero` and Secret `velero-bucket-credentials`, which `core-backup-restore` already creates. The pods carry `app.kubernetes.io/name: velero` so the Velero Package's storage egress rule matches them. The full bundle adds a Kubernetes API egress allow for `name: node-agent`.
+- The agent uses ServiceAccount `velero-server` (the Velero server's) and Secret `velero-bucket-credentials`, which `core-backup-restore` already creates. The pods carry `app.kubernetes.io/name: velero` so the Velero Package's storage egress rule matches them. The full bundle adds a Kubernetes API egress allow for `name: node-agent`.
 
 ## Consequences
 

@@ -11,6 +11,9 @@
 # the pull falls back to the upstream Defense Unicorns registry.
 #
 #   SLIM_CORE_MIRROR=""   pull from upstream only
+#   SLIM_K3D_EXTRA_ARGS   k3d arguments for the checkpoint's K3D_EXTRA_ARGS.
+#                         Defaults to the CI setting below on a CI runner and
+#                         to nothing elsewhere.
 set -euo pipefail
 
 # renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
@@ -84,5 +87,29 @@ if [[ "${#files[@]}" -gt 1 ]]; then
   exit 1
 fi
 
+# On a CI runner, turn off the API server's datastore compaction. k3s keeps
+# the cluster in SQLite (kine), and kine exits with "Transaction commit
+# failed" when a compaction transaction outlives its 5s timeout. On a busy
+# runner disk that happened about every other run, and the k3s restart takes
+# the API server and the registry down mid-deploy. A CI cluster lives about
+# an hour, so the uncompacted history stays small. A long-lived local cluster
+# keeps the default 5m interval.
+extra="${SLIM_K3D_EXTRA_ARGS-}"
+if [[ -z "${SLIM_K3D_EXTRA_ARGS+x}" && ( "${GITHUB_ACTIONS:-}" == "true" || "${CI:-}" == "true" ) ]]; then
+  extra="--k3s-arg=--kube-apiserver-arg=etcd-compaction-interval=0@server:*"
+fi
+
 echo "Deploying ${files[0]}"
-"${zarf[@]}" package deploy "${files[0]}" --confirm --features values=true
+if [[ -n "${extra}" ]]; then
+  echo "K3D_EXTRA_ARGS=${extra}"
+  "${zarf[@]}" package deploy "${files[0]}" --confirm --features values=true --set "K3D_EXTRA_ARGS=${extra}"
+else
+  "${zarf[@]}" package deploy "${files[0]}" --confirm --features values=true
+fi
+if [[ -n "${extra}" ]] && command -v docker >/dev/null 2>&1; then
+  server="$(docker ps --filter name=k3d- --filter name=server-0 --format '{{.Names}}')"
+  if [[ -n "${server}" ]]; then
+    echo "${server} k3s arguments:"
+    docker inspect "${server}" --format '{{join .Args " "}}' || true
+  fi
+fi

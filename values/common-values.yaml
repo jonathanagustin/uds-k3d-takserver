@@ -112,6 +112,15 @@ postgresql:
     registry: ghcr.io
     repository: jonathanagustin/uds-k3d-takserver/postgis
     tag: "18-3.6"
+  configurationConfigMap: postgres-configuration
+  auth:
+    database: cot
+    username: postgres
+    password: postgres
+    postgresPassword: postgres
+  # Steady working set on run 40174810574 was 57Mi amd64 and 59Mi arm64.
+  # The container limit stays 512Mi, so shared_buffers has to stay well
+  # under it. The request is about twice the steady set.
   # pg_upgrade runs before the server listens. Without a startup probe the
   # liveness probe kills that first start. 60 failures at 10s is 10 minutes.
   primary:
@@ -122,16 +131,6 @@ postgresql:
       timeoutSeconds: 5
       failureThreshold: 60
       successThreshold: 1
-  configurationConfigMap: postgres-configuration
-  auth:
-    database: cot
-    username: postgres
-    password: postgres
-    postgresPassword: postgres
-  # Steady working set on run 40174810574 was 57Mi amd64 and 59Mi arm64.
-  # The container limit stays 512Mi, so shared_buffers has to stay well
-  # under it. The request is about twice the steady set.
-  primary:
     resources:
       requests:
         cpu: 50m

@@ -39,7 +39,7 @@ export interface DestinationRuleDoc {
 }
 
 export interface PodDoc {
-  metadata?: { name?: string; deletionTimestamp?: string };
+  metadata?: { name?: string; deletionTimestamp?: string; creationTimestamp?: string };
   status?: { phase?: string };
 }
 
@@ -68,6 +68,10 @@ export interface StatefulSetDoc {
       spec?: { automountServiceAccountToken?: boolean };
     };
   };
+}
+
+export interface JobDoc {
+  status?: { succeeded?: number; completionTime?: string };
 }
 
 export interface JsonOp {
@@ -99,6 +103,7 @@ export interface Cluster {
   patchStatefulSet(namespace: string, name: string, ops: JsonOp[]): Promise<void>;
   restartStatefulSet(namespace: string, name: string, hasAnnotations: boolean): Promise<void>;
   listPods(namespace: string, app: string): Promise<PodDoc[]>;
+  getJob(namespace: string, name: string): Promise<JobDoc | undefined>;
   sleep(ms: number): Promise<void>;
 }
 
@@ -209,6 +214,7 @@ const live: Cluster = {
     const list = await K8s(kind.Pod).InNamespace(namespace).WithLabel("app", app).Get();
     return (list.items ?? []) as PodDoc[];
   },
+  getJob: (namespace, name) => read(() => K8s(kind.Job).InNamespace(namespace).Get(name)) as Promise<JobDoc | undefined>,
   sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
 };
 

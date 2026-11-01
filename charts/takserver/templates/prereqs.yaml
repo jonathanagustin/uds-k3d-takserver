@@ -61,7 +61,9 @@ stringData:
 # calls are refused (ECONNREFUSED in ztunnel, curl 35 in the Job). This
 # policy exists only for the hook, because Helm deletes it with the
 # ServiceAccount after the hooks succeed. Port 6443 is the k3s API on the
-# node, and 443 is the kubernetes Service port.
+# node, and 443 is the kubernetes Service port. Selecting the pod makes the
+# policy's rules its whole egress on a fresh install, so DNS for
+# kubernetes.default.svc is allowed too.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -82,6 +84,18 @@ spec:
           port: 6443
         - protocol: TCP
           port: 443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: v1
 kind: ServiceAccount

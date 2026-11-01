@@ -58,7 +58,7 @@ concurrency:
 
 jobs:
   images:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       actions: read
@@ -131,7 +131,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: cloudtak-image (${{ matrix.arch }})
@@ -173,7 +173,7 @@ jobs:
   # entry for the package architecture.
   cloudtak-index:
     needs: cloudtak-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -214,7 +214,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: postgis-image (${{ matrix.arch }})
@@ -253,7 +253,7 @@ jobs:
 
   postgis-index:
     needs: postgis-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -285,7 +285,7 @@ jobs:
           include-platforms: "false"
 
   check-flavor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -293,7 +293,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: test-flavor
-        uses: defenseunicorns/uds-common/.github/actions/test-flavor@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+        uses: defenseunicorns/uds-common/.github/actions/test-flavor@9cb4ebfd9f9a5efd1dbc454bf3aae843d0b57b9f # v1.32.2
         id: test-flavor
     outputs:
       upgrade-flavors: ${{ steps.test-flavor.outputs.upgrade-flavors }}
@@ -310,7 +310,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: validate-install (${{ matrix.arch }})
@@ -350,6 +350,15 @@ jobs:
           IMAGE_RESULT: ${{ needs.images.result }}
         run: test "${IMAGE_RESULT}" = success
 
+      # Toolchain deletes do not need Docker. On the runner that still had
+      # them (run 39686333898) Android alone took 136s of the 244s amd64
+      # trim, so this starts while Compose and the UDS CLI install.
+      - name: Start trimming the runner
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
+        run: ./.github/scripts/trim-runner.sh start
+        env:
+          TRIM_SKIP_ABOVE_GB: "60"
+
       - name: Install Docker Compose
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
@@ -364,11 +373,12 @@ jobs:
           version: v0.40.0
 
       - name: Trim the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64')
-        run: ./.github/scripts/trim-runner.sh
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
+        run: ./.github/scripts/trim-runner.sh finish
         env:
           # The test uses about 30 GB (see "Disk use after the test"), so a
-          # runner with this much free needs no deletes.
+          # runner with this much free needs no deletes. Run 40174810574 had
+          # 86 GB free on amd64 and 108 GB free on arm64, so this skipped.
           TRIM_SKIP_ABOVE_GB: "60"
 
       # Restore only. Install and upgrade run together, and a second save of
@@ -519,7 +529,7 @@ jobs:
     needs: [images, cloudtak-index, postgis-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
     # A healthy upgrade finishes in about 30 minutes. This job limit is what
     # stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 75
@@ -535,7 +545,7 @@ jobs:
     steps: *validate-steps
 
   verify-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [validate-install, validate-upgrade]
     if: always()
     permissions:

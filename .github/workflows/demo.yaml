@@ -50,7 +50,7 @@ env:
 jobs:
   record:
     if: ${{ !inputs.sign_only }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 240
     permissions:
       attestations: read
@@ -79,7 +79,7 @@ jobs:
           echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04'
         run: ./.github/scripts/trim-runner.sh
 
       # Same steps as the ATAK e2e workflow: the registry build cache keeps
@@ -113,13 +113,9 @@ jobs:
         timeout-minutes: 120
         run: |
           set -euo pipefail
-          ./atak/ci/build-apk.sh
-          docker buildx build -f atak/apk/Dockerfile --target driver -t "${DRIVER_IMAGE}" --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-apk-apk" .
-          docker buildx build -f atak/vm/Dockerfile -t ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-vm" .
-          docker buildx build -f atak/viewer/Dockerfile -t ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-viewer" .
+          # Pulls the images the ATAK e2e workflow published for these inputs
+          # (atak/ci/device-images.sh) and builds only the ones it has not.
+          ./atak/ci/device-images.sh build
           docker buildx rm --all-inactive --force || true
           docker buildx prune -af || true
           docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
@@ -351,7 +347,7 @@ jobs:
   publish:
     needs: record
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
@@ -396,7 +392,7 @@ jobs:
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
       && (inputs.sign_only || needs.publish.result == 'success')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write

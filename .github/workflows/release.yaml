@@ -43,7 +43,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     name: publish (${{ matrix.arch }})
@@ -148,7 +148,7 @@ jobs:
   #     --owner jonathanagustin
   provenance:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write

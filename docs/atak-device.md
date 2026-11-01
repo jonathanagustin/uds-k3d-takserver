@@ -1,6 +1,6 @@
 # ATAK test device
 
-`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 VM managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams CoT on 8089 over mutual TLS, and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
+`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 VM managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams Cursor on Target (CoT) events on 8089 over mutual TLS, and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
 
 It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [ADR 14](../adr/0014-atak-test-device-in-kubevirt.md).
 
@@ -31,7 +31,7 @@ uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=ud
 
 The package (`atak/zarf.yaml`) has two components:
 
-- `kubevirt`: KubeVirt v1.8.4 (operator and CR manifests pinned by checksum) and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in CRD schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every VMI status update fail and the VMI stays `Scheduled` while the guest runs. v1.9.1 does not start containerDisk VMs in this setup, so the release is pinned.
+- `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt CR in `atak/deploy/kubevirt-cr.yaml`, and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in CRD schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every VMI status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without CRI image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
 - `atak-device`: the VM, Service `atak-device-adb`, the viewer Deployment, and the UDS Package `atak`. The Package's expose entry probes `https://atak.<domain>/phone.html`. That path is the viewer page. Authservice sits in front of it, and the operator's probe client is what the check uses.
 
 ## Device certificate
@@ -43,25 +43,35 @@ At run time `atak/ci/e2e.sh`:
 1. Reads the deploy-time TAK CA (`ca.pem` and `ca-do-not-share.key`) from ConfigMap `takserver/cert-migration` ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)) and issues a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth`. The CA key stays in a temporary directory on the runner and is deleted after signing.
 2. Registers the certificate in TAK with `java -jar UserManager.jar certmod -g Operators <cert.pem>` in the messaging pod. Only the public certificate goes into the pod. This is how TAK 5.7 maps a certificate to a user: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `certmod` adds the user with the fingerprint and no password, the same way `enable_admin.sh` adds the admin certificate. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
 3. Builds a standard ATAK connection data package (`atak-device.dpk`): `MANIFEST/manifest.xml`, `certs/server.pref` with one stream `takserver-stream.<domain>:8089:ssl` and its `caLocation0`, `caPassword0`, `certificateLocation0`, and `clientPassword0` entries, the client `certs/atak-device.p12`, and the CA in `certs/truststore.p12`. Both PKCS#12 files use SHA-1/3DES, which Android 9 reads, and a password generated for this run. The CA certificate in the truststore carries a friendlyName (`openssl pkcs12 -export -nokeys -caname ...`); without one, Android's PKCS12 keystore lists no entry and ATAK reports "Unable to validate Truststore".
-
-### Test location
-
-The VM has no GPS. Before ATAK's first start the driver stages a preferences file at `atak/config/prefs/defaults`. ATAK loads that file once at start-up and then deletes it (`PreferenceControl.ingestDefaults`). The file gives the device a fixed **test location** on the National Mall in Washington, DC (38.8895, -77.0353). It uses ATAK's own "restore location on restart" settings (`recordedLocation`, `restoreRecordedLocation`). ATAK's `RestoreLocationMapComponent` loads those settings as a mock self position when the map starts. The same file sets the GPS option to "external only" (`mockingOption` `IgnoreInternalGPS`), because there is no GPS receiver. It marks ATAK's GPS mode hint as seen (`atak.hint.gps.device.mode`). It sets `atakControlForcePortrait` so the screen fits the phone view. The file holds no secrets. The location is not a GPS fix, and the device never presents it as one. The callsign is `ATAK-DEVICE (TEST LOCATION)`. TAK, CloudTAK, and other clients show that callsign next to the marker. `atak/ci/e2e.sh` checks that TAK's latest event from the device is at that point under that callsign. The settings are not in the data package. Importing `restoreRecordedLocation` into a running ATAK makes it record the current (empty) self position over `recordedLocation`. Override the point with `TEST_LAT`, `TEST_LON`, and `CALLSIGN`. After the device connects, the driver locks the map on the self marker and zooms in (`atak-test-location.png`). The self-coordinate overlay keeps a small red `NO GPS` source label. ATAK shows that label for any position that is not a live fix, including one placed by hand. That label is accurate for this device.
 4. Stores the package in Secret `atak/atak-device-dpk` and mounts it into the driver pod.
 
 The driver installs the APK over adb, taps through the first-run prompts, pushes the package to `/sdcard/Download/atak-device.dpk`, and restarts ATAK. On start ATAK imports `Download/atak*.dpk` files (`PreferenceControl`), the normal import path for a provisioned device. The `.p12` files go to `atak/cert`, the `.pref` adds the stream with those certificates, and ATAK connects to 8089 over mutual TLS. The e2e job then looks for `atak-device` in `/Marti/api/subscriptions/all` and `/Marti/api/clientEndPoints`.
 
 Inside the cluster `takserver.<domain>` resolves to the tenant gateway, so the device uses `takserver-stream.<domain>`. The viewer login uses the Keycloak user.
 
+### Test location
+
+The VM has no GPS, so the device reports a fixed test location instead.
+
+Before ATAK's first start the driver stages a preferences file at `atak/config/prefs/defaults`. ATAK loads that file once at start-up and then deletes it (`PreferenceControl.ingestDefaults`). The file gives the device a fixed **test location** on the National Mall in Washington, DC (38.8895, -77.0353).
+
+The file uses ATAK's own "restore location on restart" settings (`recordedLocation`, `restoreRecordedLocation`). ATAK's `RestoreLocationMapComponent` loads those settings as a mock self position when the map starts. The same file sets the GPS option to "external only" (`mockingOption` `IgnoreInternalGPS`), because there is no GPS receiver. It marks ATAK's GPS mode hint as seen (`atak.hint.gps.device.mode`). It sets `atakControlForcePortrait` so the screen fits the phone view. The file holds no secrets.
+
+The location is not a GPS fix, and the device never presents it as one. The callsign is `ATAK-DEVICE (TEST LOCATION)`. TAK, CloudTAK, and other clients show that callsign next to the marker. `atak/ci/e2e.sh` checks that TAK's latest event from the device is at that point under that callsign.
+
+The settings are not in the data package, because importing `restoreRecordedLocation` into a running ATAK makes it record the current (empty) self position over `recordedLocation`. Override the point with `TEST_LAT`, `TEST_LON`, and `CALLSIGN`.
+
+After the device connects, the driver locks the map on the self marker and zooms in (`atak-test-location.png`). The self-coordinate overlay keeps a small red `NO GPS` source label. ATAK shows that label for any position that is not a live fix, including one placed by hand. That label is accurate for this device.
+
 ### Why not password enrollment
 
-ATAK always enrolls on 8446 with HTTP Basic (`CertificateEnrollmentClient` passes `passIsToken=false`). With `auth default="file"` TAK checks Basic credentials against its file authenticator and sends only bearer tokens to Keycloak, so a Keycloak password gets a 302 to the login page. Enrolling the device would need a TAK file user with a password. A certificate issued from the TAK CA needs no password user and matches how devices are provisioned in the field. The 8446 enrollment test in `tests/` still covers the enrollment endpoint.
+ATAK always enrolls on 8446 with HTTP Basic authentication (`CertificateEnrollmentClient` passes `passIsToken=false`). With `auth default="file"` TAK checks Basic credentials against its file authenticator and sends only bearer tokens to Keycloak, so a Keycloak password gets a 302 to the login page. Enrolling the device would need a TAK file user with a password. A certificate issued from the TAK CA needs no password user and matches how devices are provisioned in the field. The 8446 enrollment test in `tests/` still covers the enrollment endpoint.
 
 ### Provisioning device certificates
 
 For a real device, an operator does the same steps by hand:
 
-1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a CSR with `ca.pem` and `ca-do-not-share.key` from `cert-migration`, as `atak/ci/e2e.sh` does.
+1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a certificate signing request (CSR) with `ca.pem` and `ca-do-not-share.key` from `cert-migration`, as `atak/ci/e2e.sh` does.
 2. Register it: `kubectl exec -n takserver deploy/takserver-messaging -c takserver-messaging -- sh -c 'cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g <group> /tmp/<name>.pem'` after copying the PEM to `/tmp` in the pod. `UserAuthenticationFile.xml` is not on a volume, so run it again after the messaging pod restarts.
 3. Package the `.p12`, the truststore, and a `.pref` as above, and hand the package to the device. Copy it to the device's `Download` folder as `atak*.dpk`, or open it with ATAK's Import Manager.
 

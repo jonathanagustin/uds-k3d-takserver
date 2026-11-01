@@ -21,13 +21,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         with:
           install_args: uv
           cache: true
 
       - name: Install hk tools
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         with:
           # Names have to match mise.toml. yamllint and codespell are PyPI tools
           # and need uv installed first. uds-cli is only in the aqua registry.
@@ -38,5 +38,5 @@ jobs:
         run: hk check --all
 
   validate:
-    uses: defenseunicorns/uds-common/.github/workflows/callable-lint.yaml@320e247b590fbdcf25a1f01e9b00db88bdd8a448 # v1.32.1
+    uses: defenseunicorns/uds-common/.github/workflows/callable-lint.yaml@9cb4ebfd9f9a5efd1dbc454bf3aae843d0b57b9f # v1.32.2
     secrets: inherit

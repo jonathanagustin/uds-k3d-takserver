@@ -4,7 +4,9 @@
 # Full UDS Core plus TAK. This is its own workflow so a nightly schedule does
 # not rerun the per-PR validate-install jobs in test.yaml. No workflow in
 # this repo sets a larger GitHub-hosted runner label, so amd64 uses
-# vars.TEST_RUNNER when that variable is set and ubuntu-latest otherwise.
+# vars.TEST_RUNNER when that variable is set and ubuntu-24.04 otherwise.
+# amd64 is pinned to ubuntu-24.04 because ubuntu-latest is moving to 26.04,
+# where the Zarf checkpoint extraction fails with 'disk quota exceeded'.
 # The job then trims the runner disk and adds swap. See
 # adr/0015-full-core-is-a-scheduled-gate.md.
 name: Full Core
@@ -70,7 +72,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-latest' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -102,13 +104,13 @@ jobs:
           version: v0.40.0
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
         run: ./.github/scripts/trim-runner.sh
         env:
           TRIM_SKIP_ABOVE_GB: "60"
 
       - name: Add swap
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-latest' || runner.arch == 'ARM64'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
         run: ./.github/scripts/add-runner-swap.sh
 
       # Restore the cache the Test workflow fills. Do not save it again: a

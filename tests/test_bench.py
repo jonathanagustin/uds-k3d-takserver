@@ -292,3 +292,73 @@ class TesterExitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RestartOrderTest(unittest.TestCase):
+    """bench/run.py restarts workloads in the package's startup order."""
+
+    def config(self):
+        def item(workload, namespace="takserver", container="c"):
+            return {"workload": workload, "namespace": namespace, "container": container,
+                    "memory_request": "1Gi", "memory_limit": "2Gi"}
+        return {
+            "env": [],
+            "resources": [
+                item("deployment/takserver-api"),
+                item("deployment/takserver-messaging"),
+                item("deployment/takserver-config"),
+                item("deployment/takserver-plugins"),
+                item("statefulset/takserver-postgresql"),
+                item("statefulset/takserver-ignite"),
+                item("deployment/cloudtak", "cloudtak", "cloudtak"),
+                item("deployment/cloudtak", "cloudtak", "sso"),
+            ],
+        }
+
+    def test_workloads_follow_the_startup_order_once_each(self):
+        self.assertEqual(
+            [w for _, w in runner.workloads(self.config())],
+            [
+                "statefulset/takserver-postgresql",
+                "statefulset/takserver-ignite",
+                "deployment/takserver-config",
+                "deployment/takserver-messaging",
+                "deployment/takserver-api",
+                "deployment/takserver-plugins",
+                "deployment/cloudtak",
+            ],
+        )
+
+    def test_only_an_ignite_change_stops_tak(self):
+        self.assertTrue(runner.restarts_ignite(self.config()))
+        heap = {"env": [{"workload": "deployment/takserver-api", "namespace": "takserver",
+                         "container": "takserver-api", "name": "X", "value": "1"}]}
+        self.assertFalse(runner.restarts_ignite(heap))
+
+    def test_tak_comes_back_after_ignite_config_first(self):
+        calls = []
+
+        def fake(*args, check=True):
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        original = runner.kubectl
+        runner.kubectl = fake
+        try:
+            replicas = {w: 1 for w in runner.TAK_CONSUMERS}
+            runner.rollout(self.config(), replicas)
+        finally:
+            runner.kubectl = original
+        steps = [(a[1], a[2]) if a[0] == "rollout" else (a[0], a[1]) for a in calls if a[0] in ("rollout", "scale") and a[1] != "status"]
+        self.assertEqual(
+            steps,
+            [
+                ("restart", "statefulset/takserver-postgresql"),
+                ("restart", "statefulset/takserver-ignite"),
+                ("scale", "deployment/takserver-config"),
+                ("scale", "deployment/takserver-messaging"),
+                ("scale", "deployment/takserver-api"),
+                ("scale", "deployment/takserver-plugins"),
+                ("restart", "deployment/cloudtak"),
+            ],
+        )

@@ -177,6 +177,76 @@ def ready_age():
     return max(ages), errors
 
 
+# The package's startup order (docs/configuration.md, "Startup order"): the
+# databases and Ignite first, then config, then messaging and the API, then
+# plugins. Messaging and the API join Ignite through config, and an Ignite
+# restart drops the caches they hold, so the package never restarts Ignite
+# under running TAK pods. The sweep follows the same order.
+TAK_NAMESPACE = "takserver"
+TAK_CONSUMERS = (
+    "deployment/takserver-config",
+    "deployment/takserver-messaging",
+    "deployment/takserver-api",
+    "deployment/takserver-plugins",
+)
+IGNITE = "statefulset/takserver-ignite"
+ORDER = (
+    "statefulset/takserver-postgresql",
+    IGNITE,
+    *TAK_CONSUMERS,
+)
+ROLLOUT_TIMEOUT = "--timeout=600s"
+
+
+def workloads(config):
+    """(namespace, workload) once each, in the package's startup order."""
+    seen = []
+    for item in (config.get("env") or []) + (config.get("resources") or []):
+        key = (item["namespace"], item["workload"])
+        if key not in seen:
+            seen.append(key)
+
+    def rank(key):
+        namespace, workload = key
+        if namespace == TAK_NAMESPACE and workload in ORDER:
+            return ORDER.index(workload)
+        return len(ORDER)
+
+    return sorted(seen, key=rank)
+
+
+def restarts_ignite(config):
+    return (TAK_NAMESPACE, IGNITE) in workloads(config)
+
+
+def diagnose(namespace, workload):
+    """What a timed-out rollout was waiting on. The nightly keeps no cluster."""
+    lines = [f"--- {workload} in {namespace} did not finish rolling out"]
+    pods = kubectl("get", "pods", "-n", namespace, "-o", "wide", check=False)
+    lines.append(pods.stdout.strip() or pods.stderr.strip())
+    events = kubectl(
+        "get", "events", "-n", namespace, "--sort-by=.lastTimestamp", check=False,
+    )
+    lines.extend((events.stdout.strip() or events.stderr.strip()).splitlines()[-25:])
+    if workload.startswith("deployment/"):
+        for container, tail in (("wait-deps", "40"), (workload.split("/", 1)[1], "80")):
+            logs = kubectl(
+                "logs", workload, "-n", namespace, "-c", container, f"--tail={tail}", check=False,
+            )
+            text = logs.stdout.strip() or logs.stderr.strip()
+            lines.append(f"--- {container} logs")
+            lines.append(text)
+    print("\n".join(lines), file=sys.stderr)
+
+
+def wait_rollout(namespace, workload):
+    try:
+        kubectl("rollout", "status", workload, "-n", namespace, ROLLOUT_TIMEOUT)
+    except RuntimeError:
+        diagnose(namespace, workload)
+        raise
+
+
 def apply_config(config):
     for item in config.get("env") or []:
         kubectl(
@@ -192,15 +262,41 @@ def apply_config(config):
         )
 
 
-def rollout(config):
+def stop_tak():
+    """Scale the TAK Deployments to zero, last first. Returns their replicas."""
+    replicas = {}
+    for workload in reversed(TAK_CONSUMERS):
+        count = kubectl(
+            "get", workload, "-n", TAK_NAMESPACE, "-o", "jsonpath={.spec.replicas}",
+        ).stdout.strip()
+        replicas[workload] = int(count or "1")
+        kubectl("scale", workload, "-n", TAK_NAMESPACE, "--replicas=0")
+        wait_rollout(TAK_NAMESPACE, workload)
+    return replicas
+
+
+def rollout(config, replicas=None):
+    """Restart each changed workload in startup order and wait for it.
+
+    With replicas (from stop_tak), the TAK Deployments are at zero: the
+    statefulsets restart first, then each Deployment is scaled back to its
+    count, config first.
+    """
     started = time.monotonic()
-    seen = False
-    for item in (config.get("env") or []) + (config.get("resources") or []):
-        kubectl("rollout", "restart", item["workload"], "-n", item["namespace"])
-        kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
-        seen = True
-    if not seen:
+    order = workloads(config)
+    if not order and not replicas:
         return None
+    for namespace, workload in order:
+        if replicas and namespace == TAK_NAMESPACE and workload in TAK_CONSUMERS:
+            continue
+        kubectl("rollout", "restart", workload, "-n", namespace)
+        wait_rollout(namespace, workload)
+        if replicas and workload == IGNITE:
+            for consumer in TAK_CONSUMERS:
+                kubectl(
+                    "scale", consumer, "-n", TAK_NAMESPACE, f"--replicas={replicas[consumer]}",
+                )
+                wait_rollout(TAK_NAMESPACE, consumer)
     return round(time.monotonic() - started, 3)
 
 
@@ -432,10 +528,14 @@ def write_record(record, out_dir):
 def one(config, clients, out_dir, tester, cold):
     duration = int(config["duration_s"])
     record = blank(arch_name(), config["name"], clients, duration)
+    replicas = None
     try:
+        # A config that resizes Ignite stops TAK before anything changes, so
+        # no TAK pod restarts against an Ignite that is restarting.
+        replicas = stop_tak() if config.get("restart") and restarts_ignite(config) else None
         apply_config(config)
         if config.get("restart"):
-            record["time_to_ready"]["warm_s"] = rollout(config)
+            record["time_to_ready"]["warm_s"] = rollout(config, replicas)
             record["time_to_ready"]["cold_s"] = cold
         else:
             record["time_to_ready"]["cold_s"] = cold
@@ -475,6 +575,9 @@ def one(config, clients, out_dir, tester, cold):
             record["errors"].append("no kubelet samples")
     except (RuntimeError, subprocess.CalledProcessError) as error:
         record["errors"].append(str(error))
+        # Leave TAK running for the next config, even after a failed one.
+        for workload, count in (replicas or {}).items():
+            kubectl("scale", workload, "-n", TAK_NAMESPACE, f"--replicas={count}", check=False)
     path = write_record(record, out_dir)
     print(f"wrote {path}")
     return record

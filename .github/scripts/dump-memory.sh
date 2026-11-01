@@ -35,8 +35,9 @@ for node in $(docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null)
 done
 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
 for node in $(docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
-  echo "--- ${node}: k3s fatal, panic, and shutdown lines"
-  docker logs "${node}" 2>&1 | grep -iE 'level=fatal|panic|signal|shutting down|killed' | tail -20 || true
+  echo "--- ${node}: k3s starts, errors, and shutdown lines"
+  docker logs "${node}" 2>&1 |
+    grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' | tail -40 || true
 done
 echo "::endgroup::"
 

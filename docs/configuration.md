@@ -116,7 +116,7 @@ Older commits of this branch still contain the keystores that used to live in `c
 
 ## Metrics
 
-TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. The image adds `micrometer-registry-prometheus` 1.13.8 on `/opt/tak/metrics` and the API and messaging scripts load it with `-Dloader.path`. Those two scripts also set `-Dmanagement.server.port=9100`, so Actuator's Prometheus text is on plaintext 9100 at `/actuator/prometheus`. The Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not bind it. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 17](../adr/0017-prometheus-monitors.md).
+The API and messaging images load the Prometheus JMX exporter javaagent 1.7.0 (`/opt/tak/metrics`). It serves plain-HTTP Prometheus text on 9100 at `/metrics`: the JVM collectors (`jvm_*`, `process_*`) and Tomcat's request and error counters (`tomcat_requestcount_total`, `tomcat_errorcount_total`, from `-Dserver.tomcat.mbeanregistry.enabled=true`). TAK's Spring configuration and Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not load the agent. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 17](../adr/0017-prometheus-monitors.md).
 
 ## Monitoring
 

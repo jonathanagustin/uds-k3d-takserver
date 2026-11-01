@@ -29,7 +29,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rate(jvm_gc_pause_seconds_count{namespace=\"takserver\"}[5m])"
+          "expr": "rate(jvm_gc_collection_seconds_count{namespace=\"takserver\"}[5m])"
         }
       ]
     },
@@ -42,7 +42,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod) (rate(http_server_requests_seconds_count{namespace=\"takserver\"}[5m]))"
+          "expr": "sum by (pod) (rate(tomcat_requestcount_total{namespace=\"takserver\"}[5m]))"
         }
       ]
     },

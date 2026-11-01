@@ -178,9 +178,9 @@ def up(namespace, path, pod_prefix):
     return matched
 
 missing = []
-if not up("takserver", "/actuator/prometheus", "takserver-api-"):
+if not up("takserver", "/metrics", "takserver-api-"):
     missing.append("takserver-api")
-if not up("takserver", "/actuator/prometheus", "takserver-messaging-"):
+if not up("takserver", "/metrics", "takserver-messaging-"):
     missing.append("takserver-messaging")
 if not up("pepr-system", "/metrics", "takserver-oidc-"):
     missing.append("takserver-oidc")

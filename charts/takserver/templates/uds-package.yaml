@@ -8,8 +8,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   {{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
-  # API and messaging listen on plaintext 9100. The admission module names
-  # that container port metrics. Absent when the monitoring API is not installed.
+  # The JMX exporter javaagent in the API and messaging pods listens on
+  # plaintext 9100. The admission module names that container port metrics. Absent when the monitoring API is not installed.
   monitor:
     - description: tak-api
       kind: PodMonitor
@@ -17,14 +17,14 @@ spec:
         {{- toYaml .Values.api.selector | nindent 8 }}
       portName: metrics
       targetPort: 9100
-      path: /actuator/prometheus
+      path: /metrics
     - description: tak-messaging
       kind: PodMonitor
       selector:
         {{- toYaml .Values.messaging.selector | nindent 8 }}
       portName: metrics
       targetPort: 9100
-      path: /actuator/prometheus
+      path: /metrics
   {{- end }}
   # Operator-managed CA bundle. The upstream chart has no value that mounts it.
   caBundle:

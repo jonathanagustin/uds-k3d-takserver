@@ -359,7 +359,7 @@ tasks:
           resources="$(uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null || true)"
           if grep -q servicemonitors <<< "${resources}"; then
             monitors="$(uds zarf tools kubectl get podmonitor.monitoring.coreos.com -n takserver -o yaml)"
-            if ! grep -q '/actuator/prometheus' <<< "${monitors}"; then
+            if ! grep -q 'port: metrics' <<< "${monitors}"; then
               echo "TAK PodMonitors are missing" >&2
               exit 1
             fi

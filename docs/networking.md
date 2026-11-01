@@ -19,7 +19,7 @@ Ports 8444, 9000, and 9001 stay on the Services and have no gateway host. TLS on
 
 Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the API, and Ignite.
 
-API and messaging also listen on plaintext 9100 for Prometheus. That port is not published. The Package monitor is what lets Prometheus scrape it.
+API and messaging also listen on plaintext 9100 for Prometheus (the JMX exporter javaagent). That port is not published. The Package monitor is what lets Prometheus scrape it.
 
 `k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` turns that optional component on for tests.
 

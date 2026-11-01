@@ -1,0 +1,15 @@
+# Prometheus JMX exporter javaagent for the TAK API and messaging processes.
+# The agent's built-in collectors export jvm_* and process_*. Only Tomcat's
+# request counters are read from JMX: Ignite registers many MBeans that would
+# make the scrape large and slow.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+includeObjectNames: ["Catalina:type=GlobalRequestProcessor,*"]
+rules:
+  # Catalina:type=GlobalRequestProcessor,name="https-jsse-nio-8443"
+  - pattern: 'Catalina<type=GlobalRequestProcessor, name=\"([\w-]+)-(\d+)\"><>([Rr]equestCount|[Ee]rrorCount):'
+    name: tomcat_$3_total
+    labels:
+      port: "$2"
+      protocol: "$1"
+    type: COUNTER

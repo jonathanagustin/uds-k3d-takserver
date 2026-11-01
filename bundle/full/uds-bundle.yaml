@@ -19,7 +19,7 @@ metadata:
 packages:
   - name: core-base
     repository: ghcr.io/defenseunicorns/packages/uds/core-base
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     optionalComponents:
       - istio-passthrough-gateway
     keylessVerification:
@@ -80,19 +80,19 @@ packages:
 
   - name: core-metrics-server
     repository: ghcr.io/defenseunicorns/packages/uds/core-metrics-server
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: &core-keyless
       certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
 
   - name: core-logging
     repository: ghcr.io/defenseunicorns/packages/uds/core-logging
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: *core-keyless
 
   - name: core-runtime-security
     repository: ghcr.io/defenseunicorns/packages/uds/core-runtime-security
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: *core-keyless
     # One custom rule. No disabledRules entry and no exception: the full-core
     # artifact has to show which stable rules actually fire before any of
@@ -115,12 +115,12 @@ packages:
 
   - name: core-backup-restore
     repository: ghcr.io/defenseunicorns/packages/uds/core-backup-restore
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: *core-keyless
 
   - name: core-monitoring
     repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: *core-keyless
     overrides:
       grafana:
@@ -133,7 +133,7 @@ packages:
 
   - name: core-portal
     repository: ghcr.io/defenseunicorns/packages/uds/core-portal
-    ref: 1.15.2-upstream
+    ref: 1.16.0-upstream
     keylessVerification: *core-keyless
 
   - name: takserver

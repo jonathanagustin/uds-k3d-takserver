@@ -6,7 +6,7 @@
 
 [[IgnoredVulns]]
 # minimatch ReDoS through globparts amplification. OSV lists 11.0.1 as the
-# first fixed version, and nothing on the 10.x line has the fix. Pepr 2.0.5
+# first fixed version, and nothing on the 10.x line has the fix. Pepr 2.0.7
 # depends on eslint, and eslint, @eslint/config-array and
 # @typescript-eslint/typescript-estree require minimatch ^10. Only the Pepr
 # CLI's format and lint commands load eslint, on this repository's own

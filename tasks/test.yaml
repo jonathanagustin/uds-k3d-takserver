@@ -135,9 +135,9 @@ tasks:
           [ "${ignite_limit}" = "1536Mi" ]
           [ "${ignite_request}" = "512Mi" ]
           plugin_limit="$(k get deploy takserver-plugins -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
-          [ "${plugin_limit}" = "384Mi" ]
+          [ "${plugin_limit}" = "512Mi" ]
           config_request="$(k get deploy takserver-config -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
-          [ "${config_request}" = "512Mi" ]
+          [ "${config_request}" = "1Gi" ]
           deny="$(k get authorizationpolicy takserver-deny-plaintext-8080 -n takserver -o yaml)"
           grep -q '8080' <<< "${deny}"
           services="$(k get svc takserver-messaging-service takserver-api-service -n takserver -o yaml)"

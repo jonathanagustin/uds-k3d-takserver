@@ -1,0 +1,22 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: postgis-wal
+description: >
+  Smaller cache and fewer checkpoints than postgis-buffers. shared_buffers
+  64MB, work_mem 4MB, effective_cache_size 256MB, max_wal_size 128MB,
+  checkpoint_timeout 15min. Still inside the 512Mi limit. The steady set on
+  run 40174810574 was 57Mi amd64 and 59Mi arm64 at the chart defaults. This
+  file is a harness point only. It is not copied into the package until a
+  report puts it on the front.
+clients: [10, 50, 200]
+duration_s: 60
+restart: true
+env: []
+resources: []
+postgres:
+  shared_buffers: 64MB
+  work_mem: 4MB
+  effective_cache_size: 256MB
+  max_wal_size: 128MB
+  checkpoint_timeout: 15min

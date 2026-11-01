@@ -1,0 +1,99 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Copies the UDS Core slim checkpoints that CI deploys
+# (ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev) into this
+# repository's GHCR, byte for byte, so the digest stays the upstream one.
+# .github/scripts/deploy-slim-core.sh pulls from the mirror and falls back to
+# upstream when the mirror lacks a version.
+#
+# The versions come from deploy-slim-core.sh (slim_core_version and the
+# pinned digests) and the SLIM_CORE_VERSION overrides in tasks.yaml and
+# tests/upgrade.sh. A Renovate bump of slim_core_version merged to main runs
+# this workflow, which mirrors the new version and prints the digest line to
+# pin. An existing mirror tag is never overwritten.
+name: Mirror the UDS Core checkpoint
+
+on:
+  workflow_dispatch:
+  # A pull request that changes a version mirrors it before it merges, so
+  # its own test runs can use the mirror. Forks cannot push (see the job).
+  pull_request:
+    paths:
+      - ".github/scripts/deploy-slim-core.sh"
+      - ".github/workflows/mirror-checkpoint.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/scripts/deploy-slim-core.sh"
+      - "tasks.yaml"
+      - "tests/upgrade.sh"
+      - ".github/workflows/mirror-checkpoint.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-checkpoint
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      UPSTREAM: ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev
+      MIRROR: ghcr.io/jonathanagustin/uds-k3d-takserver/checkpoints/k3d-core-slim-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
+          version: v0.40.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy the missing versions
+        run: |
+          set -euo pipefail
+          s=.github/scripts/deploy-slim-core.sh
+          mapfile -t versions < <({
+            sed -n 's/^slim_core_version=\([0-9.]*\).*/\1/p' "${s}"
+            sed -n 's/^ *\[\([0-9.]*\)\]=sha256:.*/\1/p' "${s}"
+            grep -ho 'SLIM_CORE_VERSION=[0-9.]*' tasks.yaml tests/upgrade.sh | cut -d= -f2
+          } | sort -uV)
+          echo "Versions: ${versions[*]}"
+          for v in "${versions[@]}"; do
+            up="$(uds zarf tools registry digest "${UPSTREAM}:${v}")"
+            pinned="$(sed -n "s/^ *\[${v//./\\.}\]=\(sha256:[0-9a-f]*\).*/\1/p" "${s}")"
+            if [[ -n "${pinned}" && "${up}" != "${pinned}" ]]; then
+              echo "::warning::${UPSTREAM}:${v} is now ${up}; the pinned digest is ${pinned}. Not mirroring it."
+              continue
+            fi
+            if have="$(uds zarf tools registry digest "${MIRROR}:${v}" 2>/dev/null)"; then
+              echo "${MIRROR}:${v} exists (${have})"
+              continue
+            fi
+            echo "Copying ${UPSTREAM}:${v} (${up})"
+            uds zarf tools registry copy --no-clobber "${UPSTREAM}:${v}" "${MIRROR}:${v}"
+            got="$(uds zarf tools registry digest "${MIRROR}:${v}")"
+            test "${got}" = "${up}"
+            echo "${MIRROR}:${v} = ${got}"
+            if [[ -z "${pinned}" ]]; then
+              echo "::notice::Pin it in ${s}: [${v}]=${up}"
+              echo "Add \`[${v}]=${up}\` to slim_core_digests in \`${s}\`." >> "${GITHUB_STEP_SUMMARY}"
+            fi
+          done
+        shell: bash

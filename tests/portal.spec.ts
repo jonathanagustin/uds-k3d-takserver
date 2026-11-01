@@ -16,9 +16,17 @@ const outsider = process.env.KEYCLOAK_OUTSIDER || "outsider";
 const outsiderPassword = process.env.KEYCLOAK_OUTSIDER_PASSWORD || "outsider123!@#UN";
 const shots = ".playwright/screenshots";
 
+// The portal's left navigation is made of links too: My Account is its own
+// link, and the Your Apps and Admin Apps sections are links in the sidebar.
+const sidebar = new Set(["My Account", "Your Apps", "Admin Apps"]);
+
 const hidden = ["takserver-api", "takserver-stream", "8443", "8446", "8089"];
 
-async function signIn(page: Page, username: string, password: string) {
+// A user with no groups still signs in at Keycloak, but the portal renders no
+// Your Apps page for that account (a blank page at /auth). allowEmpty accepts
+// that: the account has to come back to the portal origin, and the caller then
+// checks that no tile is shown.
+async function signIn(page: Page, username: string, password: string, allowEmpty = false) {
   const heading = page.getByRole("heading", { name: "Your Apps" });
   const userField = page.getByLabel("Username or email");
   await expect(heading.or(userField)).toBeVisible({ timeout: 60_000 });
@@ -27,13 +35,24 @@ async function signIn(page: Page, username: string, password: string) {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign In" }).click();
   }
-  await expect(heading).toBeVisible({ timeout: 90_000 });
+  try {
+    if (allowEmpty) {
+      await page.waitForURL(`${portalUrl}/**`, { timeout: 90_000 });
+      await heading.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+      return;
+    }
+    await expect(heading).toBeVisible({ timeout: 90_000 });
+  } catch {
+    const text = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+    await page.screenshot({ path: `${shots}/portal-${username}-signin.png`, fullPage: true }).catch(() => {});
+    throw new Error(`${username} did not reach Your Apps at ${page.url()}: ${text.slice(0, 500)}`);
+  }
 }
 
 async function packageTiles(page: Page): Promise<string[]> {
   const names = (await page.getByRole("link").allInnerTexts())
     .map((name) => name.replace(/\s+/g, " ").trim())
-    .filter((name) => name.length > 0 && name !== "My Account");
+    .filter((name) => name.length > 0 && !sidebar.has(name));
   return [...new Set(names)].sort();
 }
 
@@ -60,7 +79,7 @@ test.describe("portal tiles", () => {
     });
     const page = await context.newPage();
     await page.goto(portalUrl);
-    await signIn(page, outsider, outsiderPassword);
+    await signIn(page, outsider, outsiderPassword, true);
     const names = await packageTiles(page);
     await page.screenshot({ path: `${shots}/portal-outsider.png`, fullPage: true });
     expect(names).not.toContain("TAK Server");

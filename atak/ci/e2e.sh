@@ -28,14 +28,25 @@ mkdir -p "${OUT}"
 k() { uds zarf tools kubectl "$@"; }
 
 echo "== Zarf package (KubeVirt, VM, viewer)"
-start=$(date +%s)
-pkg_dir="$(mktemp -d)"
-uds zarf package create "${here}" --set ATAK_TAG="${ATAK_TAG}" -o "${pkg_dir}" --confirm
-du -h "${pkg_dir}"/*.tar.zst | tee "${OUT}/package.txt"
-echo "create: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
-start=$(date +%s)
-uds zarf package deploy "${pkg_dir}"/zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN="${DOMAIN}" --confirm
-echo "deploy: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+# ATAK_PACKAGE (oci://...) is a package an earlier run created from the same
+# inputs and published (see device-images.sh package-ref). Deploying it skips
+# the create. Otherwise the package is created here, in PKG_DIR.
+if [[ -n "${ATAK_PACKAGE:-}" ]]; then
+  echo "package: ${ATAK_PACKAGE}" | tee "${OUT}/package.txt"
+  start=$(date +%s)
+  uds zarf package deploy "${ATAK_PACKAGE}" --set DOMAIN="${DOMAIN}" --confirm
+  echo "deploy (pull from OCI): $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+else
+  start=$(date +%s)
+  pkg_dir="${PKG_DIR:-$(mktemp -d)}"
+  mkdir -p "${pkg_dir}"
+  uds zarf package create "${here}" --set ATAK_TAG="${ATAK_TAG}" -o "${pkg_dir}" --confirm
+  du -h "${pkg_dir}"/*.tar.zst | tee "${OUT}/package.txt"
+  echo "create: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+  start=$(date +%s)
+  uds zarf package deploy "${pkg_dir}"/zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN="${DOMAIN}" --confirm
+  echo "deploy: $(( $(date +%s) - start ))s" | tee -a "${OUT}/package.txt"
+fi
 # The driver is a test tool, not part of the package. k3d can report a
 # successful import that left nothing in the node's containerd, so check the
 # node and retry with a direct import. The pod never pulls it.

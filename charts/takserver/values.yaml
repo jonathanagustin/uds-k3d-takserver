@@ -203,4 +203,6 @@ backup:
   dump:
     enabled: false
     schedule: "15 2 * * *"
-    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4
+    # Same image as the server. pg_dump refuses a newer server major, and
+    # zarf.yaml carries only this tag.
+    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6

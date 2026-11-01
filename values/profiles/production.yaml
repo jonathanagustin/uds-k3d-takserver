@@ -1,0 +1,71 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Overlay for the upstream TAK chart. Merge it after values/common-values.yaml.
+# Headroom over values/profiles/small.yaml for one node that has the 4 CPU and
+# ~15984Mi of the CI runners, or larger. The steady set on run 40174810574 is
+# the same sample small uses. Limits are that set plus more room for a load
+# the harness has not completed. This file is not a measured front.
+#
+# Replicas stay 1 until clustered nodes stop overwriting CoreConfig:
+# https://github.com/jonathanagustin/uds-k3d-takserver/issues/3
+# The upstream developer example requests 1 CPU and 8Gi and many replicas.
+# That example is not this profile.
+#
+# Postgres stays at a 512Mi limit so shared_buffers cannot grow past the
+# cgroup. The plugins chart value is CPU only; the post-helm patch sets
+# plugin memory. NATS stays on the common-values sizes.
+takserver:
+  config:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+  messaging:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1536Mi
+      limits:
+        # Ignored. The template copies the API CPU and memory limits.
+        cpu: "2"
+        memory: 2Gi
+  api:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1536Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  plugins:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+      limits:
+        cpu: "1"
+postgresql:
+  primary:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+ignite:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      cpu: "1"
+      memory: 1536Mi

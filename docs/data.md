@@ -1,5 +1,7 @@
 # Data
 
+This page covers TAK's PostgreSQL database, what a backup contains, how to restore it, and how to find TAK logs.
+
 ## Postgres
 
 The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace. This package does not replace that database.
@@ -24,7 +26,9 @@ The password is not a production secret. Replace it, and the matching JDBC passw
 
 Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.15.2-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
 
-Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.15.2 does not ship the node agent, and k3d local-path has no snapshot API, so the backup is API objects only. The Postgres files on the volume are not in it. The package stores a logical `pg_dump` in Secret `tak-db-dump` (database `cot`) and Secret `cloudtak-db-dump` (CloudTAK's PostGIS database). CronJobs `tak-db-dump` (02:15 UTC) and `cloudtak-db-dump` (02:20 UTC) refresh those Secrets. They render only when `backup.dump.enabled` is true, which the full bundle sets. A slim install does not create them.
+Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.15.2 does not ship the node agent, and k3d local-path has no snapshot API, so the backup is API objects only. The Postgres files on the volume are not in it.
+
+To cover the databases, the package stores a logical `pg_dump` in Secret `tak-db-dump` (database `cot`) and Secret `cloudtak-db-dump` (CloudTAK's PostGIS database). CronJobs `tak-db-dump` (02:15 UTC) and `cloudtak-db-dump` (02:20 UTC) refresh those Secrets. They render only when `backup.dump.enabled` is true, which the full bundle sets. A slim install does not create them.
 
 What a namespace backup contains:
 
@@ -46,7 +50,9 @@ Restore, after Velero has put the namespaces back:
 3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty.
 4. Scale the Deployments to 1. Enrolled client certificates still chain, because `cert-migration` came back with the namespace.
 
-`tests/backup-restore.sh` does this at the end of the full-core job. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. The checkpoint MinIO is scaled to 0 by `fit-runner`; the script scales it back to 1 because Velero's default bucket `uds` is on that MinIO. BackupStorageLocation has to be `Available`.
+`tests/backup-restore.sh` does this at the end of the full-core job. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted.
+
+The checkpoint MinIO is scaled to 0 by `fit-runner`; the script scales it back to 1 because Velero's default bucket `uds` is on that MinIO. BackupStorageLocation has to be `Available`.
 
 ## Find TAK logs
 

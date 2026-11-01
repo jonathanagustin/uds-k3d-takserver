@@ -8,7 +8,7 @@ Accepted. The 8447 connector is TLS since [ADR 0006](0006-re-encrypt-gateway-tra
 
 ## Context
 
-TAK Server 5.7-RELEASE-14 implements an authorization-code flow on `/login/auth`, `/login/redirect`, and `/login/refresh`. Bearer tokens and the access-token cookie are accepted only on local ports 8446 and 8447. `auth default` has to stay `file`, because `X509Authenticator` rejects any other default. `authServer.issuer` is a `.pem`, `.der`, or `.crt` path when no key children are set, not an issuer URL. More than one `openIdDiscoveryConfiguration` is not a list TAK fails over: it picks one at random. Signature checks are RS256 only. There is no issuer check, no audience check, and no PKCE.
+TAK Server 5.7-RELEASE-14 implements an authorization-code flow on `/login/auth`, `/login/redirect`, and `/login/refresh`. Bearer tokens and the access-token cookie are accepted only on local ports 8446 and 8447. `auth default` has to stay `file`, because `X509Authenticator` rejects any other default. `authServer.issuer` is a `.pem`, `.der`, or `.crt` path when no key children are set, not an issuer URL. More than one `openIdDiscoveryConfiguration` is not a list TAK fails over: it picks one at random. Signature checks are RS256 only. There is no issuer check, no audience check, and no PKCE (Proof Key for Code Exchange).
 
 The stock Helm chart has no init-container value and its API Service has no port 8447. The browser has to reach a connector that does not require a client certificate, without moving 8443 or 8089 off client certificates. Authservice terminates HTTP on the tenant gateway and would replace TAK's login instead of letting TAK set the cookie it later reads.
 
@@ -22,7 +22,7 @@ Keep the upstream chart. Inject connectors and the auth block through the `core-
 - `auth` is `default="file"` with `x509groups="true"` and `x509tokenAuth="true"`, then one `openIdDiscoveryConfiguration` named `UDS SSO`. There is no `authServer` element.
 - The client secret is `${TAK_OIDC_CLIENT_SECRET}`. An init container runs `envsubst` from Secret `takserver-sso` into `/conf/CoreConfig.xml`, which TAK prefers over the mounted file. The `takserver-oidc` Pepr module adds the init container to each TAK pod at admission because the chart cannot express it, so no pod starts with the unrendered file. The secret carries the pod-reload label so a rotation restarts those pods.
 - `groupprefix` stays `/tak/` and the extractor stays `^/TAK/(.+)$`. TAK lowercases the prefix and the claim before the prefix compare, and compiles the regex case-insensitively, so those two strings already match `/TAK/...`.
-- `trustAllCerts` is false. The API and messaging pods trust the UDS bundle and reach `sso.<domain>` at the tenant gateway through the in-cluster DNS rewrite (see docs/networking.md). The first version used a hostAlias on the API pod.
+- `trustAllCerts` is false. The API and messaging pods trust the UDS bundle and reach `sso.<domain>` at the tenant gateway through the in-cluster DNS rewrite (see [Networking](../docs/networking.md#in-cluster-dns)). The first version used a hostAlias on the API pod.
 
 `/UDS Core/Admin` in the `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` with `_READ` or `_WRITE` are the TAK groups. The Keycloak client uses the standard group-membership mapper, which the UDS hardening policy already allows.
 
@@ -34,4 +34,4 @@ The upstream database Job still sets `proxy.istio.io/config`. The chart has no v
 
 ## Consequences
 
-Any `uds` realm token whose RS256 signature matches the realm key and whose groups match is accepted, including a token that was minted for a different client. Logout does not end the Keycloak session. There is one IdP. Port 8089 uses certificates that were bound to a token during enrollment on 8446. Cookies on 8447 are not marked Secure, because the connector is plaintext behind the gateway and TAK only sets Secure when `request.isSecure()` is true. See [Single sign-on](../docs/sso.md).
+Any `uds` realm token whose RS256 signature matches the realm key and whose groups match is accepted, including a token that was minted for a different client. Logout does not end the Keycloak session. There is one identity provider (IdP). Port 8089 uses certificates that were bound to a token during enrollment on 8446. Cookies on 8447 are not marked Secure, because the connector is plaintext behind the gateway and TAK only sets Secure when `request.isSecure()` is true. See [Single sign-on](../docs/sso.md).

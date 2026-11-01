@@ -113,6 +113,7 @@ test("the chart moves watched objects into namespaced Roles", () => {
     "takserver-ignite-configmap",
     "takserver-startup",
     "takserver-keystore",
+    "takserver-certs",
     "cloudtak-tak-admin",
     "takserver-web-ca",
     "coredns-custom",

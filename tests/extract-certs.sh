@@ -2,8 +2,9 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Copy admin.pem and admin.key out of ConfigMap cert-migration.
-# The deploy-time Job writes that ConfigMap. The gateway tests present the admin cert.
+# Copy admin.pem and admin.key for the gateway tests.
+# Secret takserver-certs holds the key. An older install still has both
+# files in ConfigMap cert-migration.
 set -euo pipefail
 
 dest="${1:-/tmp/tak-certs}"
@@ -27,9 +28,21 @@ kctl() {
 decode() {
   local name="$1"
   local out="$2"
-  kctl get configmap cert-migration -n takserver -o "go-template={{index .binaryData \"${name}\"}}" | base64 -d > "${out}"
+  local escaped b64=""
+  escaped="${name//./\\.}"
+  if kctl get secret takserver-certs -n takserver >/dev/null 2>&1; then
+    b64="$(kctl get secret takserver-certs -n takserver -o "jsonpath={.data.${escaped}}")"
+  fi
+  if [[ -z "${b64}" ]]; then
+    b64="$(kctl get configmap cert-migration -n takserver -o "jsonpath={.binaryData.${escaped}}")"
+  fi
+  if [[ -z "${b64}" ]]; then
+    echo "takserver-certs and cert-migration have no ${name}" >&2
+    exit 1
+  fi
+  printf '%s' "${b64}" | base64 -d > "${out}"
   if [[ ! -s "${out}" ]]; then
-    echo "ConfigMap cert-migration has no ${name}" >&2
+    echo "${name} decoded empty" >&2
     exit 1
   fi
 }

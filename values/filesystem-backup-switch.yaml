@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Zarf replaces ###ZARF_VAR_...### in valuesFiles before Helm renders. In a
+# chart's own values.yaml the placeholder reaches the templates unchanged,
+# because Zarf templates those only in the rendered output. So
+# `eq "###ZARF_VAR_FILESYSTEM_BACKUP###" "true"` was false and the node-agent
+# never rendered. The switch has to come from here.
+backup:
+  filesystem:
+    enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"

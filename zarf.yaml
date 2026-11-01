@@ -228,6 +228,8 @@ components:
         namespace: cloudtak
         version: 0.1.0
         localPath: charts/cloudtak
+        valuesFiles:
+          - values/filesystem-backup-switch.yaml
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package

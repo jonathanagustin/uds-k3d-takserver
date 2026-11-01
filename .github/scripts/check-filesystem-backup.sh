@@ -52,6 +52,19 @@ if ! grep -q 'backup.velero.io/backup-volumes: data' "${tpl}"; then
   fail "${tpl} does not annotate the Bitnami data volume"
 fi
 
+# The chart's own values.yaml placeholder is not replaced before Helm
+# renders, so both local charts must read the switch from a valuesFile.
+switch="values/filesystem-backup-switch.yaml"
+if ! grep -q '###ZARF_VAR_FILESYSTEM_BACKUP###' "${switch}"; then
+  fail "${switch} does not read FILESYSTEM_BACKUP"
+fi
+if ! grep -q -- '- ../values/filesystem-backup-switch.yaml' common/zarf.yaml; then
+  fail "common/zarf.yaml does not pass ${switch} to uds-takserver-config"
+fi
+if ! grep -q -- '- values/filesystem-backup-switch.yaml' zarf.yaml; then
+  fail "zarf.yaml does not pass ${switch} to uds-cloudtak"
+fi
+
 bundle="bundle/full/uds-bundle.yaml"
 if ! grep -q 'name: node-agent' "${bundle}"; then
   fail "${bundle} does not select the node-agent"

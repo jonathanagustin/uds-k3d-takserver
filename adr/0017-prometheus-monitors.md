@@ -20,7 +20,7 @@ Postgres and NATS do not expose Prometheus text unless an exporter sidecar is tu
 
 ## Decision
 
-- The API and messaging images carry `micrometer-registry-prometheus` 1.13.8 and the Prometheus client 1.2.1 jars it loads, under `/opt/tak/metrics`. Their cluster scripts add `-Dloader.path=/opt/tak/metrics` and `-Dmanagement.server.port=9100`. The management listener is plain HTTP. Config and plugins do not get those flags.
+- The API and messaging images carry `micrometer-registry-prometheus` 1.13.8 and the Prometheus client 1.2.1 jars it loads, under `/opt/tak/metrics`. Their cluster scripts add `/opt/tak/metrics` to the end of the `loader.path` that `setenv.sh` sets (a `-D` on the command line replaces it, so the flag repeats the `WEB-INF` entries) and `-Dmanagement.server.port=9100`. The management listener is plain HTTP. Config and plugins do not get those flags.
 - The admission module adds container port `metrics` on 9100 to the API and messaging pods. The upstream chart cannot.
 - When `monitoring.coreos.com/v1` is installed, the Package has PodMonitor entries for those two pods, path `/actuator/prometheus`. The operator creates the PodMonitors and the policy that lets Prometheus in `monitoring` reach port 9100. Slim does not have the API, so the block is omitted.
 - The chart adds PodMonitor `takserver-oidc` for pods `app=takserver-oidc` in `pepr-system`, HTTPS, `insecureSkipVerify`, path `/metrics`. It does not select the Pepr pod with a NetworkPolicy.

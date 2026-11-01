@@ -189,11 +189,12 @@ RUN chmod 0755 \
         /takserver-api-cluster.sh \
         /takserver-messaging-cluster.sh \
         /takserver-config-cluster.sh \
-    && sed -i 's#-jar takserver.war#-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100 -Dmanagement.endpoint.prometheus.access=unrestricted -Dmanagement.server.ssl.enabled=false -Dspring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration,org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration -jar takserver.war#' \
+    && sed -i 's#-jar takserver.war#-Dloader.path=WEB-INF/lib-provided,WEB-INF/lib,WEB-INF/classes,file:lib/,file:/opt/tak/metrics/ -Dmanagement.server.port=9100 -Dmanagement.endpoint.prometheus.access=unrestricted -Dmanagement.server.ssl.enabled=false -Dspring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration,org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration -jar takserver.war#' \
         /takserver-api-cluster.sh \
         /takserver-messaging-cluster.sh \
-    && grep -q -- '-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100' /takserver-api-cluster.sh \
-    && grep -q -- '-Dloader.path=/opt/tak/metrics -Dmanagement.server.port=9100' /takserver-messaging-cluster.sh \
+    && grep -q -- '-Dloader.path=WEB-INF/lib-provided,WEB-INF/lib,WEB-INF/classes,file:lib/,file:/opt/tak/metrics/ -Dmanagement.server.port=9100' /takserver-api-cluster.sh \
+    && grep -q -- '-Dloader.path=WEB-INF/lib-provided,WEB-INF/lib,WEB-INF/classes,file:lib/,file:/opt/tak/metrics/ -Dmanagement.server.port=9100' /takserver-messaging-cluster.sh \
+    && grep -q -- '-Dloader.path=WEB-INF/lib-provided,WEB-INF/lib,WEB-INF/classes,file:lib/' /setenv.sh \
     && ! grep -q -- '-Dmanagement.server.port=' /takserver-config-cluster.sh \
     && ! grep -q -- '-Dmanagement.server.port=' /takserver-plugins-cluster.sh \
     && sed -i 's/java -jar UserManager.jar/java -Xmx128m -jar UserManager.jar/' /enable_admin.sh \
@@ -226,6 +227,10 @@ ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 # apply to UserManager, and a second 512m heap in the messaging pod exceeds 1Gi.
 # API and messaging also get loader.path and management.server.port. The jars
 # below are the Prometheus registry Spring Boot 3.4 already knows how to load.
+# A -D on the command line replaces the loader.path setenv.sh puts in
+# JDK_JAVA_OPTIONS, so the flag repeats setenv.sh's WEB-INF entries before
+# /opt/tak/metrics. With /opt/tak/metrics alone the JVM exits with
+# ClassNotFoundException: tak.server.ServerConfiguration.
 # Config and plugins do not bind 9100. Replacing spring.autoconfigure.exclude
 # has to repeat the Mongo excludes from application.properties.
 ENV PLUGIN_MANAGER_MAX_HEAP=128

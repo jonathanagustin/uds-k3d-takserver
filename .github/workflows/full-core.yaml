@@ -80,7 +80,7 @@ jobs:
     # what stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 75
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       id-token: write
@@ -112,25 +112,6 @@ jobs:
       - name: Add swap
         if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
         run: ./.github/scripts/add-runner-swap.sh
-
-      # Restore the cache the Test workflow fills. Do not save it again: a
-      # second save of that key fails, and another multi-gigabyte cache entry
-      # crowds the repository cache.
-      - name: Restore the Zarf cache
-        id: zarf-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
 
       - name: Environment setup
         run: |

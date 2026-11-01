@@ -28,6 +28,6 @@ The slim checkpoint includes `uds-k3d-dev`, which installs MinIO in `uds-dev-sta
 ## Consequences
 
 - Whether every layer becomes Ready on a public GitHub runner is visible only after this workflow runs. Layer requests were not reduced to force a fit.
-- Adding files under `bundle/` changes the Zarf cache key used by `validate-install` once, on the next cache miss. The full-core job restores that cache and does not save a second copy.
+- The Test workflow does not keep a Zarf Actions cache. Full core does not restore one.
 - `validate-install` is not on the nightly schedule, so its per-PR runtime is unchanged.
 - A pull request without the `full-core` label skips the job. Adding the label, or pushing to a pull request that already has it, runs the job.

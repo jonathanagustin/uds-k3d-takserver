@@ -164,7 +164,7 @@ import sys
 
 active = json.load(open("out/prometheus-targets.json")).get("data", {}).get("activeTargets", [])
 
-def up(namespace, path, pod_prefix):
+def up(namespace, path, pod_prefix="", pool=""):
     matched = []
     for target in active:
         labels = target.get("labels") or {}
@@ -174,6 +174,10 @@ def up(namespace, path, pod_prefix):
             continue
         if pod_prefix and not pod.startswith(pod_prefix):
             continue
+        # The module's pods are pepr-<uuid>-..., so match the PodMonitor's
+        # scrape pool (podMonitor/takserver/takserver-oidc/0) instead.
+        if pool and pool not in (target.get("scrapePool") or ""):
+            continue
         matched.append(pod or url)
     return matched
 
@@ -182,7 +186,7 @@ if not up("takserver", "/metrics", "takserver-api-"):
     missing.append("takserver-api")
 if not up("takserver", "/metrics", "takserver-messaging-"):
     missing.append("takserver-messaging")
-if not up("pepr-system", "/metrics", "takserver-oidc-"):
+if not up("pepr-system", "/metrics", pool="/takserver-oidc/"):
     missing.append("takserver-oidc")
 if missing:
     print("waiting on " + ", ".join(missing))
@@ -207,7 +211,7 @@ for target in active:
     ns = labels.get("namespace")
     if ns not in ("takserver", "pepr-system"):
         continue
-    print(ns, labels.get("pod"), target.get("health"), target.get("scrapeUrl"), target.get("lastError"))
+    print(ns, labels.get("pod"), target.get("scrapePool"), target.get("health"), target.get("scrapeUrl"), target.get("lastError"))
 PY
   exit 1
 fi

@@ -24,7 +24,7 @@ The password is not a production secret. Replace it, and the matching JDBC passw
 
 ## Backup
 
-Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.15.2-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
+Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.16.0-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
 
 Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.15.2 does not ship the node agent, and k3d local-path has no snapshot API, so the backup is API objects only. The Postgres files on the volume are not in it.
 

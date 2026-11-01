@@ -28,7 +28,7 @@ The overlay turns the chart's nginx ingress off. Instead, the UDS Package in `ch
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.16.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle.
 
 The CI runners have 4 CPU and about 15984Mi on both architectures. TAK, CloudTAK, and NATS memory limits sum to about 8492Mi, which fits that node. CPU limits still sum above 4 because a 500m cap made JVM startup miss the rollout bound. Limit overcommit on the rest of the node is UDS core, which this overlay does not set.
 

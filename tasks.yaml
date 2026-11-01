@@ -142,9 +142,9 @@ tasks:
     description: Deploy the functional layers on the slim checkpoint and run the full-core checks
     actions:
       - task: create-dev-package
-      # The checkpoint script still defaults to 1.15.0. The full bundle pins 1.15.2.
+      # The full bundle pins the same Core version as the checkpoint script.
       - description: Deploy the slim checkpoint at the bundle's Core version
-        cmd: SLIM_CORE_VERSION=1.15.2 ./.github/scripts/deploy-slim-core.sh
+        cmd: SLIM_CORE_VERSION=1.16.0 ./.github/scripts/deploy-slim-core.sh
       - description: Validate Keycloak endpoint
         wait:
           network:

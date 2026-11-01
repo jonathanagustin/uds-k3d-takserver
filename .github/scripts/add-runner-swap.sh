@@ -23,7 +23,9 @@ if [[ ! "${gb}" =~ ^[0-9]+$ ]] || ((gb < 1 || gb > 32)); then
 fi
 
 path="/swapfile"
-want=$((gb * 1024 * 1024 * 1024))
+# mkswap keeps the first page for its header, so an 8G file reports 4KiB
+# less than 8G. Allow 1MiB under the target.
+want=$((gb * 1024 * 1024 * 1024 - 1024 * 1024))
 
 # Bytes of swap that are on now, over every swap file and device.
 swap_total() {

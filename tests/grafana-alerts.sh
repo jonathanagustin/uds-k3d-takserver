@@ -245,7 +245,7 @@ pepr_ok=0
 for _ in $(seq 1 12); do
   code="$(curl -sS -G -o out/prometheus-pepr.json -w '%{http_code}' --max-time 20 \
     "http://127.0.0.1:9091/api/v1/query" \
-    --data-urlencode 'query=pepr_errors{namespace="pepr-system",pod=~"takserver-oidc-.*"}' || true)"
+    --data-urlencode 'query=pepr_errors{namespace="pepr-system",pod=~"pepr-c72fcf944a4f43bbb386d22371aa640f-.*"}' || true)"
   echo "prometheus pepr query HTTP ${code}"
   if [[ "${code}" == "200" ]] && python3 - <<'PY'
 import json

@@ -26,7 +26,7 @@ Postgres and NATS do not expose Prometheus text unless an exporter sidecar is tu
 - The exporter config reads only Tomcat's `GlobalRequestProcessor` MBeans (`tomcat_requestcount_total`, `tomcat_errorcount_total`). The agent's built-in collectors add `jvm_*` and `process_*`. Ignite's MBeans are not scraped.
 - The admission module adds container port `metrics` on 9100 to the API and messaging pods. The upstream chart cannot.
 - When `monitoring.coreos.com/v1` is installed, the Package has PodMonitor entries for those two pods, path `/metrics`. The operator creates the PodMonitors and the policy that lets Prometheus in `monitoring` reach port 9100. Slim does not have the API, so the block is omitted.
-- The chart adds PodMonitor `takserver-oidc` for pods `app=takserver-oidc` in `pepr-system`, HTTPS, `insecureSkipVerify`, path `/metrics`. It does not select the Pepr pod with a NetworkPolicy.
+- The chart adds PodMonitor `takserver-oidc` for pods `app=pepr-c72fcf944a4f43bbb386d22371aa640f` (Pepr labels a module's pods `pepr-<uuid>`) and `pepr.dev/controller=admission` in `pepr-system`, HTTPS, `insecureSkipVerify`, path `/metrics`. It does not select the Pepr pod with a NetworkPolicy.
 - Postgres and NATS exporters stay off.
 
 ## Consequences

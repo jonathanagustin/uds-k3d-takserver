@@ -86,9 +86,11 @@ kind: PodMonitor
 metadata:
   name: takserver-oidc
 spec:
+  # Pepr labels the module's admission pods app: pepr-<uuid> (the uuid in
+  # pepr/package.json).
   selector:
     matchLabels:
-      app: takserver-oidc
+      app: pepr-c72fcf944a4f43bbb386d22371aa640f
       pepr.dev/controller: admission
   namespaceSelector:
     matchNames:

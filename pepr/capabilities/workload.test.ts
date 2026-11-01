@@ -120,14 +120,14 @@ test("the API hostAlias is removed and a messaging alias is not", () => {
   assert.deepEqual(messaging.next.spec?.template?.spec?.hostAliases, [{ ip: "10.0.0.2" }]);
 });
 
-test("config probes exec the readiness script and plugins get a 384Mi limit", () => {
+test("config probes exec the readiness script and plugins get a 512Mi limit", () => {
   const config = shaped("takserver-config").spec?.template?.spec?.containers?.[0];
   const startup = config?.startupProbe as { exec: { command: string[] } };
   assert.deepEqual(startup.exec.command, ["/config-readiness.sh"]);
   assert.equal(config?.livenessProbe, undefined);
   const plugins = shaped("takserver-plugins").spec?.template?.spec?.containers?.[0];
-  assert.equal(plugins?.resources?.requests?.memory, "128Mi");
-  assert.equal(plugins?.resources?.limits?.memory, "384Mi");
+  assert.equal(plugins?.resources?.requests?.memory, "320Mi");
+  assert.equal(plugins?.resources?.limits?.memory, "512Mi");
   const again = shapeDeployment(shaped("takserver-plugins"), { image: IMAGE });
   assert.equal(again.changed, false);
 });

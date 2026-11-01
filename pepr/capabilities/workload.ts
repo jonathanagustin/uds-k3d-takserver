@@ -357,12 +357,15 @@ export function shapePodSpec(spec: WorkloadPodSpec, app: TakDeploy, ctx: Startup
     const resources = (main.resources ??= {});
     const requests = (resources.requests ??= {});
     const limits = (resources.limits ??= {});
-    if (requests.memory !== "128Mi") {
-      requests.memory = "128Mi";
+    // The chart template copies the API CPU limit and drops memory. 128m is
+    // the plugin heap. Steady working set on run 40174810574 was 263Mi amd64
+    // and 260Mi arm64, so the request is 320Mi and the limit is 512Mi.
+    if (requests.memory !== "320Mi") {
+      requests.memory = "320Mi";
       changed = true;
     }
-    if (limits.memory !== "384Mi") {
-      limits.memory = "384Mi";
+    if (limits.memory !== "512Mi") {
+      limits.memory = "512Mi";
       changed = true;
     }
   }

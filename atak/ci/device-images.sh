@@ -41,10 +41,14 @@ ATAK_VERSION="${ATAK_VERSION:-$(git config -f .gitmodules submodule.upstream/ata
 
 # Inputs of each image. A path is a file or a directory; upstream/atak-civ
 # is the submodule pin, and fetch-source.sh decides which LFS files it holds.
-apk_inputs=(atak/apk atak/ci/build-apk.sh atak/ci/fetch-source.sh upstream/atak-civ)
+# This script is an input of every image: it holds the build commands
+# (targets, flags), and a keyed tag is never rebuilt, so an edit here must
+# not leave an image built by the old commands under a current key.
+recipe=(atak/ci/device-images.sh)
+apk_inputs=("${recipe[@]}" atak/apk atak/ci/build-apk.sh atak/ci/fetch-source.sh upstream/atak-civ)
 driver_inputs=("${apk_inputs[@]}" atak/driver)
-vm_inputs=(atak/vm)
-viewer_inputs=(atak/viewer)
+vm_inputs=("${recipe[@]}" atak/vm)
+viewer_inputs=("${recipe[@]}" atak/viewer)
 
 hash_of() {
   # git ls-files -s lists mode, object id and path: a change to any input

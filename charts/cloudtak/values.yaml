@@ -21,9 +21,9 @@ backup:
 
 postgis:
   # The image the TAK chart already uses. One image covers both databases.
-  # Built in this repository for amd64 and arm64
-  # (adr/0013-build-the-postgis-image-here.md).
-  image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4
+  # Built in this repository for amd64 and arm64. The entrypoint upgrades a
+  # PostgreSQL 15 data directory (adr/0018-upgrade-postgres-in-place.md).
+  image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
   storage: 2Gi
   database: cloudtak
   username: cloudtak
@@ -63,8 +63,9 @@ tak:
   messagingService: takserver-messaging-service
   messagingSelector:
     app: takserver-messaging
-  # Secret the cloudtak component's onDeploy action copies from the TAK
-  # namespace: ca.pem, admin.pem, and admin.key from Secret takserver-certs.
+  # Secret the takserver-oidc watcher copies into cloudtak: ca.pem and
+  # admin.pem from ConfigMap cert-migration, admin.key from Secret
+  # takserver-certs, and CAPASS from Secret takserver-keystore.
   adminSecret: cloudtak-tak-admin
 
 # TAK file user behind CloudTAK's admin connection, and its TAK groups.

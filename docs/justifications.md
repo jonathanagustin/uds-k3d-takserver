@@ -72,8 +72,8 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`. Two of them run `python3`. One writes the CoreDNS rewrite patch as JSON. The other runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
-- **What removes it:** Moving the init containers into the `takserver-oidc` Pepr module or an upstream chart value, and building the CoreDNS patch with `./zarf tools yq`.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers, writes the CoreDNS rewrite, copies the gateway CA and the CloudTAK admin material, and restarts TAK in order. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **What removes it:** Nothing further. The init containers, the CoreDNS rewrite, and the ordered restart now live in the Pepr module.
 
 ### Version scheme
 
@@ -86,7 +86,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 - **Status:** Only `upstream`. There is no `registry1` flavor. Iron Bank has some related images, and none of them are the images this package runs.
 - **TAK Server.** Iron Bank publishes one server image, `registry1.dso.mil/ironbank/tpc/tak/tak-server`. Its README pulls tag `5.5`. It also publishes `tpc/tak/tak-server-db`. This package runs six images built here from `5.7-RELEASE-14`: `takserver-api`, `takserver-messaging`, `takserver-config`, `takserver-plugins`, `takserver-database-setup`, and `takserver-ignite`. Those names are not on Iron Bank, and `5.5` is not this package's release.
 - **CloudTAK.** No CloudTAK project showed up on repo1. The `cloudtak` image is built here from the upstream submodule.
-- **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). CloudTAK's database is `postgis:15-3.4`, built here. TAK's database is the Bitnami chart the upstream TAK chart installs, not that PostGIS image.
+- **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). TAK and CloudTAK use `postgis:18-3.6`, built here. TAK's chart is still the upstream Bitnami chart; the image override points it at that build.
 - **NATS.** Iron Bank publishes `opensource/synadia/nats-server` and `opensource/synadia/nats-box`. This package pins `docker.io/library/nats:2.15.1-alpine` and `docker.io/natsio/nats-server-config-reloader:0.25.0`. The reloader did not show up on repo1, and the server project is not tag `2.15.1`.
 - **ATAK viewer.** No ATAK-CIV image showed up on repo1. The viewer is a separate package, built here.
 - **What changes it:** Iron Bank images that match those names and tags, and chart values that can point at them without forking the upstream chart. Until then the package does not pretend a values overlay is a `registry1` flavor.

@@ -23,6 +23,7 @@ tasks:
       - task: ui
       - task: flows
       - task: usage
+      - task: cert-rotation
       - task: nats
 
   - name: health-check
@@ -40,11 +41,11 @@ tasks:
           }
           trap dump_tak ERR
           for deploy in takserver-config takserver-messaging takserver-api takserver-plugins; do
-            uds zarf tools kubectl rollout status "deployment/${deploy}" -n takserver --timeout=600s
+            uds zarf tools kubectl rollout status "deployment/${deploy}" -n takserver --timeout=1200s
           done
           while read -r sts; do
             [ -z "${sts}" ] && continue
-            uds zarf tools kubectl rollout status "${sts}" -n takserver --timeout=600s
+            uds zarf tools kubectl rollout status "${sts}" -n takserver --timeout=1200s
           done < <(uds zarf tools kubectl get statefulset -n takserver -o name)
       - description: Wait for TAK pods
         shell:
@@ -53,7 +54,7 @@ tasks:
         cmd: |
           set -euo pipefail
           for app in takserver-config takserver-messaging takserver-api takserver-plugins takserver-ignite; do
-            uds zarf tools kubectl wait --for=condition=Ready "pod" -n takserver -l "app=${app}" --timeout=600s
+            uds zarf tools kubectl wait --for=condition=Ready "pod" -n takserver -l "app=${app}" --timeout=1200s
           done
       - description: Wait for the UDS Package to be Ready
         shell:
@@ -73,6 +74,50 @@ tasks:
           echo "Package takserver did not become Ready" >&2
           uds zarf tools kubectl describe package takserver -n takserver || true
           exit 1
+
+  - name: cert-rotation
+    description: After the CloudTAK tests, rotating cert-migration updates the copied CA Secrets without a redeploy
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          gw_ns="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.exportTo[0]}')"
+          secret="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.trafficPolicy.portLevelSettings[0].tls.credentialName}')"
+          [ -n "${gw_ns}" ]
+          [ -n "${secret}" ]
+          orig="$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}')"
+          [ -n "${orig}" ]
+          patch_ca() {
+            python3 -c 'import json,sys; print(json.dumps({"binaryData":{"ca.pem":sys.argv[1]}}))' "$1" > /tmp/cert-rotation.json
+            k patch cm cert-migration -n takserver --type merge --patch-file /tmp/cert-rotation.json
+          }
+          wait_for() {
+            local want="$1" gw admin
+            for _ in $(seq 1 60); do
+              gw="$(k get secret "${secret}" -n "${gw_ns}" -o jsonpath='{.data.cacert}' 2>/dev/null || true)"
+              admin="$(k get secret cloudtak-tak-admin -n cloudtak -o jsonpath='{.data.ca\.pem}' 2>/dev/null || true)"
+              if [ "${gw}" = "${want}" ] && [ "${admin}" = "${want}" ]; then
+                echo "copied CA secrets match cert-migration"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "gateway cacert and cloudtak ca.pem did not follow cert-migration" >&2
+            return 1
+          }
+          first="${orig:0:1}"
+          if [ "${first}" = "A" ]; then
+            rotated="B${orig:1}"
+          else
+            rotated="A${orig:1}"
+          fi
+          [ "${rotated}" != "${orig}" ]
+          trap 'patch_ca "${orig}"; wait_for "${orig}"' EXIT
+          patch_ca "${rotated}"
+          wait_for "${rotated}"
 
   - name: startup
     description: Startup order, probes, Ignite, and the plaintext 8080 deny
@@ -852,7 +897,7 @@ tasks:
             -e KEYCLOAK_OUTSIDER_PASSWORD="${KEYCLOAK_OUTSIDER_PASSWORD:-outsider123!@#UN}" \
             -v "$(pwd)/tests:/app" \
             -w /app \
-            mcr.microsoft.com/playwright:v1.64.1 \
+            mcr.microsoft.com/playwright:v1.64.1@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea \
             bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test'
 
   - name: nats

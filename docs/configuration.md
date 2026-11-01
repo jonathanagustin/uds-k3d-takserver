@@ -17,7 +17,7 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
-Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md).
+Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 
 NATS is still upstream chart 1.0.1. The overlay sets the server to `nats:2.15.1-alpine` and the config reloader to `natsio/nats-server-config-reloader:0.25.0`, and `zarf.yaml` packages those tags. The rendered config is one replica, clustering off, JetStream off, client port 4222, and monitor port 8222. NATS 2.15.1 accepts that file. There is no JetStream store, so an upgrade replaces the pod and TAK's client reconnects to `nats://takserver-nats:4222`. Rolling back is the previous tags, `2.9.21-alpine` and `0.11.0`. This repository does not build those images.
 
@@ -71,7 +71,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 | `nats.replicaCount`, `nats.cluster`, `nats.config.cluster`, `nats.natsBox.enabled` | jetstream on, cluster on, 3 replicas, toolbox default on | 1 replica, clustering off, toolbox off | The toolbox crash-looped and blocked Helm. TAK does not use it. |
 | `nats.container.merge.resources` and `nats.reloader.merge.resources` | unset | NATS: request 10m and 32Mi, limit 250m and 128Mi. Reloader: request 5m and 16Mi, limit 50m and 32Mi | The subchart sets none. Idle use at the end of the install test (`tests/usage.sh`) was at most 1m and 9Mi for NATS and 1m and 5Mi for the reloader. The limits leave room for message traffic the tests do not load. |
 | `global.postgresql` and `postgresql.auth` | host, port, username, password, database | same, plus `postgresPassword` and the Bitnami username keys | Bitnami PostgreSQL 12.1.6 reads `auth.postgresPassword`. The mounted CoreConfig already points at `takserver-postgresql`. |
-| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` | PostgreSQL 15 and PostGIS 3.4.3, built here for amd64 and arm64. The upstream image is amd64 only. |
+| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` | PostgreSQL 18 and PostGIS 3.6.4, built here for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 volume. The upstream image is amd64 only. |
 | `takserver.ingress.enabled` | false | false | Unchanged. The UDS Package exposes the same ports on the passthrough gateway. |
 | `imagePullSecret`, `certConfigMapName`, `coreConfigMapName` | `reg-cred`, `cert-migration`, `core-config` | same | Unchanged. |
 | `takIgniteConfigMapName` | unset in the example, required by the template | `tak-ignite-config` | The chart mounts `TAKIgniteConfig.xml` from this name. |
@@ -140,7 +140,7 @@ The upstream Deployments do not set `securityContext`, and the chart has no valu
 
 ## Startup order
 
-The upstream cluster scripts exec java and do not wait. After Helm, `patch-oidc-pods.py` restarts Ignite, then rolls config, messaging, the API, and plugins, in that order. Plugins is last because it uses services from the other three, and an Ignite restart drops caches. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API.
+The upstream cluster scripts exec java and do not wait. The `takserver-oidc` watcher applies the startup shape on the four TAK Deployments. When the Ignite server config or its ServiceAccount token mount changes, it scales those Deployments to zero in reverse order, restarts Ignite, and scales them back to the replica count they had, config first. A failed stop leaves them scaled down. When the four are Available it creates ConfigMap `takserver-startup`, and the package health check waits for that ConfigMap before CloudTAK is deployed. Plugins is last because it uses services from the other three, and an Ignite restart drops caches. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API.
 
 Ready means the stock readiness script passed. A listening port is not the gate. The scripts truncate `/logs/takserver-*.log` at process start so a readiness grep cannot match a line from an earlier JVM in the same container. There is no retention Deployment in this chart.
 

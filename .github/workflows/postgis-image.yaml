@@ -37,8 +37,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One native runner per architecture, each pushing 15-3.4-<key>-<arch> and, on main, 15-3.4-<arch>.
-  # index joins them under 15-3.4, the tag zarf.yaml references.
+  # One native runner per architecture, each pushing 18-3.6-<key>-<arch> and, on main, 18-3.6-<arch>.
+  # index joins them under 18-3.6, the tag zarf.yaml references. 15-3.4 stays
+  # in the registry for a deployment that has not upgraded.
   build:
     strategy:
       fail-fast: false
@@ -82,6 +83,14 @@ jobs:
           else
             ./.github/container-and-chart/postgis/build.sh --if-changed
           fi
+
+      - name: Check a PostgreSQL 15 database upgrades
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          tag="$(./.github/container-and-chart/postgis/build.sh --tag)"
+          ./.github/container-and-chart/postgis/smoke.sh \
+            "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:${tag}-${ARCH}"
 
       - name: Attest the pushed images
         uses: ./.github/actions/attest-images

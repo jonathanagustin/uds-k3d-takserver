@@ -19,7 +19,7 @@ cd "${root}"
 
 cloudtak_version="$(git config -f .gitmodules submodule.upstream/cloudtak.branch)"
 cloudtak_tag="$(./.github/container-and-chart/cloudtak/build.sh --tag)"
-postgis_version="15-3.4"
+postgis_version="18-3.6"
 postgis_tag="$(./.github/container-and-chart/postgis/build.sh --tag)"
 
 tak_version="$(tr -d '[:space:]' < .github/container-and-chart/docker/version.txt)"

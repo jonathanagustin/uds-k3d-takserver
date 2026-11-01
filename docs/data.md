@@ -14,13 +14,34 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 | User | `postgres` |
 | Password | the upstream example value `postgres` |
 | JDBC | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
-| Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` (amd64 and arm64) |
+| Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64) |
+| Data directory | `/bitnami/postgresql/data` |
 
 The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami PostgreSQL 12.1.6 does not read `postgresql.configurationConfigMap`, so that object is not mounted. Postgres uses the chart defaults.
 
 Those defaults are what the package ships. No benchmark load run has finished, so `values/` does not set `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, or `checkpoint_timeout`. The harness records `pg_stat_database`, `pg_stat_bgwriter`, and the `postgresql` container working set beside the TAK load. `bench/configs/postgis-buffers.yaml` and `bench/configs/postgis-wal.yaml` apply those five parameters with `ALTER SYSTEM` and restart `takserver-postgresql`. `shared_buffers` is 128MB or 64MB, both under the 512Mi limit. `effective_cache_size` is a planner hint, not memory the server allocates. The sweep does not set `fsync=off`. A setting is copied into the package only after a harness report puts it on the front. The key for that is `postgresql.primary.extendedConfiguration`, which Bitnami appends under `conf.d`. On run 40174810574, at the chart defaults, the steady working set was 57Mi on amd64 and 59Mi on arm64.
 
 The password is not a production secret. Replace it, and the matching JDBC password, before a shared cluster.
+
+CloudTAK's database is the same image. Its data directory is `/var/lib/postgresql/data/pgdata` on the `data-cloudtak-postgis-0` volume. See [CloudTAK](cloudtak.md).
+
+## Upgrading from PostgreSQL 15
+
+`18-3.6` is PostgreSQL 18 and PostGIS 3.6.4. Tag `15-3.4` stays in the registry. A deployment that has not moved keeps running that tag. A new install of `18-3.6` creates an empty cluster and loads PostGIS from the image's init script.
+
+An existing volume is a PostgreSQL 15 cluster. On the first start, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The PVC is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
+
+`pg_upgrade --link` shares the table files with the new cluster and the entrypoint deletes the old directory after the new server has started. That directory is not something you can point PostgreSQL 15 at afterwards.
+
+Before you roll the new image out:
+
+1. Snapshot the volume, or run `pg_dumpall` from the PostgreSQL 15 pod and store the dump outside the cluster.
+2. Deploy `18-3.6`.
+3. Confirm `SHOW server_version_num` is 18 and `SELECT extversion FROM pg_extension WHERE extname = 'postgis'` is 3.6.
+
+Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start. Do not point `15-3.4` at a data directory PostgreSQL 18 has already written. A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
+
+The upgrade test deploys the last release (PostgreSQL 15), writes a row, then deploys this branch and checks the row, its timestamp, the PVC, the server major, and the PostGIS version.
 
 ## Backup
 

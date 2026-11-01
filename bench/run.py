@@ -44,17 +44,24 @@ _SETTING_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 _SETTING_VALUE = re.compile(r"^[0-9]+(kB|MB|GB|ms|s|min)?$")
 # Set when this process has applied ALTER SYSTEM. A later config resets it.
 _postgres_custom = False
+# PostgreSQL 17 moved the checkpoint counters from pg_stat_bgwriter to
+# pg_stat_checkpointer and dropped buffers_backend; client backend writes
+# are in pg_stat_io. The TAK server runs PostgreSQL 18.
 POSTGRES_QUERY = """
 SELECT json_build_object(
   'blks_hit', d.blks_hit,
   'blks_read', d.blks_read,
   'temp_files', d.temp_files,
   'temp_bytes', d.temp_bytes,
-  'checkpoints_timed', b.checkpoints_timed,
-  'checkpoints_req', b.checkpoints_req,
-  'checkpoint_write_ms', b.checkpoint_write_time,
-  'checkpoint_sync_ms', b.checkpoint_sync_time,
-  'buffers_backend', b.buffers_backend,
+  'checkpoints_timed', c.num_timed,
+  'checkpoints_req', c.num_requested,
+  'checkpoint_write_ms', c.write_time,
+  'checkpoint_sync_ms', c.sync_time,
+  'buffers_backend', (
+    SELECT COALESCE(sum(io.writes), 0)::bigint
+    FROM pg_stat_io io
+    WHERE io.backend_type = 'client backend'
+  ),
   'shared_buffers', current_setting('shared_buffers'),
   'work_mem', current_setting('work_mem'),
   'effective_cache_size', current_setting('effective_cache_size'),
@@ -62,7 +69,7 @@ SELECT json_build_object(
   'checkpoint_timeout', current_setting('checkpoint_timeout')
 )
 FROM pg_stat_database d
-CROSS JOIN pg_stat_bgwriter b
+CROSS JOIN pg_stat_checkpointer c
 WHERE d.datname = 'cot'
 """.strip()
 

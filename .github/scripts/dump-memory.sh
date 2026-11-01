@@ -20,6 +20,27 @@ k() {
   return 1
 }
 
+# A k3d node container that restarts takes the API server and every pod with
+# it (all containers then show exit 255). Kubelet sees no memory or disk
+# pressure in that case, so the evidence is on the runner: the kernel OOM
+# killer, the container's restart count, and k3s's last log lines.
+echo "::group::runner memory, OOM kills, and k3d node restarts"
+free -m || true
+df -h / || true
+sudo dmesg -T 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process' | tail -20 ||
+  echo "No OOM kill in dmesg."
+for node in $(docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null); do
+  docker inspect "${node}" --format \
+    '{{.Name}} restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' || true
+done
+docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
+for node in $(docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
+  echo "--- ${node}: k3s starts, errors, and shutdown lines"
+  docker logs "${node}" 2>&1 |
+    grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' | tail -40 || true
+done
+echo "::endgroup::"
+
 echo "::group::kubectl top pods"
 k top pods -A || echo "kubectl top failed. metrics.k8s.io is not installed on this cluster."
 echo "::endgroup::"

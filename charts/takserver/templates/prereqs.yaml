@@ -351,7 +351,7 @@ data:
 ---
 # The upstream messaging Service publishes TCP 8089 only. QUIC listens on UDP
 # 8090 in the messaging process. The Package expose entry routes that port
-# through Envoy Gateway. See adr/0016-quic-through-envoy-gateway.md.
+# through Envoy Gateway. See adr/0020-quic-through-envoy-gateway.md.
 apiVersion: v1
 kind: Service
 metadata:

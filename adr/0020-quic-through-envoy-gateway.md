@@ -1,4 +1,4 @@
-# 16. QUIC through Envoy Gateway
+# 20. QUIC through Envoy Gateway
 
 Date: 2026-10-25
 

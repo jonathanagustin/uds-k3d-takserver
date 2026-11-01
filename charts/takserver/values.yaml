@@ -57,7 +57,7 @@ messaging:
 
 # QUIC streaming (UDP 8090). Off by default: no input in CoreConfig, no UDP
 # Service, and no Package expose entry. The test bundle turns it on and
-# selects Envoy Gateway. See adr/0016-quic-through-envoy-gateway.md.
+# selects Envoy Gateway. See adr/0020-quic-through-envoy-gateway.md.
 quic:
   enabled: false
   port: 8090

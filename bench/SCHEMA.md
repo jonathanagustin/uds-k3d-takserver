@@ -37,6 +37,14 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `load.ping_pong_ms_mean` | milliseconds | `ping_pong_ms_sum / pong_count`, null when `pong_count` is 0 |
 | `load.p95_ms` | always null | this tester build stores a sum, not a latency histogram, so a p95 is not available |
 | `ci.wall_clock_s` | seconds | filled by the summary job from the GitHub Actions job timestamps. Null in the per-arch file |
+| `postgres` | object or null | TAK database `cot` over the load window. Null when `psql` could not be run, with the reason in `errors` |
+| `postgres.hit_ratio` | 0 to 1, or null | `blks_hit / (blks_hit + blks_read)` from `pg_stat_database`. Null when both counters are 0 |
+| `postgres.temp_files`, `postgres.temp_bytes` | count, bytes | `pg_stat_database` for `cot` |
+| `postgres.checkpoints_timed`, `postgres.checkpoints_req` | count | `pg_stat_bgwriter` |
+| `postgres.checkpoint_write_ms`, `postgres.checkpoint_sync_ms` | milliseconds | `checkpoint_write_time` and `checkpoint_sync_time` |
+| `postgres.buffers_backend` | count | buffers written by backends, from `pg_stat_bgwriter` |
+| `postgres.peak_rss_bytes`, `postgres.steady_rss_bytes` | bytes | working set of container `postgresql` in pod `takserver-postgresql-*`, from the same kubelet Summary samples as `kubelet` |
+| `postgres.settings` | text | `current_setting` for `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, `checkpoint_timeout` |
 | `errors` | strings | why a null field was not measured |
 
 Throughput in the Pareto report is `messages_received / duration_s`. The
@@ -51,6 +59,17 @@ ready time. arm64 and amd64 are separate series on one scale per view, so a
 circle can be compared across architectures. Dominance is still decided
 inside one architecture. Dominated configs are marked in the job summary and
 drawn as open circles in the SVG.
+
+Counters are cleared with `pg_stat_reset()` and `pg_stat_reset_shared('bgwriter')`
+just before the load, so they cover that run and not the install. A config
+may set `postgres:` with those five parameters. The harness runs
+`ALTER SYSTEM` inside `takserver-postgresql-0` and restarts the StatefulSet.
+The next config in the same process resets them first, so a sweep does not
+stack. The package does not copy a winning set into values: no load report
+has put one on the front. `postgis-buffers` and `postgis-wal` are the two
+tuned points. Both keep `shared_buffers` at or below 128MB, inside the 512Mi
+limit. `effective_cache_size` is a planner hint and is not allocated. The
+sweep does not set `fsync=off`.
 
 Client certs are built at run time from `tests/extract-certs.sh` and are not
 written into the repository or the image. The nightly workflow runs client

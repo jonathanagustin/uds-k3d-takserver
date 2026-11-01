@@ -243,7 +243,9 @@ COPY jmx-exporter.yaml /opt/tak/metrics/jmx-exporter.yaml
 RUN curl -fsSL -o /opt/tak/metrics/jmx_prometheus_javaagent.jar \
         https://github.com/prometheus/jmx_exporter/releases/download/1.7.0/jmx_prometheus_javaagent-1.7.0.jar \
     && echo '0ad843261c567d1924a017d542e14c40f2afff523d940c25ee000742fde4b3a9  /opt/tak/metrics/jmx_prometheus_javaagent.jar' \
-        | sha256sum -c - \
+        > /tmp/jmx-exporter.sha256 \
+    && sha256sum -c /tmp/jmx-exporter.sha256 \
+    && rm /tmp/jmx-exporter.sha256 \
     && chmod 0644 /opt/tak/metrics/jmx_prometheus_javaagent.jar /opt/tak/metrics/jmx-exporter.yaml
 
 FROM cluster-base AS takserver-config

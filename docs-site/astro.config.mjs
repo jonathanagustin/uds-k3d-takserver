@@ -57,6 +57,9 @@ export default defineConfig({
           items: [
             { label: 'Building images', slug: 'building' },
             { label: 'Data', slug: 'data' },
+            { label: 'Values profiles', slug: 'profiles' },
+            { label: 'CI workflows', slug: 'ci' },
+            { label: 'Benchmarks', slug: 'benchmarks' },
           ],
         },
         {

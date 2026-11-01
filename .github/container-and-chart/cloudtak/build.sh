@@ -221,10 +221,6 @@ if [[ "${1:-}" = "--if-changed" ]] && [[ "${PUSH_IMAGES:-false}" = "true" ]]; th
 fi
 
 export REGISTRY="${registry}" CLOUDTAK_VERSION="${version}" CLOUDTAK_SRC="${src}" UPSTREAM_SHA="${sha}" INPUTS="${inputs}" PLATFORM="linux/${arch}" IMAGE_TAG="${tag}"
-output="--load"
-if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
-  output="--push"
-fi
 cd "${here}"
 # The bake file reads the submodule, which is outside this directory.
 # Buildx asks for that read to be granted.
@@ -232,8 +228,11 @@ allow=()
 if docker buildx bake --help 2>/dev/null | grep -q -- '--allow'; then
   allow=(--allow "fs.read=${root}")
 fi
-docker buildx bake -f docker-bake.hcl "${allow[@]}" "${output}" cloudtak
+# Load, then patch, then push. Copa needs the image in the local daemon.
+docker buildx bake -f docker-bake.hcl "${allow[@]}" --load cloudtak
+"${root}/.github/scripts/copa-patch.sh" "${image}"
 if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
+  docker push "${image}"
   record_push "${image}"
   publish_version_arch
 fi

@@ -31,7 +31,7 @@ A pod can only reach the pods and ports its role needs. Postgres accepts connect
 
 Remaining gaps:
 
-- These are L4 rules: pod label, port and, since the update below, the client's ServiceAccount. There is no waypoint, so there are no L7 authorization rules between these pods. Ambient mTLS still encrypts the traffic.
+- These are layer 4 (L4) rules: pod label, port and, since the update below, the client's ServiceAccount. There is no waypoint, so there are no layer 7 (L7) authorization rules between these pods. Ambient mTLS still encrypts the traffic.
 - Authservice is off by design (see [ADR 0004](0004-tak-oauth-uses-openid-discovery.md)). TAK authenticates browser users itself.
 - Passthrough ports 8443, 8446, and 8089 terminate TLS in TAK. The mesh cannot inspect that traffic. TAK checks the client certificate.
 - The list is a snapshot of one CI run plus the commented flows. A TAK feature that opens a new connection (federation, a plugin that calls out) needs a new flow. `test:flows` reports it as a connection with no rule.

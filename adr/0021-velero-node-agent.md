@@ -1,4 +1,4 @@
-# 17. Velero node-agent for databases that outgrow a Secret
+# 21. Velero node-agent for databases that outgrow a Secret
 
 Date: 2026-10-25
 

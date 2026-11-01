@@ -1,0 +1,72 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Overlay for the upstream TAK chart. Merge it after values/common-values.yaml.
+# It is not a standalone values file: image names, passwords, and NATS stay
+# in the common file.
+#
+# One node. Requests sit just above the steady working set from tests/usage.sh
+# at the end of install on run 40174810574 (kubelet Summary API, higher arch):
+# api 66m / 911Mi, messaging 26m / 888Mi, config 11m / 750Mi, Ignite 48m / 488Mi,
+# Postgres 10m / 59Mi. Heaps stay -Xmx512m. No benchmark load run has finished,
+# so this is not a throughput or latency point.
+#
+# The plugins chart value is CPU only. The post-helm patch sets plugin memory
+# and ignores a memory value here. NATS is already sized in common-values.yaml.
+#
+# Replicas stay 1. More than one messaging or API pod overwrites CoreConfig
+# with the cached copy: https://github.com/jonathanagustin/uds-k3d-takserver/issues/3
+takserver:
+  config:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1280Mi
+  messaging:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1Gi
+      limits:
+        # The messaging template ignores this and copies the API limit.
+        cpu: 500m
+        memory: 1536Mi
+  api:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+  plugins:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 25m
+      limits:
+        cpu: 250m
+postgresql:
+  primary:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+ignite:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1536Mi

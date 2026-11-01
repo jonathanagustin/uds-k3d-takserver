@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Velero node-agent and the host-access exemption it needs.
-# Off unless FILESYSTEM_BACKUP=true. See adr/0017-velero-node-agent.md.
+# Off unless FILESYSTEM_BACKUP=true. See adr/0021-velero-node-agent.md.
 apiVersion: uds.dev/v1alpha1
 kind: Exemption
 metadata:

@@ -38,7 +38,7 @@ swapon --show || true
 if (($(swap_total) >= want)); then
   echo "Swap is already at least ${gb}G."
 else
-  if swapon --noheadings --show=NAME | grep -qx "${path}"; then
+  if swapon --noheadings --show=NAME | grep -x "${path}" >/dev/null; then
     echo "Turning off the existing ${path} to resize it."
     sudo swapoff "${path}"
   fi

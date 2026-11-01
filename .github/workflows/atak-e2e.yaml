@@ -215,6 +215,7 @@ jobs:
           fi
           docker image ls | grep atak
           df -h /
+        shell: bash
 
       - name: ATAK device end to end
         env:

@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addRender,
+  CERT_SECRET,
+  CERT_VOLUME,
   CONFIG_MOUNT,
   INIT_NAME,
   isTakPod,
@@ -73,4 +75,46 @@ test("an existing oidc-script volume is not duplicated", () => {
   addRender(p, IMAGE);
   const count = (p.spec?.volumes ?? []).filter(v => v.name === "oidc-script").length;
   assert.equal(count, 1);
+});
+
+function certVolume(app = "takserver-api"): PodLike {
+  const p = pod(app);
+  p.spec!.volumes = [
+    { name: "other", emptyDir: {} },
+    { name: CERT_VOLUME, configMap: { name: "cert-migration" } },
+  ];
+  return p;
+}
+
+test("the upstream cert volume is mounted from the Secret", () => {
+  const p = certVolume();
+  assert.equal(addRender(p, IMAGE), true);
+  const volume = p.spec?.volumes?.find(v => v.name === CERT_VOLUME);
+  assert.deepEqual(volume?.secret, { secretName: CERT_SECRET });
+  assert.equal(volume?.configMap, undefined);
+  assert.ok(p.spec?.volumes?.some(v => v.name === "other"));
+});
+
+test("a cert volume that already names the Secret is left alone", () => {
+  const p = certVolume();
+  addRender(p, IMAGE);
+  const once = structuredClone(p);
+  assert.equal(addRender(p, IMAGE), false);
+  assert.deepEqual(p, once);
+});
+
+test("a cert volume is replaced when it still has a ConfigMap or another Secret", () => {
+  const leftover = certVolume("takserver-messaging");
+  leftover.spec!.volumes = [
+    { name: CERT_VOLUME, secret: { secretName: CERT_SECRET }, configMap: { name: "cert-migration" } },
+  ];
+  assert.equal(addRender(leftover, IMAGE), true);
+  const swapped = leftover.spec?.volumes?.find(v => v.name === CERT_VOLUME);
+  assert.equal(swapped?.configMap, undefined);
+  assert.deepEqual(swapped?.secret, { secretName: CERT_SECRET });
+
+  const other = certVolume("takserver-config");
+  other.spec!.volumes = [{ name: CERT_VOLUME, secret: { secretName: "cert-migration" } }];
+  assert.equal(addRender(other, IMAGE), true);
+  assert.deepEqual(other.spec?.volumes?.find(v => v.name === CERT_VOLUME)?.secret, { secretName: CERT_SECRET });
 });

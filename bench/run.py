@@ -8,9 +8,11 @@ Writes bench/out/<arch>/<config>.json. A field that was not measured is null
 and listed in errors. This script does not fill those fields with zero.
 """
 
+import base64
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +33,38 @@ from bench.loadlog import parse
 from bench.tester_exit import bind_tester, reap
 
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
+POSTGRES_SETTINGS = (
+    "shared_buffers",
+    "work_mem",
+    "effective_cache_size",
+    "max_wal_size",
+    "checkpoint_timeout",
+)
+_SETTING_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
+_SETTING_VALUE = re.compile(r"^[0-9]+(kB|MB|GB|ms|s|min)?$")
+# Set when this process has applied ALTER SYSTEM. A later config resets it.
+_postgres_custom = False
+POSTGRES_QUERY = """
+SELECT json_build_object(
+  'blks_hit', d.blks_hit,
+  'blks_read', d.blks_read,
+  'temp_files', d.temp_files,
+  'temp_bytes', d.temp_bytes,
+  'checkpoints_timed', b.checkpoints_timed,
+  'checkpoints_req', b.checkpoints_req,
+  'checkpoint_write_ms', b.checkpoint_write_time,
+  'checkpoint_sync_ms', b.checkpoint_sync_time,
+  'buffers_backend', b.buffers_backend,
+  'shared_buffers', current_setting('shared_buffers'),
+  'work_mem', current_setting('work_mem'),
+  'effective_cache_size', current_setting('effective_cache_size'),
+  'max_wal_size', current_setting('max_wal_size'),
+  'checkpoint_timeout', current_setting('checkpoint_timeout')
+)
+FROM pg_stat_database d
+CROSS JOIN pg_stat_bgwriter b
+WHERE d.datname = 'cot'
+""".strip()
 
 
 def kubectl_cmd():
@@ -177,6 +211,135 @@ def ready_age():
     return max(ages), errors
 
 
+def postgres_statements(settings):
+    """RESET ALL, then one ALTER SYSTEM per setting. Values are units only."""
+    if not isinstance(settings, dict):
+        raise RuntimeError("postgres settings must be a mapping")
+    lines = ["ALTER SYSTEM RESET ALL"]
+    for key in sorted(settings):
+        value = str(settings[key])
+        if _SETTING_NAME.match(key) is None or _SETTING_VALUE.match(value) is None:
+            raise RuntimeError(f"refusing postgres setting {key}={value}")
+        lines.append(f"ALTER SYSTEM SET {key} = '{value}'")
+    return lines
+
+
+def postgres_pod(runner):
+    result = runner(
+        "get", "pods", "-n", "takserver",
+        "-l", "app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary",
+        "-o", "json",
+    )
+    pods = [
+        pod for pod in json.loads(result.stdout).get("items", [])
+        if not pod.get("metadata", {}).get("deletionTimestamp")
+    ]
+    if len(pods) != 1:
+        raise RuntimeError(f"expected one PostgreSQL pod, found {len(pods)}")
+    return pods[0]["metadata"]["name"]
+
+
+def postgres_sql(statements, runner):
+    # One -c each. psql wraps several statements in a single -c in one
+    # transaction, and ALTER SYSTEM cannot run inside a transaction block.
+    pod = postgres_pod(runner)
+    args = [
+        "exec", "-n", "takserver", pod, "-c", "postgresql",
+        "--", "psql", "-X", "-w", "-U", "postgres", "-d", "postgres",
+        "-v", "ON_ERROR_STOP=1", "-At",
+    ]
+    for statement in statements:
+        args.extend(["-c", statement])
+    result = runner(*args)
+    return result.stdout.strip()
+
+
+def apply_postgres(config, runner=None):
+    """Apply bench GUC overrides. Returns true when the server must restart."""
+    global _postgres_custom
+    settings = config.get("postgres") or {}
+    if not settings and not _postgres_custom:
+        return False
+    run = runner or kubectl
+    postgres_sql(postgres_statements(settings), run)
+    _postgres_custom = bool(settings)
+    return True
+
+
+def reset_postgres_counters(runner=None):
+    run = runner or kubectl
+    postgres_sql(
+        [
+            "SELECT pg_stat_reset()",
+            "SELECT pg_stat_reset_shared('bgwriter')",
+        ],
+        run,
+    )
+
+
+def hit_ratio(hits, reads):
+    total = hits + reads
+    if total == 0:
+        return None
+    return round(hits / total, 6)
+
+
+def assemble_postgres(row, rss_samples):
+    if not isinstance(row, dict):
+        raise RuntimeError("postgres stats were not a JSON object")
+    needed = (
+        "blks_hit", "blks_read", "temp_files", "temp_bytes",
+        "checkpoints_timed", "checkpoints_req", "checkpoint_write_ms",
+        "checkpoint_sync_ms", "buffers_backend",
+    )
+    for key in needed:
+        if key not in row:
+            raise RuntimeError(f"postgres stats missing {key}")
+    samples = list(rss_samples or [])
+    return {
+        "datname": "cot",
+        "blks_hit": row["blks_hit"],
+        "blks_read": row["blks_read"],
+        "hit_ratio": hit_ratio(row["blks_hit"], row["blks_read"]),
+        "temp_files": row["temp_files"],
+        "temp_bytes": row["temp_bytes"],
+        "checkpoints_timed": row["checkpoints_timed"],
+        "checkpoints_req": row["checkpoints_req"],
+        "checkpoint_write_ms": row["checkpoint_write_ms"],
+        "checkpoint_sync_ms": row["checkpoint_sync_ms"],
+        "buffers_backend": row["buffers_backend"],
+        "peak_rss_bytes": max(samples) if samples else None,
+        "steady_rss_bytes": samples[-1] if samples else None,
+        "settings": {key: row.get(key) for key in POSTGRES_SETTINGS},
+    }
+
+
+def read_postgres(rss_samples, runner=None):
+    run = runner or kubectl
+    raw = postgres_sql([POSTGRES_QUERY], run)
+    if not raw:
+        raise RuntimeError("postgres stats query returned no row")
+    return assemble_postgres(json.loads(raw), rss_samples)
+
+
+def rollout_items(config, postgres_changed):
+    items = list(config.get("env") or []) + list(config.get("resources") or [])
+    if postgres_changed:
+        items.append({
+            "workload": "statefulset/takserver-postgresql",
+            "namespace": "takserver",
+        })
+    chosen = []
+    seen = set()
+    for item in items:
+        key = (item["workload"], item["namespace"])
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append(item)
+    return chosen
+
+
 def apply_config(config):
     for item in config.get("env") or []:
         kubectl(
@@ -192,10 +355,10 @@ def apply_config(config):
         )
 
 
-def rollout(config):
+def rollout(items):
     started = time.monotonic()
     seen = False
-    for item in (config.get("env") or []) + (config.get("resources") or []):
+    for item in items:
         kubectl("rollout", "restart", item["workload"], "-n", item["namespace"])
         kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
         seen = True
@@ -213,22 +376,23 @@ def keystore_password():
     except (RuntimeError, subprocess.CalledProcessError):
         encoded = ""
     if encoded:
-        import base64
         return base64.b64decode(encoded).decode()
     # This branch still issues certificates with the upstream example password.
     return "atakatak"
 
 
-def kubelet_samples(stop, sink, errors):
+def kubelet_samples(stop, sink, errors, pg_rss=None):
     while not stop.is_set():
         try:
             nodes = kubectl("get", "nodes", "-o", "name").stdout.split()
             rss = cpu = 0
             found = False
+            pg_bytes = None
             for node in nodes:
                 raw = kubectl("get", "--raw", f"/api/v1/nodes/{node.split('/', 1)[-1]}/proxy/stats/summary").stdout
                 for pod in json.loads(raw).get("pods", []):
-                    if pod.get("podRef", {}).get("namespace") not in ("takserver", "cloudtak"):
+                    ref = pod.get("podRef", {})
+                    if ref.get("namespace") not in ("takserver", "cloudtak"):
                         continue
                     for container in pod.get("containers", []):
                         memory = container.get("memory", {}).get("workingSetBytes")
@@ -238,10 +402,19 @@ def kubelet_samples(stop, sink, errors):
                         found = True
                         rss += memory
                         cpu += usage
+                        pod_name = str(ref.get("name", ""))
+                        if (
+                            ref.get("namespace") == "takserver"
+                            and container.get("name") == "postgresql"
+                            and pod_name.startswith("takserver-postgresql")
+                        ):
+                            pg_bytes = memory
             if found:
                 sink.append({"rss": rss, "cpu": cpu})
             else:
                 errors.append("kubelet summary had no TAK or CloudTAK stats")
+            if pg_rss is not None and pg_bytes is not None:
+                pg_rss.append(pg_bytes)
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             errors.append(f"kubelet summary: {error}")
         stop.wait(5)
@@ -364,6 +537,7 @@ def blank(arch, config, clients, duration):
             "p95_ms": None,
         },
         "ci": {"wall_clock_s": None},
+        "postgres": None,
         "errors": [],
     }
 
@@ -433,9 +607,10 @@ def one(config, clients, out_dir, tester, cold):
     duration = int(config["duration_s"])
     record = blank(arch_name(), config["name"], clients, duration)
     try:
+        postgres_changed = apply_postgres(config)
         apply_config(config)
-        if config.get("restart"):
-            record["time_to_ready"]["warm_s"] = rollout(config)
+        if config.get("restart") or postgres_changed:
+            record["time_to_ready"]["warm_s"] = rollout(rollout_items(config, postgres_changed))
             record["time_to_ready"]["cold_s"] = cold
         else:
             record["time_to_ready"]["cold_s"] = cold
@@ -450,11 +625,18 @@ def one(config, clients, out_dir, tester, cold):
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             record["errors"].append(f"image bytes: {error}")
         samples = []
+        pg_rss = []
         sample_errors = []
         stop = threading.Event()
-        thread = threading.Thread(target=kubelet_samples, args=(stop, samples, sample_errors), daemon=True)
+        thread = threading.Thread(
+            target=kubelet_samples, args=(stop, samples, sample_errors, pg_rss), daemon=True,
+        )
         thread.start()
         try:
+            try:
+                reset_postgres_counters()
+            except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+                record["errors"].append(f"postgres counters: {error}")
             password = keystore_password()
             parsed = run_load(clients, duration, password, tester)
             record["load"].update(parsed)
@@ -464,6 +646,10 @@ def one(config, clients, out_dir, tester, cold):
             stop.set()
             thread.join(timeout=10)
         record["errors"].extend(sample_errors)
+        try:
+            record["postgres"] = read_postgres(pg_rss)
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            record["errors"].append(f"postgres: {error}")
         if samples:
             record["kubelet"] = {
                 "peak_rss_bytes": max(item["rss"] for item in samples),

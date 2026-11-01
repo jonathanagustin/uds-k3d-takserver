@@ -143,9 +143,11 @@ store_secret() {
   local ns="$1"
   local name="$2"
   local file="$3"
+  # Server-side apply: client-side apply copies the whole Secret into the
+  # last-applied annotation, which is capped at 256KiB.
   k create secret generic "${name}" -n "${ns}" \
     --from-file=dump.sql="${file}" \
-    --dry-run=client -o yaml | k apply -f -
+    --dry-run=client -o yaml | k apply --server-side --force-conflicts -f -
   say "Secret ${ns}/${name} stored"
 }
 
@@ -188,6 +190,12 @@ else
   say "Deployment uds-dev-stack/minio is missing; Velero's default bucket has nowhere to go" >&2
   exit 1
 fi
+
+# The dev stack gives Velero and Loki one bucket, and Loki writes its chunks
+# under fake/ there. Velero marks a bucket Unavailable when it holds a
+# top-level directory it does not own, so keep Velero under its own prefix.
+k patch backupstoragelocations.velero.io default -n velero --type merge \
+  -p '{"spec":{"objectStorage":{"prefix":"velero"}}}'
 
 bsl_ok=0
 for _ in $(seq 1 30); do
@@ -258,6 +266,10 @@ spec:
     - takserver
     - cloudtak
   includeClusterResources: false
+  # The backup holds no volumes. A restored claim would point at the deleted
+  # volume and stay Pending, so let the StatefulSets create fresh claims.
+  excludedResources:
+    - persistentvolumeclaims
 EOF
 
 wait_phase restore.velero.io "${restore_name}" 60
@@ -287,6 +299,28 @@ for name in takserver-api takserver-messaging takserver-plugins takserver-config
   k scale "deploy/${name}" -n takserver --replicas=0
 done
 k scale deploy/cloudtak -n cloudtak --replicas=0
+
+# The restored CloudTAK pod can still be running its migrations when it is
+# scaled down. If it is still connected when the database is recreated, it
+# migrates into the new empty database and the reload then fails with
+# 'schema "drizzle" already exists'. Wait until the app pods are gone first.
+wait_pods_gone() {
+  local ns="$1"
+  local pattern="$2"
+  local left
+  local _
+  for _ in $(seq 1 90); do
+    left="$(k get pods -n "${ns}" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | grep -E "${pattern}" || true)"
+    if [[ -z "${left}" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  say "pods still present in ${ns} after scale-down: ${left}" >&2
+  return 1
+}
+wait_pods_gone cloudtak '^cloudtak-[a-z0-9]{6,10}-[a-z0-9]{5}$'
+wait_pods_gone takserver '^takserver-(api|messaging|plugins|config)-'
 
 k wait --for=condition=ready pod -n takserver -l app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary --timeout=300s
 k wait --for=condition=ready pod -n cloudtak -l app=cloudtak-postgis --timeout=300s
@@ -330,7 +364,9 @@ if [[ "${tak_note}" != "${note}" || "${ct_note}" != "${note}" ]]; then
 fi
 say "marker ${note} read back from both databases"
 
-for name in takserver-api takserver-messaging takserver-plugins takserver-config; do
+# Start order follows the wait-deps init containers: messaging and the API wait
+# for config, and plugins waits for config, messaging, and the API.
+for name in takserver-config takserver-messaging takserver-api takserver-plugins; do
   k scale "deploy/${name}" -n takserver --replicas=1
   k rollout status "deploy/${name}" -n takserver --timeout=600s
 done

@@ -1,12 +1,14 @@
 # Configuration
 
-The package deploys the public TAK Server chart from [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server) tag `5.7-RELEASE-14`, path `src/takserver-cluster/deployments/helm`. The chart is not copied into this repository. `common/zarf.yaml` points Zarf at that git URL. The chart version in that tag is `4.5.0`. It has no `values.yaml`. Its examples are `developer-values.yaml` and `production-values.yaml`.
+This page covers how the package configures the upstream TAK Server chart: the Zarf variables, the values overlay and why each value differs from the upstream example, sign-in, certificates, monitoring, logging, pod security, and startup order.
+
+The package deploys the public TAK Server chart from [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server) tag `5.7-RELEASE-14`, path `src/takserver-cluster/deployments/helm`. The chart is not copied into this repository. `common/zarf.yaml` points Zarf at that git URL. The chart version in that tag is `4.5.0`. It has no `values.yaml`. Its example values files are `developer-values.yaml` and `production-values.yaml`.
 
 The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream`.
 
 ## Values
 
-`values/common-values.yaml` is the overlay. `values/upstream-values.yaml` is an extra values file on the chart. Zarf replaces `###ZARF_VAR_DOMAIN###` and `###ZARF_VAR_TAK_IMAGE_TAG###` when the package is created.
+`values/common-values.yaml` is the overlay. `values/upstream-values.yaml` is an extra values file on the chart. Zarf replaces `###ZARF_VAR_DOMAIN###` and `###ZARF_VAR_TAK_IMAGE_TAG###` when the package is created. These are the package variables:
 
 | Variable | Default | Used for |
 | --- | --- | --- |
@@ -15,16 +17,20 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
-Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md). NATS stays the images rendered by the upstream NATS chart. This repository does not build those.
+Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md).
 
-The overlay turns the chart's nginx ingress off. The UDS Package in `charts/takserver/templates/uds-package.yaml` exposes the same ports through the passthrough gateway:
+NATS is still upstream chart 1.0.1. The overlay sets the server to `nats:2.15.1-alpine` and the config reloader to `natsio/nats-server-config-reloader:0.25.0`, and `zarf.yaml` packages those tags. The rendered config is one replica, clustering off, JetStream off, client port 4222, and monitor port 8222. NATS 2.15.1 accepts that file. There is no JetStream store, so an upgrade replaces the pod and TAK's client reconnects to `nats://takserver-nats:4222`. Rolling back is the previous tags, `2.9.21-alpine` and `0.11.0`. This repository does not build those images.
+
+The overlay turns the chart's nginx ingress off. Instead, the UDS Package in `charts/takserver/templates/uds-package.yaml` exposes the browser UI on the tenant gateway and the same ports through the passthrough gateway:
 
 - `https://takserver.uds.dev` on the tenant gateway to `takserver-web` port 8447. The gateway re-encrypts and verifies TAK's certificate.
 - `https://takserver.uds.dev` on the passthrough gateway to `takserver-api-service` port 8446
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle and lowers TAK CPU and memory to fit a 2 vCPU, 8 GB runner. The CI runners have 4 CPU and 16 GB on both architectures.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle. The CI runners have 4 CPU and 16 GB on both architectures.
+
+Named overlays are in [Profiles](profiles.md). The package default stays `values/common-values.yaml`.
 
 ## Upstream chart values
 
@@ -32,7 +38,23 @@ The TAK chart is used as published. Nothing under `src/takserver-cluster/deploym
 
 The chart has no defaults file. `developer-values.yaml` in tag `5.7-RELEASE-14` is the example these overrides are measured against. Probes are hardcoded in the upstream Deployments (`api-readiness.sh`, `config-readiness.sh`, `messaging-readiness.sh`, and the TCP liveness ports). This repo does not replace those templates. The readiness scripts read `/logs/takserver-api.log`, `/logs/takserver-config.log`, and `UserAuthenticationFile.xml`. Logback writes `logs/takserver-*.log` and the image working directory is `/`, so that path is `/logs/takserver-*.log`. The file is absent until the process gets past Ignite discovery. `cat: /logs/takserver-api.log: No such file or directory` is that startup window, or a container that just restarted. It is not a different log path.
 
-The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-cluster.sh` defaults that percentage to 90. The non-cluster `setenv.sh` instead divides host `MemTotal` into heap megabytes, and the image does not use that script. On OpenJDK 17.0.16, `UseContainerSupport` reports a 1Gi cgroup limit and still leaves `MaxHeapSize` at a fraction of host RAM, so the percentage does not keep the heap inside the limit. The image inserts `-Xms512m -Xmx512m` into the api, messaging, and config cluster scripts. `-Xmx` wins over `MaxRAMPercentage`. 512m is the heap Ignite's own warning asks for. A config process on the test runner logged `Runtime.maxMemory()` as 536870912. `ignite.sh` sets `-Xms1g -Xmx1g` only when `JVM_OPTS` is empty, and the chart always sets `JVM_OPTS`, so the server had no heap flag. The overlay sets `-Xmx512m` and caps the default data region at 128MiB. Those flags are not exported through `JDK_JAVA_OPTIONS`, because that variable also applies to `UserManager.jar`. With UserManager capped at `-Xmx128m`, the messaging container was still OOM-killed about 15 seconds after `Server started`. The 512m heap, metaspace, the 128MB off-heap cap, and the second JVM did not fit in 1Gi. The messaging Deployment copies `takserver.api.resources.limits`, so the overlay sets that limit to 1536Mi. `enable_admin.sh` runs UserManager with `-Xmx128m`. The mounted `TAKIgniteConfig.xml` sets `cacheOffHeapInitialSizeBytes` to 67108864 and `cacheOffHeapMaxSizeBytes` to 134217728 so the 0.99 factor cannot reserve another heap-sized off-heap. The image also creates `/work` (Tomcat's work directory under the `/` base) and ships an empty `UserAuthenticationFile.xml`. That file has no certificate fingerprint. `enable_admin.sh` runs `UserManager certmod -A` on `certs/files/admin.pem` after the server logs `Server started`. The messaging readiness script accepts `ROLE_ADMIN` in the file or the log line `adding new file-based user`, then still checks Postgres with the upstream `nc` command.
+### Java heap and memory limits
+
+The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-cluster.sh` defaults that percentage to 90. The non-cluster `setenv.sh` instead divides host `MemTotal` into heap megabytes, and the image does not use that script. On OpenJDK 17.0.16, `UseContainerSupport` reports a 1Gi cgroup limit and still leaves `MaxHeapSize` at a fraction of host RAM, so the percentage does not keep the heap inside the limit.
+
+The image inserts `-Xms512m -Xmx512m` into the api, messaging, and config cluster scripts. `-Xmx` wins over `MaxRAMPercentage`. 512m is the heap Ignite's own warning asks for. A config process on the test runner logged `Runtime.maxMemory()` as 536870912. `ignite.sh` sets `-Xms1g -Xmx1g` only when `JVM_OPTS` is empty, and the chart always sets `JVM_OPTS`, so the server had no heap flag.
+
+For the Ignite server, the overlay sets `-Xmx512m` and caps the default data region at 384 MiB. Those flags are not exported through `JDK_JAVA_OPTIONS`, because that variable also applies to `UserManager.jar`.
+
+With UserManager capped at `-Xmx128m`, the messaging container was still OOM-killed about 15 seconds after `Server started`. The 512m heap, metaspace, the 128MB off-heap cap, and the second JVM did not fit in 1Gi. The messaging Deployment copies `takserver.api.resources.limits`, so the overlay sets that limit to 1536Mi. `enable_admin.sh` runs UserManager with `-Xmx128m`.
+
+The mounted `TAKIgniteConfig.xml` sets `cacheOffHeapInitialSizeBytes` to 67108864 and `cacheOffHeapMaxSizeBytes` to 134217728 so the 0.99 factor cannot reserve another heap-sized off-heap.
+
+### Working directory and admin user
+
+The image also creates `/work` (Tomcat's work directory under the `/` base) and ships an empty `UserAuthenticationFile.xml`. That file has no certificate fingerprint. `enable_admin.sh` runs `UserManager certmod -A` on `certs/files/admin.pem` after the server logs `Server started`. The messaging readiness script accepts `ROLE_ADMIN` in the file or the log line `adding new file-based user`, then still checks Postgres with the upstream `nc` command.
+
+### Overrides compared with the developer example
 
 | Value | Developer example | This overlay | Why |
 | --- | --- | --- | --- |
@@ -56,19 +78,27 @@ The cluster scripts pass `-XX:MaxRAMPercentage` and do not pass `-Xmx`. `setenv-
 
 ## Single sign-on
 
-`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container. The `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` on each config, messaging, API, and plugins pod when the pod is created. The browser UI is tenant-gateway host `takserver` on port 8447. 8447 is a TLS connector, and the gateway connects to it over TLS. `api.web.backendTLS.enabled` (default `true`) controls that. See [Networking](networking.md). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used. Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
+`sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container. The `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` on each config, messaging, API, and plugins pod when the pod is created.
+
+The browser UI is tenant-gateway host `takserver` on port 8447. 8447 is a TLS connector, and the gateway connects to it over TLS. `api.web.backendTLS.enabled` (default `true`) controls that. See [Networking](networking.md). Ports 8443 and 8089 stay on client certificates. 8446 stays passthrough for enrollment. Authservice is not used.
+
+Group `/UDS Core/Admin` in the token's `groups` claim is `ROLE_ADMIN`. Groups under `/TAK/` are the TAK groups. See [Single sign-on](sso.md).
 
 ## What the chart mounts
 
 `charts/takserver/templates/prereqs.yaml` creates ConfigMaps `core-config` and `tak-ignite-config`, Secret `reg-cred`, and Exemption `takserver-db-setup` in `uds-policy-exemptions`. A pre-install Job creates ConfigMap `cert-migration` when that object is missing and publishes ConfigMap `ignite-extensions` from the jar in the `takserver-config` image. The image build produces that jar with `:takserver-cluster:igniteExtensions`. Zarf installs this chart before the upstream chart, because a manifest in the same component would run only after that chart finished. The upstream chart mounts those ConfigMaps and always sets `imagePullSecrets` to `reg-cred`.
 
-The upstream `post-install-hook-postgres.yaml` Job is named `takserver-db-setup` and sets `proxy.istio.io/config` to `{ "holdApplicationUntilProxyStarts": true }`. There is no values key for that annotation. UDS `RestrictIstioSidecarOverrides` denied every pod the Job created, so the schema hook never ran and Helm hit its 15 minute deadline with the Job still `0/1`. The Exemption matches pods `^takserver-db-setup-.*` in the release namespace and allows only that policy. Probes stay the upstream delays and ports. The messaging restarts on that run were the 1Gi OOM above, not the TCP liveness timing: the container exited about 15 seconds after UserManager started, before six liveness failures could accumulate.
+The upstream `post-install-hook-postgres.yaml` Job is named `takserver-db-setup` and sets `proxy.istio.io/config` to `{ "holdApplicationUntilProxyStarts": true }`. There is no values key for that annotation. UDS `RestrictIstioSidecarOverrides` denied every pod the Job created, so the schema hook never ran and Helm hit its 15 minute deadline with the Job still `0/1`. The Exemption matches pods `^takserver-db-setup-.*` in the release namespace and allows only that policy.
+
+Probes stay the upstream delays and ports. The messaging restarts on that run were the 1Gi OOM above, not the TCP liveness timing: the container exited about 15 seconds after UserManager started, before six liveness failures could accumulate.
 
 `core-config` is the upstream cluster example. The Postgres URL is `jdbc:postgresql://takserver-postgresql:5432/cot` with user and password `postgres`. The chart mounts `CoreConfig.xml` read-only, so that URL is already substituted. `<cluster cacheConfig="false">` is set in that file. The TAK image registers the configuration continuous query only when `cacheConfig` is true, so a save on one node does not replace another node's file. See [Single sign-on](sso.md#render-at-admission).
 
 ## Certificates
 
-No private key, keystore, CSR, or CRL is stored in this repository. `charts/takserver/values.yaml` `certs` sets the CA subject (`uds-tak-ca`, `VA`, `Arlington`, `TAK`, `UDS`). The pre-install Job `takserver-cert-init` runs `/opt/tak/certs/publish-cert-configmap.sh` in the `takserver-config` image. That script runs the same steps as TAK's `generateClusterCerts.sh` from tag `5.7-RELEASE-14` (`makeRootCa.sh` and `makeCert.sh` for the server, admin, and user) and POSTs ConfigMap `cert-migration`. The upstream chart mounts that ConfigMap. A fresh install stores a random keystore password in Secret `takserver-keystore` and renders it into CoreConfig at pod start. The password is not in the ConfigMap, the image, or git. An upgrade that already has ConfigMap `cert-migration` and no Secret keeps `atakatak`, because that is the password those certificates were generated with. `ca-do-not-share.key` is stored in Secret `takserver-ca-key` and removed from the ConfigMap TAK pods mount. The encrypted keystores and `admin.key` stay in the ConfigMap, because that is what the upstream chart mounts and what CloudTAK copies.
+No private key, keystore, CSR, or CRL is stored in this repository. `charts/takserver/values.yaml` `certs` sets the CA subject (`uds-tak-ca`, `VA`, `Arlington`, `TAK`, `UDS`). The pre-install Job `takserver-cert-init` runs `/opt/tak/certs/publish-cert-configmap.sh` in the `takserver-config` image. That script runs the same steps as TAK's `generateClusterCerts.sh` from tag `5.7-RELEASE-14` (`makeRootCa.sh` and `makeCert.sh` for the server, admin, and user) and POSTs ConfigMap `cert-migration`. The upstream chart mounts that ConfigMap.
+
+A fresh install stores a random keystore password in Secret `takserver-keystore` and renders it into CoreConfig at pod start. The password is not in the ConfigMap, the image, or git. An upgrade that already has ConfigMap `cert-migration` and no Secret keeps `atakatak`, because that is the password those certificates were generated with. `ca-do-not-share.key` is stored in Secret `takserver-ca-key` and removed from the ConfigMap TAK pods mount. The encrypted keystores and `admin.key` stay in the ConfigMap, because that is what the upstream chart mounts and what CloudTAK copies.
 
 OpenSSF Best Practices: `crypto_weaknesses` is answered by the random per-deploy password in that Secret, with the legacy password kept only so an existing install can still open its certificates. `no_leaked_credentials` is answered by keeping that password and the CA private key in Secrets rather than in a ConfigMap every TAK pod mounts. The bestpractices.dev form itself is not in this repository.
 
@@ -108,17 +138,27 @@ The upstream Deployments do not set `securityContext`, and the chart has no valu
 
 ## Startup order
 
-The upstream cluster scripts exec java and do not wait. The `takserver-oidc` watcher applies the startup shape on the four TAK Deployments. When the Ignite server config or its ServiceAccount token mount changes, it scales those Deployments to zero in reverse order, restarts Ignite, and scales them back to the replica count they had, config first. A failed stop leaves them scaled down. When the four are Available it creates ConfigMap `takserver-startup`, and the package health check waits for that ConfigMap before CloudTAK is deployed. Plugins is last because it uses services from the other three, and an Ignite restart drops caches. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API. Ready means the stock readiness script passed. A listening port is not the gate. The scripts truncate `/logs/takserver-*.log` at process start so a readiness grep cannot match a line from an earlier JVM in the same container. There is no retention Deployment in this chart.
+The upstream cluster scripts exec java and do not wait. The `takserver-oidc` watcher applies the startup shape on the four TAK Deployments. When the Ignite server config or its ServiceAccount token mount changes, it scales those Deployments to zero in reverse order, restarts Ignite, and scales them back to the replica count they had, config first. A failed stop leaves them scaled down. When the four are Available it creates ConfigMap `takserver-startup`, and the package health check waits for that ConfigMap before CloudTAK is deployed. Plugins is last because it uses services from the other three, and an Ignite restart drops caches. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API.
+
+Ready means the stock readiness script passed. A listening port is not the gate. The scripts truncate `/logs/takserver-*.log` at process start so a readiness grep cannot match a line from an earlier JVM in the same container. There is no retention Deployment in this chart.
 
 API and messaging get a TCP `startupProbe` on 8443 and 8089. The budget is 80 periods of 10s, which covers the dependency waits plus about 300s for the process. Readiness `timeoutSeconds` is 10 because those scripts call `nc` against Postgres and the default probe timeout is 1s. `pgrep -f` is not used. Messaging liveness is TCP 8089.
 
-`TAKIgniteConfig.xml` is the pre-created ConfigMap `tak-ignite-config`. `igniteFailureDetectionTimeoutSeconds` is 30. With `clusterEnabled`, the client builds only a Kubernetes IP finder and client mode, so that attribute is not applied there. The schema has no `networkTimeout` attribute. The Ignite server config sets discovery `networkTimeout` to 15000 and `failureDetectionTimeout` to 30000. `localAddress` stays unset: that is the path that binds every interface and still advertises a real address. `0.0.0.0` is resolved as the wildcard and registered as the node address. REST is off because `OPTION_LIBS` does not include `ignite-rest-http`. `ConnectorConfiguration` has no `enabled` property, so the server XML does not set one. The Service is headless. The ServiceAccount token is mounted. RBAC can get and list pods and endpoints. Ignite work and `/tmp` are emptyDirs. The disruption budget is `floor(n/2)+1` with `n` odd (1).
+`TAKIgniteConfig.xml` is the pre-created ConfigMap `tak-ignite-config`. `igniteFailureDetectionTimeoutSeconds` is 30. With `clusterEnabled`, the client builds only a Kubernetes IP finder and client mode, so that attribute is not applied there. The schema has no `networkTimeout` attribute.
+
+The Ignite server config sets discovery `networkTimeout` to 15000 and `failureDetectionTimeout` to 30000. `localAddress` stays unset: that is the path that binds every interface and still advertises a real address. `0.0.0.0` is resolved as the wildcard and registered as the node address. REST is off because `OPTION_LIBS` does not include `ignite-rest-http`. `ConnectorConfiguration` has no `enabled` property, so the server XML does not set one.
+
+The Service is headless. The ServiceAccount token is mounted. RBAC can get and list pods and endpoints. Ignite work and `/tmp` are emptyDirs. The disruption budget is `floor(n/2)+1` with `n` odd (1).
 
 `FileAuthenticator` copies the auth file to a sibling `.backup` before it replaces the file. On the API pod that copy was `AccessDeniedException: UserAuthenticationFile.xml.backup` in the working directory `/`. CoreConfig sets the file to `/opt/tak/UserAuthenticationFile.xml`. The image creates `/opt/tak` mode 0777, which is also the JVM temp directory, and copies the empty auth file there.
 
 ## Data
 
-Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver` namespace. Database `cot`, user `postgres`, Service `takserver-postgresql:5432`. The password in the overlay is the upstream example value. See [Data](data.md).
+Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver` namespace. Database `cot`, user `postgres`, Service `takserver-postgresql:5432`. The password in the overlay is the upstream example value `postgres`. It is not a production secret. See [Data](data.md).
+
+The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
+
+The NATS toolbox is disabled in `values/common-values.yaml`.
 
 ## Related docs
 
@@ -128,7 +168,4 @@ Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver`
 - [OAuth discovery](../adr/0004-tak-oauth-uses-openid-discovery.md)
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
-
-The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
-
-The database password in the overlay is the upstream example value `postgres`. It is not a production secret. The NATS toolbox is disabled in `values/common-values.yaml`.
+- [Values profiles](profiles.md)

@@ -33,6 +33,10 @@
 # the tags zarf.yaml and the charts name and releases ship, are written only
 # from main (GITHUB_REF=refs/heads/main) or with WRITE_VERSION_TAG=true.
 #
+# After the image is loaded, copa-patch.sh applies fixable OS package
+# upgrades (Trivy --pkg-types os --ignore-unfixed). The TAK and CloudTAK
+# builds do the same. COPA=false leaves the image as Docker built it.
+#
 #   REGISTRY       default: ghcr.io/jonathanagustin/uds-k3d-takserver
 #   POSTGRES_IMAGE override the pinned base image, for example to pull it
 #                  through a mirror when Docker Hub limits anonymous pulls
@@ -160,14 +164,12 @@ case "$(uname -m)" in
 esac
 arch="${ARCH:-${host_arch}}"
 tag="${version}"
-output="--load"
 if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
   if [[ -z "${ARCH:-}" ]]; then
     echo "Set ARCH (amd64 or arm64) to push. build.sh --merge writes ${version}-${key}." >&2
     exit 1
   fi
   tag="${version}-${key}-${arch}"
-  output="--push"
 fi
 keyed_arch="${image}-${arch}"
 version_arch="${version_image}-${arch}"
@@ -202,8 +204,13 @@ args=(--platform "linux/${arch}" --build-arg "INPUTS=${inputs}" --tag "${registr
 if [[ -n "${POSTGRES_IMAGE:-}" ]]; then
   args+=(--build-arg "POSTGRES_IMAGE=${POSTGRES_IMAGE}")
 fi
-docker buildx build "${args[@]}" "${output}" "${here}"
+# Load into the local daemon, then patch fixable OS packages, then push.
+# buildx --push never loads an image Copa can read. Same order as the TAK
+# and CloudTAK builds. COPA=false skips the patch.
+docker buildx build "${args[@]}" --load "${here}"
+"${root}/.github/scripts/copa-patch.sh" "${registry}/postgis:${tag}"
 if [[ "${PUSH_IMAGES:-false}" = "true" ]]; then
+  docker push "${registry}/postgis:${tag}"
   record_push "${registry}/postgis:${tag}"
   publish_version_arch
 fi

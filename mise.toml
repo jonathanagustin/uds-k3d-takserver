@@ -6,9 +6,9 @@
 
 [tools]
 # renovate: datasource=node depName=node versioning=node
-node = "24.22.1"
+node = "24.22.2"
 # renovate: datasource=github-releases depName=jdx/hk versioning=semver
-hk = "2.8.0"
+hk = "2.9.0"
 # renovate: datasource=github-releases depName=k3d-io/k3d versioning=semver-coerced
 k3d = "5.9.0"
 # renovate: datasource=github-releases depName=helm/helm versioning=semver
@@ -22,7 +22,7 @@ shellcheck = "0.11.0"
 # renovate: datasource=github-releases depName=rhysd/actionlint versioning=semver
 actionlint = "1.7.12"
 # renovate: datasource=github-releases depName=astral-sh/uv versioning=semver
-uv = "0.13.5"
+uv = "0.13.6"
 # Renovate's built-in mise manager updates java, so it has no # renovate: line.
 java = "temurin-17.0.21+9"
 # renovate: datasource=github-releases depName=anchore/syft versioning=semver
@@ -32,7 +32,7 @@ grype = "0.121.0"
 # renovate: datasource=github-releases depName=opentofu/opentofu versioning=semver
 opentofu = "1.13.2"
 # renovate: datasource=npm depName=pnpm
-pnpm = "10.34.7"
+pnpm = "10.34.9"
 # renovate: datasource=pypi depName=codespell versioning=pep440
 "pypi:codespell" = { version = "2.4.3", depends = "uv" }
 # renovate: datasource=github-releases depName=google/go-containerregistry versioning=semver

@@ -5,6 +5,7 @@
 
 import importlib.util
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -80,6 +81,36 @@ class BenchReportTests(unittest.TestCase):
         text = report.markdown(records)
         self.assertIn("Dominated: high", text)
         self.assertIn("Front: low", text)
+        self.assertIn("one scale per view", text)
+
+    def test_both_architectures_share_the_footprint_axis(self):
+        records = [
+            record("baseline", "amd64", 100, 100, 10, 5, 20),
+            record("heap", "amd64", 150, 80, 10, 6, 22),
+            record("postgis", "amd64", 180, 90, 10, 7, 24),
+            record("baseline", "arm64", 400, 100, 10, 5, 20),
+            record("heap", "arm64", 450, 80, 10, 6, 22),
+            record("postgis", "arm64", 480, 90, 10, 7, 24),
+        ]
+        first = report.svg(records).split("footprint vs mean latency", 1)[0]
+        centers = {
+            title: float(cx)
+            for cx, _cy, title in re.findall(
+                r'<circle cx="([0-9.]+)" cy="([0-9.]+)"[^>]*><title>([^<]+)</title>',
+                first,
+            )
+        }
+        self.assertEqual(
+            [
+                "amd64 baseline",
+                "amd64 heap",
+                "amd64 postgis",
+                "arm64 baseline",
+                "arm64 heap",
+                "arm64 postgis",
+            ],
+            sorted(centers, key=centers.get),
+        )
 
 
 class LoadLogTests(unittest.TestCase):

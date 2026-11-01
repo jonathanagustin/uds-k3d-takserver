@@ -28,6 +28,6 @@ The banner is gone, `isSecure` returns `true`, and TAK marks the access-token co
 
 This package now ships raw Istio configuration that the UDS operator does not manage or validate. A UDS Core change to the tenant gateway namespace, or to how it handles DestinationRules, can break the browser UI without a Package CR error. The test task `web-tls` checks the connector, the Service, the DestinationRule, and the gateway Secret on every run.
 
-In ambient mode Istio still sends this traffic through the HBONE tunnel, so the hop is TLS inside mutual TLS. Strict mTLS still applies. The cost is a second TLS handshake and encryption on the gateway-to-pod hop.
+In ambient mode Istio still sends this traffic through the HBONE tunnel (Istio's HTTP-based tunnel between workloads), so the hop is TLS inside mutual TLS. Strict mTLS still applies. The cost is a second TLS handshake and encryption on the gateway-to-pod hop.
 
 The CA certificate exists in two places. The deploy action writes it on every deploy, so a new CA reaches the gateway on the next deploy. The web certificate is valid for two years and is not rotated automatically. Delete the `takserver-web.jks` key from `cert-migration` and redeploy to issue a new one.

@@ -18,7 +18,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 arch="${UDS_ARCH:-amd64}"
 flavor="${FLAVOR:-upstream}"
 # renovate: datasource=github-tags depName=defenseunicorns/uds-core versioning=semver
-slim_core_version=1.15.2
+slim_core_version=1.16.0
 core="${SLIM_CORE_VERSION:-${slim_core_version}}"
 var() { uds zarf tools yq ".variables[] | select(.name == \"$1\") | .default" tasks.yaml; }
 domain="$(var DOMAIN)"

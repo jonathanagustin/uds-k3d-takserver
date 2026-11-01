@@ -12,7 +12,7 @@
 #
 # Changing PostGIS on a database that already has the extension needs
 # ALTER EXTENSION postgis UPDATE, so keep 3.4.3 until that is planned.
-ARG POSTGRES_IMAGE=postgres:15-bookworm@sha256:22c6356b2897cb0b4be6ad550b44ff97a0f29df7dbe327c01bc3c84bd457694d
+ARG POSTGRES_IMAGE=postgres:15-bookworm@sha256:daeac543477e189e334f159133f4be6dae739b005cec2dfb9d482509fed05465
 
 # The pgdg package version, URL encoded for the file names below.
 ARG POSTGIS_DEB_VERSION=3.4.3%2Bdfsg-2.pgdg120%2B1

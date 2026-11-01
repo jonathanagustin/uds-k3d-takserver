@@ -38,7 +38,10 @@ env:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned like the other cluster jobs (#219). On the ubuntu-26.04 image that
+    # ubuntu-latest is moving to, virt-handler exits with 'Failed to create an
+    # inotify watcher: too many open files', so KubeVirt never becomes Available.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       # Reads the GHCR build cache; main also publishes the device images.

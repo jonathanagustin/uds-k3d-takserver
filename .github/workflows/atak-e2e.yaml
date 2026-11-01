@@ -28,8 +28,11 @@ concurrency:
 
 env:
   CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
-  # Pull requests test local "dev" images and push nothing. Only main
-  # publishes, under RELEASE_TAG (the atak-civ submodule tag).
+  # The tests use local "dev" images. They come from GHCR under a tag made of
+  # the ATAK version and a hash of their inputs (atak/ci/device-images.sh);
+  # the images job builds and pushes the ones that are not there yet. Only
+  # main moves RELEASE_TAG (the atak-civ submodule tag), after the test
+  # passes. Fork pull requests cannot push, so they build in the e2e job.
   ATAK_TAG: dev
   RELEASE_TAG: 5.5.1.10
   VM_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
@@ -37,25 +40,72 @@ env:
   DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
 
 jobs:
+  # Runs beside the e2e job's UDS Core and TAK deploy. With every image
+  # already in GHCR it finishes in under a minute.
+  images:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Pushes the keyed device images and the GHCR build cache.
+      packages: write
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find the images to build
+        id: plan
+        run: |
+          ./atak/ci/device-images.sh keys | tee -a "${GITHUB_STEP_SUMMARY}"
+          todo="$(./atak/ci/device-images.sh missing | tr '\n' ' ')"
+          echo "missing: ${todo:-none}"
+          echo "missing=${todo}" >> "${GITHUB_OUTPUT}"
+
+      # The APK build needs the disk the preinstalled toolchains take.
+      - name: Trim the runner
+        if: contains(steps.plan.outputs.missing, 'atak-civ-apk') || contains(steps.plan.outputs.missing, 'atak-driver')
+        run: ./.github/scripts/trim-runner.sh
+
+      - name: Build and push the missing images
+        if: steps.plan.outputs.missing != ''
+        timeout-minutes: 150
+        env:
+          PUSH: "true"
+        run: ./atak/ci/device-images.sh build
+
   e2e:
     # Pinned like the other cluster jobs (#219). On the ubuntu-26.04 image that
     # ubuntu-latest is moving to, virt-handler exits with 'Failed to create an
     # inotify watcher: too many open files', so KubeVirt never becomes Available.
     runs-on: ubuntu-24.04
     permissions:
+      # Reads the images job's state while it waits for the images.
+      actions: read
       contents: read
-      # Reads the GHCR build cache; main also publishes the device images.
+      # Pulls the device images; publishes the Zarf package and, on main,
+      # the release tags.
       packages: write
     timeout-minutes: 300
+    env:
+      FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Check out the ATAK submodule and its LFS files
-        run: ./atak/ci/fetch-source.sh
-
-      - name: Trim the runner
-        run: ./.github/scripts/trim-runner.sh
+      # The toolchain deletes run while the CLIs install.
+      - name: Start trimming the runner
+        run: ./.github/scripts/trim-runner.sh start
 
       - name: Let the runner use KVM
         run: |
@@ -74,26 +124,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build the device images
-        timeout-minutes: 120
-        run: |
-          ./atak/ci/build-apk.sh
-          docker buildx build -f atak/apk/Dockerfile --target driver -t "${DRIVER_IMAGE}" --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-apk-apk" .
-          docker buildx build -f atak/vm/Dockerfile -t "${VM_IMAGE}" --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-vm" .
-          docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
-            --cache-from "type=registry,ref=${CACHE}:atak-viewer" .
-          docker image ls | grep atak
-          # The APK build leaves many GB of NDK, Conan and Gradle layers in the
-          # BuildKit container. The images are in Docker now; drop the builder
-          # before UDS Core and TAK need the disk and memory.
-          docker buildx rm --all-inactive --force || true
-          docker buildx prune -af || true
-          docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
-          df -h /
-          free -h
-
       - name: Install Docker Compose
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
         with:
@@ -104,6 +134,37 @@ jobs:
         with:
           # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
           version: v0.40.0
+
+      - name: Trim the runner
+        run: ./.github/scripts/trim-runner.sh finish
+
+      # A fork's token cannot push, so there is no images job: build here,
+      # before the cluster needs the disk and memory (the old serial path).
+      - name: Build the device images (fork)
+        if: env.FORK == 'true'
+        timeout-minutes: 150
+        run: |
+          ./atak/ci/device-images.sh build
+          # The APK build leaves many GB of NDK, Conan and Gradle layers in the
+          # BuildKit container. Drop the builder before UDS Core and TAK.
+          docker buildx rm --all-inactive --force || true
+          docker buildx prune -af || true
+          docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
+          df -h /
+          free -h
+
+      # The checkpoint is 5.5 GB; a restore is faster than the GHCR pull.
+      # Only main and manual runs save it, to spare the 10 GB Actions cache.
+      - name: Read the UDS Core checkpoint version
+        id: slim
+        run: echo "version=$(sed -n 's/^slim_core_version=\([0-9.]*\).*/\1/p' .github/scripts/deploy-slim-core.sh)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore the UDS Core checkpoint
+        id: slim-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/k3d-core-slim-dev
+          key: k3d-core-slim-dev-${{ runner.arch }}-${{ steps.slim.outputs.version }}
 
       - name: Environment setup
         run: |
@@ -122,20 +183,67 @@ jobs:
         shell: bash
         timeout-minutes: 90
 
+      - name: Save the UDS Core checkpoint
+        if: success() && github.event_name != 'pull_request' && steps.slim-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/k3d-core-slim-dev
+          key: k3d-core-slim-dev-${{ runner.arch }}-${{ steps.slim.outputs.version }}
+
+      # The images job builds what is missing while the deploy above runs.
+      # A published Zarf package with the same inputs replaces the package
+      # create, and then only the driver image is needed here.
+      - name: Get the device images
+        id: device
+        if: env.FORK != 'true'
+        timeout-minutes: 150
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGES_JOB: images
+        run: |
+          set -euo pipefail
+          UDS_VERSION="$(uds version)"
+          export UDS_VERSION
+          ./atak/ci/device-images.sh keys
+          pkg="$(./atak/ci/device-images.sh package-ref)"
+          echo "package=${pkg}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${pkg}" ]]; then
+            echo "Deploying the published package ${pkg}"
+            ONLY=atak-driver ./atak/ci/device-images.sh wait
+          else
+            ./atak/ci/device-images.sh wait
+          fi
+          docker image ls | grep atak
+          df -h /
+        shell: bash
+
       - name: ATAK device end to end
+        env:
+          ATAK_PACKAGE: ${{ steps.device.outputs.package }}
+          PKG_DIR: ${{ runner.temp }}/atak-package
         run: |
           # Playwright from atak/ci/package-lock.json.
           npm ci --prefix atak/ci --no-audit --no-fund >/dev/null
           NODE_PATH="${PWD}/atak/ci/node_modules" OUT=out ./atak/ci/e2e.sh
         timeout-minutes: 90
 
+      # Keyed by its inputs, so a later run with the same ones deploys it
+      # instead of creating it. Not from forks.
+      - name: Publish the Zarf package
+        if: success() && env.FORK != 'true' && steps.device.outputs.package == ''
+        run: |
+          UDS_VERSION="$(uds version)"
+          export UDS_VERSION
+          ./atak/ci/device-images.sh publish-package "${RUNNER_TEMP}/atak-package" \
+            || echo "::warning::Could not publish the ATAK Zarf package; the next run creates it again."
+
+      # RELEASE_TAG points at the keyed images this run tested. No pull or
+      # push: the manifests are already in GHCR.
       - name: Publish the device images
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          for img in "${VM_IMAGE}" "${VIEWER_IMAGE}" "${DRIVER_IMAGE}"; do
-            docker tag "${img}" "${img%:*}:${RELEASE_TAG}"
-            docker push "${img%:*}:${RELEASE_TAG}"
-          done
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: ./atak/ci/device-images.sh release
 
       - name: Debug
         if: failure()

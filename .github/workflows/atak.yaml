@@ -49,10 +49,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The ATAK e2e workflow publishes the APK as a scratch image tagged with
+      # the ATAK version and a hash of its inputs (atak/ci/device-images.sh).
+      # When that tag exists, the APK is copied out of it instead of rebuilt.
       - name: Build the APK
         env:
           CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
-        run: ./atak/ci/build-apk.sh
+        run: |
+          set -euo pipefail
+          ref="$(./atak/ci/device-images.sh keys | sed -n 's/^APK_IMAGE_KEYED=//p')"
+          if docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
+            echo "Using ${ref}"
+            docker pull -q "${ref}"
+            mkdir -p out
+            id="$(docker create "${ref}" /atak-civ.apk)"
+            docker cp "${id}:/atak-civ.apk" out/atak-civ.apk
+            docker rm "${id}" >/dev/null
+            ls -la out
+          else
+            ./atak/ci/build-apk.sh
+          fi
+        shell: bash
 
       - name: Upload the APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,0 +1,35 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# The KubeVirt CR for the ATAK test device. It is the upstream release
+# kubevirt-cr.yaml plus two disabled feature gates. Since v1.9.0 every Beta
+# feature gate is on unless it is listed in disabledFeatureGates
+# (kubevirt/kubevirt#17405).
+#
+# - ImageVolume: with it, the launcher pod gets the containerDisk, the kernel
+#   boot image and the container-disk binary as Kubernetes image volumes. A
+#   runtime without CRI image volume support (the containerd in many k3s
+#   releases) mounts them empty and the pod fails with
+#   "/container-disk-binary/usr/bin/container-disk: no such file or directory"
+#   (kubevirt/kubevirt#17460, k3s-io/k3s#14323). Without the gate, KubeVirt
+#   copies the binary with an init container and virt-handler mounts the
+#   disk, as v1.8 did.
+# - Template: it deploys virt-template-apiserver and virt-template-controller,
+#   whose images are not in this package and which the device does not use.
+apiVersion: kubevirt.io/v1
+kind: KubeVirt
+metadata:
+  name: kubevirt
+  namespace: kubevirt
+spec:
+  certificateRotateStrategy: {}
+  configuration:
+    developerConfiguration:
+      featureGates: []
+      disabledFeatureGates:
+        - ImageVolume
+        - Template
+    imagePullPolicy: IfNotPresent
+  customizeComponents: {}
+  imagePullPolicy: IfNotPresent
+  workloadUpdateStrategy: {}

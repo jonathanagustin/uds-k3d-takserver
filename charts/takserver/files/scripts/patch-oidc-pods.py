@@ -590,11 +590,13 @@ def patch_plugins(config_image):
                             {
                                 "name": name,
                                 # The chart template copies the API CPU limit and
-                                # drops memory. 128m is the plugin heap. 384Mi
-                                # leaves room for metaspace above that heap.
+                                # drops memory. 128m is the plugin heap. Steady
+                                # working set on run 40174810574 was 263Mi
+                                # amd64 and 260Mi arm64, so the request is
+                                # 320Mi and the limit is 512Mi.
                                 "resources": {
-                                    "requests": {"memory": "128Mi"},
-                                    "limits": {"memory": "384Mi"},
+                                    "requests": {"memory": "320Mi"},
+                                    "limits": {"memory": "512Mi"},
                                 },
                             }
                         ],

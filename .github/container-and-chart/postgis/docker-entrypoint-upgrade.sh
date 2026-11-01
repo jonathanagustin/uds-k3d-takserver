@@ -161,6 +161,16 @@ if [[ "${current}" == "${old_major}" ]]; then
     exit 1
   fi
 
+  # initdb wrote default client auth, which allows only local connections.
+  # The PostgreSQL 15 cluster's rules are what let pods on the pod network in
+  # (the official image appends "host all all all" at its own initdb), so
+  # carry them over. Without this CloudTAK got "no pg_hba.conf entry".
+  for conf in pg_hba.conf pg_ident.conf; do
+    if [[ -f "${old_data}/${conf}" ]]; then
+      cp -p "${old_data}/${conf}" "${pgdata}/${conf}"
+    fi
+  done
+
   log "updating PostGIS extensions"
   "${new_bindir}/pg_ctl" -D "${pgdata}" -w -o "-c listen_addresses= -c unix_socket_directories=${socket_dir}" start
   mapfile -t databases < <("${new_bindir}/psql" -h "${socket_dir}" -U "${db_user}" -d postgres -At -v ON_ERROR_STOP=1 \

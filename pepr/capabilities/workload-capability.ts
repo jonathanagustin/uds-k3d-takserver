@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { a, Capability } from "pepr";
-import { runtime } from "../cluster.ts";
+import { runtime, type ConfigMapDoc, type StatefulSetDoc } from "../cluster.ts";
 import { TAK_NAMESPACE } from "./gateway-ca.ts";
 import {
   enqueueIgnite,
+  prepareDeployment,
+  prepareIgniteConfigMap,
+  prepareIgniteStatefulSet,
   reconcileDeployment,
   reconcileIgnite,
   TAK_DEPLOYS,
@@ -28,7 +31,24 @@ export function onIgnite(_update: unknown, phase: string): Promise<void> {
   return enqueueIgnite(() => reconcileIgnite(phase, runtime.cluster));
 }
 
+export function onDeploymentMutate(deploy: object): Promise<void> {
+  return prepareDeployment(deploy as WorkloadDeploy, process.env, runtime.cluster);
+}
+
+export function onIgniteConfigMutate(configMap: object): void {
+  prepareIgniteConfigMap(configMap as ConfigMapDoc);
+}
+
+export function onIgniteSetMutate(statefulSet: object): void {
+  prepareIgniteStatefulSet(statefulSet as StatefulSetDoc);
+}
+
 for (const name of TAK_DEPLOYS) {
+  When(a.Deployment)
+    .IsCreatedOrUpdated()
+    .InNamespace(TAK_NAMESPACE)
+    .WithName(name)
+    .Mutate(request => onDeploymentMutate(request.Raw));
   When(a.Deployment).IsCreatedOrUpdated().InNamespace(TAK_NAMESPACE).WithName(name).Reconcile(onDeployment);
 }
 
@@ -36,7 +56,19 @@ When(a.ConfigMap)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
   .WithName("takserver-ignite-configmap")
+  .Mutate(request => onIgniteConfigMutate(request.Raw));
+
+When(a.ConfigMap)
+  .IsCreatedOrUpdated()
+  .InNamespace(TAK_NAMESPACE)
+  .WithName("takserver-ignite-configmap")
   .Reconcile(onIgnite);
+
+When(a.StatefulSet)
+  .IsCreatedOrUpdated()
+  .InNamespace(TAK_NAMESPACE)
+  .WithName("takserver-ignite")
+  .Mutate(request => onIgniteSetMutate(request.Raw));
 
 When(a.StatefulSet)
   .IsCreatedOrUpdated()

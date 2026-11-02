@@ -35,6 +35,13 @@ Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create i
 - **Why it is safe:** The matcher is the node-agent pods in the `velero` namespace. Nothing in `takserver` or `cloudtak` is exempted. The DaemonSet exists only when file-system backup is turned on.
 - **What removes it:** Leaving `FILESYSTEM_BACKUP` at its default, or a Velero release that can copy the volumes without host access.
 
+Second entry, `Velero data mover`:
+
+- **Policies:** `RequireNonRootUser`, `RestrictHostPathWrite`, `RestrictVolumeTypes`
+- **Matcher:** `.*`, kind `pod`, namespace `velero`
+- **Why:** Velero 1.18 copies each volume in a pod the node-agent creates for every PodVolumeBackup and PodVolumeRestore. It runs as root and mounts `/var/lib/kubelet/pods` read-write (a restore writes into it). The pod takes the PodVolumeBackup or PodVolumeRestore name, which starts with the user's Backup or Restore name, so no fixed name prefix can match it.
+- **Why it is safe:** Only the `velero` namespace, which holds only Velero's own pods, and only these three policies. It exists only when file-system backup is on.
+
 ## kubevirt
 
 Only the optional ATAK test device uses this. It is not part of the package: `atak/deploy/kubevirt-exemption.yaml` is applied by the ATAK end-to-end workflow, and a normal install never creates it. It is one `Exemption` object with three entries.

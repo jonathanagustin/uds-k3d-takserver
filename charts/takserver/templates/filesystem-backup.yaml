@@ -26,6 +26,20 @@ spec:
         kind: pod
       title: "Velero node-agent"
       description: "File-system backup mounts pod volumes from the node kubelet directory. The agent is privileged and runs as root. The matcher is that DaemonSet."
+    # Velero 1.18 copies each volume in a data-mover pod that the node-agent
+    # creates. The pod is named after its PodVolumeBackup or PodVolumeRestore,
+    # which takes the user's Backup or Restore name, so the name has no fixed
+    # prefix. It runs as root and mounts the kubelet pods directory read-write.
+    - policies:
+        - RequireNonRootUser
+        - RestrictHostPathWrite
+        - RestrictVolumeTypes
+      matcher:
+        namespace: {{ .Values.backup.filesystem.namespace | quote }}
+        name: ".*"
+        kind: pod
+      title: "Velero data mover"
+      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as root. Only the velero namespace, and only when file-system backup is on."
 ---
 apiVersion: apps/v1
 kind: DaemonSet

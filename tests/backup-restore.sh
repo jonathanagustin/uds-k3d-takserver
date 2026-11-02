@@ -126,11 +126,15 @@ dump_db() {
   say "pg_dump ${ns}/${db}"
   in_pod "${ns}" "${pod}" "${container}" \
     pg_dump -h 127.0.0.1 -U "${user}" -d "${db}" --no-owner --no-acl > "${dest}"
+  # The Secret holds the gzip, as the dump CronJobs write it.
+  gzip -9 -n -c "${dest}" > "${dest}.gz"
+  local plain
   local bytes
-  bytes="$(wc -c < "${dest}" | tr -d ' ')"
-  say "pg_dump ${ns}/${db} ${bytes} bytes"
+  plain="$(wc -c < "${dest}" | tr -d ' ')"
+  bytes="$(wc -c < "${dest}.gz" | tr -d ' ')"
+  say "pg_dump ${ns}/${db} ${plain} bytes, ${bytes} gzipped"
   if [[ "${bytes}" -gt "${max_dump_bytes}" ]]; then
-    say "dump is ${bytes} bytes, over ${max_dump_bytes}; a Secret cannot hold it" >&2
+    say "gzipped dump is ${bytes} bytes, over ${max_dump_bytes}; a Secret cannot hold it" >&2
     exit 1
   fi
   if ! grep -q 'uds_restore_marker' "${dest}"; then
@@ -146,7 +150,7 @@ store_secret() {
   # Server-side apply: client-side apply copies the whole Secret into the
   # last-applied annotation, which is capped at 256KiB.
   k create secret generic "${name}" -n "${ns}" \
-    --from-file=dump.sql="${file}" \
+    --from-file=dump.sql.gz="${file}.gz" \
     --dry-run=client -o yaml | k apply --server-side --force-conflicts -f -
   say "Secret ${ns}/${name} stored"
 }

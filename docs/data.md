@@ -64,7 +64,7 @@ What a namespace backup contains:
 | Ignite | No. The cache is memory. Clients reconnect. |
 | CoreConfig and the Ignite ConfigMap | Yes, as rendered objects. The chart can render them again from git. |
 
-A Secret holds about 1Mi. The CronJob refuses a dump over 700000 bytes. A database that large needs a node-agent image and file-system backup, which this package does not add.
+A Secret holds about 1Mi. Each Secret has key `dump.sql.gz`, the gzipped `pg_dump`. The CronJob refuses a gzipped dump over 700000 bytes. A database that large needs a node-agent image and file-system backup, which this package does not add.
 
 Without `takserver-certs`, `takserver-ca-key`, and `takserver-keystore`, enrolled client certificates no longer chain and the pods cannot open the keystores.
 
@@ -72,7 +72,7 @@ Restore, after Velero has put the namespaces back:
 
 1. Scale the TAK API, messaging, plugins, and config Deployments to 0, and scale CloudTAK to 0, so they do not write during the load.
 2. Wait until `takserver-postgresql` and `cloudtak-postgis` are Ready.
-3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty.
+3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty. For example, `kubectl get secret tak-db-dump -n takserver -o jsonpath='{.data.dump\.sql\.gz}' | base64 -d | gunzip | psql ... -d cot`.
 4. Scale the Deployments to 1. Enrolled client certificates still chain, because the cert ConfigMap and Secrets came back with the namespace.
 
 `tests/backup-restore.sh` does this at the end of the full-core job. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted.

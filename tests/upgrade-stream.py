@@ -5,6 +5,7 @@
 """Require server acceptance of the retained certificate on the 8089 gateway."""
 
 import argparse
+import os
 import socket
 import ssl
 
@@ -18,9 +19,11 @@ def connect(port, cert=None, key=None):
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.maximum_version = ssl.TLSVersion.TLSv1_2
     if cert:
-        # The released package issued this key with the upstream example
-        # password. The upgrade keeps that password for these certificates.
-        context.load_cert_chain(cert, key, password="atakatak")
+        # The key is encrypted with the released install's keystore password:
+        # the upstream example password before 0.7.0, a generated one after.
+        # upgrade.sh reads it from Secret takserver-keystore before the upgrade.
+        password = os.environ.get("TAK_CLIENT_KEY_PASSPHRASE") or "atakatak"
+        context.load_cert_chain(cert, key, password=password)
     with socket.create_connection(("127.0.0.1", port), timeout=20) as raw:
         with context.wrap_socket(raw, server_hostname="takserver-stream.uds.dev") as stream:
             if stream.version() != "TLSv1.2":

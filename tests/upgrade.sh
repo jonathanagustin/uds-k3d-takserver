@@ -69,7 +69,7 @@ k() { uds zarf tools kubectl "$@"; }
 health() { uds run test:health-check --no-progress; }
 gateway() { uds run test:gateway --no-progress; }
 stream() {
-  python3 -B tests/upgrade-stream.py --port "$(cat /tmp/tak-gateway-port)" \
+  TAK_CLIENT_KEY_PASSPHRASE="${keystore_before}" python3 -B tests/upgrade-stream.py --port "$(cat /tmp/tak-gateway-port)" \
     --cert "${work}/certs/admin.pem" --key "${work}/certs/admin.key"
 }
 postgres_pod() {
@@ -120,6 +120,24 @@ require_pg() {
     exit 1
   fi
 }
+# A release before 0.7.0 runs PostgreSQL 15 / PostGIS 3.4, and the upgrade
+# moves it to 18 in place. A release from 0.7.0 on is already on 18 / 3.6.
+require_released_pg() {
+  local label="$1" version="$2" extension="$3"
+  if [[ "${version}" =~ ^[0-9]+$ && "${version}" -ge 180000 ]]; then
+    require_pg "${label}" "${version}" "${extension}" 180000 190000 3.6
+  else
+    require_pg "${label}" "${version}" "${extension}" 150000 160000 3.4
+  fi
+}
+# Only a PostgreSQL 15 baseline logs an in-place upgrade.
+require_upgrade_log_from() {
+  local released="$1"
+  shift
+  if [[ "${released}" -lt 180000 ]]; then
+    require_upgrade_log "$@"
+  fi
+}
 require_upgrade_log() {
   local ns="$1" pod="$2" container="$3" logs
   logs="$(k logs -n "${ns}" "${pod}" -c "${container}" 2>/dev/null || true)"
@@ -152,6 +170,10 @@ health
 uds run setup:keycloak-user --no-progress --with group="/UDS Core/Admin"
 python3 -B tests/ensure-tak-group.py
 gateway
+# The keystore password and mode before the upgrade. The upgrade must keep
+# both, since the retained client certificates were issued with that password.
+keystore_mode_before="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}' 2>/dev/null || true)"
+keystore_before="$(bash tests/keystore-pass.sh 2>/dev/null || echo atakatak)"
 # The fresh directory is extracted only here, before the upgrade.
 bash tests/extract-certs.sh "${work}/certs"
 sha256sum "${work}/certs/admin.pem" "${work}/certs/admin.key" > "${work}/certs.sha256"
@@ -169,7 +191,7 @@ expected="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade
 pvc_snapshot > "${work}/postgres-pvc.before"
 released_version="$(sql <<< 'SHOW server_version_num;')"
 released_postgis="$(sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "released TAK database" "${released_version}" "${released_postgis}" 150000 160000 3.4
+require_released_pg "released TAK database" "${released_version}" "${released_postgis}"
 echo "PASS released TAK database is PostgreSQL ${released_version} / PostGIS ${released_postgis}"
 
 if ! k get statefulset cloudtak-postgis -n cloudtak >/dev/null 2>&1; then
@@ -186,7 +208,7 @@ cloudtak_expected="$(cloudtak_sql <<< 'SELECT marker || '\''|'\'' || created_at:
 [[ "${cloudtak_expected}" == "${cloudtak_marker}|"* ]]
 released_cloudtak_version="$(cloudtak_sql <<< 'SHOW server_version_num;')"
 released_cloudtak_postgis="$(cloudtak_sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
-require_pg "released CloudTAK database" "${released_cloudtak_version}" "${released_cloudtak_postgis}" 150000 160000 3.4
+require_released_pg "released CloudTAK database" "${released_cloudtak_version}" "${released_cloudtak_postgis}"
 pvc_snapshot cloudtak "$(cloudtak_pod)" > "${work}/cloudtak-pvc.before"
 echo "PASS released CloudTAK database is PostgreSQL ${released_cloudtak_version} / PostGIS ${released_cloudtak_postgis}"
 
@@ -208,12 +230,19 @@ fi
 uds run deploy:test-bundle --no-progress --with options="${upgrade_options}"
 health
 mode="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}')"
-legacy="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}' | base64 -d)"
-if [[ "${mode}" != "legacy" || "${legacy}" != "atakatak" ]]; then
-  echo "upgrade from a release that used the example keystore password did not keep it (mode ${mode:-unset})" >&2
+after="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}' | base64 -d)"
+# A release before 0.7.0 had no Secret and used the example password, which
+# the upgrade must keep as mode legacy. A later release already has the Secret.
+if [[ -z "${keystore_mode_before}" ]]; then
+  if [[ "${mode}" != "legacy" || "${after}" != "atakatak" ]]; then
+    echo "upgrade from a release that used the example keystore password did not keep it (mode ${mode:-unset})" >&2
+    exit 1
+  fi
+elif [[ "${mode}" != "${keystore_mode_before}" || "${after}" != "${keystore_before}" ]]; then
+  echo "upgrade changed the keystore password or its mode (${keystore_mode_before} -> ${mode:-unset})" >&2
   exit 1
 fi
-unset legacy
+unset after
 echo "PASS upgrade kept the keystore password those certificates were issued with"
 pvc_snapshot > "${work}/postgres-pvc.after"
 diff -u "${work}/postgres-pvc.before" "${work}/postgres-pvc.after"
@@ -222,7 +251,7 @@ actual="$(sql <<< 'SELECT marker || '\''|'\'' || created_at::text FROM upgrade_t
 server_version="$(sql <<< 'SHOW server_version_num;')"
 postgis_version="$(sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
 require_pg "upgraded TAK database" "${server_version}" "${postgis_version}" 180000 190000 3.6
-require_upgrade_log takserver "$(postgres_pod)" postgresql
+require_upgrade_log_from "${released_version}" takserver "$(postgres_pod)" postgresql
 echo "PASS TAK PostgreSQL ${released_version} moved to ${server_version} / PostGIS ${postgis_version} on the same volume"
 
 k rollout status statefulset/cloudtak-postgis -n cloudtak --timeout=600s
@@ -233,7 +262,7 @@ diff -u "${work}/cloudtak-pvc.before" "${work}/cloudtak-pvc.after"
 cloudtak_version="$(cloudtak_sql <<< 'SHOW server_version_num;')"
 cloudtak_postgis="$(cloudtak_sql <<< 'SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';')"
 require_pg "upgraded CloudTAK database" "${cloudtak_version}" "${cloudtak_postgis}" 180000 190000 3.6
-require_upgrade_log cloudtak "$(cloudtak_pod)" postgis
+require_upgrade_log_from "${released_cloudtak_version}" cloudtak "$(cloudtak_pod)" postgis
 cloudtak_sql <<< 'DROP TABLE upgrade_test_retained;'
 echo "PASS CloudTAK PostgreSQL ${released_cloudtak_version} moved to ${cloudtak_version} / PostGIS ${cloudtak_postgis} on the same volume"
 sha256sum --check "${work}/certs.sha256"

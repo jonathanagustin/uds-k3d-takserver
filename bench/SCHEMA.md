@@ -42,9 +42,9 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `postgres` | object or null | TAK database `cot` over the load window. Null when `psql` could not be run, with the reason in `errors` |
 | `postgres.hit_ratio` | 0 to 1, or null | `blks_hit / (blks_hit + blks_read)` from `pg_stat_database`. Null when both counters are 0 |
 | `postgres.temp_files`, `postgres.temp_bytes` | count, bytes | `pg_stat_database` for `cot` |
-| `postgres.checkpoints_timed`, `postgres.checkpoints_req` | count | `pg_stat_bgwriter` |
-| `postgres.checkpoint_write_ms`, `postgres.checkpoint_sync_ms` | milliseconds | `checkpoint_write_time` and `checkpoint_sync_time` |
-| `postgres.buffers_backend` | count | buffers written by backends, from `pg_stat_bgwriter` |
+| `postgres.checkpoints_timed`, `postgres.checkpoints_req` | count | `num_timed` and `num_requested` from `pg_stat_checkpointer` (PostgreSQL 17 and later) |
+| `postgres.checkpoint_write_ms`, `postgres.checkpoint_sync_ms` | milliseconds | `write_time` and `sync_time` from `pg_stat_checkpointer` |
+| `postgres.buffers_backend` | count | blocks written by client backends: the sum of `writes` in `pg_stat_io` for `client backend` |
 | `postgres.peak_rss_bytes`, `postgres.steady_rss_bytes` | bytes | working set of container `postgresql` in pod `takserver-postgresql-*`, from the same kubelet Summary samples as `kubelet` |
 | `postgres.settings` | text | `current_setting` for `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, `checkpoint_timeout` |
 | `errors` | strings | why a null field was not measured |

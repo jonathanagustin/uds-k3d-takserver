@@ -32,7 +32,7 @@ k() {
   fi
 }
 
-if ! k api-resources --api-group=velero.io 2>/dev/null | grep -q '^backups '; then
+if ! k api-resources --api-group=velero.io 2>/dev/null | grep '^backups ' >/dev/null; then
   say "velero.io Backup is not installed; backup-restore skipped"
   exit 0
 fi

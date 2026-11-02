@@ -15,7 +15,8 @@
 #                             this key at the path create would write; false
 #                             otherwise (the caller then creates it). Waits up
 #                             to DEV_PACKAGE_WAIT_SECONDS (default 0) for a
-#                             parallel job to publish it.
+#                             parallel job to publish it, and stops early
+#                             once that Package run has finished.
 #   dev-package.sh publish    publish the created package unless the tag exists
 #
 # KEY_SALT changes every key. DEV_PACKAGE_REUSE=false makes prebuilt print false.
@@ -30,7 +31,10 @@ case "$(uname -m)" in
   aarch64 | arm64) arch=arm64 ;;
   *) echo "dev-package: unknown machine $(uname -m)" >&2; exit 1 ;;
 esac
-file="zarf-package-takserver-${arch}-dev.tar.zst"
+# uds-common's create:package writes the flavored name; create:test-bundle
+# copies it to the plain name before the bundle is made.
+flavor="${FLAVOR:-upstream}"
+file="zarf-package-takserver-${arch}-dev-${flavor}.tar.zst"
 
 zarf() {
   uds zarf "$@"
@@ -62,7 +66,7 @@ key() {
   sum="$(
     {
       printf 'salt=%s\n' "${KEY_SALT:-}"
-      printf 'arch=%s\n' "${arch}"
+      printf 'arch=%s flavor=%s\n' "${arch}" "${flavor}"
       printf 'uds=%s\n' "$(uds version 2>/dev/null || true)"
       printf 'domain=%s tag=%s options=%s\n' "${DOMAIN:-uds.dev}" "${TAK_IMAGE_TAG:-}" "${CREATE_OPTIONS:-}"
       inputs | while IFS= read -r line; do
@@ -85,6 +89,24 @@ exists() {
   zarf tools registry digest "$1" >/dev/null 2>&1
 }
 
+# True when the Package workflow run for DEV_PACKAGE_SHA has finished, so the
+# tag will not appear (it failed, or this is a fork). Needs GH_TOKEN and
+# GITHUB_REPOSITORY; without them, waiting falls back to the time limit.
+package_run_done() {
+  [[ -n "${GH_TOKEN:-}" && -n "${GITHUB_REPOSITORY:-}" && -n "${DEV_PACKAGE_SHA:-}" ]] || return 1
+  local status
+  status="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+    "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/package.yaml/runs?head_sha=${DEV_PACKAGE_SHA}&per_page=1" \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin).get("workflow_runs") or []; print(r[0]["status"] if r else "none")' 2>/dev/null)" || return 1
+  if [[ "${status}" == "completed" ]]; then
+    # One more look: it may have published just before finishing.
+    exists "$(ref)" && return 1
+    echo "dev-package: the Package run for ${DEV_PACKAGE_SHA} finished without this tag" >&2
+    return 0
+  fi
+  return 1
+}
+
 prebuilt() {
   if [[ "${DEV_PACKAGE_REUSE:-true}" != "true" ]]; then
     echo false
@@ -93,7 +115,7 @@ prebuilt() {
   local r waited=0 wait="${DEV_PACKAGE_WAIT_SECONDS:-0}"
   r="$(ref)"
   until exists "${r}"; do
-    if (( waited >= wait )); then
+    if (( waited >= wait )) || package_run_done; then
       echo "dev-package: ${r} not published; creating the package here" >&2
       echo false
       return

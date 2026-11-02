@@ -69,6 +69,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Kopia keeps its repository config under $HOME/udmrepo. HOME is /
+            # in the image, which the agent cannot write. /scratch is an emptyDir.
+            - name: HOME
+              value: /scratch
             - name: VELERO_SCRATCH_DIR
               value: /scratch
             - name: AWS_SHARED_CREDENTIALS_FILE

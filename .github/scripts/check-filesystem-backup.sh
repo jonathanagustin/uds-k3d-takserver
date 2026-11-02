@@ -36,6 +36,7 @@ for needle in \
   'privileged: true' \
   'runAsUser: 0' \
   'role: node-agent' \
+  'name: HOME' \
   '/var/lib/kubelet/pods' \
   'namespace: velero'; do
   if ! grep -q "${needle}" <<< "${on}"; then

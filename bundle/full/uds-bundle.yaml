@@ -130,6 +130,16 @@ packages:
                     name: node-agent
                   remoteGenerated: KubeAPI
                   description: "Velero node-agent to the Kubernetes API"
+        # The server initialises the Kopia repository under $HOME/udmrepo.
+        # HOME is / in the image and / is not writable, so a file-system
+        # backup failed with "mkdir /udmrepo: permission denied". /scratch is
+        # the chart's emptyDir.
+        velero:
+          values:
+            - path: configuration.extraEnvVars
+              value:
+                - name: HOME
+                  value: /scratch
 
   - name: core-monitoring
     repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring

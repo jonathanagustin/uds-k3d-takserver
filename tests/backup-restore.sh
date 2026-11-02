@@ -157,6 +157,14 @@ store_secret() {
   say "Secret ${ns}/${name} stored"
 }
 
+# A PartiallyFailed backup only counts its errors in describe. The pod
+# volume messages and the server's error lines say which item failed.
+velero_details() {
+  k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
+    -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' >&2 || true
+  k logs -n velero deploy/velero --tail=2000 2>/dev/null | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+}
+
 wait_phase() {
   local kind="$1"
   local name="$2"
@@ -172,6 +180,7 @@ wait_phase() {
         ;;
       Failed | FailedValidation | PartiallyFailed)
         k describe "${kind}" -n velero "${name}" >&2 || true
+        velero_details
         return 1
         ;;
       *) ;;
@@ -180,6 +189,7 @@ wait_phase() {
   done
   say "${kind} ${name} was not Completed" >&2
   k describe "${kind}" -n velero "${name}" >&2 || true
+  velero_details
   return 1
 }
 

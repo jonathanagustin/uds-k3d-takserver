@@ -17,11 +17,19 @@ const MATERIAL: ConfigMapDoc = {
   },
 };
 
-function fake(opts: { configMap?: ConfigMapDoc; keystore?: SecretDoc; current?: SecretDoc }) {
+function fake(opts: { configMap?: ConfigMapDoc; keystore?: SecretDoc; current?: SecretDoc; certs?: SecretDoc }) {
   const calls: { ensure: number; applied: Record<string, string>[] } = { ensure: 0, applied: [] };
   const cluster = {
     getConfigMap: async () => opts.configMap,
-    getSecret: async (_namespace: string, name: string) => (name === "takserver-keystore" ? opts.keystore : opts.current),
+    getSecret: async (_namespace: string, name: string) => {
+      if (name === "takserver-keystore") {
+        return opts.keystore;
+      }
+      if (name === "takserver-certs") {
+        return opts.certs;
+      }
+      return opts.current;
+    },
     ensureNamespace: async () => {
       calls.ensure += 1;
     },
@@ -41,6 +49,26 @@ test("the CloudTAK secret is the CA, the admin certificate, its key, and CAPASS"
     CAPASS: "cGFzcw==",
   });
   assert.equal(data && "ca-do-not-share.key" in data, false);
+});
+
+test("the key comes from Secret takserver-certs, and each side falls back to the other", async () => {
+  const pass = { data: { CAPASS: "cGFzcw==" } };
+  const split: ConfigMapDoc = { binaryData: { "ca.pem": "Y2E=", "admin.pem": "Y2VydA==" } };
+  const certs: SecretDoc = { data: { "admin.key": "c2VjcmV0a2V5", "admin.pem": "b3RoZXI=" } };
+  assert.deepEqual(cloudtakData(split, pass, certs), {
+    "ca.pem": "Y2E=",
+    "admin.pem": "Y2VydA==",
+    "admin.key": "c2VjcmV0a2V5",
+    CAPASS: "cGFzcw==",
+  });
+  assert.equal(cloudtakData(MATERIAL, pass, certs)?.["admin.key"], "c2VjcmV0a2V5");
+  assert.equal(cloudtakData(MATERIAL, pass, { data: {} })?.["admin.key"], "a2V5");
+  const onlySecret: SecretDoc = { data: { "ca.pem": "Y2E=", "admin.pem": "Y2VydA==", "admin.key": "a2V5" } };
+  assert.equal(cloudtakData(undefined, pass, onlySecret)?.["ca.pem"], "Y2E=");
+  assert.equal(cloudtakData(split, pass), undefined);
+  const { cluster, calls } = fake({ configMap: split, keystore: pass, certs });
+  await reconcileCloudtak("ADDED", cluster);
+  assert.equal(calls.applied[0]["admin.key"], "c2VjcmV0a2V5");
 });
 
 test("missing material waits", () => {
@@ -111,13 +139,13 @@ afterEach(() => {
   runtime.cluster = saved;
 });
 
-test("the capability watches cert-migration and the keystore secret", async () => {
+test("the capability watches cert-migration, the keystore secret, and the certs secret", async () => {
   const registered = CloudtakAdmin as unknown as {
     bindings: { filters: { name: string }; kind: { kind: string } }[];
   };
   assert.deepEqual(
     registered.bindings.map(binding => `${binding.kind.kind}/${binding.filters.name}`),
-    ["ConfigMap/cert-migration", "Secret/takserver-keystore"],
+    ["ConfigMap/cert-migration", "Secret/takserver-keystore", "Secret/takserver-certs"],
   );
   runtime.cluster = fake({}).cluster;
   await onCloudtak({}, "DELETED");

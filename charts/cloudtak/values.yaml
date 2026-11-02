@@ -21,9 +21,9 @@ backup:
 
 postgis:
   # The image the TAK chart already uses. One image covers both databases.
-  # Built in this repository for amd64 and arm64
-  # (adr/0013-build-the-postgis-image-here.md).
-  image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4
+  # Built in this repository for amd64 and arm64. The entrypoint upgrades a
+  # PostgreSQL 15 data directory (adr/0018-upgrade-postgres-in-place.md).
+  image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
   storage: 2Gi
   database: cloudtak
   username: cloudtak
@@ -117,29 +117,36 @@ basemap:
   # The rule always applies to the cloudtak pod only.
   egress: {}
 
+# Steady working set from tests/usage.sh at the end of install, run
+# 40174810574, higher of amd64 and arm64. Requests sit near that set.
+# Limits are the set plus headroom. The SSO limit stays 512Mi: the sample
+# was 67Mi, and an earlier note had this container near 270Mi.
 resources:
   cloudtak:
     requests:
       cpu: 100m
-      memory: 384Mi
+      memory: 256Mi
     limits:
-      memory: 1Gi
-  # Loads CloudTAK's model and session modules: about 270 MB resident.
+      cpu: 500m
+      memory: 768Mi
   sso:
     requests:
-      cpu: 10m
-      memory: 192Mi
+      cpu: 50m
+      memory: 128Mi
     limits:
+      cpu: 500m
       memory: 512Mi
   bootstrap:
     requests:
       cpu: 10m
       memory: 48Mi
     limits:
+      cpu: 200m
       memory: 128Mi
   postgis:
     requests:
       cpu: 50m
       memory: 128Mi
     limits:
+      cpu: 500m
       memory: 512Mi

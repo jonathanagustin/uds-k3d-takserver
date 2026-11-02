@@ -22,6 +22,7 @@ import {
   waitGone,
   waitMode,
   waitReady,
+  waitSchema,
   type WorkloadDeploy,
   type WorkloadPodSpec,
 } from "./workload.ts";
@@ -120,14 +121,14 @@ test("the API hostAlias is removed and a messaging alias is not", () => {
   assert.deepEqual(messaging.next.spec?.template?.spec?.hostAliases, [{ ip: "10.0.0.2" }]);
 });
 
-test("config probes exec the readiness script and plugins get a 384Mi limit", () => {
+test("config probes exec the readiness script and plugins get a 512Mi limit", () => {
   const config = shaped("takserver-config").spec?.template?.spec?.containers?.[0];
   const startup = config?.startupProbe as { exec: { command: string[] } };
   assert.deepEqual(startup.exec.command, ["/config-readiness.sh"]);
   assert.equal(config?.livenessProbe, undefined);
   const plugins = shaped("takserver-plugins").spec?.template?.spec?.containers?.[0];
-  assert.equal(plugins?.resources?.requests?.memory, "128Mi");
-  assert.equal(plugins?.resources?.limits?.memory, "384Mi");
+  assert.equal(plugins?.resources?.requests?.memory, "320Mi");
+  assert.equal(plugins?.resources?.limits?.memory, "512Mi");
   const again = shapeDeployment(shaped("takserver-plugins"), { image: IMAGE });
   assert.equal(again.changed, false);
 });
@@ -509,7 +510,8 @@ function igniteCluster(opts: {
   omitReplicas?: boolean;
   startup?: { metadata?: { annotations?: Record<string, string> } };
   ready?: boolean;
-  listPods?: () => Promise<{ metadata?: { deletionTimestamp?: string }; status?: { phase?: string } }[]>;
+  listPods?: () => Promise<{ metadata?: { deletionTimestamp?: string; creationTimestamp?: string }; status?: { phase?: string } }[]>;
+  job?: { status?: { succeeded?: number; completionTime?: string } } | null;
 }) {
   const calls: string[] = [];
   const ops: JsonOp[] = [];
@@ -589,6 +591,9 @@ function igniteCluster(opts: {
       counts.set(name, replicas);
     },
     listPods: opts.listPods ?? (async () => []),
+    getJob: async () => {
+      return opts.job === null ? undefined : (opts.job ?? { status: { succeeded: 1, completionTime: "2026-11-01T17:32:32Z" } });
+    },
     patchConfigMapKey: async () => {
       calls.push("patch-xml");
     },
@@ -819,4 +824,104 @@ test("the capability watches the four deployments, the ignite config, and the St
   await onDeployment(deploy("postgres"), "ADDED");
   runtime.cluster = igniteCluster({ xml: tuneIgniteXml(IGNITE_XML), automount: true }).cluster;
   await onIgnite({}, "ADDED");
+});
+
+test("an ignite change starts the consumers only after the db-setup Job has succeeded", async () => {
+  let polls = 0;
+  const { cluster, calls } = igniteCluster({ xml: IGNITE_XML, automount: true });
+  const base = cluster as unknown as Record<string, unknown>;
+  base.getJob = async () => {
+    polls += 1;
+    calls.push(`job ${polls}`);
+    return polls < 3 ? (polls === 1 ? undefined : { status: {} }) : { status: { succeeded: 1, completionTime: "2026-11-01T17:32:32Z" } };
+  };
+  await reconcileIgnite("ADDED", cluster);
+  const restart = calls.findIndex(call => call.startsWith("restart"));
+  const done = calls.indexOf("job 3");
+  const firstUp = calls.indexOf("scale takserver-config 1");
+  assert.ok(restart >= 0 && restart < done && done < firstUp, calls.join(" | "));
+  assert.equal(calls.at(-1), "stamp");
+});
+
+test("consumers started before the schema existed are stopped and started again in order", async () => {
+  const { cluster, calls } = igniteCluster({
+    xml: tuneIgniteXml(IGNITE_XML),
+    automount: true,
+    listPods: async () => [{ metadata: { creationTimestamp: "2026-11-01T17:31:00Z" } }],
+  });
+  const base = cluster as unknown as Record<string, unknown>;
+  let stopped = false;
+  base.listPods = async () => (stopped ? [] : [{ metadata: { creationTimestamp: "2026-11-01T17:31:00Z" } }]);
+  const scale = base.scaleDeployment as (ns: string, name: string, n: number) => Promise<void>;
+  base.scaleDeployment = async (ns: string, name: string, n: number) => {
+    if (n === 0) {
+      stopped = true;
+    }
+    await scale(ns, name, n);
+  };
+  await reconcileIgnite("ADDED", cluster);
+  assert.equal(calls[0], "delete-startup");
+  assert.deepEqual(
+    calls.filter(call => call.startsWith("scale")),
+    [
+      "scale takserver-plugins 0",
+      "scale takserver-api 0",
+      "scale takserver-messaging 0",
+      "scale takserver-config 0",
+      "scale takserver-config 1",
+      "scale takserver-messaging 1",
+      "scale takserver-api 1",
+      "scale takserver-plugins 1",
+    ],
+  );
+  assert.equal(calls.at(-1), "stamp");
+});
+
+test("consumers started after the schema are left alone", async () => {
+  const { cluster, calls } = igniteCluster({
+    xml: tuneIgniteXml(IGNITE_XML),
+    automount: true,
+    listPods: async () => [{ metadata: { creationTimestamp: "2026-11-01T17:40:00Z" } }],
+  });
+  await reconcileIgnite("ADDED", cluster);
+  assert.deepEqual(calls, ["stamp"]);
+});
+
+test("waitSchema skips a release without the in-chart Postgres and times out on a stuck Job", async () => {
+  let slept = 0;
+  const none = {
+    getJob: async () => undefined,
+    getStatefulSet: async () => undefined,
+    sleep: async () => {
+      slept += 1;
+    },
+  } as unknown as Cluster;
+  assert.equal(await waitSchema(none, 600_000), undefined);
+  assert.ok(slept >= 10, `slept ${slept}`);
+  const pending = {
+    getJob: async () => undefined,
+    getStatefulSet: async () => ({}),
+    sleep: async () => undefined,
+  } as unknown as Cluster;
+  await assert.rejects(waitSchema(pending, 9_000), /takserver-db-setup did not complete/);
+  const done = {
+    getJob: async () => ({ status: { succeeded: 1, completionTime: "2026-11-01T17:32:32Z" } }),
+  } as unknown as Cluster;
+  assert.equal(await waitSchema(done), Date.parse("2026-11-01T17:32:32Z"));
+});
+
+test("terminating, finished, and unstamped pods do not trigger a restart", async () => {
+  const { cluster, calls } = igniteCluster({
+    xml: tuneIgniteXml(IGNITE_XML),
+    automount: true,
+    listPods: async () => [
+      { metadata: { creationTimestamp: "2026-11-01T17:31:00Z", deletionTimestamp: "2026-11-01T17:31:30Z" } },
+      { metadata: { creationTimestamp: "2026-11-01T17:31:00Z" }, status: { phase: "Succeeded" } },
+      { metadata: {} },
+    ],
+  });
+  await reconcileIgnite("ADDED", cluster);
+  assert.deepEqual(calls, ["stamp"]);
+  const undated = { getJob: async () => ({ status: { succeeded: 1 } }) } as unknown as Cluster;
+  assert.equal(await waitSchema(undated), 0);
 });

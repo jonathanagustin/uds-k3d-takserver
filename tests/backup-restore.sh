@@ -307,7 +307,8 @@ spec:
   includedNamespaces:
     - takserver
     - cloudtak
-  includeClusterResources: false
+  # Unset, not false: Velero then also records the PVs the claims use, which
+  # it needs to re-provision a claim whose data comes from file-system backup.
   snapshotVolumes: false
   ttl: 2h0m0s
 EOF
@@ -318,6 +319,7 @@ say "Backup ${backup_name} Completed"
 # Velero skips hostPath PVs in file-system backup (pkg/podvolume/backupper.go,
 # isHostPathVolume). k3d's default local-path class makes hostPath PVs; the
 # full-core bundle uses class local-path-local, which makes local PVs.
+fs_backed=0
 tak_pv="$(k get pvc data-takserver-postgresql-0 -n takserver -o jsonpath='{.spec.volumeName}')"
 tak_pv_hostpath="$(k get pv "${tak_pv}" -o jsonpath='{.spec.hostPath.path}')"
 say "takserver Postgres PV ${tak_pv} class=$(k get pv "${tak_pv}" -o jsonpath='{.spec.storageClassName}')"
@@ -358,12 +360,24 @@ then
   velero_details backup.velero.io "${backup_name}"
   exit 1
 else
+  fs_backed=1
   say "Backup ${backup_name} holds the Postgres volume"
 fi
 
 say "delete namespaces takserver and cloudtak"
 k delete namespace takserver cloudtak --wait=true --timeout=600s
 
+# Without a volume in the backup, a restored claim would point at the deleted
+# volume and stay Pending, so the StatefulSets create fresh claims. With the
+# Postgres volume backed up, Velero restores the claims: a PV with reclaim
+# policy Delete and no snapshot is provisioned fresh, and the PodVolumeRestore
+# fills the Postgres one.
+restore_scope="  includeClusterResources: false
+  excludedResources:
+    - persistentvolumeclaims"
+if [[ "${fs_backed}" -eq 1 ]]; then
+  restore_scope="  # Unset so the claims' PVs are handled with them."
+fi
 cat <<EOF | k apply -f -
 apiVersion: velero.io/v1
 kind: Restore
@@ -377,14 +391,11 @@ spec:
   includedNamespaces:
     - takserver
     - cloudtak
-  includeClusterResources: false
-  # The backup holds no volumes. A restored claim would point at the deleted
-  # volume and stay Pending, so let the StatefulSets create fresh claims.
-  excludedResources:
-    - persistentvolumeclaims
+${restore_scope}
 EOF
 
-wait_phase restore.velero.io "${restore_name}" 60
+# A PodVolumeRestore holds the Restore InProgress until the data is back.
+wait_phase restore.velero.io "${restore_name}" "$(( fs_backed == 1 ? 300 : 60 ))"
 say "Restore ${restore_name} Completed"
 
 apps_up=0

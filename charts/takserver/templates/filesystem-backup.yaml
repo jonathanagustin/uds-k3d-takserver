@@ -42,6 +42,9 @@ spec:
     metadata:
       labels:
         name: node-agent
+        # Velero finds the agent on a node by role=node-agent. Without it every
+        # opted-in volume fails with "daemonset pod not found in running state".
+        role: node-agent
         app.kubernetes.io/name: velero
     spec:
       serviceAccountName: {{ .Values.backup.filesystem.serviceAccount }}

@@ -163,7 +163,7 @@ The upstream cluster scripts exec java and do not wait. Admission on the four TA
 
 Ready means the stock readiness script passed. A listening port is not the gate. The scripts truncate `/logs/takserver-*.log` at process start so a readiness grep cannot match a line from an earlier JVM in the same container. There is no retention Deployment in this chart.
 
-API and messaging get a TCP `startupProbe` on 8443 and 8089. The budget is 80 periods of 10s, which covers the dependency waits plus about 300s for the process. Readiness `timeoutSeconds` is 10 because those scripts call `nc` against Postgres and the default probe timeout is 1s. `pgrep -f` is not used. Messaging liveness is TCP 8089.
+API and messaging get a TCP `startupProbe` on 8443 and 8089. The budget is 80 periods of 10s, which covers the dependency waits plus about 300s for the process. Readiness `timeoutSeconds` is 10 because those scripts call `nc` against Postgres and the default probe timeout is 1s. `pgrep -f` is not used. Messaging liveness is TCP 8089. The period stays 10s. On run 39556568533 the messaging restart was 2m12s and the API restart was 1m52s, so one probe period is at most 10s of that, about 8%. A class-data-sharing archive was not added. The class-loading share of those two minutes is not measured, and the archive would add bytes to both images. `bench/phases.py` records pull, init, JVM-to-log, and log-to-Ready when the harness runs.
 
 `TAKIgniteConfig.xml` is the pre-created ConfigMap `tak-ignite-config`. `igniteFailureDetectionTimeoutSeconds` is 30. With `clusterEnabled`, the client builds only a Kubernetes IP finder and client mode, so that attribute is not applied there. The schema has no `networkTimeout` attribute.
 

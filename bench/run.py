@@ -30,6 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
+from bench.phases import pod_phases
 from bench.startup import max_generation, max_restarts
 from bench.tester_exit import bind_tester, reap
 
@@ -178,6 +179,45 @@ def footprint():
         "cpu_limits_m": cpu_lim if cpu_limits_complete else None,
         "memory_limits_bytes": mem_lim if limits_complete else None,
     }, errors
+
+
+def start_phases():
+    """Pull, init, JVM, and Ready for messaging and the API. Missing stays None."""
+    found = {}
+    errors = []
+    for app in ("takserver-messaging", "takserver-api"):
+        try:
+            raw = kubectl("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json").stdout
+            pods = json.loads(raw).get("items", [])
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            found[app] = None
+            errors.append(f"{app} phases: {error}")
+            continue
+        if not pods:
+            found[app] = None
+            errors.append(f"{app} phases: no pod")
+            continue
+        pod = pods[0]
+        name = pod.get("metadata", {}).get("name", "")
+        events = []
+        log_text = ""
+        try:
+            event_raw = kubectl(
+                "get", "events", "-n", "takserver",
+                "--field-selector", f"involvedObject.name={name}",
+                "-o", "json",
+            ).stdout
+            events = json.loads(event_raw).get("items", [])
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError):
+            events = []
+        containers = pod.get("spec", {}).get("containers") or []
+        container = containers[0]["name"] if containers else app
+        try:
+            log_text = kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps", "--tail=400").stdout
+        except (RuntimeError, subprocess.CalledProcessError):
+            log_text = ""
+        found[app] = pod_phases(pod, events, log_text)
+    return found, errors
 
 
 def startup_shape():
@@ -665,6 +705,7 @@ def blank(arch, config, clients, duration):
         "images": None,
         "package_bytes": None,
         "time_to_ready": {"cold_s": None, "warm_s": None},
+        "start_phases": {"takserver-messaging": None, "takserver-api": None},
         "startup": {"max_generation": None, "max_restart_count": None},
         "load": {
             "clients": clients,
@@ -759,6 +800,9 @@ def one(config, clients, out_dir, tester, cold):
         fp, fp_errors = footprint()
         record["footprint"] = fp
         record["errors"].extend(fp_errors)
+        phases, phase_errors = start_phases()
+        record["start_phases"] = phases
+        record["errors"].extend(phase_errors)
         shape, shape_errors = startup_shape()
         record["startup"] = shape
         record["errors"].extend(shape_errors)

@@ -68,9 +68,12 @@ spec:
               args:
                 - |
                   set -eu
+                  # gzip keeps the dump under the Secret cap for longer. Plain SQL of
+                  # the CI cot database was already over 700000 bytes.
                   pg_dump -h takserver-postgresql -p 5432 -U postgres -d cot --no-owner --no-acl > /dump/dump.sql
-                  chmod 644 /dump/dump.sql
-                  bytes="$(wc -c < /dump/dump.sql | tr -d ' ')"
+                  gzip -9 -n /dump/dump.sql
+                  chmod 644 /dump/dump.sql.gz
+                  bytes="$(wc -c < /dump/dump.sql.gz | tr -d ' ')"
                   if [ "${bytes}" -gt 700000 ]; then
                     echo "tak-db-dump is ${bytes} bytes; a Secret holds about 1Mi" >&2
                     exit 1
@@ -108,12 +111,14 @@ spec:
                   ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
                   token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
                   ca="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                  payload="$(base64 -w 0 /dump/dump.sql)"
+                  payload="$(base64 -w 0 /dump/dump.sql.gz)"
                   api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
-                  body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","labels":{"app.kubernetes.io/part-of":"tak-backup"}},"type":"Opaque","data":{"dump.sql":"%s"}}' "${SECRET_NAME}" "${payload}")"
-                  code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data "${body}" "${api}")"
+                  # The body is about 1Mi. A command-line argument is capped at 128KiB,
+                  # so curl reads it from a file.
+                  printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","labels":{"app.kubernetes.io/part-of":"tak-backup"}},"type":"Opaque","data":{"dump.sql.gz":"%s"}}' "${SECRET_NAME}" "${payload}" > /tmp/secret.json
+                  code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data-binary @/tmp/secret.json "${api}")"
                   if [[ "${code}" == "409" ]]; then
-                    code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X PUT -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data "${body}" "${api}/${SECRET_NAME}")"
+                    code="$(curl --silent --show-error --cacert "${ca}" --max-time 60 -o /dev/null -w '%{http_code}' -X PUT -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data-binary @/tmp/secret.json "${api}/${SECRET_NAME}")"
                   fi
                   if [[ "${code}" != "200" && "${code}" != "201" ]]; then
                     echo "writing Secret ${SECRET_NAME} returned HTTP ${code}" >&2

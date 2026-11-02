@@ -166,12 +166,16 @@ tasks:
             address: sso.uds.dev
             code: 200
       - task: fit-runner
+      # File-system backup needs non-hostPath volumes; Postgres uses this class.
+      - description: Create the local-path-local StorageClass
+        cmd: ./tests/local-path-local.sh
       - task: create:test-bundle
         with:
           path: bundle/full
       - task: deploy:test-bundle
         with:
           path: bundle/full
+          config: bundle/full/uds-config.yaml
           options: "--force-conflicts"
       - task: setup:keycloak-user
         with:

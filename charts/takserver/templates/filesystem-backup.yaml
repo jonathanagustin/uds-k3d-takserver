@@ -1,0 +1,154 @@
+{{- if eq (toString .Values.backup.filesystem.enabled) "true" }}
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Velero node-agent and the host-access exemption it needs.
+# Off unless FILESYSTEM_BACKUP=true. See adr/0021-velero-node-agent.md.
+apiVersion: uds.dev/v1alpha1
+kind: Exemption
+metadata:
+  name: velero-node-agent
+  namespace: uds-policy-exemptions
+spec:
+  exemptions:
+    - policies:
+        - DisallowPrivileged
+        - RequireNonRootUser
+        - DropAllCapabilities
+        - RestrictCapabilities
+        - RestrictHostPathWrite
+        - RestrictVolumeTypes
+        - DisallowHostNamespaces
+        - RestrictSELinuxType
+      matcher:
+        namespace: {{ .Values.backup.filesystem.namespace | quote }}
+        name: "^node-agent-.*"
+        kind: pod
+      title: "Velero node-agent"
+      description: "File-system backup mounts pod volumes from the node kubelet directory. The agent is privileged and runs as root. The matcher is that DaemonSet."
+    # Velero 1.18 copies each volume in a data-mover pod that the node-agent
+    # creates. Its own labels carry the PodVolumeBackup or PodVolumeRestore
+    # name, so they change per backup. The Exemption CRD in UDS Core 1.16.0
+    # has no matcher.podLabels ("field not declared in schema"), so the match
+    # is every pod in the velero namespace. ConfigMap node-agent-config still
+    # adds a fixed label, ready for a Core version whose matcher has podLabels.
+    - policies:
+        - DisallowPrivileged
+        - RequireNonRootUser
+        - DropAllCapabilities
+        - RestrictHostPathWrite
+        - RestrictVolumeTypes
+      matcher:
+        namespace: {{ .Values.backup.filesystem.namespace | quote }}
+        name: ".*"
+        kind: pod
+      title: "Velero data mover"
+      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as privileged root, because a volume such as PGDATA is mode 0700 for another user. Every pod in the velero namespace, only when file-system backup is on. UDS Core 1.16.0's Exemption matcher has no podLabels."
+---
+# Read by the node-agent (--node-agent-configmap). Velero expects one key.
+# app.kubernetes.io/name=velero puts the data-mover pods under the Velero
+# Package's storage egress, which selects that label; the server already uses it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-agent-config
+  namespace: {{ .Values.backup.filesystem.namespace }}
+data:
+  node-agent-config.json: |
+    {"privilegedFsBackup": true, "podLabels": {"app.kubernetes.io/name": "velero", "app.kubernetes.io/component": "velero-data-mover"}}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  namespace: {{ .Values.backup.filesystem.namespace }}
+  labels:
+    app.kubernetes.io/name: velero
+spec:
+  selector:
+    matchLabels:
+      name: node-agent
+  template:
+    metadata:
+      labels:
+        name: node-agent
+        # Velero finds the agent on a node by role=node-agent. Without it every
+        # opted-in volume fails with "daemonset pod not found in running state".
+        role: node-agent
+        app.kubernetes.io/name: velero
+    spec:
+      serviceAccountName: {{ .Values.backup.filesystem.serviceAccount }}
+      automountServiceAccountToken: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: node-agent
+          image: {{ .Values.backup.filesystem.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /velero
+          args:
+            - node-agent
+            - server
+            - --node-agent-configmap=node-agent-config
+          env:
+            - name: VELERO_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Kopia keeps its repository config under $HOME/udmrepo. HOME is /
+            # in the image, which the agent cannot write. /scratch is an emptyDir.
+            - name: HOME
+              value: /scratch
+            - name: VELERO_SCRATCH_DIR
+              value: /scratch
+            - name: AWS_SHARED_CREDENTIALS_FILE
+              value: /credentials/cloud
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /credentials/cloud
+            - name: AZURE_CREDENTIALS_FILE
+              value: /credentials/cloud
+          # The image runs as a non-root user, and /var/lib/kubelet/pods is
+          # root-only (velero: "open /host_pods: permission denied"). The
+          # upstream Velero chart runs the node-agent as root for the same
+          # reason. The Exemption above covers RequireNonRootUser.
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: cloud-credentials
+              mountPath: /credentials
+              readOnly: true
+            - name: host-pods
+              mountPath: /host_pods
+              mountPropagation: HostToContainer
+            - name: host-plugins
+              mountPath: /host_plugins
+              mountPropagation: HostToContainer
+            - name: scratch
+              mountPath: /scratch
+      volumes:
+        - name: cloud-credentials
+          secret:
+            secretName: {{ .Values.backup.filesystem.credentialSecret }}
+        - name: host-pods
+          hostPath:
+            path: /var/lib/kubelet/pods
+        - name: host-plugins
+          hostPath:
+            path: /var/lib/kubelet/plugins
+        - name: scratch
+          emptyDir: {}
+{{- end }}

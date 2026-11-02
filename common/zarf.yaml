@@ -18,6 +18,8 @@ components:
         namespace: takserver
         version: 0.6.0 # x-release-please-version
         localPath: ../charts/takserver
+        valuesFiles:
+          - ../values/filesystem-backup-switch.yaml
         values:
           - sourcePath: .global.domain
             targetPath: .domain
@@ -42,6 +44,11 @@ components:
         version: 5.7-RELEASE-14
         valuesFiles:
           - ../values/common-values.yaml
+        # Adds the Postgres pod annotation only when FILESYSTEM_BACKUP=true.
+        # An empty object otherwise, so the default overlay is unchanged.
+        templatedValuesFiles:
+          - ../values/filesystem-backup.yaml.tpl
+          - ../values/postgres-storage.yaml.tpl
         values:
           - sourcePath: .tak.imageTag
             targetPath: .takserver.config.image.tag

@@ -24,6 +24,24 @@ Each section below is named after the `Exemption` object it describes.
 - **Why it is safe:** The package uses Istio ambient mode, which does not inject a sidecar. The annotation has no effect on the mesh here. The matcher is the one hook Job name, not a wildcard.
 - **What removes it:** An upstream chart that makes the annotation optional or drops it.
 
+## velero-node-agent
+
+Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create it. See [ADR 0021](../adr/0021-velero-node-agent.md).
+
+- **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`
+- **Matcher:** `^node-agent-.*`, kind `pod`, namespace `velero`
+- **Defined in:** `charts/takserver/templates/filesystem-backup.yaml`
+- **Why:** The node-agent is privileged so it can mount pod volumes from `/var/lib/kubelet/pods` on the node. That is host path, a host volume type, and a root process.
+- **Why it is safe:** The matcher is the node-agent pods in the `velero` namespace. Nothing in `takserver` or `cloudtak` is exempted. The DaemonSet exists only when file-system backup is turned on.
+- **What removes it:** Leaving `FILESYSTEM_BACKUP` at its default, or a Velero release that can copy the volumes without host access.
+
+Second entry, `Velero data mover`:
+
+- **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`
+- **Matcher:** `.*`, kind `pod`, namespace `velero`
+- **Why:** Velero 1.18 copies each volume in a pod the node-agent creates for every PodVolumeBackup and PodVolumeRestore. It runs as root and mounts `/var/lib/kubelet/pods` read-write (a restore writes into it). `node-agent-config` sets `privilegedFsBackup: true`, so the pod is privileged: root without capabilities cannot open a directory such as the Postgres data directory, which is mode 0700 for the postgres user (the unprivileged pod failed with `open .../data: permission denied`). Velero's own labels on it (`velero.io/pod-volume-backup`, `velero.io/pod-volume-restore`) hold the PVB or PVR name, which changes each backup, so they cannot be matched. ConfigMap `node-agent-config` makes the node-agent add a fixed label, `app.kubernetes.io/component: velero-data-mover`, to every data-mover pod, but the Exemption CRD in UDS Core 1.16.0 rejects `matcher.podLabels` (field not declared in schema). So the matcher is every pod in the `velero` namespace. When the bundle moves to a Core version whose matcher has `podLabels`, narrow it to that label.
+- **Why it is safe:** Only the `velero` namespace, which holds only Velero's own pods, and only these five policies. It exists only when file-system backup is on.
+
 ## kubevirt
 
 Only the optional ATAK test device uses this. It is not part of the package: `atak/deploy/kubevirt-exemption.yaml` is applied by the ATAK end-to-end workflow, and a normal install never creates it. It is one `Exemption` object with three entries.

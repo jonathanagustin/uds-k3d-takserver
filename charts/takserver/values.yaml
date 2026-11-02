@@ -206,3 +206,13 @@ backup:
     # Same image as the server. pg_dump refuses a newer server major, and
     # zarf.yaml carries only this tag.
     image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
+  # String, not a boolean. The Zarf variable is text, and Helm treats the
+  # string "false" as true. Templates compare it to "true".
+  filesystem:
+    enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
+    image: docker.io/velero/velero:v1.18.4
+    namespace: velero
+    # The ServiceAccount UDS Core's Velero server runs as (the upstream
+    # chart's <fullname>-server). There is no ServiceAccount named velero.
+    serviceAccount: velero-server
+    credentialSecret: velero-bucket-credentials

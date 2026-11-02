@@ -44,6 +44,8 @@ spec:
       description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as root. Every pod in the velero namespace, only when file-system backup is on. UDS Core 1.16.0's Exemption matcher has no podLabels."
 ---
 # Read by the node-agent (--node-agent-configmap). Velero expects one key.
+# app.kubernetes.io/name=velero puts the data-mover pods under the Velero
+# Package's storage egress, which selects that label; the server already uses it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -51,7 +53,7 @@ metadata:
   namespace: {{ .Values.backup.filesystem.namespace }}
 data:
   node-agent-config.json: |
-    {"podLabels": {"app.kubernetes.io/component": "velero-data-mover"}}
+    {"podLabels": {"app.kubernetes.io/name": "velero", "app.kubernetes.io/component": "velero-data-mover"}}
 ---
 apiVersion: apps/v1
 kind: DaemonSet

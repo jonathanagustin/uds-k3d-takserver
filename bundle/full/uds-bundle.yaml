@@ -130,6 +130,13 @@ packages:
                     name: node-agent
                   remoteGenerated: KubeAPI
                   description: "Velero node-agent to the Kubernetes API"
+                # Data-mover pods watch their PodVolumeBackup or Restore.
+                # Storage egress comes from the Package's own rule.
+                - direction: Egress
+                  selector:
+                    app.kubernetes.io/component: velero-data-mover
+                  remoteGenerated: KubeAPI
+                  description: "Velero data mover to the Kubernetes API"
         # The server initialises the Kopia repository under $HOME/udmrepo.
         # HOME is / in the image and / is not writable, so a file-system
         # backup failed with "mkdir /udmrepo: permission denied". /scratch is

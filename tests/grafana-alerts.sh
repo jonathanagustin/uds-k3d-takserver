@@ -8,8 +8,8 @@
 # Slim has no monitoring API and this script exits 0.
 #
 # Then it scales takserver-messaging to 0, waits until Alertmanager reports
-# TAKMessagingTargetDown active, and scales it back to 1. Saves a
-# Playwright screenshot of the dashboard when docker is available.
+# TAKMessagingTargetDown active, scales it back to 1, and waits for Ready.
+# Saves a Playwright screenshot of the dashboard when docker is available.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -349,4 +349,11 @@ else
 fi
 
 restore_messaging
-echo "grafana-alerts: takserver-messaging scaled back to 1"
+# The next tests use messaging. Its startup probe allows 80 periods of 10s
+# after the dependency waits, so wait up to 15 minutes for Ready.
+if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
+  echo "takserver-messaging did not become Ready after scaling back to 1" >&2
+  k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
+  exit 1
+fi
+echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"

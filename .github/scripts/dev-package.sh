@@ -6,7 +6,9 @@
 #
 # The key hashes the working tree (after pin-image-tags.sh, so it covers the
 # image tags too) of every tracked file that can go into the package, plus the
-# UDS CLI version, the create variables and the architecture. The package is
+# UDS CLI version, the flavor and the architecture. DOMAIN and TAK_IMAGE_TAG
+# are not in the key: their values come from tasks.yaml and the bundle files,
+# which are hashed. A run that overrides them with --set must not reuse. The package is
 # published as ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<key>,
 # a tag written once by the run that built it and never overwritten.
 #
@@ -68,7 +70,6 @@ key() {
       printf 'salt=%s\n' "${KEY_SALT:-}"
       printf 'arch=%s flavor=%s\n' "${arch}" "${flavor}"
       printf 'uds=%s\n' "$(uds version 2>/dev/null || true)"
-      printf 'domain=%s tag=%s options=%s\n' "${DOMAIN:-uds.dev}" "${TAK_IMAGE_TAG:-}" "${CREATE_OPTIONS:-}"
       inputs | while IFS= read -r line; do
         case "${line}" in
           gitlink\ *) echo "${line}" ;;
@@ -93,7 +94,13 @@ exists() {
 # tag will not appear (it failed, or this is a fork). Needs GH_TOKEN and
 # GITHUB_REPOSITORY; without them, waiting falls back to the time limit.
 package_run_done() {
-  [[ -n "${GH_TOKEN:-}" && -n "${GITHUB_REPOSITORY:-}" && -n "${DEV_PACKAGE_SHA:-}" ]] || return 1
+  if [[ -z "${GH_TOKEN:-}" || -z "${GITHUB_REPOSITORY:-}" || -z "${DEV_PACKAGE_SHA:-}" ]]; then
+    if [[ -z "${warned_no_api:-}" ]]; then
+      echo "dev-package: GH_TOKEN, GITHUB_REPOSITORY or DEV_PACKAGE_SHA unset; waiting on the time limit only" >&2
+      warned_no_api=1
+    fi
+    return 1
+  fi
   local status
   status="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
     "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/package.yaml/runs?head_sha=${DEV_PACKAGE_SHA}&per_page=1" \

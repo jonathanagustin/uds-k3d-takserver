@@ -43,7 +43,9 @@ tasks:
       # Prints true after pulling a package published for these inputs
       # (.github/scripts/dev-package.sh). Outside CI nothing is published under
       # the key, so this prints false and the create runs as before.
-      - cmd: DOMAIN="${{ .variables.DOMAIN }}" TAK_IMAGE_TAG="${{ .variables.TAK_IMAGE_TAG }}" CREATE_OPTIONS="${{ .variables.CREATE_OPTIONS }}" ./.github/scripts/dev-package.sh prebuilt
+      # A --set CREATE_OPTIONS run builds something else, so it never reuses.
+      - cmd: |
+          if [ -n "${{ .variables.CREATE_OPTIONS }}" ]; then echo false; else ./.github/scripts/dev-package.sh prebuilt; fi
         setVariables:
           - name: DEV_PACKAGE_PREBUILT
       - task: create:package

@@ -334,6 +334,9 @@ jobs:
       id-token: write
     env:
       TEST_TYPE: install
+      # Pull the Package workflow's build (same key) instead of creating it.
+      # Fork pull requests cannot publish one, so they create at once.
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
       TEST_FLAVOR: upstream
     steps: &validate-steps
       - name: Checkout repository
@@ -528,6 +531,9 @@ jobs:
       id-token: write
     env:
       TEST_TYPE: upgrade
+      # Pull the Package workflow's build (same key) instead of creating it.
+      # Fork pull requests cannot publish one, so they create at once.
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
       TEST_FLAVOR: upstream
     steps: *validate-steps
 

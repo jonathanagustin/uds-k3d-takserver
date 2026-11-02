@@ -5,6 +5,25 @@ name: Package
 
 on:
   workflow_dispatch:
+  # main publishes the package for its inputs too, for the Full Core and
+  # Benchmark runs on main.
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "docs/**"
+      - "adr/**"
+      - ".gitignore"
+      - "LICENSE"
+      - "renovate.json"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
+      - "CODEOWNERS"
+      - "SECURITY.md"
   pull_request:
     # Doc-only changes do not alter the package inputs. The Test workflow
     # uses the same list and already skips the cluster jobs.
@@ -50,6 +69,10 @@ jobs:
     name: package (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,6 +144,8 @@ jobs:
       - name: Use this commit's TAK, CloudTAK and PostGIS images
         run: ./.github/scripts/pin-image-tags.sh
 
+      # A package published for the same inputs (a rerun, or a merge of main
+      # that did not touch them) is pulled instead (.github/scripts/dev-package.sh).
       - name: Create the dev package
         run: uds run create-dev-package --no-progress
 
@@ -136,3 +161,10 @@ jobs:
           built="$(uds zarf tools yq -r '.build.architecture' "${RUNNER_TEMP}/zarf.yaml")"
           echo "${package}: build.architecture=${built}"
           test "${built}" = "${ARCH}"
+
+      # Content-addressed: the tag is the input key and is written once. Test,
+      # Full Core and Benchmark pull it instead of creating the package again.
+      # Fork pull requests get a read-only token and skip this.
+      - name: Publish the package under its input key
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: ./.github/scripts/dev-package.sh publish

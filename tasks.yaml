@@ -30,15 +30,24 @@ variables:
   # The image names in the package stay docker.io, only the pull source changes.
   - name: CREATE_OPTIONS
     default: ""
+  - name: DEV_PACKAGE_PREBUILT
+    default: "false"
   # Shared lint:all checks SPDX headers when this is true.
   - name: RUN_LICENSE_CHECKS
     default: "true"
 
 tasks:
   - name: create-dev-package
-    description: Create the package without an SBOM
+    description: Create the package without an SBOM, or pull the one CI published for the same inputs
     actions:
+      # Prints true after pulling a package published for these inputs
+      # (.github/scripts/dev-package.sh). Outside CI nothing is published under
+      # the key, so this prints false and the create runs as before.
+      - cmd: DOMAIN="${{ .variables.DOMAIN }}" TAK_IMAGE_TAG="${{ .variables.TAK_IMAGE_TAG }}" CREATE_OPTIONS="${{ .variables.CREATE_OPTIONS }}" ./.github/scripts/dev-package.sh prebuilt
+        setVariables:
+          - name: DEV_PACKAGE_PREBUILT
       - task: create:package
+        if: ${{ ne .variables.DEV_PACKAGE_PREBUILT "true" }}
         with:
           options: "--skip-sbom --set DOMAIN=${{ .variables.DOMAIN }} --set TAK_IMAGE_TAG=${{ .variables.TAK_IMAGE_TAG }} ${{ .variables.CREATE_OPTIONS }}"
 
@@ -102,8 +111,10 @@ tasks:
   - name: test-install
     description: Install the current branch on a new k3d-core-slim-dev cluster
     actions:
-      - task: create-dev-package
+      # The checkpoint deploys first so a package built by CI's parallel
+      # package job is published by the time it is needed.
       - task: deploy-slim-core
+      - task: create-dev-package
       - task: fit-runner
       - task: create-deploy-test-bundle
 
@@ -141,10 +152,10 @@ tasks:
   - name: test-full-core
     description: Deploy the functional layers on the slim checkpoint and run the full-core checks
     actions:
-      - task: create-dev-package
       # The full bundle pins the same Core version as the checkpoint script.
       - description: Deploy the slim checkpoint at the bundle's Core version
         cmd: SLIM_CORE_VERSION=1.16.0 ./.github/scripts/deploy-slim-core.sh
+      - task: create-dev-package
       - description: Validate Keycloak endpoint
         wait:
           network:

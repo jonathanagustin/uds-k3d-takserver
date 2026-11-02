@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Build the dev Zarf package once per set of inputs and reuse it.
+#
+# The key hashes the working tree (after pin-image-tags.sh, so it covers the
+# image tags too) of every tracked file that can go into the package, plus the
+# UDS CLI version, the create variables and the architecture. The package is
+# published as ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<key>,
+# a tag written once by the run that built it and never overwritten.
+#
+#   dev-package.sh key        print the key
+#   dev-package.sh prebuilt   print true after placing a published package with
+#                             this key at the path create would write; false
+#                             otherwise (the caller then creates it). Waits up
+#                             to DEV_PACKAGE_WAIT_SECONDS (default 0) for a
+#                             parallel job to publish it.
+#   dev-package.sh publish    publish the created package unless the tag exists
+#
+# KEY_SALT changes every key. DEV_PACKAGE_REUSE=false makes prebuilt print false.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "${root}"
+
+repo="${DEV_PACKAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages}"
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "dev-package: unknown machine $(uname -m)" >&2; exit 1 ;;
+esac
+file="zarf-package-takserver-${arch}-dev.tar.zst"
+
+zarf() {
+  uds zarf "$@"
+}
+
+# Everything tracked except what cannot reach the package: docs, tests, CI
+# definitions, the bundles, and the ATAK/demo/bench trees.
+inputs() {
+  git ls-files -s -z -- . \
+    ':(exclude)docs/**' ':(exclude)adr/**' ':(exclude)tests/**' \
+    ':(exclude).github/**' ':(exclude)bundle/**' ':(exclude)atak/**' \
+    ':(exclude)demo/**' ':(exclude)bench/**' ':(exclude)*.md' \
+    ':(exclude)renovate.json' ':(exclude).release-please-manifest.json' \
+    ':(exclude)upstream/atak-civ' \
+    | python3 -c '
+import sys
+for rec in sys.stdin.buffer.read().split(b"\0"):
+    if not rec:
+        continue
+    meta, path = rec.split(b"\t", 1)
+    mode, obj = meta.split()[:2]
+    # A submodule is hashed by its pinned commit, a file by its content.
+    sys.stdout.buffer.write((b"gitlink " + obj + b" " + path + b"\n") if mode == b"160000" else (b"file " + path + b"\n"))
+'
+}
+
+key() {
+  local sum
+  sum="$(
+    {
+      printf 'salt=%s\n' "${KEY_SALT:-}"
+      printf 'arch=%s\n' "${arch}"
+      printf 'uds=%s\n' "$(uds version 2>/dev/null || true)"
+      printf 'domain=%s tag=%s options=%s\n' "${DOMAIN:-uds.dev}" "${TAK_IMAGE_TAG:-}" "${CREATE_OPTIONS:-}"
+      inputs | while IFS= read -r line; do
+        case "${line}" in
+          gitlink\ *) echo "${line}" ;;
+          file\ *) sha256sum -- "${line#file }" ;;
+        esac
+      done
+    } | sha256sum
+  )"
+  echo "${arch}-${sum:0:16}"
+}
+
+ref() {
+  echo "${repo}/takserver:$(key)"
+}
+
+exists() {
+  zarf tools registry digest "$1" >/dev/null 2>&1
+}
+
+prebuilt() {
+  if [[ "${DEV_PACKAGE_REUSE:-true}" != "true" ]]; then
+    echo false
+    return
+  fi
+  local r waited=0 wait="${DEV_PACKAGE_WAIT_SECONDS:-0}"
+  r="$(ref)"
+  until exists "${r}"; do
+    if (( waited >= wait )); then
+      echo "dev-package: ${r} not published; creating the package here" >&2
+      echo false
+      return
+    fi
+    sleep 15
+    waited=$(( waited + 15 ))
+  done
+  echo "dev-package: pulling ${r} (waited ${waited}s)" >&2
+  rm -f "${file}"
+  if ! zarf package pull "oci://${r}" --output-directory . --no-progress >&2 || [[ ! -f "${file}" ]]; then
+    echo "dev-package: pull of ${r} failed; creating the package here" >&2
+    echo false
+    return
+  fi
+  echo true
+}
+
+publish() {
+  local r
+  r="$(ref)"
+  if exists "${r}"; then
+    echo "dev-package: ${r} exists; not publishing"
+    return
+  fi
+  [[ -f "${file}" ]] || { echo "dev-package: ${file} missing" >&2; exit 1; }
+  zarf package publish "${file}" "oci://${repo}" --tag "$(key)" --confirm --no-progress
+  echo "dev-package: published ${r}"
+}
+
+case "${1:-}" in
+  key) key ;;
+  ref) ref ;;
+  prebuilt) prebuilt ;;
+  publish) publish ;;
+  *) echo "usage: $0 key|ref|prebuilt|publish" >&2; exit 2 ;;
+esac

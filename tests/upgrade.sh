@@ -193,7 +193,19 @@ echo "PASS released CloudTAK database is PostgreSQL ${released_cloudtak_version}
 # Only now create and deploy the PR package. Do not recreate identities or seed data.
 uds run create-dev-package --set FLAVOR=upstream --no-progress
 uds run create:test-bundle --set FLAVOR=upstream --no-progress
-uds run deploy:test-bundle --no-progress --with options=--force-conflicts
+# core-base is already deployed by the released bundle. When this branch's
+# bundle has the same core-base entry (ref and overrides), deploying it again
+# changes nothing and costs about three minutes, so only TAK is upgraded.
+upgrade_options="--force-conflicts"
+core_entry='.packages[] | select(.name == "core-base")'
+if [[ "$(uds zarf tools yq -o json "${core_entry}" "${work}/bundle/uds-bundle.yaml")" == \
+  "$(uds zarf tools yq -o json "${core_entry}" bundle/uds-bundle.yaml)" ]]; then
+  echo "core-base entry unchanged since ${tag}; upgrading only the takserver package"
+  upgrade_options+=" --packages takserver"
+else
+  echo "core-base entry changed since ${tag}; the upgrade redeploys it"
+fi
+uds run deploy:test-bundle --no-progress --with options="${upgrade_options}"
 health
 mode="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}')"
 legacy="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}' | base64 -d)"

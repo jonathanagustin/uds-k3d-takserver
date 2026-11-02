@@ -17,38 +17,8 @@ on:
     - cron: "17 7 * * *"
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
-      - "docs/**"
-      - "adr/**"
-      - ".gitignore"
-      - "LICENSE"
-      - "renovate.json"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
-      - "docs/**"
-      - "adr/**"
-      - ".gitignore"
-      - "LICENSE"
-      - "renovate.json"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
 
 permissions:
   contents: read
@@ -60,13 +30,39 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether a pull request needs Full Core. Pushes to main, the
+  # nightly run and manual runs always do; so does a pull request with the
+  # full-core label. Otherwise only changes to backup, monitoring, UDS Core
+  # integration, the bundles, or this workflow and its tests run it. This is
+  # a job, not workflow-level paths, so the "full-core" check below always
+  # reports and can be required.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Checkout repository
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'full-core') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ./.github/scripts/full-core-paths.sh
+
   validate-full-core:
     name: validate-full-core (${{ matrix.arch }})
-    if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-core'))
+    needs: [changes]
+    if: needs.changes.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -88,6 +84,9 @@ jobs:
       id-token: write
     env:
       TEST_FLAVOR: upstream
+      # Test's package job publishes the dev package for these inputs; pull
+      # it instead of creating it (.github/scripts/dev-package.sh).
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '900' || '0' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -263,3 +262,28 @@ jobs:
             /tmp/uds-containerd-logs
             /tmp/k3d-uds-*.log
           if-no-files-found: ignore
+
+  # The one check to require: success when Full Core passed or was not needed.
+  full-core:
+    runs-on: ubuntu-24.04
+    needs: [changes, validate-full-core]
+    if: always()
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check the Full Core result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          RUN: ${{ needs.changes.outputs.run }}
+          RESULT: ${{ needs.validate-full-core.result }}
+        run: |
+          echo "changes=${CHANGES} run=${RUN} validate-full-core=${RESULT}"
+          if [ "${CHANGES}" != "success" ]; then
+            echo "The path check did not finish."
+            exit 1
+          fi
+          if [ "${RUN}" != "true" ]; then
+            echo "Full Core was not needed for this change."
+            exit 0
+          fi
+          test "${RESULT}" = success

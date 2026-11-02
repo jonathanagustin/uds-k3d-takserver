@@ -305,8 +305,19 @@ EOF
 wait_phase backup.velero.io "${backup_name}" 120
 say "Backup ${backup_name} Completed"
 
+# Velero skips hostPath PVs in file-system backup (pkg/podvolume/backupper.go,
+# isHostPathVolume). k3d's default local-path class makes hostPath PVs; the
+# full-core bundle uses class local-path-local, which makes local PVs.
+tak_pv="$(k get pvc data-takserver-postgresql-0 -n takserver -o jsonpath='{.spec.volumeName}')"
+tak_pv_hostpath="$(k get pv "${tak_pv}" -o jsonpath='{.spec.hostPath.path}')"
+say "takserver Postgres PV ${tak_pv} class=$(k get pv "${tak_pv}" -o jsonpath='{.spec.storageClassName}')"
 k get podvolumebackups.velero.io -n velero -o json > "${work}/pvb.json"
-if ! python3 - "${work}/pvb.json" "${backup_name}" <<'PY'
+if [[ -n "${tak_pv_hostpath}" && "${REQUIRE_FS_BACKUP:-false}" == "true" ]]; then
+  say "PV ${tak_pv} is hostPath but REQUIRE_FS_BACKUP=true; POSTGRES_STORAGE_CLASS did not reach the install" >&2
+  exit 1
+elif [[ -n "${tak_pv_hostpath}" ]]; then
+  say "SKIP file-system backup check: PV ${tak_pv} is hostPath, which Velero does not back up. Set POSTGRES_STORAGE_CLASS to a non-hostPath class on a new install. The logical dump below still covers the data."
+elif ! python3 - "${work}/pvb.json" "${backup_name}" <<'PY'
 import json
 import sys
 
@@ -335,8 +346,9 @@ then
   say "Backup ${backup_name} has no Completed PodVolumeBackup for the takserver data volume" >&2
   k get podvolumebackups.velero.io -n velero >&2 || true
   exit 1
+else
+  say "Backup ${backup_name} holds the Postgres volume"
 fi
-say "Backup ${backup_name} holds the Postgres volume"
 
 say "delete namespaces takserver and cloudtak"
 k delete namespace takserver cloudtak --wait=true --timeout=600s

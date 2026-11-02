@@ -1,0 +1,15 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Full-core CI only. k3d's local-path class makes hostPath PVs, and Velero
+# skips hostPath volumes in file-system backup. The same provisioner makes
+# local PVs when the class carries defaultVolumeType: local.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path-local
+  annotations:
+    defaultVolumeType: local
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete

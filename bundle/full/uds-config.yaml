@@ -9,3 +9,5 @@ variables:
     DOMAIN: uds.dev
     TAK_IMAGE_TAG: 5.7-RELEASE-14
     FILESYSTEM_BACKUP: "true"
+    # Local PVs, not hostPath, so Velero file-system backup copies the volume.
+    POSTGRES_STORAGE_CLASS: local-path-local

@@ -829,7 +829,8 @@ tasks:
       - cmd: ./tests/portal.sh
       - cmd: ./tests/falco-events.sh
       # Deletes the takserver and cloudtak namespaces. Keep it last.
-      - cmd: ./tests/backup-restore.sh
+      # The full bundle puts Postgres on local-path-local, so the volume check must run.
+      - cmd: REQUIRE_FS_BACKUP=true ./tests/backup-restore.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented

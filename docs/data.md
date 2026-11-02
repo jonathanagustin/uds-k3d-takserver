@@ -53,6 +53,10 @@ To cover the databases, the package stores a logical `pg_dump` in Secret `tak-db
 
 `FILESYSTEM_BACKUP` defaults to `false`. Slim leaves it there. The full-core deploy (`bundle/full/uds-config.yaml`) sets it to `true`. That renders DaemonSet `node-agent` from `docker.io/velero/velero:v1.18.4` (amd64 and arm64, the same tag Core already runs), Exemption `velero-node-agent`, and `backup.velero.io/backup-volumes: data` on the Postgres and PostGIS pods. The Velero Package gets an egress allow to the Kubernetes API for pods labeled `name: node-agent`. See [ADR 0021](../adr/0021-velero-node-agent.md).
 
+File-system backup needs volumes that are not hostPath. Velero skips a hostPath PersistentVolume (`isHostPathVolume` in Velero's `pkg/podvolume/backupper.go`), and k3d's default `local-path` class makes hostPath PVs. So on a default k3d install the node-agent runs but copies nothing. Use a CSI class, or on k3d a `local-path` variant with annotation `defaultVolumeType: local` (see `tests/local-path-local-storageclass.yaml`). Point the TAK Postgres volume at it with `POSTGRES_STORAGE_CLASS`. The default is empty, which keeps the cluster default class. Set it only on a new install: a StatefulSet volume claim template cannot change on an upgrade. The full-core deploy creates `local-path-local` and sets `POSTGRES_STORAGE_CLASS: local-path-local`.
+
+The gzipped logical dumps are the backup that works on every storage class. Keep them even with file-system backup on.
+
 What a namespace backup contains:
 
 | Object | In the backup |
@@ -77,7 +81,7 @@ Restore, after Velero has put the namespaces back:
 3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty. `tests/db-dump-secret.sh <namespace> <secret>` prints the SQL: it reads key `dump.sql.gz` and gunzips it, and falls back to key `dump.sql` for a Secret written before the dumps were gzipped, so an older backup restores the same way. For example, `tests/db-dump-secret.sh takserver tak-db-dump | kubectl exec -i -n takserver takserver-postgresql-0 -- psql -U postgres -d cot`.
 4. Scale the Deployments to 1. Enrolled client certificates still chain, because the cert ConfigMap and Secrets came back with the namespace.
 
-`tests/backup-restore.sh` does this at the end of the full-core job, loading the dumps from the restored Secrets with `tests/db-dump-secret.sh`. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. On that deploy the node-agent has to log `Starting controllers`, and the Backup has to include a Completed PodVolumeBackup of the `takserver` volume `data`.
+`tests/backup-restore.sh` does this at the end of the full-core job, loading the dumps from the restored Secrets with `tests/db-dump-secret.sh`. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. On that deploy the node-agent has to log `Starting controllers`, and the Backup has to include a Completed PodVolumeBackup of the `takserver` volume `data` (`REQUIRE_FS_BACKUP=true`). Run by hand on a hostPath volume, the script skips that check with a message and still checks the logical dump.
 
 The checkpoint MinIO is scaled to 0 by `fit-runner`; the script scales it back to 1 because Velero's default bucket `uds` is on that MinIO. BackupStorageLocation has to be `Available`.
 

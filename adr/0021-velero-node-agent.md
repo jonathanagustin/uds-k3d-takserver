@@ -27,3 +27,7 @@ The logical dump stays. The full-core deploy turns file-system backup on as well
 - Setting the variable on a cluster that does not have the `velero` namespace leaves the DaemonSet unscheduled.
 - The full-core job requires the node-agent to log `Starting controllers` and the Backup to hold a Completed copy of the Postgres `data` volume. Slim never deploys the agent.
 - The agent is privileged. The exemption is limited to pods named `node-agent-*` in `velero`.
+
+## Amendment: hostPath volumes
+
+Velero skips hostPath PersistentVolumes in file-system backup, and k3d `local-path` makes hostPath PVs by default. The TAK Postgres StorageClass is now `POSTGRES_STORAGE_CLASS`, empty by default so existing installs and their volume claim templates do not change. Full-core CI creates class `local-path-local` (`defaultVolumeType: local`) and installs Postgres on it, so the PodVolumeBackup check proves the agent copies the volume. File-system backup needs a CSI class or that variant on a new install. The gzipped logical dumps stay the backup that works everywhere.

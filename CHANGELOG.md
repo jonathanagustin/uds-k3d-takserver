@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.7.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.6.0...v0.7.0) (2026-11-02)
+
+
+### Features
+
+* add a TAK Grafana dashboard and alert rules ([#182](https://github.com/jonathanagustin/uds-k3d-takserver/issues/182)) ([311ff82](https://github.com/jonathanagustin/uds-k3d-takserver/commit/311ff8204a3920ceb48cfe7d7609b1fed968a7c9)), closes [#27](https://github.com/jonathanagustin/uds-k3d-takserver/issues/27)
+* add an optional Velero node-agent for volume backups ([#203](https://github.com/jonathanagustin/uds-k3d-takserver/issues/203)) ([e449302](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e4493025232e1141b3cdae84148d0dfaaf1249f4))
+* add small and production values profiles ([#195](https://github.com/jonathanagustin/uds-k3d-takserver/issues/195)) ([b6506ae](https://github.com/jonathanagustin/uds-k3d-takserver/commit/b6506ae5300ea6006bed9b12eac349629b99658f))
+* admit TAK startup shape before the first pod ([#200](https://github.com/jonathanagustin/uds-k3d-takserver/issues/200)) ([f739057](https://github.com/jonathanagustin/uds-k3d-takserver/commit/f739057a5a0947229b6c696392c0e52beef58616)), closes [#43](https://github.com/jonathanagustin/uds-k3d-takserver/issues/43)
+* collect Falco events and add a TAK cert-write rule ([#184](https://github.com/jonathanagustin/uds-k3d-takserver/issues/184)) ([bb97380](https://github.com/jonathanagustin/uds-k3d-takserver/commit/bb97380b6b0a45fe8591e937bda0dbc66cc3ec9d)), closes [#30](https://github.com/jonathanagustin/uds-k3d-takserver/issues/30)
+* end the CloudTAK Keycloak session on logout ([#187](https://github.com/jonathanagustin/uds-k3d-takserver/issues/187)) ([6e9bc51](https://github.com/jonathanagustin/uds-k3d-takserver/commit/6e9bc51c8e506151b439364a578458691e561006)), closes [#31](https://github.com/jonathanagustin/uds-k3d-takserver/issues/31)
+* expose domain, image tag, and DNS as Zarf package values ([#202](https://github.com/jonathanagustin/uds-k3d-takserver/issues/202)) ([1edd06e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/1edd06e2f82c5e32183291f12e943b6853157c58)), closes [#38](https://github.com/jonathanagustin/uds-k3d-takserver/issues/38)
+* fire target-down from kube-state and screenshot the dashboard ([#204](https://github.com/jonathanagustin/uds-k3d-takserver/issues/204)) ([5c9bfd2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/5c9bfd2d918adc511df518228ecc3cb503bdde44))
+* probe TAK and CloudTAK uptime in the full-core job ([#183](https://github.com/jonathanagustin/uds-k3d-takserver/issues/183)) ([702dbe7](https://github.com/jonathanagustin/uds-k3d-takserver/commit/702dbe7202ed17e76302e93e89e01ad856a00b98)), closes [#28](https://github.com/jonathanagustin/uds-k3d-takserver/issues/28)
+* record messaging and API start phases ([#201](https://github.com/jonathanagustin/uds-k3d-takserver/issues/201)) ([abf61c3](https://github.com/jonathanagustin/uds-k3d-takserver/commit/abf61c35e7d6b5081400f62994f76a6d21bdb6ed))
+* replace the deploy-time shell actions with Pepr reconciles ([#177](https://github.com/jonathanagustin/uds-k3d-takserver/issues/177)) ([3e9fab2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/3e9fab2816f7d2c8f7eee803bda39b76c34fb003)), closes [#35](https://github.com/jonathanagustin/uds-k3d-takserver/issues/35)
+* restore TAK and CloudTAK from a logical dump ([#181](https://github.com/jonathanagustin/uds-k3d-takserver/issues/181)) ([cbb5651](https://github.com/jonathanagustin/uds-k3d-takserver/commit/cbb5651e2031e9282d7940718f4216955336e260)), closes [#25](https://github.com/jonathanagustin/uds-k3d-takserver/issues/25)
+* run NATS 2.15 with the upstream chart ([#210](https://github.com/jonathanagustin/uds-k3d-takserver/issues/210)) ([0234818](https://github.com/jonathanagustin/uds-k3d-takserver/commit/023481886924269a8d135ac98aaa0d2d97a92714))
+* scrape TAK and the Pepr module from Prometheus ([#206](https://github.com/jonathanagustin/uds-k3d-takserver/issues/206)) ([28c1e04](https://github.com/jonathanagustin/uds-k3d-takserver/commit/28c1e0474b327b347f71e356c705d1ff830a7b55))
+* upgrade the PostGIS image to PostgreSQL 18 ([#208](https://github.com/jonathanagustin/uds-k3d-takserver/issues/208)) ([0f27f60](https://github.com/jonathanagustin/uds-k3d-takserver/commit/0f27f6039fb6585bdfeb32dfc52b5ae0c705efeb)), closes [#100](https://github.com/jonathanagustin/uds-k3d-takserver/issues/100)
+
+
+### Bug Fixes
+
+* **atak:** run KubeVirt v1.9.1 with the ImageVolume gate off ([#225](https://github.com/jonathanagustin/uds-k3d-takserver/issues/225)) ([e029ab9](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e029ab9d649e8e933c6d1e4244e88443263ca4c0))
+* **backup:** gzip the logical database dumps ([#237](https://github.com/jonathanagustin/uds-k3d-takserver/issues/237)) ([f16d14e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/f16d14e98a946faf2805abf4bb64dcb959df67b2))
+* **bench:** put each config's changes back before the next one ([#228](https://github.com/jonathanagustin/uds-k3d-takserver/issues/228)) ([ef05472](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ef05472c073d00f90329869899dfcfd4d40a3bf6))
+* **ci:** give Full Core 8G of swap and stop SIGPIPE from failing its checks ([#233](https://github.com/jonathanagustin/uds-k3d-takserver/issues/233)) ([28d86e3](https://github.com/jonathanagustin/uds-k3d-takserver/commit/28d86e3a9598cafbfbb9700609869964b62550f9))
+* **deps:** update node-forge to 1.4.2 and hold minimatch 10 so the OSV check passes ([#224](https://github.com/jonathanagustin/uds-k3d-takserver/issues/224)) ([8e1ad37](https://github.com/jonathanagustin/uds-k3d-takserver/commit/8e1ad37b66f5fe67b07b58910f1f99d2a3314017))
+* **deps:** update tak server support dependencies ([#218](https://github.com/jonathanagustin/uds-k3d-takserver/issues/218)) ([2f70651](https://github.com/jonathanagustin/uds-k3d-takserver/commit/2f70651f598ed4b4c78b2ac77763d17c879e3235))
+* **deps:** update undici to 8.12.3 and body-parser to 2.4.0 in the Pepr module ([#152](https://github.com/jonathanagustin/uds-k3d-takserver/issues/152)) ([ed67a99](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ed67a99028ba5bbbfa4a09a42ecb51f04b99beb9))
+* give the takserver-oidc watcher 512Mi so it is not OOM-killed ([#234](https://github.com/jonathanagustin/uds-k3d-takserver/issues/234)) ([ae5dc46](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ae5dc4660f39459dd23affc023a2d6113a6b0536))
+* keep keystore passwords in a Secret ([#168](https://github.com/jonathanagustin/uds-k3d-takserver/issues/168)) ([3e777d1](https://github.com/jonathanagustin/uds-k3d-takserver/commit/3e777d1533023cf1d9e8dabd5b50c0608e9f7661)), closes [#67](https://github.com/jonathanagustin/uds-k3d-takserver/issues/67)
+* keep TAK private keys out of ConfigMaps ([#205](https://github.com/jonathanagustin/uds-k3d-takserver/issues/205)) ([e06628a](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e06628a210b3e358341e7c5f01115e3b409b8581)), closes [#67](https://github.com/jonathanagustin/uds-k3d-takserver/issues/67)
+* plot both architectures on one scale ([#214](https://github.com/jonathanagustin/uds-k3d-takserver/issues/214)) ([c2af60d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/c2af60d70dc0bf85ac24150f43259b4444a24bd1))
+* **renovate:** drop host rules that need Iron Bank secrets ([#172](https://github.com/jonathanagustin/uds-k3d-takserver/issues/172)) ([4c0a414](https://github.com/jonathanagustin/uds-k3d-takserver/commit/4c0a4149bbed8c10198b81ae99693a418540eceb)), closes [#171](https://github.com/jonathanagustin/uds-k3d-takserver/issues/171)
+* repair the full-core test steps that never ran ([#215](https://github.com/jonathanagustin/uds-k3d-takserver/issues/215)) ([4082510](https://github.com/jonathanagustin/uds-k3d-takserver/commit/40825104dc97f8e4a11ec68338df91fb675897c7))
+* retry refused API handshakes in the cert-init hooks ([#176](https://github.com/jonathanagustin/uds-k3d-takserver/issues/176)) ([8a8ff80](https://github.com/jonathanagustin/uds-k3d-takserver/commit/8a8ff80f01582c7288785d1c94c04c09139b6e84)), closes [#168](https://github.com/jonathanagustin/uds-k3d-takserver/issues/168)
+* run the TAK database dump with the PostgreSQL 18 image ([#229](https://github.com/jonathanagustin/uds-k3d-takserver/issues/229)) ([48c02c0](https://github.com/jonathanagustin/uds-k3d-takserver/commit/48c02c050a0941d4d95919d1b8f449152c0040ce))
+* stop a cached CoreConfig from replacing the local file ([#174](https://github.com/jonathanagustin/uds-k3d-takserver/issues/174)) ([b36a6e2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/b36a6e2f27d4a53019a47fef65330452ddf5b6d6)), closes [#3](https://github.com/jonathanagustin/uds-k3d-takserver/issues/3)
+* wait for the app pods to be gone before the restore reloads the databases ([#216](https://github.com/jonathanagustin/uds-k3d-takserver/issues/216)) ([83293b2](https://github.com/jonathanagustin/uds-k3d-takserver/commit/83293b2e422fed7c9b6510681a4b1ac5fb46a1b6))
+
+
+### Miscellaneous
+
+* align slim core version, fix docs drift, tighten CI token permissions ([#155](https://github.com/jonathanagustin/uds-k3d-takserver/issues/155)) ([22ac952](https://github.com/jonathanagustin/uds-k3d-takserver/commit/22ac95296ce02527ab6ca552eb090285c385dd0f)), closes [#161](https://github.com/jonathanagustin/uds-k3d-takserver/issues/161)
+* **atak:** install the viewer's runtime dependencies from a lockfile ([#150](https://github.com/jonathanagustin/uds-k3d-takserver/issues/150)) ([41e4639](https://github.com/jonathanagustin/uds-k3d-takserver/commit/41e463982d68b7eb7f898fcbd3cfb0eb0111a1d8))
+* **atak:** record why the APK builder's urllib3 advisories are ignored ([#153](https://github.com/jonathanagustin/uds-k3d-takserver/issues/153)) ([7faaa9d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/7faaa9dfad09b94ce59732ef1e392610b8e06775))
+* **deps:** update tak server package dependencies ([#217](https://github.com/jonathanagustin/uds-k3d-takserver/issues/217)) ([ff8cb46](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ff8cb46e434ea22ac417bb80d9ba8c6c066adbe9))
+* record the protobuf advisories the load tester cannot take ([#220](https://github.com/jonathanagustin/uds-k3d-takserver/issues/220)) ([d37aa46](https://github.com/jonathanagustin/uds-k3d-takserver/commit/d37aa46e6393185059100c44532f49a995eb0a0d))
+* **renovate:** extend the uds-common preset ([#170](https://github.com/jonathanagustin/uds-k3d-takserver/issues/170)) ([62e2401](https://github.com/jonathanagustin/uds-k3d-takserver/commit/62e2401140607098a3f07b77ca58b073464ec135)), closes [#162](https://github.com/jonathanagustin/uds-k3d-takserver/issues/162)
+
+
+### Documentation
+
+* add a Starlight site for the existing guides ([#173](https://github.com/jonathanagustin/uds-k3d-takserver/issues/173)) ([e8e11f4](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e8e11f4c797f45aa623a382b6bc14dece107b773))
+* keep release-please instead of the template tag flow ([#180](https://github.com/jonathanagustin/uds-k3d-takserver/issues/180)) ([599b7f0](https://github.com/jonathanagustin/uds-k3d-takserver/commit/599b7f09ac0bf2cea6bc8b2778136505fc2d7b43)), closes [#164](https://github.com/jonathanagustin/uds-k3d-takserver/issues/164)
+* keep the TAK builder on Java 17 ([#209](https://github.com/jonathanagustin/uds-k3d-takserver/issues/209)) ([ce0c438](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ce0c4380e443300960d33d24eb5ee8d47157acaf)), closes [#101](https://github.com/jonathanagustin/uds-k3d-takserver/issues/101)
+* record the two Scorecard pins that are not registry deps ([#221](https://github.com/jonathanagustin/uds-k3d-takserver/issues/221)) ([7016bc7](https://github.com/jonathanagustin/uds-k3d-takserver/commit/7016bc72b0079aaab340867b1528dd4fa6fb7b56))
+* record why only the upstream flavor ships ([#178](https://github.com/jonathanagustin/uds-k3d-takserver/issues/178)) ([e7fafea](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e7fafea6a9d6f9602ffbd092a12652a9af7c3be9)), closes [#163](https://github.com/jonathanagustin/uds-k3d-takserver/issues/163)
+* rewrite the docs in plain language and fill gaps ([#226](https://github.com/jonathanagustin/uds-k3d-takserver/issues/226)) ([4af9b61](https://github.com/jonathanagustin/uds-k3d-takserver/commit/4af9b61defce6d97637537fac7b9dc0c9e057cda))
+
 ## [0.6.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.5.4...v0.6.0) (2026-10-24)
 
 

@@ -39,10 +39,12 @@ watcher:
       value: "###ZARF_VAR_DOMAIN###"
     - name: PASSTHROUGH_HOSTS
       value: "###ZARF_VAR_PASSTHROUGH_HOSTS###"
+  # The watcher caches every object its reconciles watch. At 256Mi it was
+  # OOM-killed during CI installs, so the limit is 512Mi.
   resources:
     requests:
       cpu: "25m"
-      memory: "64Mi"
+      memory: "128Mi"
     limits:
       cpu: "500m"
-      memory: "256Mi"
+      memory: "512Mi"

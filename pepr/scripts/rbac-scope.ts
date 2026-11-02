@@ -94,6 +94,14 @@ const ROLE_RULES = [
         verbs: ["get", "list", "patch", "watch"],
       },
       {
+        apiGroups: ["apps"],
+        resources: ["statefulsets"],
+        resourceNames: ["takserver-postgresql"],
+        verbs: ["get"],
+      },
+      // The Ignite reconcile waits for SchemaManager before it starts TAK.
+      { apiGroups: ["batch"], resources: ["jobs"], resourceNames: ["takserver-db-setup"], verbs: ["get"] },
+      {
         apiGroups: ["networking.istio.io"],
         resources: ["destinationrules"],
         resourceNames: ["takserver-web"],

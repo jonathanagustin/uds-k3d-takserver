@@ -17,7 +17,7 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
-Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4`, built in this repository from the official `postgres` image with PostGIS 3.4.3 for amd64 and arm64. The upstream chart's `postgis/postgis:15-3.4` is amd64 only. See [ADR 13](../adr/0013-build-the-postgis-image-here.md).
+Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 
 NATS is still upstream chart 1.0.1. The overlay sets the server to `nats:2.15.1-alpine` and the config reloader to `natsio/nats-server-config-reloader:0.25.0`, and `zarf.yaml` packages those tags. The rendered config is one replica, clustering off, JetStream off, client port 4222, and monitor port 8222. NATS 2.15.1 accepts that file. There is no JetStream store, so an upgrade replaces the pod and TAK's client reconnects to `nats://takserver-nats:4222`. Rolling back is the previous tags, `2.9.21-alpine` and `0.11.0`. This repository does not build those images.
 
@@ -28,7 +28,9 @@ The overlay turns the chart's nginx ingress off. Instead, the UDS Package in `ch
 - `https://takserver-api.uds.dev` to `takserver-api-service` port 8443
 - `https://takserver-stream.uds.dev` to `takserver-messaging-service` port 8089
 
-`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.15.2-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle. The CI runners have 4 CPU and 16 GB on both architectures.
+`k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` lists `core-base` `1.16.0-upstream` with that optional component, so the test deploy upgrades the slim install and turns the gateway on. `bundle/test-values.yaml` is applied only by that bundle.
+
+The CI runners have 4 CPU and about 15984Mi on both architectures. TAK, CloudTAK, and NATS memory limits sum to about 8492Mi, which fits that node. CPU limits still sum above 4 because a 500m cap made JVM startup miss the rollout bound. Limit overcommit on the rest of the node is UDS core, which this overlay does not set.
 
 Named overlays are in [Profiles](profiles.md). The package default stays `values/common-values.yaml`.
 
@@ -60,16 +62,16 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 | --- | --- | --- | --- |
 | `takserver.{api,messaging,config,plugins}.image` and `takserverDatabaseSetup.image` | `docker-devtest-local.artifacts.tak.gov/...` | `ghcr.io/jonathanagustin/uds-k3d-takserver/...` and `###ZARF_VAR_TAK_IMAGE_TAG###` | The example registry is private. These are the images built from the same tag. |
 | `ignite.image` | tag `2.17.0` on the chart's tak.gov repository | this repo's `takserver-ignite` tag | Same Ignite version, built here. |
-| `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 250m and 1Gi, limit 1 CPU and 1536Mi. Messaging requests match; its own limit is ignored. `bundle/test-values.yaml`: API request 50m and 512Mi, messaging request 50m and 640Mi, CPU limit 500m, memory limit 1536Mi | The example does not schedule on a 2 vCPU, 8 GB runner. CPU requests stay low. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. The messaging request adds the 128m UserManager heap. |
-| `takserver.config.resources` | unset | common values: request 250m and 1Gi, limit 1 CPU and 1Gi. test values: request 50m and 512Mi, limit 500m and 1Gi | The example does not set config resources. Config does not run UserManager. The request is the measured 512MB heap. 1Gi holds that heap and the off-heap cap. |
-| `takserver.plugins.resources.requests.cpu` | 1 | 100m in common values, 25m in test values. The post-helm patch sets memory request 128Mi and limit 384Mi | The plugins template reads this CPU request and then uses the API CPU limit. It ignores plugin memory. The patch supplies the memory. The heap is `-Xmx128m`. |
+| `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; its own limit is ignored. `bundle/test-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; the template ignores its 500m CPU limit and copies the API limit | Steady working set on run 40174810574 was 911Mi (api) and 888Mi (messaging) at `-Xmx512m`. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. |
+| `takserver.config.resources` | unset | common and test values: request 50m and 1Gi, limit 1 CPU and 1280Mi | Steady working set on that run was 750Mi at `-Xmx512m`. Config does not run UserManager. 1280Mi is that set plus about half again. |
+| `takserver.plugins.resources.requests.cpu` | 1 | 50m in common values, 25m in test values. The post-helm patch sets memory request 320Mi and limit 512Mi | The plugins template reads this CPU request and then uses the API CPU limit. It ignores plugin memory. The patch supplies the memory. Steady working set was 263Mi. The heap is `-Xmx128m`. |
 | `ignite.replicaCount` | chart default 2 | 1 | A second Ignite pod does not fit next to the slim core. |
-| `ignite.resources` | unset | common values: request 250m and 768Mi, limit 1 CPU and 1536Mi. test values: request 50m and 512Mi, limit 1 CPU and 1536Mi | `-Xmx512m`, 128m metaspace, and a 384 MiB data region. A 128 MiB region ran out of memory (`IgniteOutOfMemoryException`) during the API smoke test. 1536Mi is the limit those fit inside. |
+| `ignite.resources` | unset | common values: request 100m and 512Mi, limit 1 CPU and 1536Mi. test values: request 50m and 512Mi, limit 1 CPU and 1536Mi | Steady working set was 488Mi at `-Xmx512m`. 128m metaspace and a 384 MiB data region still have to fit: a 128 MiB region ran out of memory (`IgniteOutOfMemoryException`) during the API smoke test. 1536Mi is the limit those fit inside. |
 | `ignite.serviceAccount.name` | `takserver-ignite` | `takserver-ignite` | Unchanged. The API, messaging, config, and plugins Deployments also use that account, and the Package allows those pod labels to reach the Kubernetes API. |
 | `nats.replicaCount`, `nats.cluster`, `nats.config.cluster`, `nats.natsBox.enabled` | jetstream on, cluster on, 3 replicas, toolbox default on | 1 replica, clustering off, toolbox off | The toolbox crash-looped and blocked Helm. TAK does not use it. |
 | `nats.container.merge.resources` and `nats.reloader.merge.resources` | unset | NATS: request 10m and 32Mi, limit 250m and 128Mi. Reloader: request 5m and 16Mi, limit 50m and 32Mi | The subchart sets none. Idle use at the end of the install test (`tests/usage.sh`) was at most 1m and 9Mi for NATS and 1m and 5Mi for the reloader. The limits leave room for message traffic the tests do not load. |
 | `global.postgresql` and `postgresql.auth` | host, port, username, password, database | same, plus `postgresPassword` and the Bitnami username keys | Bitnami PostgreSQL 12.1.6 reads `auth.postgresPassword`. The mounted CoreConfig already points at `takserver-postgresql`. |
-| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` | PostgreSQL 15 and PostGIS 3.4.3, built here for amd64 and arm64. The upstream image is amd64 only. |
+| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` | PostgreSQL 18 and PostGIS 3.6.4, built here for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 volume. The upstream image is amd64 only. |
 | `takserver.ingress.enabled` | false | false | Unchanged. The UDS Package exposes the same ports on the passthrough gateway. |
 | `imagePullSecret`, `certConfigMapName`, `coreConfigMapName` | `reg-cred`, `cert-migration`, `core-config` | same | Unchanged. |
 | `takIgniteConfigMapName` | unset in the example, required by the template | `tak-ignite-config` | The chart mounts `TAKIgniteConfig.xml` from this name. |
@@ -156,7 +158,7 @@ The Service is headless. The ServiceAccount token is mounted. RBAC can get and l
 
 Postgres is the Bitnami chart the upstream TAK chart installs in the `takserver` namespace. Database `cot`, user `postgres`, Service `takserver-postgresql:5432`. The password in the overlay is the upstream example value `postgres`. It is not a production secret. See [Data](data.md).
 
-The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them.
+The chart renders `postgres-configuration`, but `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami 12.1.6 does not mount that object. The package leaves the server on the chart defaults. See [Data](data.md).
 
 The NATS toolbox is disabled in `values/common-values.yaml`.
 

@@ -35,9 +35,12 @@ for node in $(docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null)
 done
 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
 for node in $(docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
+  # The API server's 502/503 proxy lines while the kubelet is down would
+  # push the fatal out of the tail, so they are left out.
   echo "--- ${node}: k3s starts, errors, and shutdown lines"
   docker logs "${node}" 2>&1 |
-    grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' | tail -40 || true
+    grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' |
+    grep -v 'Sending HTTP/1.1 50[23] response' | tail -40 || true
 done
 echo "::endgroup::"
 

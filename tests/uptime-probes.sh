@@ -29,7 +29,7 @@ k() {
   fi
 }
 
-if ! k api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q '^probes '; then
+if ! k api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep '^probes ' >/dev/null; then
   say "monitoring.coreos.com Probe is not installed; uptime-probes skipped"
   exit 0
 fi
@@ -171,7 +171,7 @@ k scale deploy/cloudtak -n cloudtak --replicas=0
 
 dropped=0
 for _ in $(seq 1 48); do
-  if series | tee "${work}/now.txt" | grep -q '^cloudtak 0 '; then
+  if series | tee "${work}/now.txt" | grep '^cloudtak 0 ' >/dev/null; then
     dropped=1
     say "uptime: CloudTAK probe_success dropped to 0"
     grep '^cloudtak ' "${work}/now.txt" | tee -a "${log}"

@@ -24,7 +24,7 @@ k() {
   fi
 }
 
-if ! k api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep -q '^prometheusrules '; then
+if ! k api-resources --api-group=monitoring.coreos.com 2>/dev/null | grep '^prometheusrules ' >/dev/null; then
   echo "monitoring.coreos.com is not installed; grafana-alerts skipped"
   exit 0
 fi

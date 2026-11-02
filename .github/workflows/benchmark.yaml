@@ -53,6 +53,11 @@ jobs:
     env:
       TEST_FLAVOR: upstream
       BENCH_CLIENTS: ${{ github.event.inputs.clients || '10' }}
+      # Test's package job publishes the dev package for these inputs; pull
+      # it instead of creating it (.github/scripts/dev-package.sh).
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '900' || '0' }}
+      DEV_PACKAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

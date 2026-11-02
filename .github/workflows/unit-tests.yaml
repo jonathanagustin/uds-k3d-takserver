@@ -66,6 +66,9 @@ jobs:
       - name: Loki query helper
         run: bash tests/test_query_loki.sh
 
+      - name: Full Core path filter
+        run: bash tests/test_full_core_paths.sh
+
       - name: Dump Secret restore helper
         run: bash tests/test_db_dump_secret.sh
 

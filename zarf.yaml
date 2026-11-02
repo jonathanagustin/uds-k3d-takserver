@@ -28,18 +28,27 @@ documentation:
   cloudtak: docs/cloudtak.md
   profiles: docs/profiles.md
 
+# Beta. Chart mappings read these. Each default is the placeholder of the
+# matching variable below, so the variables still decide the result, from
+# `--set` or a bundle's uds-config.yaml. A package value set at deploy
+# overrides its variable. docs/configuration.md has the table.
+values:
+  files:
+    - values/zarf-values.yaml
+  schema: values/zarf-values.schema.json
+
 variables:
   - name: DOMAIN
-    description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev.
+    description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev. The global.domain package value defaults to this and overrides it when set.
     default: uds.dev
   - name: TAK_IMAGE_TAG
-    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package.
+    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package. The tak.imageTag package value defaults to this. The images list and certs.image read only this variable.
     default: 5.7-RELEASE-14
   - name: IN_CLUSTER_DNS
-    description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist.
+    description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist. The dns.inCluster package value defaults to this.
     default: "true"
   - name: PASSTHROUGH_HOSTS
-    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host.
+    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host. The dns.passthroughHosts package value defaults to this.
     default: "takserver-api takserver-stream"
   - name: FILESYSTEM_BACKUP
     description: When true, annotate the database volumes for Velero file-system backup and run the node-agent. Default false. The logical dump stays the full-bundle path. See adr/0021-velero-node-agent.md.
@@ -60,10 +69,11 @@ components:
       - name: takserver
         valuesFiles:
           - values/upstream-values.yaml
-    # The watcher creates this ConfigMap only after the ordered Ignite
-    # restart has finished and the four TAK Deployments are Available.
-    # A ConfigMap has no status, so Zarf treats it as healthy once it exists.
-    # Deployment checks alone can pass before that restart scales them down.
+    # The watcher creates this ConfigMap once the four TAK Deployments are
+    # Available. Admission shapes those Deployments, the Ignite config, and
+    # the Ignite StatefulSet before the first pod, so a cold install does not
+    # scale them down. A ConfigMap has no status, so Zarf treats it as healthy
+    # once it exists.
     healthChecks:
       - apiVersion: v1
         kind: ConfigMap
@@ -115,6 +125,9 @@ components:
         localPath: charts/cloudtak
         valuesFiles:
           - values/filesystem-backup-switch.yaml
+        values:
+          - sourcePath: .global.domain
+            targetPath: .domain
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package

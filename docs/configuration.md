@@ -17,6 +17,21 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
+### Package values
+
+`values/zarf-values.yaml` is the package values file, checked by `values/zarf-values.schema.json`. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each upstream TAK image tag. The Pepr values file is templated, so the watcher env reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`.
+
+Each default is the placeholder of the matching variable, for example `global.domain: "###ZARF_VAR_DOMAIN###"`. Zarf replaces placeholders after Helm renders, so with no package value set the variable decides, exactly as before. `--set DOMAIN=`, a bundle's `uds-config.yaml`, and UDS CLI 0.40 bundles keep working unchanged. A package value only overrides its variable, for that key: `uds zarf package deploy --set-values global.domain=example.com`, or `--values`. The `images:` list and `certs.image` in `charts/takserver/values.yaml` read only `TAK_IMAGE_TAG`.
+
+| Package value | Defaults to | Overrides |
+| --- | --- | --- |
+| `global.domain` | `DOMAIN` | TAK, CloudTAK, and watcher hosts |
+| `tak.imageTag` | `TAK_IMAGE_TAG` | the upstream TAK image tags and the watcher render image |
+| `dns.inCluster` | `IN_CLUSTER_DNS` | the watcher's CoreDNS rewrite switch |
+| `dns.passthroughHosts` | `PASSTHROUGH_HOSTS` | the watcher's passthrough host list |
+
+`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OIDC URLs, CloudTAK, and the watcher, and that a package value wins over the variable.
+
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 
 NATS is still upstream chart 1.0.1. The overlay sets the server to `nats:2.15.1-alpine` and the config reloader to `natsio/nats-server-config-reloader:0.25.0`, and `zarf.yaml` packages those tags. The rendered config is one replica, clustering off, JetStream off, client port 4222, and monitor port 8222. NATS 2.15.1 accepts that file. There is no JetStream store, so an upgrade replaces the pod and TAK's client reconnects to `nats://takserver-nats:4222`. Rolling back is the previous tags, `2.9.21-alpine` and `0.11.0`. This repository does not build those images.
@@ -144,7 +159,7 @@ The upstream Deployments do not set `securityContext`, and the chart has no valu
 
 ## Startup order
 
-The upstream cluster scripts exec java and do not wait. The `takserver-oidc` watcher applies the startup shape on the four TAK Deployments. When the Ignite server config or its ServiceAccount token mount changes, it scales those Deployments to zero in reverse order, restarts Ignite, and scales them back to the replica count they had, config first. A failed stop leaves them scaled down. When the four are Available it creates ConfigMap `takserver-startup`, and the package health check waits for that ConfigMap before CloudTAK is deployed. Plugins is last because it uses services from the other three, and an Ignite restart drops caches. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API.
+The upstream cluster scripts exec java and do not wait. Admission on the four TAK Deployments, the Ignite ConfigMap, and the Ignite StatefulSet writes the startup shape before those objects are stored. A cold install rolls each Deployment once: config waits for Ignite, then messaging and the API wait for config, then plugins waits for the other three. The watcher still scales those Deployments to zero, restarts Ignite, and scales them back only when a stored Ignite config is missing the SPI timeouts or the ServiceAccount token is not mounted. That is the upgrade from a package that admitted the objects without this webhook. A failed stop leaves them scaled down. When the four are Available it creates ConfigMap `takserver-startup`, and the package health check waits for that ConfigMap before CloudTAK is deployed. Plugins stays last because it uses services from the other three, and an Ignite restart drops caches. Messaging and the API do not start their JVMs until config is Ready, so the overlapping pair is the same set the node already runs once the install is up. The container limits in `bundle/test-values.yaml` sum to 6528Mi (config 1Gi, messaging 1536Mi, API 1536Mi, plugins 384Mi, Postgres 512Mi, Ignite 1536Mi), under the 7938Mi allocatable the test values are sized for. Each consumer pod's first init container is `wait-deps.sh`. It fails closed: Ignite port 47500 within 180s, then, for messaging and the API, Deployment `takserver-config` updated and Ready within 300s. Plugins waits the same way for config, messaging, and the API.
 
 Ready means the stock readiness script passed. A listening port is not the gate. The scripts truncate `/logs/takserver-*.log` at process start so a readiness grep cannot match a line from an earlier JVM in the same container. There is no retention Deployment in this chart.
 

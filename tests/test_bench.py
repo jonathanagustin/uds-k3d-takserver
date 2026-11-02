@@ -28,6 +28,7 @@ def load(name, relative):
 report = load("bench_report", "bench/report.py")
 loadlog = load("bench_loadlog", "bench/loadlog.py")
 runner = load("bench_run", "bench/run.py")
+startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
 
 
@@ -291,6 +292,23 @@ class TesterExitTests(unittest.TestCase):
         self.assertFalse(tester_exit.kill_group(proc.pid, signal.SIGKILL))
 
 
+class StartupShapeTests(unittest.TestCase):
+    def test_generation_and_restarts_use_the_highest_count(self):
+        generations = startup.max_generation([
+            {"metadata": {"generation": 1}},
+            {"metadata": {"generation": 2}},
+            {"metadata": {}},
+        ])
+        restarts = startup.max_restarts([
+            {"status": {"containerStatuses": [{"restartCount": 0}], "initContainerStatuses": [{"restartCount": 1}]}},
+            {"status": {"containerStatuses": [{"restartCount": "nope"}]}},
+        ])
+        self.assertEqual(generations, 2)
+        self.assertEqual(restarts, 1)
+        self.assertIsNone(startup.max_generation([]))
+        self.assertIsNone(startup.max_restarts([{"status": {}}]))
+
+
 class PostgresTests(unittest.TestCase):
     def tearDown(self):
         runner._postgres_custom = False
@@ -421,6 +439,82 @@ class PostgresTests(unittest.TestCase):
         self.assertIn("throughput 5.0", text)
         self.assertIn("shared_buffers 128MB", text)
         self.assertIn("No Postgres stats.", report.markdown([record("baseline", "amd64", 10, 50, 10, 5, 20)]))
+
+
+class RestoreTests(unittest.TestCase):
+    CONFIG = {
+        "name": "mixed",
+        "env": [{
+            "workload": "deployment/takserver-messaging",
+            "namespace": "takserver",
+            "container": "takserver-messaging",
+            "name": "JDK_JAVA_OPTIONS",
+            "value": "-Xms768m -Xmx768m",
+        }],
+        "resources": [{
+            "workload": "deployment/takserver-api",
+            "namespace": "takserver",
+            "container": "takserver-api",
+            "memory_request": "1536Mi",
+            "memory_limit": "2Gi",
+        }],
+    }
+
+    @staticmethod
+    def fake(containers):
+        calls = []
+
+        class Result:
+            def __init__(self, stdout=""):
+                self.stdout = stdout
+
+        def run(*args):
+            calls.append(list(args))
+            if args[0] == "get":
+                spec = {"spec": {"template": {"spec": {"containers": containers[args[1]]}}}}
+                return Result(json.dumps(spec))
+            return Result()
+
+        return run, calls
+
+    def test_an_env_the_install_did_not_set_is_removed(self):
+        run, calls = self.fake({
+            "deployment/takserver-messaging": [{"name": "takserver-messaging", "env": [{"name": "A", "value": "1"}]}],
+            "deployment/takserver-api": [{"name": "takserver-api", "resources": {"limits": {"memory": "1Gi"}}}],
+        })
+        saved = runner.snapshot(self.CONFIG, run)
+        runner.restore(self.CONFIG, saved, run, wait=False)
+        changes = [call for call in calls if call[0] != "get"]
+        self.assertEqual(
+            changes[0],
+            ["set", "env", "deployment/takserver-messaging", "-n", "takserver",
+             "-c", "takserver-messaging", "JDK_JAVA_OPTIONS-"],
+        )
+        patch = json.loads(changes[1][-1])
+        resources = patch["spec"]["template"]["spec"]["containers"][0]["resources"]
+        self.assertEqual(resources, {"requests": {"memory": None}, "limits": {"memory": "1Gi"}})
+
+    def test_an_installed_env_value_is_put_back(self):
+        run, _ = self.fake({
+            "deployment/takserver-messaging": [{
+                "name": "takserver-messaging",
+                "env": [{"name": "JDK_JAVA_OPTIONS", "value": "-Dx=1"}],
+            }],
+            "deployment/takserver-api": [{"name": "takserver-api"}],
+        })
+        commands = runner.restore_commands(runner.snapshot(self.CONFIG, run))
+        self.assertEqual(commands[0][-1], "JDK_JAVA_OPTIONS=-Dx=1")
+
+    def test_value_from_is_refused(self):
+        run, _ = self.fake({
+            "deployment/takserver-messaging": [{
+                "name": "takserver-messaging",
+                "env": [{"name": "JDK_JAVA_OPTIONS", "valueFrom": {"configMapKeyRef": {}}}],
+            }],
+            "deployment/takserver-api": [{"name": "takserver-api"}],
+        })
+        with self.assertRaises(RuntimeError):
+            runner.snapshot(self.CONFIG, run)
 
 
 if __name__ == "__main__":

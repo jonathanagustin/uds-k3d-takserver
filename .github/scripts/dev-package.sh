@@ -69,6 +69,7 @@ key() {
         case "${line}" in
           gitlink\ *) echo "${line}" ;;
           file\ *) sha256sum -- "${line#file }" ;;
+          *) echo "dev-package: unexpected input line ${line}" >&2; exit 1 ;;
         esac
       done
     } | sha256sum

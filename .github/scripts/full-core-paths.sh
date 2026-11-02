@@ -30,7 +30,7 @@ fi
 if [[ -n "${CHANGED+x}" ]]; then
   changed="${CHANGED}"
 else
-  changed="$(git diff --name-only "${BASE}...${HEAD}")"
+  changed="$(git diff --name-only "${BASE:?}...${HEAD:?}")"
 fi
 
 # Backup, monitoring, UDS Core integration, the bundles, and the files this

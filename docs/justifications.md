@@ -38,9 +38,9 @@ Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create i
 Second entry, `Velero data mover`:
 
 - **Policies:** `RequireNonRootUser`, `RestrictHostPathWrite`, `RestrictVolumeTypes`
-- **Matcher:** namespace `velero`, kind `pod`, `podLabels` `app.kubernetes.io/component: velero-data-mover`
-- **Why:** Velero 1.18 copies each volume in a pod the node-agent creates for every PodVolumeBackup and PodVolumeRestore. It runs as root and mounts `/var/lib/kubelet/pods` read-write (a restore writes into it). Velero's own labels on it (`velero.io/pod-volume-backup`, `velero.io/pod-volume-restore`) hold the PVB or PVR name, which changes each backup, so they cannot be matched. ConfigMap `node-agent-config` sets `podLabels`, which the node-agent adds to every data-mover pod, and the exemption matches that label.
-- **Why it is safe:** Only pods with that label in the `velero` namespace, and only these three policies. It exists only when file-system backup is on.
+- **Matcher:** `.*`, kind `pod`, namespace `velero`
+- **Why:** Velero 1.18 copies each volume in a pod the node-agent creates for every PodVolumeBackup and PodVolumeRestore. It runs as root and mounts `/var/lib/kubelet/pods` read-write (a restore writes into it). Velero's own labels on it (`velero.io/pod-volume-backup`, `velero.io/pod-volume-restore`) hold the PVB or PVR name, which changes each backup, so they cannot be matched. ConfigMap `node-agent-config` makes the node-agent add a fixed label, `app.kubernetes.io/component: velero-data-mover`, to every data-mover pod, but the Exemption CRD in UDS Core 1.16.0 rejects `matcher.podLabels` (field not declared in schema). So the matcher is every pod in the `velero` namespace. When the bundle moves to a Core version whose matcher has `podLabels`, narrow it to that label.
+- **Why it is safe:** Only the `velero` namespace, which holds only Velero's own pods, and only these three policies. It exists only when file-system backup is on.
 
 ## kubevirt
 

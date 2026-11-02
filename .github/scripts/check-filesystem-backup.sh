@@ -38,7 +38,7 @@ for needle in \
   'role: node-agent' \
   'name: HOME' \
   '--node-agent-configmap=node-agent-config' \
-  'app.kubernetes.io/component: velero-data-mover' \
+  '"podLabels": {"app.kubernetes.io/component": "velero-data-mover"}' \
   '/var/lib/kubelet/pods' \
   'namespace: velero'; do
   if ! grep -qF -- "${needle}" <<< "${on}"; then

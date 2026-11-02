@@ -44,8 +44,9 @@ tasks:
       # (.github/scripts/dev-package.sh). Outside CI nothing is published under
       # the key, so this prints false and the create runs as before.
       # A --set CREATE_OPTIONS run builds something else, so it never reuses.
+      # uds exports task variables to the environment.
       - cmd: |
-          if [ -n "${{ .variables.CREATE_OPTIONS }}" ]; then echo false; else ./.github/scripts/dev-package.sh prebuilt; fi
+          if [ -n "${CREATE_OPTIONS:-}" ]; then echo false; else ./.github/scripts/dev-package.sh prebuilt; fi
         setVariables:
           - name: DEV_PACKAGE_PREBUILT
       - task: create:package

@@ -355,8 +355,22 @@ reload_db() {
   ' sh "${user}" "${db}" < "${file}"
 }
 
-reload_db takserver "${tak_pod}" "${tak_container}" postgres cot "${work}/tak.sql"
-reload_db cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak "${work}/cloudtak.sql"
+# Load what Velero brought back, the way an operator would, and check it is
+# the dump taken before the backup.
+# shellcheck source=tests/db-dump-secret.sh
+source "${root}/tests/db-dump-secret.sh"
+secret_dump_sql takserver tak-db-dump > "${work}/tak-restored.sql"
+secret_dump_sql cloudtak cloudtak-db-dump > "${work}/cloudtak-restored.sql"
+for pair in tak cloudtak; do
+  if ! cmp -s "${work}/${pair}.sql" "${work}/${pair}-restored.sql"; then
+    say "restored ${pair} dump Secret does not match the dump taken before the backup" >&2
+    exit 1
+  fi
+done
+say "restored dump Secrets match the dumps taken before the backup"
+
+reload_db takserver "${tak_pod}" "${tak_container}" postgres cot "${work}/tak-restored.sql"
+reload_db cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak "${work}/cloudtak-restored.sql"
 
 tak_note="$(read_marker takserver "${tak_pod}" "${tak_container}" postgres cot | tr -d '[:space:]')"
 ct_note="$(read_marker cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak | tr -d '[:space:]')"

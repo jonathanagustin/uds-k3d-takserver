@@ -74,8 +74,15 @@ spec:
               value: /credentials/cloud
             - name: AZURE_CREDENTIALS_FILE
               value: /credentials/cloud
+          # The image runs as a non-root user, and /var/lib/kubelet/pods is
+          # root-only (velero: "open /host_pods: permission denied"). The
+          # upstream Velero chart runs the node-agent as root for the same
+          # reason. The Exemption above covers RequireNonRootUser.
           securityContext:
             privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
           resources:
             requests:
               cpu: 25m

@@ -44,11 +44,13 @@ jobs:
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
+      # Always check out: the decision script lives in the repository. Only a
+      # pull request needs the full history, for the diff against its base.
       - name: Checkout repository
-        if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          persist-credentials: false
 
       - name: Decide
         id: decide

@@ -72,8 +72,18 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers, writes the CoreDNS rewrite, copies the gateway CA and the CloudTAK admin material, and restarts TAK in order. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
-- **What removes it:** Nothing further. The init containers, the CoreDNS rewrite, and the ordered restart now live in the Pepr module.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers at admission, writes the CoreDNS rewrite, and copies the gateway CA and the CloudTAK admin material. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **What removes it:** Nothing further. The init containers and the CoreDNS rewrite live in the Pepr module. A scale-down remains only when Ignite was admitted without the tuned config.
+
+### Zarf values
+
+- **Requirement:** Prefer Zarf Values over Zarf Variables where Zarf supports them. Values is beta, so variables stay for compatibility.
+- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. Each value defaults to its variable's placeholder, so `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` still decide the result unless a package value is set. A UDS CLI 0.40 bundle sets Zarf variables and has no package-values input, and the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md#package-values) has the table.
+- **What removes the variables:** A bundle CLI that can pass package values, and a cert image built from `tak.imageTag` instead of one substituted string.
+
+### Package template
+
+Compared with [uds-packages/template](https://github.com/uds-packages/template). This repo already has the pieces that fit: root `zarf.yaml`, `common/zarf.yaml`, a config chart plus the upstream chart, `values/`, `bundle/`, `tasks.yaml`, `tests/`, `adr/`, `docs/`, CODEOWNERS, Renovate, and the lint and release workflows. It does not collapse to one `chart/` directory, because TAK and CloudTAK are separate charts. It does not add `releaser.yaml` or `uds-pk release`. [Version scheme](#version-scheme) says why release-please stays. It does not add a `registry1` flavor. [Image flavors](#image-flavors) says why.
 
 ### Version scheme
 

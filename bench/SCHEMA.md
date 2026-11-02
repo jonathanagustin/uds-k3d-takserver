@@ -30,6 +30,8 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition. This is the probe lag |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
+| `startup.max_generation` | count | highest `metadata.generation` on the TAK Deployments. 1 is a single rollout |
+| `startup.max_restart_count` | count | highest container or init restart count on the four TAK apps |
 | `load.clients` | count | the client count this record ran |
 | `load.duration_s` | seconds | how long `tak_tester.py` was left running |
 | `load.messages_sent` | count | sum of every per-uid `messages_sent` the tester printed |
@@ -57,6 +59,8 @@ latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 `cold_s` otherwise.
 
 `<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s, so Ready can lag the process by at most one period, about 8% of those restarts. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. If `jvm_to_log_s` is most of the start on a later run, that archive is the next change.
+
+Run 39556568533 measured the old scale-down on validate-install. amd64 job 119079081806 spent 103s in Helm and then 5m21s restarting config, messaging, api, and plugins. arm64 job 119079081713 spent 98s in Helm and then 5m08s. `startup.max_generation` and `startup.max_restart_count` are how a later run shows that second rollout is gone. This file does not store that later run.
 
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint

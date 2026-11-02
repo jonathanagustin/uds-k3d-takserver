@@ -29,6 +29,7 @@ report = load("bench_report", "bench/report.py")
 loadlog = load("bench_loadlog", "bench/loadlog.py")
 phases = load("bench_phases", "bench/phases.py")
 runner = load("bench_run", "bench/run.py")
+startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
 
 
@@ -344,6 +345,21 @@ class StartPhaseTests(unittest.TestCase):
             [{"reason": "Pulling"}],
             "2026-10-25T00:00:01Z Tomcat started on port 8443",
         )["jvm_to_log_s"])
+class StartupShapeTests(unittest.TestCase):
+    def test_generation_and_restarts_use_the_highest_count(self):
+        generations = startup.max_generation([
+            {"metadata": {"generation": 1}},
+            {"metadata": {"generation": 2}},
+            {"metadata": {}},
+        ])
+        restarts = startup.max_restarts([
+            {"status": {"containerStatuses": [{"restartCount": 0}], "initContainerStatuses": [{"restartCount": 1}]}},
+            {"status": {"containerStatuses": [{"restartCount": "nope"}]}},
+        ])
+        self.assertEqual(generations, 2)
+        self.assertEqual(restarts, 1)
+        self.assertIsNone(startup.max_generation([]))
+        self.assertIsNone(startup.max_restarts([{"status": {}}]))
 
 
 class PostgresTests(unittest.TestCase):

@@ -6,7 +6,7 @@
 # and the shared ui task runs every spec, so this stays a separate task.
 set -euo pipefail
 
-if ! uds zarf tools kubectl get deploy -n uds-portal -o name | grep -q .; then
+if ! uds zarf tools kubectl get deploy -n uds-portal -o name | grep . >/dev/null; then
   echo "uds-portal is not deployed" >&2
   exit 1
 fi

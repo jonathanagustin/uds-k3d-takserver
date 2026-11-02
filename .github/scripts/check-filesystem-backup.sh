@@ -37,9 +37,11 @@ for needle in \
   'runAsUser: 0' \
   'role: node-agent' \
   'name: HOME' \
+  '--node-agent-configmap=node-agent-config' \
+  'app.kubernetes.io/component: velero-data-mover' \
   '/var/lib/kubelet/pods' \
   'namespace: velero'; do
-  if ! grep -q "${needle}" <<< "${on}"; then
+  if ! grep -qF -- "${needle}" <<< "${on}"; then
     fail "enabled TAK render is missing ${needle}"
   fi
 done

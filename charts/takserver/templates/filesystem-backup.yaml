@@ -27,9 +27,9 @@ spec:
       title: "Velero node-agent"
       description: "File-system backup mounts pod volumes from the node kubelet directory. The agent is privileged and runs as root. The matcher is that DaemonSet."
     # Velero 1.18 copies each volume in a data-mover pod that the node-agent
-    # creates. The pod is named after its PodVolumeBackup or PodVolumeRestore,
-    # which takes the user's Backup or Restore name, so the name has no fixed
-    # prefix. It runs as root and mounts the kubelet pods directory read-write.
+    # creates. Its own labels carry the PodVolumeBackup or PodVolumeRestore
+    # name, so they change per backup. ConfigMap node-agent-config makes the
+    # node-agent add one fixed label to every pod it creates; that is the match.
     - policies:
         - RequireNonRootUser
         - RestrictHostPathWrite
@@ -38,8 +38,20 @@ spec:
         namespace: {{ .Values.backup.filesystem.namespace | quote }}
         name: ".*"
         kind: pod
+        podLabels:
+          app.kubernetes.io/component: velero-data-mover
       title: "Velero data mover"
-      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as root. Only the velero namespace, and only when file-system backup is on."
+      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as root. Matched by the fixed label the node-agent adds, in the velero namespace, only when file-system backup is on."
+---
+# Read by the node-agent (--node-agent-configmap). Velero expects one key.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-agent-config
+  namespace: {{ .Values.backup.filesystem.namespace }}
+data:
+  node-agent-config.json: |
+    {"podLabels": {"app.kubernetes.io/component": "velero-data-mover"}}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -74,6 +86,7 @@ spec:
           args:
             - node-agent
             - server
+            - --node-agent-configmap=node-agent-config
           env:
             - name: VELERO_NAMESPACE
               valueFrom:

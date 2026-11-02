@@ -45,17 +45,24 @@ _SETTING_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 _SETTING_VALUE = re.compile(r"^[0-9]+(kB|MB|GB|ms|s|min)?$")
 # Set when this process has applied ALTER SYSTEM. A later config resets it.
 _postgres_custom = False
+# PostgreSQL 17 moved the checkpoint counters from pg_stat_bgwriter to
+# pg_stat_checkpointer and dropped buffers_backend; client backend writes
+# are in pg_stat_io. The TAK server runs PostgreSQL 18.
 POSTGRES_QUERY = """
 SELECT json_build_object(
   'blks_hit', d.blks_hit,
   'blks_read', d.blks_read,
   'temp_files', d.temp_files,
   'temp_bytes', d.temp_bytes,
-  'checkpoints_timed', b.checkpoints_timed,
-  'checkpoints_req', b.checkpoints_req,
-  'checkpoint_write_ms', b.checkpoint_write_time,
-  'checkpoint_sync_ms', b.checkpoint_sync_time,
-  'buffers_backend', b.buffers_backend,
+  'checkpoints_timed', c.num_timed,
+  'checkpoints_req', c.num_requested,
+  'checkpoint_write_ms', c.write_time,
+  'checkpoint_sync_ms', c.sync_time,
+  'buffers_backend', (
+    SELECT COALESCE(sum(io.writes), 0)::bigint
+    FROM pg_stat_io io
+    WHERE io.backend_type = 'client backend'
+  ),
   'shared_buffers', current_setting('shared_buffers'),
   'work_mem', current_setting('work_mem'),
   'effective_cache_size', current_setting('effective_cache_size'),
@@ -63,7 +70,7 @@ SELECT json_build_object(
   'checkpoint_timeout', current_setting('checkpoint_timeout')
 )
 FROM pg_stat_database d
-CROSS JOIN pg_stat_bgwriter b
+CROSS JOIN pg_stat_checkpointer c
 WHERE d.datname = 'cot'
 """.strip()
 
@@ -395,12 +402,121 @@ def apply_config(config):
         )
 
 
+def diagnose(namespace, workload):
+    """What a timed-out rollout was waiting on. The nightly keeps no cluster."""
+    lines = [f"--- {workload} in {namespace} did not finish rolling out"]
+    pods = kubectl("get", "pods", "-n", namespace, "-o", "wide", check=False)
+    lines.append(pods.stdout.strip() or pods.stderr.strip())
+    events = kubectl(
+        "get", "events", "-n", namespace, "--sort-by=.lastTimestamp", check=False,
+    )
+    lines.extend((events.stdout.strip() or events.stderr.strip()).splitlines()[-25:])
+    if workload.startswith("deployment/"):
+        for container, tail in (("wait-deps", "40"), (workload.split("/", 1)[1], "80")):
+            logs = kubectl(
+                "logs", workload, "-n", namespace, "-c", container, f"--tail={tail}", check=False,
+            )
+            text = logs.stdout.strip() or logs.stderr.strip()
+            lines.append(f"--- {container} logs")
+            lines.append(text)
+    print("\n".join(lines), file=sys.stderr)
+
+
+def pod_container(workload, namespace, container, runner):
+    result = runner("get", workload, "-n", namespace, "-o", "json")
+    spec = json.loads(result.stdout)
+    for item in spec["spec"]["template"]["spec"].get("containers", []):
+        if item["name"] == container:
+            return item
+    raise RuntimeError(f"{workload} in {namespace} has no container {container}")
+
+
+def snapshot(config, runner=None):
+    """The installed env values and memory a config is about to change.
+
+    apply_config edits the live workloads, and nothing put them back, so one
+    config's changes carried into every config after it. heap-768 left
+    JDK_JAVA_OPTIONS=-Xms768m on messaging. enable_admin.sh runs
+    java -Xmx128m UserManager.jar, which then exits with "Initial heap size set
+    to a larger value than the maximum heap size", the admin user is never
+    added, and messaging never passes readiness in production and small.
+    """
+    run = runner or kubectl
+    saved = []
+    for item in config.get("env") or []:
+        container = pod_container(item["workload"], item["namespace"], item["container"], run)
+        entry = next((e for e in container.get("env") or [] if e["name"] == item["name"]), None)
+        if entry is not None and "valueFrom" in entry:
+            raise RuntimeError(
+                f"{item['workload']} {item['container']} {item['name']} uses valueFrom; "
+                "the sweep cannot put it back"
+            )
+        saved.append({
+            "kind": "env",
+            "workload": item["workload"],
+            "namespace": item["namespace"],
+            "container": item["container"],
+            "name": item["name"],
+            "value": None if entry is None else entry.get("value", ""),
+        })
+    for item in config.get("resources") or []:
+        container = pod_container(item["workload"], item["namespace"], item["container"], run)
+        resources = container.get("resources") or {}
+        saved.append({
+            "kind": "resources",
+            "workload": item["workload"],
+            "namespace": item["namespace"],
+            "container": item["container"],
+            "memory_request": (resources.get("requests") or {}).get("memory"),
+            "memory_limit": (resources.get("limits") or {}).get("memory"),
+        })
+    return saved
+
+
+def restore_commands(saved):
+    """kubectl arguments that put the snapshot back. None removes the field."""
+    commands = []
+    for item in saved:
+        target = [item["workload"], "-n", item["namespace"]]
+        if item["kind"] == "env":
+            if item["value"] is None:
+                change = f"{item['name']}-"
+            else:
+                change = f"{item['name']}={item['value']}"
+            commands.append(["set", "env", *target, "-c", item["container"], change])
+            continue
+        patch = {"spec": {"template": {"spec": {"containers": [{
+            "name": item["container"],
+            "resources": {
+                "requests": {"memory": item["memory_request"]},
+                "limits": {"memory": item["memory_limit"]},
+            },
+        }]}}}}
+        commands.append(["patch", *target, "--type=strategic", "-p", json.dumps(patch)])
+    return commands
+
+
+def restore(config, saved, runner=None, wait=True):
+    """Put the workloads back and wait, so the next config starts from the install."""
+    run = runner or kubectl
+    if not saved:
+        return
+    for command in restore_commands(saved):
+        run(*command)
+    if wait:
+        rollout(rollout_items(config, False))
+
+
 def rollout(items):
     started = time.monotonic()
     seen = False
     for item in items:
         kubectl("rollout", "restart", item["workload"], "-n", item["namespace"])
-        kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
+        try:
+            kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
+        except RuntimeError:
+            diagnose(item["namespace"], item["workload"])
+            raise
         seen = True
     if not seen:
         return None
@@ -730,6 +846,12 @@ def main(argv):
             print(f"skip {original['name']}: {reason}")
             continue
         counts = selected_clients(original)
+        try:
+            saved = snapshot(original)
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            failed = True
+            print(f"{original['name']}: snapshot: {error}", file=sys.stderr)
+            continue
         for index, clients in enumerate(counts):
             # The first client count keeps the config name. Further counts
             # get a suffix so they do not overwrite that file.
@@ -741,6 +863,12 @@ def main(argv):
             if record["errors"]:
                 failed = True
                 print(f"{name}: " + "; ".join(record["errors"]), file=sys.stderr)
+        try:
+            restore(original, saved)
+        except (RuntimeError, subprocess.CalledProcessError) as error:
+            # Every later config would run on top of this one.
+            print(f"{original['name']}: restore: {error}; stopping the sweep", file=sys.stderr)
+            return 1
     return 1 if failed else 0
 
 

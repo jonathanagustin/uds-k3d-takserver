@@ -33,7 +33,9 @@ spec:
     # is every pod in the velero namespace. ConfigMap node-agent-config still
     # adds a fixed label, ready for a Core version whose matcher has podLabels.
     - policies:
+        - DisallowPrivileged
         - RequireNonRootUser
+        - DropAllCapabilities
         - RestrictHostPathWrite
         - RestrictVolumeTypes
       matcher:
@@ -41,7 +43,7 @@ spec:
         name: ".*"
         kind: pod
       title: "Velero data mover"
-      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as root. Every pod in the velero namespace, only when file-system backup is on. UDS Core 1.16.0's Exemption matcher has no podLabels."
+      description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as privileged root, because a volume such as PGDATA is mode 0700 for another user. Every pod in the velero namespace, only when file-system backup is on. UDS Core 1.16.0's Exemption matcher has no podLabels."
 ---
 # Read by the node-agent (--node-agent-configmap). Velero expects one key.
 # app.kubernetes.io/name=velero puts the data-mover pods under the Velero
@@ -53,7 +55,7 @@ metadata:
   namespace: {{ .Values.backup.filesystem.namespace }}
 data:
   node-agent-config.json: |
-    {"podLabels": {"app.kubernetes.io/name": "velero", "app.kubernetes.io/component": "velero-data-mover"}}
+    {"privilegedFsBackup": true, "podLabels": {"app.kubernetes.io/name": "velero", "app.kubernetes.io/component": "velero-data-mover"}}
 ---
 apiVersion: apps/v1
 kind: DaemonSet

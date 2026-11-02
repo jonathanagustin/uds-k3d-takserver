@@ -204,6 +204,8 @@ jobs:
           path: |
             out/grafana-search.json
             out/prometheus-tak-rules.json
+            out/alertmanager-alerts.json
+            tests/.playwright/screenshots/tak-dashboard.png
           if-no-files-found: warn
           retention-days: 14
 

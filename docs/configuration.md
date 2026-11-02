@@ -8,16 +8,29 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 
 ## Values
 
-`values/zarf-values.yaml` is the package values file. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each TAK image tag. The watcher env is a templated values file, so it reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. `uds zarf package deploy --set-values global.domain=example.com` overrides the file. `values/common-values.yaml` is still the upstream overlay, and `values/upstream-values.yaml` is an extra values file on that chart.
+`values/common-values.yaml` is the overlay. `values/upstream-values.yaml` is an extra values file on the chart. Zarf replaces `###ZARF_VAR_DOMAIN###` and `###ZARF_VAR_TAK_IMAGE_TAG###` when the package is created. These are the package variables:
 
-The four Zarf variables stay. UDS CLI 0.40 bundles set variables (`bundle/uds-config.yaml`, `uds deploy --set`) and cannot pass package values. The `images:` list is parsed before either substitution, so those refs stay literal. `charts/takserver/values.yaml` `certs.image` is one string, so it still contains `###ZARF_VAR_TAK_IMAGE_TAG###`. `pin-image-tags.sh` writes the commit tag into both `tak.imageTag` and `TAK_IMAGE_TAG`. On a mapped key the package value wins over the variable.
+| Variable | Default | Used for |
+| --- | --- | --- |
+| `DOMAIN` | `uds.dev` | Gateway hosts, such as `takserver.uds.dev` |
+| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
+| `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
+| `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 
-| Name | Default | Helm reads | Variable still used for |
-| --- | --- | --- | --- |
-| `global.domain` / `DOMAIN` | `uds.dev` | package value | ATAK device manifest and any unmapped `###ZARF_VAR_DOMAIN###` |
-| `tak.imageTag` / `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | package value for the tag keys and the watcher image | `images:` literals and `certs.image` |
-| `dns.inCluster` / `IN_CLUSTER_DNS` | `true` | package value | `--set IN_CLUSTER_DNS=` still names the variable. The watcher does not read it |
-| `dns.passthroughHosts` / `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | package value | same, for `PASSTHROUGH_HOSTS` |
+### Package values
+
+`values/zarf-values.yaml` is the package values file, checked by `values/zarf-values.schema.json`. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each upstream TAK image tag. The Pepr values file is templated, so the watcher env reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`.
+
+Each default is the placeholder of the matching variable, for example `global.domain: "###ZARF_VAR_DOMAIN###"`. Zarf replaces placeholders after Helm renders, so with no package value set the variable decides, exactly as before. `--set DOMAIN=`, a bundle's `uds-config.yaml`, and UDS CLI 0.40 bundles keep working unchanged. A package value only overrides its variable, for that key: `uds zarf package deploy --set-values global.domain=example.com`, or `--values`. The `images:` list and `certs.image` in `charts/takserver/values.yaml` read only `TAK_IMAGE_TAG`.
+
+| Package value | Defaults to | Overrides |
+| --- | --- | --- |
+| `global.domain` | `DOMAIN` | TAK, CloudTAK, and watcher hosts |
+| `tak.imageTag` | `TAK_IMAGE_TAG` | the upstream TAK image tags and the watcher render image |
+| `dns.inCluster` | `IN_CLUSTER_DNS` | the watcher's CoreDNS rewrite switch |
+| `dns.passthroughHosts` | `PASSTHROUGH_HOSTS` | the watcher's passthrough host list |
+
+`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OIDC URLs, CloudTAK, and the watcher, and that a package value wins over the variable.
 
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 

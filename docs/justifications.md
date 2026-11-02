@@ -77,8 +77,8 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 
 ### Zarf values
 
-- **Requirement:** Prefer Zarf Values over Zarf Variables where Zarf supports them. Values is beta, so variables stay only for compatibility.
-- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` remain because a UDS CLI 0.40 bundle sets Zarf variables and has no package-values input, and because the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md) says which path wins.
+- **Requirement:** Prefer Zarf Values over Zarf Variables where Zarf supports them. Values is beta, so variables stay for compatibility.
+- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. Each value defaults to its variable's placeholder, so `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` still decide the result unless a package value is set. A UDS CLI 0.40 bundle sets Zarf variables and has no package-values input, and the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md#package-values) has the table.
 - **What removes the variables:** A bundle CLI that can pass package values, and a cert image built from `tak.imageTag` instead of one substituted string.
 
 ### Package template

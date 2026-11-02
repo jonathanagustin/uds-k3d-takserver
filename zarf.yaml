@@ -28,9 +28,10 @@ documentation:
   cloudtak: docs/cloudtak.md
   profiles: docs/profiles.md
 
-# Beta. Chart mappings read these. The variables below stay for UDS CLI 0.40
-# bundles, which set Zarf variables and cannot pass package values, and for
-# the cert image string. docs/configuration.md lists which path wins.
+# Beta. Chart mappings read these. Each default is the placeholder of the
+# matching variable below, so the variables still decide the result, from
+# `--set` or a bundle's uds-config.yaml. A package value set at deploy
+# overrides its variable. docs/configuration.md has the table.
 values:
   files:
     - values/zarf-values.yaml
@@ -38,16 +39,16 @@ values:
 
 variables:
   - name: DOMAIN
-    description: Compatibility variable for UDS bundles. Helm domain comes from global.domain. This still fills cert and ATAK strings that package values cannot.
+    description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev. The global.domain package value defaults to this and overrides it when set.
     default: uds.dev
   - name: TAK_IMAGE_TAG
-    description: Compatibility variable. The images list cannot be templated, and charts/takserver certs.image is one string. Helm tag keys come from tak.imageTag. Keep the two equal.
+    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package. The tak.imageTag package value defaults to this. The images list and certs.image read only this variable.
     default: 5.7-RELEASE-14
   - name: IN_CLUSTER_DNS
-    description: Compatibility variable. The watcher reads dns.inCluster. Left so uds-config.yaml and --set IN_CLUSTER_DNS= still name a real variable.
+    description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist. The dns.inCluster package value defaults to this.
     default: "true"
   - name: PASSTHROUGH_HOSTS
-    description: Compatibility variable. The watcher reads dns.passthroughHosts. Hosts under the domain that the passthrough gateway serves by SNI.
+    description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host. The dns.passthroughHosts package value defaults to this.
     default: "takserver-api takserver-stream"
 
 components:

@@ -33,7 +33,7 @@
       "properties": {
         "inCluster": {
           "type": "string",
-          "enum": ["true", "false"]
+          "pattern": "^(true|false|###ZARF_VAR_IN_CLUSTER_DNS###)$"
         },
         "passthroughHosts": {
           "type": "string"

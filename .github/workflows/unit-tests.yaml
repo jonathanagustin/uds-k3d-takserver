@@ -66,5 +66,8 @@ jobs:
       - name: Loki query helper
         run: bash tests/test_query_loki.sh
 
+      - name: Dump Secret restore helper
+        run: bash tests/test_db_dump_secret.sh
+
       - name: CoreConfig cache listener
         run: python3 -B -m unittest tests.test_cacheconfig_patch -v

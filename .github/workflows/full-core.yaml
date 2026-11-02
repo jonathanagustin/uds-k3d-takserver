@@ -180,6 +180,13 @@ jobs:
         shell: bash
         timeout-minutes: 2
 
+      - name: Print logs before the upload
+        if: always()
+        # A hung upload-artifact can outlast its step timeout; the job log keeps these.
+        run: ./.github/scripts/print-logs.sh out /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log
+        shell: bash
+        timeout-minutes: 3
+
       - name: Generate unique suffix
         id: uniq
         if: always()
@@ -190,7 +197,7 @@ jobs:
 
       - name: Upload uptime probe log
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: uptime-probes-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -200,7 +207,7 @@ jobs:
 
       - name: Upload Grafana and Prometheus rule check
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: grafana-alerts-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -214,7 +221,7 @@ jobs:
 
       - name: Upload Falco events
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: falco-events-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -224,7 +231,7 @@ jobs:
 
       - name: Upload kubectl top
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kubectl-top-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -234,7 +241,7 @@ jobs:
 
       - name: Upload portal screenshots
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: portal-tiles-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -244,7 +251,7 @@ jobs:
 
       - name: Upload backup restore log
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backup-restore-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -254,7 +261,7 @@ jobs:
 
       - name: Upload debug logs
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: debug-log-full-core-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}

@@ -83,7 +83,12 @@ const ROLE_RULES = [
         resourceNames: ["takserver-startup"],
         verbs: ["delete"],
       },
-      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-keystore"], verbs: ["get", "list", "watch"] },
+      {
+        apiGroups: [""],
+        resources: ["secrets"],
+        resourceNames: ["takserver-keystore", "takserver-certs"],
+        verbs: ["get", "list", "watch"],
+      },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },
       { apiGroups: ["apps"], resources: ["deployments/scale"], resourceNames: TAK, verbs: ["get", "patch", "update"] },

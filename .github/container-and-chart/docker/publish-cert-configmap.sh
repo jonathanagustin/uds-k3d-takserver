@@ -6,7 +6,9 @@
 # The scripts live in this image at /opt/tak/certs (TAK Server 5.7-RELEASE-14).
 # A ConfigMap that already exists is left alone so an operator can supply certs.
 
-# Retry a refused or reset handshake. Five tries, one second apart.
+# Retry a refused or reset handshake. The k3s port-6443 tunnel refuses new
+# connections for several seconds after this hook reads cert-migration, which
+# is longer than five one-second tries. Twenty tries, two seconds apart.
 # --retry-all-errors covers a TLS reset (curl 35 or 56). --retry-connrefused
 # covers ECONNREFUSED. An HTTP status is not an error unless the caller
 # passes -f, so 409 still returns to the caller. The config image is UBI9,
@@ -15,13 +17,28 @@ api_curl() {
   curl \
     --silent \
     --show-error \
-    --retry 5 \
-    --retry-delay 1 \
+    --retry 20 \
+    --retry-delay 2 \
     --retry-all-errors \
     --retry-connrefused \
     --connect-timeout 5 \
     "$@"
 }
+
+# Truststores and the legacy CA pkcs12 hold certificates only.
+is_private_material() {
+  case "$1" in
+    *.key) return 0 ;;
+    *truststore*) return 1 ;;
+    *-legacy.p12) return 1 ;;
+    *.jks | *.p12) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [[ "${PUBLISH_CERT_SOURCE_ONLY:-}" == "1" ]]; then
+  return 0
+fi
 
 set -euo pipefail
 
@@ -179,8 +196,10 @@ fi
   for file in files/*; do
     [[ -f "${file}" ]] || continue
     name="$(basename "${file}")"
-    # TAK pods mount this ConfigMap. The CA key stays in Secret takserver-ca-key.
-    if [[ "${name}" == "ca-do-not-share.key" ]]; then
+    # TAK pods mount Secret takserver-certs, not this ConfigMap. Private
+    # keys and keystores stay out of it. The CA key is a .key, so it is
+    # skipped here and written to Secret takserver-ca-key below.
+    if is_private_material "${name}"; then
       continue
     fi
     b64="$(base64 -w 0 "${file}")"
@@ -208,15 +227,56 @@ if [[ "${code}" != "201" ]] && [[ "${code}" != "200" ]] && [[ "${code}" != "409"
 fi
 echo "Created ConfigMap cert-migration"
 
-# The CA key is not in the ConfigMap. The cert Job's ServiceAccount can write
-# this Secret. Do not print the key.
+# Every file the pods need, except the CA key. The inlined split script
+# does this again so an older image, which still put keystores in the
+# ConfigMap, ends up with the same Secret.
+secrets_api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
+{
+  printf '%s\n' '{'
+  printf '%s\n' '  "apiVersion": "v1",'
+  printf '%s\n' '  "kind": "Secret",'
+  printf '%s\n' '  "metadata": {"name": "takserver-certs"},'
+  printf '%s\n' '  "type": "Opaque",'
+  printf '%s\n' '  "data": {'
+  first=1
+  for file in files/*; do
+    [[ -f "${file}" ]] || continue
+    name="$(basename "${file}")"
+    if [[ "${name}" == "ca-do-not-share.key" ]]; then
+      continue
+    fi
+    b64="$(base64 -w 0 "${file}")"
+    if [[ "${first}" -eq 0 ]]; then
+      printf '%s\n' ','
+    fi
+    printf '    "%s": "%s"' "${name}" "${b64}"
+    first=0
+  done
+  printf '\n%s\n' '  }'
+  printf '%s\n' '}'
+} > /tmp/takserver-certs.json
+code="$(api_curl -o /tmp/takserver-certs-response -w '%{http_code}' --cacert "${ca}" \
+  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
+  -X POST --data-binary @/tmp/takserver-certs.json "${secrets_api}")"
+if [[ "${code}" == "409" ]]; then
+  code="$(api_curl -o /tmp/takserver-certs-response -w '%{http_code}' --cacert "${ca}" \
+    -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
+    -X PUT --data-binary @/tmp/takserver-certs.json "${secrets_api}/takserver-certs")"
+fi
+if [[ "${code}" != "200" && "${code}" != "201" ]]; then
+  echo "Secret takserver-certs returned HTTP ${code}" >&2
+  exit 1
+fi
+echo "Secret takserver-certs holds the certificate files"
+
+# The CA key is not in the ConfigMap or the Secret the pods mount.
+# Do not print the key.
 ca_key="files/ca-do-not-share.key"
 if [[ ! -s "${ca_key}" ]]; then
   echo "ca-do-not-share.key was not written" >&2
   exit 1
 fi
 secret_body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"takserver-ca-key"},"type":"Opaque","data":{"ca-do-not-share.key":"%s"}}' "$(base64 -w 0 "${ca_key}")")"
-secrets_api="https://kubernetes.default.svc/api/v1/namespaces/${ns}/secrets"
 code="$(api_curl -o /tmp/ca-key-response -w '%{http_code}' --cacert "${ca}" \
   -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
   -X POST --data-binary "${secret_body}" "${secrets_api}")"

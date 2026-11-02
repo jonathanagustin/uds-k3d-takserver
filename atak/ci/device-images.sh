@@ -23,7 +23,8 @@
 #   device-images.sh publish-package DIR  publish the package created in
 #                              DIR under PKG_REF, unless it is there already
 #   device-images.sh release   point TAG (the ATAK version) at the keyed
-#                              images in GHCR, without a pull or push
+#                              images and the keyed Zarf package in GHCR,
+#                              without a pull or push
 #
 # The hash covers the git blobs of each image's inputs in the index, so it needs a
 # git checkout and ignores unstaged edits. KEY_SALT invalidates every hash.
@@ -203,6 +204,13 @@ release() {
     # crane copy keeps the digest: the release tag is the tested image.
     uds zarf tools registry copy "$(ref_of "${name}" "${key}")" "${REPO}/${name}:${tag}"
   done
+  # The package the e2e run deployed gets the same plain tag, so
+  # packages/atak-device:5.5.1.10 is the tested package, by digest.
+  if ! pkg_exists; then
+    echo "${PKG_REF} is not in GHCR; cannot tag it ${tag}" >&2
+    return 1
+  fi
+  uds zarf tools registry copy "${PKG_REF}" "${PKG_REPO}/atak-device:${tag}"
 }
 
 # A Zarf package is an OCI artifact, not an image; crane reads any manifest.

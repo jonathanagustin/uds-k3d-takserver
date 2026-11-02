@@ -8,7 +8,7 @@ import { preparePod } from "./workload.ts";
 
 export const OidcRender = new Capability({
   name: "takserver-oidc-render",
-  description: "Render the OIDC client secret into CoreConfig.xml before any TAK container starts",
+  description: "Render CoreConfig and mount TAK certificates from a Secret before any TAK container starts",
   namespaces: [NAMESPACE],
 });
 

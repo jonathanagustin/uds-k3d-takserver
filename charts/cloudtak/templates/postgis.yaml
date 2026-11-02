@@ -56,6 +56,14 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+          # pg_upgrade runs in the entrypoint before postgres listens. Liveness
+          # waits until this probe succeeds, so a 15 to 18 upgrade is not killed.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
@@ -63,7 +71,6 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 5432
-            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources.postgis | nindent 12 }}

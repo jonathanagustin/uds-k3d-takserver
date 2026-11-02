@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Applied by bundle/uds-bundle.yaml and bundle/full/uds-bundle.yaml.
-# Sized to fit a 2 vCPU, 8 GB node, the ubuntu-latest runner for private
-# repositories. CI here runs on the public-repository runners, which have
-# 4 CPU and 16 GB on amd64 and arm64. The upstream developer example requests
-# 1 CPU and 8Gi for messaging and the API.
-# k3d-core-slim-dev still uses most of the runner.
+# CI runners are 4 CPU and 16 GB on amd64 and arm64 (about 15984Mi).
+# Memory requests sit just above the steady working set from tests/usage.sh at the
+# end of install on run 40174810574, kubelet Summary API, higher arch:
+# api 911Mi, messaging 888Mi, config 750Mi, Ignite 488Mi, Postgres 59Mi.
+# A 2 vCPU, 8 GB node is smaller than that working set once slim core is
+# added. The upstream developer example requests 1 CPU and 8Gi for
+# messaging and the API.
 #
 # CPU requests stay small so the pods can schedule.
 # The image adds -Xms512m -Xmx512m on the api, messaging, and config
@@ -18,31 +20,32 @@
 # The messaging Deployment copies the API memory limit. A 1Gi cgroup was
 # OOM-killed about 15s after UserManager started (512m heap, 128MB off-heap,
 # plus that second JVM). 1536Mi holds those. Config does not run UserManager.
-# Its request matches the 512MB heap measured from Runtime.maxMemory().
+# Its request is 1Gi against the 750Mi steady set on that run.
 #
 # The plugins Deployment reads only the CPU request and then copies the API
 # CPU limit. It does not read a plugins memory value. The post-helm patch
-# sets that memory. Requests below are the steady-state TAK set and stay
-# under the 7938Mi allocatable of a 2 CPU, 8 GB node.
+# sets that memory from the steady 263Mi (amd64) and 260Mi (arm64) on the
+# same run: request 320Mi, limit 512Mi.
 takserver:
   config:
     replicas: 1
     resources:
       requests:
         cpu: 50m
-        memory: 512Mi
+        memory: 1Gi
       limits:
         # A 500m limit made the JVM start-up take most of a rollout bound on
         # the 2 CPU runner. The processes start one after another, so they
         # can burst into CPU the others are not using.
         cpu: "1"
-        memory: 1Gi
+        # Steady 750Mi. 1280Mi is that set plus about half again.
+        memory: 1280Mi
   messaging:
     replicas: 1
     resources:
       requests:
         cpu: 50m
-        memory: 640Mi
+        memory: 1Gi
       limits:
         cpu: 500m
         # The messaging template ignores this and copies the API limit.
@@ -51,8 +54,8 @@ takserver:
     replicas: 1
     resources:
       requests:
-        cpu: 50m
-        memory: 512Mi
+        cpu: 100m
+        memory: 1Gi
       limits:
         # Messaging and plugins copy this CPU limit.
         cpu: "1"
@@ -63,16 +66,16 @@ takserver:
     resources:
       requests:
         cpu: 25m
-        memory: 128Mi
+        memory: 320Mi
       limits:
         cpu: 250m
-        memory: 384Mi
+        memory: 512Mi
 postgresql:
   primary:
     resources:
       requests:
         cpu: 50m
-        memory: 256Mi
+        memory: 128Mi
       limits:
         cpu: 500m
         memory: 512Mi

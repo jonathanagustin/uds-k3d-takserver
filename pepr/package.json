@@ -17,7 +17,7 @@
       "labels": []
     },
     "includedFiles": [],
-    "peprVersion": "2.0.5",
+    "peprVersion": "2.0.7",
     "appVersion": "0.1.0",
     "rbacMode": "scoped",
     "rbac": [
@@ -34,12 +34,12 @@
     "test:coverage": "PEPR_MODE=build node --test --experimental-test-coverage --test-coverage-include='capabilities/**' --test-coverage-exclude='**/*.test.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info capabilities/*.test.ts"
   },
   "dependencies": {
-    "pepr": "2.0.5"
+    "pepr": "2.0.7"
   },
   "overrides": {
     "kubernetes-fluent-client": {
       "undici": "8.12.3",
-      "js-yaml": "5.4.2",
+      "js-yaml": "5.4.3",
       "@kubernetes/client-node": {
         "js-yaml": "4.3.2"
       }

@@ -29,6 +29,12 @@ export const STARTUP_ANNOTATION = "uds.dev/tak-startup";
 const STARTUP_VALUE = "complete";
 const REPLICA_ANNOTATION = "uds.dev/tak-replicas";
 const READY_TIMEOUT_MS = 1_200_000;
+// The upstream chart's post-install hook runs SchemaManager. It exists only
+// when the chart deploys its own Postgres (StatefulSet takserver-postgresql).
+export const DB_SETUP_JOB = "takserver-db-setup";
+export const POSTGRES_STATEFULSET = "takserver-postgresql";
+const NO_DB_GRACE_MS = 30_000;
+const SCHEMA_POLL_MS = 3_000;
 const ISSUER_TRIES = 3;
 const IGNITE_XML = "ignite-config.xml";
 const SPI = '<bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">';
@@ -357,12 +363,15 @@ export function shapePodSpec(spec: WorkloadPodSpec, app: TakDeploy, ctx: Startup
     const resources = (main.resources ??= {});
     const requests = (resources.requests ??= {});
     const limits = (resources.limits ??= {});
-    if (requests.memory !== "128Mi") {
-      requests.memory = "128Mi";
+    // The chart template copies the API CPU limit and drops memory. 128m is
+    // the plugin heap. Steady working set on run 40174810574 was 263Mi amd64
+    // and 260Mi arm64, so the request is 320Mi and the limit is 512Mi.
+    if (requests.memory !== "320Mi") {
+      requests.memory = "320Mi";
       changed = true;
     }
-    if (limits.memory !== "384Mi") {
-      limits.memory = "384Mi";
+    if (limits.memory !== "512Mi") {
+      limits.memory = "512Mi";
       changed = true;
     }
   }
@@ -857,6 +866,48 @@ function automountOps(sts: StatefulSetDoc): JsonOp[] {
   ];
 }
 
+// Resolves with the db-setup Job's completion time once SchemaManager has
+// run, or undefined when this release has no in-chart Postgres (no Job and no
+// StatefulSet after a short grace, since Helm creates both after the Ignite
+// ConfigMap). A TAK consumer that starts before the schema exists keeps a
+// broken OAuth token store: /oauth/token works but every bearer token is
+// rejected, so CloudTAK's PATCH /api/server fails in CredentialCommands.
+export async function waitSchema(cluster: Cluster, timeoutMs = READY_TIMEOUT_MS): Promise<number | undefined> {
+  // Time is counted in polls, so a test's instant sleep ends the grace too.
+  let waited = 0;
+  for (;;) {
+    const job = await cluster.getJob("takserver", DB_SETUP_JOB);
+    if ((job?.status?.succeeded ?? 0) > 0) {
+      const done = Date.parse(job?.status?.completionTime ?? "");
+      return Number.isNaN(done) ? 0 : done;
+    }
+    if (!job && waited >= NO_DB_GRACE_MS && !(await cluster.getStatefulSet("takserver", POSTGRES_STATEFULSET))) {
+      return undefined;
+    }
+    if (waited >= timeoutMs) {
+      throw new Error(`Job ${DB_SETUP_JOB} did not complete within ${timeoutMs / 1000}s`);
+    }
+    await cluster.sleep(SCHEMA_POLL_MS);
+    waited += SCHEMA_POLL_MS;
+  }
+}
+
+// True when a running TAK consumer pod was created before the schema existed.
+async function startedBeforeSchema(cluster: Cluster, schemaAt: number): Promise<boolean> {
+  for (const name of START_ORDER) {
+    for (const pod of await cluster.listPods("takserver", name)) {
+      if (pod.metadata?.deletionTimestamp || pod.status?.phase === "Succeeded") {
+        continue;
+      }
+      const created = Date.parse(pod.metadata?.creationTimestamp ?? "");
+      if (!Number.isNaN(created) && created < schemaAt) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export async function reconcileIgnite(phase: string, cluster: Cluster, readyTimeoutMs = READY_TIMEOUT_MS): Promise<void> {
   if (phase === "DELETED") {
     return;
@@ -885,7 +936,15 @@ export async function reconcileIgnite(phase: string, cluster: Cluster, readyTime
     }
     const hasAnnotations = sts.spec?.template?.metadata?.annotations !== undefined;
     await cluster.restartStatefulSet("takserver", IGNITE_STATEFULSET, hasAnnotations);
+    // On a fresh install the consumers come back only after SchemaManager.
+    await waitSchema(cluster, readyTimeoutMs);
     await startConsumers(cluster, desired);
+  } else {
+    const schemaAt = await waitSchema(cluster, readyTimeoutMs);
+    if (schemaAt !== undefined && (await startedBeforeSchema(cluster, schemaAt))) {
+      await cluster.deleteConfigMap("takserver", STARTUP_CONFIGMAP);
+      await startConsumers(cluster, await stopConsumers(cluster));
+    }
   }
   await resumeReplicas(cluster);
   await waitReady(cluster, readyTimeoutMs);

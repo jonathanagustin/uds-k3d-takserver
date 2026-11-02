@@ -131,15 +131,19 @@ Older commits of this branch still contain the keystores that used to live in `c
 
 ## Metrics
 
-TAK Server `5.7-RELEASE-14` sets `management.endpoints.web.exposure.include=*` in `application.properties` and depends on `spring-boot-starter-actuator`, `micrometer-core`, and `micrometer-registry-cloudwatch2`. It does not depend on `micrometer-registry-prometheus`. The actuator endpoints are on the same HTTPS connectors as Marti (8443 and 8446). 8443 requires a client certificate. The API Service has no metrics port. The Package has no `monitor` entry, because a ServiceMonitor would not scrape a Prometheus text endpoint. `k3d-core-slim-dev` does not install the Prometheus operator.
+The API and messaging images load the Prometheus JMX exporter javaagent 1.7.0 (`/opt/tak/metrics`). It serves plain-HTTP Prometheus text on 9100 at `/metrics`: the JVM collectors (`jvm_*`, `process_*`) and Tomcat's request and error counters (`tomcat_requestcount_total`, `tomcat_errorcount_total`, from `-Dserver.tomcat.mbeanregistry.enabled=true`). TAK's Spring configuration and Marti connectors are unchanged. 8443 still requires a client certificate. 9100 is not on a Service or a gateway. Config and plugins do not load the agent. The admission module names the container port `metrics` on the API and messaging pods, which is the port the Package PodMonitor scrapes. See [ADR 17](../adr/0017-prometheus-monitors.md).
 
 ## Monitoring
 
-When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds three objects. Slim does not have that API, so it does not get them, and the chart still adds no ServiceMonitor or PodMonitor.
+When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
 
-ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". Its panels are JVM heap, GC, HTTP rate, Postgres up, and pod restarts. Those series are empty until TAK exports Prometheus text.
+ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". JVM heap, GC, and HTTP rate read the TAK API and messaging scrape. Postgres ready, pod restarts, messaging replicas, and container memory read kube-state-metrics and cAdvisor, which the full bundle already scrapes.
 
-PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. A target-down alert can fire only after a monitor exists. Scaling messaging to 0 does not create a down target today.
+PrometheusRule `takserver` defines `TAKAPITargetDown`, `TAKMessagingTargetDown`, `TAKDeploymentUnavailable`, `TAKJVMHeapHigh` (heap above 90% for 10 minutes), and `TAKPodRestartLoop`. The heap alert reads `jvm_memory_used_bytes` and `jvm_memory_max_bytes`. The two target-down rules are `kube_deployment_spec_replicas == 0` for two minutes. That fires when the Deployment is scaled to 0. `TAKDeploymentUnavailable` is spec replicas still at 1 and no available pods, for 10 minutes. That is longer than the 5m21s restart measured on run 39556568533, so a normal start does not page. `tests/grafana-alerts.sh` checks that the TAK and Pepr targets are up, scales `takserver-messaging` to 0, waits until Alertmanager reports `TAKMessagingTargetDown` active, writes `tests/.playwright/screenshots/tak-dashboard.png`, and scales the Deployment back to 1.
+
+PodMonitor `takserver-oidc` selects the admission pods in `pepr-system` and scrapes HTTPS `/metrics` with `insecureSkipVerify`. The Package `monitor` block cannot set a scheme or TLS, and the generated Pepr chart's ServiceMonitor would select every admission controller in that namespace.
+
+Postgres and NATS exporters are not enabled. This package does not build those images.
 
 ConfigMap `takserver-loki-rules` is labeled `loki_rule: "1"`. The ruler alerts when a TAK pod logs `error pulling auth file` more than three times in five minutes. That string is the one the API log check already rejects.
 
@@ -185,4 +189,5 @@ The NATS toolbox is disabled in `values/common-values.yaml`.
 - [OAuth discovery](../adr/0004-tak-oauth-uses-openid-discovery.md)
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
+- [Prometheus monitors](../adr/0017-prometheus-monitors.md)
 - [Values profiles](profiles.md)

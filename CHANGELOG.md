@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.7.0...v0.7.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **ci:** check out the repo in the Full Core gate on every event ([#240](https://github.com/jonathanagustin/uds-k3d-takserver/issues/240)) ([ccaab20](https://github.com/jonathanagustin/uds-k3d-takserver/commit/ccaab20dc61ae5d292e4cde4cde2318ad90fa5e0))
+
 ## [0.7.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.6.0...v0.7.0) (2026-11-02)
 
 

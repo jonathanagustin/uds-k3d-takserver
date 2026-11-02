@@ -182,6 +182,16 @@ velero_details() {
   k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
     -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' >&2 || true
   k logs -n velero deploy/velero --tail=2000 2>/dev/null | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+  # The node-agent runs the data path; a canceled PVB says why only here,
+  # and in the data-mover pod, which Velero deletes when it ends.
+  echo "--- node-agent log (PVB/PVR, errors)" >&2
+  k logs -n velero ds/node-agent --tail=3000 2>/dev/null \
+    | grep -iE 'level=(error|warning)|cancel|podvolume|data path|exposer' | tail -n 60 >&2 || true
+  local pod
+  for pod in $(k get pods -n velero -l app.kubernetes.io/component=velero-data-mover -o name 2>/dev/null); do
+    echo "--- ${pod}" >&2
+    k logs -n velero "${pod}" --all-containers --tail=200 >&2 || true
+  done
 }
 
 wait_phase() {
@@ -345,6 +355,7 @@ PY
 then
   say "Backup ${backup_name} has no Completed PodVolumeBackup for the takserver data volume" >&2
   k get podvolumebackups.velero.io -n velero >&2 || true
+  velero_details backup.velero.io "${backup_name}"
   exit 1
 else
   say "Backup ${backup_name} holds the Postgres volume"

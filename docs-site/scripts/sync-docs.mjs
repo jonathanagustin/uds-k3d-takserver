@@ -316,10 +316,14 @@ try {
 }
 for (const page of all) await writePage(page, byPath, videos);
 await writeFile(path.join(outRoot, 'adr/index.md'), adrIndex(adrs));
+// Starlight's own /404 route reads this entry with getEntry(). draft keeps
+// it out of the [...slug] pages in a production build, so the two routes do
+// not both try to write /404.
 await writeFile(
   path.join(outRoot, '404.md'),
   `---
 title: "Page not found"
+draft: true
 description: "That page is not in these guides."
 editUrl: false
 sidebar:

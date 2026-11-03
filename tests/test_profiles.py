@@ -84,15 +84,27 @@ class ProfileTests(unittest.TestCase):
         ignite = quantity(load("values/profiles/small.yaml")["ignite"]["resources"]["requests"]["memory"])
         self.assertGreaterEqual(ignite, 488 * UNITS["Mi"])
 
+    def test_plugins_memory_is_set_at_admission(self):
+        # The chart drops a plugins memory value. The takserver-workload
+        # capability writes the request and limit before the pod is stored.
+        source = (ROOT / "pepr/capabilities/workload.ts").read_text(encoding="utf-8")
+        self.assertIn('requests.memory = "320Mi"', source)
+        self.assertIn('limits.memory = "512Mi"', source)
+
     def test_documented_limit_sums(self):
-        # Plugin patch on the package is 384Mi. NATS limits are 128Mi + 32Mi.
-        small_tak = 1280 + 1536 + 1536 + 512 + 1536 + 384
+        # Admission sets the plugins limit to 512Mi. NATS limits are 128Mi + 32Mi.
+        # docs/profiles.md and docs/configuration.md quote these sums.
+        plugins = 512
+        small_tak = 1280 + 1536 + 1536 + 512 + 1536 + plugins
         small_cloud = 768 + 512 + 128 + 512
         nats = 128 + 32
-        self.assertEqual(small_tak + small_cloud + nats, 8864)
-        prod_tak = 2048 + 2048 + 1536 + 512 + 1536 + 384
+        self.assertEqual(small_tak + small_cloud + nats, 8992)
+        prod_tak = 2048 + 2048 + 1536 + 512 + 1536 + plugins
         prod_cloud = 1024 + 512 + 128 + 1024
-        self.assertEqual(prod_tak + prod_cloud + nats, 10912)
+        self.assertEqual(prod_tak + prod_cloud + nats, 11040)
+        for doc in ("docs/profiles.md", "docs/configuration.md"):
+            self.assertIn("8992Mi", (ROOT / doc).read_text(encoding="utf-8"), doc)
+        self.assertIn("11040Mi", (ROOT / "docs/profiles.md").read_text(encoding="utf-8"))
 
     def test_harness_memory_matches_the_overlay(self):
         small = load("bench/configs/small.yaml")

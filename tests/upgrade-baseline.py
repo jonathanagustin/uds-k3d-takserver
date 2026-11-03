@@ -40,8 +40,12 @@ def releases(repository):
         page += 1
 
 
-def select_release(items, head=None):
-    """Pick the newest published release, skipping one tagged on the commit under test."""
+def select_release(items, head=None, pin=None):
+    """Pick the newest published release, skipping one tagged on the commit under test.
+
+    With pin, use exactly that published release. The pinned PostgreSQL 15
+    upgrade job sets UPGRADE_BASELINE_TAG=v0.6.0.
+    """
     candidates = []
     for release in items:
         tag = release.get("tag_name", "")
@@ -57,11 +61,16 @@ def select_release(items, head=None):
             raise RuntimeError("Stable Git tags exist but no published Release Please release is available")
         return None
     candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+    if pin:
+        pinned = [candidate for candidate in candidates if candidate[1] == pin]
+        if not pinned:
+            raise RuntimeError(f"Pinned baseline {pin} is not a published release")
+        candidates = pinned
     _, tag, match = candidates[0]
     ref = f"refs/tags/{tag}"
     # Never fall back to an older release if the latest baseline is invalid.
     commit = git("rev-parse", "--verify", f"{ref}^{{commit}}")
-    if head and commit == head:
+    if head and commit == head and not pin:
         # The release commit itself: its package may not be published yet, and
         # upgrading a release to itself proves nothing. Use the one before it.
         if len(candidates) == 1:
@@ -94,7 +103,10 @@ def main():
         raise RuntimeError("Invalid repository name")
     subprocess.run(["git", "fetch", "origin", "main", "--tags"], check=True)
     head = os.environ.get("GITHUB_SHA") or git("rev-parse", "HEAD")
-    baseline = select_release(releases(repository), head=head)
+    pin = os.environ.get("UPGRADE_BASELINE_TAG") or None
+    if pin and not VERSION.fullmatch(pin):
+        raise RuntimeError(f"UPGRADE_BASELINE_TAG {pin} is not a release tag")
+    baseline = select_release(releases(repository), head=head, pin=pin)
     args.output.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:

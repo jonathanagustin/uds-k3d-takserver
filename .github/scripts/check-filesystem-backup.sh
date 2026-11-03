@@ -84,4 +84,19 @@ if ! grep -q 'FILESYSTEM_BACKUP: "true"' "${config}"; then
   fail "${config} does not turn FILESYSTEM_BACKUP on"
 fi
 
+# The CloudTAK PostGIS class is unset unless postgis.storageClass is set.
+if grep -q 'storageClassName' <<< "${cloud_off}"; then
+  fail "default CloudTAK render sets a StorageClass"
+fi
+cloud_class="$(helm template cloudtak charts/cloudtak --namespace cloudtak --set-string postgis.storageClass=local-path-local)"
+if ! grep -q 'storageClassName: "local-path-local"' <<< "${cloud_class}"; then
+  fail "CloudTAK render with postgis.storageClass is missing storageClassName"
+fi
+if ! grep -q -- '- values/cloudtak-storage.yaml.tpl' zarf.yaml; then
+  fail "zarf.yaml does not pass values/cloudtak-storage.yaml.tpl to uds-cloudtak"
+fi
+if ! grep -q 'CLOUDTAK_STORAGE_CLASS: local-path-local' "${config}"; then
+  fail "${config} does not put the CloudTAK volume on local-path-local"
+fi
+
 echo "filesystem-backup: default render is empty and the enabled render has the agent"

@@ -28,6 +28,11 @@ postgis:
   # PostgreSQL 15 data directory (adr/0018-upgrade-postgres-in-place.md).
   image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
   storage: 2Gi
+  # StorageClass for the data volume. Empty leaves storageClassName unset, so
+  # the cluster default class is used, as before. The package sets it from
+  # CLOUDTAK_STORAGE_CLASS. A StatefulSet volume claim template cannot change
+  # later, so set it only on a new install.
+  storageClass: ""
   database: cloudtak
   username: cloudtak
 

@@ -8,11 +8,12 @@
 # One node. Requests sit just above the steady working set from tests/usage.sh
 # at the end of install on run 40174810574 (kubelet Summary API, higher arch):
 # api 66m / 911Mi, messaging 26m / 888Mi, config 11m / 750Mi, Ignite 48m / 488Mi,
-# Postgres 10m / 59Mi. Heaps stay -Xmx512m. No benchmark load run has finished,
-# so this is not a throughput or latency point.
+# Postgres 10m / 59Mi. Heaps stay -Xmx512m. The nightly benchmark runs only 10
+# clients, so this is not a throughput or latency point.
 #
-# The plugins chart value is CPU only. The post-helm patch sets plugin memory
-# and ignores a memory value here. NATS is already sized in common-values.yaml.
+# The plugins chart value is CPU only. The takserver-workload admission
+# capability sets plugin memory to 320Mi / 512Mi and ignores a memory value
+# here. NATS is already sized in common-values.yaml.
 #
 # Replicas stay 1. More than one messaging or API pod overwrites CoreConfig
 # with the cached copy: https://github.com/jonathanagustin/uds-k3d-takserver/issues/3

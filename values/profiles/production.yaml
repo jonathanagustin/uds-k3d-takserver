@@ -13,8 +13,8 @@
 # That example is not this profile.
 #
 # Postgres stays at a 512Mi limit so shared_buffers cannot grow past the
-# cgroup. The plugins chart value is CPU only; the post-helm patch sets
-# plugin memory. NATS stays on the common-values sizes.
+# cgroup. The plugins chart value is CPU only; the takserver-workload
+# admission capability sets plugin memory. NATS stays on the common-values sizes.
 takserver:
   config:
     replicas: 1

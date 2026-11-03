@@ -17,6 +17,8 @@ on:
       - "**.svg"
       - "docs/**"
       - "adr/**"
+      - "docs-site/**"
+      - ".github/workflows/docs.yaml"
       - ".gitignore"
       - "LICENSE"
       - "renovate.json"
@@ -36,6 +38,8 @@ on:
       - "**.svg"
       - "docs/**"
       - "adr/**"
+      - "docs-site/**"
+      - ".github/workflows/docs.yaml"
       - ".gitignore"
       - "LICENSE"
       - "renovate.json"
@@ -550,9 +554,34 @@ jobs:
       TEST_FLAVOR: upstream
     steps: *validate-steps
 
+  # The newest release is already on PostgreSQL 18, so validate-upgrade no
+  # longer runs the in-place upgrade from 15. This job pins release 0.6.0,
+  # the last one on PostgreSQL 15 / PostGIS 3.4. It runs on pushes to main,
+  # and on a pull request that has the upgrade-pg15 label when a commit is
+  # pushed, so it adds no time to other pull requests.
+  validate-upgrade-pg15:
+    needs: [images, cloudtak-index, postgis-index]
+    if: ${{ !cancelled() && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')) }}
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 75
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: read
+      id-token: write
+    env:
+      TEST_TYPE: upgrade
+      UPGRADE_BASELINE_TAG: v0.6.0
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
+      DEV_PACKAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+      TEST_FLAVOR: upstream
+    steps: *validate-steps
+
   verify-test:
     runs-on: ubuntu-24.04
-    needs: [validate-install, validate-upgrade]
+    needs: [validate-install, validate-upgrade, validate-upgrade-pg15]
     if: always()
     permissions:
       contents: read
@@ -569,6 +598,14 @@ jobs:
 
           if [ "${{ needs.validate-upgrade.result }}" != "success" ]; then
             echo "Upgrade failed."
+            exit 1
+          fi
+
+          # Skipped unless this is a push to main or the PR has upgrade-pg15.
+          pg15="${{ needs.validate-upgrade-pg15.result }}"
+          echo "upgrade from PostgreSQL 15 result: ${pg15}"
+          if [ "${pg15}" != "success" ] && [ "${pg15}" != "skipped" ]; then
+            echo "Upgrade from PostgreSQL 15 failed."
             exit 1
           fi
 

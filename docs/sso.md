@@ -14,7 +14,7 @@ The Keycloak client:
 | Full scope | false |
 | Default scopes | `openid`, `profile`, `email` |
 | Refresh tokens | `use.refresh.tokens=true` |
-| Login gate | `groups.anyOf` `/UDS Core/Admin` |
+| Login gate | `groups.anyOf` `/UDS Core/Admin`. CloudTAK also allows `/CloudTAK/Users`. See [CloudTAK](cloudtak.md#who-can-sign-in) |
 | Secret | `takserver-sso`, key `TAK_OIDC_CLIENT_SECRET` |
 | Redirect | `https://takserver.<domain>/login/redirect` |
 | Issuer document | `https://sso.<domain>/realms/uds/.well-known/openid-configuration` |
@@ -104,7 +104,7 @@ Both clients set `client.session.idle.timeout` to `600` and `client.session.max.
 
 `/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it.
 
-This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/sso-clients.py` reads the client attributes back from the admin API.
+This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/ensure-map-user.py` creates `mapuser` in `/CloudTAK/Users` and `/TAK/Operators_READ`. The CloudTAK client lets it in, and the TAK client refuses it. `tests/sso-clients.py` reads the client attributes back from the admin API.
 
 ## What TAK does not check
 

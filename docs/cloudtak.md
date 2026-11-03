@@ -46,11 +46,40 @@ Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strin
 People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page as the TAK web UI. CloudTAK's own password and passkey sign-in is off.
 
 1. `https://map.<domain>/` loads the CloudTAK app. With no session, the app routes to `/login`. nginx adds `/api/login/oidc/auto.js` to the app's HTML pages. With no stored ID token, that script sends `/login` on to `/api/login/oidc`. After a sign-in it sends `/login` to `/api/login/oidc/logout` with the ID token as `id_token_hint`.
-2. `/api/login/oidc` starts an authorization code flow with PKCE (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin`, the same gate as the TAK client.
+2. `/api/login/oidc` starts an authorization code flow with PKCE (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin` and `/CloudTAK/Users`. See [Who can sign in](#who-can-sign-in).
 3. Keycloak returns to `https://map.<domain>/api/login/oidc/callback`. The `sso` container exchanges the code at Keycloak's token endpoint, in the cluster. `sso.<domain>` resolves to the tenant gateway through the in-cluster CoreDNS rewrite (see [Networking](networking.md)), and the Keycloak certificate is checked against the system trust store.
 4. It enrolls a TAK client certificate for the user on TAK's 8447. It sends the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)). The certificate is the Keycloak user's own TAK identity, with that user's TAK groups.
 5. It creates or updates the CloudTAK profile for that username with the certificate, and opens a CloudTAK login session with CloudTAK's own session code. Members of `sso.adminGroup` (default `/UDS Core/Admin`) become CloudTAK system administrators.
 6. The browser gets the session (login token, refresh token, session id) in the URL fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
+
+### Who can sign in
+
+Keycloak lets a user into CloudTAK only if they are a direct member of a group in `sso.groups` (`charts/cloudtak/values.yaml`). The UDS operator writes that list to the client's `groups.anyOf`. The default list is:
+
+| Group | Who | CloudTAK role |
+| --- | --- | --- |
+| `/UDS Core/Admin` | UDS Core platform admins. UDS Core creates this group | System administrator, because it is also `sso.adminGroup` |
+| `/CloudTAK/Users` | People who use the map but are not admins | Regular user |
+
+The TAK Server web UI at `takserver.<domain>` still allows only `/UDS Core/Admin`. A member of `/CloudTAK/Users` alone is refused there by Keycloak.
+
+UDS Core does not create `/CloudTAK/Users`. Create it once in the Keycloak admin console (realm `uds`, **Groups**) and add users to it. Keycloak skips a listed group that does not exist, so admins can still sign in before you create it.
+
+A user in `/CloudTAK/Users` also needs a TAK group to see TAK data. Add them to a group under `/TAK/`, for example `/TAK/Operators_READ` (see [Single sign-on](sso.md)). `/CloudTAK/Users` is outside `/TAK/`, so TAK does not treat it as a TAK group.
+
+CloudTAK makes a user a system administrator only when the `groups` claim holds `sso.adminGroup`, and it checks that at every sign-in. TAK grants `ROLE_ADMIN` only for `/UDS Core/Admin`. So a `/CloudTAK/Users` member gets a regular CloudTAK account and a regular TAK client certificate.
+
+To change the list, set bundle variable `CLOUDTAK_SSO_GROUPS`. It replaces the whole list, so include `/UDS Core/Admin` if admins should keep access:
+
+```yaml title="uds-config.yaml"
+variables:
+  takserver:
+    CLOUDTAK_SSO_GROUPS:
+      - /UDS Core/Admin
+      - /Field Teams/Map
+```
+
+`bundle/uds-bundle.yaml` and `bundle/full/uds-bundle.yaml` show the override (`cloudtak` component, `uds-cloudtak` chart, path `sso.groups`). A bundle of your own needs the same `overrides` entry. Group paths are case-sensitive.
 
 ### What CloudTAK does and does not provide
 
@@ -77,7 +106,7 @@ CloudTAK cannot redirect to Keycloak on its own. The auto-redirect is the `auto.
 - The ID token is taken straight from Keycloak's token endpoint over a verified TLS connection, so `sso.mjs` checks its issuer, audience, nonce, and expiry rather than its signature (OpenID Connect Core 3.1.3.7). TAK checks the access token's signature against Keycloak's keys when it enrolls the certificate.
 - CloudTAK's own logout clears the CloudTAK session and opens `/login`. `auto.js` sends that to `/api/login/oidc/logout` with the ID token from sign-in as `id_token_hint`. The client sets `logout.confirmation.enabled` to `false`. UDS Core otherwise leaves that on, and Keycloak 26 then shows "You are logged out" instead of following `post_logout_redirect_uri`. With it off, Keycloak ends the session and redirects back to the sign-in route, so the next visit stops on the Keycloak login page. Without the hint Keycloak stays on its confirmation page and does not continue.
 - Before that redirect, `auto.js` drops the CloudTAK login token, refresh token, and session id, so the next load cannot refresh the old session. A CloudTAK session that never opens `/login` still lasts until its refresh token expires. Password sign-in and passkey sign-in stay off.
-- A CloudTAK session lasts as long as CloudTAK's refresh token (`login::refresh::expiry`, 720 hours by default), not the Keycloak session. Removing a user from `/UDS Core/Admin` in Keycloak blocks new sign-ins, not open CloudTAK sessions. Disable the profile in CloudTAK's admin page or revoke the certificate in TAK to cut one off.
+- A CloudTAK session lasts as long as CloudTAK's refresh token (`login::refresh::expiry`, 720 hours by default), not the Keycloak session. Removing a user from the sign-in groups in Keycloak blocks new sign-ins, not open CloudTAK sessions. Disable the profile in CloudTAK's admin page or revoke the certificate in TAK to cut one off.
 - The TAK certificate is enrolled at each sign-in. CloudTAK keeps it for the session, the way it keeps one from a password sign-in.
 
 ## Admin account
@@ -174,6 +203,8 @@ CloudTAK's own tile route for this record (`/api/basemap/:id/tiles/:z/:x/:y`) re
 - the server basemap with the `/uds-basemap/tiles/` URL exists, the map loads its tiles (200, `image/*`), the attribution box names OpenStreetMap, and a tile request without the session token gets 401
 - zooming in with the mouse wheel loads tiles at a higher zoom
 - `/login?sso=off` shows "Sign in with UDS SSO" and no password or passkey form
+
+`tests/cloudtak-user.spec.ts` signs in as `mapuser`, which `tests/ensure-map-user.py` puts in `/CloudTAK/Users` and `/TAK/Operators_READ` only. It expects the map, `access: user` from `GET /api/login`, the `Operators` group from `GET /api/marti/group`, and a refusal from the admin-only `GET /api/server/injector`. It then expects Keycloak to refuse the same user at the TAK Server web UI. `tests/sso-clients.py` checks that the `uds-takserver` client allows only `/UDS Core/Admin`, and that `uds-cloudtak` allows `/UDS Core/Admin` and `/CloudTAK/Users`.
 
 It saves `cloudtak-01-keycloak.png`, `cloudtak-02-map.png`, `cloudtak-04-basemap.png` (after the zoom), and `cloudtak-03-login-page.png` under `tests/.playwright/screenshots`, which CI uploads with the Playwright report. `test:flows` also checks the flows inside the `cloudtak` namespace.
 

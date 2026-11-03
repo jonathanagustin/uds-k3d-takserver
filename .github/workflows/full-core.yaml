@@ -163,6 +163,22 @@ jobs:
         # limit so the log and dump steps below still run.
         timeout-minutes: 55
 
+      # test:full-core writes out/falco-events.txt only when it reaches
+      # tests/falco-events.sh, so an earlier failure left the upload below
+      # with no file. Collect the events here instead. The script skips when
+      # Falco or Loki never came up, and it redacts passwords itself.
+      - name: Collect Falco events when the test did not
+        if: failure()
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s out/falco-events.txt ]]; then
+            echo "out/falco-events.txt already exists"
+            exit 0
+          fi
+          FALCO_COLLECT_ONLY=1 ./tests/falco-events.sh
+
       - name: Disk use after the test
         if: always()
         timeout-minutes: 2

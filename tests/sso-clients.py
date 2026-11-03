@@ -11,6 +11,7 @@ and Keycloak rejects the client.
 """
 
 import importlib.util
+import json
 import os
 import sys
 import urllib.parse
@@ -42,6 +43,14 @@ EXPECTED = {
     },
 }
 
+# The UDS operator writes Package sso groups.anyOf to attribute
+# uds.core.groups. The TAK web UI stays admin-only. CloudTAK also lets the
+# non-admin /CloudTAK/Users group in (charts/cloudtak/values.yaml sso.groups).
+GROUPS = {
+    "uds-takserver": ["/UDS Core/Admin"],
+    "uds-cloudtak": ["/UDS Core/Admin", "/CloudTAK/Users"],
+}
+
 
 def client_by_id(access, client_id):
     query = urllib.parse.urlencode({"clientId": client_id})
@@ -69,6 +78,16 @@ def main():
                 failed = True
             else:
                 print(f"{client_id} {key}={actual}")
+        raw = got.get("uds.core.groups", "")
+        try:
+            any_of = sorted(json.loads(raw).get("anyOf", [])) if raw else []
+        except ValueError:
+            any_of = [f"unparsable {raw!r}"]
+        if any_of != sorted(GROUPS[client_id]):
+            print(f"{client_id} uds.core.groups anyOf: got {any_of}, want {sorted(GROUPS[client_id])}", file=sys.stderr)
+            failed = True
+        else:
+            print(f"{client_id} uds.core.groups anyOf={any_of}")
     if failed:
         raise SystemExit(1)
     print("Keycloak client attributes match the chart")

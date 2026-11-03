@@ -1,7 +1,7 @@
 {
   "name": "uds-k3d-takserver-tests",
   "private": true,
-  "packageManager": "pnpm@10.34.9",
+  "packageManager": "pnpm@12.16.1",
   "scripts": {
     "test": "playwright test"
   },

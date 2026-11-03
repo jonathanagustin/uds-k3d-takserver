@@ -7,6 +7,9 @@
 # Unexplained events are recorded and do not fail this script. The labeled
 # write does fail the script when Loki never shows falco-probe-test.
 # Skips when Falco or Loki is absent.
+# FALCO_COLLECT_ONLY=1 writes the event file and stops before the labeled
+# write. The Full Core workflow uses it when the test failed before this
+# script ran.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -155,6 +158,11 @@ PY
 # Stock Falco rules print the full command line, and TAK's cert tools take
 # keystore passwords as arguments. Mask them before this file is uploaded.
 python3 .github/scripts/redact-logs.py "${log}" >&2
+
+if [[ "${FALCO_COLLECT_ONLY:-}" == "1" ]]; then
+  say "falco: collect only; the labeled write runs in test:full-core"
+  exit 0
+fi
 
 say "falco-probe: labeled test write under /opt/tak/certs by touch, not the TAK JVM"
 k exec -n takserver deploy/takserver-api -c takserver-api -- \

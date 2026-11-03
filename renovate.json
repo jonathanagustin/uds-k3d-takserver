@@ -36,8 +36,19 @@
     "enabled": true
   },
   "schedule": [
-    "after 7am and before 9am every weekday"
+    "after 7am and before 9am on monday"
   ],
+  "vulnerabilityAlerts": {
+    "description": "Security updates skip the weekly schedule and the group, and open right away in their own pull request.",
+    "schedule": [
+      "at any time"
+    ],
+    "groupName": null,
+    "dependencyDashboardApproval": false,
+    "addLabels": [
+      "security"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -154,37 +165,35 @@
   ],
   "packageRules": [
     {
-      "groupName": "TAK Server Support Dependencies",
+      "description": "Every minor, patch, digest and pin update lands in one pull request a week, so the heavy CI runs once for the batch. Majors, security updates, and the groups below that need approval or their own test keep their own pull requests.",
+      "groupName": "weekly dependency updates",
       "labels": [
-        "support-deps"
+        "deps"
       ],
-      "commitMessageTopic": "support-deps",
+      "commitMessageTopic": "weekly dependencies",
       "matchPackageNames": [
         "*"
-      ]
-    },
-    {
-      "groupName": "TAK Server Package Dependencies",
-      "labels": [
-        "package-deps"
       ],
-      "commitMessageTopic": "package-deps",
-      "matchDatasources": [
-        "docker",
-        "helm",
-        "git-tags"
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
       ]
     },
     {
-      "description": "upstream/takserver follows the public TAK Server release tags. .gitmodules sets branch to the tag, so Renovate moves the tag and the pinned commit together.",
+      "description": "upstream/takserver follows the public TAK Server release tags. .gitmodules sets branch to the tag, so Renovate moves the tag and the pinned commit together. The X.Y-RELEASE-N strings the regex manager finds (depName https://github.com/TAK-Product-Center/Server) join the same pull request.",
       "matchManagers": [
-        "git-submodules"
+        "git-submodules",
+        "custom.regex"
       ],
       "matchDepNames": [
-        "upstream/takserver"
+        "upstream/takserver",
+        "https://github.com/TAK-Product-Center/Server"
       ],
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-RELEASE-(?<patch>\\d+)$",
-      "groupName": "TAK Server Package Dependencies",
+      "groupName": "TAK Server release",
       "labels": [
         "package-deps"
       ],
@@ -313,6 +322,18 @@
       "matchFileNames": [
         "pepr/package.json"
       ]
+    },
+    {
+      "description": "The ATAK viewer's build stages stay on Node 22: ws-scrcpy's node-pty 0.10.1 does not compile on Node 24 or 26. The runtime NODE_IMAGE in the same file moves normally.",
+      "matchFileNames": [
+        "atak/viewer/Dockerfile"
+      ],
+      "matchPackageNames": [
+        "node",
+        "docker.io/library/node"
+      ],
+      "matchCurrentValue": "/^22\\./",
+      "allowedVersions": "<23"
     }
   ],
   "git-submodules": {

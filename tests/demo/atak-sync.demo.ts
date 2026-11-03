@@ -196,8 +196,9 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     mark("zoom", "0.5,0.5,1.5");
     await page.waitForTimeout(2_500);
     await still(page, "atak-test-marker");
-    if (adb) atakAdb("shot", "demo-test-marker");
-    await page.waitForTimeout(4_500);
+    const shot = adb ? atakAdbLater("shot", "demo-test-marker") : Promise.resolve(false);
+    await page.waitForTimeout(3_500);
+    await shot;
     await map.bringToFront();
     await showCursor(map);
   }
@@ -240,7 +241,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     caption("On the phone: the chat arrives over the device's stream");
     mark("zoom", "0.5,0.5,1.4");
     await page.waitForTimeout(5_000);
-    if (adb) atakAdb("shot", "demo-chat");
+    if (adb) await atakAdbLater("shot", "demo-chat");
   }
   if (adb) atakAdb("stop");
 

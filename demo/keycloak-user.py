@@ -5,8 +5,11 @@
 """Create or update the Keycloak user the demo signs in as.
 
 Reads DEMO_KEYCLOAK_USER (default takuser) and DEMO_KEYCLOAK_PASSWORD. The
-user gets the same groups as the test user: /UDS Core/Admin (ROLE_ADMIN in
-TAK) and /TAK/Operators_READ (TAK group Operators). DEMO_KEYCLOAK_GROUPS, a
+user gets /UDS Core/Admin (ROLE_ADMIN in TAK) and both directions of TAK
+group Operators: /TAK/Operators_READ (TAK sends the group's traffic to the
+user) and /TAK/Operators_WRITE (the user's CloudTAK can send to the group).
+The ATAK test device is in Operators, so without _WRITE a marker or chat
+shared from CloudTAK never reaches it. DEMO_KEYCLOAK_GROUPS, a
 comma-separated list of group paths, replaces that list; a group that does
 not exist yet is created. The non-admin CloudTAK chapter uses
 "/CloudTAK/Users,/TAK/Operators_READ". The password is set on every run, so
@@ -30,7 +33,7 @@ USER = os.environ.get("DEMO_KEYCLOAK_USER", "takuser")
 PASSWORD = os.environ.get("DEMO_KEYCLOAK_PASSWORD", "")
 GROUPS = [
     g.strip().strip("/")
-    for g in os.environ.get("DEMO_KEYCLOAK_GROUPS", "/UDS Core/Admin,/TAK/Operators_READ").split(",")
+    for g in os.environ.get("DEMO_KEYCLOAK_GROUPS", "/UDS Core/Admin,/TAK/Operators_READ,/TAK/Operators_WRITE").split(",")
     if g.strip()
 ]
 

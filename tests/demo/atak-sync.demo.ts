@@ -205,6 +205,9 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   // CloudTAK -> ATAK: a TEST chat message to the device.
   const chat = await scene(map, "chat", async () => {
+    // Caption first: the phone's caption must not stay up while CloudTAK
+    // opens the chat and the message is typed.
+    caption("A TEST chat message from CloudTAK to the device");
     // Close the TEST MARKER's pane with the circled X in its own header. The
     // top bar has a "Close Menu" button with the same title, and the first
     // match can be that one, which does not close the pane: the pane stayed
@@ -230,15 +233,14 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await clickLikeAPerson(map, input);
     await typeLikeAPerson(map, "TEST MESSAGE from CloudTAK");
     await clickLikeAPerson(map, map.getByTitle("Send Message", { exact: true }).first());
-    caption("A TEST chat message from CloudTAK to the device");
-    await map.waitForTimeout(3_000);
+    await map.waitForTimeout(2_000);
   });
 
   if (chat) {
     await page.bringToFront();
     await showCursor(page);
     await page.waitForTimeout(2_000);
-    caption("On the phone: the chat arrives over the device's stream");
+    caption("On the phone: the chat arrives over the device's stream (unread badge, top bar)");
     mark("zoom", "0.5,0.5,1.4");
     await page.waitForTimeout(5_000);
     if (adb) await atakAdbLater("shot", "demo-chat");

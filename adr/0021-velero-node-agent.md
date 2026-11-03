@@ -30,10 +30,12 @@ The logical dump stays. The full-core deploy turns file-system backup on as well
 
 ## Amendment: hostPath volumes
 
-Velero skips hostPath PersistentVolumes in file-system backup, and k3d `local-path` makes hostPath PVs by default. The TAK Postgres StorageClass is now `POSTGRES_STORAGE_CLASS`, empty by default so existing installs and their volume claim templates do not change. Full-core CI creates class `local-path-local` (`defaultVolumeType: local`) and installs Postgres on it, so the PodVolumeBackup check proves the agent copies the volume. File-system backup needs a CSI class or that variant on a new install. The gzipped logical dumps stay the backup that works everywhere.
+Velero skips hostPath PersistentVolumes in file-system backup, and k3d `local-path` makes hostPath PersistentVolumes by default. The TAK Postgres StorageClass is now `POSTGRES_STORAGE_CLASS`, empty by default so existing installs and their volume claim templates do not change. Full-core CI creates class `local-path-local` (`defaultVolumeType: local`) and installs Postgres on it, so the PodVolumeBackup check proves the agent copies the volume. File-system backup needs a Container Storage Interface (CSI) class or that variant on a new install. The gzipped logical dumps stay the backup that works everywhere.
 
 The CloudTAK chart has no StorageClass setting, so on k3d the CloudTAK PostGIS volume stays hostPath and Velero skips it. The `cloudtak-db-dump` Secret is its backup.
 
 ## Amendment: data mover pods
 
-Velero 1.18 copies each volume in a separate data-mover pod that the node-agent creates for every PodVolumeBackup and PodVolumeRestore. `node-agent-config` sets `privilegedFsBackup: true`, because root without capabilities cannot open the 0700 Postgres data directory. The UDS Core 1.16.0 Exemption CRD rejects `matcher.podLabels`, and those pods have names that change every backup, so a second exemption entry matches every pod in the `velero` namespace for five policies. It renders only when `FILESYSTEM_BACKUP=true`. See [Policy exemptions](../docs/justifications.md#velero-node-agent).
+Velero 1.18 copies each volume in a separate data-mover pod. The node-agent creates one for every PodVolumeBackup and PodVolumeRestore. `node-agent-config` sets `privilegedFsBackup: true`, because root without capabilities cannot open the Postgres data directory (mode 0700).
+
+Those pod names change every backup. The Exemption custom resource definition (CRD) in UDS Core 1.16.0 rejects `matcher.podLabels`. So a second exemption entry matches every pod in the `velero` namespace, for five policies. It renders only when `FILESYSTEM_BACKUP=true`. See [Policy exemptions](../docs/justifications.md#velero-node-agent).

@@ -1,6 +1,6 @@
 # Values profiles
 
-This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds, so neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
+This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds. Neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
 
 The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
 
@@ -19,7 +19,7 @@ The footprint below is the steady working set from `tests/usage.sh` at the end o
 | NATS | 2m | 8Mi |
 | NATS reloader | 0m | 5Mi |
 
-Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup was OOM-killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
+Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup ran out of memory and was killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
 
 ## Default
 
@@ -31,7 +31,7 @@ NATS requests and limits stay in `values/common-values.yaml` (10m and 32Mi, limi
 
 `values/profiles/small.yaml` and `values/profiles/small-cloudtak.yaml`. One node, requests just above the table, limits with a little room. Postgres memory limit is 512Mi. API, messaging, and Ignite memory limits stay 1536Mi.
 
-The plugins Deployment does not read a memory value from the chart. The `takserver-workload` admission hook sets it to request 320Mi and limit 512Mi on every install, and the harness configs set the same values. The values file cannot change it.
+The plugins Deployment does not read a memory value from the chart. The `takserver-workload` admission hook sets it on every install: request 320Mi and limit 512Mi. The harness configs set the same values. The values file cannot change it.
 
 TAK, CloudTAK, and NATS memory limits, counting the 512Mi plugins limit, sum to about 8992Mi of the ~15984Mi runner.
 

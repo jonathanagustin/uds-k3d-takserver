@@ -1,6 +1,6 @@
 # Benchmarks
 
-The Benchmark workflow measures how much CPU and memory TAK Server uses under a client load, and how long it takes to become ready, for several resource configs. The nightly run on `main` has completed on both architectures since November 2, 2026, for example [run 41613491855](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/41613491855). Those runs use 10 clients for 60 seconds, once per config, so treat the front as a first look and not a sizing decision. The results are in the run's `bench-front` artifact and its job summary. This page describes the harness.
+The Benchmark workflow measures how much CPU and memory TAK Server uses under a client load, and how long it takes to become ready, for several resource configs. The nightly run on `main` has completed on both architectures since November 2, 2026, for example [run 41613491855](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/41613491855). Those runs use 10 clients for 60 seconds, once per config. Treat the front as a first look, not a sizing decision. The results are in the run's `bench-front` artifact and its job summary. This page describes the harness.
 
 ## When it runs
 
@@ -35,7 +35,7 @@ Each file in [`bench/configs/`](../bench/configs/) changes memory settings, JVM 
 | `postgis-wal` | A smaller cache and fewer checkpoints than `postgis-buffers`: `shared_buffers` 64MB, `effective_cache_size` 256MB, `max_wal_size` 128MB, `checkpoint_timeout` 15min |
 | `small` | Memory requests and limits from the `small` [values profile](profiles.md) |
 | `production` | Memory requests and limits from the `production` [values profile](profiles.md) |
-| `gc-serial` | Serial GC on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
+| `gc-serial` | Serial garbage collector (GC) on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
 
 The configs set memory, JVM flags, and Postgres settings only. CPU stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set.
 
@@ -45,4 +45,4 @@ The configs set memory, JVM flags, and Postgres settings only. CPU stays at what
 
 The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against ready time. A config is on the Pareto front for a view when no other config on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each plot, but dominance is decided inside one architecture. See [ADR 19](../adr/0019-compare-arches-on-one-scale.md).
 
-A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config, so do not treat any config, or either [values profile](profiles.md), as a sizing result yet.
+A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config. Do not treat any config, or either [values profile](profiles.md), as a sizing result yet.

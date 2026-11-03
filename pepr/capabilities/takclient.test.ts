@@ -705,8 +705,9 @@ test("crds/takclient.yaml is what pepr crd generate writes from api/", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     readFileSync(join(out, "takclient.yaml"), "utf8"),
-    readFileSync(join(root, "crds", "takclient.yaml"), "utf8"),
-    "run `npx pepr crd generate` in pepr/ and commit crds/takclient.yaml",
+    // The committed file starts with the license header and a note, then a blank line.
+    readFileSync(join(root, "crds", "takclient.yaml"), "utf8").replace(/^(#.*\n)+\n/, ""),
+    "run `npx pepr crd generate` in pepr/, keep the header, and commit crds/takclient.yaml",
   );
 });
 

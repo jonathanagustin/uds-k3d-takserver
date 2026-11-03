@@ -102,7 +102,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 
 ## The takserver-oidc module
 
-The upstream chart has no values for init containers, probes, or the extra objects TAK needs on UDS. The Pepr module in `pepr/` adds them. Zarf deploys it into `pepr-system` before the upstream chart, so every TAK object is shaped when it is first stored. It has five capabilities, registered in `pepr/pepr.ts`:
+The upstream chart has no values for init containers, probes, or the extra objects TAK needs on UDS. The Pepr module in `pepr/` adds them. Zarf deploys it into `pepr-system` before the upstream chart, so every TAK object is shaped when it is first stored. It has five capabilities, registered in `pepr/pepr.ts`. The name `takserver-oidc` is from when rendering the OIDC secret was its only job. It stays, because the name and the uuid in `pepr/package.json` name the webhooks and the watcher in a running cluster, and PodMonitor `takserver-oidc` selects pods by the uuid. A rename would replace them on upgrade. release-please sets the module version to the package release.
 
 | Capability | What it does |
 | --- | --- |

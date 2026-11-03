@@ -47,6 +47,8 @@ const EXPECTED: Rule[] = [
   { apiGroups: ["apps"], resources: ["statefulsets"], verbs: ["watch"] },
   { apiGroups: ["networking.istio.io"], resources: ["destinationrules"], verbs: ["watch"] },
   { apiGroups: ["pepr.dev"], resources: ["peprstores"], verbs: ["create", "get", "patch", "watch"] },
+  // Pepr's finalizer patch. finalize-chart moves it into the takclients Role.
+  { apiGroups: ["tak.jonathanagustin.github.io"], resources: ["takclients"], verbs: ["patch"] },
 ];
 
 function generatedRules(): Rule[] {
@@ -58,10 +60,11 @@ import { CoreDns } from "./capabilities/coredns-rewrite-capability.ts";
 import { GatewayCa } from "./capabilities/gateway-ca-capability.ts";
 import { OidcRender } from "./capabilities/oidc-render-capability.ts";
 import { Workload } from "./capabilities/workload-capability.ts";
+import { TakClients } from "./capabilities/takclient-capability.ts";
 
 const role = clusterRole(
   "takserver-oidc",
-  [OidcRender, CoreDns, GatewayCa, CloudtakAdmin, Workload],
+  [OidcRender, CoreDns, GatewayCa, CloudtakAdmin, Workload, TakClients],
   cfg.pepr.rbacMode,
   cfg.pepr.rbac,
 );
@@ -132,6 +135,9 @@ test("the chart moves watched objects into namespaced Roles", () => {
     "istio-admin-gateway",
     "kube-system",
     "cloudtak",
+    "takclients",
+    "takserver-ca-key",
+    "takserver-crl",
   ]) {
     assert.equal(text.includes(name), true, name);
   }
@@ -171,8 +177,22 @@ test("the chart moves watched objects into namespaced Roles", () => {
   for (const rule of clusterWatch.rules ?? []) {
     assert.deepEqual(rule.verbs, ["list", "watch"]);
     assert.equal((rule.resources ?? []).includes("pods"), false);
+    // The TakClient watch has no name filter (ADR 22). It is the only one.
+    if ((rule.resources ?? []).join(",") === "takclients") {
+      assert.equal(rule.resourceNames, undefined);
+      continue;
+    }
     assert.ok((rule.resourceNames ?? []).length > 0);
   }
+  const caKey = (takserver.rules ?? []).filter((rule: ManifestRule) => (rule.resourceNames ?? []).includes("takserver-ca-key"));
+  assert.equal(caKey.length, 1);
+  assert.deepEqual(caKey[0].verbs, ["get", "list", "watch"]);
+  const clients = roles.find(role => role.kind === "Role" && role.metadata.namespace === "takclients");
+  assert.ok(clients);
+  assert.deepEqual(
+    (clients.rules ?? []).map((rule: ManifestRule) => `${(rule.resources ?? []).join(",")}:${(rule.verbs ?? []).join(",")}`),
+    ["takclients:get,patch", "takclients/status:get,patch", "secrets:get,create,patch,delete"],
+  );
   const watched = new Map<string, string[]>();
   for (const role of roles) {
     if (role.kind !== "Role") {

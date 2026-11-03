@@ -83,6 +83,9 @@
 			keymanager="SunX509"
 			keystore="JKS" keystoreFile="certs/files/takserver.jks" keystorePass="${TAK_KEYSTORE_PASS}"
 			truststore="JKS" truststoreFile="certs/files/truststore-root.jks" truststorePass="${TAK_KEYSTORE_PASS}">
+			<!-- The TAK CA's CRL from Secret takserver-crl, which the Pepr
+			     module keeps current (ADR 22). TAK reads it at startup. -->
+			<crl _name="tak-ca" crlFile="certs/crl/ca.crl"/>
 		</tls>
 
 	</security>

@@ -32,8 +32,8 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 - `spec.callsign`: the certificate CN and the TAK file user name. It must pass TAK's username rule.
 - `spec.groups`: one or more TAK groups, for example `["Operators"]`.
 - `spec.validityDays`: certificate lifetime, default 30, maximum 365.
-- `status.conditions`: `Ready`, with a reason when it is false. `status` also has the serial number, the SHA-256 fingerprint, `notAfter`, the Secret name, and `observedGeneration`.
-- A `TakClient` is reconciled only in namespace `takserver`. Its Secret is written there. A device in another namespace, such as the ATAK test VM in `atak`, gets a copy made by whoever deploys it. This keeps Secret `create`, which a Role cannot pin to a name, inside the one namespace the module already writes to.
+- `status.conditions`: `Ready`, with a reason when it is false (`InvalidSpec`, `NoDomain`, `WaitingForCa`, `WaitingForAdmin`, `TakUnavailable`) and `Issued` when it is true. The condition has `observedGeneration`. The Pepr 2.0.7 CRD generator writes only `conditions` under `status`, so the serial number, the SHA-256 fingerprint, and `notAfter` are annotations (`tak.jonathanagustin.github.io/serial`, `/fingerprint`, `/not-after`) on the `TakClient` and on its Secret.
+- A `TakClient` is reconciled only in namespace `takclients`, which the module chart creates. Its Secret has the same name, in the same namespace, with `client.pem`, `client.key`, `ca.pem`, `package.zip` (the data package), and `password` (the PKCS#12 password in the package). Only these Secrets live in `takclients`, so the watcher's Secret verbs there need no names. A Role cannot pin Secret `create` to a name, and this keeps that grant away from namespaces with other Secrets. A device in another namespace, such as the ATAK test VM in `atak`, gets a copy made by whoever deploys it.
 
 ### Where signing happens
 
@@ -43,14 +43,16 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 
 ### Who can read the CA key
 
-- Only the watcher. `finalize-chart.mjs` gives the watcher Deployment its own ServiceAccount, and the Role that grants `get` on Secret `takserver-ca-key` (by name) binds only that account. The admission pods keep the shared account and cannot read the key. Today only the cert Job and cluster administrators can read it.
+- The module's ServiceAccount gets `get`, `list`, and `watch` on Secret `takserver/takserver-ca-key`, by name, in the takserver Role that `pepr/scripts/rbac-scope.ts` writes. Before this change, only the cert Job and cluster administrators could read it.
+- The admission pods and the watcher share that ServiceAccount, because the chart `pepr build` writes uses one. The admission pods do not read the key, but they could. A watcher-only ServiceAccount, with the CA key grant bound only to it, is the next step and is not in this change. It needs every Role and binding in `rbac-scope.ts` to name both accounts.
 - Creating a `TakClient` is the same as being given a certificate for any TAK group. The CRD has no `aggregate-to-edit` or `aggregate-to-admin` label, so only cluster administrators can create one until someone grants it on purpose.
 
 ### Registering the client in TAK
 
 - The watcher calls TAK's admin API on `takserver-api:8443` with the admin certificate it already reads: `POST /user-management/api/new-user` with the callsign, the groups, and a random password that nobody keeps (TAK requires one). `X509Authenticator` then maps the certificate to that user by CN.
 - `UserAuthenticationFile.xml` is not on a volume, so a messaging restart loses the user. The watcher already watches `takserver-messaging` for the startup order. When it becomes Available, the watcher registers every `TakClient` again.
-- The takserver Package allows ingress to `takserver-api` on 8443 from the watcher pods in `pepr-system`.
+- The takserver Package allows ingress to `takserver-api` on 8443 from the watcher pods in `pepr-system` (`app: pepr-<uuid>-watcher`), with the module's ServiceAccount as `remoteServiceAccount`. `pepr-system` is ambient, like `takserver`.
+- The TAK API's server certificate is not issued for the Service name, so the watcher checks the chain against the TAK CA and skips the host name check.
 
 ### Delete
 
@@ -58,8 +60,11 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
   1. Deletes the TAK file user, so a new connection gets no groups.
   2. Adds the serial to the CRL and writes it to Secret `takserver/takserver-crl`, signed by the TAK CA, with a `nextUpdate` 730 days out, as TAK's own `config.cfg` sets.
   3. Deletes the client's Secret.
+- Pepr adds its finalizer in the mutating webhook. `finalize-chart.mjs` already narrows that webhook to the TAK pods, so it moves the `takclients` rule to a second webhook entry that matches only namespace `takclients`.
+- If finalize cannot finish (the CA is not readable), it keeps the finalizer and writes an annotation 30 seconds later, which runs it again.
+- A certificate that Reconcile replaces (the Secret was deleted, the callsign changed, or a third of the lifetime is left) is added to the CRL too.
 - The render capability mounts `takserver-crl` into the messaging and API pods, and CoreConfig gets `<crl _name="tak-ca" crlFile="certs/crl/ca.crl"/>` in `<security><tls>`. The Secret has the UDS Core `uds.dev/pod-reload` label, so UDS Core restarts those pods when the CRL changes and TAK starts rejecting the certificate. Between the delete and the restart, the certificate can still connect, with no groups.
-- On first start, the watcher writes an empty CRL if the Secret is missing, so TAK always has a file to load. It writes a new CRL with the same entries when `nextUpdate` is less than 60 days away. Java rejects every client certificate if the CRL has expired.
+- The watcher writes an empty CRL when the Secret is missing, so TAK always has a file to load. The CRL volume is not optional, so a TAK pod waits for it. The watcher checks the CRL when the CA material changes, on each `TakClient` reconcile, and once a day. It writes a new one with the same entries when `nextUpdate` is less than 60 days away, and drops entries for certificates that have expired. Java rejects every client certificate if the CRL has expired. If the CA changes, it writes an empty CRL signed by the new CA.
 - Finalize removes the finalizer only after the CRL Secret is written. If TAK is not reachable, the user deletion is retried on the next messaging Available event. The CRL is what stops the certificate.
 
 ### Tests
@@ -67,12 +72,14 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 - Unit tests in `pepr/capabilities/` keep the 100% line, branch, and function gate. They cover signing against a CA generated in the test, the data package contents, the status conditions, and the finalizer order.
 - A cluster test applies a `TakClient` for callsign `takclient-test`, waits for `Ready`, connects on 8089 with the Secret's certificate, and checks `/Marti/api/clientEndPoints` for the callsign. It then deletes the resource, waits for the API and messaging pods to restart, and checks that the handshake with that certificate fails. It runs on amd64 and arm64.
 - The ATAK e2e job applies a `TakClient` for `atak-device` and copies its data package into the `atak` namespace, in place of the `openssl` and `certmod` steps.
+- `tests/takclient.sh` is task `test:takclient`, the last step of `test:all`.
 
 ## Consequences
 
 - Revocation needs a restart of the API and messaging pods. That drops every connected client for the length of the restart. Deleting many clients at once causes one restart per CRL write, unless the writes are batched. A short `validityDays` is still the main control, as [ADR 14](0014-atak-test-device-in-kubevirt.md) already says.
 - Adding a CRL to `<security><tls>` turns on CRL checks for every certificate the TAK CA signed, including the admin certificate and CloudTAK's. An expired or unreadable CRL would reject all of them. The watcher keeps it current, and `tests/` checks that the CRL loads.
-- The watcher can now read the TAK CA key. A compromise of the watcher pod is a compromise of the CA. Before this change, the cert Job was the only workload with that access.
+- The module can now read the TAK CA key. A compromise of the watcher or admission pods is a compromise of the CA. Before this change, the cert Job was the only workload with that access.
+- Deleting the `takclients` namespace, or uninstalling the module chart, deletes every `TakClient` Secret. If the watcher is not running then, the finalizers hold the delete until it is.
 - The watcher makes HTTPS calls to TAK, which it did not do before. That is a new network rule and a new failure mode, reported in the `Ready` condition.
 - Certificates are not renewed automatically. `status.notAfter` shows the expiry. Renewal is a later change.
 - Certificates that TAK issues through enrollment on 8446 are not affected. They are still revoked through TAK's own certificate table.

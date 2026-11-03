@@ -1,0 +1,83 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: takclients.tak.jonathanagustin.github.io
+spec:
+  group: tak.jonathanagustin.github.io
+  names:
+    kind: TakClient
+    plural: takclients
+    singular: takclient
+    shortNames:
+      - takc
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: TakClientSpec defines the desired state of TakClient
+              properties:
+                callsign:
+                  type: string
+                  description: "Certificate CN and TAK file user name. At least 4 characters:
+                    letters, numbers, dots, underscores, and hyphens."
+                groups:
+                  type: array
+                  items:
+                    type: string
+                  description: TAK groups the client is in, for example Operators.
+                validityDays:
+                  type: number
+                  description: Certificate lifetime in days. Default 30, maximum 365.
+              required:
+                - callsign
+                - groups
+            status:
+              type: object
+              description: TakClientStatus defines the observed state of TakClient
+              properties:
+                conditions:
+                  type: array
+                  description: Conditions describing the current state
+                  items:
+                    type: object
+                    description: Condition contains details for one aspect of the current state of
+                      this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                        description: lastTransitionTime is the last time the condition transitioned from
+                          one status to another.
+                      message:
+                        type: string
+                        description: message is a human readable message indicating details about the
+                          transition. This may be an empty string.
+                      observedGeneration:
+                        type: number
+                        description: observedGeneration is the .metadata.generation the condition was
+                          set for.
+                      reason:
+                        type: string
+                        description: reason is a CamelCase identifier for the condition's last
+                          transition.
+                      status:
+                        type: string
+                        description: status of the condition, one of True, False, Unknown.
+                      type:
+                        type: string
+                        description: type of the condition, for example Ready.
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+      subresources:
+        status: {}

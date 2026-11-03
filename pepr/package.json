@@ -1,7 +1,7 @@
 {
   "name": "takserver-oidc",
   "version": "0.8.0",
-  "description": "Prepares TAK Server on UDS Core. Renders CoreConfig at pod admission, sets the startup order and probes, writes the CoreDNS rewrite, and copies the TAK CA and CloudTAK admin certificates",
+  "description": "Prepares TAK Server on UDS Core. Renders CoreConfig at pod admission, sets the startup order and probes, writes the CoreDNS rewrite, copies the TAK CA and CloudTAK admin certificates, and issues client certificates from TakClient resources",
   "license": "GPL-3.0-only",
   "type": "module",
   "engines": {
@@ -41,6 +41,7 @@
     "test:coverage": "PEPR_MODE=build node --test --experimental-test-coverage --test-coverage-include='capabilities/**' --test-coverage-include='scripts/webhook-scope.ts' --test-coverage-exclude='**/*.test.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info capabilities/*.test.ts"
   },
   "dependencies": {
+    "node-forge": "1.4.2",
     "pepr": "2.0.7"
   },
   "overrides": {
@@ -53,6 +54,7 @@
     }
   },
   "devDependencies": {
+    "@types/node-forge": "1.3.14",
     "fast-check": "4.10.2"
   }
 }

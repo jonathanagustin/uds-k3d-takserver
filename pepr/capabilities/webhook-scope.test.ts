@@ -11,6 +11,7 @@ import {
   matchExpression,
   pinLiterals,
   scopeWebhook,
+  splitTakClientWebhook,
   TIMEOUT_VALUE,
 } from "../scripts/webhook-scope.ts";
 import { TAK_APPS } from "./oidc-render.ts";
@@ -116,4 +117,46 @@ test("failurePolicy follows Pepr's onError mapping", () => {
   assert.equal(failurePolicy("reject"), "Fail");
   assert.equal(failurePolicy("ignore"), "Ignore");
   assert.equal(failurePolicy(undefined), "Ignore");
+});
+
+// The generated webhook with the TakClient rule Pepr adds for ADR 22.
+const withTakClients = generated.replace(
+  "    sideEffects: None",
+  [
+    "      - apiGroups:",
+    "          - tak.jonathanagustin.github.io",
+    "        apiVersions:",
+    "          - v1alpha1",
+    "        operations:",
+    "          - CREATE",
+    "          - UPDATE",
+    "        resources:",
+    "          - takclients",
+    "    sideEffects: None",
+  ].join("\n"),
+);
+
+test("splitTakClientWebhook moves TakClients to their own entry without the TAK match conditions", () => {
+  const split = splitTakClientWebhook(scopeWebhook(pinLiterals(withTakClients, 10, "Fail")));
+  const [tak, clients, extra] = render(split).webhooks;
+  assert.equal(extra, undefined);
+  assert.deepEqual(
+    tak.rules.map((rule: { resources: string[] }) => rule.resources),
+    [["pods"]],
+  );
+  assert.equal(tak.matchConditions[0].name, MATCH_CONDITION);
+  assert.equal(clients.name, "takclients.uuid.pepr.dev");
+  assert.deepEqual(clients.namespaceSelector, { matchLabels: { "kubernetes.io/metadata.name": "takclients" } });
+  assert.equal(clients.matchConditions, undefined);
+  assert.equal(clients.objectSelector, undefined);
+  assert.deepEqual(clients.rules[0].resources, ["takclients"]);
+  assert.deepEqual(clients.clientConfig, tak.clientConfig);
+  assert.equal(clients.clientConfig.service.path, "/mutate/3e34bf10d2259");
+  assert.equal(clients.timeoutSeconds, "TIMEOUT");
+  assert.equal(clients.failurePolicy, "FAILURE");
+  assert.equal(clients.sideEffects, "None");
+});
+
+test("splitTakClientWebhook throws when the TakClient rule is missing", () => {
+  assert.throws(() => splitTakClientWebhook(scopeWebhook(generated)), /TakClient rule anchor/);
 });

@@ -63,12 +63,10 @@ driver_present || { docker exec k3d-uds-server-0 crictl images >&2 || true; exit
 
 echo "== device certificate"
 # The device authenticates to 8089 with a client certificate, like a fielded
-# ATAK with a provisioned data package. The certificate is issued here from
-# the deploy-time TAK CA (cert-migration and Secret takserver-ca-key, ADR 0002) and
-# exists only on this runner and in Secret atak/atak-device-dpk. TAK maps a
-# client certificate to a file user by fingerprint or by CN; UserManager
-# certmod adds that user with no password, as enable_admin.sh does for the
-# admin certificate.
+# ATAK with a provisioned data package. A TakClient (ADR 22) issues it from
+# the deploy-time TAK CA, registers the callsign in TAK group DEVICE_GROUP,
+# and writes the data package to Secret takclients/<name>. The key exists
+# only in that Secret, on this runner, and in Secret atak/atak-device-dpk.
 k -n istio-passthrough-gateway port-forward svc/passthrough-ingressgateway 28443:443 >/tmp/e2e-pf.log 2>&1 &
 pf=$!
 work="$(mktemp -d)"
@@ -82,94 +80,29 @@ admin() {
 }
 DEVICE_USER="${DEVICE_USER:-atak-device}"
 DEVICE_GROUP="${DEVICE_GROUP:-Operators}"
-cm() { k get configmap cert-migration -n takserver -o "go-template={{index .binaryData \"$1\"}}" | base64 -d; }
-cm ca.pem > "${work}/ca.pem"
-if k get secret takserver-ca-key -n takserver >/dev/null 2>&1; then
-  k get secret takserver-ca-key -n takserver -o jsonpath='{.data.ca-do-not-share\.key}' | base64 -d > "${work}/ca.key"
-else
-  cm ca-do-not-share.key > "${work}/ca.key"
+k apply -f - <<YAML
+apiVersion: tak.jonathanagustin.github.io/v1alpha1
+kind: TakClient
+metadata:
+  name: ${DEVICE_USER}
+  namespace: takclients
+spec:
+  callsign: ${DEVICE_USER}
+  groups:
+    - ${DEVICE_GROUP}
+  validityDays: 30
+YAML
+if ! k wait takclient "${DEVICE_USER}" -n takclients --for=condition=Ready --timeout=300s; then
+  k get takclient "${DEVICE_USER}" -n takclients -o yaml >&2
+  exit 1
 fi
-cat > "${work}/ext.cnf" <<CNF
-basicConstraints = CA:FALSE
-keyUsage = critical, digitalSignature, keyEncipherment
-extendedKeyUsage = clientAuth
-CNF
-openssl req -new -newkey rsa:2048 -nodes -keyout "${work}/device.key" -out "${work}/device.csr" \
-  -subj "/CN=${DEVICE_USER}/O=TAK/OU=UDS"
-openssl x509 -req -in "${work}/device.csr" -days 30 -sha256 \
-  -CA "${work}/ca.pem" -CAkey "${work}/ca.key" -passin "pass:${key_pass}" \
-  -set_serial "0x$(openssl rand -hex 16)" -extfile "${work}/ext.cnf" -out "${work}/device.pem"
-rm -f "${work}/ca.key"
-openssl verify -CAfile "${work}/ca.pem" "${work}/device.pem"
-# Android 9 reads PKCS#12 with SHA-1/3DES; OpenSSL 3 defaults to AES/PBKDF2.
-P12_PASS="$(openssl rand -hex 16)"
-p12() { openssl pkcs12 -export -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 -passout "pass:${P12_PASS}" "$@"; }
-mkdir -p "${work}/dpk/certs" "${work}/dpk/MANIFEST"
-p12 -in "${work}/device.pem" -inkey "${work}/device.key" -certfile "${work}/ca.pem" \
-  -name "${DEVICE_USER}" -out "${work}/dpk/certs/${DEVICE_USER}.p12"
-# -caname, not -name: with -nokeys only -caname labels the certificate, and
-# Android's PKCS12 keystore lists no entry without a friendlyName.
-p12 -nokeys -in "${work}/ca.pem" -caname tak-ca -out "${work}/dpk/certs/truststore.p12"
-rm -f "${work}/device.key"
-openssl x509 -in "${work}/device.pem" -noout -subject -enddate -fingerprint -sha256 | tee "${OUT}/device-cert.txt"
-
-# Register the certificate in TAK with group DEVICE_GROUP. Only the public
-# certificate goes into the pod.
-msg() { k exec -i -n takserver deploy/takserver-messaging -c takserver-messaging -- "$@"; }
-msg sh -c 'cat > /tmp/device.pem' < "${work}/device.pem"
-# Same environment as enable_admin.sh, which takserver-messaging-cluster.sh
-# runs after sourcing setenv.sh: the Ignite client needs its --add-opens
-# flags on JDK 17. enable_admin.sh retries too.
-for i in 1 2 3 4 5; do
-  if msg sh -c "cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g '${DEVICE_GROUP}' /tmp/device.pem" < /dev/null \
-    > "${OUT}/certmod.txt" 2>&1; then
-    break
-  fi
-  [[ "${i}" = 5 ]] && { cat "${OUT}/certmod.txt" >&2; exit 1; }
-  sleep 10
-done
-cat "${OUT}/certmod.txt"
-msg rm -f /tmp/device.pem
+k get takclient "${DEVICE_USER}" -n takclients -o jsonpath='{.status.conditions[0].message}{"\n"}' | tee "${OUT}/takclient.txt"
+k get secret "${DEVICE_USER}" -n takclients -o jsonpath='{.data.package\.zip}' | base64 -d > "${work}/atak-device.dpk"
+k get secret "${DEVICE_USER}" -n takclients -o jsonpath='{.data.client\.pem}' | base64 -d \
+  | openssl x509 -noout -subject -enddate -fingerprint -sha256 | tee "${OUT}/device-cert.txt"
 admin "https://takserver-api.${DOMAIN}:28443/user-management/api/get-groups-for-user/${DEVICE_USER}" \
   | tee "${OUT}/device-groups.json"; echo
-
-# A standard ATAK connection data package: one 8089 ssl stream with the
-# truststore and client certificate it ships with.
-cat > "${work}/dpk/certs/server.pref" <<PREF
-<?xml version='1.0' standalone='yes'?>
-<preferences>
-  <preference version="1" name="cot_streams">
-    <entry key="count" class="class java.lang.Integer">1</entry>
-    <entry key="description0" class="class java.lang.String">TAK Server</entry>
-    <entry key="enabled0" class="class java.lang.Boolean">true</entry>
-    <entry key="connectString0" class="class java.lang.String">${TAK_HOST}:8089:ssl</entry>
-    <entry key="caLocation0" class="class java.lang.String">cert/truststore.p12</entry>
-    <entry key="caPassword0" class="class java.lang.String">${P12_PASS}</entry>
-    <entry key="certificateLocation0" class="class java.lang.String">cert/${DEVICE_USER}.p12</entry>
-    <entry key="clientPassword0" class="class java.lang.String">${P12_PASS}</entry>
-  </preference>
-  <preference version="1" name="com.atakmap.app_preferences">
-    <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
-  </preference>
-</preferences>
-PREF
-cat > "${work}/dpk/MANIFEST/manifest.xml" <<XML
-<MissionPackageManifest version="2">
-  <Configuration>
-    <Parameter name="uid" value="$(cat /proc/sys/kernel/random/uuid)"/>
-    <Parameter name="name" value="${DEVICE_USER}"/>
-    <Parameter name="onReceiveDelete" value="true"/>
-  </Configuration>
-  <Contents>
-    <Content ignore="false" zipEntry="certs/server.pref"/>
-    <Content ignore="false" zipEntry="certs/truststore.p12"/>
-    <Content ignore="false" zipEntry="certs/${DEVICE_USER}.p12"/>
-  </Contents>
-</MissionPackageManifest>
-XML
-(cd "${work}/dpk" && python3 -m zipfile -c "${work}/atak-device.dpk" MANIFEST certs)
 unzip -l "${work}/atak-device.dpk" | tee "${OUT}/dpk-contents.txt"
-unset P12_PASS
 
 echo "== driver"
 k -n atak create secret generic atak-device-dpk --from-file=atak-device.dpk="${work}/atak-device.dpk" \

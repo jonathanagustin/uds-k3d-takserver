@@ -62,7 +62,10 @@ const MOVED = new Set([
   "deployments/scale",
   "statefulsets",
   "destinationrules",
+  "takclients",
 ]);
+
+const TAKCLIENT_GROUP = "tak.jonathanagustin.github.io";
 
 const TAK = ["takserver-config", "takserver-messaging", "takserver-api", "takserver-plugins"];
 
@@ -86,9 +89,13 @@ const ROLE_RULES = [
       {
         apiGroups: [""],
         resources: ["secrets"],
-        resourceNames: ["takserver-keystore", "takserver-certs"],
+        resourceNames: ["takserver-keystore", "takserver-certs", "takserver-ca-key"],
         verbs: ["get", "list", "watch"],
       },
+      // The CRL the TakClient capability writes (ADR 22). Secret create
+      // cannot be pinned to a name.
+      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-crl"], verbs: ["get", "patch"] },
+      { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },
       { apiGroups: ["apps"], resources: ["deployments/scale"], resourceNames: TAK, verbs: ["get", "patch", "update"] },
@@ -112,6 +119,16 @@ const ROLE_RULES = [
         resourceNames: ["takserver-web"],
         verbs: ["get", "list", "watch"],
       },
+    ],
+  },
+  // TakClients and their Secrets (ADR 22). Only those Secrets live in this
+  // namespace, so the Secret verbs are not pinned to names.
+  {
+    namespace: "takclients",
+    rules: [
+      { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients"], verbs: ["get", "patch"] },
+      { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients/status"], verbs: ["get", "patch"] },
+      { apiGroups: [""], resources: ["secrets"], verbs: ["get", "create", "patch", "delete"] },
     ],
   },
   {
@@ -240,7 +257,12 @@ function watchClusterRules(): ChartRule[] {
       found.resourceNames = names;
     }
   }
-  return [...grouped.values()];
+  // The TakClient watch has no name filter, so it is cluster-wide. TakClients
+  // outside namespace takclients are ignored by the capability.
+  return [
+    ...grouped.values(),
+    { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients"], verbs: ["list", "watch"] },
+  ];
 }
 
 function clusterWatchDoc(rules: ChartRule[]) {

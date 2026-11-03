@@ -237,6 +237,28 @@ function dropFirstHeading(markdown) {
   return markdown.replace(/^#\s+.+\r?\n(\r?\n)?/m, '');
 }
 
+function dropGithubOnly(markdown) {
+  // Text between <!-- github-only:start --> and <!-- github-only:end --> is
+  // for readers on github.com, such as the line that points at this site.
+  return markdown.replace(/[ \t]*<!-- github-only:start -->[\s\S]*?<!-- github-only:end -->[ \t]*\r?\n?(\r?\n)?/g, '');
+}
+
+function titleLinkLabels(markdown, fromSrc, headings) {
+  // A link whose text is the file path, like [docs/sso.md](docs/sso.md),
+  // shows that page's title instead. On the site the path is not a file the
+  // reader can open.
+  return mapProse(markdown, (prose) =>
+    prose.replace(/\[([A-Za-z0-9_./-]+\.md)\]\(([^)]+)\)/g, (full, label, destination) => {
+      const { pathPart } = stripDestination(destination);
+      const fromDir = posix(path.posix.dirname(fromSrc));
+      const resolved = normalizeRepoPath(path.posix.join(fromDir === '.' ? '' : fromDir, pathPart));
+      if (label !== pathPart && normalizeRepoPath(label) !== resolved) return full;
+      const heading = headings.get(resolved);
+      return heading ? `[${heading}](${destination})` : full;
+    }),
+  );
+}
+
 function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
   // image or inline code. Fenced code is left untouched.
@@ -264,10 +286,11 @@ async function adrPages() {
   });
 }
 
-async function writePage(page, byPath, videos) {
+async function writePage(page, byPath, videos, headings) {
   const raw = await readFile(path.join(repoRoot, page.src), 'utf8');
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
-  let content = rewriteLinks(dropFirstHeading(body), page.src, byPath);
+  const local = titleLinkLabels(dropGithubOnly(dropFirstHeading(body)), page.src, headings);
+  let content = rewriteLinks(local, page.src, byPath);
   if (page.src === 'README.md') content = embedDemoVideos(content, videos);
   const markdown = `${frontmatter(page, body)}${content}`;
   const destination = path.join(outRoot, `${page.slug}.md`);
@@ -302,6 +325,11 @@ for (const page of adrs) {
 }
 const all = [...pages, ...adrs];
 const byPath = new Map(all.map((page) => [page.src, page.slug]));
+const headings = new Map();
+for (const page of all) {
+  const raw = await readFile(path.join(repoRoot, page.src), 'utf8');
+  headings.set(page.src, firstHeading(raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')) || page.label);
+}
 
 await rm(outRoot, { recursive: true, force: true });
 await mkdir(outRoot, { recursive: true });
@@ -314,7 +342,7 @@ try {
   if (process.env.CI) throw error;
   console.warn(`sync-docs: demo videos not copied: ${error.message}`);
 }
-for (const page of all) await writePage(page, byPath, videos);
+for (const page of all) await writePage(page, byPath, videos, headings);
 await writeFile(path.join(outRoot, 'adr/index.md'), adrIndex(adrs));
 // Starlight's own /404 route reads this entry with getEntry(). draft keeps
 // it out of the [...slug] pages in a production build, so the two routes do

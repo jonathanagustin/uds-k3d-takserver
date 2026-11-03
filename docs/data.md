@@ -43,7 +43,7 @@ Before you roll the new image out:
 
 Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start. Do not point `15-3.4` at a data directory PostgreSQL 18 has already written. A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
 
-The upgrade test deploys the last release and writes a row. Then it deploys this branch and checks the row, its timestamp, the PVC, the server major version, and the PostGIS version. Since 0.7.0 the last release is already on PostgreSQL 18, so CI no longer runs the in-place upgrade from 15. That path was last checked by the upgrade runs from 0.6.0.
+The upgrade test deploys the last release and writes a row. Then it deploys this branch and checks the row, its timestamp, the PVC, the server major version, and the PostGIS version. Since 0.7.0 the last release is already on PostgreSQL 18, so that job no longer runs the in-place upgrade from 15. A second job, `validate-upgrade-pg15`, pins release 0.6.0 with `UPGRADE_BASELINE_TAG=v0.6.0`, so the upgrade from 15 stays tested. It runs on pushes to `main`, and on a pull request with the `upgrade-pg15` label when a commit is pushed.
 
 ## Backup
 
@@ -57,7 +57,7 @@ To cover the databases, the package stores a logical `pg_dump` in Secret `tak-db
 
 File-system backup needs volumes that are not hostPath. Velero skips a hostPath PersistentVolume (`isHostPathVolume` in Velero's `pkg/podvolume/backupper.go`), and k3d's default `local-path` class makes hostPath PersistentVolumes. So on a default k3d install the node-agent runs but copies nothing.
 
-Use a Container Storage Interface (CSI) class, or on k3d a `local-path` variant with annotation `defaultVolumeType: local` (see `tests/local-path-local.sh`: uds-k3d runs the provisioner with a shared filesystem path, which gives no node affinity, so the variant needs its own `nodePathMap` under `storageClassConfigs`). Point the TAK Postgres volume at it with `POSTGRES_STORAGE_CLASS`. The default is empty, which keeps the cluster default class. Set it only on a new install: a StatefulSet volume claim template cannot change on an upgrade. The full-core deploy creates `local-path-local` and sets `POSTGRES_STORAGE_CLASS: local-path-local`.
+Use a Container Storage Interface (CSI) class, or on k3d a `local-path` variant with annotation `defaultVolumeType: local` (see `tests/local-path-local.sh`: uds-k3d runs the provisioner with a shared filesystem path, which gives no node affinity, so the variant needs its own `nodePathMap` under `storageClassConfigs`). Point the TAK Postgres volume at it with `POSTGRES_STORAGE_CLASS`, and the CloudTAK PostGIS volume with `CLOUDTAK_STORAGE_CLASS`. Both default to empty, which keeps the cluster default class. Set them only on a new install: a StatefulSet volume claim template cannot change on an upgrade. They are two variables so that setting one on an existing install does not also change the other StatefulSet. The full-core deploy creates `local-path-local` and sets both to it.
 
 The gzipped logical dumps are the backup that works on every storage class. Keep them even with file-system backup on.
 
@@ -71,7 +71,7 @@ What a namespace backup contains:
 | Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |
 | Secrets `tak-db-dump` and `cloudtak-db-dump` | Yes, when the CronJob or `tests/backup-restore.sh` has written them. |
 | TAK Postgres volume | Yes on the full-core deploy, where `FILESYSTEM_BACKUP=true` and the volume is on `local-path-local`. Velero copies the volume named `data`. Slim does not. The restore test still loads the logical dump after the namespaces come back. |
-| CloudTAK PostGIS volume | Annotated when `FILESYSTEM_BACKUP=true`, but the CloudTAK chart has no StorageClass setting. On the default k3d class the volume is hostPath, so Velero skips it. The `cloudtak-db-dump` Secret covers it. |
+| CloudTAK PostGIS volume | Yes on the full-core deploy, where `FILESYSTEM_BACKUP=true` and `CLOUDTAK_STORAGE_CLASS` puts the volume on `local-path-local`. On the default k3d class the volume is hostPath, so Velero skips it. The `cloudtak-db-dump` Secret covers it either way. |
 | Ignite | No. The cache is memory. Clients reconnect. |
 | CoreConfig and the Ignite ConfigMap | Yes, as rendered objects. The chart can render them again from git. |
 

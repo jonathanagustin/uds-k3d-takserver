@@ -11,3 +11,4 @@ variables:
     FILESYSTEM_BACKUP: "true"
     # Local PVs, not hostPath, so Velero file-system backup copies the volume.
     POSTGRES_STORAGE_CLASS: local-path-local
+    CLOUDTAK_STORAGE_CLASS: local-path-local

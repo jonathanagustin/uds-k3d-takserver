@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Node and uv
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: node uv
           cache: true
@@ -75,6 +75,12 @@ jobs:
       - name: CoreConfig cache listener
         run: python3 -B -m unittest tests.test_cacheconfig_patch -v
 
+      # The profile checks and bench/run.py read YAML.
+      - name: Profiles, benchmark harness, and Full Core summary
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top -v
+
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.
   package-values:
@@ -85,7 +91,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Node, uv, and UDS CLI
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: node uv aqua:defenseunicorns/uds-cli
           cache: true

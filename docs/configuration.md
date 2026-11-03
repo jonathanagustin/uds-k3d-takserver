@@ -18,6 +18,7 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 | `FILESYSTEM_BACKUP` | `false` | `true` runs a Velero node-agent and marks the TAK Postgres and CloudTAK PostGIS volumes for file-system backup. See [Data](data.md#backup) |
 | `POSTGRES_STORAGE_CLASS` | empty | StorageClass for the TAK Postgres volume. Empty keeps the cluster default. Set it only on a new install, because a StatefulSet cannot change its volume claim template. See [Data](data.md#backup) |
+| `CLOUDTAK_STORAGE_CLASS` | empty | StorageClass for the CloudTAK PostGIS volume. Same rules as `POSTGRES_STORAGE_CLASS`. See [Data](data.md#backup) |
 
 ### Package values
 
@@ -32,9 +33,9 @@ Each default is the placeholder of the matching variable, for example `global.do
 | `dns.inCluster` | `IN_CLUSTER_DNS` | the watcher's CoreDNS rewrite switch |
 | `dns.passthroughHosts` | `PASSTHROUGH_HOSTS` | the watcher's passthrough host list |
 
-`FILESYSTEM_BACKUP` and `POSTGRES_STORAGE_CLASS` have no package value. Set them as variables.
+`FILESYSTEM_BACKUP`, `POSTGRES_STORAGE_CLASS`, and `CLOUDTAK_STORAGE_CLASS` have no package value. Set them as variables. A package value cannot work for them. The charts decide while Helm renders whether to add the node-agent, the volume annotations, and `storageClassName`. A package value defaults to the variable's placeholder, and Zarf replaces that placeholder only after Helm renders. So with no package value set, Helm would see the placeholder text, not `true` or a class name. The variables reach the charts through values files that Zarf fills in before Helm runs.
 
-`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable.
+`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable. It also checks that both database volumes have no StorageClass by default and get the one their variable names.
 
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 

@@ -37,7 +37,7 @@ Each file in [`bench/configs/`](../bench/configs/) changes memory settings, JVM 
 | `production` | Memory requests and limits from the `production` [values profile](profiles.md) |
 | `gc-serial` | Serial garbage collector (GC) on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
 
-The configs set memory, JVM flags, and Postgres settings only. CPU stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set.
+The configs set memory, JVM flags, and Postgres settings only. CPU stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set. The harness resets those counters before each config. Earlier runs, such as run 41613491855, did not reset the checkpoint counters or the `cot` database counters. In those runs the values add up from one config to the next.
 
 ## The record and the report
 

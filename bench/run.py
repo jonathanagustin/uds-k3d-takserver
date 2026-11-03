@@ -311,13 +311,13 @@ def postgres_pod(runner):
     return pods[0]["metadata"]["name"]
 
 
-def postgres_sql(statements, runner):
+def postgres_sql(statements, runner, database="postgres"):
     # One -c each. psql wraps several statements in a single -c in one
     # transaction, and ALTER SYSTEM cannot run inside a transaction block.
     pod = postgres_pod(runner)
     args = [
         "exec", "-n", "takserver", pod, "-c", "postgresql",
-        "--", "psql", "-X", "-w", "-U", "postgres", "-d", "postgres",
+        "--", "psql", "-X", "-w", "-U", "postgres", "-d", database,
         "-v", "ON_ERROR_STOP=1", "-At",
     ]
     for statement in statements:
@@ -338,15 +338,22 @@ def apply_postgres(config, runner=None):
     return True
 
 
+# pg_stat_reset() clears only the database it runs in, so it runs in cot,
+# the database POSTGRES_QUERY reads. On PostgreSQL 17 and later the checkpoint
+# counters are in pg_stat_checkpointer, which the 'bgwriter' reset no longer
+# clears, and buffers_backend comes from pg_stat_io. Each target exists on
+# PostgreSQL 17 and 18.
+RESET_STATEMENTS = (
+    "SELECT pg_stat_reset()",
+    "SELECT pg_stat_reset_shared('bgwriter')",
+    "SELECT pg_stat_reset_shared('checkpointer')",
+    "SELECT pg_stat_reset_shared('io')",
+)
+
+
 def reset_postgres_counters(runner=None):
     run = runner or kubectl
-    postgres_sql(
-        [
-            "SELECT pg_stat_reset()",
-            "SELECT pg_stat_reset_shared('bgwriter')",
-        ],
-        run,
-    )
+    postgres_sql(list(RESET_STATEMENTS), run, database="cot")
 
 
 def hit_ratio(hits, reads):

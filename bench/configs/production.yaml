@@ -5,8 +5,8 @@ name: production
 description: >
   Memory requests and limits from values/profiles/production.yaml and
   production-cloudtak.yaml. Messaging copies the API memory limit, so both
-  are 2Gi. Plugin memory on the package patch is still 128Mi / 384Mi; this
-  run sets 320Mi / 512Mi, the same as small, because there is no measured
+  are 2Gi. Plugin memory is 320Mi / 512Mi, the same as small and the
+  takserver-workload admission capability, because there is no measured
   plugin peak above 263Mi. CPU stays at whatever the install set. Steady
   working set is run 40174810574. Replicas are not changed here. Not a front
   until this record is compared.

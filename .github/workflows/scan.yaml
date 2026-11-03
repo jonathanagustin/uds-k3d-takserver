@@ -100,7 +100,7 @@ jobs:
       cancel-in-progress: true
     env:
       # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
-      UDS_CLI_VERSION: 0.40.0
+      UDS_CLI_VERSION: 0.41.0
       GRYPE_VERSION: v0.120.1
       # sha256 of grype_<version>_linux_amd64.tar.gz for GRYPE_VERSION, from
       # the release's checksums file. Update both together.

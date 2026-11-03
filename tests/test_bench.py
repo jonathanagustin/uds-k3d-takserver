@@ -328,6 +328,31 @@ class StartPhaseTests(unittest.TestCase):
         self.assertEqual(got["jvm_to_log_s"], 98.123)
         self.assertEqual(got["log_to_ready_s"], 10.877)
 
+    def test_pull_pairs_each_container_and_skips_present_images(self):
+        def event(reason, stamp, path, field="firstTimestamp"):
+            return {"reason": reason, field: stamp, "involvedObject": {"fieldPath": path}}
+
+        init = "spec.initContainers{wait-deps}"
+        main = "spec.containers{api}"
+        # Out of time order, as kubectl returns them. The init image was
+        # already present (Pulled without Pulling) before the main pull.
+        events = [
+            event("Pulled", "2026-11-03T09:50:40Z", main),
+            event("Pulled", "2026-11-03T09:49:00Z", init),
+            event("Pulling", "2026-11-03T09:50:01Z", main, field="eventTime"),
+            {"reason": "Scheduled", "firstTimestamp": "2026-11-03T09:48:59Z"},
+        ]
+        self.assertEqual(phases.pod_phases({}, events, "")["image_pull_s"], 39.0)
+        # Two real pulls add up.
+        events += [
+            event("Pulling", "2026-11-03T09:48:50Z", "spec.initContainers{import-trust}"),
+            event("Pulled", "2026-11-03T09:48:55Z", "spec.initContainers{import-trust}"),
+        ]
+        self.assertEqual(phases.pod_phases({}, events, "")["image_pull_s"], 44.0)
+        # Every image already present: no pull time, not zero.
+        present = [event("Pulled", "2026-11-03T09:49:00Z", init), event("Pulled", "2026-11-03T09:49:30Z", main)]
+        self.assertIsNone(phases.pod_phases({}, present, "")["image_pull_s"])
+
     def test_missing_inputs_stay_unset(self):
         self.assertIsNone(phases.parse_time(None))
         self.assertIsNone(phases.parse_time("nope"))
@@ -380,6 +405,29 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(lines[0], "ALTER SYSTEM RESET ALL")
         self.assertIn("ALTER SYSTEM SET checkpoint_timeout = '15min'", lines)
         self.assertIn("ALTER SYSTEM SET shared_buffers = '128MB'", lines)
+
+    def test_reset_clears_the_counters_the_query_reads(self):
+        calls = []
+
+        def fake(*args):
+            calls.append(args)
+
+            class Result:
+                stdout = (
+                    '{"items": [{"metadata": {"name": "takserver-postgresql-0"}}]}'
+                    if args[:2] == ("get", "pods") else ""
+                )
+
+            return Result()
+
+        runner.reset_postgres_counters(fake)
+        psql = next(call for call in calls if "psql" in call)
+        self.assertEqual(psql[psql.index("-d") + 1], "cot")
+        self.assertIn("SELECT pg_stat_reset_shared('checkpointer')", psql)
+        self.assertIn("SELECT pg_stat_reset_shared('io')", psql)
+        self.assertIn("SELECT pg_stat_reset_shared('bgwriter')", psql)
+        self.assertIn("pg_stat_checkpointer", runner.POSTGRES_QUERY)
+        self.assertIn("d.datname = 'cot'", runner.POSTGRES_QUERY)
 
     def test_hit_ratio_is_null_when_no_blocks_were_read(self):
         self.assertIsNone(runner.hit_ratio(0, 0))

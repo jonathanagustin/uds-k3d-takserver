@@ -173,8 +173,8 @@ sso:
   enabled: true
   clientId: uds-takserver
   secretName: takserver-sso
-  # uds-identity-config 0.32.3 imports the realm with idle 600 and max
-  # lifespan 36000 when those env vars are unset. UDS Core 1.15.2 does not
+  # uds-identity-config 0.32.4 imports the realm with idle 600 and max
+  # lifespan 36000 when those env vars are unset. UDS Core 1.16.0 does not
   # set them. Keycloak 26 rejects a client idle longer than the realm.
   sessionIdleTimeout: "600"
   sessionMaxLifespan: "36000"

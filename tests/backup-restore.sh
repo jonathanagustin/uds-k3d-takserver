@@ -320,20 +320,16 @@ say "Backup ${backup_name} Completed"
 # isHostPathVolume). k3d's default local-path class makes hostPath PVs; the
 # full-core bundle uses class local-path-local, which makes local PVs.
 fs_backed=0
-tak_pv="$(k get pvc data-takserver-postgresql-0 -n takserver -o jsonpath='{.spec.volumeName}')"
-tak_pv_hostpath="$(k get pv "${tak_pv}" -o jsonpath='{.spec.hostPath.path}')"
-say "takserver Postgres PV ${tak_pv} class=$(k get pv "${tak_pv}" -o jsonpath='{.spec.storageClassName}')"
 k get podvolumebackups.velero.io -n velero -o json > "${work}/pvb.json"
-if [[ -n "${tak_pv_hostpath}" && "${REQUIRE_FS_BACKUP:-false}" == "true" ]]; then
-  say "PV ${tak_pv} is hostPath but REQUIRE_FS_BACKUP=true; POSTGRES_STORAGE_CLASS did not reach the install" >&2
-  exit 1
-elif [[ -n "${tak_pv_hostpath}" ]]; then
-  say "SKIP file-system backup check: PV ${tak_pv} is hostPath, which Velero does not back up. Set POSTGRES_STORAGE_CLASS to a non-hostPath class on a new install. The logical dump below still covers the data."
-elif ! python3 - "${work}/pvb.json" "${backup_name}" <<'PY'
+
+# True when this backup has a Completed PodVolumeBackup for volume "data" of a
+# pod in namespace $1.
+has_pvb() {
+  python3 - "${work}/pvb.json" "${backup_name}" "$1" <<'PY'
 import json
 import sys
 
-path, backup = sys.argv[1], sys.argv[2]
+path, backup, namespace = sys.argv[1], sys.argv[2], sys.argv[3]
 items = json.load(open(path)).get("items") or []
 ok = False
 for item in items:
@@ -349,12 +345,22 @@ for item in items:
     spec = item.get("spec") or {}
     pod = spec.get("pod") or {}
     phase = (item.get("status") or {}).get("phase")
-    if spec.get("volume") == "data" and pod.get("namespace") == "takserver" and phase == "Completed":
+    if spec.get("volume") == "data" and pod.get("namespace") == namespace and phase == "Completed":
         ok = True
         break
 sys.exit(0 if ok else 1)
 PY
-then
+}
+
+tak_pv="$(k get pvc data-takserver-postgresql-0 -n takserver -o jsonpath='{.spec.volumeName}')"
+tak_pv_hostpath="$(k get pv "${tak_pv}" -o jsonpath='{.spec.hostPath.path}')"
+say "takserver Postgres PV ${tak_pv} class=$(k get pv "${tak_pv}" -o jsonpath='{.spec.storageClassName}')"
+if [[ -n "${tak_pv_hostpath}" && "${REQUIRE_FS_BACKUP:-false}" == "true" ]]; then
+  say "PV ${tak_pv} is hostPath but REQUIRE_FS_BACKUP=true; POSTGRES_STORAGE_CLASS did not reach the install" >&2
+  exit 1
+elif [[ -n "${tak_pv_hostpath}" ]]; then
+  say "SKIP file-system backup check: PV ${tak_pv} is hostPath, which Velero does not back up. Set POSTGRES_STORAGE_CLASS to a non-hostPath class on a new install. The logical dump below still covers the data."
+elif ! has_pvb takserver; then
   say "Backup ${backup_name} has no Completed PodVolumeBackup for the takserver data volume" >&2
   k get podvolumebackups.velero.io -n velero >&2 || true
   velero_details backup.velero.io "${backup_name}"
@@ -362,6 +368,25 @@ then
 else
   fs_backed=1
   say "Backup ${backup_name} holds the Postgres volume"
+fi
+
+# The same check for the CloudTAK PostGIS volume, whose class is
+# CLOUDTAK_STORAGE_CLASS.
+ct_pv="$(k get pvc data-cloudtak-postgis-0 -n cloudtak -o jsonpath='{.spec.volumeName}')"
+ct_pv_hostpath="$(k get pv "${ct_pv}" -o jsonpath='{.spec.hostPath.path}')"
+say "CloudTAK PostGIS PV ${ct_pv} class=$(k get pv "${ct_pv}" -o jsonpath='{.spec.storageClassName}')"
+if [[ -n "${ct_pv_hostpath}" && "${REQUIRE_FS_BACKUP:-false}" == "true" ]]; then
+  say "PV ${ct_pv} is hostPath but REQUIRE_FS_BACKUP=true; CLOUDTAK_STORAGE_CLASS did not reach the install" >&2
+  exit 1
+elif [[ -n "${ct_pv_hostpath}" ]]; then
+  say "SKIP CloudTAK file-system backup check: PV ${ct_pv} is hostPath. Set CLOUDTAK_STORAGE_CLASS to a non-hostPath class on a new install. The logical dump below still covers the data."
+elif ! has_pvb cloudtak; then
+  say "Backup ${backup_name} has no Completed PodVolumeBackup for the CloudTAK data volume" >&2
+  k get podvolumebackups.velero.io -n velero >&2 || true
+  velero_details backup.velero.io "${backup_name}"
+  exit 1
+else
+  say "Backup ${backup_name} holds the CloudTAK PostGIS volume"
 fi
 
 say "delete namespaces takserver and cloudtak"

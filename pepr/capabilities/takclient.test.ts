@@ -20,6 +20,8 @@ import {
   onFinalize,
   onMessaging,
   onTakClient,
+  RECONCILE_RETRY_MS,
+  retryLater,
   resetMessaging,
   TakClients,
 } from "./takclient-capability.ts";
@@ -52,6 +54,7 @@ import {
   reconcileTakClient,
   register,
   registerAll,
+  RECONCILE_RETRY,
   RETRY,
   revoke,
   SERIAL,
@@ -463,36 +466,39 @@ test("needsIssue renews in the last third of the lifetime and on a callsign chan
 
 test("reconcile reports why it is not Ready", async () => {
   const invalid = fake();
-  await reconcileTakClient(client({ spec: { callsign: "no" } }), "ADDED", invalid.d);
+  assert.equal(await reconcileTakClient(client({ spec: { callsign: "no" } }), "ADDED", invalid.d), false);
   assert.equal(invalid.calls.status[0].conditions[0].reason, "InvalidSpec");
 
   const noDomain = fake();
   noDomain.d.domain = "";
-  await reconcileTakClient(client(), "ADDED", noDomain.d);
+  assert.equal(await reconcileTakClient(client(), "ADDED", noDomain.d), false);
   assert.equal(noDomain.calls.status[0].conditions[0].reason, "NoDomain");
 
   const store = material();
   delete store.secrets["takserver/takserver-ca-key"];
   const noCa = fake({ store });
-  await reconcileTakClient(client(), "ADDED", noCa.d);
+  assert.equal(await reconcileTakClient(client(), "ADDED", noCa.d), true);
   assert.equal(noCa.calls.status[0].conditions[0].reason, "WaitingForCa");
 
   const adminless = material();
   delete adminless.secrets["takserver/takserver-certs"];
   const noAdmin = fake({ store: adminless });
-  await reconcileTakClient(client(), "ADDED", noAdmin.d);
+  assert.equal(await reconcileTakClient(client(), "ADDED", noAdmin.d), true);
   assert.equal(noAdmin.calls.status[0].conditions[0].reason, "WaitingForAdmin");
 
   const down = fake({ tak: () => ({ status: 503, body: "" }) });
-  await reconcileTakClient(client(), "ADDED", down.d);
+  assert.equal(await reconcileTakClient(client(), "ADDED", down.d), true);
   assert.equal(down.calls.status[0].conditions[0].reason, "TakUnavailable");
   assert.equal(down.calls.logs[0].includes("HTTP 503"), true);
 });
 
 test("reconcile skips deletes and objects being deleted", async () => {
   const { d, calls } = fake();
-  await reconcileTakClient(client(), "DELETED", d);
-  await reconcileTakClient(client({ metadata: { name: "x", deletionTimestamp: NOW.toISOString() } }), "MODIFIED", d);
+  assert.equal(await reconcileTakClient(client(), "DELETED", d), false);
+  assert.equal(
+    await reconcileTakClient(client({ metadata: { name: "x", deletionTimestamp: NOW.toISOString() } }), "MODIFIED", d),
+    false,
+  );
   assert.equal(calls.status.length + calls.tak.length, 0);
 });
 
@@ -671,6 +677,16 @@ test("onCaMaterial and onTakClient use the live surfaces", async () => {
     assert.ok(store.secrets[`takserver/${CRL_SECRET}`]);
     await onTakClient(client(), "ADDED");
     assert.equal(calls.status.at(-1)!.conditions[0].status, "True");
+    assert.equal(calls.sleeps.length, 0);
+    const down = fake({ tak: () => ({ status: 503, body: "" }) });
+    runtime.takCluster = down.d.cluster;
+    runtime.tak = down.d.tak;
+    await onTakClient(client(), "ADDED");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(down.calls.sleeps, [RECONCILE_RETRY_MS]);
+    assert.equal(RECONCILE_RETRY in down.calls.annotate.at(-1)!.annotations, true);
+    runtime.takCluster = d.cluster;
+    runtime.tak = d.tak;
     const live = deps();
     assert.equal(live.domain, "uds.dev");
     assert.equal(live.now() instanceof Date, true);
@@ -690,6 +706,16 @@ test("onCaMaterial and onTakClient use the live surfaces", async () => {
       process.env.DOMAIN = saved.domain;
     }
   }
+});
+
+test("retryLater logs when the annotation cannot be written", async () => {
+  const { d, calls } = fake();
+  d.cluster.annotateTakClient = async () => {
+    throw new Error("conflict");
+  };
+  await retryLater(d, "takclient-test");
+  assert.deepEqual(calls.sleeps, [RECONCILE_RETRY_MS]);
+  assert.equal(calls.logs[0], "TakClient takclient-test: retry failed: conflict");
 });
 
 test("crds/takclient.yaml is what pepr crd generate writes from api/", () => {

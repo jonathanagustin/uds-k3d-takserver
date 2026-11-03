@@ -373,7 +373,7 @@ spec:
         remoteNamespace: pepr-system
         remoteSelector:
           app: pepr-c72fcf944a4f43bbb386d22371aa640f-watcher
-        remoteServiceAccount: c72fcf944a4f43bbb386d22371aa640f
+        remoteServiceAccount: pepr-c72fcf944a4f43bbb386d22371aa640f
         port: 8443
         description: "Ingress 8443 to TAK API from the TakClient watcher"
 

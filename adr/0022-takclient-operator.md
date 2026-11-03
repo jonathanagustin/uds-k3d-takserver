@@ -13,7 +13,7 @@ A TAK client that uses a certificate needs four things: a key and a certificate 
 What is already true:
 
 - The CA key is not in ConfigMap `cert-migration`. Since [ADR 2](0002-generate-certificates-at-deploy-time.md), `ca-do-not-share.key` is in Secret `takserver/takserver-ca-key`, and the cert Job removes it from the ConfigMap on upgrade. The key is encrypted with `CAPASS` from Secret `takserver-keystore`. The ConfigMap still holds `ca.pem`, which is public. No change to where the key is stored is needed.
-- The module's admission pods and its watcher use one ServiceAccount, `c72fcf944a4f43bbb386d22371aa640f`, from the chart `pepr build` writes. `pepr/scripts/rbac-scope.ts` already moves the watched objects to named Roles.
+- The module's admission pods and its watcher use one ServiceAccount, `pepr-c72fcf944a4f43bbb386d22371aa640f`, from the chart `pepr build` writes. `pepr/scripts/rbac-scope.ts` already moves the watched objects to named Roles.
 - The watcher already reads Secret `takserver-certs` (`admin.pem`, `admin.key`) and Secret `takserver-keystore` to build CloudTAK's admin Secret.
 
 What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) supports for revocation, from its source:
@@ -50,7 +50,7 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 ### Registering the client in TAK
 
 - The watcher calls TAK's admin API on `takserver-api:8443` with the admin certificate it already reads: `POST /user-management/api/new-user` with the callsign, the groups, and a random password that nobody keeps (TAK requires one). `X509Authenticator` then maps the certificate to that user by CN.
-- `UserAuthenticationFile.xml` is not on a volume, so a messaging restart loses the user. The watcher already watches `takserver-messaging` for the startup order. When it becomes Available, the watcher registers every `TakClient` again.
+- `UserAuthenticationFile.xml` is not on a volume, so a messaging restart loses the user. The watcher already watches `takserver-messaging` for the startup order. When it becomes Available, the watcher registers every `TakClient` again. A `TakClient` that is not `Ready` because the CA, the admin certificate, or TAK is not ready yet is tried again every minute: the watcher writes annotation `tak.jonathanagustin.github.io/reconcile-retry`, which sends another update.
 - The takserver Package allows ingress to `takserver-api` on 8443 from the watcher pods in `pepr-system` (`app: pepr-<uuid>-watcher`), with the module's ServiceAccount as `remoteServiceAccount`. `pepr-system` is ambient, like `takserver`.
 - The TAK API's server certificate is not issued for the Service name, so the watcher checks the chain against the TAK CA and skips the host name check.
 
@@ -65,7 +65,7 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 - A certificate that Reconcile replaces (the Secret was deleted, the callsign changed, or a third of the lifetime is left) is added to the CRL too.
 - The render capability mounts `takserver-crl` into the messaging and API pods, and CoreConfig gets `<crl _name="tak-ca" crlFile="certs/crl/ca.crl"/>` in `<security><tls>`. The Secret has the UDS Core `uds.dev/pod-reload` label, so UDS Core restarts those pods when the CRL changes and TAK starts rejecting the certificate. Between the delete and the restart, the certificate can still connect, with no groups.
 - The watcher writes an empty CRL when the Secret is missing, so TAK always has a file to load. The CRL volume is not optional, so a TAK pod waits for it. The watcher checks the CRL when the CA material changes, on each `TakClient` reconcile, and once a day. It writes a new one with the same entries when `nextUpdate` is less than 60 days away, and drops entries for certificates that have expired. Java rejects every client certificate if the CRL has expired. If the CA changes, it writes an empty CRL signed by the new CA.
-- Finalize removes the finalizer only after the CRL Secret is written. If TAK is not reachable, the user deletion is retried on the next messaging Available event. The CRL is what stops the certificate.
+- Finalize removes the finalizer only after the CRL Secret is written. If TAK is not reachable, the user is left behind and the watcher logs it. The revocation restart starts messaging with no file users, so the user is gone after it. The CRL is what stops the certificate.
 
 ### Tests
 

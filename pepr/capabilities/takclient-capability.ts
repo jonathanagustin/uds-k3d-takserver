@@ -12,6 +12,7 @@ import {
   KEYSTORE_SECRET,
   readCa,
   reconcileTakClient,
+  RECONCILE_RETRY,
   registerAll,
   RETRY,
   TAK_NAMESPACE,
@@ -37,8 +38,27 @@ export function deps(): Deps {
   };
 }
 
-export function onTakClient(client: object, phase: string): Promise<void> {
-  return reconcileTakClient(client as TakClientDoc, phase, deps());
+export const RECONCILE_RETRY_MS = 60000;
+
+// Writes an annotation after a wait, which sends another update and runs
+// Reconcile again. Nothing else would: TAK can be up while the user is still
+// missing.
+export async function retryLater(d: Deps, name: string): Promise<void> {
+  await d.cluster.sleep(RECONCILE_RETRY_MS);
+  try {
+    await d.cluster.annotateTakClient(CLIENT_NAMESPACE, name, { [RECONCILE_RETRY]: d.now().toISOString() });
+  } catch (err) {
+    d.log(`TakClient ${name}: retry failed: ${(err as Error).message}`);
+  }
+}
+
+export async function onTakClient(client: object, phase: string): Promise<void> {
+  const d = deps();
+  const doc = client as TakClientDoc;
+  if (await reconcileTakClient(doc, phase, d)) {
+    // Not awaited, so the wait does not hold up other TakClients in the queue.
+    void retryLater(d, doc.metadata!.name!);
+  }
 }
 
 export const FINALIZE_RETRY_MS = 30000;

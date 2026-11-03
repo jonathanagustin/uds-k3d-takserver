@@ -41,6 +41,7 @@ export const NOT_AFTER = `${GROUP}/not-after`;
 export const FINGERPRINT = `${GROUP}/fingerprint`;
 export const CALLSIGN = `${GROUP}/callsign`;
 export const RETRY = `${GROUP}/finalize-retry`;
+export const RECONCILE_RETRY = `${GROUP}/reconcile-retry`;
 export const DEFAULT_DAYS = 30;
 export const MAX_DAYS = 365;
 export const CRL_DAYS = 730;
@@ -367,25 +368,27 @@ export function secretData(callsign: string, issued: Issued, ca: Ca, host: strin
   };
 }
 
-export async function reconcileTakClient(client: TakClientDoc, phase: string, deps: Deps): Promise<void> {
+// Returns true when the failure is one that clears on its own (the CA, the
+// admin certificate, or TAK is not ready yet), so the caller tries again.
+export async function reconcileTakClient(client: TakClientDoc, phase: string, deps: Deps): Promise<boolean> {
   if (phase === "DELETED" || client.metadata?.deletionTimestamp) {
-    return;
+    return false;
   }
   const { cluster } = deps;
   const name = client.metadata!.name!;
   const problem = validate(client.spec);
   if (problem) {
     await setReady(deps, client, "False", "InvalidSpec", problem);
-    return;
+    return false;
   }
   if (!deps.domain) {
     await setReady(deps, client, "False", "NoDomain", "The watcher has no DOMAIN for the data package host");
-    return;
+    return false;
   }
   const ca = await readCa(cluster);
   if (!ca) {
     await setReady(deps, client, "False", "WaitingForCa", "The TAK CA is not published yet");
-    return;
+    return true;
   }
   const now = deps.now();
   await ensureCrl(cluster, ca, now);
@@ -423,7 +426,7 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
   const admin = await readAdmin(cluster, ca);
   if (!admin) {
     await setReady(deps, client, "False", "WaitingForAdmin", "The TAK admin certificate is not published yet");
-    return;
+    return true;
   }
   try {
     await register(deps.tak, admin, callsign, spec.groups!);
@@ -434,11 +437,12 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
       client,
       "False",
       "TakUnavailable",
-      "The certificate is issued, but TAK did not accept the user. It is retried when takserver-messaging is Available",
+      "The certificate is issued, but TAK did not accept the user. It is retried every minute",
     );
-    return;
+    return true;
   }
   await setReady(deps, client, "True", "Issued", `Secret ${secretName(client)}, expires ${notAfter}`);
+  return false;
 }
 
 // Returns false to keep the finalizer. The caller retries.

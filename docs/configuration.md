@@ -114,6 +114,8 @@ The upstream chart has no values for init containers, probes, or the extra objec
 
 The watcher runs the reconciles. Its memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
 
+Why a Pepr module and not a forked chart, a Helm post-renderer, Kustomize, or upstream changes: see [ADR 23](../adr/0023-adapt-the-upstream-chart-with-pepr.md). It also lists where each of those would be the better choice.
+
 ## Single sign-on
 
 `sso.enabled` registers Keycloak client `uds-takserver` and writes Secret `takserver-sso` with key `TAK_OIDC_CLIENT_SECRET`. The mounted `CoreConfig.xml` keeps that name as `${TAK_OIDC_CLIENT_SECRET}`. The upstream chart cannot add an init container. The `takserver-oidc` Pepr module adds one that runs `envsubst` into `/conf/CoreConfig.xml` on each config, messaging, API, and plugins pod when the pod is created.
@@ -221,4 +223,5 @@ The NATS toolbox is disabled in `values/common-values.yaml`.
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
 - [Prometheus monitors](../adr/0017-prometheus-monitors.md)
+- [Adapting the upstream chart](../adr/0023-adapt-the-upstream-chart-with-pepr.md)
 - [Values profiles](profiles.md)

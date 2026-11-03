@@ -17,38 +17,8 @@ on:
     - cron: "17 7 * * *"
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
-      - "docs/**"
-      - "adr/**"
-      - ".gitignore"
-      - "LICENSE"
-      - "renovate.json"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
-      - "docs/**"
-      - "adr/**"
-      - ".gitignore"
-      - "LICENSE"
-      - "renovate.json"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
 
 permissions:
   contents: read
@@ -60,13 +30,42 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether a pull request needs Full Core. Pushes to main, the
+  # nightly run and manual runs always do; so does a pull request with the
+  # full-core label. Otherwise only changes to backup, monitoring, UDS Core
+  # integration, the bundles, or this workflow and its tests run it. This is
+  # a job, not workflow-level paths, so the "full-core" check below always
+  # reports and can be required.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      # Always check out: the decision script lives in the repository. Only a
+      # pull request needs the full history, for the diff against its base. The
+      # depths are strings: a bare 0 is falsy, so "&& 0 || 1" always gives 1.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'full-core') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ./.github/scripts/full-core-paths.sh
+
   validate-full-core:
     name: validate-full-core (${{ matrix.arch }})
-    if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-core'))
+    needs: [changes]
+    if: needs.changes.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -76,16 +75,23 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    # A healthy full-core run finishes in about 30 minutes. This job limit is
-    # what stops a step whose own timeout does not, such as actions/upload-artifact.
-    timeout-minutes: 75
+    # A healthy full-core run takes about 30 minutes once the images exist.
+    # When this commit changes the TAK, CloudTAK or PostGIS images, the wait
+    # for them below can take up to about 180 more. The job limit covers both,
+    # and still stops a step whose own timeout does not (actions/upload-artifact).
+    timeout-minutes: 255
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       id-token: write
     env:
       TEST_FLAVOR: upstream
+      # Test's package job publishes the dev package for these inputs; pull
+      # it instead of creating it (.github/scripts/dev-package.sh).
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '900' || '0' }}
+      DEV_PACKAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,25 +119,6 @@ jobs:
         if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
         run: ./.github/scripts/add-runner-swap.sh
 
-      # Restore the cache the Test workflow fills. Do not save it again: a
-      # second save of that key fails, and another multi-gigabyte cache entry
-      # crowds the repository cache.
-      - name: Restore the Zarf cache
-        id: zarf-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
-
       - name: Environment setup
         run: |
           echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "$GITHUB_ENV"
@@ -143,6 +130,23 @@ jobs:
           --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
+
+      # pin-image-tags.sh points the package at <version>-<key>. Those tags
+      # do not exist until Container, CloudTAK and PostGIS publish them.
+      # Creating the package first fails with "reference does not exist".
+      # A keyed tag that is already published returns immediately.
+      - name: Wait for the six TAK images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
 
       - name: Use this commit's TAK, CloudTAK and PostGIS images
         run: ./.github/scripts/pin-image-tags.sh
@@ -170,12 +174,21 @@ jobs:
       - name: Node memory
         if: failure()
         run: ./.github/scripts/dump-memory.sh
+        # A dead API server can hang kubectl; later always() steps still run.
+        timeout-minutes: 5
 
       - name: Save logs
         if: always()
         run: uds run actions:save-logs
         shell: bash
         timeout-minutes: 2
+
+      - name: Print logs before the upload
+        if: always()
+        # A hung upload-artifact can outlast its step timeout; the job log keeps these.
+        run: ./.github/scripts/print-logs.sh out /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log
+        shell: bash
+        timeout-minutes: 3
 
       - name: Generate unique suffix
         id: uniq
@@ -187,7 +200,7 @@ jobs:
 
       - name: Upload uptime probe log
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: uptime-probes-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -197,19 +210,21 @@ jobs:
 
       - name: Upload Grafana and Prometheus rule check
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: grafana-alerts-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
           path: |
             out/grafana-search.json
             out/prometheus-tak-rules.json
+            out/alertmanager-alerts.json
+            tests/.playwright/screenshots/tak-dashboard.png
           if-no-files-found: warn
           retention-days: 14
 
       - name: Upload Falco events
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: falco-events-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -219,7 +234,7 @@ jobs:
 
       - name: Upload kubectl top
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kubectl-top-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -229,7 +244,7 @@ jobs:
 
       - name: Upload portal screenshots
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: portal-tiles-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -239,7 +254,7 @@ jobs:
 
       - name: Upload backup restore log
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backup-restore-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -249,7 +264,7 @@ jobs:
 
       - name: Upload debug logs
         if: always()
-        timeout-minutes: 2
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: debug-log-full-core-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
@@ -261,3 +276,28 @@ jobs:
             /tmp/uds-containerd-logs
             /tmp/k3d-uds-*.log
           if-no-files-found: ignore
+
+  # The one check to require: success when Full Core passed or was not needed.
+  full-core:
+    runs-on: ubuntu-24.04
+    needs: [changes, validate-full-core]
+    if: always()
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check the Full Core result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          RUN: ${{ needs.changes.outputs.run }}
+          RESULT: ${{ needs.validate-full-core.result }}
+        run: |
+          echo "changes=${CHANGES} run=${RUN} validate-full-core=${RESULT}"
+          if [ "${CHANGES}" != "success" ]; then
+            echo "The path check did not finish."
+            exit 1
+          fi
+          if [ "${RUN}" != "true" ]; then
+            echo "Full Core was not needed for this change."
+            exit 0
+          fi
+          test "${RESULT}" = success

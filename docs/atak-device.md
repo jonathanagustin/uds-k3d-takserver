@@ -20,7 +20,7 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 
 The APK build (`atak/apk/Dockerfile`, driven by `atak/ci/build-apk.sh`) compiles the takthirdparty natives, the Conan dependencies, and cesium-native from source. A cold build takes well over an hour on a GitHub runner; the layers are cached in `ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache`. No key, certificate, or password is in any image. The APK is signed with the debug keystore that ships in the public atak-civ repository.
 
-Pull requests build the images locally as `:dev` and push nothing. A merge to `main` publishes them under the ATAK tag (`5.5.1.10`).
+CI tags each image with the ATAK version and a hash of its inputs, for example `atak-civ-vm:5.5.1.10-<hash>`. When that tag is in GitHub Container Registry (GHCR), CI pulls it. A pull request builds and pushes only the images whose inputs changed. Fork pull requests cannot push, so they build locally. After a passing e2e run on `main`, the plain `5.5.1.10` tags point at the tested images. `packages/atak-device:5.5.1.10` points at the tested Zarf package. See [Reused build outputs](ci.md#reused-build-outputs).
 
 ## Deploy
 
@@ -29,9 +29,16 @@ uds zarf package create atak --set ATAK_TAG=5.5.1.10 --confirm
 uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=uds.dev --confirm
 ```
 
+Or deploy the package the last `main` run tested, without building it:
+
+```bash
+uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-k3d-takserver/packages/atak-device:5.5.1.10 \
+  --architecture amd64 --set DOMAIN=uds.dev --confirm
+```
+
 The package (`atak/zarf.yaml`) has two components:
 
-- `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt CR in `atak/deploy/kubevirt-cr.yaml`, and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in CRD schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every VMI status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without CRI image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
+- `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt CR in `atak/deploy/kubevirt-cr.yaml`, and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in custom resource definition (CRD) schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every virtual machine instance (VMI) status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without CRI image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
 - `atak-device`: the VM, Service `atak-device-adb`, the viewer Deployment, and the UDS Package `atak`. The Package's expose entry probes `https://atak.<domain>/phone.html`. That path is the viewer page. Authservice sits in front of it, and the operator's probe client is what the check uses.
 
 ## Device certificate
@@ -40,7 +47,7 @@ The device authenticates with a client certificate, the way a provisioned field 
 
 At run time `atak/ci/e2e.sh`:
 
-1. Reads the deploy-time TAK CA (`ca.pem` and `ca-do-not-share.key`) from ConfigMap `takserver/cert-migration` ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)) and issues a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth`. The CA key stays in a temporary directory on the runner and is deleted after signing.
+1. Reads the deploy-time TAK CA from ConfigMap `takserver/cert-migration` (`ca.pem`) and Secret `takserver/takserver-ca-key` (`ca-do-not-share.key`) ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)) and issues a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth`. The CA key stays in a temporary directory on the runner and is deleted after signing.
 2. Registers the certificate in TAK with `java -jar UserManager.jar certmod -g Operators <cert.pem>` in the messaging pod. Only the public certificate goes into the pod. This is how TAK 5.7 maps a certificate to a user: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `certmod` adds the user with the fingerprint and no password, the same way `enable_admin.sh` adds the admin certificate. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
 3. Builds a standard ATAK connection data package (`atak-device.dpk`): `MANIFEST/manifest.xml`, `certs/server.pref` with one stream `takserver-stream.<domain>:8089:ssl` and its `caLocation0`, `caPassword0`, `certificateLocation0`, and `clientPassword0` entries, the client `certs/atak-device.p12`, and the CA in `certs/truststore.p12`. Both PKCS#12 files use SHA-1/3DES, which Android 9 reads, and a password generated for this run. The CA certificate in the truststore carries a friendlyName (`openssl pkcs12 -export -nokeys -caname ...`); without one, Android's PKCS12 keystore lists no entry and ATAK reports "Unable to validate Truststore".
 4. Stores the package in Secret `atak/atak-device-dpk` and mounts it into the driver pod.
@@ -71,7 +78,7 @@ ATAK always enrolls on 8446 with HTTP Basic authentication (`CertificateEnrollme
 
 For a real device, an operator does the same steps by hand:
 
-1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a certificate signing request (CSR) with `ca.pem` and `ca-do-not-share.key` from `cert-migration`, as `atak/ci/e2e.sh` does.
+1. Issue a client certificate from the TAK CA, with the device or user name as the CN. TAK's `makeCert.sh client <name>` does this where the CA is on disk. With this package, sign a certificate signing request (CSR) with `ca.pem` from `cert-migration` and `ca-do-not-share.key` from Secret `takserver-ca-key`, as `atak/ci/e2e.sh` does.
 2. Register it: `kubectl exec -n takserver deploy/takserver-messaging -c takserver-messaging -- sh -c 'cd / && . ./setenv.sh && java -Xmx128m -jar UserManager.jar certmod -g <group> /tmp/<name>.pem'` after copying the PEM to `/tmp` in the pod. `UserAuthenticationFile.xml` is not on a volume, so run it again after the messaging pod restarts.
 3. Package the `.p12`, the truststore, and a `.pref` as above, and hand the package to the device. Copy it to the device's `Download` folder as `atak*.dpk`, or open it with ATAK's Import Manager.
 

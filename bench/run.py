@@ -8,9 +8,11 @@ Writes bench/out/<arch>/<config>.json. A field that was not measured is null
 and listed in errors. This script does not fill those fields with zero.
 """
 
+import base64
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -28,9 +30,50 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
+from bench.phases import pod_phases
+from bench.startup import max_generation, max_restarts
 from bench.tester_exit import bind_tester, reap
 
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
+POSTGRES_SETTINGS = (
+    "shared_buffers",
+    "work_mem",
+    "effective_cache_size",
+    "max_wal_size",
+    "checkpoint_timeout",
+)
+_SETTING_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
+_SETTING_VALUE = re.compile(r"^[0-9]+(kB|MB|GB|ms|s|min)?$")
+# Set when this process has applied ALTER SYSTEM. A later config resets it.
+_postgres_custom = False
+# PostgreSQL 17 moved the checkpoint counters from pg_stat_bgwriter to
+# pg_stat_checkpointer and dropped buffers_backend; client backend writes
+# are in pg_stat_io. The TAK server runs PostgreSQL 18.
+POSTGRES_QUERY = """
+SELECT json_build_object(
+  'blks_hit', d.blks_hit,
+  'blks_read', d.blks_read,
+  'temp_files', d.temp_files,
+  'temp_bytes', d.temp_bytes,
+  'checkpoints_timed', c.num_timed,
+  'checkpoints_req', c.num_requested,
+  'checkpoint_write_ms', c.write_time,
+  'checkpoint_sync_ms', c.sync_time,
+  'buffers_backend', (
+    SELECT COALESCE(sum(io.writes), 0)::bigint
+    FROM pg_stat_io io
+    WHERE io.backend_type = 'client backend'
+  ),
+  'shared_buffers', current_setting('shared_buffers'),
+  'work_mem', current_setting('work_mem'),
+  'effective_cache_size', current_setting('effective_cache_size'),
+  'max_wal_size', current_setting('max_wal_size'),
+  'checkpoint_timeout', current_setting('checkpoint_timeout')
+)
+FROM pg_stat_database d
+CROSS JOIN pg_stat_checkpointer c
+WHERE d.datname = 'cot'
+""".strip()
 
 
 def kubectl_cmd():
@@ -138,6 +181,69 @@ def footprint():
     }, errors
 
 
+def start_phases():
+    """Pull, init, JVM, and Ready for messaging and the API. Missing stays None."""
+    found = {}
+    errors = []
+    for app in ("takserver-messaging", "takserver-api"):
+        try:
+            raw = kubectl("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json").stdout
+            pods = json.loads(raw).get("items", [])
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            found[app] = None
+            errors.append(f"{app} phases: {error}")
+            continue
+        if not pods:
+            found[app] = None
+            errors.append(f"{app} phases: no pod")
+            continue
+        pod = pods[0]
+        name = pod.get("metadata", {}).get("name", "")
+        events = []
+        log_text = ""
+        try:
+            event_raw = kubectl(
+                "get", "events", "-n", "takserver",
+                "--field-selector", f"involvedObject.name={name}",
+                "-o", "json",
+            ).stdout
+            events = json.loads(event_raw).get("items", [])
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError):
+            events = []
+        containers = pod.get("spec", {}).get("containers") or []
+        container = containers[0]["name"] if containers else app
+        try:
+            log_text = kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps", "--tail=400").stdout
+        except (RuntimeError, subprocess.CalledProcessError):
+            log_text = ""
+        found[app] = pod_phases(pod, events, log_text)
+    return found, errors
+
+
+def startup_shape():
+    """Generation and restarts for the four TAK Deployments. Null when unread."""
+    errors = []
+    try:
+        raw = kubectl("get", "deploy", "-n", "takserver", "-o", "json").stdout
+        pods = kubectl(
+            "get", "pods", "-n", "takserver",
+            "-l", "app in (takserver-api,takserver-messaging,takserver-config,takserver-plugins)",
+            "-o", "json",
+        ).stdout
+    except (RuntimeError, subprocess.CalledProcessError) as error:
+        return {"max_generation": None, "max_restart_count": None}, [str(error)]
+    try:
+        generations = max_generation(json.loads(raw).get("items", []))
+        restarts = max_restarts(json.loads(pods).get("items", []))
+    except json.JSONDecodeError as error:
+        return {"max_generation": None, "max_restart_count": None}, [f"startup: {error}"]
+    if generations is None:
+        errors.append("no TAK deployment generation")
+    if restarts is None:
+        errors.append("no TAK container restart count")
+    return {"max_generation": generations, "max_restart_count": restarts}, errors
+
+
 def ready_age():
     """Seconds from pod creation to Ready. Null when a pod has restarted."""
     ages = []
@@ -177,6 +283,135 @@ def ready_age():
     return max(ages), errors
 
 
+def postgres_statements(settings):
+    """RESET ALL, then one ALTER SYSTEM per setting. Values are units only."""
+    if not isinstance(settings, dict):
+        raise RuntimeError("postgres settings must be a mapping")
+    lines = ["ALTER SYSTEM RESET ALL"]
+    for key in sorted(settings):
+        value = str(settings[key])
+        if _SETTING_NAME.match(key) is None or _SETTING_VALUE.match(value) is None:
+            raise RuntimeError(f"refusing postgres setting {key}={value}")
+        lines.append(f"ALTER SYSTEM SET {key} = '{value}'")
+    return lines
+
+
+def postgres_pod(runner):
+    result = runner(
+        "get", "pods", "-n", "takserver",
+        "-l", "app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary",
+        "-o", "json",
+    )
+    pods = [
+        pod for pod in json.loads(result.stdout).get("items", [])
+        if not pod.get("metadata", {}).get("deletionTimestamp")
+    ]
+    if len(pods) != 1:
+        raise RuntimeError(f"expected one PostgreSQL pod, found {len(pods)}")
+    return pods[0]["metadata"]["name"]
+
+
+def postgres_sql(statements, runner):
+    # One -c each. psql wraps several statements in a single -c in one
+    # transaction, and ALTER SYSTEM cannot run inside a transaction block.
+    pod = postgres_pod(runner)
+    args = [
+        "exec", "-n", "takserver", pod, "-c", "postgresql",
+        "--", "psql", "-X", "-w", "-U", "postgres", "-d", "postgres",
+        "-v", "ON_ERROR_STOP=1", "-At",
+    ]
+    for statement in statements:
+        args.extend(["-c", statement])
+    result = runner(*args)
+    return result.stdout.strip()
+
+
+def apply_postgres(config, runner=None):
+    """Apply bench GUC overrides. Returns true when the server must restart."""
+    global _postgres_custom
+    settings = config.get("postgres") or {}
+    if not settings and not _postgres_custom:
+        return False
+    run = runner or kubectl
+    postgres_sql(postgres_statements(settings), run)
+    _postgres_custom = bool(settings)
+    return True
+
+
+def reset_postgres_counters(runner=None):
+    run = runner or kubectl
+    postgres_sql(
+        [
+            "SELECT pg_stat_reset()",
+            "SELECT pg_stat_reset_shared('bgwriter')",
+        ],
+        run,
+    )
+
+
+def hit_ratio(hits, reads):
+    total = hits + reads
+    if total == 0:
+        return None
+    return round(hits / total, 6)
+
+
+def assemble_postgres(row, rss_samples):
+    if not isinstance(row, dict):
+        raise RuntimeError("postgres stats were not a JSON object")
+    needed = (
+        "blks_hit", "blks_read", "temp_files", "temp_bytes",
+        "checkpoints_timed", "checkpoints_req", "checkpoint_write_ms",
+        "checkpoint_sync_ms", "buffers_backend",
+    )
+    for key in needed:
+        if key not in row:
+            raise RuntimeError(f"postgres stats missing {key}")
+    samples = list(rss_samples or [])
+    return {
+        "datname": "cot",
+        "blks_hit": row["blks_hit"],
+        "blks_read": row["blks_read"],
+        "hit_ratio": hit_ratio(row["blks_hit"], row["blks_read"]),
+        "temp_files": row["temp_files"],
+        "temp_bytes": row["temp_bytes"],
+        "checkpoints_timed": row["checkpoints_timed"],
+        "checkpoints_req": row["checkpoints_req"],
+        "checkpoint_write_ms": row["checkpoint_write_ms"],
+        "checkpoint_sync_ms": row["checkpoint_sync_ms"],
+        "buffers_backend": row["buffers_backend"],
+        "peak_rss_bytes": max(samples) if samples else None,
+        "steady_rss_bytes": samples[-1] if samples else None,
+        "settings": {key: row.get(key) for key in POSTGRES_SETTINGS},
+    }
+
+
+def read_postgres(rss_samples, runner=None):
+    run = runner or kubectl
+    raw = postgres_sql([POSTGRES_QUERY], run)
+    if not raw:
+        raise RuntimeError("postgres stats query returned no row")
+    return assemble_postgres(json.loads(raw), rss_samples)
+
+
+def rollout_items(config, postgres_changed):
+    items = list(config.get("env") or []) + list(config.get("resources") or [])
+    if postgres_changed:
+        items.append({
+            "workload": "statefulset/takserver-postgresql",
+            "namespace": "takserver",
+        })
+    chosen = []
+    seen = set()
+    for item in items:
+        key = (item["workload"], item["namespace"])
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append(item)
+    return chosen
+
+
 def apply_config(config):
     for item in config.get("env") or []:
         kubectl(
@@ -192,12 +427,121 @@ def apply_config(config):
         )
 
 
-def rollout(config):
+def diagnose(namespace, workload):
+    """What a timed-out rollout was waiting on. The nightly keeps no cluster."""
+    lines = [f"--- {workload} in {namespace} did not finish rolling out"]
+    pods = kubectl("get", "pods", "-n", namespace, "-o", "wide", check=False)
+    lines.append(pods.stdout.strip() or pods.stderr.strip())
+    events = kubectl(
+        "get", "events", "-n", namespace, "--sort-by=.lastTimestamp", check=False,
+    )
+    lines.extend((events.stdout.strip() or events.stderr.strip()).splitlines()[-25:])
+    if workload.startswith("deployment/"):
+        for container, tail in (("wait-deps", "40"), (workload.split("/", 1)[1], "80")):
+            logs = kubectl(
+                "logs", workload, "-n", namespace, "-c", container, f"--tail={tail}", check=False,
+            )
+            text = logs.stdout.strip() or logs.stderr.strip()
+            lines.append(f"--- {container} logs")
+            lines.append(text)
+    print("\n".join(lines), file=sys.stderr)
+
+
+def pod_container(workload, namespace, container, runner):
+    result = runner("get", workload, "-n", namespace, "-o", "json")
+    spec = json.loads(result.stdout)
+    for item in spec["spec"]["template"]["spec"].get("containers", []):
+        if item["name"] == container:
+            return item
+    raise RuntimeError(f"{workload} in {namespace} has no container {container}")
+
+
+def snapshot(config, runner=None):
+    """The installed env values and memory a config is about to change.
+
+    apply_config edits the live workloads, and nothing put them back, so one
+    config's changes carried into every config after it. heap-768 left
+    JDK_JAVA_OPTIONS=-Xms768m on messaging. enable_admin.sh runs
+    java -Xmx128m UserManager.jar, which then exits with "Initial heap size set
+    to a larger value than the maximum heap size", the admin user is never
+    added, and messaging never passes readiness in production and small.
+    """
+    run = runner or kubectl
+    saved = []
+    for item in config.get("env") or []:
+        container = pod_container(item["workload"], item["namespace"], item["container"], run)
+        entry = next((e for e in container.get("env") or [] if e["name"] == item["name"]), None)
+        if entry is not None and "valueFrom" in entry:
+            raise RuntimeError(
+                f"{item['workload']} {item['container']} {item['name']} uses valueFrom; "
+                "the sweep cannot put it back"
+            )
+        saved.append({
+            "kind": "env",
+            "workload": item["workload"],
+            "namespace": item["namespace"],
+            "container": item["container"],
+            "name": item["name"],
+            "value": None if entry is None else entry.get("value", ""),
+        })
+    for item in config.get("resources") or []:
+        container = pod_container(item["workload"], item["namespace"], item["container"], run)
+        resources = container.get("resources") or {}
+        saved.append({
+            "kind": "resources",
+            "workload": item["workload"],
+            "namespace": item["namespace"],
+            "container": item["container"],
+            "memory_request": (resources.get("requests") or {}).get("memory"),
+            "memory_limit": (resources.get("limits") or {}).get("memory"),
+        })
+    return saved
+
+
+def restore_commands(saved):
+    """kubectl arguments that put the snapshot back. None removes the field."""
+    commands = []
+    for item in saved:
+        target = [item["workload"], "-n", item["namespace"]]
+        if item["kind"] == "env":
+            if item["value"] is None:
+                change = f"{item['name']}-"
+            else:
+                change = f"{item['name']}={item['value']}"
+            commands.append(["set", "env", *target, "-c", item["container"], change])
+            continue
+        patch = {"spec": {"template": {"spec": {"containers": [{
+            "name": item["container"],
+            "resources": {
+                "requests": {"memory": item["memory_request"]},
+                "limits": {"memory": item["memory_limit"]},
+            },
+        }]}}}}
+        commands.append(["patch", *target, "--type=strategic", "-p", json.dumps(patch)])
+    return commands
+
+
+def restore(config, saved, runner=None, wait=True):
+    """Put the workloads back and wait, so the next config starts from the install."""
+    run = runner or kubectl
+    if not saved:
+        return
+    for command in restore_commands(saved):
+        run(*command)
+    if wait:
+        rollout(rollout_items(config, False))
+
+
+def rollout(items):
     started = time.monotonic()
     seen = False
-    for item in (config.get("env") or []) + (config.get("resources") or []):
+    for item in items:
         kubectl("rollout", "restart", item["workload"], "-n", item["namespace"])
-        kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
+        try:
+            kubectl("rollout", "status", item["workload"], "-n", item["namespace"], "--timeout=600s")
+        except RuntimeError:
+            diagnose(item["namespace"], item["workload"])
+            raise
         seen = True
     if not seen:
         return None
@@ -213,22 +557,23 @@ def keystore_password():
     except (RuntimeError, subprocess.CalledProcessError):
         encoded = ""
     if encoded:
-        import base64
         return base64.b64decode(encoded).decode()
     # This branch still issues certificates with the upstream example password.
     return "atakatak"
 
 
-def kubelet_samples(stop, sink, errors):
+def kubelet_samples(stop, sink, errors, pg_rss=None):
     while not stop.is_set():
         try:
             nodes = kubectl("get", "nodes", "-o", "name").stdout.split()
             rss = cpu = 0
             found = False
+            pg_bytes = None
             for node in nodes:
                 raw = kubectl("get", "--raw", f"/api/v1/nodes/{node.split('/', 1)[-1]}/proxy/stats/summary").stdout
                 for pod in json.loads(raw).get("pods", []):
-                    if pod.get("podRef", {}).get("namespace") not in ("takserver", "cloudtak"):
+                    ref = pod.get("podRef", {})
+                    if ref.get("namespace") not in ("takserver", "cloudtak"):
                         continue
                     for container in pod.get("containers", []):
                         memory = container.get("memory", {}).get("workingSetBytes")
@@ -238,10 +583,19 @@ def kubelet_samples(stop, sink, errors):
                         found = True
                         rss += memory
                         cpu += usage
+                        pod_name = str(ref.get("name", ""))
+                        if (
+                            ref.get("namespace") == "takserver"
+                            and container.get("name") == "postgresql"
+                            and pod_name.startswith("takserver-postgresql")
+                        ):
+                            pg_bytes = memory
             if found:
                 sink.append({"rss": rss, "cpu": cpu})
             else:
                 errors.append("kubelet summary had no TAK or CloudTAK stats")
+            if pg_rss is not None and pg_bytes is not None:
+                pg_rss.append(pg_bytes)
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             errors.append(f"kubelet summary: {error}")
         stop.wait(5)
@@ -351,6 +705,8 @@ def blank(arch, config, clients, duration):
         "images": None,
         "package_bytes": None,
         "time_to_ready": {"cold_s": None, "warm_s": None},
+        "start_phases": {"takserver-messaging": None, "takserver-api": None},
+        "startup": {"max_generation": None, "max_restart_count": None},
         "load": {
             "clients": clients,
             "duration_s": duration,
@@ -364,6 +720,7 @@ def blank(arch, config, clients, duration):
             "p95_ms": None,
         },
         "ci": {"wall_clock_s": None},
+        "postgres": None,
         "errors": [],
     }
 
@@ -433,15 +790,22 @@ def one(config, clients, out_dir, tester, cold):
     duration = int(config["duration_s"])
     record = blank(arch_name(), config["name"], clients, duration)
     try:
+        postgres_changed = apply_postgres(config)
         apply_config(config)
-        if config.get("restart"):
-            record["time_to_ready"]["warm_s"] = rollout(config)
+        if config.get("restart") or postgres_changed:
+            record["time_to_ready"]["warm_s"] = rollout(rollout_items(config, postgres_changed))
             record["time_to_ready"]["cold_s"] = cold
         else:
             record["time_to_ready"]["cold_s"] = cold
         fp, fp_errors = footprint()
         record["footprint"] = fp
         record["errors"].extend(fp_errors)
+        phases, phase_errors = start_phases()
+        record["start_phases"] = phases
+        record["errors"].extend(phase_errors)
+        shape, shape_errors = startup_shape()
+        record["startup"] = shape
+        record["errors"].extend(shape_errors)
         record["package_bytes"] = package_bytes()
         if record["package_bytes"] is None:
             record["errors"].append("no zarf-package-takserver tarball to stat")
@@ -450,11 +814,18 @@ def one(config, clients, out_dir, tester, cold):
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             record["errors"].append(f"image bytes: {error}")
         samples = []
+        pg_rss = []
         sample_errors = []
         stop = threading.Event()
-        thread = threading.Thread(target=kubelet_samples, args=(stop, samples, sample_errors), daemon=True)
+        thread = threading.Thread(
+            target=kubelet_samples, args=(stop, samples, sample_errors, pg_rss), daemon=True,
+        )
         thread.start()
         try:
+            try:
+                reset_postgres_counters()
+            except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+                record["errors"].append(f"postgres counters: {error}")
             password = keystore_password()
             parsed = run_load(clients, duration, password, tester)
             record["load"].update(parsed)
@@ -464,6 +835,10 @@ def one(config, clients, out_dir, tester, cold):
             stop.set()
             thread.join(timeout=10)
         record["errors"].extend(sample_errors)
+        try:
+            record["postgres"] = read_postgres(pg_rss)
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            record["errors"].append(f"postgres: {error}")
         if samples:
             record["kubelet"] = {
                 "peak_rss_bytes": max(item["rss"] for item in samples),
@@ -500,6 +875,12 @@ def main(argv):
             print(f"skip {original['name']}: {reason}")
             continue
         counts = selected_clients(original)
+        try:
+            saved = snapshot(original)
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            failed = True
+            print(f"{original['name']}: snapshot: {error}", file=sys.stderr)
+            continue
         for index, clients in enumerate(counts):
             # The first client count keeps the config name. Further counts
             # get a suffix so they do not overwrite that file.
@@ -511,6 +892,12 @@ def main(argv):
             if record["errors"]:
                 failed = True
                 print(f"{name}: " + "; ".join(record["errors"]), file=sys.stderr)
+        try:
+            restore(original, saved)
+        except (RuntimeError, subprocess.CalledProcessError) as error:
+            # Every later config would run on top of this one.
+            print(f"{original['name']}: restore: {error}; stopping the sweep", file=sys.stderr)
+            return 1
     return 1 if failed else 0
 
 

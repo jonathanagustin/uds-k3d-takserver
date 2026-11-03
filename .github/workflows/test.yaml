@@ -25,8 +25,7 @@ on:
       - "CODEOWNERS"
       - "SECURITY.md"
 
-  # A run on main is the only one that saves the Zarf cache. A cache saved by a
-  # pull request is scoped to that pull request and no other one can restore it.
+  # The same install runs again after a pull request merges.
   push:
     branches: [main]
     paths-ignore:
@@ -53,7 +52,8 @@ permissions:
 
 concurrency:
   group: test-${{ github.ref }}
-  # A cancelled run on main would skip its cache save.
+  # A pull request push replaces the run before it. A main run is left
+  # alone so two merges do not cancel each other.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -204,9 +204,9 @@ jobs:
           refs-file: ${{ runner.temp }}/pushed-refs.txt
           include-platforms: "false"
 
-  # Each job pushes 15-3.4-<key>-<arch>, keyed by the
+  # Each job pushes 18-3.6-<key>-<arch>, keyed by the
   # .github/container-and-chart/postgis tree, only when no image with that
-  # tree exists yet. postgis-index joins them under 15-3.4-<key>. 15-3.4, the
+  # tree exists yet. postgis-index joins them under 18-3.6-<key>. 18-3.6, the
   # tag zarf.yaml and the charts name, moves only on main.
   postgis-image:
     strategy:
@@ -245,6 +245,14 @@ jobs:
           PUSH_IMAGES: "true"
           ARCH: ${{ matrix.arch }}
         run: ./.github/container-and-chart/postgis/build.sh --if-changed
+
+      - name: Check a PostgreSQL 15 database upgrades
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          tag="$(./.github/container-and-chart/postgis/build.sh --tag)"
+          ./.github/container-and-chart/postgis/smoke.sh \
+            "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:${tag}-${ARCH}"
 
       - name: Attest the pushed images
         uses: ./.github/actions/attest-images
@@ -319,13 +327,18 @@ jobs:
     # stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 60
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       pull-requests: read
       id-token: write
     env:
       TEST_TYPE: install
+      # Pull the Package workflow's build (same key) instead of creating it.
+      # Fork pull requests cannot publish one, so they create at once.
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
+      DEV_PACKAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
       TEST_FLAVOR: upstream
     steps: &validate-steps
       - name: Checkout repository
@@ -381,26 +394,12 @@ jobs:
           # 86 GB free on amd64 and 108 GB free on arm64, so this skipped.
           TRIM_SKIP_ABOVE_GB: "60"
 
-      # Restore only. Install and upgrade run together, and a second save of
-      # the same key fails the job. Only a run on main saves, after the deploy.
-      - name: Restore the Zarf cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
-        id: zarf-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-          restore-keys: |
-            zarf-cache-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Point Zarf at the restored cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/zarf-cache"
-          rm -rf "${HOME}/.zarf-cache"
-          ln -s "${GITHUB_WORKSPACE}/.cache/zarf-cache" "${HOME}/.zarf-cache"
-
+      # No Actions cache for ~/.zarf-cache. On 2026-10-25 the entries were
+      # 4.28 GB (amd64) and 4.11 GB (arm64), and a second arm64 key put the
+      # repo at 14.6 GB of the 10 GB limit, so the arm64 prefix missed
+      # (run 40174810574). The amd64 hit took 32s to unpack. The miss saved
+      # the same images in about 9s. The ATAK e2e job keeps the 5.5 GB slim
+      # checkpoint in the Actions cache, which needs the room.
       - name: Environment setup
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: |
@@ -475,22 +474,24 @@ jobs:
             done
           done
 
-      - name: Save the Zarf cache
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (success() && github.event_name == 'push' && env.TEST_TYPE == 'install' && steps.zarf-cache.outputs.cache-hit != 'true')
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/zarf-cache
-          key: zarf-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('zarf.yaml', 'common/zarf.yaml', 'values/**/*.yaml', 'bundle/**/*.yaml') }}
-
       - name: Node memory
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (failure())
         run: ./.github/scripts/dump-memory.sh
+        # A dead API server can hang kubectl; later always() steps still run.
+        timeout-minutes: 5
 
       - name: Save logs
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
         run: uds run actions:save-logs
         shell: bash
         timeout-minutes: 2
+
+      - name: Print logs before the upload
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        # A hung upload-artifact can outlast its step timeout; the job log keeps these.
+        run: ./.github/scripts/print-logs.sh /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
+        shell: bash
+        timeout-minutes: 3
 
       - name: Generate unique suffix
         id: uniq
@@ -502,7 +503,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
-        timeout-minutes: 2
+        timeout-minutes: 5
         with:
           name: debug-log-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
           path: |
@@ -516,7 +517,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
-        timeout-minutes: 2
+        timeout-minutes: 5
         with:
           name: playwright-report-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
           path: |
@@ -534,13 +535,18 @@ jobs:
     # stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 75
     permissions:
-      actions: write
+      actions: read
       contents: read
       packages: read
       pull-requests: read
       id-token: write
     env:
       TEST_TYPE: upgrade
+      # Pull the Package workflow's build (same key) instead of creating it.
+      # Fork pull requests cannot publish one, so they create at once.
+      DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
+      DEV_PACKAGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
       TEST_FLAVOR: upstream
     steps: *validate-steps
 

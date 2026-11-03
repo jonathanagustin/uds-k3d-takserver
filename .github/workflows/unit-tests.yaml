@@ -66,5 +66,34 @@ jobs:
       - name: Loki query helper
         run: bash tests/test_query_loki.sh
 
+      - name: Full Core path filter
+        run: bash tests/test_full_core_paths.sh
+
+      - name: Dump Secret restore helper
+        run: bash tests/test_db_dump_secret.sh
+
       - name: CoreConfig cache listener
         run: python3 -B -m unittest tests.test_cacheconfig_patch -v
+
+  # Renders the package without a cluster and checks that the package values
+  # default to the Zarf variables, so a DOMAIN change still moves the hosts.
+  package-values:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node, uv, and UDS CLI
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: node uv aqua:defenseunicorns/uds-cli
+          cache: true
+
+      - name: Build the Pepr chart
+        run: bash pepr/build.sh
+
+      - name: Package values follow the variables
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values -v

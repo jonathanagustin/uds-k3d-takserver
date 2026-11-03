@@ -24,6 +24,24 @@ Each section below is named after the `Exemption` object it describes.
 - **Why it is safe:** The package uses Istio ambient mode, which does not inject a sidecar. The annotation has no effect on the mesh here. The matcher is the one hook Job name, not a wildcard.
 - **What removes it:** An upstream chart that makes the annotation optional or drops it.
 
+## velero-node-agent
+
+Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create it. See [ADR 0021](../adr/0021-velero-node-agent.md).
+
+- **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`
+- **Matcher:** `^node-agent-.*`, kind `pod`, namespace `velero`
+- **Defined in:** `charts/takserver/templates/filesystem-backup.yaml`
+- **Why:** The node-agent is privileged so it can mount pod volumes from `/var/lib/kubelet/pods` on the node. That is host path, a host volume type, and a root process.
+- **Why it is safe:** The matcher is the node-agent pods in the `velero` namespace. Nothing in `takserver` or `cloudtak` is exempted. The DaemonSet exists only when file-system backup is turned on.
+- **What removes it:** Leaving `FILESYSTEM_BACKUP` at its default, or a Velero release that can copy the volumes without host access.
+
+Second entry, `Velero data mover`:
+
+- **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`
+- **Matcher:** `.*`, kind `pod`, namespace `velero`
+- **Why:** Velero 1.18 copies each volume in a pod the node-agent creates for every PodVolumeBackup and PodVolumeRestore. It runs as root and mounts `/var/lib/kubelet/pods` read-write (a restore writes into it). `node-agent-config` sets `privilegedFsBackup: true`, so the pod is privileged: root without capabilities cannot open a directory such as the Postgres data directory, which is mode 0700 for the postgres user (the unprivileged pod failed with `open .../data: permission denied`). Velero's own labels on it (`velero.io/pod-volume-backup`, `velero.io/pod-volume-restore`) hold the PVB or PVR name, which changes each backup, so they cannot be matched. ConfigMap `node-agent-config` makes the node-agent add a fixed label, `app.kubernetes.io/component: velero-data-mover`, to every data-mover pod, but the Exemption CRD in UDS Core 1.16.0 rejects `matcher.podLabels` (field not declared in schema). So the matcher is every pod in the `velero` namespace. When the bundle moves to a Core version whose matcher has `podLabels`, narrow it to that label.
+- **Why it is safe:** Only the `velero` namespace, which holds only Velero's own pods, and only these five policies. It exists only when file-system backup is on.
+
 ## kubevirt
 
 Only the optional ATAK test device uses this. It is not part of the package: `atak/deploy/kubevirt-exemption.yaml` is applied by the ATAK end-to-end workflow, and a normal install never creates it. It is one `Exemption` object with three entries.
@@ -65,15 +83,25 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Metrics monitor
 
 - **Requirement:** Implement a monitor for each application metrics endpoint, unless the application provides no metrics.
-- **Status:** Not applicable. TAK Server 5.7-RELEASE-14 has no Prometheus endpoint, and its actuator is served on the Marti HTTPS connectors, where port 8443 requires a client certificate. The Package has no `monitor` entry.
-- **Details:** [ADR 3](../adr/0003-no-prometheus-monitor.md) and [Configuration](configuration.md).
-- **What changes it:** A Prometheus registry in the TAK image and a metrics port that does not require a client certificate.
+- **Status:** Met for the TAK API, TAK messaging, and the `takserver-oidc` module when the monitoring API is installed. Slim omits the monitors. Postgres and NATS are not scraped. Their exporter images are not built here.
+- **Details:** [ADR 17](../adr/0017-prometheus-monitors.md) and [Configuration](configuration.md).
+- **What changes it:** Building multi-arch Postgres and NATS exporter images, and enabling them without an upstream chart change that this package does not carry.
 
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Not met. The `onDeploy` actions in `zarf.yaml` use `sed`. Two of them run `python3`. One writes the CoreDNS rewrite patch as JSON. The other runs `patch-oidc-pods.py`, which adds the startup and trust init containers that the upstream Deployments cannot take through values. The actions use `kubectl` when it is on the path and fall back to `zarf tools kubectl`. Without `python3` on the deploy host, those two actions fail.
-- **What removes it:** Moving the init containers into the `takserver-oidc` Pepr module or an upstream chart value, and building the CoreDNS patch with `./zarf tools yq`.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers at admission, writes the CoreDNS rewrite, and copies the gateway CA and the CloudTAK admin material. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **What removes it:** Nothing further. The init containers and the CoreDNS rewrite live in the Pepr module. A scale-down remains only when Ignite was admitted without the tuned config.
+
+### Zarf values
+
+- **Requirement:** Prefer Zarf Values over Zarf Variables where Zarf supports them. Values is beta, so variables stay for compatibility.
+- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. Each value defaults to its variable's placeholder, so `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` still decide the result unless a package value is set. A UDS CLI 0.40 bundle sets Zarf variables and has no package-values input, and the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md#package-values) has the table.
+- **What removes the variables:** A bundle CLI that can pass package values, and a cert image built from `tak.imageTag` instead of one substituted string.
+
+### Package template
+
+Compared with [uds-packages/template](https://github.com/uds-packages/template). This repo already has the pieces that fit: root `zarf.yaml`, `common/zarf.yaml`, a config chart plus the upstream chart, `values/`, `bundle/`, `tasks.yaml`, `tests/`, `adr/`, `docs/`, CODEOWNERS, Renovate, and the lint and release workflows. It does not collapse to one `chart/` directory, because TAK and CloudTAK are separate charts. It does not add `releaser.yaml` or `uds-pk release`. [Version scheme](#version-scheme) says why release-please stays. It does not add a `registry1` flavor. [Image flavors](#image-flavors) says why.
 
 ### Version scheme
 
@@ -86,7 +114,7 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 - **Status:** Only `upstream`. There is no `registry1` flavor. Iron Bank has some related images, and none of them are the images this package runs.
 - **TAK Server.** Iron Bank publishes one server image, `registry1.dso.mil/ironbank/tpc/tak/tak-server`. Its README pulls tag `5.5`. It also publishes `tpc/tak/tak-server-db`. This package runs six images built here from `5.7-RELEASE-14`: `takserver-api`, `takserver-messaging`, `takserver-config`, `takserver-plugins`, `takserver-database-setup`, and `takserver-ignite`. Those names are not on Iron Bank, and `5.5` is not this package's release.
 - **CloudTAK.** No CloudTAK project showed up on repo1. The `cloudtak` image is built here from the upstream submodule.
-- **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). CloudTAK's database is `postgis:15-3.4`, built here. TAK's database is the Bitnami chart the upstream TAK chart installs, not that PostGIS image.
+- **PostGIS.** Iron Bank publishes `opensource/postgres/postgresql-15/postgis15` (a findings issue names tag `15-3.6.3`). TAK and CloudTAK use `postgis:18-3.6`, built here. TAK's chart is still the upstream Bitnami chart; the image override points it at that build.
 - **NATS.** Iron Bank publishes `opensource/synadia/nats-server` and `opensource/synadia/nats-box`. This package pins `docker.io/library/nats:2.15.1-alpine` and `docker.io/natsio/nats-server-config-reloader:0.25.0`. The reloader did not show up on repo1, and the server project is not tag `2.15.1`.
 - **ATAK viewer.** No ATAK-CIV image showed up on repo1. The viewer is a separate package, built here.
 - **What changes it:** Iron Bank images that match those names and tags, and chart values that can point at them without forking the upstream chart. Until then the package does not pretend a values overlay is a `registry1` flavor.

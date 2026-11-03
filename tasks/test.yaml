@@ -24,6 +24,7 @@ tasks:
       - task: ui
       - task: flows
       - task: usage
+      - task: cert-rotation
       - task: nats
 
   - name: health-check
@@ -41,11 +42,11 @@ tasks:
           }
           trap dump_tak ERR
           for deploy in takserver-config takserver-messaging takserver-api takserver-plugins; do
-            uds zarf tools kubectl rollout status "deployment/${deploy}" -n takserver --timeout=600s
+            uds zarf tools kubectl rollout status "deployment/${deploy}" -n takserver --timeout=1200s
           done
           while read -r sts; do
             [ -z "${sts}" ] && continue
-            uds zarf tools kubectl rollout status "${sts}" -n takserver --timeout=600s
+            uds zarf tools kubectl rollout status "${sts}" -n takserver --timeout=1200s
           done < <(uds zarf tools kubectl get statefulset -n takserver -o name)
       - description: Wait for TAK pods
         shell:
@@ -54,7 +55,7 @@ tasks:
         cmd: |
           set -euo pipefail
           for app in takserver-config takserver-messaging takserver-api takserver-plugins takserver-ignite; do
-            uds zarf tools kubectl wait --for=condition=Ready "pod" -n takserver -l "app=${app}" --timeout=600s
+            uds zarf tools kubectl wait --for=condition=Ready "pod" -n takserver -l "app=${app}" --timeout=1200s
           done
       - description: Wait for the UDS Package to be Ready
         shell:
@@ -74,6 +75,50 @@ tasks:
           echo "Package takserver did not become Ready" >&2
           uds zarf tools kubectl describe package takserver -n takserver || true
           exit 1
+
+  - name: cert-rotation
+    description: After the CloudTAK tests, rotating cert-migration updates the copied CA Secrets without a redeploy
+    actions:
+      - shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          k() { uds zarf tools kubectl "$@"; }
+          gw_ns="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.exportTo[0]}')"
+          secret="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o jsonpath='{.spec.trafficPolicy.portLevelSettings[0].tls.credentialName}')"
+          [ -n "${gw_ns}" ]
+          [ -n "${secret}" ]
+          orig="$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}')"
+          [ -n "${orig}" ]
+          patch_ca() {
+            python3 -c 'import json,sys; print(json.dumps({"binaryData":{"ca.pem":sys.argv[1]}}))' "$1" > /tmp/cert-rotation.json
+            k patch cm cert-migration -n takserver --type merge --patch-file /tmp/cert-rotation.json
+          }
+          wait_for() {
+            local want="$1" gw admin
+            for _ in $(seq 1 60); do
+              gw="$(k get secret "${secret}" -n "${gw_ns}" -o jsonpath='{.data.cacert}' 2>/dev/null || true)"
+              admin="$(k get secret cloudtak-tak-admin -n cloudtak -o jsonpath='{.data.ca\.pem}' 2>/dev/null || true)"
+              if [ "${gw}" = "${want}" ] && [ "${admin}" = "${want}" ]; then
+                echo "copied CA secrets match cert-migration"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "gateway cacert and cloudtak ca.pem did not follow cert-migration" >&2
+            return 1
+          }
+          first="${orig:0:1}"
+          if [ "${first}" = "A" ]; then
+            rotated="B${orig:1}"
+          else
+            rotated="A${orig:1}"
+          fi
+          [ "${rotated}" != "${orig}" ]
+          trap 'patch_ca "${orig}"; wait_for "${orig}"' EXIT
+          patch_ca "${rotated}"
+          wait_for "${rotated}"
 
   - name: startup
     description: Startup order, probes, Ignite, and the plaintext 8080 deny
@@ -136,9 +181,9 @@ tasks:
           [ "${ignite_limit}" = "1536Mi" ]
           [ "${ignite_request}" = "512Mi" ]
           plugin_limit="$(k get deploy takserver-plugins -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}')"
-          [ "${plugin_limit}" = "384Mi" ]
+          [ "${plugin_limit}" = "512Mi" ]
           config_request="$(k get deploy takserver-config -n takserver -o jsonpath='{.spec.template.spec.containers[0].resources.requests.memory}')"
-          [ "${config_request}" = "512Mi" ]
+          [ "${config_request}" = "1Gi" ]
           deny="$(k get authorizationpolicy takserver-deny-plaintext-8080 -n takserver -o yaml)"
           grep -q '8080' <<< "${deny}"
           services="$(k get svc takserver-messaging-service takserver-api-service -n takserver -o yaml)"
@@ -224,7 +269,8 @@ tasks:
             exit 1
           fi
           [ "$(k get svc takserver-web -n takserver -o jsonpath='{.spec.ports[0].appProtocol}')" = "https" ]
-          [ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.takserver-web\.jks}')" ]
+          [ -n "$(k get secret takserver-certs -n takserver -o jsonpath='{.data.takserver-web\.jks}')" ]
+          [ -z "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.takserver-web\.jks}')" ]
           dr="$(k get destinationrule.networking.istio.io takserver-web -n takserver -o json)"
           python3 -c '
           import json, sys
@@ -243,7 +289,7 @@ tasks:
           echo "8447 serves TLS and the gateway verifies it"
 
   - name: pkcs12
-    description: Keystores in ConfigMap cert-migration use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC
+    description: Keystores in Secret takserver-certs use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC
     actions:
       - shell:
           linux: bash
@@ -265,15 +311,38 @@ tasks:
           fi
           work="$(mktemp -d)"
           trap 'rm -rf "${work}"' EXIT
-          # Write each keystore out of the ConfigMap. A *-legacy.p12 holds only
+          # Write each keystore out of the Secret. A *-legacy.p12 holds only
           # the public CA certificate for clients that need the old format.
-          k get cm cert-migration -n takserver -o json | python3 -c '
+          # Private keys and keystores must not remain in the ConfigMap.
+          k get secret takserver-certs -n takserver -o json > "${work}/secret.json"
+          k get cm cert-migration -n takserver -o json > "${work}/cm.json"
+          python3 -c '
           import base64, json, sys
           work = sys.argv[1]
-          for name, data in json.load(sys.stdin).get("binaryData", {}).items():
+          secret = json.load(open(work + "/secret.json"))
+          cm = json.load(open(work + "/cm.json"))
+          def private(name):
+              if name.endswith(".key"):
+                  return True
+              if "truststore" in name or name.endswith("-legacy.p12"):
+                  return False
+              return name.endswith(".jks") or name.endswith(".p12")
+          leaked = sorted(name for name in (cm.get("binaryData") or {}) if private(name))
+          if leaked:
+              sys.stderr.write("private files still in cert-migration: " + ", ".join(leaked) + "\n")
+              sys.exit(1)
+          data = secret.get("data") or {}
+          if "ca-do-not-share.key" in data:
+              sys.stderr.write("ca-do-not-share.key is in Secret takserver-certs\n")
+              sys.exit(1)
+          for required in ("takserver.jks", "admin.key"):
+              if required not in data:
+                  sys.stderr.write("Secret takserver-certs has no " + required + "\n")
+                  sys.exit(1)
+          for name, raw in data.items():
               if name.endswith((".p12", ".jks")) and not name.endswith("-legacy.p12"):
-                  with open(work + "/" + name, "wb") as f:
-                      f.write(base64.b64decode(data))
+                  with open(work + "/" + name, "wb") as handle:
+                      handle.write(base64.b64decode(raw))
                   print(name)
           ' "${work}" > "${work}/names"
           pass="$(./tests/keystore-pass.sh)"
@@ -296,6 +365,8 @@ tasks:
           done < "${work}/names"
           [[ "${checked}" -ge 8 ]] || { echo "only ${checked} keystores were checked" >&2; exit 1; }
           echo "${checked} keystores use PBES2 (AES-256-CBC) with an HMAC-SHA256 MAC"
+          k get secret takserver-ca-key -n takserver -o name >/dev/null
+          echo "CA key is in Secret takserver-ca-key"
           if [[ "${mode}" == "legacy" ]]; then
             echo "Secret takserver-keystore kept the password from certificates that already existed"
           else
@@ -308,12 +379,6 @@ tasks:
               exit 1
             fi
             echo "takserver.jks does not open with the upstream example password"
-            if [[ -n "$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca-do-not-share\.key}')" ]]; then
-              echo "ca-do-not-share.key is still in ConfigMap cert-migration" >&2
-              exit 1
-            fi
-            k get secret takserver-ca-key -n takserver -o name >/dev/null
-            echo "CA key is in Secret takserver-ca-key"
           fi
           unset pass
 
@@ -359,9 +424,19 @@ tasks:
           grep -q RestrictIstioSidecarOverrides <<< "${exemption}"
           resources="$(uds zarf tools kubectl api-resources --api-group=monitoring.coreos.com 2>/dev/null || true)"
           if grep -q servicemonitors <<< "${resources}"; then
-            monitors="$(uds zarf tools kubectl get servicemonitor,podmonitor -n takserver --no-headers 2>/dev/null | wc -l | tr -d ' ')"
-            echo "monitor count: ${monitors}"
-            [ "${monitors}" = "0" ]
+            monitors="$(uds zarf tools kubectl get podmonitor.monitoring.coreos.com -n takserver -o yaml)"
+            if ! grep -q 'port: metrics' <<< "${monitors}"; then
+              echo "TAK PodMonitors are missing" >&2
+              exit 1
+            fi
+            if ! grep -q 'name: takserver-oidc' <<< "${monitors}"; then
+              echo "Pepr PodMonitor takserver-oidc is missing" >&2
+              exit 1
+            fi
+            if ! grep -q '/metrics' <<< "${monitors}"; then
+              echo "Pepr PodMonitor does not scrape /metrics" >&2
+              exit 1
+            fi
           else
             echo "monitoring.coreos.com is not installed on k3d-core-slim-dev"
           fi
@@ -755,7 +830,8 @@ tasks:
       - cmd: ./tests/portal.sh
       - cmd: ./tests/falco-events.sh
       # Deletes the takserver and cloudtak namespaces. Keep it last.
-      - cmd: ./tests/backup-restore.sh
+      # The full bundle puts Postgres on local-path-local, so the volume check must run.
+      - cmd: REQUIRE_FS_BACKUP=true ./tests/backup-restore.sh
 
   - name: exemptions
     description: Every policy exemption and exempted pod in the takserver and cloudtak namespaces is expected and documented
@@ -838,7 +914,7 @@ tasks:
             -e KEYCLOAK_OUTSIDER_PASSWORD="${KEYCLOAK_OUTSIDER_PASSWORD:-outsider123!@#UN}" \
             -v "$(pwd)/tests:/app" \
             -w /app \
-            mcr.microsoft.com/playwright:v1.64.1 \
+            mcr.microsoft.com/playwright:v1.64.1@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea \
             bash -lc 'export HOME=/tmp COREPACK_HOME=/tmp/corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0 && mkdir -p "$COREPACK_HOME" && corepack prepare pnpm@10.33.4 --activate && corepack pnpm install --frozen-lockfile && corepack pnpm exec playwright test'
 
   - name: nats

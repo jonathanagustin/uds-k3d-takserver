@@ -6,6 +6,7 @@
 // The copies are gitignored. The files in the repository stay the source.
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,6 +17,13 @@ const repoUrl = 'https://github.com/jonathanagustin/uds-k3d-takserver';
 // Root-relative, including the Pages base. The link checker rejects relative
 // links, and it looks these paths up against the built routes.
 const siteBase = '/uds-k3d-takserver';
+// The demo videos are assets on the fixed `demo` release. GitHub serves a
+// release download as application/octet-stream, and the user-attachments
+// players in the README only work on github.com, so the build copies the
+// videos into public/demo/ and Pages serves them as video/mp4. The posters
+// in public/demo/ are committed. The copies are gitignored.
+const demoRelease = `${repoUrl}/releases/download/demo`;
+const demoDir = path.resolve(import.meta.dirname, '../public/demo');
 
 const pages = [
   { src: 'README.md', slug: 'index', label: 'Getting started' },
@@ -177,6 +185,58 @@ function rewriteDestination(fromSrc, destination, byPath) {
   return `${repoUrl}/${kind}/main/${resolved}${hash}${suffix}`;
 }
 
+async function fetchDemoVideos() {
+  // demo-videos.intoto.jsonl lists each video's sha256. A copy that does not
+  // match is downloaded again, and a download that does not match fails.
+  const response = await fetch(`${demoRelease}/demo-videos.intoto.jsonl`);
+  if (!response.ok) throw new Error(`demo-videos.intoto.jsonl: HTTP ${response.status}`);
+  const envelope = JSON.parse((await response.text()).trim().split('\n')[0]);
+  const statement = JSON.parse(Buffer.from(envelope.payload, 'base64').toString('utf8'));
+  await mkdir(demoDir, { recursive: true });
+  const names = [];
+  for (const subject of statement.subject) {
+    const want = subject.digest.sha256;
+    const file = path.join(demoDir, subject.name);
+    const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    if (existsSync(file) && sha(await readFile(file)) === want) {
+      names.push(subject.name);
+      continue;
+    }
+    const video = await fetch(`${demoRelease}/${subject.name}`);
+    if (!video.ok) throw new Error(`${subject.name}: HTTP ${video.status}`);
+    const bytes = Buffer.from(await video.arrayBuffer());
+    if (sha(bytes) !== want) throw new Error(`${subject.name}: sha256 does not match the provenance`);
+    await writeFile(file, bytes);
+    names.push(subject.name);
+  }
+  return new Set(names);
+}
+
+function embedDemoVideos(markdown, videos) {
+  // A README line that is only a user-attachments URL is GitHub's inline
+  // player. On the site it becomes a <video> for the next demo download link.
+  const lines = markdown.split('\n');
+  return lines
+    .map((line, index) => {
+      if (!/^https:\/\/github\.com\/user-attachments\/assets\/\S+$/.test(line.trim())) return line;
+      const next = lines.slice(index + 1).join('\n').match(/releases\/download\/demo\/([\w.-]+\.mp4)/);
+      if (!next || !videos.has(next[1])) return line;
+      const base = next[1].replace(/\.mp4$/, '');
+      return [
+        `<video controls preload="none" playsinline width="1280" height="720" poster="${siteBase}/demo/${base}.jpg">`,
+        `  <source src="${siteBase}/demo/${next[1]}" type="video/mp4" />`,
+        `</video>`,
+      ].join('\n');
+    })
+    .join('\n');
+}
+
+function dropFirstHeading(markdown) {
+  // Starlight prints the frontmatter title as the page heading, so the body's
+  // own first H1 would show twice.
+  return markdown.replace(/^#\s+.+\r?\n(\r?\n)?/m, '');
+}
+
 function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
   // image or inline code. Fenced code is left untouched.
@@ -204,10 +264,12 @@ async function adrPages() {
   });
 }
 
-async function writePage(page, byPath) {
+async function writePage(page, byPath, videos) {
   const raw = await readFile(path.join(repoRoot, page.src), 'utf8');
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
-  const markdown = `${frontmatter(page, body)}${rewriteLinks(body, page.src, byPath)}`;
+  let content = rewriteLinks(dropFirstHeading(body), page.src, byPath);
+  if (page.src === 'README.md') content = embedDemoVideos(content, videos);
+  const markdown = `${frontmatter(page, body)}${content}`;
   const destination = path.join(outRoot, `${page.slug}.md`);
   await mkdir(path.dirname(destination), { recursive: true });
   await writeFile(destination, markdown.endsWith('\n') ? markdown : `${markdown}\n`);
@@ -243,7 +305,16 @@ const byPath = new Map(all.map((page) => [page.src, page.slug]));
 
 await rm(outRoot, { recursive: true, force: true });
 await mkdir(outRoot, { recursive: true });
-for (const page of all) await writePage(page, byPath);
+let videos = new Set();
+try {
+  videos = await fetchDemoVideos();
+} catch (error) {
+  // CI must publish the players. A local build without network keeps the
+  // download links and warns.
+  if (process.env.CI) throw error;
+  console.warn(`sync-docs: demo videos not copied: ${error.message}`);
+}
+for (const page of all) await writePage(page, byPath, videos);
 await writeFile(path.join(outRoot, 'adr/index.md'), adrIndex(adrs));
 await writeFile(
   path.join(outRoot, '404.md'),

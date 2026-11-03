@@ -32,7 +32,7 @@ api:
       # Namespace of the UDS Core tenant gateway. The CA Secret goes there.
       gatewayNamespace: istio-tenant-gateway
       caSecretName: takserver-web-ca
-      # Key in ConfigMap cert-migration, mounted under certs/files.
+      # Key in Secret takserver-certs, mounted under certs/files.
       keystore: takserver-web.jks
 
 # CloudTAK, the browser map client in the cloudtak component. These values
@@ -210,4 +210,16 @@ backup:
   dump:
     enabled: false
     schedule: "15 2 * * *"
-    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4
+    # Same image as the server. pg_dump refuses a newer server major, and
+    # zarf.yaml carries only this tag.
+    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
+  # String, not a boolean. The Zarf variable is text, and Helm treats the
+  # string "false" as true. Templates compare it to "true".
+  filesystem:
+    enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
+    image: docker.io/velero/velero:v1.18.4
+    namespace: velero
+    # The ServiceAccount UDS Core's Velero server runs as (the upstream
+    # chart's <fullname>-server). There is no ServiceAccount named velero.
+    serviceAccount: velero-server
+    credentialSecret: velero-bucket-credentials

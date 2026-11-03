@@ -22,9 +22,49 @@ kctl() {
 }
 
 if ! kctl get svc takserver-messaging-quic -n takserver >/dev/null 2>&1; then
+  # The test bundle selects Envoy Gateway only to carry QUIC. With Envoy
+  # Gateway installed and no QUIC Service, quic.enabled did not reach the chart.
+  if kctl get package envoy-gateway -n envoy-gateway-system >/dev/null 2>&1; then
+    echo "Envoy Gateway is installed but Service takserver-messaging-quic does not exist; quic.enabled did not reach the chart" >&2
+    exit 1
+  fi
   echo "QUIC is off. Service takserver-messaging-quic does not exist."
   exit 0
 fi
+
+# TAK 5.7-RELEASE-14 bundles the QUIC native library for linux-x86_64 only
+# (src/takserver-core/build.gradle), so the QUIC input cannot start on arm64.
+arch="$(kctl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')"
+if [[ "${arch}" != "amd64" ]]; then
+  echo "SKIP QUIC on ${arch}: TAK ships the QUIC native library for linux-x86_64 only."
+  exit 0
+fi
+
+# What to look at when QUIC fails: the gateway and route status, the UDP
+# Services and policies, whether TAK bound UDP 8090, and its QUIC log lines.
+diagnose() {
+  set +e
+  echo "::group::QUIC diagnostics" >&2
+  kctl get gateway -n envoy-default-gateway -o yaml >&2
+  kctl get udproute -A -o yaml >&2
+  kctl get svc,endpointslices -n envoy-default-gateway -o wide >&2
+  kctl get endpointslices -n takserver -l kubernetes.io/service-name=takserver-messaging-quic -o yaml >&2
+  kctl get networkpolicy -n takserver -o name | grep -i -E 'udp|envoy|quic' >&2
+  for np in $(kctl get networkpolicy -n takserver -o name | grep -i -E 'udp|envoy|quic'); do
+    kctl get "${np}" -n takserver -o yaml >&2
+  done
+  local pod
+  pod="$(kctl get pods -n takserver -l app=takserver-messaging -o jsonpath='{.items[0].metadata.name}')"
+  # 8090 is 1F9A in /proc/net/udp.
+  echo "UDP sockets in ${pod} (8090 = :1F9A):" >&2
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /proc/net/udp /proc/net/udp6 2>/dev/null' >&2
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'grep -i -h quic /opt/tak/logs/*.log 2>/dev/null | tail -40' >&2
+  kctl logs -n takserver "${pod}" -c takserver-messaging --tail=2000 | grep -i quic | tail -20 >&2
+  for proxy in $(kctl get pods -n envoy-default-gateway -o name); do
+    kctl logs -n envoy-default-gateway "${proxy}" -c envoy --tail=50 >&2
+  done
+  echo "::endgroup::" >&2
+}
 
 work="$(mktemp -d)"
 cleanup() {
@@ -72,7 +112,7 @@ done
 
 if [[ -z "${gw_ip}" ]]; then
   echo "no UDP 8090 Service in envoy-default-gateway" >&2
-  kctl get svc,gateway,udproute -A >&2 || true
+  diagnose
   exit 1
 fi
 echo "Envoy Gateway UDP ${gw_ip}:${gw_port}"
@@ -111,7 +151,8 @@ chmod 600 "${key_pass_file}"
 
 echo "client without a certificate"
 if ! run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" reject --host "${gw_ip}" --port "${gw_port}"; then
-  echo "QUIC accepted a client with no certificate" >&2
+  echo "QUIC did not refuse a client with no certificate with a TLS alert" >&2
+  diagnose
   exit 1
 fi
 
@@ -132,12 +173,14 @@ for _ in $(seq 1 40); do
   if ! kill -0 "${hold_pid}" >/dev/null 2>&1; then
     wait "${hold_pid}" || true
     echo "QUIC client exited before the stream was ready" >&2
+    diagnose
     exit 1
   fi
   sleep 1
 done
 if [[ ! -s "${ready}" ]]; then
   echo "QUIC client did not report a CoT event" >&2
+  diagnose
   exit 1
 fi
 
@@ -161,6 +204,7 @@ printf 'stop\n' > "${stop}"
 wait "${hold_pid}" || true
 if [[ -z "${listed}" ]]; then
   echo "QUIC client ${uid} was not listed in /Marti/api/subscriptions/all" >&2
+  diagnose
   exit 1
 fi
 echo "QUIC client ${uid} listed in /Marti/api/subscriptions/all"

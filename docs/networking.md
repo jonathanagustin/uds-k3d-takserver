@@ -19,6 +19,8 @@ Ports 8444, 9000, and 9001 stay on the Services and have no gateway host. TLS on
 
 Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the API, and Ignite.
 
+API and messaging also listen on plaintext 9100 for Prometheus (the JMX exporter javaagent). That port is not published. The Package monitor is what lets Prometheus scrape it.
+
 `k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` turns that optional component on for tests.
 
 On k3d, host port 443 is the tenant gateway. Tests port-forward `svc/passthrough-ingressgateway` in `istio-passthrough-gateway` and send SNI to that local port.
@@ -54,9 +56,26 @@ Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In
 
 ### QUIC
 
-`quic.enabled` defaults to false. With it true, CoreConfig adds `<input _name="quic" protocol="quic" port="8090" coreVersion="2"/>` and Service `takserver-messaging-quic` publishes UDP 8090. The Package expose entry sets `protocol: UDP` and no host. UDS Core routes that through Envoy Gateway. Istio AuthorizationPolicy does not apply. TAK 5.7-RELEASE-14 still requires a client certificate: the QUIC context uses `ClientAuth.REQUIRE` and the input's `auth` defaults to `x509`, the same default as 8089. The anonymous UDP input on 8087 is not added.
+QUIC is off by default: `quic.enabled` is `false`. With it off, the chart adds no QUIC input, no UDP Service, and no UDP expose entry.
 
-The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave both off, so they have no UDP Service. `tests/quic.sh` exits immediately when that Service is missing. When it is present, the script refuses a client with no certificate and streams a CoT event with the admin certificate through the gateway's UDP 8090. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
+When `quic.enabled` is `true`, the chart does three things:
+
+- CoreConfig gets `<input _name="quic" protocol="quic" port="8090" coreVersion="2"/>`.
+- Service `takserver-messaging-quic` publishes UDP 8090 to the messaging pods.
+- The Package exposes that Service with `protocol: UDP` and no host.
+
+UDS Core sends that UDP traffic through Envoy Gateway, not Istio. The UDS operator writes the route and one NetworkPolicy. That policy lets only the Envoy default gateway proxy reach the messaging pods on UDP 8090. Istio AuthorizationPolicy and mesh mTLS do not cover this path.
+
+TAK itself requires a client certificate. In TAK 5.7-RELEASE-14 the QUIC TLS context uses `ClientAuth.REQUIRE`, and the input's `auth` defaults to `x509`, the same as 8089. The anonymous UDP input on 8087 and the multicast inputs are not added.
+
+TAK 5.7-RELEASE-14 ships the QUIC native library for linux-x86_64 only. QUIC therefore works on amd64 nodes only.
+
+The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on amd64:
+
+- A client with no certificate must be refused with a TLS alert. No answer at all fails the test, so a broken route cannot pass as a refusal.
+- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`.
+
+The script skips on arm64. It also exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
 
 ## Tenant gateway to 8447
 
@@ -82,7 +101,7 @@ The package allows only the flows below. Every allow rule has its own descriptio
 | Egress | `remoteGenerated: KubeAPI`, one rule per pod label in `kubeApi.selectors` | Ignite Kubernetes discovery for that label |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JWKS |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, messaging selector, only when `sso.enabled` | Keycloak discovery and JWKS for 8089 clients |
-| Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled` | QUIC from the Envoy default gateway |
+| Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled`. The UDS operator writes it from the UDP expose entry | QUIC from the Envoy default gateway |
 
 Postgres, NATS, and Ignite are installed in the `takserver` namespace by the upstream chart. There is no namespace-wide allow rule. Each pod-to-pod flow is its own rule pair, from `intraNamespace` in `charts/takserver/values.yaml`: an Egress rule on the client and an Ingress rule on the server, both limited to the port.
 
@@ -112,7 +131,7 @@ Inside the cluster, `sso.<domain>` resolves to the ClusterIP of `tenant-ingressg
 
 Public DNS for `*.uds.dev` answers `127.0.0.1`. From inside a pod that is the pod itself, so a pod cannot reach `sso.uds.dev` or `takserver.uds.dev` by name without help. uds-k3d ships ConfigMap `kube-system/coredns-custom` with key `uds.override`, which rewrites `*.admin.uds.dev` to the admin gateway and every other `*.uds.dev` name to the tenant gateway. It has no rule for passthrough hosts and only covers `uds.dev`.
 
-The `takserver` component's first `onDeploy` action adds key `00-takserver.override` to that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, and restarts CoreDNS when the key changed:
+The `takserver-oidc` watcher writes key `00-takserver.override` on that ConfigMap, built from the `DOMAIN` and `PASSTHROUGH_HOSTS` variables, restarts CoreDNS when the key changed, and waits until that Deployment is Available:
 
 | Name | Answer |
 | --- | --- |
@@ -128,6 +147,6 @@ The k3s Corefile imports the `*.override` keys in name order, and the first matc
 
 Pods in an ambient namespace can get a different, equally correct answer. The UDS operator writes a `MeshInternal` ServiceEntry for every exposed host, with the gateway Service as its endpoint. ztunnel's DNS proxy answers names that have a ServiceEntry before CoreDNS sees the query. It allocates an address from `240.240.0.0/16` and routes connections to that address to the ServiceEntry endpoint, the same gateway. Names without a ServiceEntry, and pods outside the mesh, get the CoreDNS answer. On a cluster without `coredns-custom` the ServiceEntries alone still steer ambient pods, as long as public DNS answers the name at all.
 
-The action does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`.
+The reconcile does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`.
 
 `uds run test:dns` checks the answers from inside the API pod and that the API Deployment has no `hostAliases`. It accepts the gateway ClusterIP, or a `240.240.0.0/16` address when the name's ServiceEntry points at the expected gateway Service. Earlier versions of this package gave the API pod a hostAlias for `sso.<domain>`. An upgrade removes it.

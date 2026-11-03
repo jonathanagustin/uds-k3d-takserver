@@ -24,8 +24,14 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `images.sum_bytes` | bytes | sum of layer sizes for this runner's platform, from `crane manifest` or `uds zarf tools registry manifest`, for every image in `zarf.yaml` |
 | `images.unique_bytes` | bytes | same layers counted once, by digest |
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
+| `start_phases.<app>.image_pull_s` | seconds | kubelet `Pulling` to `Pulled` for that pod. Null when the image was already present and no pull event was recorded |
+| `start_phases.<app>.inits` | list | each init container's `name` and `seconds` from its state timestamps |
+| `start_phases.<app>.jvm_to_log_s` | seconds | main container `startedAt` to the first `Started TAK Server` or `Tomcat started on port` log line |
+| `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition. This is the probe lag |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
+| `startup.max_generation` | count | highest `metadata.generation` on the TAK Deployments. 1 is a single rollout |
+| `startup.max_restart_count` | count | highest container or init restart count on the four TAK apps |
 | `load.clients` | count | the client count this record ran |
 | `load.duration_s` | seconds | how long `tak_tester.py` was left running |
 | `load.messages_sent` | count | sum of every per-uid `messages_sent` the tester printed |
@@ -37,12 +43,24 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `load.ping_pong_ms_mean` | milliseconds | `ping_pong_ms_sum / pong_count`, null when `pong_count` is 0 |
 | `load.p95_ms` | always null | this tester build stores a sum, not a latency histogram, so a p95 is not available |
 | `ci.wall_clock_s` | seconds | filled by the summary job from the GitHub Actions job timestamps. Null in the per-arch file |
+| `postgres` | object or null | TAK database `cot` over the load window. Null when `psql` could not be run, with the reason in `errors` |
+| `postgres.hit_ratio` | 0 to 1, or null | `blks_hit / (blks_hit + blks_read)` from `pg_stat_database`. Null when both counters are 0 |
+| `postgres.temp_files`, `postgres.temp_bytes` | count, bytes | `pg_stat_database` for `cot` |
+| `postgres.checkpoints_timed`, `postgres.checkpoints_req` | count | `num_timed` and `num_requested` from `pg_stat_checkpointer` (PostgreSQL 17 and later) |
+| `postgres.checkpoint_write_ms`, `postgres.checkpoint_sync_ms` | milliseconds | `write_time` and `sync_time` from `pg_stat_checkpointer` |
+| `postgres.buffers_backend` | count | blocks written by client backends: the sum of `writes` in `pg_stat_io` for `client backend` |
+| `postgres.peak_rss_bytes`, `postgres.steady_rss_bytes` | bytes | working set of container `postgresql` in pod `takserver-postgresql-*`, from the same kubelet Summary samples as `kubelet` |
+| `postgres.settings` | text | `current_setting` for `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, `checkpoint_timeout` |
 | `errors` | strings | why a null field was not measured |
 
 Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 `kubelet.steady_rss_bytes`. Ready time is `warm_s` when it was measured and
 `cold_s` otherwise.
+
+`<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s, so Ready can lag the process by at most one period, about 8% of those restarts. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. If `jvm_to_log_s` is most of the start on a later run, that archive is the next change.
+
+Run 39556568533 measured the old scale-down on validate-install. amd64 job 119079081806 spent 103s in Helm and then 5m21s restarting config, messaging, api, and plugins. arm64 job 119079081713 spent 98s in Helm and then 5m08s. `startup.max_generation` and `startup.max_restart_count` are how a later run shows that second rollout is gone. This file does not store that later run.
 
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint
@@ -51,6 +69,17 @@ ready time. arm64 and amd64 are separate series on one scale per view, so a
 circle can be compared across architectures. Dominance is still decided
 inside one architecture. Dominated configs are marked in the job summary and
 drawn as open circles in the SVG.
+
+Counters are cleared with `pg_stat_reset()` and `pg_stat_reset_shared('bgwriter')`
+just before the load, so they cover that run and not the install. A config
+may set `postgres:` with those five parameters. The harness runs
+`ALTER SYSTEM` inside `takserver-postgresql-0` and restarts the StatefulSet.
+The next config in the same process resets them first, so a sweep does not
+stack. The package does not copy a winning set into values: no load report
+has put one on the front. `postgis-buffers` and `postgis-wal` are the two
+tuned points. Both keep `shared_buffers` at or below 128MB, inside the 512Mi
+limit. `effective_cache_size` is a planner hint and is not allocated. The
+sweep does not set `fsync=off`.
 
 Client certs are built at run time from `tests/extract-certs.sh` and are not
 written into the repository or the image. The nightly workflow runs client

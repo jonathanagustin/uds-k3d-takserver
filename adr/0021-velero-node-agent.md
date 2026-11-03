@@ -1,0 +1,41 @@
+# 21. Velero node-agent for databases that outgrow a Secret
+
+Date: 2026-10-25
+
+## Status
+
+Accepted
+
+## Context
+
+[ADR 0016](0016-logical-db-dump.md) stores `pg_dump` output in Secrets. A Secret holds about 1Mi, and the CronJob refuses a dump over 700000 bytes. Past that, the Postgres files have to be copied from the volume.
+
+UDS Core 1.16.0 backup-restore, like 1.15.2, installs Velero v1.18.4 and does not deploy a node-agent. The image `velero/velero:v1.18.4` is already the one that package runs, and that tag publishes amd64 and arm64. File-system backup needs the agent on the node, with host access to `/var/lib/kubelet/pods`. k3d local-path still has no VolumeSnapshot API, so a snapshot is not the alternative.
+
+The logical dump stays. The full-core deploy turns file-system backup on as well, and `tests/backup-restore.sh` checks that the Backup copied the Postgres volume. It still loads the dump after restore.
+
+## Decision
+
+- `FILESYSTEM_BACKUP` defaults to `false`. Slim leaves it there. `bundle/full/uds-config.yaml` sets it for the full-core job only.
+- When it is `true`, the config chart renders DaemonSet `node-agent` in the `velero` namespace from `docker.io/velero/velero:v1.18.4`, and Exemption `velero-node-agent` for the host access that DaemonSet needs. The image is in this package so an air-gapped deploy has it.
+- The same switch annotates the Bitnami Postgres pod volume `data` and the CloudTAK PostGIS pod volume `data` with `backup.velero.io/backup-volumes`. Velero then copies those volumes on the existing schedule. The schedule stays `snapshotVolumes: false`.
+- The agent uses ServiceAccount `velero-server` (the Velero server's) and Secret `velero-bucket-credentials`, which `core-backup-restore` already creates. The pods carry `app.kubernetes.io/name: velero` so the Velero Package's storage egress rule matches them. The full bundle adds a Kubernetes API egress allow for `name: node-agent`.
+
+## Consequences
+
+- A default install is unchanged: no DaemonSet, no exemption, no volume annotation. The dump CronJobs and `tests/backup-restore.sh` stay the restore path.
+- Setting the variable on a cluster that does not have the `velero` namespace leaves the DaemonSet unscheduled.
+- The full-core job requires the node-agent to log `Starting controllers` and the Backup to hold a Completed copy of the Postgres `data` volume. Slim never deploys the agent.
+- The agent is privileged. The exemption is limited to pods named `node-agent-*` in `velero`.
+
+## Amendment: hostPath volumes
+
+Velero skips hostPath PersistentVolumes in file-system backup, and k3d `local-path` makes hostPath PersistentVolumes by default. The TAK Postgres StorageClass is now `POSTGRES_STORAGE_CLASS`, empty by default so existing installs and their volume claim templates do not change. Full-core CI creates class `local-path-local` (`defaultVolumeType: local`) and installs Postgres on it, so the PodVolumeBackup check proves the agent copies the volume. File-system backup needs a Container Storage Interface (CSI) class or that variant on a new install. The gzipped logical dumps stay the backup that works everywhere.
+
+The CloudTAK chart has no StorageClass setting, so on k3d the CloudTAK PostGIS volume stays hostPath and Velero skips it. The `cloudtak-db-dump` Secret is its backup.
+
+## Amendment: data mover pods
+
+Velero 1.18 copies each volume in a separate data-mover pod. The node-agent creates one for every PodVolumeBackup and PodVolumeRestore. `node-agent-config` sets `privilegedFsBackup: true`, because root without capabilities cannot open the Postgres data directory (mode 0700).
+
+Those pod names change every backup. The Exemption custom resource definition (CRD) in UDS Core 1.16.0 rejects `matcher.podLabels`. So a second exemption entry matches every pod in the `velero` namespace, for five policies. It renders only when `FILESYSTEM_BACKUP=true`. See [Policy exemptions](../docs/justifications.md#velero-node-agent).

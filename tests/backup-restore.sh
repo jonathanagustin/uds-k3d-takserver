@@ -32,9 +32,15 @@ k() {
   fi
 }
 
-if ! k api-resources --api-group=velero.io 2>/dev/null | grep -q '^backups '; then
+if ! k api-resources --api-group=velero.io 2>/dev/null | grep '^backups ' >/dev/null; then
   say "velero.io Backup is not installed; backup-restore skipped"
   exit 0
+fi
+
+# Full-core sets FILESYSTEM_BACKUP. Slim never reaches this point.
+if ! k get daemonset node-agent -n velero >/dev/null 2>&1; then
+  say "node-agent DaemonSet is missing; FILESYSTEM_BACKUP was not true" >&2
+  exit 1
 fi
 
 run_id="${GITHUB_RUN_ID:-}"
@@ -126,11 +132,15 @@ dump_db() {
   say "pg_dump ${ns}/${db}"
   in_pod "${ns}" "${pod}" "${container}" \
     pg_dump -h 127.0.0.1 -U "${user}" -d "${db}" --no-owner --no-acl > "${dest}"
+  # The Secret holds the gzip, as the dump CronJobs write it.
+  gzip -9 -n -c "${dest}" > "${dest}.gz"
+  local plain
   local bytes
-  bytes="$(wc -c < "${dest}" | tr -d ' ')"
-  say "pg_dump ${ns}/${db} ${bytes} bytes"
+  plain="$(wc -c < "${dest}" | tr -d ' ')"
+  bytes="$(wc -c < "${dest}.gz" | tr -d ' ')"
+  say "pg_dump ${ns}/${db} ${plain} bytes, ${bytes} gzipped"
   if [[ "${bytes}" -gt "${max_dump_bytes}" ]]; then
-    say "dump is ${bytes} bytes, over ${max_dump_bytes}; a Secret cannot hold it" >&2
+    say "gzipped dump is ${bytes} bytes, over ${max_dump_bytes}; a Secret cannot hold it" >&2
     exit 1
   fi
   if ! grep -q 'uds_restore_marker' "${dest}"; then
@@ -146,9 +156,42 @@ store_secret() {
   # Server-side apply: client-side apply copies the whole Secret into the
   # last-applied annotation, which is capped at 256KiB.
   k create secret generic "${name}" -n "${ns}" \
-    --from-file=dump.sql="${file}" \
+    --from-file=dump.sql.gz="${file}.gz" \
     --dry-run=client -o yaml | k apply --server-side --force-conflicts -f -
   say "Secret ${ns}/${name} stored"
+}
+
+# A PartiallyFailed backup only counts its errors in describe. The pod
+# volume messages and the server's error lines say which item failed.
+velero_details() {
+  local kind="${1:-}"
+  local name="${2:-}"
+  local verb=""
+  case "${kind}" in
+    backup.velero.io) verb="backup" ;;
+    restore.velero.io) verb="restore" ;;
+    *) ;;
+  esac
+  # The server image is also the CLI. describe --details lists each error,
+  # and the logs say which item failed. Neither is in the CR status.
+  if [[ -n "${verb}" ]]; then
+    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details >&2 || true
+    k exec -n velero deploy/velero -c velero -- /velero "${verb}" logs "${name}" 2>/dev/null \
+      | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+  fi
+  k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
+    -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' >&2 || true
+  k logs -n velero deploy/velero --tail=2000 2>/dev/null | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+  # The node-agent runs the data path; a canceled PVB says why only here,
+  # and in the data-mover pod, which Velero deletes when it ends.
+  echo "--- node-agent log (PVB/PVR, errors)" >&2
+  k logs -n velero ds/node-agent --tail=3000 2>/dev/null \
+    | grep -iE 'level=(error|warning)|cancel|podvolume|data path|exposer' | tail -n 60 >&2 || true
+  local pod
+  for pod in $(k get pods -n velero -l app.kubernetes.io/component=velero-data-mover -o name 2>/dev/null); do
+    echo "--- ${pod}" >&2
+    k logs -n velero "${pod}" --all-containers --tail=200 >&2 || true
+  done
 }
 
 wait_phase() {
@@ -166,6 +209,7 @@ wait_phase() {
         ;;
       Failed | FailedValidation | PartiallyFailed)
         k describe "${kind}" -n velero "${name}" >&2 || true
+        velero_details "${kind}" "${name}"
         return 1
         ;;
       *) ;;
@@ -174,6 +218,7 @@ wait_phase() {
   done
   say "${kind} ${name} was not Completed" >&2
   k describe "${kind}" -n velero "${name}" >&2 || true
+  velero_details "${kind}" "${name}"
   return 1
 }
 
@@ -212,6 +257,27 @@ if [[ "${bsl_ok}" -ne 1 ]]; then
   exit 1
 fi
 
+say "wait for the Velero node-agent"
+if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
+  k describe daemonset/node-agent -n velero >&2 || true
+  k describe pods -n velero -l name=node-agent >&2 || true
+  exit 1
+fi
+agent_ok=0
+for _ in $(seq 1 30); do
+  if k logs -n velero -l name=node-agent --tail=300 2>/dev/null | grep -q "Starting controllers"; then
+    agent_ok=1
+    break
+  fi
+  sleep 5
+done
+if [[ "${agent_ok}" -ne 1 ]]; then
+  say "node-agent did not log Starting controllers; it has not reached the Kubernetes API" >&2
+  k logs -n velero -l name=node-agent --tail=200 >&2 || true
+  exit 1
+fi
+say "node-agent logged Starting controllers"
+
 tak_pod="$(pod_name takserver app.kubernetes.io/name=postgresql,app.kubernetes.io/component=primary takserver-postgresql-0)"
 tak_container="$(container_name takserver "${tak_pod}")"
 ct_pod="$(pod_name cloudtak app=cloudtak-postgis cloudtak-postgis-0)"
@@ -241,17 +307,77 @@ spec:
   includedNamespaces:
     - takserver
     - cloudtak
-  includeClusterResources: false
+  # Unset, not false: Velero then also records the PVs the claims use, which
+  # it needs to re-provision a claim whose data comes from file-system backup.
   snapshotVolumes: false
   ttl: 2h0m0s
 EOF
 
-wait_phase backup.velero.io "${backup_name}" 60
+wait_phase backup.velero.io "${backup_name}" 120
 say "Backup ${backup_name} Completed"
+
+# Velero skips hostPath PVs in file-system backup (pkg/podvolume/backupper.go,
+# isHostPathVolume). k3d's default local-path class makes hostPath PVs; the
+# full-core bundle uses class local-path-local, which makes local PVs.
+fs_backed=0
+tak_pv="$(k get pvc data-takserver-postgresql-0 -n takserver -o jsonpath='{.spec.volumeName}')"
+tak_pv_hostpath="$(k get pv "${tak_pv}" -o jsonpath='{.spec.hostPath.path}')"
+say "takserver Postgres PV ${tak_pv} class=$(k get pv "${tak_pv}" -o jsonpath='{.spec.storageClassName}')"
+k get podvolumebackups.velero.io -n velero -o json > "${work}/pvb.json"
+if [[ -n "${tak_pv_hostpath}" && "${REQUIRE_FS_BACKUP:-false}" == "true" ]]; then
+  say "PV ${tak_pv} is hostPath but REQUIRE_FS_BACKUP=true; POSTGRES_STORAGE_CLASS did not reach the install" >&2
+  exit 1
+elif [[ -n "${tak_pv_hostpath}" ]]; then
+  say "SKIP file-system backup check: PV ${tak_pv} is hostPath, which Velero does not back up. Set POSTGRES_STORAGE_CLASS to a non-hostPath class on a new install. The logical dump below still covers the data."
+elif ! python3 - "${work}/pvb.json" "${backup_name}" <<'PY'
+import json
+import sys
+
+path, backup = sys.argv[1], sys.argv[2]
+items = json.load(open(path)).get("items") or []
+ok = False
+for item in items:
+    meta = item.get("metadata") or {}
+    names = set()
+    for bag in (meta.get("labels") or {}, meta.get("annotations") or {}):
+        for key in ("velero.io/backup-name", "velero.io/backup"):
+            value = bag.get(key)
+            if value:
+                names.add(value)
+    if backup not in names:
+        continue
+    spec = item.get("spec") or {}
+    pod = spec.get("pod") or {}
+    phase = (item.get("status") or {}).get("phase")
+    if spec.get("volume") == "data" and pod.get("namespace") == "takserver" and phase == "Completed":
+        ok = True
+        break
+sys.exit(0 if ok else 1)
+PY
+then
+  say "Backup ${backup_name} has no Completed PodVolumeBackup for the takserver data volume" >&2
+  k get podvolumebackups.velero.io -n velero >&2 || true
+  velero_details backup.velero.io "${backup_name}"
+  exit 1
+else
+  fs_backed=1
+  say "Backup ${backup_name} holds the Postgres volume"
+fi
 
 say "delete namespaces takserver and cloudtak"
 k delete namespace takserver cloudtak --wait=true --timeout=600s
 
+# Without a volume in the backup, a restored claim would point at the deleted
+# volume and stay Pending, so the StatefulSets create fresh claims. With the
+# Postgres volume backed up, Velero restores the claims: a PV with reclaim
+# policy Delete and no snapshot is provisioned fresh, and the PodVolumeRestore
+# fills the Postgres one.
+restore_scope="  includeClusterResources: false
+  excludedResources:
+    - persistentvolumeclaims"
+if [[ "${fs_backed}" -eq 1 ]]; then
+  restore_scope="  # Unset so the claims' PVs are handled with them."
+fi
 cat <<EOF | k apply -f -
 apiVersion: velero.io/v1
 kind: Restore
@@ -265,14 +391,11 @@ spec:
   includedNamespaces:
     - takserver
     - cloudtak
-  includeClusterResources: false
-  # The backup holds no volumes. A restored claim would point at the deleted
-  # volume and stay Pending, so let the StatefulSets create fresh claims.
-  excludedResources:
-    - persistentvolumeclaims
+${restore_scope}
 EOF
 
-wait_phase restore.velero.io "${restore_name}" 60
+# A PodVolumeRestore holds the Restore InProgress until the data is back.
+wait_phase restore.velero.io "${restore_name}" "$(( fs_backed == 1 ? 300 : 60 ))"
 say "Restore ${restore_name} Completed"
 
 apps_up=0
@@ -351,8 +474,22 @@ reload_db() {
   ' sh "${user}" "${db}" < "${file}"
 }
 
-reload_db takserver "${tak_pod}" "${tak_container}" postgres cot "${work}/tak.sql"
-reload_db cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak "${work}/cloudtak.sql"
+# Load what Velero brought back, the way an operator would, and check it is
+# the dump taken before the backup.
+# shellcheck source=tests/db-dump-secret.sh
+source "${root}/tests/db-dump-secret.sh"
+secret_dump_sql takserver tak-db-dump > "${work}/tak-restored.sql"
+secret_dump_sql cloudtak cloudtak-db-dump > "${work}/cloudtak-restored.sql"
+for pair in tak cloudtak; do
+  if ! cmp -s "${work}/${pair}.sql" "${work}/${pair}-restored.sql"; then
+    say "restored ${pair} dump Secret does not match the dump taken before the backup" >&2
+    exit 1
+  fi
+done
+say "restored dump Secrets match the dumps taken before the backup"
+
+reload_db takserver "${tak_pod}" "${tak_container}" postgres cot "${work}/tak-restored.sql"
+reload_db cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak "${work}/cloudtak-restored.sql"
 
 tak_note="$(read_marker takserver "${tak_pod}" "${tak_container}" postgres cot | tr -d '[:space:]')"
 ct_note="$(read_marker cloudtak "${ct_pod}" "${ct_container}" cloudtak cloudtak | tr -d '[:space:]')"

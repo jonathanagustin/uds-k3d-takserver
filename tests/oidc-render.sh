@@ -52,6 +52,10 @@ for app in "${apps[@]}"; do
   if grep -qw 'render-oidc' <<< "${template_inits}"; then
     fail "${app}: the Deployment template carries render-oidc, so it is not coming from admission"
   fi
+  template_ports="$(kctl get deploy "${app}" -n "${ns}" -o jsonpath='{.spec.template.spec.containers[0].ports[*].name}')"
+  if grep -qw 'metrics' <<< "${template_ports}"; then
+    fail "${app}: the Deployment template carries the metrics port, so it is not coming from admission"
+  fi
 
   pods="$(kctl get pods -n "${ns}" -l "app=${app}" -o jsonpath='{.items[*].metadata.name}')"
   if [[ -z "${pods}" ]]; then
@@ -66,6 +70,23 @@ for app in "${apps[@]}"; do
     fi
     code="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.status.initContainerStatuses[?(@.name=="render-oidc")].state.terminated.exitCode}')"
     [[ "${code}" = "0" ]] || fail "${pod}: render-oidc exit code '${code}'"
+
+    metrics="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{range .spec.containers[0].ports[*]}{.name}={.containerPort}{" "}{end}')"
+    if [[ "${app}" == "takserver-api" || "${app}" == "takserver-messaging" ]]; then
+      if ! grep -qw 'metrics=9100' <<< "${metrics}"; then
+        fail "${pod}: metrics port is '${metrics}'"
+      fi
+    elif grep -qw 'metrics=9100' <<< "${metrics}"; then
+      fail "${pod}: unexpected metrics port '${metrics}'"
+    fi
+
+    # The Deployment still mounts ConfigMap cert-migration. Admission swaps
+    # that volume for Secret takserver-certs before the pod is created.
+    cert_secret="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.spec.volumes[?(@.name=="config")].secret.secretName}')"
+    cert_cm="$(kctl get pod "${pod}" -n "${ns}" -o jsonpath='{.spec.volumes[?(@.name=="config")].configMap.name}')"
+    if [[ "${cert_secret}" != "takserver-certs" || -n "${cert_cm}" ]]; then
+      fail "${pod}: cert volume is secret=${cert_secret:-<none>} configMap=${cert_cm:-<none>}"
+    fi
 
     # TAK rewrites /conf/CoreConfig.xml from its in-memory copy when it saves,
     # so this is the secret the process holds, not only what the init rendered.

@@ -86,24 +86,71 @@ async def read_until(reader, needle, timeout):
     return buf
 
 
+def crypto_close(connection):
+    """The QUIC CONNECTION_CLOSE code when it is a TLS alert (0x100-0x1ff), else None."""
+    event = connection._close_event
+    if event is None:
+        return None
+    print(f"connection closed: error 0x{event.error_code:x} {event.reason_phrase!r}")
+    if 0x100 <= event.error_code <= 0x1FF:
+        return event.error_code
+    return None
+
+
 async def reject(host, port):
-    transport = None
+    """Pass only when the server ends the handshake with a TLS alert.
+
+    No answer at all is a failure, so a broken route cannot pass as a refusal.
+    In TLS 1.3 the client can finish its side before the server checks the
+    client certificate, so a connection that opens is given a few seconds to
+    be closed by the server. Data on the stream, or a connection that stays
+    open, means the server accepted a client with no certificate.
+    """
+    loop = asyncio.get_running_loop()
+    connection = QuicConnection(configuration=configuration(None, None, None))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", 0))
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: QuicConnectionProtocol(connection),
+        sock=sock,
+    )
     try:
-        transport, _protocol, _reader, _writer = await asyncio.wait_for(
-            open_stream(host, port, configuration(None, None, None)),
-            15,
-        )
-    except TimeoutError:
-        print("no QUIC response without a certificate", file=sys.stderr)
+        protocol.connect((host, port))
+        try:
+            await asyncio.wait_for(protocol.wait_connected(), 15)
+        except TimeoutError:
+            print("no QUIC response without a certificate", file=sys.stderr)
+            return 1
+        except ConnectionError:
+            code = crypto_close(connection)
+            if code is not None:
+                print(f"refused without a certificate: TLS alert {code - 0x100}")
+                return 0
+            print("connection ended without a TLS alert", file=sys.stderr)
+            return 1
+        # A stream exists for the server only once a frame carries it.
+        reader, writer = await protocol.create_stream()
+        writer.write(b"\n")
+        try:
+            data = await asyncio.wait_for(reader.read(65536), 10)
+        except TimeoutError:
+            data = b""
+        except ConnectionError:
+            data = b""
+        await asyncio.sleep(0.5)
+        code = crypto_close(connection)
+        if code is not None and not data:
+            print(f"refused without a certificate after the client finished: TLS alert {code - 0x100}")
+            return 0
+        print(f"no certificate and not refused; {len(data)} bytes on the stream", file=sys.stderr)
         return 1
-    except Exception as exc:
-        print(f"refused without a certificate: {type(exc).__name__}: {exc}")
-        return 0
     finally:
-        if transport is not None:
-            transport.close()
-    print("handshake succeeded without a client certificate", file=sys.stderr)
-    return 1
+        protocol.close()
+        try:
+            await asyncio.wait_for(protocol.wait_closed(), 2)
+        except TimeoutError:
+            pass
+        transport.close()
 
 
 async def roundtrip(host, port, cert, key, password, uid, ready, stop):

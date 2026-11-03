@@ -16,7 +16,7 @@
 # amd64 and arm64.
 
 ARG BUILDER_IMAGE=eclipse-temurin:17.0.20_8-jdk-jammy@sha256:51d32af96fb8a13ffbc96c719d7b05447a04ca69f314627d64050a64ecd13057
-ARG RUNTIME_IMAGE=registry.access.redhat.com/ubi9/openjdk-17:1.24-3.1791779556@sha256:716810ec4ad7805f57b6434da9405188cb98b30042bdb1cff0d833f76ed5b4b0
+ARG RUNTIME_IMAGE=registry.access.redhat.com/ubi9/openjdk-17:1.24-3.1792711375@sha256:5c179856ef17684de55f5819f36ee71329539e7161d1ed06cf4c6e8d735044cb
 
 FROM ${BUILDER_IMAGE} AS builder
 
@@ -189,6 +189,13 @@ RUN chmod 0755 \
         /takserver-api-cluster.sh \
         /takserver-messaging-cluster.sh \
         /takserver-config-cluster.sh \
+    && sed -i 's#-jar takserver.war#-javaagent:/opt/tak/metrics/jmx_prometheus_javaagent.jar=9100:/opt/tak/metrics/jmx-exporter.yaml -Dserver.tomcat.mbeanregistry.enabled=true -jar takserver.war#' \
+        /takserver-api-cluster.sh \
+        /takserver-messaging-cluster.sh \
+    && grep -q -- '-javaagent:/opt/tak/metrics/jmx_prometheus_javaagent.jar=9100:' /takserver-api-cluster.sh \
+    && grep -q -- '-javaagent:/opt/tak/metrics/jmx_prometheus_javaagent.jar=9100:' /takserver-messaging-cluster.sh \
+    && ! grep -q -- '-javaagent:' /takserver-config-cluster.sh \
+    && ! grep -q -- '-javaagent:' /takserver-plugins-cluster.sh \
     && sed -i 's/java -jar UserManager.jar/java -Xmx128m -jar UserManager.jar/' /enable_admin.sh \
     && sed -i 's/-Djdk.tls.client.protocols=TLSv1.2/-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2/' /setenv.sh \
     && grep -q -- '-Djdk.tls.client.protocols=TLSv1.3,TLSv1.2' /setenv.sh \
@@ -217,7 +224,29 @@ ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
 # MaxRAMPercentage. 512m is the floor Ignite prints in its own warning.
 # The flags stay on those three java commands. JDK_JAVA_OPTIONS would also
 # apply to UserManager, and a second 512m heap in the messaging pod exceeds 1Gi.
+# API and messaging also load the Prometheus JMX exporter as a javaagent. It
+# serves plain-HTTP Prometheus text on 9100 from its own small HTTP server, so
+# TAK's Spring configuration, loader.path, and connectors are unchanged.
+# (Spring Boot's management.server.port cannot be used: messaging fails with
+# "MessagingOnlyConfiguration$1 cannot be instantiated".) The agent's JVM
+# collectors give jvm_memory_*, jvm_gc_collection_seconds and process_*.
+# server.tomcat.mbeanregistry.enabled registers Tomcat's MBeans, which the
+# exporter turns into tomcat_requestcount_total and tomcat_errorcount_total.
+# Config and plugins do not bind 9100.
 ENV PLUGIN_MANAGER_MAX_HEAP=128
+
+# Prometheus JMX exporter javaagent 1.7.0 from the GitHub release. The
+# checksum is the sha256 the release publishes next to the jar. Only Tomcat's
+# GlobalRequestProcessor MBeans are read, so Ignite's MBeans stay out of the
+# scrape.
+COPY jmx-exporter.yaml /opt/tak/metrics/jmx-exporter.yaml
+RUN curl -fsSL -o /opt/tak/metrics/jmx_prometheus_javaagent.jar \
+        https://github.com/prometheus/jmx_exporter/releases/download/1.7.0/jmx_prometheus_javaagent-1.7.0.jar \
+    && echo '0ad843261c567d1924a017d542e14c40f2afff523d940c25ee000742fde4b3a9  /opt/tak/metrics/jmx_prometheus_javaagent.jar' \
+        > /tmp/jmx-exporter.sha256 \
+    && sha256sum -c /tmp/jmx-exporter.sha256 \
+    && rm /tmp/jmx-exporter.sha256 \
+    && chmod 0644 /opt/tak/metrics/jmx_prometheus_javaagent.jar /opt/tak/metrics/jmx-exporter.yaml
 
 FROM cluster-base AS takserver-config
 ARG UPSTREAM_REF=5.7-RELEASE-14

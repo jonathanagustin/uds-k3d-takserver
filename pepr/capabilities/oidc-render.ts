@@ -6,8 +6,15 @@
 // created, so no TAK pod can
 // start with the unrendered template. A node that did would publish that
 // copy to the others through the Ignite configuration cache.
+//
+// The upstream chart mounts certificates from a ConfigMap. This swaps that
+// volume for Secret takserver-certs before the pod is admitted.
 
 export const NAMESPACE = "takserver";
+
+// The upstream volume name. The chart has no value that mounts a Secret.
+export const CERT_VOLUME = "config";
+export const CERT_SECRET = "takserver-certs";
 
 // Pods that read CoreConfig.xml. Ignite, NATS and Postgres do not.
 export const TAK_APPS = [
@@ -22,15 +29,27 @@ export const RELOAD_VALUE = "takserver";
 export const INIT_NAME = "render-oidc";
 export const CONFIG_MOUNT = "rendered-core";
 
+// Plain HTTP Prometheus text. The upstream Deployment has no metrics port,
+// and the Package PodMonitor scrapes a named container port.
+export const METRICS_PORT_NAME = "metrics";
+export const METRICS_PORT = 9100;
+
 interface Volume {
   name: string;
   [key: string]: unknown;
+}
+
+interface ContainerPort {
+  name?: string;
+  containerPort: number;
+  protocol?: string;
 }
 
 interface Container {
   name: string;
   image?: string;
   volumeMounts?: { name: string; mountPath: string; readOnly?: boolean }[];
+  ports?: ContainerPort[];
   [key: string]: unknown;
 }
 
@@ -46,6 +65,27 @@ export interface PodLike {
 export function isTakPod(pod: PodLike): boolean {
   const app = pod.metadata?.labels?.app;
   return app !== undefined && TAK_APPS.includes(app);
+}
+
+function useCertSecret(pod: PodLike): boolean {
+  const volumes = pod.spec?.volumes;
+  if (!volumes) {
+    return false;
+  }
+  let changed = false;
+  for (const volume of volumes) {
+    if (volume.name !== CERT_VOLUME) {
+      continue;
+    }
+    const secret = volume.secret as { secretName?: string } | undefined;
+    if (secret?.secretName === CERT_SECRET && volume.configMap === undefined) {
+      continue;
+    }
+    delete volume.configMap;
+    volume.secret = { secretName: CERT_SECRET };
+    changed = true;
+  }
+  return changed;
 }
 
 function renderVolumes(): Volume[] {
@@ -85,7 +125,7 @@ export function addRender(pod: PodLike, image: string): boolean {
     return false;
   }
   const spec = (pod.spec ??= {});
-  let changed = false;
+  let changed = useCertSecret(pod);
 
   const volumes = (spec.volumes ??= []);
   for (const volume of renderVolumes()) {
@@ -109,6 +149,14 @@ export function addRender(pod: PodLike, image: string): boolean {
     if (!mounts.some(existing => existing.name === CONFIG_MOUNT)) {
       mounts.push({ name: CONFIG_MOUNT, mountPath: "/conf" });
       changed = true;
+    }
+    const app = pod.metadata?.labels?.app;
+    if (app === "takserver-api" || app === "takserver-messaging") {
+      const ports = (main.ports ??= []);
+      if (!ports.some(existing => existing.name === METRICS_PORT_NAME)) {
+        ports.push({ name: METRICS_PORT_NAME, containerPort: METRICS_PORT, protocol: "TCP" });
+        changed = true;
+      }
     }
   }
 

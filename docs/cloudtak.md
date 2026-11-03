@@ -7,10 +7,10 @@
 | Object | Namespace | Purpose |
 | --- | --- | --- |
 | Deployment `cloudtak` | `cloudtak` | CloudTAK's nginx and API process on port 5000, plus the `sso` and `bootstrap` containers |
-| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:15-3.4` (amd64 and arm64, see [ADR 13](../adr/0013-build-the-postgis-image-here.md)), 2Gi volume |
+| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64, see [ADR 18](../adr/0018-upgrade-postgres-in-place.md)), 2Gi volume |
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
 | Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
-| Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, and `admin.key`, copied from ConfigMap `takserver/cert-migration` by the component's `onDeploy` action |
+| Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
 Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, CoT from TAK, and the admin pages do.
@@ -33,7 +33,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 - The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.112.3-<key>`).
 - The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-24.04` and `ubuntu-24.04-arm`). Each job pushes `v13.112.3-<key>-<arch>`, and only when no image with those inputs exists yet.
 - `cloudtak-index` then runs `build.sh --merge`. It writes `v13.112.3-<key>` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
-- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.112.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`15-3.4-<key>`).
+- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.112.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`18-3.6-<key>`).
 - `v13.112.3` and `v13.112.3-<arch>`, the tags in the committed files and in released packages, are written only from `main`. `build.sh --wait`, used by the Scan and Package workflows, waits for the keyed index.
 - `.github/workflows/cloudtak-image.yaml` does the same on `main`.
 
@@ -183,4 +183,4 @@ CloudTAK is licensed under AGPL-3.0. This repository does not include its source
 
 ## Resources
 
-On the test node, CloudTAK requests 100m CPU and 384Mi memory, with a 1Gi limit. The `sso` container requests 10m and 192Mi, with a 512Mi limit. It loads CloudTAK's modules and sits near 270 MB. The bootstrap container requests 10m and 48Mi. PostGIS requests 50m and 128Mi. The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.
+CloudTAK requests 100m CPU and 256Mi memory, with a 500m and 768Mi limit. The `sso` container requests 50m and 128Mi, with a 500m and 512Mi limit. It loads CloudTAK's modules. On run 40174810574 the steady working set was 146Mi for CloudTAK and 67Mi for `sso`; an earlier note had `sso` near 270 MB, which is why the limit stays 512Mi. The bootstrap container requests 10m and 48Mi, with a 200m and 128Mi limit (steady 19Mi). PostGIS requests 50m and 128Mi, with a 500m and 512Mi limit (steady 96Mi). The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.

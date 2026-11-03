@@ -40,11 +40,35 @@ if [[ "${arch}" != "amd64" ]]; then
   exit 0
 fi
 
+# UDP counters on both ends of the gateway hop. Udp InDatagrams in the TAK
+# pod's network namespace counts packets that reached it, and OutDatagrams
+# counts its replies. The Envoy udp stats count what the proxy received and
+# sent upstream.
+udp_counters() {
+  set +e
+  local pod proxy
+  pod="$(kctl get pods -n takserver -l app=takserver-messaging -o jsonpath='{.items[0].metadata.name}')"
+  echo "UDP counters ($1), ${pod}:" >&2
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'grep "^Udp:" /proc/net/snmp' >&2
+  proxy="$(kctl get pods -n envoy-default-gateway -o jsonpath='{.items[0].metadata.name}')"
+  if [[ -n "${proxy}" ]]; then
+    kctl port-forward -n envoy-default-gateway "pod/${proxy}" 19100:19000 >/dev/null 2>&1 &
+    local pf=$!
+    sleep 3
+    echo "Envoy udp stats ($1), ${proxy}:" >&2
+    curl -sS --max-time 5 http://127.0.0.1:19100/stats | grep -E '^(udp\.|cluster\.udproute)' | grep -v ': 0$' >&2
+    kill "${pf}" >/dev/null 2>&1
+    wait "${pf}" 2>/dev/null
+  fi
+  set -e
+}
+
 # What to look at when QUIC fails: the gateway and route status, the UDP
 # Services and policies, whether TAK bound UDP 8090, and its QUIC log lines.
 diagnose() {
   set +e
   echo "::group::QUIC diagnostics" >&2
+  udp_counters "after"
   kctl get gateway -n envoy-default-gateway -o yaml >&2
   kctl get udproute -A -o yaml >&2
   kctl get svc,endpointslices -n envoy-default-gateway -o wide >&2
@@ -64,6 +88,7 @@ diagnose() {
     kctl logs -n envoy-default-gateway "${proxy}" -c envoy --tail=50 >&2
   done
   echo "::endgroup::" >&2
+  set -e
 }
 
 work="$(mktemp -d)"
@@ -149,11 +174,15 @@ key_pass_file="${work}/key-pass"
 printf '%s' "${TAK_CLIENT_KEY_PASSPHRASE}" > "${key_pass_file}"
 chmod 600 "${key_pass_file}"
 
+udp_counters "before"
 echo "client without a certificate"
+reject_failed=""
 if ! run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" reject --host "${gw_ip}" --port "${gw_port}"; then
   echo "QUIC did not refuse a client with no certificate with a TLS alert" >&2
   diagnose
-  exit 1
+  # Keep going so the log also shows whether a client with a certificate
+  # gets through. The test still fails at the end.
+  reject_failed=1
 fi
 
 uid="uds-quic-$(date +%s)"
@@ -208,3 +237,7 @@ if [[ -z "${listed}" ]]; then
   exit 1
 fi
 echo "QUIC client ${uid} listed in /Marti/api/subscriptions/all"
+if [[ -n "${reject_failed}" ]]; then
+  echo "QUIC accepted the certificate client, but the client with no certificate was not refused with a TLS alert" >&2
+  exit 1
+fi

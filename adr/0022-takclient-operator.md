@@ -60,7 +60,7 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
   1. Deletes the TAK file user, so a new connection gets no groups.
   2. Adds the serial to the CRL and writes it to Secret `takserver/takserver-crl`, signed by the TAK CA, with a `nextUpdate` 730 days out, as TAK's own `config.cfg` sets.
   3. Deletes the client's Secret.
-- Pepr adds its finalizer in the mutating webhook. `finalize-chart.mjs` already narrows that webhook to the TAK pods, so it moves the `takclients` rule to a second webhook entry that matches only namespace `takclients`.
+- Pepr adds its finalizer in the mutating webhook. `finalize-chart.mjs` narrows that webhook to namespace `takserver` and, with match conditions, to the TAK objects (see `webhook-scope.ts`). `splitTakClientWebhook` moves the `takclients` rule to a second webhook entry that matches only namespace `takclients`, with the same path, CA bundle, timeout, and failure policy and without those match conditions.
 - If finalize cannot finish (the CA is not readable), it keeps the finalizer and writes an annotation 30 seconds later, which runs it again.
 - A certificate that Reconcile replaces (the Secret was deleted, the callsign changed, or a third of the lifetime is left) is added to the CRL too.
 - The render capability mounts `takserver-crl` into the messaging and API pods, and CoreConfig gets `<crl _name="tak-ca" crlFile="certs/crl/ca.crl"/>` in `<security><tls>`. The Secret has the UDS Core `uds.dev/pod-reload` label, so UDS Core restarts those pods when the CRL changes and TAK starts rejecting the certificate. Between the delete and the restart, the certificate can still connect, with no groups.

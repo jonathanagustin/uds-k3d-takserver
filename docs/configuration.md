@@ -102,7 +102,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 
 ## The takserver-oidc module
 
-The upstream chart has no values for init containers, probes, or the extra objects TAK needs on UDS. The Pepr module in `pepr/` adds them. Zarf deploys it into `pepr-system` before the upstream chart, so every TAK object is shaped when it is first stored. It has five capabilities, registered in `pepr/pepr.ts`:
+The upstream chart has no values for init containers, probes, or the extra objects TAK needs on UDS. The Pepr module in `pepr/` adds them. Zarf deploys it into `pepr-system` before the upstream chart, so every TAK object is shaped when it is first stored. It has five capabilities, registered in `pepr/pepr.ts`. The name `takserver-oidc` is from when rendering the OIDC secret was its only job. It stays, because the name and the uuid in `pepr/package.json` name the webhooks and the watcher in a running cluster, and PodMonitor `takserver-oidc` selects pods by the uuid. A rename would replace them on upgrade. release-please sets the module version to the package release.
 
 | Capability | What it does |
 | --- | --- |
@@ -113,6 +113,8 @@ The upstream chart has no values for init containers, probes, or the extra objec
 | `takserver-cloudtak-admin` | Copies the TAK CA, the admin certificate and key, and the keystore password to the `cloudtak` namespace. CloudTAK uses them to connect to TAK. See [CloudTAK](cloudtak.md#tak-connection) |
 
 The watcher runs the reconciles. Its memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
+
+Why a Pepr module and not a forked chart, a Helm post-renderer, Kustomize, or upstream changes: see [ADR 23](../adr/0023-adapt-the-upstream-chart-with-pepr.md). It also lists where each of those would be the better choice.
 
 ## Single sign-on
 
@@ -221,4 +223,5 @@ The NATS toolbox is disabled in `values/common-values.yaml`.
 - [Data](data.md)
 - [Slim core boundaries](../adr/0005-slim-core-boundaries.md)
 - [Prometheus monitors](../adr/0017-prometheus-monitors.md)
+- [Adapting the upstream chart](../adr/0023-adapt-the-upstream-chart-with-pepr.md)
 - [Values profiles](profiles.md)

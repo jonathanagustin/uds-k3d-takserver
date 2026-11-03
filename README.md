@@ -330,7 +330,7 @@ The first four also have package values (`global.domain`, `tak.imageTag`, `dns.i
 | Architecture | Images | Zarf package | Tested in CI |
 | --- | --- | --- | --- |
 | `amd64` (x86_64) | yes | yes | install and upgrade |
-| `arm64` (aarch64) | yes | yes | install |
+| `arm64` (aarch64) | yes | yes | install and upgrade |
 
 The images are multi-arch: one tag serves both. Zarf packages are per architecture, and `uds run create-dev-package` builds for the machine you run it on. To build for the other one:
 
@@ -350,7 +350,7 @@ The ATAK test device is amd64 only and needs KVM on the node.
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate.
 - The CloudTAK tests go from `map.<domain>` to the Keycloak login and back as that user, and require a live TAK connection with that user's certificate.
 
-In GitHub Actions, the Test workflow runs the install test on amd64 and arm64. It runs the upgrade test from the last release on amd64 only. Full Core deploys the full UDS Core layers and checks monitoring, logging, Falco, Portal, and a Velero backup and restore. It runs nightly, on `main`, and on pull requests that touch those areas or carry the `full-core` label. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
+In GitHub Actions, the Test workflow runs the install test on amd64 and arm64. It runs the upgrade test from the last release on both architectures too. Full Core deploys the full UDS Core layers and checks monitoring, logging, Falco, Portal, and a Velero backup and restore. It runs nightly, on `main`, and on pull requests that touch those areas or carry the `full-core` label. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
 
 ## Repository layout
 

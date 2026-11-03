@@ -14,7 +14,11 @@
       "extra-files": [
         { "type": "generic", "path": "charts/takserver/Chart.yaml" },
         { "type": "generic", "path": "common/zarf.yaml" },
-        { "type": "generic", "path": "README.md" }
+        { "type": "generic", "path": "README.md" },
+        { "type": "json", "path": "pepr/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "pepr/package.json", "jsonpath": "$.pepr.appVersion" },
+        { "type": "json", "path": "pepr/package-lock.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "pepr/package-lock.json", "jsonpath": "$.packages[''].version" }
       ]
     }
   },

@@ -10,7 +10,13 @@ baseline="${1:?Usage: upgrade.sh baseline.json}"
 work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/tak-upgrade.XXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 root="$(pwd)"
-export UDS_ARCH=amd64 FLAVOR=upstream
+# The released package and the bundle are for this runner's architecture.
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "upgrade: unknown machine $(uname -m)" >&2; exit 1 ;;
+esac
+export UDS_ARCH="${arch}" FLAVOR=upstream
 read_baseline() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "${baseline}" "$1"; }
 tag="$(read_baseline tag)"
 package="$(read_baseline package)"
@@ -31,11 +37,11 @@ uds zarf tools yq -i '
   } |
   del(.packages[] | select(.name == "takserver") | .repository)
 ' "${work}/bundle/uds-bundle.yaml"
-if ! uds zarf package pull "${package}" --architecture=amd64 --no-progress --features values=true -o "${work}"; then
-  echo "::error title=Released package unavailable::Cannot pull ${package} for ${tag}. Publish this release's upstream amd64 package before rerunning."
+if ! uds zarf package pull "${package}" --architecture="${arch}" --no-progress --features values=true -o "${work}"; then
+  echo "::error title=Released package unavailable::Cannot pull ${package} for ${tag}. Publish this release's upstream ${arch} package before rerunning."
   exit 1
 fi
-released="${work}/zarf-package-takserver-amd64-${version}-upstream.tar.zst"
+released="${work}/zarf-package-takserver-${arch}-${version}-upstream.tar.zst"
 test -s "${released}"
 # A bundle that names a different signer must refuse the same signed package.
 # Check the reason too, so a network or disk failure cannot pass for a refusal.
@@ -43,7 +49,7 @@ cp -r "${work}/bundle" "${work}/bundle-wrong-signer"
 WRONG_SIGNER_REGEXP='^https://github\.com/not-this-repo/not-this-repo/\.github/workflows/release\.yaml@refs/heads/main$' \
   uds zarf tools yq -i '(.packages[] | select(.name == "takserver") | .keylessVerification.certificateIdentityRegexp) = strenv(WRONG_SIGNER_REGEXP)' \
   "${work}/bundle-wrong-signer/uds-bundle.yaml"
-if wrong="$(uds create "${work}/bundle-wrong-signer" --architecture=amd64 --confirm --no-progress 2>&1)"; then
+if wrong="$(uds create "${work}/bundle-wrong-signer" --architecture="${arch}" --confirm --no-progress 2>&1)"; then
   echo "::error title=Wrong signer accepted::uds create accepted a bundle whose keylessVerification names a different signer."
   exit 1
 fi
@@ -53,7 +59,7 @@ if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
   exit 1
 fi
 rm -rf "${work}/bundle-wrong-signer"
-uds create "${work}/bundle" --architecture=amd64 --confirm --no-progress
+uds create "${work}/bundle" --architecture="${arch}" --confirm --no-progress
 # The baseline cluster starts from slim core 1.15.0 on purpose. Release
 # 0.6.0's admission chart asks for Pepr controller v2.0.3, which the 1.15.0
 # checkpoint has and the 1.15.2 one does not. The pinned PostgreSQL 15 job

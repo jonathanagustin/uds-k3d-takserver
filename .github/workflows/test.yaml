@@ -312,9 +312,10 @@ jobs:
 
   # Install and upgrade do not need each other, so they run at the same time.
   # Upgrade must resolve a released baseline; the first-release bootstrap is reported explicitly.
-  # The install path runs once per architecture on a native runner. The
-  # slim core checkpoint and core-base are published for amd64 and arm64.
-  # Upgrade stays on amd64 until a released arm64 package exists.
+  # The install and upgrade paths run once per architecture on a native
+  # runner. The slim core checkpoints (1.15.0 and 1.16.0), core-base, and
+  # every released takserver package from 0.6.0 on are published for amd64
+  # and arm64.
   validate-install:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
     strategy:
@@ -542,7 +543,16 @@ jobs:
     needs: [images, cloudtak-index, postgis-index]
     # Run baseline discovery even when image preparation fails, never a silent skip.
     if: ${{ !cancelled() }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: validate-upgrade (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     # A healthy upgrade finishes in about 30 minutes. This job limit is what
     # stops a step whose own timeout does not, such as actions/upload-artifact.
     timeout-minutes: 75
@@ -570,7 +580,17 @@ jobs:
   validate-upgrade-pg15:
     needs: [images, cloudtak-index, postgis-index]
     if: ${{ !cancelled() && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')) }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+    # Release 0.6.0 published an arm64 package too, so this runs on both.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    name: validate-upgrade-pg15 (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
     permissions:
       actions: read

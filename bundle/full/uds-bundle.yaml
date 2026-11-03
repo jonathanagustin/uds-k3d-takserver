@@ -194,3 +194,9 @@ packages:
           values:
             - path: backup.dump.enabled
               value: true
+          variables:
+            # Keycloak groups that may sign in to CloudTAK. Unset keeps the
+            # chart default, /UDS Core/Admin and /CloudTAK/Users.
+            - name: CLOUDTAK_SSO_GROUPS
+              description: Keycloak group paths allowed to sign in to CloudTAK (a list)
+              path: sso.groups

@@ -14,6 +14,8 @@ const adminUser = process.env.KEYCLOAK_USER || "doug";
 const adminPassword = process.env.KEYCLOAK_PASSWORD || "unicorn123!@#UN";
 const outsider = process.env.KEYCLOAK_OUTSIDER || "outsider";
 const outsiderPassword = process.env.KEYCLOAK_OUTSIDER_PASSWORD || "outsider123!@#UN";
+const mapUser = process.env.KEYCLOAK_MAP_USER || "mapuser";
+const mapUserPassword = process.env.KEYCLOAK_MAP_USER_PASSWORD || "mapuser123!@#UN";
 const shots = ".playwright/screenshots";
 
 // The portal's left navigation is made of links too: My Account is its own
@@ -69,6 +71,27 @@ test.describe("portal tiles", () => {
     for (const marker of hidden) {
       expect(names.join("\n"), marker).not.toContain(marker);
     }
+  });
+
+  // tests/ensure-map-user.py: /CloudTAK/Users and /TAK/Operators_READ, not
+  // /UDS Core/Admin. The CloudTAK client allows that group and the TAK
+  // Server client does not.
+  test("a /CloudTAK/Users member sees only the CloudTAK tile", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const context = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await context.newPage();
+    await page.goto(portalUrl);
+    await signIn(page, mapUser, mapUserPassword);
+    const names = await packageTiles(page);
+    await page.screenshot({ path: `${shots}/portal-mapuser.png`, fullPage: true });
+    expect(names, "Package tiles besides My Account").toEqual(["CloudTAK"]);
+    for (const marker of hidden) {
+      expect(names.join("\n"), marker).not.toContain(marker);
+    }
+    await context.close();
   });
 
   test("a user outside the admin group sees neither tile", async ({ browser }) => {

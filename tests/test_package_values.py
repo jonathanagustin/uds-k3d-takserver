@@ -182,6 +182,34 @@ class PackageValuesTests(unittest.TestCase):
         for passthrough in ("tak-api-https", "tak-api-cert", "tak-messaging-streaming"):
             self.assertIsNone(uptime["takserver"][passthrough])
 
+    def test_health_checks_cover_the_client_ports(self):
+        _out, docs = render()
+        expose = {e["description"]: e for e in find(docs, "Package", "takserver")["spec"]["network"]["expose"]}
+        health = expose["tak-health"]
+        self.assertEqual(health["uptime"], {"checks": {"paths": ["/stream", "/api", "/enroll"]}})
+        self.assertEqual(health["gateway"], "admin")
+        self.assertEqual(health["annotations"], {"uds.dev/visible": "false"})
+        pod = find(docs, "Deployment", "tak-health")["spec"]["template"]["spec"]
+        secrets = [v["secret"]["secretName"] for v in pod["volumes"] if "secret" in v]
+        self.assertEqual(secrets, ["tak-health-client"])
+        # Its own key is not encrypted, so the pod reads no other Secret.
+        self.assertNotIn("secretKeyRef", str(pod))
+        env = {e["name"]: e.get("value") for e in pod["containers"][0]["env"]}
+        self.assertEqual(env["INTERVAL_SECONDS"], "30")
+        self.assertEqual(env["STALE_SECONDS"], "90")
+        job = find(docs, "Job", "takserver-cert-init")
+        # The cert-init Job runs issue-health-cert.sh, which is inlined.
+        self.assertIn("Issued client certificate CN=${cn}", str(job))
+
+    def test_health_package_value_turns_it_off(self):
+        _out, docs = render(values=["health.enabled=false"])
+        expose = {e["description"] for e in find(docs, "Package", "takserver")["spec"]["network"]["expose"]}
+        self.assertNotIn("tak-health", expose)
+        names = {(d.get("kind"), (d.get("metadata") or {}).get("name")) for d in docs}
+        self.assertNotIn(("Deployment", "tak-health"), names)
+        self.assertNotIn(("Service", "tak-health"), names)
+        self.assertNotIn("Issued client certificate", str(find(docs, "Job", "takserver-cert-init")))
+
 
 if __name__ == "__main__":
     unittest.main()

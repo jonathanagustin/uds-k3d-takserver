@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# TAK client-port health for UDS Core uptime checks.
+# A loop checks each TAK client port through the passthrough gateway, the
+# way a TAK client reaches it, with the tak-health client certificate. It
+# writes one result file per check. Health.java answers each HTTP request
+# from those files, so a probe never opens a TAK connection itself.
+#   /stream  8089: mutual TLS, then a CoT ping (t-x-c-t). Passes on TAK's pong.
+#   /api     8443 (443 SNI takserver-api): mutual TLS, GET /Marti/api/version.
+#   /enroll  8446: TLS, GET /login. Passes on 200 from TAK.
+# Checks run every INTERVAL_SECONDS (30). A result older than STALE_SECONDS
+# (90, three intervals) answers 503, so a stuck loop also reads as down.
+set -uo pipefail
+
+gw="${GATEWAY:?}"
+domain="${DOMAIN:?}"
+dir="${STATE_DIR:-/tmp/health}"
+interval="${INTERVAL_SECONDS:-30}"
+stale="${STALE_SECONDS:-90}"
+certs="${CERT_DIR:-/certs}"
+mkdir -p "${dir}"
+
+tls() {
+  # $1 port, $2 SNI, $3 client cert (yes|no). Reads the request on stdin.
+  local args=(-quiet -verify_return_error -CAfile "${certs}/ca.pem"
+    -connect "${gw}:$1" -servername "$2")
+  if [[ "$3" == "yes" ]]; then
+    args+=(-cert "${certs}/client.pem" -key "${certs}/client.key")
+  fi
+  timeout 10 openssl s_client "${args[@]}" 2>&1
+}
+
+record() {
+  # $1 name, $2 0|1, $3 detail
+  printf '%s %s %s\n' "$(date +%s)" "$2" "$3" > "${dir}/$1.tmp"
+  mv "${dir}/$1.tmp" "${dir}/$1"
+  echo "check $1 ok=$2 $3"
+}
+
+check_stream() {
+  local now out
+  now="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+  out="$({ sleep 1
+    printf "<event version='2.0' uid='uds-tak-health' type='t-x-c-t' how='h-g-i-g-o' time='%s' start='%s' stale='%s'><point lat='0' lon='0' hae='0' ce='9999999' le='9999999'/><detail/></event>" "${now}" "${now}" "${now}"
+    sleep 3; } | tls 8089 "takserver-stream.${domain}" yes)"
+  if grep -q "t-x-c-t-r" <<< "${out}"; then
+    record stream 1 "pong"
+  else
+    record stream 0 "$(tr '\n' ' ' <<< "${out}" | cut -c1-200)"
+  fi
+}
+
+check_http() {
+  # $1 name, $2 port, $3 SNI, $4 path, $5 client cert
+  local out status
+  out="$(printf 'GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$4" "$3" | tls "$2" "$3" "$5")"
+  status="$(grep -m1 -o '^HTTP/1\.[01] [0-9][0-9][0-9]' <<< "${out}")"
+  status="${status##* }"
+  if [[ "${status}" == "200" ]]; then
+    record "$1" 1 "status 200"
+  else
+    record "$1" 0 "status ${status:-none}: $(tr '\n' ' ' <<< "${out}" | cut -c1-200)"
+  fi
+}
+
+(
+  while true; do
+    start="$(date +%s)"
+    check_stream
+    check_http api 443 "takserver-api.${domain}" /Marti/api/version yes
+    check_http enroll 8446 "takserver-stream.${domain}" /login no
+    # Start a round every interval seconds. The checks take up to 30s.
+    wait_s=$(( interval - ($(date +%s) - start) ))
+    sleep "$(( wait_s > 1 ? wait_s : 1 ))"
+  done
+) &
+# Health.java answers the probes from the result files. The JDK is already
+# in this image. ncat --sh-exec aborts when a client resets the connection.
+export STATE_DIR="${dir}" STALE_SECONDS="${stale}"
+exec java -Xmx24m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 /health/Health.java

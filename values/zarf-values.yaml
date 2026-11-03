@@ -7,7 +7,8 @@
 # and PLUGINS_MEMORY_LIMIT from `--set` or a
 # bundle's uds-config.yaml still decide the result. `--set-values` or
 # `--values` on `uds zarf package deploy` override a variable for its key.
-# See docs/configuration.md.
+# health.enabled has no variable. It is a plain value, so Helm sees it as
+# set. See docs/configuration.md.
 global:
   domain: "###ZARF_VAR_DOMAIN###"
 tak:
@@ -20,3 +21,5 @@ tak:
 dns:
   inCluster: "###ZARF_VAR_IN_CLUSTER_DNS###"
   passthroughHosts: "###ZARF_VAR_PASSTHROUGH_HOSTS###"
+health:
+  enabled: true

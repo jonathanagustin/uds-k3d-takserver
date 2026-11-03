@@ -32,7 +32,8 @@ The Package `expose` entries also tell UDS Core what to monitor and what to show
 | Expose entry | Portal tile | Uptime check |
 | --- | --- | --- |
 | `tak-web-http` (`takserver.<domain>`, tenant), only when `sso.enabled` | "TAK Server" (`uds.dev/title`) | `/login`. TAK serves its own login page there with status 200 and no redirect |
-| `tak-api-https`, `tak-api-cert`, `tak-messaging-streaming` (passthrough) | none (`uds.dev/visible: "false"`) | none. See [What has no uptime check](#what-has-no-uptime-check) |
+| `tak-api-https`, `tak-api-cert`, `tak-messaging-streaming` (passthrough) | none (`uds.dev/visible: "false"`) | none directly. `tak-health` checks them. See [Client-port health](#client-port-health) |
+| `tak-health` (`tak-health.admin.<domain>`, admin), only when `health.enabled` | none (`uds.dev/visible: "false"`) | `/stream`, `/api`, and `/enroll`. Each answers 200 when its TAK port passed its last check |
 | `cloudtak-map` (`map.<domain>`, tenant) | "CloudTAK" (`uds.dev/title`) | `/login`, which answers 200 without a session |
 | ATAK viewer (`atak.<domain>`, tenant, optional package) | no `uds.dev/title` set | `/phone.html`, through Authservice. The full-core job does not deploy this package, so it does not check this probe. See [ATAK test device](atak-device.md) |
 
@@ -45,6 +46,7 @@ The package uses UDS Core [uptime monitoring](https://docs.defenseunicorns.com/c
 | Probe | Namespace | Target |
 | --- | --- | --- |
 | `uds-takserver-tenant-uptime` | `takserver` | `https://takserver.<domain>/login` |
+| `uds-tak-health-admin-uptime` | `takserver` | `https://tak-health.admin.<domain>/stream`, `/api`, and `/enroll` |
 | `uds-map-tenant-uptime` | `cloudtak` | `https://map.<domain>/login` |
 | `uds-atak-tenant-uptime` (optional package) | `atak` | `https://atak.<domain>/phone.html` |
 
@@ -86,22 +88,54 @@ UDS Core ships three alerts for every probe, ours included:
 
 The thresholds are UDS Core settings under `udsCoreDefaultAlerts` in the `uds-prometheus-config` chart. See [Monitoring and observability](https://docs.defenseunicorns.com/core/reference/configuration/monitoring-and-observability/).
 
+#### Client-port health
+
+UDS Core cannot probe TAK's client ports itself. Its probe only sends an HTTPS GET and must trust the server certificate. On the passthrough hosts TAK serves the package's own CA, not the gateway certificate. Ports 8443 and 8089 also require a client certificate, and 8089 is not HTTP. The UDS Core API has no field for a custom probe module, and the operator overwrites the Blackbox configuration Secret.
+
+The `tak-health` pod fills that gap. Every 30 seconds it connects to TAK the way a TAK client does, through the passthrough gateway:
+
+| Path | TAK port | Passes when |
+| --- | --- | --- |
+| `/stream` | 8089 (`takserver-stream.<domain>`) | the mutual TLS handshake succeeds and TAK answers a CoT ping (`t-x-c-t`) with a pong (`t-x-c-t-r`) |
+| `/api` | 8443 (`takserver-api.<domain>` on 443) | the mutual TLS handshake succeeds and `GET /Marti/api/version` returns 200 |
+| `/enroll` | 8446 (`takserver-stream.<domain>`) | the TLS handshake succeeds and `GET /login` returns 200. No client certificate |
+
+Each path answers 200 when its last check passed and is at most 90 seconds old, about three check intervals. Otherwise it answers 503. So a stopped check loop also shows as down. The `tak-health` expose entry lists the three paths under `uptime.checks.paths` on the admin gateway. UDS Core probes them, and its alerts and **Probe Uptime** dashboard include them with no extra setup. The entry does not depend on `sso.enabled`, so TAK without SSO is checked too.
+
+**Client certificate.** The cert-init Job issues the pod its own client certificate, `CN=tak-health`, signed by the deploy-time CA. It stores it in Secret `tak-health-client` as `ca.pem`, `client.pem`, and `client.key`. The certificate:
+
+- is for client authentication only, and is valid for 730 days;
+- is not in TAK's user file, so it has no TAK groups and no admin role;
+- has an unencrypted key, so the pod does not read the keystore password.
+
+The pod mounts only that Secret, read-only, and runs as a non-root user with no Linux capabilities. Anyone who can read Secrets in the `takserver` namespace can read the key. That is the same group that can already read `takserver-certs`. The Job issues a new certificate on install or upgrade when the Secret is missing, was signed by another CA, or expires within 30 days. Each check reads the files again, so the pod uses a new certificate once the kubelet updates the mounted Secret, without a restart. UDS Core's TLS expiry alerts watch the admin gateway certificate, not this one.
+
+**Network.** The pod may connect only to the passthrough gateway on ports 443, 8446, and 8089. Its HTTP answers carry only a pass or fail and a short reason, never certificate material.
+
+**Turn it off.** Set the package value `health.enabled` to `false`:
+
+```bash
+uds zarf package deploy <package> --set-values health.enabled=false
+```
+
+In a bundle, set `health.enabled: false` on chart `uds-takserver-config` the same way as `uptime.enabled` above. The chart then renders no `tak-health` pod, Service, expose entry, or certificate. A Secret `tak-health-client` from an earlier install stays until you delete it.
+
 #### What has no uptime check
 
-- The passthrough hosts. The operator's probe only sends an HTTPS GET and must trust the server certificate. On these hosts TAK serves the package's own CA, not the gateway certificate. 8443 and 8089 also require a client certificate, and 8089 is not HTTP. The UDS Core API has no field for a custom probe module.
-- TAK when `sso.enabled` is `false`. The chart then does not create the `takserver-web` Service or the tenant `expose` entry, so there is no HTTPS host for a probe. Only the passthrough hosts remain.
+- With `health.enabled` set to `false`: the passthrough hosts, for the reasons in [Client-port health](#client-port-health). With `sso.enabled` also `false`, TAK has no uptime check at all, because the chart does not create the `takserver-web` Service or the tenant `expose` entry.
 
 #### When a check fails
 
 1. Find the failing target: `probe_success == 0` in Grafana Explore, or the `instance` label on the alert.
 2. Check the HTTP status: `probe_http_status_code` for the same `instance`. 0 means no connection. 503 usually means the gateway has no ready pod behind it.
 3. Check the workload: `uds zarf tools kubectl get pods -n takserver` (or `-n cloudtak`). For TAK, the `takserver-api` pod serves `/login`.
-4. Check the probe exists: `uds zarf tools kubectl get probes.monitoring.coreos.com -A`. If it is missing, run `uds zarf tools kubectl describe package -n takserver` and read the status.
-5. For the ATAK viewer, check the UDS operator logs for the `uds-atak-viewer-probe` client.
+4. For a `tak-health` target, read the pod's last checks: `uds zarf tools kubectl logs deploy/tak-health -n takserver --tail=6`. A line like `check stream ok=0 ...` gives the reason. `/stream` depends on `takserver-messaging`, and `/api` and `/enroll` on `takserver-api`.
+5. Check the probe exists: `uds zarf tools kubectl get probes.monitoring.coreos.com -A`. If it is missing, run `uds zarf tools kubectl describe package -n takserver` and read the status.
+6. For the ATAK viewer, check the UDS operator logs for the `uds-atak-viewer-probe` client.
 
 #### How CI tests it
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It then requires `probe_success` 1 for the three `tak-health` paths, scales `takserver-messaging` to zero, and requires `/stream` to drop to 0 while `/api` and `/enroll` stay up. It scales messaging back and requires `/stream` to return to 1. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
 
 ### Standard TAK ports
 

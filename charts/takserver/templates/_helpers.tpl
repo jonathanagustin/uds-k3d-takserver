@@ -53,3 +53,12 @@ Usage: include "takserver.remoteServiceAccount" (list $ "takserver-api")
 {{- end -}}
 remoteServiceAccount: {{ $sa | quote }}
 {{- end -}}
+
+{{/*
+"true" when the tak-health client-port checks are on, else empty. A Zarf
+package value set with --set-values can arrive as the string "false",
+which Helm treats as true, so compare the text.
+*/}}
+{{- define "takserver.healthEnabled" -}}
+{{- if eq (toString .Values.health.enabled) "true" }}true{{ end }}
+{{- end -}}

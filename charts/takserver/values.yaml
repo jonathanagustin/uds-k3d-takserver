@@ -172,6 +172,23 @@ intraNamespace:
 uptime:
   enabled: true
 
+# Client-port health (templates/health.yaml). The tak-health pod checks
+# TAK's mutual TLS ports 8089 and 8443 and the enrollment port 8446 through
+# the passthrough gateway, with its own client certificate. UDS Core probes
+# one path per port on https://<host>.<adminDomain>. Works with SSO on or
+# off. The package value health.enabled sets enabled. See docs/networking.md.
+health:
+  enabled: true
+  host: tak-health
+  gateway: admin
+  port: 8081
+  # Secret the cert-init Job writes the client certificate into.
+  secret: tak-health-client
+  intervalSeconds: 30
+  # A result older than this answers 503. About three intervals.
+  staleSeconds: 90
+  passthroughService: passthrough-ingressgateway.istio-passthrough-gateway.svc.cluster.local
+
 sso:
   # Registers Keycloak client uds-takserver and Secret takserver-sso.
   # An init container envsubsts TAK_OIDC_CLIENT_SECRET into CoreConfig.

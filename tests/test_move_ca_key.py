@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "charts" / "takserver" / "files" / "scripts" / "move-ca-key.sh"
 ISSUE = ROOT / "charts" / "takserver" / "files" / "scripts" / "issue-web-cert.sh"
+HEALTH = ROOT / "charts" / "takserver" / "files" / "scripts" / "issue-health-cert.sh"
 SPLIT = ROOT / "charts" / "takserver" / "files" / "scripts" / "split-key-material.sh"
 PUBLISH = ROOT / ".github" / "container-and-chart" / "docker" / "publish-cert-configmap.sh"
 PREREQS = ROOT / "charts" / "takserver" / "templates" / "prereqs.yaml"
@@ -138,6 +139,7 @@ class MoveCaKeyTests(unittest.TestCase):
         self.assertIn("--retry-all-errors", block)
         self.assertIn("--retry-connrefused", block)
         self.assertEqual(helper_text(ISSUE), block)
+        self.assertEqual(helper_text(HEALTH), block)
         self.assertEqual(helper_text(PUBLISH), block)
         self.assertEqual(helper_text(SPLIT), block)
 

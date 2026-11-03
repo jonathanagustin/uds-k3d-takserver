@@ -90,6 +90,8 @@ spec:
     # the server certificate. TAK serves its own deploy-time CA there, 8443
     # and 8089 also require a client certificate, and 8089 is not HTTP. They
     # are for TAK clients, not browsers, so UDS Portal does not list them.
+    # The tak-health entry covers them instead: its pod connects as a TAK
+    # client and serves a plain HTTP answer per port for the uptime check.
     expose:
       {{- if .Values.sso.enabled }}
       - description: tak-web-http
@@ -113,6 +115,25 @@ spec:
             paths:
               - /login
         {{- end }}
+      {{- end }}
+      {{- if include "takserver.healthEnabled" . }}
+      # Client-port health. Each path reports one TAK client port: /stream
+      # 8089, /api 8443, /enroll 8446. Hidden from the Portal.
+      - description: tak-health
+        service: tak-health
+        selector:
+          app: tak-health
+        gateway: {{ .Values.health.gateway }}
+        host: {{ .Values.health.host | quote }}
+        port: {{ .Values.health.port }}
+        annotations:
+          uds.dev/visible: "false"
+        uptime:
+          checks:
+            paths:
+              - /stream
+              - /api
+              - /enroll
       {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}
@@ -154,6 +175,20 @@ spec:
         port: {{ .Values.quic.port }}
       {{- end }}
     allow:
+      {{- if include "takserver.healthEnabled" . }}
+      # tak-health reaches TAK the way a client does, through the
+      # passthrough gateway.
+      {{- range $port := list 443 8446 8089 }}
+      - direction: Egress
+        selector:
+          app: tak-health
+        remoteNamespace: istio-passthrough-gateway
+        remoteSelector:
+          app: passthrough-ingressgateway
+        port: {{ $port }}
+        description: "Egress {{ $port }} from tak-health to the passthrough gateway"
+      {{- end }}
+      {{- end }}
       # Explicit pod-to-pod flows from values intraNamespace.flows. There is
       # no namespace-wide allow rule.
       {{- range $flow := .Values.intraNamespace.flows }}

@@ -5,7 +5,8 @@
 # List the TAK and CloudTAK blackbox probes (in their own namespaces), require
 # probe_success 1, and require that TAK answered /login itself (status 200, no
 # redirect to Keycloak). Then scale CloudTAK to zero and back, and record the
-# drop and the recovery.
+# drop and the recovery. When tak-health is deployed, do the same for its
+# /stream check by scaling TAK messaging.
 # The ATAK viewer probe is on atak/deploy/device.yaml. The full bundle does
 # not deploy that package, so this job does not list it.
 # Skips when the Probe CRD is absent.
@@ -117,6 +118,8 @@ for instance in sorted(rows):
         kind = "cloudtak"
     elif host.startswith("takserver."):
         kind = "tak"
+    elif host.startswith("tak-health."):
+        kind = "health"
     if not kind:
         continue
     found = True
@@ -221,4 +224,66 @@ if [[ "${recovered}" -ne 1 ]]; then
 fi
 
 k rollout status deploy/cloudtak -n cloudtak --timeout=180s
+
+# TAK client-port health. Each tak-health path reports one client port
+# through the passthrough gateway. Require all three at 1, scale TAK
+# messaging to zero, require /stream to drop to 0, then restore it. The pod
+# checks every 30s, so the drop shows within about a minute.
+if k get deploy tak-health -n takserver >/dev/null 2>&1; then
+  up=0
+  for _ in $(seq 1 30); do
+    if require_up health; then
+      up=1
+      break
+    fi
+    k logs deploy/tak-health -n takserver --tail=6 2>&1 | tee -a "${log}" || true
+    sleep 10
+  done
+  if [[ "${up}" -ne 1 ]]; then
+    say "tak-health probe_success was not 1 for every client port" >&2
+    exit 1
+  fi
+  say "uptime: tak-health probe_success is 1 for /stream, /api and /enroll"
+  mreplicas="$(k get deploy takserver-messaging -n takserver -o jsonpath='{.spec.replicas}')"
+  mreplicas="${mreplicas:-1}"
+  restore_messaging() {
+    k scale deploy/takserver-messaging -n takserver --replicas="${mreplicas}" >/dev/null 2>&1 || true
+  }
+  trap 'restore_messaging; restore_cloudtak; cleanup' EXIT
+  say "uptime: scaling TAK messaging to zero so /stream can drop"
+  k scale deploy/takserver-messaging -n takserver --replicas=0
+  dropped=0
+  for _ in $(seq 1 48); do
+    if series | tee "${work}/now.txt" | grep -E '^health 0 .*/stream$' >/dev/null; then
+      dropped=1
+      say "uptime: tak-health /stream dropped to 0"
+      grep '^health ' "${work}/now.txt" | tee -a "${log}"
+      break
+    fi
+    sleep 10
+  done
+  k logs deploy/tak-health -n takserver --tail=6 2>&1 | tee -a "${log}" || true
+  say "uptime: scaling TAK messaging back to ${mreplicas}"
+  restore_messaging
+  if [[ "${dropped}" -ne 1 ]]; then
+    say "tak-health /stream did not drop with messaging at zero" >&2
+    exit 1
+  fi
+  k rollout status deploy/takserver-messaging -n takserver --timeout=900s
+  recovered=0
+  for _ in $(seq 1 60); do
+    if series >"${work}/now.txt" && grep -qE '^health 1 .*/stream$' "${work}/now.txt"; then
+      recovered=1
+      say "uptime: tak-health /stream recovered to 1"
+      grep '^health ' "${work}/now.txt" | tee -a "${log}"
+      break
+    fi
+    sleep 10
+  done
+  if [[ "${recovered}" -ne 1 ]]; then
+    say "tak-health /stream did not recover" >&2
+    series | tee -a "${log}" >&2 || true
+    exit 1
+  fi
+fi
 say "uptime-probes passed"

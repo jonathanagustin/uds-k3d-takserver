@@ -486,6 +486,14 @@ jobs:
         shell: bash
         timeout-minutes: 2
 
+      - name: Redact passwords from the logs
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        # TAK's cert tools take keystore passwords as arguments, and container
+        # logs can record those command lines.
+        run: ./.github/scripts/redact-logs.py /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
+        shell: bash
+        timeout-minutes: 3
+
       - name: Print logs before the upload
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
         # A hung upload-artifact can outlast its step timeout; the job log keeps these.

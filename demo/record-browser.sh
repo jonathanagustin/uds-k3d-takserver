@@ -98,16 +98,21 @@ for _ in $(seq 100); do
   sleep 0.1
 done
 
+# Node 25 and later ship without corepack. Keep corepack where it exists
+# (the CI runner's Node) and fall back to the pnpm that mise installs.
+pnpm=(corepack pnpm)
+command -v corepack >/dev/null 2>&1 || pnpm=(pnpm)
+
 status=0
 (
   cd tests
-  corepack pnpm install --frozen-lockfile --silent
+  "${pnpm[@]}" install --frozen-lockfile --silent
   DISPLAY="${display}" \
     DEMO_WINDOW="${width},${height}" \
     DEMO_BROWSER_HOME="${work}/home" \
     DEMO_BROWSER_PROFILE="${work}/profile" \
     DEMO_EVENTS="${work}/events.json" \
-    corepack pnpm exec playwright test --config playwright.demo.config.ts "${spec}"
+    "${pnpm[@]}" exec playwright test --config playwright.demo.config.ts "${spec}"
 ) || status=$?
 
 kill -INT "${ffmpeg_pid}"

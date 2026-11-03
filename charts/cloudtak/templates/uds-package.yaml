@@ -70,12 +70,14 @@ spec:
         port: 5000
         annotations:
           uds.dev/title: "CloudTAK"
-        # The Package operator creates a Blackbox Probe for this path. The
-        # login page answers 2xx without a session.
+        # The operator turns this path into a Blackbox probe. CloudTAK serves
+        # its login page with 200 and no redirect, without a session.
+        {{- if .Values.uptime.enabled }}
         uptime:
           checks:
             paths:
               - /login
+        {{- end }}
     allow:
       - direction: Egress
         selector:

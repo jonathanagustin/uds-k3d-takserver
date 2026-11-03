@@ -43,6 +43,11 @@ check true pull_request false "values/filesystem-backup.yaml.tpl"
 check true pull_request false "values/cloudtak-storage.yaml.tpl"
 check true pull_request false "pepr/capabilities/workload.ts"
 check true pull_request false "tasks/test.yaml"
+check false pull_request false "bundle/uds-config.yaml"
+check false pull_request false "pepr/capabilities/workload.test.ts"
+check true pull_request false $'pepr/capabilities/workload.test.ts\npepr/capabilities/workload.ts'
+check true pull_request false $'bundle/uds-config.yaml\nbundle/full/uds-config.yaml'
+check true pull_request false "bundle/test-values.yaml"
 
 if (( fails > 0 )); then
   echo "${fails} case(s) failed"

@@ -129,10 +129,13 @@ fi
 revoked="$(k get secret takserver-crl -n takserver -o jsonpath='{.data.revoked\.json}' | base64 -d)"
 grep -q "${serial}" <<< "${revoked}" || { echo "serial ${serial} is not in takserver-crl: ${revoked}" >&2; exit 1; }
 k get secret takserver-crl -n takserver -o jsonpath='{.data.ca\.crl}' | base64 -d > "${work}/ca.crl"
-if openssl verify -crl_check -CAfile "${work}/ca.pem" -CRLfile "${work}/ca.crl" "${work}/client.pem" 2>&1 | grep -q "certificate revoked"; then
+# openssl exits non-zero for a revoked certificate. Capture the output first,
+# so pipefail does not turn that into a failed check.
+verify_out="$(openssl verify -crl_check -CAfile "${work}/ca.pem" -CRLfile "${work}/ca.crl" "${work}/client.pem" 2>&1 || true)"
+if grep -q "certificate revoked" <<< "${verify_out}"; then
   echo "PASS the CRL in takserver-crl revokes ${serial}"
 else
-  echo "the CRL does not revoke ${serial}" >&2
+  echo "the CRL does not revoke ${serial}: ${verify_out}" >&2
   exit 1
 fi
 # UDS Core pod-reload restarts the TAK pods that mount takserver-crl.

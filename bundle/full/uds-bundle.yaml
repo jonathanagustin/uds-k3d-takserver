@@ -94,10 +94,16 @@ packages:
     repository: ghcr.io/defenseunicorns/packages/uds/core-runtime-security
     ref: 1.16.0-upstream
     keylessVerification: *core-keyless
-    # One custom rule. No disabledRules entry and no exception: the full-core
-    # artifact has to show which stable rules actually fire before any of
-    # them is narrowed. UDS already disables "Contact K8S API Server From
-    # Container" for the whole cluster; this package does not add another.
+    # One custom rule. No disabledRules entry and no exception: in the
+    # falco-events artifacts (for example Full Core run 41595868023, amd64 and
+    # arm64) no stock rule fired for takserver, cloudtak or pepr-system. UDS
+    # already disables "Contact K8S API Server From Container" for the whole
+    # cluster; this package does not add another.
+    # The custom rule skips the certs container of the takserver-cert-init
+    # Job, which writes /opt/tak/certs with makeCert.sh, openssl and keytool
+    # by design (all 39 events per arch in that run). Its output names the
+    # process, not its command line, because those tools take keystore
+    # passwords as arguments.
     overrides:
       falco:
         uds-falco-config:
@@ -106,8 +112,8 @@ packages:
               value:
                 - rule: TAK cert write outside the JVM
                   desc: A process other than the TAK JVM wrote a file under /opt/tak/certs in the takserver namespace.
-                  condition: 'open_write and fd.name startswith "/opt/tak/certs" and proc.name != "java" and k8s.ns.name = "takserver"'
-                  output: 'TAK cert write outside the JVM (user=%user.name file=%fd.name command=%proc.cmdline container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)'
+                  condition: 'open_write and fd.name startswith "/opt/tak/certs" and proc.name != "java" and k8s.ns.name = "takserver" and not (k8s.pod.name startswith "takserver-cert-init-" and container.name = "certs")'
+                  output: 'TAK cert write outside the JVM (user=%user.name file=%fd.name process=%proc.name exe=%proc.exepath parent=%proc.pname container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)'
                   priority: WARNING
                   tags:
                     - tak

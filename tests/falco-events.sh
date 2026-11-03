@@ -152,6 +152,10 @@ with open(dest, "a", encoding="utf-8") as handle:
             handle.write(sample + "\n")
 PY
 
+# Stock Falco rules print the full command line, and TAK's cert tools take
+# keystore passwords as arguments. Mask them before this file is uploaded.
+python3 .github/scripts/redact-logs.py "${log}" >&2
+
 say "falco-probe: labeled test write under /opt/tak/certs by touch, not the TAK JVM"
 k exec -n takserver deploy/takserver-api -c takserver-api -- \
   sh -c 'mkdir -p /opt/tak/certs && touch /opt/tak/certs/falco-probe-test'
@@ -188,6 +192,7 @@ if [[ "${proven}" -ne 1 ]]; then
   exit 1
 fi
 
+python3 .github/scripts/redact-logs.py "${work}/hit.txt" >&2
 say "falco-probe: Loki has the labeled write"
 while IFS= read -r hit; do
   say "falco-probe: ${hit}"

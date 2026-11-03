@@ -4,8 +4,9 @@
 
 """Create a Keycloak user with no groups for the Portal tile check.
 
-setup:keycloak-user puts doug in /UDS Core/Admin. TAK and CloudTAK both
-require that group. This account is the one that must see neither tile.
+setup:keycloak-user puts doug in /UDS Core/Admin. TAK allows only that
+group, and CloudTAK also allows /CloudTAK/Users. This account is in neither,
+so it must see neither tile.
 """
 
 import base64

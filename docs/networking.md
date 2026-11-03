@@ -38,7 +38,7 @@ The Package `expose` entries also tell UDS Core what to monitor and what to show
 
 For each uptime check the UDS operator creates a Blackbox Probe. The package metadata that Portal and the package catalog read (title, tagline, categories, keywords, and icon) is in the `metadata.annotations` block of `zarf.yaml`. The icon is the base64 of `assets/icon.svg`, and hk's `icon` check fails when they differ.
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes, requires `probe_success` 1, then scales CloudTAK to zero and back and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as a user outside the admin group and expects neither tile.
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes, requires `probe_success` 1, then scales CloudTAK to zero and back and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
 
 ### Standard TAK ports
 

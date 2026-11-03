@@ -48,9 +48,18 @@ sso:
   realm: uds
   # Button text on CloudTAK's login page (/login?sso=off).
   name: UDS SSO
-  # Same coarse gate as the TAK client.
+  # Keycloak login gate (Package sso groups.anyOf). A user must be a direct
+  # member of one of these groups. The TAK Server web UI client stays
+  # /UDS Core/Admin only (charts/takserver/values.yaml sso.adminGroup).
+  # /CloudTAK/Users is the non-admin group. UDS Core does not create it: an
+  # operator creates it in Keycloak, and a listed group that does not exist
+  # is skipped. It is outside /TAK/, so TAK does not also map it to a TAK
+  # group. Members still need a /TAK/<group>_READ or _WRITE group to see TAK
+  # data. A bundle replaces the whole list with variable CLOUDTAK_SSO_GROUPS.
+  # See docs/cloudtak.md#who-can-sign-in.
   groups:
     - "/UDS Core/Admin"
+    - "/CloudTAK/Users"
   # Members of this Keycloak group become CloudTAK system administrators.
   # Empty turns that off.
   adminGroup: "/UDS Core/Admin"

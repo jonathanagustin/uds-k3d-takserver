@@ -5,9 +5,8 @@
 # SPIKE: TAK client-port health for UDS Core uptime checks.
 # A loop checks each TAK client port through the passthrough gateway, the
 # way a TAK client reaches it, with a client certificate. It writes one
-# result file per check. ncat answers each HTTP request from those files, so
-# a probe never opens a TAK connection itself and gets an answer in
-# milliseconds.
+# result file per check. Health.java answers each HTTP request from those
+# files, so a probe never opens a TAK connection itself.
 #   /stream  8089: mutual TLS, then a CoT ping (t-x-c-t). Passes on TAK's pong.
 #   /api     8443 (443 SNI takserver-api): mutual TLS, GET /Marti/api/version.
 #   /enroll  8446: TLS, GET /login. Passes on 200 from TAK.
@@ -65,42 +64,15 @@ check_http() {
   fi
 }
 
-serve() {
-  local line path name ts ok detail code body now
-  IFS= read -r line || exit 0
-  while IFS= read -r h; do [[ "${h}" == $'\r' || -z "${h}" ]] && break; done
-  read -r _ path _ <<< "${line}"
-  case "${path}" in
-    /stream) name=stream ;;
-    /api) name=api ;;
-    /enroll) name=enroll ;;
-    /healthz) printf 'HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nok\n'; exit 0 ;;
-    *) printf 'HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'; exit 0 ;;
-  esac
-  now="$(date +%s)"
-  code="503 Service Unavailable"
-  body="no result yet"
-  if read -r ts ok detail < "${dir}/${name}" 2>/dev/null; then
-    body="${name} ok=${ok} age=$((now - ts))s ${detail}"
-    if [[ "${ok}" == "1" ]] && (( now - ts <= stale )); then
-      code="200 OK"
-    fi
-  fi
-  body="${body}"$'\n'
-  printf 'HTTP/1.1 %s\r\nContent-Type: text/plain\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' "${code}" "${#body}" "${body}"
-}
-
-case "${1:-}" in
-  serve) serve ;;
-  *)
-    (
-      while true; do
-        check_stream
-        check_http api 443 "takserver-api.${domain}" /Marti/api/version yes
-        check_http enroll 8446 "takserver-stream.${domain}" /login no
-        sleep "${interval}"
-      done
-    ) &
-    exec ncat -lk -p "${PORT:-8081}" --sh-exec "/bin/bash /health/health.sh serve"
-    ;;
-esac
+(
+  while true; do
+    check_stream
+    check_http api 443 "takserver-api.${domain}" /Marti/api/version yes
+    check_http enroll 8446 "takserver-stream.${domain}" /login no
+    sleep "${interval}"
+  done
+) &
+# Health.java answers the probes from the result files. The JDK is already
+# in this image. ncat --sh-exec aborts when a client resets the connection.
+export STATE_DIR="${dir}" STALE_SECONDS="${stale}"
+exec java -Xmx24m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 /health/Health.java

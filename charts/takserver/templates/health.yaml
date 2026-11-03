@@ -1,7 +1,10 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
 {{- if .Values.health.enabled }}
 # SPIKE: TAK client-port health for UDS Core uptime checks. See
-# files/health/health.sh. Uses the config image (openssl and ncat are
-# already in it) and the deploy-time "user" client certificate, which has
+# files/health/. Uses the config image (openssl and the JDK are already
+# in it) and the deploy-time "user" client certificate, which has
 # no TAK admin role.
 apiVersion: v1
 kind: ConfigMap
@@ -10,6 +13,8 @@ metadata:
 data:
   health.sh: |
 {{ .Files.Get "files/health/health.sh" | indent 4 }}
+  Health.java: |
+{{ .Files.Get "files/health/Health.java" | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -59,6 +64,7 @@ spec:
             httpGet:
               path: /healthz
               port: http
+            initialDelaySeconds: 5
             periodSeconds: 10
           securityContext:
             allowPrivilegeEscalation: false
@@ -68,10 +74,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
+              memory: 96Mi
             limits:
-              cpu: 200m
-              memory: 64Mi
+              cpu: 500m
+              memory: 160Mi
           volumeMounts:
             - name: script
               mountPath: /health

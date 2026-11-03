@@ -104,7 +104,7 @@ components:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14"
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6"
-      - "docker.io/library/nats:2.15.1-alpine"
+      - "docker.io/library/nats:2.15.2-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.25.0"
       # Same tag UDS Core 1.15.2 runs. The manifest lists amd64 and arm64.
       # The DaemonSet renders only when FILESYSTEM_BACKUP is true.

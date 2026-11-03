@@ -65,6 +65,9 @@ Where tests live:
 | Marti API smoke tests | [`tests/api-smoke.sh`](tests/api-smoke.sh) | part of `uds run test-install` |
 | Browser and SSO tests (Playwright) | `tests/*.spec.ts` | part of `uds run test-install` |
 | Upgrade tests | `tests/upgrade*.py`, `tests/upgrade.sh` | `uds run test-upgrade` |
+| Python and shell unit tests | `tests/test_*.py`, `tests/test_*.sh` | `python3 -B -m unittest discover -s tests -p 'test_*.py'`, and `bash tests/test_<name>.sh`. `test_package_values.py` needs the UDS CLI and `bash pepr/build.sh` first |
+| Full Core checks (monitoring, logging, Falco, Portal, backup and restore) | `test:full-core` in [`tasks/test.yaml`](tasks/test.yaml), `tests/backup-restore.sh` | `uds run test-full-core` |
+| Benchmark harness | `bench/`, `tests/test_bench.py` | the Benchmark workflow. See [Benchmarks](docs/benchmarks.md) |
 
 `uds run test-install` builds the package, deploys `k3d-core-slim-dev` and the test bundle, and runs the whole suite. The same suite runs in the Test workflow on every pull request that changes code.
 
@@ -72,7 +75,7 @@ Where tests live:
 
 The Unit tests workflow ([`.github/workflows/unit-tests.yaml`](.github/workflows/unit-tests.yaml)) measures coverage on every pull request and on `main`, and writes it to the job summary:
 
-- **Pepr module:** `cd pepr && npm ci && npm run test:coverage` uses Node's built-in coverage. Both files in `pepr/capabilities/` are at 100% of lines, branches and functions, and the run fails below 100% or if a capability file isn't loaded by any test. `pepr/pepr.ts`, which only registers the capability with `PeprModule`, isn't measured.
+- **Pepr module:** `cd pepr && npm ci && npm run test:coverage` uses Node's built-in coverage. Every file in `pepr/capabilities/` must stay at 100% of lines, branches and functions. That covers the five capabilities and their helpers. The run fails below 100%, or if no test loads a capability file. `pepr/pepr.ts`, which only registers the capabilities with `PeprModule`, isn't measured.
 - **Python upgrade helpers:** `coverage.py` measures `tests/upgrade-baseline.py` and `tests/upgrade-stream.py` under `tests/test_upgrade_*.py` (66% of lines and branches combined when this was added). The parts that aren't covered call `git`, `gh` and the cluster, and the upgrade job exercises them.
 
 The shell scripts, Helm templates and the TAK and CloudTAK behavior are tested by the deployment suite on a real cluster. That suite isn't instrumented for coverage.

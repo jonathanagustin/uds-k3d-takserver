@@ -1,6 +1,6 @@
 # Benchmarks
 
-The Benchmark workflow measures how much CPU and memory TAK Server uses under a client load, and how long it takes to become ready, for several resource configs. No completed load run exists yet, so this page describes the harness, not results. Throughput, mean latency, and time-to-ready per config and per architecture are still unmeasured.
+The Benchmark workflow measures how much CPU and memory TAK Server uses under a client load, and how long it takes to become ready, for several resource configs. The nightly run on `main` has completed on both architectures since November 2, 2026, for example [run 41613491855](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/41613491855). Those runs use 10 clients for 60 seconds, once per config. Treat the front as a first look, not a sizing decision. The results are in the run's `bench-front` artifact and its job summary. This page describes the harness.
 
 ## When it runs
 
@@ -24,18 +24,20 @@ Client certificates for the load are built at run time from `tests/extract-certs
 
 ## Configs
 
-Each file in [`bench/configs/`](../bench/configs/) changes memory settings or JVM flags on the running cluster. Each lists client counts 10, 50, and 200 and a 60-second load.
+Each file in [`bench/configs/`](../bench/configs/) changes memory settings, JVM flags, or Postgres settings on the running cluster. Before the next config, `bench/run.py` puts the previous config's changes back. Each lists client counts 10, 50, and 200 and a 60-second load.
 
 | Config | What it changes |
 | --- | --- |
 | `baseline` | Nothing. The test bundle's current requests, limits, and JVM flags. Its cold time-to-ready is the install itself, with no rollout restart |
 | `heap-768` | Sets `JDK_JAVA_OPTIONS` to `-Xms768m -Xmx768m` on the API, messaging, and config containers |
 | `postgis-memory` | Raises the CloudTAK PostGIS memory request to 512Mi and limit to 1Gi |
+| `postgis-buffers` | TAK Postgres `shared_buffers` 128MB, `work_mem` 4MB, `effective_cache_size` 384MB, `max_wal_size` 256MB, `checkpoint_timeout` 5min, through `ALTER SYSTEM` and a restart |
+| `postgis-wal` | A smaller cache and fewer checkpoints than `postgis-buffers`: `shared_buffers` 64MB, `effective_cache_size` 256MB, `max_wal_size` 128MB, `checkpoint_timeout` 15min |
 | `small` | Memory requests and limits from the `small` [values profile](profiles.md) |
 | `production` | Memory requests and limits from the `production` [values profile](profiles.md) |
-| `gc-serial` | Serial GC on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
+| `gc-serial` | Serial garbage collector (GC) on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
 
-The configs set memory and JVM flags only. CPU stays at whatever the install set.
+The configs set memory, JVM flags, and Postgres settings only. CPU stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set.
 
 ## The record and the report
 
@@ -43,4 +45,4 @@ The configs set memory and JVM flags only. CPU stays at whatever the install set
 
 The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against ready time. A config is on the Pareto front for a view when no other config on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each plot, but dominance is decided inside one architecture. See [ADR 19](../adr/0019-compare-arches-on-one-scale.md).
 
-Until a completed run produces these artifacts, do not treat any config, or either [values profile](profiles.md), as a measured point on the front.
+A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config. Do not treat any config, or either [values profile](profiles.md), as a sizing result yet.

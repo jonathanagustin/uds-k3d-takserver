@@ -28,7 +28,7 @@ The upgrade test deploys only the `takserver` package on the upgrade step when t
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Container | `container.yaml` | changes to `.github/container-and-chart/`, the TAK submodule, or the workflow, and by hand | Builds the six TAK images on native amd64 and arm64 runners when their inputs changed, scans them, writes SBOMs, and joins the two architectures into one index. See [Building the images](building.md) |
+| Container | `container.yaml` | changes to `.github/container-and-chart/`, the TAK submodule, or the workflow, and by hand | Builds the six TAK images on native amd64 and arm64 runners when their inputs changed, scans them, writes software bills of materials (SBOMs), and joins the two architectures into one index. See [Building the images](building.md) |
 | CloudTAK image | `cloudtak-image.yaml` | changes to the CloudTAK submodule or its build, and by hand | Builds the CloudTAK image per architecture and writes the multi-arch index. See [CloudTAK](cloudtak.md#image) |
 | PostGIS image | `postgis-image.yaml` | changes to the PostGIS build, and by hand | Builds the PostGIS image per architecture and writes the multi-arch index. See [ADR 13](../adr/0013-build-the-postgis-image-here.md) |
 | Cosign | `cosign.yaml` | by hand only, with the `sign` input | Signs the published TAK images with keyless Cosign |
@@ -41,7 +41,7 @@ The image workflows also attest the images they push. See [Verify a release](../
 | --- | --- | --- | --- |
 | ATAK | `atak.yaml` | changes to the APK build or the `upstream/atak-civ` submodule, and by hand | Builds the ATAK-CIV APK and uploads it |
 | ATAK device VM | `atak-vm.yaml` | changes to `atak/vm/`, `atak/ci/`, or `atak/viewer/`, and by hand | Builds the containerDisk and the viewer, boots Android under KubeVirt on k3d, reaches it over adb, and opens the phone view in a browser |
-| ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GHCR when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
+| ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GitHub Container Registry (GHCR) when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
 
 ### Reused build outputs
 
@@ -78,6 +78,17 @@ A pull request without the `benchmark` label skips Benchmark. Full Core also run
 ## Other clusters
 
 The EKS Test, RKE2 Test, and AKS Test workflows (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) run only by hand, and only when the `enabled` input is set. Each one sets up OpenTofu and validates its scaffold in [`.github/test-infra/`](../.github/test-infra/). Per their inputs, they create nothing and only initialize OpenTofu.
+
+## Runner setup
+
+The cluster jobs run on the standard 4 CPU GitHub runners, so a few scripts make room before the deploy:
+
+- `.github/scripts/trim-runner.sh` deletes preinstalled toolchains and Docker images the tests never use. The install job once ran out of disk inside the k3d node without it.
+- `.github/scripts/add-runner-swap.sh` grows the runner's swap to 8G for Full Core. The full UDS Core layers plus TAK need more memory than the runner keeps free. Outside CI it changes nothing.
+- `.github/scripts/deploy-slim-core.sh` turns off k3s datastore compaction (`etcd-compaction-interval=0`) on CI clusters. A compaction that ran past its 5 second timeout made k3s exit mid-deploy about every other run. A local cluster keeps the default.
+- `uds run fit-runner` (`.github/scripts/fit-runner.sh`) scales down slim checkpoint pods the TAK tests do not need. That frees CPU for the `core-base` upgrade.
+
+After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and node allocatable. It also prints any out-of-memory (OOM) kills, k3d node restarts, `kubectl top`, and each container's last state. The step has a 5 minute timeout so a dead API server cannot hang the job.
 
 ## Logs when an upload hangs
 

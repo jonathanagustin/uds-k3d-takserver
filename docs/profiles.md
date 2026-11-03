@@ -1,6 +1,6 @@
 # Values profiles
 
-This page describes two named values overlays, `small` and `production`. Neither is the package default. Neither has been measured as a point on the benchmark's Pareto front yet (see [Benchmarks](benchmarks.md)): the benchmark workflow has no completed load run, so throughput, mean latency, and time-to-ready for these sizes are unmeasured. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
+This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds. Neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
 
 The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
 
@@ -19,7 +19,7 @@ The footprint below is the steady working set from `tests/usage.sh` at the end o
 | NATS | 2m | 8Mi |
 | NATS reloader | 0m | 5Mi |
 
-Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup was OOM-killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
+Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup ran out of memory and was killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
 
 ## Default
 
@@ -31,13 +31,13 @@ NATS requests and limits stay in `values/common-values.yaml` (10m and 32Mi, limi
 
 `values/profiles/small.yaml` and `values/profiles/small-cloudtak.yaml`. One node, requests just above the table, limits with a little room. Postgres memory limit is 512Mi. API, messaging, and Ignite memory limits stay 1536Mi.
 
-The plugins Deployment does not read a memory value from the chart. The post-helm patch sets that memory (request 128Mi, limit 384Mi on the current package). The small harness config sets 320Mi and 512Mi on the live Deployment so a nightly run can measure it. The values file cannot.
+The plugins Deployment does not read a memory value from the chart. The `takserver-workload` admission hook sets it on every install: request 320Mi and limit 512Mi. The harness configs set the same values. The values file cannot change it.
 
-TAK, CloudTAK, and NATS memory limits, counting the current plugin patch, sum to about 8864Mi of the ~15984Mi runner.
+TAK, CloudTAK, and NATS memory limits, counting the 512Mi plugins limit, sum to about 8992Mi of the ~15984Mi runner.
 
 ## production
 
-`values/profiles/production.yaml` and `values/profiles/production-cloudtak.yaml`. Same single replica. More CPU and memory headroom than small. API and messaging memory limits are 2Gi because the messaging pod copies the API limit. Postgres stays at 512Mi so `shared_buffers` cannot fill a larger cgroup. The same sum, with the current plugin patch, is about 10912Mi and still fits the runner. CPU limits add up to more than 4 because startup has needed a whole core; that overcommit is on purpose.
+`values/profiles/production.yaml` and `values/profiles/production-cloudtak.yaml`. Same single replica. More CPU and memory headroom than small. API and messaging memory limits are 2Gi because the messaging pod copies the API limit. Postgres stays at 512Mi so `shared_buffers` cannot fill a larger cgroup. The same sum, with the 512Mi plugins limit, is about 11040Mi and still fits the runner. CPU limits add up to more than 4 because startup has needed a whole core; that overcommit is on purpose.
 
 Messaging and API replicas are 1. A second pod overwrites CoreConfig with the cached copy ([#3](https://github.com/jonathanagustin/uds-k3d-takserver/issues/3)). The upstream example's replica counts are not used.
 
@@ -60,4 +60,4 @@ Use `production.yaml` and `production-cloudtak.yaml` the same way.
 
 ## Harness
 
-`bench/configs/small.yaml` and `bench/configs/production.yaml` set the memory request and limit from these profiles on the running cluster. `kubectl set resources` does not take a CPU value, so the CPU numbers exist only in the values files. The nightly job writes `bench/out/<arch>/<config>.json`. Until that artifact exists, do not treat either profile as a measured point on the front.
+`bench/configs/small.yaml` and `bench/configs/production.yaml` set the memory request and limit from these profiles on the running cluster. `kubectl set resources` does not take a CPU value, so the CPU numbers exist only in the values files. The nightly job writes `bench/out/<arch>/<config>.json`. The nightly records are 10 clients only, so do not treat either profile as a sizing result yet.

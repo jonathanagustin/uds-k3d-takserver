@@ -7,9 +7,10 @@
 # the device's adb connection, and phone.html frames it. Remote shell and file
 # listing are compiled out. amd64 only, like the device VM.
 
-# Node 24 LTS (supported to 2028-04-30). ws-scrcpy's node-pty 0.10.1 does not
-# compile on Node 26 (ATAK device VM run 41707626016).
-ARG NODE_IMAGE=node:24.22-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
+# Node 22 LTS (supported to 2027-04-30). ws-scrcpy's node-pty 0.10.1 does not
+# compile on Node 26 (ATAK device VM run 41707626016) or Node 24 (run
+# 41709858736), so a newer major waits for a ws-scrcpy that moves node-pty.
+ARG NODE_IMAGE=node:22.23-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
 
 FROM ${NODE_IMAGE} AS source
 RUN apt-get update \

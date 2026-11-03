@@ -6,6 +6,8 @@ import { runtime, type ConfigMapDoc, type StatefulSetDoc } from "../cluster.ts";
 import { TAK_NAMESPACE } from "./gateway-ca.ts";
 import {
   enqueueIgnite,
+  IGNITE_CONFIGMAP,
+  IGNITE_STATEFULSET,
   prepareDeployment,
   prepareIgniteConfigMap,
   prepareIgniteStatefulSet,
@@ -55,23 +57,23 @@ for (const name of TAK_DEPLOYS) {
 When(a.ConfigMap)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
-  .WithName("takserver-ignite-configmap")
+  .WithName(IGNITE_CONFIGMAP)
   .Mutate(request => onIgniteConfigMutate(request.Raw));
 
 When(a.ConfigMap)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
-  .WithName("takserver-ignite-configmap")
+  .WithName(IGNITE_CONFIGMAP)
   .Reconcile(onIgnite);
 
 When(a.StatefulSet)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
-  .WithName("takserver-ignite")
+  .WithName(IGNITE_STATEFULSET)
   .Mutate(request => onIgniteSetMutate(request.Raw));
 
 When(a.StatefulSet)
   .IsCreatedOrUpdated()
   .InNamespace(TAK_NAMESPACE)
-  .WithName("takserver-ignite")
+  .WithName(IGNITE_STATEFULSET)
   .Reconcile(onIgnite);

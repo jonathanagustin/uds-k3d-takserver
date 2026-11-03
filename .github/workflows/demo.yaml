@@ -7,7 +7,7 @@
 # joined with ffmpeg. The MP4 is uploaded as the demo-video
 # artifact, with one short clip per chapter for the doc pages and the stills
 # the docs use. A manual run from main publishes the videos and the clips to
-# the demo release and signs them there. demo/sync-assets.sh then copies a
+# the demo release and signs them there. demo/sync-assets.py then copies a
 # run's posters, stills and chapter times into the docs.
 name: Demo Video
 
@@ -452,8 +452,9 @@ jobs:
   # links to, and it never uploads or changes the videos. Each video and
   # chapter clip (every .mp4 on the release) gets a Cosign bundle
   # (<video>.sigstore.json), and all get one SLSA provenance attestation
-  # (demo-videos.intoto.jsonl), which the docs site build reads to copy them. It runs after publish, or alone
-  # with sign_only for the videos already there. Verify with:
+  # (demo-videos.intoto.jsonl), which the docs site build reads to copy them.
+  # It runs after publish, or alone with sign_only for the videos already
+  # there. Verify with:
   #   cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
   #     --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
   #     --certificate-oidc-issuer https://token.actions.githubusercontent.com

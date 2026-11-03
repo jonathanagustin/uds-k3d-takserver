@@ -166,6 +166,12 @@ intraNamespace:
       - app: takserver-config
       - app: takserver-plugins
 
+# UDS Core uptime check on the browser host (https://takserver.<domain>/login).
+# Same switch as UDS Core's Keycloak and Grafana charts. The browser host
+# exists only when sso.enabled is true, so with SSO off there is no check.
+uptime:
+  enabled: true
+
 sso:
   # Registers Keycloak client uds-takserver and Secret takserver-sso.
   # An init container envsubsts TAK_OIDC_CLIENT_SECRET into CoreConfig.

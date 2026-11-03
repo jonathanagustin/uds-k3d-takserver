@@ -31,14 +31,77 @@ The Package `expose` entries also tell UDS Core what to monitor and what to show
 
 | Expose entry | Portal tile | Uptime check |
 | --- | --- | --- |
-| `tak-web-http` (`takserver.<domain>`, tenant), only when `sso.enabled` | "TAK Server" (`uds.dev/title`) | `/`. The unauthenticated request ends on the Keycloak login page, which answers 2xx |
-| `tak-api-https`, `tak-api-cert`, `tak-messaging-streaming` (passthrough) | none (`uds.dev/visible: "false"`) | none. These use mutual TLS, so a plain HTTP probe cannot pass. They are for TAK clients, not browsers |
-| `cloudtak-map` (`map.<domain>`, tenant) | "CloudTAK" (`uds.dev/title`) | `/login`, which answers 2xx without a session |
-| ATAK viewer (`atak.<domain>`, tenant, optional package) | no `uds.dev/title` set | `/phone.html`. The full-core job does not deploy this package, so it does not check this probe. See [ATAK test device](atak-device.md) |
+| `tak-web-http` (`takserver.<domain>`, tenant), only when `sso.enabled` | "TAK Server" (`uds.dev/title`) | `/login`. TAK serves its own login page there with status 200 and no redirect |
+| `tak-api-https`, `tak-api-cert`, `tak-messaging-streaming` (passthrough) | none (`uds.dev/visible: "false"`) | none. See [What has no uptime check](#what-has-no-uptime-check) |
+| `cloudtak-map` (`map.<domain>`, tenant) | "CloudTAK" (`uds.dev/title`) | `/login`, which answers 200 without a session |
+| ATAK viewer (`atak.<domain>`, tenant, optional package) | no `uds.dev/title` set | `/phone.html`, through Authservice. The full-core job does not deploy this package, so it does not check this probe. See [ATAK test device](atak-device.md) |
 
-For each uptime check the UDS operator creates a Blackbox Probe. The package metadata that Portal and the package catalog read (title, tagline, categories, keywords, and icon) is in the `metadata.annotations` block of `zarf.yaml`. The icon is the base64 of `assets/icon.svg`, and hk's `icon` check fails when they differ.
+The package metadata that Portal and the package catalog read (title, tagline, categories, keywords, and icon) is in the `metadata.annotations` block of `zarf.yaml`. The icon is the base64 of `assets/icon.svg`, and hk's `icon` check fails when they differ.
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes, requires `probe_success` 1, then scales CloudTAK to zero and back and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as a user outside the admin group and expects neither tile.
+### Uptime monitoring
+
+The package uses UDS Core [uptime monitoring](https://docs.defenseunicorns.com/core/how-to-guides/monitoring--observability/set-up-uptime-monitoring/). Each check is an `uptime.checks.paths` entry on an `expose` entry. The UDS operator turns it into a Prometheus Probe in the package's namespace, and Blackbox Exporter sends an HTTPS GET to `https://<host>.<domain><path>` at a regular interval. A check passes on a 2xx answer.
+
+| Probe | Namespace | Target |
+| --- | --- | --- |
+| `uds-takserver-tenant-uptime` | `takserver` | `https://takserver.<domain>/login` |
+| `uds-map-tenant-uptime` | `cloudtak` | `https://map.<domain>/login` |
+| `uds-atak-tenant-uptime` (optional package) | `atak` | `https://atak.<domain>/phone.html` |
+
+Why `/login` for TAK: the default Blackbox module follows redirects, so a check on a path that redirects passes on whatever page the redirect ends on. TAK redirects a signed-out request for `/` once before a page answers. TAK serves `/login` itself with 200 and no redirect, so a pass means TAK answered. UDS Core probes Grafana on `/healthz` for the same reason: its other paths redirect to Keycloak.
+
+The ATAK viewer is behind Authservice. For that probe the UDS operator creates Keycloak client `uds-atak-viewer-probe` and signs the probe in with it. No other setup is needed.
+
+To turn a check off, set `uptime.enabled: false` on chart `uds-takserver-config` (component `takserver`) or chart `uds-cloudtak` (component `cloudtak`). UDS Core uses the same switch for Keycloak and Grafana. In a bundle:
+
+```yaml
+packages:
+  - name: takserver
+    overrides:
+      takserver:
+        uds-takserver-config:
+          values:
+            - path: uptime.enabled
+              value: false
+      cloudtak:
+        uds-cloudtak:
+          values:
+            - path: uptime.enabled
+              value: false
+```
+
+#### Where to see the results
+
+- Grafana dashboard **UDS / Monitoring / Probe Uptime** shows each target's status over time, its uptime percentage, and when its TLS certificate expires.
+- In Grafana Explore, query `probe_success{instance="https://takserver.<domain>/login"}`. 1 is up and 0 is down.
+- `uds zarf tools kubectl get package -n takserver` lists the probe names in the Probes column.
+
+UDS Core ships three alerts for every probe, ours included:
+
+| Alert | Fires when |
+| --- | --- |
+| `UDSProbeEndpointDown` | the check has failed for 5 minutes |
+| `UDSProbeTLSExpiryWarning` | the certificate expires in less than 30 days |
+| `UDSProbeTLSExpiryCritical` | the certificate expires in less than 14 days |
+
+The thresholds are UDS Core settings under `udsCoreDefaultAlerts` in the `uds-prometheus-config` chart. See [Monitoring and observability](https://docs.defenseunicorns.com/core/reference/configuration/monitoring-and-observability/).
+
+#### What has no uptime check
+
+- The passthrough hosts. The operator's probe only sends an HTTPS GET and must trust the server certificate. On these hosts TAK serves the package's own CA, not the gateway certificate. 8443 and 8089 also require a client certificate, and 8089 is not HTTP. The UDS Core API has no field for a custom probe module.
+- TAK when `sso.enabled` is `false`. The chart then does not create the `takserver-web` Service or the tenant `expose` entry, so there is no HTTPS host for a probe. Only the passthrough hosts remain.
+
+#### When a check fails
+
+1. Find the failing target: `probe_success == 0` in Grafana Explore, or the `instance` label on the alert.
+2. Check the HTTP status: `probe_http_status_code` for the same `instance`. 0 means no connection. 503 usually means the gateway has no ready pod behind it.
+3. Check the workload: `uds zarf tools kubectl get pods -n takserver` (or `-n cloudtak`). For TAK, the `takserver-api` pod serves `/login`.
+4. Check the probe exists: `uds zarf tools kubectl get probes.monitoring.coreos.com -A`. If it is missing, run `uds zarf tools kubectl describe package -n takserver` and read the status.
+5. For the ATAK viewer, check the UDS operator logs for the `uds-atak-viewer-probe` client.
+
+#### How CI tests it
+
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as a user outside the admin group and expects neither tile.
 
 ### Standard TAK ports
 

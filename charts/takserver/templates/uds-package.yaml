@@ -85,9 +85,11 @@ spec:
     # 8446, and 8089 has to reach TAK, and Authservice is not enabled.
     serviceMesh:
       mode: ambient
-    # Passthrough entries below (8443, 8446, 8089) use mutual TLS, so a plain
-    # HTTP uptime probe cannot pass there and none is configured. They are for
-    # TAK clients, not browsers, so UDS Portal does not list them.
+    # The passthrough entries below (8443, 8446, 8089) have no uptime check.
+    # The operator's Blackbox module only does an HTTPS GET that must trust
+    # the server certificate. TAK serves its own deploy-time CA there, 8443
+    # and 8089 also require a client certificate, and 8089 is not HTTP. They
+    # are for TAK clients, not browsers, so UDS Portal does not list them.
     expose:
       {{- if .Values.sso.enabled }}
       - description: tak-web-http
@@ -99,12 +101,18 @@ spec:
         port: {{ .Values.api.web.port }}
         annotations:
           uds.dev/title: "TAK Server"
-        # The Package operator creates a Blackbox Probe for these paths. The
-        # unauthenticated request ends on the Keycloak login page (2xx).
+        # The operator turns each path into a Blackbox probe of
+        # https://<host>.<domain><path>. TAK's own controller serves /login
+        # with 200 and no redirect, so a pass means TAK answered, not
+        # Keycloak. Same reason UDS Core probes Grafana on /healthz. "/" also
+        # passes, but only after a redirect. tests/uptime-probes.sh checks
+        # that /login stays at zero redirects.
+        {{- if .Values.uptime.enabled }}
         uptime:
           checks:
             paths:
-              - /
+              - /login
+        {{- end }}
       {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}

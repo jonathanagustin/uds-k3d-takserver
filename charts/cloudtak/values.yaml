@@ -6,6 +6,11 @@ domain: "###ZARF_VAR_DOMAIN###"
 # Browser host on the tenant gateway: https://<host>.<domain>/
 host: map
 
+# UDS Core uptime check on https://<host>.<domain>/login. Same switch as UDS
+# Core's Keycloak and Grafana charts.
+uptime:
+  enabled: true
+
 image:
   repository: ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak
   tag: v13.112.3 # cloudtak-version

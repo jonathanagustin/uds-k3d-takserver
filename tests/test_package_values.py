@@ -146,6 +146,18 @@ class PackageValuesTests(unittest.TestCase):
         self.assert_domain(out, docs, "values.example")
         self.assertEqual(hostnames(out, "example.com"), set())
 
+    def test_uptime_checks_probe_pages_the_apps_serve_themselves(self):
+        _out, docs = render()
+        expected = {"checks": {"paths": ["/login"]}}
+        uptime = {
+            pkg: {e["description"]: e.get("uptime") for e in find(docs, "Package", pkg)["spec"]["network"]["expose"]}
+            for pkg in ("takserver", "cloudtak")
+        }
+        self.assertEqual(uptime["takserver"]["tak-web-http"], expected)
+        self.assertEqual(uptime["cloudtak"]["cloudtak-map"], expected)
+        for passthrough in ("tak-api-https", "tak-api-cert", "tak-messaging-streaming"):
+            self.assertIsNone(uptime["takserver"][passthrough])
+
 
 if __name__ == "__main__":
     unittest.main()

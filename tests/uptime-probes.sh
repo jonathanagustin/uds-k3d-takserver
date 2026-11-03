@@ -2,8 +2,10 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# List the TAK and CloudTAK blackbox probes (in their own namespaces), require probe_success 1, then
-# scale CloudTAK to zero and back, and record the drop and the recovery.
+# List the TAK and CloudTAK blackbox probes (in their own namespaces), require
+# probe_success 1, and require that TAK answered /login itself (status 200, no
+# redirect to Keycloak). Then scale CloudTAK to zero and back, and record the
+# drop and the recovery.
 # The ATAK viewer probe is on atak/deploy/device.yaml. The full bundle does
 # not deploy that package, so this job does not list it.
 # Skips when the Probe CRD is absent.
@@ -90,53 +92,67 @@ if [[ "${ready}" -ne 1 ]]; then
   exit 1
 fi
 
-# Prints one "tak|cloudtak <value> <instance>" line per TAK or CloudTAK series.
+# Prints one "<tak|cloudtak> <success> <status> <redirects> <instance>" line per
+# TAK or CloudTAK target, classified by host.
 series() {
-  local encoded
-  encoded="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 'probe_success')"
-  curl -fsS --max-time 20 "http://127.0.0.1:9091/api/v1/query?query=${encoded}" -o "${work}/probe.json"
-  python3 - "${work}/probe.json" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1]))
-rows = data.get("data", {}).get("result", [])
+  local m
+  for m in probe_success probe_http_status_code probe_http_redirects; do
+    curl -fsS --max-time 20 "http://127.0.0.1:9091/api/v1/query?query=${m}" -o "${work}/${m}.json"
+  done
+  python3 - "${work}" <<'PY'
+import json, os, sys
+from urllib.parse import urlparse
+work = sys.argv[1]
+rows = {}
+for metric in ("probe_success", "probe_http_status_code", "probe_http_redirects"):
+    data = json.load(open(os.path.join(work, metric + ".json")))
+    for row in data.get("data", {}).get("result", []):
+        instance = row.get("metric", {}).get("instance", "")
+        rows.setdefault(instance, {})[metric] = row.get("value", ["", ""])[1]
 found = False
-for row in rows:
-    metric = row.get("metric", {})
-    instance = metric.get("instance", "")
-    value = row.get("value", ["", ""])[1]
+for instance in sorted(rows):
+    host = urlparse(instance).hostname or ""
     kind = ""
-    if "map." in instance or instance.endswith("/login") or "/login" in instance:
+    if host.startswith("map."):
         kind = "cloudtak"
-    elif "takserver." in instance and "takserver-api." not in instance and "takserver-stream." not in instance:
+    elif host.startswith("takserver."):
         kind = "tak"
     if not kind:
         continue
     found = True
-    print(f"{kind} {value} {instance}")
+    v = rows[instance]
+    print(kind, v.get("probe_success", "?"), v.get("probe_http_status_code", "?"),
+          v.get("probe_http_redirects", "?"), instance)
 if not found:
     sys.exit(2)
 PY
 }
 
+# Requires probe_success 1 for every target of this kind. For TAK it also
+# requires status 200 with no redirect, so the pass came from TAK and not from
+# the Keycloak page a redirect would end on.
 require_up() {
   local kind="$1"
-  local line value
+  local line success status redirects
   local saw=0
   while IFS= read -r line; do
     [[ -z "${line}" ]] && continue
-    say "probe_success ${line}"
+    say "probe ${line}"
+    read -r _ success status redirects _ <<< "${line}"
     if [[ "${line}" == "${kind} "* ]]; then
       saw=1
-      value="${line#"${kind}" }"
-      value="${value%% *}"
-      if [[ "${value}" != "1" ]]; then
-        say "${kind} probe_success is ${value}" >&2
+      if [[ "${success}" != "1" ]]; then
+        say "${kind} probe_success is ${success}" >&2
+        return 1
+      fi
+      if [[ "${kind}" == "tak" && ( "${status}" != "200" || "${redirects}" != "0" ) ]]; then
+        say "tak probe got status ${status} after ${redirects} redirects; expected 200 from TAK with none" >&2
         return 1
       fi
     fi
   done < <(series)
   if [[ "${saw}" -ne 1 ]]; then
-    say "no ${kind} probe_success series" >&2
+    say "no ${kind} probe series" >&2
     return 1
   fi
 }
@@ -153,7 +169,7 @@ if [[ "${up}" -ne 1 ]]; then
   say "TAK and CloudTAK probe_success were not both 1" >&2
   exit 1
 fi
-say "uptime: probe_success is 1 for TAK and CloudTAK"
+say "uptime: probe_success is 1 for TAK and CloudTAK, and TAK answered /login without a redirect"
 
 # Deleting the pod is not enough: it is back within one scrape interval, so the
 # probe can miss the outage. Scale to zero so the drop lasts until scale-up.

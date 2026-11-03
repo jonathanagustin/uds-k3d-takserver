@@ -160,17 +160,20 @@ async def roundtrip(host, port, cert, key, password, uid, ready, stop):
             open_stream(host, port, configuration(cert, key, password)),
             20,
         )
-        # Auth is x509 from the client certificate. The server then writes a
-        # CoT protocol announcement (TakProtocolSupport) on the stream.
-        announcement = await read_until(reader, "TakProtocolSupport", 20)
-        if b"TakProtocolSupport" not in announcement and b"<event" not in announcement:
-            print("no CoT event on the QUIC stream", file=sys.stderr)
-            print(announcement[:500], file=sys.stderr)
-            return 1
+        # Auth is x509 from the client certificate. A QUIC stream reaches the
+        # server only with its first data, so TAK starts its handler, and
+        # writes its protocol announcement, after the client sends. The
+        # client sends its event first. The shell script then checks that
+        # /Marti/api/subscriptions/all lists the uid.
         writer.write(cot(uid).encode())
         await writer.drain()
-        Path(ready).write_text(uid)
         print(f"sent {uid}")
+        reply = await read_until(reader, "TakProtocolSupport", 10)
+        if b"TakProtocolSupport" in reply or b"<event" in reply:
+            print("TAK answered on the QUIC stream")
+        else:
+            print("no reply on the QUIC stream yet; the subscription check decides", file=sys.stderr)
+        Path(ready).write_text(uid)
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline and not Path(stop).exists():
             await asyncio.sleep(0.5)

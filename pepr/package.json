@@ -1,7 +1,7 @@
 {
   "name": "takserver-oidc",
-  "version": "0.1.0",
-  "description": "Admission-time render of the OIDC client secret into the TAK Server CoreConfig",
+  "version": "0.7.1",
+  "description": "Prepares TAK Server on UDS Core. Renders CoreConfig at pod admission, sets the startup order and probes, writes the CoreDNS rewrite, and copies the TAK CA and CloudTAK admin certificates",
   "license": "GPL-3.0-only",
   "type": "module",
   "engines": {
@@ -18,7 +18,7 @@
     },
     "includedFiles": [],
     "peprVersion": "2.0.7",
-    "appVersion": "0.1.0",
+    "appVersion": "0.7.1",
     "rbacMode": "scoped",
     "rbac": [
       {

@@ -5,8 +5,9 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-// A user in no Keycloak group. Both clients set groups.anyOf to
-// /UDS Core/Admin, so this sign-in must stop on Keycloak's denial.
+// A user in no Keycloak group. The TAK client allows /UDS Core/Admin and the
+// CloudTAK client also allows /CloudTAK/Users, so this sign-in must stop on
+// Keycloak's denial for both.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const takUrl = process.env.TAK_SSO_URL || "https://takserver.uds.dev/";

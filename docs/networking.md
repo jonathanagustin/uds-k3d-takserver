@@ -101,7 +101,7 @@ The thresholds are UDS Core settings under `udsCoreDefaultAlerts` in the `uds-pr
 
 #### How CI tests it
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as a user outside the admin group and expects neither tile.
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
 
 ### Standard TAK ports
 

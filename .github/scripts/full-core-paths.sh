@@ -50,7 +50,13 @@ pattern+='|charts/[^/]+/(dashboards|alerts|rules)/'
 pattern+='|pepr/capabilities/workload[^/]*\.ts'
 pattern+=')'
 
-hits="$(grep -E "${pattern}" <<< "${changed}" || true)"
+# Files under those paths that Full Core does not read. bundle/uds-config.yaml
+# configures the slim test bundle (Test's install and upgrade jobs); Full Core
+# deploys bundle/full with bundle/full/uds-config.yaml. The workload unit tests
+# run in the Unit tests workflow (unit-tests.yaml), not in a cluster.
+skip='^(bundle/uds-config\.yaml|pepr/capabilities/[^/]*\.test\.ts)$'
+
+hits="$(grep -E "${pattern}" <<< "${changed}" | grep -Ev "${skip}" || true)"
 if [[ -n "${hits}" ]]; then
   decide true "$(tr '\n' ' ' <<< "${hits}" | cut -c1-300)"
 fi

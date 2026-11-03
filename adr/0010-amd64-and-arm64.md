@@ -33,5 +33,5 @@ Building arm64 under QEMU on an amd64 runner emulates the whole Gradle and Node 
 - One image tag and one package reference work on either architecture. `zarf package deploy` and `uds deploy` pick the package for the cluster, or take `--architecture`.
 - Every image change costs two native builds instead of one. They run in parallel.
 - The Postgres image comes from a maintainer's namespace rather than the `postgis` organization. Switch back if `postgis/postgis` starts publishing arm64.
-- The upgrade test stays on amd64 until a released arm64 package exists to upgrade from.
+- The upgrade test ran on amd64 only until a released arm64 package existed. Every release from 0.6.0 on publishes both, so the upgrade jobs run on amd64 and arm64.
 - Any image added to `zarf.yaml` must have an arm64 variant, or the arm64 package create fails. That failure is intended.

@@ -4,8 +4,9 @@
 
 """Create a Keycloak user with no groups for the Portal tile check.
 
-setup:keycloak-user puts doug in /UDS Core/Admin. TAK and CloudTAK both
-require that group. This account is the one that must see neither tile.
+setup:keycloak-user puts doug in /UDS Core/Admin. TAK allows only that
+group, and CloudTAK also allows /CloudTAK/Users. This account is in neither,
+so it must see neither tile.
 """
 
 import base64
@@ -97,6 +98,31 @@ def user_id(access):
     return body[0]["id"]
 
 
+def set_password(access, uid):
+    """Set the test password. A rerun is fine.
+
+    Keycloak's password policy refuses a password used in the last 5 changes
+    (invalidPasswordHistoryMessage). The user then already has this password,
+    for example when tasks.yaml and tests/portal.sh both run this script.
+    """
+    req = urllib.request.Request(
+        ADMIN + f"/admin/realms/{REALM}/users/{uid}/reset-password",
+        data=json.dumps({"type": "password", "value": PASSWORD, "temporary": False}).encode(),
+        method="PUT",
+        headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        if error.code == 400 and "invalidPasswordHistory" in raw:
+            print(f"{USER} already has the test password")
+            return
+        sys.stderr.write(raw + "\n")
+        raise SystemExit(error.code) from error
+
+
 def main():
     access = token()
     uid = user_id(access)
@@ -112,12 +138,7 @@ def main():
         uid = user_id(access)
     if not uid:
         raise SystemExit(f"Keycloak user {USER} was not created")
-    request(
-        "PUT",
-        f"/admin/realms/{REALM}/users/{uid}/reset-password",
-        access,
-        {"type": "password", "value": PASSWORD, "temporary": False},
-    )
+    set_password(access, uid)
     _status, groups = request("GET", f"/admin/realms/{REALM}/users/{uid}/groups", access)
     for group in groups or []:
         request("DELETE", f"/admin/realms/{REALM}/users/{uid}/groups/{group['id']}", access)

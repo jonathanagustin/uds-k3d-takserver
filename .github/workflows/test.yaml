@@ -351,11 +351,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Put /tmp on the root disk
-        # Ubuntu 26.04 mounts /tmp as tmpfs, too small for the Zarf checkpoint.
-        run: ./.github/scripts/tmp-on-disk.sh
-        timeout-minutes: 2
-
       - name: Check upgrade test contracts
         if: env.TEST_TYPE == 'upgrade'
         run: python3 -B -m unittest discover -s tests -p 'test_upgrade_*.py' -v

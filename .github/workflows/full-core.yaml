@@ -5,9 +5,10 @@
 # not rerun the per-PR validate-install jobs in test.yaml. No workflow in
 # this repo sets a larger GitHub-hosted runner label, so amd64 uses
 # vars.TEST_RUNNER when that variable is set and ubuntu-26.04 otherwise.
-# Ubuntu 26.04 mounts /tmp as tmpfs, where the Zarf checkpoint extraction
-# failed with 'disk quota exceeded', so the job first puts /tmp back on the
-# root disk. It then trims the runner disk and adds swap. See
+# #219 pinned 24.04 after early 26.04 images failed the Zarf checkpoint
+# extraction with 'disk quota exceeded'. On Nov 3, 2026 /tmp was ext4 on
+# both 26.04 images and every cluster job passed (#279). The job trims the
+# runner disk and adds swap. See
 # adr/0015-full-core-is-a-scheduled-gate.md.
 name: Full Core
 
@@ -97,11 +98,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Put /tmp on the root disk
-        # Ubuntu 26.04 mounts /tmp as tmpfs, too small for the Zarf checkpoint.
-        run: ./.github/scripts/tmp-on-disk.sh
-        timeout-minutes: 2
 
       - name: Install Docker Compose
         uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0

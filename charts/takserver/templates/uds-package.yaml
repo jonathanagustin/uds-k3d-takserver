@@ -114,6 +114,24 @@ spec:
               - /login
         {{- end }}
       {{- end }}
+      {{- if .Values.health.enabled }}
+      # SPIKE: client-port health. Each path reports one TAK client port.
+      - description: tak-health
+        service: tak-health
+        selector:
+          app: tak-health
+        gateway: {{ .Values.health.gateway }}
+        host: {{ .Values.health.host | quote }}
+        port: {{ .Values.health.port }}
+        annotations:
+          uds.dev/visible: "false"
+        uptime:
+          checks:
+            paths:
+              - /stream
+              - /api
+              - /enroll
+      {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}
         selector:
@@ -142,6 +160,20 @@ spec:
         host: {{ .Values.messaging.streaming.host | quote }}
         port: {{ .Values.messaging.streaming.port }}
     allow:
+      {{- if .Values.health.enabled }}
+      # SPIKE: the health service reaches TAK the way a client does, through
+      # the passthrough gateway.
+      {{- range $port := list 443 8446 8089 }}
+      - direction: Egress
+        selector:
+          app: tak-health
+        remoteNamespace: istio-passthrough-gateway
+        remoteSelector:
+          app: passthrough-ingressgateway
+        port: {{ $port }}
+        description: "Egress {{ $port }} from tak-health to the passthrough gateway"
+      {{- end }}
+      {{- end }}
       # Explicit pod-to-pod flows from values intraNamespace.flows. There is
       # no namespace-wide allow rule.
       {{- range $flow := .Values.intraNamespace.flows }}

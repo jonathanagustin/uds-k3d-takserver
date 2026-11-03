@@ -165,6 +165,16 @@ intraNamespace:
 uptime:
   enabled: true
 
+# SPIKE: client-port health service (templates/health.yaml). Exposed on the
+# admin gateway at https://<host>.<adminDomain> with one uptime path per TAK
+# client port. Works with SSO on or off.
+health:
+  enabled: true
+  host: tak-health
+  gateway: admin
+  port: 8081
+  passthroughService: passthrough-ingressgateway.istio-passthrough-gateway.svc.cluster.local
+
 sso:
   # Registers Keycloak client uds-takserver and Secret takserver-sso.
   # An init container envsubsts TAK_OIDC_CLIENT_SECRET into CoreConfig.

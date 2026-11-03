@@ -1,0 +1,114 @@
+{{- if .Values.health.enabled }}
+# SPIKE: TAK client-port health for UDS Core uptime checks. See
+# files/health/health.sh. Uses the config image (openssl and ncat are
+# already in it) and the deploy-time "user" client certificate, which has
+# no TAK admin role.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tak-health
+data:
+  health.sh: |
+{{ .Files.Get "files/health/health.sh" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tak-health
+  labels:
+    app: tak-health
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tak-health
+  template:
+    metadata:
+      labels:
+        app: tak-health
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: health
+          image: {{ .Values.certs.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "/health/health.sh"]
+          env:
+            - name: GATEWAY
+              value: {{ .Values.health.passthroughService | quote }}
+            - name: DOMAIN
+              value: {{ .Values.domain | quote }}
+            - name: PORT
+              value: {{ .Values.health.port | quote }}
+            - name: KEY_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: takserver-keystore
+                  key: PASS
+          ports:
+            - name: http
+              containerPort: {{ .Values.health.port }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          volumeMounts:
+            - name: script
+              mountPath: /health
+              readOnly: true
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: tak-health
+        - name: certs
+          secret:
+            secretName: takserver-certs
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+              - key: user.pem
+                path: client.pem
+              - key: user.key
+                path: client.key
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tak-health
+spec:
+  selector:
+    app: tak-health
+  ports:
+    - name: http
+      port: {{ .Values.health.port }}
+      targetPort: http
+{{- end }}

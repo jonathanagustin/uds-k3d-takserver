@@ -91,8 +91,9 @@ previous="$(cat "${work}/previous")"
 old_bundle="$(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst' | head -n 1)"
 old_package="zarf-package-takserver-${arch}-${previous}-upstream.tar.zst"
 postgres_pod() {
-  k get pods -n takserver -l app.kubernetes.io/name=postgresql \
-    -o jsonpath='{range .items[?(!@.metadata.deletionTimestamp)]}{.metadata.name}{"\n"}{end}' | head -n 1
+  k get pods -n takserver -l app.kubernetes.io/name=postgresql -o json | python3 -c 'import json, sys
+pods = [p for p in json.load(sys.stdin)["items"] if not p["metadata"].get("deletionTimestamp")]
+print(pods[0]["metadata"]["name"] if pods else "")'
 }
 sql() {
   k exec -i -n takserver "$(postgres_pod)" -c postgresql -- psql -X -w -U postgres -d cot -v ON_ERROR_STOP=1 -At

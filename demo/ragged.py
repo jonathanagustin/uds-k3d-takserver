@@ -11,11 +11,16 @@ speeds and pauses between them: words often go in one burst, flags, pipes and
 quotes get a hesitation first, and a pipeline gets one longer think pause.
 The Sleep before each Enter becomes 300-800 ms. Lines marked with
 '# typo: <word>' get one corrected typo in that word (comments only).
-Lines marked with '# fast' are typed quickly in one go (long commands).
+Lines marked with '# fast' are typed quickly in one go (long commands), and
+so are comment lines ('Type "# ..."'), so a narrated step does not wait on
+typing. '{{NAME}}' anywhere in the tape becomes the environment variable
+DEMO_NAME (for example {{VERSION}} is DEMO_VERSION), so a tape can name the
+release it shows without hard-coding it.
 The random seed is the tape's file name, so the schedule is the same on
 every run, and demo/filters.py reads the generated tape to time captions.
 """
 
+import os
 import random
 import re
 import sys
@@ -94,7 +99,13 @@ def main():
     typo_word = None
     fast = False
     out = []
-    lines = source.read_text().splitlines()
+    def substitute(match):
+        name = f"DEMO_{match.group(1)}"
+        if name not in os.environ:
+            raise SystemExit(f"{source}: {{{{{match.group(1)}}}}} needs {name} set")
+        return os.environ[name]
+
+    lines = re.sub(r"\{\{([A-Z_]+)\}\}", substitute, source.read_text()).splitlines()
     i = 0
     while i < len(lines):
         raw = lines[i]
@@ -114,7 +125,7 @@ def main():
             text = match.group(1)
             if typo_word and not text.startswith("#"):
                 raise SystemExit("typos are only allowed in comment lines")
-            if fast:
+            if fast or (text.startswith("#") and not typo_word):
                 out.append(f'Type@{ms(rng.uniform(6, 10))} "{text}"')
             else:
                 out.extend(type_line(rng, text, typo_word))

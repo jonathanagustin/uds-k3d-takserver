@@ -6,7 +6,10 @@
 # videos: demo/out/demo.mp4 (deploy) and demo/out/demo-operate.mp4 (operate
 # and trust). H.264, yuv420p, faststart, no audio, each under MAX_BYTES.
 # Each gets a NAME-chapters.txt with the start time of every part.
-# Also writes demo/out/poster.png and demo/out/preview.gif.
+# Also writes demo/out/poster.png and demo/out/preview.gif, one short clip
+# per chapter cut from the same parts (demo/out/clips/demo-clip-*.mp4, each
+# with a .jpg poster) for the doc pages, and WebP copies of the stills the
+# tapes and walkthroughs saved (demo/out/shots/*.webp).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -136,6 +139,11 @@ clip t02 "${out}/02-package-cr.mp4" terminal demo/out/tapes/02-package-cr.tape
 card c06 "Sign In through UDS SSO" "TAK's web UI at takserver.uds.dev, Keycloak from UDS Core"
 clip t06 "${out}/06-web.mp4" web "${out}/06-web-events.json" "${web_trim}"
 deploy_video+=(c02 t02 c06 t06)
+if [[ -f "${out}/07-user.mp4" ]]; then
+  card c07 "CloudTAK for Regular Users" "a non-admin group signs in to the map; TAK's admin UI stays admin-only"
+  clip t07 "${out}/07-user.mp4" web "${out}/07-user-events.json" "${web_trim}"
+  deploy_video+=(c07 t07)
+fi
 if [[ -f "${out}/08-atak.mp4" ]]; then
   card c08 "A Real ATAK Device on the Same Server" "ATAK-CIV in a KubeVirt VM, its TEST LOCATION marker in CloudTAK"
   clip t08 "${out}/08-atak.mp4" web "${out}/08-atak-events.json" "${web_trim}"
@@ -160,8 +168,16 @@ fi
 card c03 "Secure by Default" "mesh, generated network policy, signed releases with provenance"
 clip t03 "${out}/03-secure.mp4" terminal demo/out/tapes/03-secure.tape
 operate_video+=(c03 t03)
-card c96 "Upgrades from the Last Signed Release" "CI installs the verified release, upgrades in place, keeps certificates and data"
-operate_video+=(c96)
+# demo/upgrade.sh, recorded last on a new cluster. Without it there is no
+# card: a chapter title with nothing after it says nothing.
+if [[ -f "${out}/11-upgrade-5.mp4" ]]; then
+  card c96 "Upgrades from the Last Signed Release" "install the verified release, upgrade in place, keep certificates and data"
+  operate_video+=(c96)
+  for n in 1 2 3 4 5; do
+    clip "u0${n}" "${out}/11-upgrade-${n}.mp4" web "${out}/11-upgrade-${n}-events.json" 0
+    operate_video+=("u0${n}")
+  done
+fi
 if [[ -f "${out}/10-operate-4.mp4" ]]; then
   card c10 "Footprint and Self-Healing" "live numbers from this run; TAK's messaging pod deleted"
   operate_video+=(c10)
@@ -178,6 +194,55 @@ operate_video+=(c98 c97)
 
 build demo "${deploy_video[@]}"
 build demo-operate "${operate_video[@]}"
+
+# chapter SLUG PART... joins one chapter's parts (its card first) into
+# ${out}/clips/demo-clip-SLUG.mp4 for the doc page about it, with a poster
+# two seconds after the card. Parts that were not recorded are skipped, and
+# so is a chapter with only its card.
+mkdir -p "${out}/clips"
+chapter() {
+  local slug="$1" list="${work}/clip-$1-list.txt" part card_secs n=0
+  shift
+  : > "${list}"
+  for part in "$@"; do
+    if [[ -f "${work}/${part}.mp4" ]]; then
+      echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
+      n=$((n + 1))
+    fi
+  done
+  if [[ "${n}" -lt 2 ]]; then
+    echo "clip ${slug}: not recorded, skipped"
+    return 0
+  fi
+  ffmpeg -v error -y -f concat -safe 0 -i "${list}" -an \
+    -c:v libx264 -preset slow -crf 28 -profile:v high -pix_fmt yuv420p \
+    -g $((fps * 4)) -movflags +faststart "${out}/clips/demo-clip-${slug}.mp4"
+  card_secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/$1.mp4")"
+  ffmpeg -v error -y -ss "$(awk -v c="${card_secs}" 'BEGIN { print c + 2 }')" -i "${out}/clips/demo-clip-${slug}.mp4" \
+    -frames:v 1 -q:v 4 "${out}/clips/demo-clip-${slug}.jpg"
+  echo "clip ${slug}: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "${out}/clips/demo-clip-${slug}.mp4")s"
+}
+chapter deploy v1 d01 d02 d03 d04
+chapter package-ready c02 t02
+chapter sso c06 t06
+chapter cloudtak-user c07 t07
+chapter atak-device c08 t08
+chapter airgap c2a t2a
+chapter policy c2b t2b
+chapter sync c09 t09
+chapter secure c03 t03
+chapter upgrade c96 u01 u02 u03 u04 u05
+chapter self-healing c10 e01 e02 e03 e04 e05
+
+# The stills, as WebP for the docs (lossless: they are mostly text).
+for shot in "${out}"/shots/*.png; do
+  [[ -f "${shot}" ]] || continue
+  ffmpeg -v error -y -i "${shot}" -c:v libwebp -lossless 1 -compression_level 6 "${shot%.png}.webp"
+  echo "still $(basename "${shot%.png}"): $(stat -c%s "${shot%.png}.webp") bytes"
+done
+# The two videos' posters, as the docs site shows them.
+ffmpeg -v error -y -ss 1.5 -i "${out}/demo.mp4" -frames:v 1 -q:v 4 "${out}/demo-deploy.jpg"
+ffmpeg -v error -y -ss 1.5 -i "${out}/demo-operate.mp4" -frames:v 1 -q:v 4 "${out}/demo-operate-and-trust.jpg"
 
 # Poster: the TAK landing page after sign-in, with its caption fully shown
 # and before the zoom starts. Preview: six seconds of the Package CR chapter.

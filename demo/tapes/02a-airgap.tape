@@ -1,9 +1,10 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Air-gapped install: images come from the Zarf registry in the cluster, and
-# the released package carries its SBOMs.
+# Air-gapped install: the package is one file, images come from the Zarf
+# registry in the cluster, and the released package carries its SBOMs.
 # '# caption:' and '# zoom:' lines are read by demo/filters.py, not VHS.
+# {{VERSION}} and {{RELEASE_PACKAGE}} come from demo/record-terminal.sh.
 Output "demo/out/02a-airgap.mp4"
 Source "demo/settings.tape"
 
@@ -13,6 +14,15 @@ Enter
 Sleep 1s
 Show
 
+Type@70ms "# The whole package is one file you can carry offline"
+Sleep 500ms
+Enter
+Sleep 400ms
+# caption: One Zarf package file: the chart, every image and the SBOMs
+Type@80ms "ls -lh zarf-package-takserver-amd64-*-upstream.tar.zst"
+Sleep 400ms
+Enter
+Sleep 2600ms
 Type@70ms "# Every TAK image runs from the Zarf registry inside the cluster"
 Sleep 500ms
 Enter
@@ -23,6 +33,7 @@ Type@80ms "kubectl get pods -n takserver -o custom-columns=POD:.metadata.name,IM
 Sleep 400ms
 Enter
 Sleep 3200ms
+Screenshot "demo/out/shots/zarf-registry-images.png"
 # caption: The registry holds what the package brought with it
 Type@80ms "uds zarf tools registry catalog | head -12"
 Sleep 400ms
@@ -33,10 +44,10 @@ Type@70ms "# The released package carries its SBOMs"
 Sleep 500ms
 Enter
 Sleep 400ms
-# caption: SBOMs travel inside the signed release package, readable offline
+# caption: SBOMs travel inside the signed v{{VERSION}} package, readable offline
 # fast
-Type@35ms "uds zarf package inspect sbom oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.3.0-upstream --certificate-identity-regexp $RELEASE_WORKFLOW --certificate-oidc-issuer $RELEASE_ISSUER --output /tmp/sbom && ls /tmp/sbom/takserver | grep json"
+Type@35ms "uds zarf package inspect sbom {{RELEASE_PACKAGE}} --output /tmp/sbom && ls /tmp/sbom/takserver | grep json"
 Sleep 400ms
 Enter
-Wait@180s /takserver \$\s*$/
+Wait@60s /takserver \$\s*$/
 Sleep 3000ms

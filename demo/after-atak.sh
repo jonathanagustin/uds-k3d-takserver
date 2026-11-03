@@ -4,7 +4,7 @@
 
 # Footprint and self-healing, recorded (asciinema) after the ATAK chapter so
 # the ATAK test device is connected: live CPU and memory from the kubelet,
-# the package size, then TAK's messaging pod is deleted and the device's
+# then TAK's messaging pod is deleted and the device's
 # connection is checked again. demo/render-cast.py splits it at the prompts.
 set -euo pipefail
 
@@ -48,7 +48,6 @@ print("total".ljust(48), f"{sum(r[1] for r in rows):6.0f}m {sum(r[2] for r in ro
 
 prompt "kubectl get --raw /api/v1/nodes/NODE/proxy/stats/summary   # TAK pods: CPU and memory now"
 usage
-run ls -lh zarf-package-takserver-amd64-*-upstream.tar.zst
 prompt "curl https://takserver-api.${domain}/Marti/api/clientEndPoints   # the ATAK test device"
 before="$(device_status)"
 echo "${before}"

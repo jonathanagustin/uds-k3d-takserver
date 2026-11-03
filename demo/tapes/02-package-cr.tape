@@ -23,6 +23,8 @@ Type@85ms "kubectl get packages -A -o custom-columns=NAME:.metadata.name,PHASE:.
 Sleep 350ms
 Enter
 Sleep 2600ms
+# A still for the docs, from this same recording (demo/assemble.sh).
+Screenshot "demo/out/shots/packages-ready.png"
 # caption: Operator status for the takserver Package
 # fast
 Type@65ms "kubectl get package takserver -n takserver -o yaml | yq '.status | del(.conditions)'"

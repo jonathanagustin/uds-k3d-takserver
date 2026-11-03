@@ -4,12 +4,17 @@
  */
 
 // Live sync between CloudTAK and the ATAK test device for the "Operate and
-// trust" video: a TEST MARKER drawn in CloudTAK and shared to the device, a
-// TEST chat message to the device, both shown arriving on the phone view,
-// then TAK's own client list with the device's certificate connection.
+// trust" video: a TEST MARKER drawn in CloudTAK and shared to the device,
+// shown arriving on the phone view, then a TEST chat message to the device.
+// Before the phone view comes back, demo/atak-adb.sh zooms ATAK in on its
+// test location, so the TEST MARKER shows as its own icon next to the
+// device's marker. At ATAK's starting zoom (about 270 m a pixel) the two
+// would overlap.
 // Each scene is skipped (with a screenshot in tests/.playwright/demo) if the
 // UI does not do what it should, so the video only shows what worked.
 // demo/record-web.sh runs it after atak/ci/e2e.sh has connected the device.
+import { execFile, execFileSync } from "node:child_process";
+import path from "node:path";
 import type { Page } from "@playwright/test";
 import {
   caption,
@@ -22,6 +27,7 @@ import {
   showCursor,
   start,
   test,
+  still,
   typeLikeAPerson,
   watchSecurity,
 } from "./browser";
@@ -33,6 +39,39 @@ const username = process.env.KEYCLOAK_USER || "takuser";
 const password = process.env.KEYCLOAK_PASSWORD || "";
 const deviceCallsign = process.env.ATAK_CALLSIGN || "ATAK-DEVICE (TEST LOCATION)";
 const testLocation = process.env.ATAK_TEST_LOCATION || "38.8895/-77.0353";
+
+// demo/atak-adb.sh, from the repository root (Playwright runs in tests/).
+// A failure is logged, not thrown: the phone view still shows, unzoomed.
+function atakAdb(...args: string[]) {
+  try {
+    execFileSync(path.resolve(process.cwd(), "..", "demo", "atak-adb.sh"), args, {
+      cwd: path.resolve(process.cwd(), ".."),
+      stdio: "inherit",
+      timeout: 120_000,
+    });
+    return true;
+  } catch (error) {
+    console.log(`demo/atak-adb.sh ${args.join(" ")} failed: ${String(error).split("\n")[0]}`);
+    return false;
+  }
+}
+// The same, in the background, so the video does not wait on it.
+function atakAdbLater(...args: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(
+      path.resolve(process.cwd(), "..", "demo", "atak-adb.sh"),
+      args,
+      { cwd: path.resolve(process.cwd(), ".."), timeout: 120_000 },
+      (error) => {
+        if (error) console.log(`demo/atak-adb.sh ${args.join(" ")} failed: ${String(error).split("\n")[0]}`);
+        resolve(!error);
+      },
+    );
+  });
+}
+// About 2 m a pixel after seven taps: the TEST MARKER, 0.004 degrees (about
+// 350 m) east of the device, lands well clear of the device's own marker.
+const atakZoomTaps = process.env.ATAK_ZOOM_TAPS || "7";
 
 // Clicking a marker opens CloudTAK's radial menu; its "view" sector opens
 // the marker's pane.
@@ -67,6 +106,8 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   test.setTimeout(600_000);
   expect(password, "KEYCLOAK_PASSWORD is not set").not.toBe("");
   await watchSecurity(page);
+  const adb = atakAdb("start");
+  let zooming: Promise<boolean> = Promise.resolve(false);
 
   await page.goto(phoneUrl);
   await expect(page).toHaveURL(/sso\.uds\.dev/, { timeout: 60_000 });
@@ -135,9 +176,31 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await typeLikeAPerson(map, "ATAK");
     await clickLikeAPerson(map, modal.getByText(deviceCallsign, { exact: true }).first());
     await clickLikeAPerson(map, modal.getByTitle("Share to Selected"));
+    if (adb) zooming = atakAdbLater("zoom", atakZoomTaps);
     caption("Shared to the ATAK device through TAK");
     await map.waitForTimeout(3_000);
   });
+
+  // Back on the phone, zoomed in on the test location: the TEST MARKER sits
+  // east of the device's own marker.
+  if (marker) {
+    const zoomed = await zooming;
+    await page.bringToFront();
+    await showCursor(page);
+    await page.waitForTimeout(2_500);
+    caption(
+      zoomed
+        ? "On the phone: the TEST MARKER from CloudTAK, east of the device's own marker"
+        : "On the phone: the TEST MARKER arrives over the device's stream",
+    );
+    mark("zoom", "0.5,0.5,1.5");
+    await page.waitForTimeout(2_500);
+    await still(page, "atak-test-marker");
+    if (adb) atakAdb("shot", "demo-test-marker");
+    await page.waitForTimeout(4_500);
+    await map.bringToFront();
+    await showCursor(map);
+  }
 
   // CloudTAK -> ATAK: a TEST chat message to the device.
   const chat = await scene(map, "chat", async () => {
@@ -170,20 +233,16 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await map.waitForTimeout(3_000);
   });
 
-  if (marker || chat) {
+  if (chat) {
     await page.bringToFront();
     await showCursor(page);
     await page.waitForTimeout(2_000);
-    caption(
-      marker && chat
-        ? "On the phone: the TEST MARKER and the chat arrive over the device's stream"
-        : marker
-          ? "On the phone: the TEST MARKER arrives over the device's stream"
-          : "On the phone: the chat arrives over the device's stream",
-    );
+    caption("On the phone: the chat arrives over the device's stream");
     mark("zoom", "0.5,0.5,1.4");
-    await page.waitForTimeout(7_000);
+    await page.waitForTimeout(5_000);
+    if (adb) atakAdb("shot", "demo-chat");
   }
+  if (adb) atakAdb("stop");
 
   // Nothing to show if neither scene worked: fail so the take is left out.
   expect(marker || chat, "no sync scene worked").toBe(true);

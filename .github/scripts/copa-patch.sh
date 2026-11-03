@@ -158,12 +158,26 @@ apply_patch() {
   # The builder cannot see this daemon tag. Drop it so the pull is the copy
   # the builder reads.
   docker rmi "${src}" >/dev/null
-  "${copa}" patch \
+  # Copa installs its RPM tools from the Azure Linux package mirror inside
+  # the build. A dropped connection there fails the whole image build
+  # (tdnf "Error(1208) : Couldn't connect to server", exit 184, Container
+  # run 41633036119 on arm64), so try the patch up to three times.
+  local attempt=1
+  local max_attempts="${COPA_ATTEMPTS:-3}"
+  until "${copa}" patch \
     -i "${src}" \
     -r "${report}" \
     -t "${dst}" \
     --addr "buildx://${builder_name}" \
-    --timeout "${COPA_TIMEOUT:-15m}"
+    --timeout "${COPA_TIMEOUT:-15m}"; do
+    if [[ "${attempt}" -ge "${max_attempts}" ]]; then
+      echo "copa patch failed ${attempt} times for ${image}" >&2
+      return 1
+    fi
+    echo "copa patch attempt ${attempt} of ${max_attempts} failed for ${image}; retrying in $((attempt * 30))s" >&2
+    sleep "$((attempt * 30))"
+    attempt=$((attempt + 1))
+  done
   docker image inspect "${dst}" >/dev/null
   docker tag "${dst}" "${image}"
   docker rmi "${dst}" >/dev/null

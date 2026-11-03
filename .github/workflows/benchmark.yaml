@@ -124,6 +124,53 @@ jobs:
           export PATH="${RUNNER_TEMP}/bench-venv/bin:${GITHUB_WORKSPACE}/.local/bin:${PATH}"
           "${RUNNER_TEMP}/bench-venv/bin/python" bench/run.py
 
+      # A failed install or sweep used to leave no logs. Keep the same debug
+      # the Test and Full Core workflows keep. These run only on failure.
+      - name: Disk use after a failure
+        if: failure()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          df -h /
+          sudo timeout 60 docker system df || true
+
+      - name: Debug output
+        if: failure()
+        timeout-minutes: 5
+        run: uds run actions:debug-output
+        shell: bash
+
+      - name: Save logs
+        if: failure()
+        timeout-minutes: 2
+        run: uds run actions:save-logs
+        shell: bash
+
+      - name: Redact passwords from the logs
+        if: failure()
+        # TAK's cert tools take keystore passwords as arguments, and container
+        # logs can record those command lines.
+        run: ./.github/scripts/redact-logs.py /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
+        shell: bash
+        timeout-minutes: 3
+
+      - name: Upload the debug logs
+        if: failure()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # Not bench-*, so the summary job does not download it.
+          name: debug-log-bench-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/zarf-*.log
+            /tmp/uds-*.log
+            /tmp/maru-*.log
+            /tmp/debug-*.log
+            /tmp/uds-containerd-logs
+            /tmp/k3d-uds-*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload the records
         if: always()
         timeout-minutes: 2
@@ -137,7 +184,9 @@ jobs:
   summary:
     name: benchmark-summary
     needs: [benchmark]
-    if: needs.benchmark.result == 'success'
+    # When one arch fails, the other arch's records still make a front.
+    # Skip only when the benchmark job did not run or was cancelled.
+    if: always() && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure')
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -152,7 +201,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p bench/in
-          gh run download "${GITHUB_RUN_ID}" --dir bench/in
+          gh run download "${GITHUB_RUN_ID}" --dir bench/in --pattern 'bench-*'
 
       - name: Plot the front
         run: |

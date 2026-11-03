@@ -105,6 +105,12 @@ spec:
           checks:
             paths:
               - /
+              - /Marti/api/version
+              - /Marti/login/index.html
+              - /login
+              - /Marti/jquery/jquery-3.5.0.js
+              - /Marti/api/tls/config
+              - /error
       {{- end }}
       - description: tak-api-https
         service: {{ .Values.api.service | quote }}

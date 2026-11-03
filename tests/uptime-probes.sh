@@ -90,6 +90,39 @@ if [[ "${ready}" -ne 1 ]]; then
   exit 1
 fi
 
+# EXPERIMENT (temporary): which TAK paths answer 2xx without a redirect.
+report() {
+  local m
+  for m in probe_success probe_http_status_code probe_http_redirects; do
+    curl -fsS --max-time 20 "http://127.0.0.1:9091/api/v1/query?query=${m}" -o "${work}/${m}.json" || true
+  done
+  python3 - "${work}" <<'PY'
+import json, sys, os
+d = sys.argv[1]
+rows = {}
+for m in ("probe_success", "probe_http_status_code", "probe_http_redirects"):
+    try:
+        data = json.load(open(os.path.join(d, m + ".json")))
+    except Exception:
+        continue
+    for r in data.get("data", {}).get("result", []):
+        inst = r["metric"].get("instance", "")
+        rows.setdefault(inst, {})[m] = r["value"][1]
+for inst in sorted(rows):
+    v = rows[inst]
+    print(f"REPORT {inst} success={v.get('probe_success')} status={v.get('probe_http_status_code')} redirects={v.get('probe_http_redirects')}")
+PY
+}
+for _ in $(seq 1 30); do
+  report | tee -a "${log}"
+  if [[ "$(report | grep -c 'takserver\.')" -ge 7 ]] && ! report | grep 'takserver\.' | grep -q 'status=0'; then
+    break
+  fi
+  sleep 10
+done
+say "EXPERIMENT done"
+exit 1
+
 # Prints one "tak|cloudtak <value> <instance>" line per TAK or CloudTAK series.
 series() {
   local encoded

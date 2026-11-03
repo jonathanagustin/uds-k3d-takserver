@@ -19,6 +19,8 @@ import {
   desiredReplicas,
   enqueueIgnite,
   issuerHost,
+  PLUGINS_MEMORY,
+  pluginsMemory,
   prepareDeployment,
   prepareIgniteConfigMap,
   prepareIgniteStatefulSet,
@@ -26,6 +28,7 @@ import {
   reconcileDeployment,
   reconcileIgnite,
   resetIgniteQueue,
+  sameMemory,
   shapeDeployment,
   STARTUP_ANNOTATION,
   tuneIgniteXml,
@@ -141,6 +144,63 @@ test("config probes exec the readiness script and plugins get a 512Mi limit", ()
   assert.equal(plugins?.resources?.limits?.memory, "512Mi");
   const again = shapeDeployment(shaped("takserver-plugins"), { image: IMAGE });
   assert.equal(again.changed, false);
+});
+
+test("plugins memory comes from the env and defaults to 320Mi and 512Mi", () => {
+  assert.deepEqual(PLUGINS_MEMORY, { request: "320Mi", limit: "512Mi" });
+  assert.deepEqual(pluginsMemory({}), PLUGINS_MEMORY);
+  assert.deepEqual(pluginsMemory({ PLUGINS_MEMORY_REQUEST: " ", PLUGINS_MEMORY_LIMIT: "" }), PLUGINS_MEMORY);
+  assert.deepEqual(pluginsMemory({ PLUGINS_MEMORY_REQUEST: "1.5Gi", PLUGINS_MEMORY_LIMIT: " 2G " }), {
+    request: "1.5Gi",
+    limit: "2G",
+  });
+  assert.throws(() => pluginsMemory({ PLUGINS_MEMORY_REQUEST: "lots" }), /PLUGINS_MEMORY_REQUEST is not a memory quantity: lots/);
+  assert.throws(() => pluginsMemory({ PLUGINS_MEMORY_LIMIT: "512mi" }), /PLUGINS_MEMORY_LIMIT/);
+  const memory = { request: "400Mi", limit: "768Mi" };
+  const plugins = shapeDeployment(deploy("takserver-plugins"), { image: IMAGE, pluginsMemory: memory }).next;
+  const container = plugins.spec?.template?.spec?.containers?.[0];
+  assert.equal(container?.resources?.requests?.memory, "400Mi");
+  assert.equal(container?.resources?.limits?.memory, "768Mi");
+  assert.equal(shapeDeployment(plugins, { image: IMAGE, pluginsMemory: memory }).changed, false);
+  assert.equal(shapeDeployment(plugins, { image: IMAGE }).changed, true);
+});
+
+test("plugins memory compares bytes, so a canonical stored value is not patched again", () => {
+  assert.equal(sameMemory("1536Mi", "1.5Gi"), true);
+  assert.equal(sameMemory("1Gi", "1024Mi"), true);
+  assert.equal(sameMemory("2G", "2000M"), true);
+  assert.equal(sameMemory("1073741824", "1Gi"), true);
+  assert.equal(sameMemory("512Mi", "320Mi"), false);
+  assert.equal(sameMemory(undefined, "320Mi"), false);
+  assert.equal(sameMemory("odd", "odd"), true);
+  const stored = shapeDeployment(deploy("takserver-plugins"), { image: IMAGE, pluginsMemory: { request: "1536Mi", limit: "2Gi" } }).next;
+  assert.equal(shapeDeployment(stored, { image: IMAGE, pluginsMemory: { request: "1.5Gi", limit: "2048Mi" } }).changed, false);
+});
+
+test("admission, the watcher, and pod admission all read the plugins memory env", async () => {
+  const env = { RENDER_IMAGE: IMAGE, PLUGINS_MEMORY_REQUEST: "400Mi", PLUGINS_MEMORY_LIMIT: "768Mi" };
+  const { cluster } = recordedCluster();
+  const admitted = deploy("takserver-plugins");
+  await prepareDeployment(admitted, env, cluster);
+  assert.equal(admitted.spec?.template?.spec?.containers?.[0]?.resources?.limits?.memory, "768Mi");
+  const pod: PodLike = { metadata: { labels: { app: "takserver-plugins" } }, spec: { containers: [{ name: "plugins" }] } };
+  await preparePod(pod, env, cluster);
+  const resources = (pod.spec?.containers?.[0] as { resources?: { requests?: { memory?: string } } }).resources;
+  assert.equal(resources?.requests?.memory, "400Mi");
+  const patched: JsonOp[][] = [];
+  const watcher = recordedCluster({
+    patchDeployment: async (_ns: string, _name: string, ops: JsonOp[]) => {
+      patched.push(ops);
+    },
+  });
+  await reconcileDeployment(admitted, "MODIFIED", watcher.cluster, env);
+  assert.equal(patched.length, 0);
+  await reconcileDeployment(admitted, "MODIFIED", watcher.cluster, { RENDER_IMAGE: IMAGE });
+  assert.equal(JSON.stringify(patched).includes("512Mi"), true);
+  await assert.rejects(
+    reconcileDeployment(admitted, "MODIFIED", watcher.cluster, { ...env, PLUGINS_MEMORY_LIMIT: "big" }),
+    /PLUGINS_MEMORY_LIMIT/,
+  );
 });
 
 test("a wrong trust env, mount, and volume are corrected", () => {

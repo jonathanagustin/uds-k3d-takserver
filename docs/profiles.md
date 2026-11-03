@@ -31,7 +31,7 @@ NATS requests and limits stay in `values/common-values.yaml` (10m and 32Mi, limi
 
 `values/profiles/small.yaml` and `values/profiles/small-cloudtak.yaml`. One node, requests just above the table, limits with a little room. Postgres memory limit is 512Mi. API, messaging, and Ignite memory limits stay 1536Mi.
 
-The plugins Deployment does not read a memory value from the chart. The `takserver-workload` admission hook sets it on every install: request 320Mi and limit 512Mi. The harness configs set the same values. The values file cannot change it.
+The plugins Deployment does not read a memory value from the chart, so a profile cannot change it. See [Plugins memory](#plugins-memory).
 
 TAK, CloudTAK, and NATS memory limits, counting the 512Mi plugins limit, sum to about 8992Mi of the ~15984Mi runner.
 
@@ -57,6 +57,21 @@ overrides:
 ```
 
 Use `production.yaml` and `production-cloudtak.yaml` the same way.
+
+## Plugins memory
+
+The `takserver-workload` capability in the Pepr module sets the plugins memory, not the chart. The defaults are request 320Mi and limit 512Mi. The plugin heap is 128m, and the steady working set was about 263Mi. The harness configs use the same values.
+
+To change it, set the `PLUGINS_MEMORY_REQUEST` and `PLUGINS_MEMORY_LIMIT` variables, for example in a bundle's `uds-config.yaml`:
+
+```yaml
+variables:
+  takserver:
+    PLUGINS_MEMORY_REQUEST: 400Mi
+    PLUGINS_MEMORY_LIMIT: 768Mi
+```
+
+Or set the `tak.plugins.memoryRequest` and `tak.plugins.memoryLimit` package values, which override the variables. Admission and the watcher both read them. The schema rejects a package value that is not a memory quantity, such as `512mi`. A variable is not checked before deploy. With a bad variable, admission rejects the four TAK Deployments, and the error names the variable.
 
 ## Harness
 

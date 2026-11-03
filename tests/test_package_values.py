@@ -68,6 +68,12 @@ def watcher_env(docs):
     return {item["name"]: item.get("value") for item in container.get("env") or []}
 
 
+def admission_env(docs):
+    deploy = find(docs, "Deployment", f"pepr-{MODULE}")
+    container = deploy["spec"]["template"]["spec"]["containers"][0]
+    return {item["name"]: item.get("value") for item in container.get("env") or []}
+
+
 def tak_tags(docs):
     tags = set()
     for app in TAK_APPS:
@@ -124,6 +130,24 @@ class PackageValuesTests(unittest.TestCase):
         self.assertEqual(env["PASSTHROUGH_HOSTS"], "takserver-api")
         self.assertTrue(env["RENDER_IMAGE"].endswith(":9.9-RELEASE-9"))
         self.assertEqual(tak_tags(docs), {"9.9-RELEASE-9"})
+
+    def test_plugins_memory_reaches_admission_and_the_watcher(self):
+        _out, docs = render()
+        admission = admission_env(docs)
+        for env in (watcher_env(docs), admission):
+            self.assertEqual(env["PLUGINS_MEMORY_REQUEST"], "320Mi")
+            self.assertEqual(env["PLUGINS_MEMORY_LIMIT"], "512Mi")
+        _out, docs = render(variables=["PLUGINS_MEMORY_REQUEST=400Mi", "PLUGINS_MEMORY_LIMIT=1Gi"])
+        for env in (watcher_env(docs), admission_env(docs)):
+            self.assertEqual(env["PLUGINS_MEMORY_REQUEST"], "400Mi")
+            self.assertEqual(env["PLUGINS_MEMORY_LIMIT"], "1Gi")
+        _out, docs = render(
+            variables=["PLUGINS_MEMORY_LIMIT=1Gi"],
+            values=["tak.plugins.memoryRequest=640Mi", "tak.plugins.memoryLimit=2Gi"],
+        )
+        for env in (watcher_env(docs), admission_env(docs)):
+            self.assertEqual(env["PLUGINS_MEMORY_REQUEST"], "640Mi")
+            self.assertEqual(env["PLUGINS_MEMORY_LIMIT"], "2Gi")
 
     def test_storage_classes_are_unset_by_default(self):
         _out, docs = render()

@@ -319,11 +319,13 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts reach the Istio gateways from inside the cluster |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that the passthrough gateway serves |
+| `PLUGINS_MEMORY_REQUEST` | `320Mi` | Memory request for the TAK plugins container |
+| `PLUGINS_MEMORY_LIMIT` | `512Mi` | Memory limit for the TAK plugins container |
 | `FILESYSTEM_BACKUP` | `false` | Run a Velero node-agent and back up the database volumes as files. See [docs/data.md](docs/data.md#backup) |
 | `POSTGRES_STORAGE_CLASS` | empty (cluster default) | StorageClass for the TAK Postgres volume. Set it only on a new install |
 | `CLOUDTAK_STORAGE_CLASS` | empty (cluster default) | StorageClass for the CloudTAK PostGIS volume. Set it only on a new install |
 
-The first four also have package values (`global.domain`, `tak.imageTag`, `dns.inCluster`, `dns.passthroughHosts`) that override them at deploy time. `values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle. Named `small` and `production` overlays are in [docs/profiles.md](docs/profiles.md). See [docs/configuration.md](docs/configuration.md).
+The first six also have package values (`global.domain`, `tak.imageTag`, `dns.inCluster`, `dns.passthroughHosts`, `tak.plugins.memoryRequest`, `tak.plugins.memoryLimit`) that override them at deploy time. `values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle. Named `small` and `production` overlays are in [docs/profiles.md](docs/profiles.md). See [docs/configuration.md](docs/configuration.md).
 
 ## Supported architectures
 

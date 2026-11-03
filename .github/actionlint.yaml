@@ -7,3 +7,10 @@ paths:
   .github/workflows/scorecard.yaml:
     ignore:
       - 'unknown permission scope "(code-quality|drives|vulnerability-alerts)"'
+
+# GitHub-hosted Ubuntu 26.04 labels. They are GA (actions/runner-images
+# #14747), but actionlint 1.7.12 does not list them yet.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm

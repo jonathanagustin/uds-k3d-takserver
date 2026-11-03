@@ -12,8 +12,12 @@ missing group and removes every other group from the user.
 """
 
 import importlib.util
+import json
 import os
+import sys
+import urllib.error
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
@@ -53,6 +57,31 @@ def user_id(access):
     return body[0]["id"] if body else None
 
 
+def set_password(access, uid):
+    """Set the test password. A rerun is fine.
+
+    Keycloak's password policy refuses a password used in the last 5 changes
+    (invalidPasswordHistoryMessage). The user then already has this password,
+    for example when tasks.yaml and tests/portal.sh both run this script.
+    """
+    req = urllib.request.Request(
+        kc.ADMIN + f"/admin/realms/{REALM}/users/{uid}/reset-password",
+        data=json.dumps({"type": "password", "value": PASSWORD, "temporary": False}).encode(),
+        method="PUT",
+        headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        if error.code == 400 and "invalidPasswordHistory" in raw:
+            print(f"{USER} already has the test password")
+            return
+        sys.stderr.write(raw + "\n")
+        raise SystemExit(error.code) from error
+
+
 def main():
     access = kc.token()
     wanted = {ensure_path(access, path): path for path in GROUPS}
@@ -75,12 +104,7 @@ def main():
         uid = user_id(access)
     if not uid:
         raise SystemExit(f"Keycloak user {USER} was not created")
-    kc.request(
-        "PUT",
-        f"/admin/realms/{REALM}/users/{uid}/reset-password",
-        access,
-        {"type": "password", "value": PASSWORD, "temporary": False},
-    )
+    set_password(access, uid)
     _status, current = kc.request("GET", f"/admin/realms/{REALM}/users/{uid}/groups", access)
     for group in current or []:
         if group["id"] not in wanted:

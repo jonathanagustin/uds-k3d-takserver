@@ -31,6 +31,6 @@ The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets the
 - A normal install does not run Envoy Gateway and does not open UDP.
 - The test bundle does. The extra request is about 160m CPU and 800Mi on top of the pinned Istiod and passthrough gateway. The public CI runners have 4 CPU and 16 GB. A 2 CPU, 8 GB node still has to fit those requests beside the TAK test-values.
 - UDP is not mesh mTLS. The client certificate is the authentication.
-- `kubectl port-forward` does not carry UDP. The test enters the k3d node network namespace.
+- `kubectl port-forward` does not carry UDP. The test sends to the gateway's LoadBalancer address from the runner, the same path UDS Core's UDP test uses. With no LoadBalancer address it falls back to the ClusterIP from the k3d node network namespace.
 - TAK 5.7-RELEASE-14 ships the QUIC native library for linux-x86_64 only (`src/takserver-core/build.gradle`). QUIC works on amd64 nodes only, and `tests/quic.sh` skips on arm64.
 - The full-core bundle does not select Envoy Gateway. It must not turn `quic.enabled` on until it does.

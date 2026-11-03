@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # QUIC through Envoy Gateway. With quic.enabled false the UDP Service is
-# absent and this exits 0. With it true, a client in the k3d node network
-# namespace connects to the gateway's UDP 8090, requires a refusal when it
+# absent and this exits 0. With it true, a client on the runner connects to
+# the gateway's UDP 8090 at its LoadBalancer address, requires a refusal when it
 # presents no certificate, and holds a stream open with the admin certificate
 # until /Marti/api/subscriptions/all lists the CoT uid.
 set -euo pipefail
@@ -56,7 +56,7 @@ udp_counters() {
     local pf=$!
     sleep 3
     echo "Envoy udp stats ($1), ${proxy}:" >&2
-    curl -sS --max-time 5 http://127.0.0.1:19100/stats | grep -E '^(udp\.|cluster\.udproute)' | grep -v ': 0$' >&2
+    curl -sS --max-time 5 http://127.0.0.1:19100/stats | grep -E 'udp|datagram' | grep -v -E ': 0$|update_|membership_|version|lb_recalculate|max_host_weight|update_duration'  >&2
     kill "${pf}" >/dev/null 2>&1
     wait "${pf}" 2>/dev/null
   fi
@@ -110,6 +110,7 @@ for _ in $(seq 1 60); do
 done
 
 gw_ip=""
+gw_kind=""
 gw_port="8090"
 for _ in $(seq 1 30); do
   while read -r name; do
@@ -120,12 +121,14 @@ import json, sys
 svc = json.load(sys.stdin)
 for port in svc.get("spec", {}).get("ports", []):
     if port.get("port") == 8090 and port.get("protocol") == "UDP":
-        print(svc["spec"]["clusterIP"])
+        ingress = (svc.get("status", {}).get("loadBalancer", {}).get("ingress") or [{}])[0]
+        external = ingress.get("ip") or ingress.get("hostname") or ""
+        print(external or svc["spec"]["clusterIP"], "external" if external else "cluster")
         raise SystemExit(0)
 raise SystemExit(1)
 ' || true)"
     if [[ -n "${found}" ]]; then
-      gw_ip="${found}"
+      read -r gw_ip gw_kind <<< "${found}"
       break
     fi
   done < <(kctl get svc -n envoy-default-gateway -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
@@ -140,7 +143,7 @@ if [[ -z "${gw_ip}" ]]; then
   diagnose
   exit 1
 fi
-echo "Envoy Gateway UDP ${gw_ip}:${gw_port}"
+echo "Envoy Gateway UDP ${gw_ip}:${gw_port} (${gw_kind} address)"
 
 node="$(docker ps -q --filter name=k3d-uds-server --filter status=running | head -n 1)"
 if [[ -z "${node}" ]]; then
@@ -149,7 +152,14 @@ if [[ -z "${node}" ]]; then
 fi
 pid="$(docker inspect -f '{{.State.Pid}}' "${node}")"
 
+# The LoadBalancer address is reachable from the runner, the way a device
+# reaches it and the way UDS Core tests UDP expose. A ClusterIP is reachable
+# only from the k3d node's network namespace.
 run_net() {
+  if [[ "${gw_kind}" == "external" ]]; then
+    "$@"
+    return
+  fi
   if nsenter -t "${pid}" -n true >/dev/null 2>&1; then
     nsenter -t "${pid}" -n -- "$@"
   else

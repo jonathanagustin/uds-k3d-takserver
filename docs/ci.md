@@ -79,6 +79,17 @@ A pull request without the `benchmark` label skips Benchmark. Full Core also run
 
 The EKS Test, RKE2 Test, and AKS Test workflows (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) run only by hand, and only when the `enabled` input is set. Each one sets up OpenTofu and validates its scaffold in [`.github/test-infra/`](../.github/test-infra/). Per their inputs, they create nothing and only initialize OpenTofu.
 
+## Runner setup
+
+The cluster jobs run on the standard 4 CPU GitHub runners, so a few scripts make room before the deploy:
+
+- `.github/scripts/trim-runner.sh` deletes preinstalled toolchains and Docker images the tests never use. The install job once ran out of disk inside the k3d node without it.
+- `.github/scripts/add-runner-swap.sh` grows the runner's swap to 8G for Full Core, because the full UDS Core layers plus TAK need more memory than the runner keeps free. Outside CI it changes nothing.
+- `.github/scripts/deploy-slim-core.sh` turns off k3s datastore compaction (`etcd-compaction-interval=0`) on CI clusters. A compaction that ran past its 5 second timeout made k3s exit mid-deploy about every other run. A local cluster keeps the default.
+- `uds run fit-runner` (`.github/scripts/fit-runner.sh`) scales down the slim checkpoint pods the TAK tests do not need, so the `core-base` upgrade can schedule.
+
+After a failed test, `.github/scripts/dump-memory.sh` prints runner memory, any OOM kills and k3d node restarts, `kubectl top`, node allocatable, and each container's last state. The step has a 5 minute timeout so a dead API server cannot hang the job.
+
 ## Logs when an upload hangs
 
 `actions/upload-artifact` has hung past its step timeout in the install, upgrade and Full Core jobs. Before the uploads, `.github/scripts/print-logs.sh` prints the last 300 lines of each log the job uploads (at most 60 files) in collapsed groups, so the job log keeps them. Upload steps time out after 5 minutes, and the job timeout stops a hang the step timeout misses.

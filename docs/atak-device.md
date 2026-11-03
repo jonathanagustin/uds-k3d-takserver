@@ -20,13 +20,20 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 
 The APK build (`atak/apk/Dockerfile`, driven by `atak/ci/build-apk.sh`) compiles the takthirdparty natives, the Conan dependencies, and cesium-native from source. A cold build takes well over an hour on a GitHub runner; the layers are cached in `ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache`. No key, certificate, or password is in any image. The APK is signed with the debug keystore that ships in the public atak-civ repository.
 
-Pull requests build the images locally as `:dev` and push nothing. A merge to `main` publishes them under the ATAK tag (`5.5.1.10`).
+CI tags each image with the ATAK version and a hash of its inputs, for example `atak-civ-vm:5.5.1.10-<hash>`, and pulls it from GHCR when that tag exists. A pull request builds and pushes only the images whose inputs changed. Fork pull requests cannot push, so they build locally. After a passing e2e run on `main`, the plain `5.5.1.10` tags point at the tested images, and `packages/atak-device:5.5.1.10` points at the tested Zarf package. See [Reused build outputs](ci.md#reused-build-outputs).
 
 ## Deploy
 
 ```bash
 uds zarf package create atak --set ATAK_TAG=5.5.1.10 --confirm
 uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=uds.dev --confirm
+```
+
+Or deploy the package the last `main` run tested, without building it:
+
+```bash
+uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-k3d-takserver/packages/atak-device:5.5.1.10 \
+  --architecture amd64 --set DOMAIN=uds.dev --confirm
 ```
 
 The package (`atak/zarf.yaml`) has two components:

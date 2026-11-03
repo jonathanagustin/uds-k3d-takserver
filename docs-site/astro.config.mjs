@@ -3,6 +3,7 @@
 
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
+import mermaid from 'astro-mermaid';
 import starlightLinksValidator from 'starlight-links-validator';
 
 // Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
@@ -12,6 +13,9 @@ export default defineConfig({
   base: '/uds-k3d-takserver',
   trailingSlash: 'always',
   integrations: [
+    // Renders the ```mermaid blocks in the README and the guides. It has to
+    // come before Starlight so it sees the fences first.
+    mermaid({ theme: 'default', autoTheme: true }),
     starlight({
       title: 'uds-k3d-takserver',
       description:
@@ -28,6 +32,9 @@ export default defineConfig({
       },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
+      // Shiki has no LogQL grammar. Show those blocks as plain text without a
+      // build warning.
+      expressiveCode: { shiki: { langAlias: { logql: 'txt' } } },
       plugins: [starlightLinksValidator()],
       sidebar: [
         {

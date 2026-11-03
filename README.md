@@ -154,6 +154,7 @@ Creating the package pulls the published images from GitHub Container Registry (
 | `uds run test-install` | New k3d cluster, package, test bundle, and the full test suite (same as `uds run default`) |
 | `uds run dev` | Create the package and bundle, then deploy onto an existing cluster |
 | `uds run test-upgrade` | Install the latest published release, then upgrade to the current branch |
+| `uds run test-full-core` | New k3d cluster with the UDS Core layers the slim install leaves out (metrics, logging, runtime security, backup, monitoring, Portal), the package, and the full-core checks |
 | `uds run create-dev-package` | Create the Zarf package without an SBOM |
 | `uds run build-image` | Build the six TAK images from the public source (`PUSH_IMAGES=true` pushes them) |
 | `uds run publish-package` | Create the package with its SBOM, test it, and publish it |
@@ -172,6 +173,18 @@ uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 ```
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
+
+### Upgrade from 0.6
+
+0.7 changes a few things an existing install notices on its first deploy:
+
+- **UDS Core 1.16.0.** The test bundle moved `core-base` from 1.15.2 to 1.16.0, and the `takserver-oidc` module is built with Pepr 2.0.7, the version Core 1.16.0 runs. The package does not carry the Pepr controller image; it uses the one UDS Core put in the Zarf registry. Upgrade Core first, or deploy both from one bundle as `bundle/uds-bundle.yaml` does.
+- **PostgreSQL 15 to 18.** The TAK and CloudTAK databases move to PostgreSQL 18 in place the first time each pod starts. Snapshot the volumes or take a `pg_dumpall` first. Rollback is that snapshot. See [Upgrading from PostgreSQL 15](docs/data.md#upgrading-from-postgresql-15).
+- **Keystore password.** An install that already has ConfigMap `cert-migration` keeps the old `atakatak` keystore password, because its certificates were made with it. A new install gets a random password in Secret `takserver-keystore`. See [Certificates](docs/configuration.md#certificates).
+- **Private keys leave the ConfigMap.** The certificate Job moves private keys and keystores out of `cert-migration` into Secrets `takserver-certs` and `takserver-ca-key`. Enrolled clients still chain to the same CA.
+- **Gzipped dumps.** The dump CronJobs now write key `dump.sql.gz`. A Secret from 0.6 with key `dump.sql` still restores. See [Backup](docs/data.md#backup).
+
+The new variables `FILESYSTEM_BACKUP` and `POSTGRES_STORAGE_CLASS` default to off and empty, so they change nothing on an upgrade.
 
 ## Verify a release
 
@@ -302,8 +315,12 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | --- | --- | --- |
 | `DOMAIN` | `uds.dev` | Domain suffix for gateway hosts |
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
+| `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts reach the Istio gateways from inside the cluster |
+| `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that the passthrough gateway serves |
+| `FILESYSTEM_BACKUP` | `false` | Run a Velero node-agent and back up the database volumes as files. See [docs/data.md](docs/data.md#backup) |
+| `POSTGRES_STORAGE_CLASS` | empty (cluster default) | StorageClass for the TAK Postgres volume. Set it only on a new install |
 
-`values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle. Named `small` and `production` overlays are in [docs/profiles.md](docs/profiles.md). See [docs/configuration.md](docs/configuration.md).
+The first four also have package values (`global.domain`, `tak.imageTag`, `dns.inCluster`, `dns.passthroughHosts`) that override them at deploy time. `values/common-values.yaml` is the overlay for the upstream chart. `bundle/test-values.yaml` is applied only by the test bundle. Named `small` and `production` overlays are in [docs/profiles.md](docs/profiles.md). See [docs/configuration.md](docs/configuration.md).
 
 ## Supported architectures
 
@@ -330,7 +347,7 @@ The ATAK test device is amd64 only and needs KVM on the node.
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate.
 - The CloudTAK tests go from `map.<domain>` to the Keycloak login and back as that user, and require a live TAK connection with that user's certificate.
 
-In GitHub Actions, the Test workflow runs the install test on amd64 and arm64, and the upgrade test from the last release. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
+In GitHub Actions, the Test workflow runs the install test on amd64 and arm64, and the upgrade test from the last release on amd64. Full Core deploys the full UDS Core layers and checks monitoring, logging, Falco, Portal, and a Velero backup and restore. It runs nightly, on `main`, and on pull requests that touch those areas or carry the `full-core` label. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
 
 ## Repository layout
 
@@ -340,12 +357,13 @@ In GitHub Actions, the Test workflow runs the install test on amd64 and arm64, a
 | `charts/takserver/` | Config chart: UDS `Package`, ConfigMaps, standard TAK ports, and the certificate Job |
 | `charts/cloudtak/` | CloudTAK chart: Deployment, PostGIS, and its UDS `Package` |
 | `values/` | Values overlays for the upstream chart and the Pepr module |
-| `pepr/` | `takserver-oidc` Pepr module that adds the OIDC init container |
+| `pepr/` | `takserver-oidc` Pepr module: renders CoreConfig at admission, sets the TAK startup order, writes the CoreDNS rewrite, and copies the CA and CloudTAK admin certificate. See [docs/configuration.md](docs/configuration.md#the-takserver-oidc-module) |
 | `bundle/` | Test bundle (UDS Core passthrough gateway plus this package), `uds-config.yaml`, and `test-values.yaml` |
 | `atak/` | Optional ATAK test device: KubeVirt package, VM, viewer, and APK build |
 | `upstream/` | Git submodules: TAK Server, CloudTAK, and ATAK-CIV source at pinned tags |
 | `tasks.yaml`, `tasks/` | `uds run` tasks, built on [uds-common](https://github.com/defenseunicorns/uds-common) |
-| `tests/` | API smoke scripts, upgrade checks, and Playwright tests |
+| `tests/` | API smoke scripts, upgrade and backup checks, Python unit tests, and Playwright tests |
+| `bench/` | Load benchmark harness, its configs, and the report. See [docs/benchmarks.md](docs/benchmarks.md) |
 | `demo/` | Scripts that record the demo videos |
 | `docs/`, `adr/` | Documentation and architecture decision records |
 | `.github/` | CI workflows, image builds, and test infrastructure |

@@ -13,3 +13,28 @@ SPDX-License-Identifier: GPL-3.0-only
   display: block;
   overflow-x: auto;
 }
+
+/* Long code spans (image refs, paths) in the last column set a table's
+   minimum width. Let them break there so most tables fit the column and only
+   scroll when an earlier column is too wide. Short names in the other columns
+   stay whole. */
+.sl-markdown-content td:last-child code {
+  overflow-wrap: anywhere;
+}
+
+/* The README badges are one paragraph of linked images. Keep them on a line. */
+.sl-markdown-content p > a > img {
+  display: inline-block;
+  margin: 0 0.25rem 0 0;
+  vertical-align: middle;
+}
+
+/* The demo players fill the column at 16:9. */
+.sl-markdown-content video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 0.25rem;
+}

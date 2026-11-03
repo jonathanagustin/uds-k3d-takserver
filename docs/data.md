@@ -19,7 +19,7 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 
 The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami PostgreSQL 12.1.6 does not read `postgresql.configurationConfigMap`, so that object is not mounted. Postgres uses the chart defaults.
 
-Those defaults are what the package ships. No benchmark load run has finished, so `values/` does not set `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, or `checkpoint_timeout`. The harness records `pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`, and the `postgresql` container working set beside the TAK load. `bench/configs/postgis-buffers.yaml` and `bench/configs/postgis-wal.yaml` apply those five parameters with `ALTER SYSTEM` and restart `takserver-postgresql`. `shared_buffers` is 128MB or 64MB, both under the 512Mi limit. `effective_cache_size` is a planner hint, not memory the server allocates. The sweep does not set `fsync=off`. A setting is copied into the package only after a harness report puts it on the front. The key for that is `postgresql.primary.extendedConfiguration`, which Bitnami appends under `conf.d`. On run 40174810574, at the chart defaults, the steady working set was 57Mi on amd64 and 59Mi on arm64.
+Those defaults are what the package ships. The nightly benchmark has measured these settings only at 10 clients for 60 seconds, so `values/` does not set `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, or `checkpoint_timeout`. The harness records `pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`, and the `postgresql` container working set beside the TAK load. `bench/configs/postgis-buffers.yaml` and `bench/configs/postgis-wal.yaml` apply those five parameters with `ALTER SYSTEM` and restart `takserver-postgresql`. `shared_buffers` is 128MB or 64MB, both under the 512Mi limit. `effective_cache_size` is a planner hint, not memory the server allocates. The sweep does not set `fsync=off`. A setting is copied into the package only after a harness report puts it on the front. The key for that is `postgresql.primary.extendedConfiguration`, which Bitnami appends under `conf.d`. On run 40174810574, at the chart defaults, the steady working set was 57Mi on amd64 and 59Mi on arm64.
 
 The password is not a production secret. Replace it, and the matching JDBC password, before a shared cluster.
 
@@ -41,13 +41,13 @@ Before you roll the new image out:
 
 Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start. Do not point `15-3.4` at a data directory PostgreSQL 18 has already written. A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
 
-The upgrade test deploys the last release (PostgreSQL 15), writes a row, then deploys this branch and checks the row, its timestamp, the PVC, the server major, and the PostGIS version.
+The upgrade test deploys the last release, writes a row, then deploys this branch and checks the row, its timestamp, the PVC, the server major, and the PostGIS version. Since 0.7.0 the last release is already on PostgreSQL 18, so CI no longer runs the in-place upgrade from 15. That path was last checked by the upgrade runs from 0.6.0.
 
 ## Backup
 
 Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.16.0-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
 
-Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.15.2 does not deploy a node-agent, and k3d local-path has no snapshot API, so the default backup is API objects only. The Postgres files on the volume are not in it.
+Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, TTL 240h, `snapshotVolumes: false`. UDS Core 1.16.0 does not deploy a node-agent, and k3d local-path has no snapshot API, so the default backup is API objects only. The Postgres files on the volume are not in it.
 
 To cover the databases, the package stores a logical `pg_dump` in Secret `tak-db-dump` (database `cot`) and Secret `cloudtak-db-dump` (CloudTAK's PostGIS database). CronJobs `tak-db-dump` (02:15 UTC) and `cloudtak-db-dump` (02:20 UTC) refresh those Secrets. They render only when `backup.dump.enabled` is true, which the full bundle sets. A slim install does not create them.
 
@@ -66,7 +66,8 @@ What a namespace backup contains:
 | Secrets `takserver-ca-key` and `takserver-keystore` | Yes. The CA key, and the keystore password. |
 | Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |
 | Secrets `tak-db-dump` and `cloudtak-db-dump` | Yes, when the CronJob or `tests/backup-restore.sh` has written them. |
-| Postgres and PostGIS volumes | Yes on the full-core deploy, where `FILESYSTEM_BACKUP=true`. Velero copies the volume named `data`. Slim does not. The restore test still loads the logical dump after the namespaces come back. |
+| TAK Postgres volume | Yes on the full-core deploy, where `FILESYSTEM_BACKUP=true` and the volume is on `local-path-local`. Velero copies the volume named `data`. Slim does not. The restore test still loads the logical dump after the namespaces come back. |
+| CloudTAK PostGIS volume | Annotated when `FILESYSTEM_BACKUP=true`, but the CloudTAK chart has no StorageClass setting. On the default k3d class the volume is hostPath, so Velero skips it. The `cloudtak-db-dump` Secret covers it. |
 | Ignite | No. The cache is memory. Clients reconnect. |
 | CoreConfig and the Ignite ConfigMap | Yes, as rendered objects. The chart can render them again from git. |
 

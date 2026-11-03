@@ -100,7 +100,7 @@ Names that end in `_READ` or `_WRITE` set the direction and the suffix is remove
 
 The display names are `TAK Server Login` and `CloudTAK Login`. The client ids stay `uds-takserver` and `uds-cloudtak`. The template's `uds-<group>-<app>` form would be a second client. The pods, CoreConfig, and the CloudTAK sign-in route already use these ids, and an existing cluster already has the clients. Renaming them would leave the old clients in the realm and break the secret the pods mount.
 
-Both clients set `client.session.idle.timeout` to `600` and `client.session.max.lifespan` to `36000`. UDS Core 1.15.2 imports the `uds` realm from uds-identity-config 0.32.3. That import uses an idle timeout of 600 seconds and a max lifespan of 36000 when `REALM_SSO_SESSION_IDLE_TIMEOUT` and `REALM_SSO_SESSION_MAX_LIFESPAN` are unset, which this bundle leaves unset. Keycloak 26 rejects the client when its idle timeout is longer than the realm's. An idle timeout of 1800 did that, and the Package stayed `InProgress`.
+Both clients set `client.session.idle.timeout` to `600` and `client.session.max.lifespan` to `36000`. UDS Core 1.16.0 imports the `uds` realm from uds-identity-config 0.32.4. That import uses an idle timeout of 600 seconds and a max lifespan of 36000 when `REALM_SSO_SESSION_IDLE_TIMEOUT` and `REALM_SSO_SESSION_MAX_LIFESPAN` are unset, which this bundle leaves unset. Keycloak 26 rejects the client when its idle timeout is longer than the realm's. An idle timeout of 1800 did that, and the Package stayed `InProgress`.
 
 `/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it.
 

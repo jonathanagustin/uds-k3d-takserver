@@ -40,6 +40,7 @@ check true pull_request false ".github/workflows/full-core.yaml"
 check true pull_request false "tests/backup-restore.sh"
 check true pull_request false "tests/grafana-alerts.sh"
 check true pull_request false "values/filesystem-backup.yaml.tpl"
+check true pull_request false "values/cloudtak-storage.yaml.tpl"
 check true pull_request false "pepr/capabilities/workload.ts"
 check true pull_request false "tasks/test.yaml"
 

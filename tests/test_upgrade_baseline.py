@@ -72,6 +72,19 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(result["tag"], "v1.0.0")
         self.assertEqual(result["commit"], "a" * 40)
 
+    def test_pinned_tag_selects_that_release(self):
+        self.git.side_effect = self.valid_git
+        result = baseline.select_release(
+            [release("v0.6.0"), release("v0.7.0"), release("v0.7.1")], pin="v0.6.0",
+        )
+        self.assertEqual(result["tag"], "v0.6.0")
+        self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.6.0-upstream")
+
+    def test_pinned_tag_must_be_published(self):
+        self.git.side_effect = self.valid_git
+        with self.assertRaisesRegex(RuntimeError, "Pinned baseline v0.6.0"):
+            baseline.select_release([release("v0.6.0", draft=True), release("v0.7.1")], pin="v0.6.0")
+
     def test_first_release_on_the_commit_under_test_is_bootstrap(self):
         self.git.side_effect = self.valid_git
         self.assertIsNone(baseline.select_release([release("v1.0.0")], head="a" * 40))

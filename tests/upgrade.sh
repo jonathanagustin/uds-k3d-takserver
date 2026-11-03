@@ -54,11 +54,12 @@ if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
 fi
 rm -rf "${work}/bundle-wrong-signer"
 uds create "${work}/bundle" --architecture=amd64 --confirm --no-progress
-# Release 0.6.0's admission chart asks for Pepr controller v2.0.3. The 1.15.2
-# checkpoint only publishes v2.0.5, so the baseline cluster has to start from
-# 1.15.0, which still has v2.0.3. The released bundle then deploys core 1.15.2,
-# and this branch's bundle deploys core 1.16.0, which pushes the v2.0.7 this
-# branch's module runs.
+# The baseline cluster starts from slim core 1.15.0 on purpose. Release
+# 0.6.0's admission chart asks for Pepr controller v2.0.3, which the 1.15.0
+# checkpoint has and the 1.15.2 one does not. The pinned PostgreSQL 15 job
+# (UPGRADE_BASELINE_TAG=v0.6.0) needs that. A 0.7.x baseline's own bundle
+# deploys core 1.16.0 first, which pushes the Pepr v2.0.7 its module runs, so
+# it works from the same start. This branch's bundle then deploys its own core.
 SLIM_CORE_VERSION=1.15.0 uds run deploy-slim-core --no-progress
 uds run fit-runner --no-progress
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')

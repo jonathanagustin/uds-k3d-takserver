@@ -10,13 +10,15 @@ Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore
 | --- | --- | --- | --- |
 | Lint | `lint.yaml` | every pull request, and pushes to `main` | Runs `hk check` (the checks in [`hk.pkl`](../hk.pkl)) and the shared uds-common lint workflow |
 | PR Title Check | `commitlint.yaml` | every pull request | Checks that the title follows Conventional Commits, with the shared uds-common commitlint workflow |
-| Test | `test.yaml` | pull requests that change more than docs, and pushes to `main` | Builds the CloudTAK and PostGIS images when their inputs changed, waits for the six TAK images, then runs the install test on amd64 and arm64 and the upgrade test from the last release. `verify-test` reports the result |
-| Unit tests | `unit-tests.yaml` | every pull request, and pushes to `main` | Pepr module tests and the Python upgrade helper tests, with coverage in the job summary, plus the Loki query helper and CoreConfig cache listener tests. See [Coverage](../CONTRIBUTING.md#coverage) |
+| Test | `test.yaml` | pull requests that change more than docs, and pushes to `main` | Builds the CloudTAK and PostGIS images when their inputs changed, waits for the six TAK images, then runs the install test on amd64 and arm64 and the upgrade test from the last release. On pushes to `main`, and on pull requests with the `upgrade-pg15` label, it also runs the upgrade from release 0.6.0 (PostgreSQL 15). `verify-test` reports the result |
+| Unit tests | `unit-tests.yaml` | every pull request, and pushes to `main` | Pepr module tests and the Python upgrade helper tests, with coverage in the job summary. Also the Loki query helper, CoreConfig cache listener, profile, benchmark harness, and Full Core summary tests, and the package values render. See [Coverage](../CONTRIBUTING.md#coverage) |
 | Package | `package.yaml` | pull requests that change more than docs, pushes to `main`, and by hand | Waits for the images, then creates the dev package on amd64 and arm64, checks its architecture, and publishes it as `ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<arch>-<key>`. See [Package reuse](#package-reuse) |
 | Scan | `scan.yaml` | pull requests that change the package, charts, values, bundle, image builds, or submodules | Compares image scans with `uds-pk scan compare` and posts the result as a pull request comment |
 | CodeQL | `codeql.yaml` | every pull request, pushes to `main`, and Mondays at 06:00 | CodeQL code scanning |
 | Dependency Review | `dependency-review.yaml` | every pull request | GitHub dependency review of the changed dependencies |
 | Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
+
+"Docs" in the triggers above means Markdown files, images, `docs/`, `adr/`, `docs-site/`, and the Docs workflow file. A docs-only pull request skips Test and Package. Full Core decides in its own `changes` job and skips too. The checks that `main` requires still report on it: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`.
 
 ## Package reuse
 

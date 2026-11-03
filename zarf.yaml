@@ -27,6 +27,10 @@ documentation:
   data: docs/data.md
   cloudtak: docs/cloudtak.md
   profiles: docs/profiles.md
+  ci: docs/ci.md
+  building: docs/building.md
+  benchmarks: docs/benchmarks.md
+  atak-device: docs/atak-device.md
 
 # Beta. Chart mappings read these. Each default is the placeholder of the
 # matching variable below, so the variables still decide the result, from
@@ -55,6 +59,9 @@ variables:
     default: "false"
   - name: POSTGRES_STORAGE_CLASS
     description: StorageClass for the TAK Postgres volume. Empty (the default) keeps the cluster default class, so existing installs are unchanged. Set it only on a new install; a StatefulSet volume claim template cannot change later. File-system backup needs a class whose volumes are not hostPath. See docs/data.md.
+    default: ""
+  - name: CLOUDTAK_STORAGE_CLASS
+    description: StorageClass for the CloudTAK PostGIS volume. Empty (the default) keeps the cluster default class, so existing installs are unchanged. Set it only on a new install; a StatefulSet volume claim template cannot change later. File-system backup needs a class whose volumes are not hostPath. See docs/data.md.
     default: ""
 
 components:
@@ -106,7 +113,7 @@ components:
       - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6"
       - "docker.io/library/nats:2.15.2-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.25.0"
-      # Same tag UDS Core 1.15.2 runs. The manifest lists amd64 and arm64.
+      # Same tag UDS Core 1.16.0 runs. The manifest lists amd64 and arm64.
       # The DaemonSet renders only when FILESYSTEM_BACKUP is true.
       - "docker.io/velero/velero:v1.18.4"
 
@@ -125,6 +132,10 @@ components:
         localPath: charts/cloudtak
         valuesFiles:
           - values/filesystem-backup-switch.yaml
+        # Sets the PostGIS StorageClass only when CLOUDTAK_STORAGE_CLASS is
+        # not empty. An empty object otherwise.
+        templatedValuesFiles:
+          - values/cloudtak-storage.yaml.tpl
         values:
           - sourcePath: .global.domain
             targetPath: .domain

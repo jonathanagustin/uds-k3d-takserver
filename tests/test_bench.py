@@ -406,6 +406,29 @@ class PostgresTests(unittest.TestCase):
         self.assertIn("ALTER SYSTEM SET checkpoint_timeout = '15min'", lines)
         self.assertIn("ALTER SYSTEM SET shared_buffers = '128MB'", lines)
 
+    def test_reset_clears_the_counters_the_query_reads(self):
+        calls = []
+
+        def fake(*args):
+            calls.append(args)
+
+            class Result:
+                stdout = (
+                    '{"items": [{"metadata": {"name": "takserver-postgresql-0"}}]}'
+                    if args[:2] == ("get", "pods") else ""
+                )
+
+            return Result()
+
+        runner.reset_postgres_counters(fake)
+        psql = next(call for call in calls if "psql" in call)
+        self.assertEqual(psql[psql.index("-d") + 1], "cot")
+        self.assertIn("SELECT pg_stat_reset_shared('checkpointer')", psql)
+        self.assertIn("SELECT pg_stat_reset_shared('io')", psql)
+        self.assertIn("SELECT pg_stat_reset_shared('bgwriter')", psql)
+        self.assertIn("pg_stat_checkpointer", runner.POSTGRES_QUERY)
+        self.assertIn("d.datname = 'cot'", runner.POSTGRES_QUERY)
+
     def test_hit_ratio_is_null_when_no_blocks_were_read(self):
         self.assertIsNone(runner.hit_ratio(0, 0))
         self.assertEqual(runner.hit_ratio(3, 1), 0.75)

@@ -49,7 +49,9 @@ else
   # matchConditions rule instead.
   name="${hook%% *}"
   scope="$(kctl get mutatingwebhookconfiguration "${name}" -o jsonpath='{.webhooks[0].matchConditions[*].name}|{.webhooks[0].objectSelector}')"
-  [[ "${scope}" == "takserver-objects|" ]] || fail "the takserver-oidc webhook scope is '${scope}', want matchConditions takserver-objects and no objectSelector"
+  # The API server stores an absent objectSelector as {}, which matches all.
+  [[ "${scope}" == "takserver-objects|" || "${scope}" == "takserver-objects|{}" ]] \
+    || fail "the takserver-oidc webhook scope is '${scope}', want matchConditions takserver-objects and an empty objectSelector"
 
   # Admission has to see the Deployments, the Ignite ConfigMap, and the Ignite
   # StatefulSet, not only the pods. Pod logs reset when a pod restarts, so this

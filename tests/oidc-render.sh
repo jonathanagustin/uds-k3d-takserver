@@ -44,6 +44,31 @@ if [[ -z "${hook}" ]]; then
 else
   grep -q ' Fail ' <<< "${hook}" || fail "the takserver-oidc webhook does not fail closed: ${hook}"
   grep -q 'takserver' <<< "${hook}" || fail "the takserver-oidc webhook is not scoped to the takserver namespace: ${hook}"
+  # The upstream Deployments and Ignite objects carry no app label, so an
+  # object selector on app would let only the pods through. The scope is a
+  # matchConditions rule instead.
+  name="${hook%% *}"
+  scope="$(kctl get mutatingwebhookconfiguration "${name}" -o jsonpath='{.webhooks[0].matchConditions[*].name}|{.webhooks[0].objectSelector}')"
+  # The API server stores an absent objectSelector as {}, which matches all.
+  [[ "${scope}" == "takserver-objects|" || "${scope}" == "takserver-objects|{}" ]] \
+    || fail "the takserver-oidc webhook scope is '${scope}', want matchConditions takserver-objects and an empty objectSelector"
+
+  # Admission has to see the Deployments, the Ignite ConfigMap, and the Ignite
+  # StatefulSet, not only the pods. Pod logs reset when a pod restarts, so this
+  # is checked only while no admission pod has restarted.
+  selector="app=${name},pepr.dev/controller=admission"
+  restarts="$(kctl get pods -n pepr-system -l "${selector}" -o jsonpath='{range .items[*]}{.status.containerStatuses[0].restartCount}{"\n"}{end}' | sort -u)"
+  if [[ "${restarts}" == "0" ]]; then
+    seen="$(kctl logs -n pepr-system -l "${selector}" --tail=-1 --prefix=false \
+      | grep '"msg":"Incoming request"' \
+      | grep -o '"kind":"[A-Za-z]*"' | sort -u | tr '\n' ' ')"
+    for kind in Pod Deployment ConfigMap StatefulSet; do
+      grep -q "\"kind\":\"${kind}\"" <<< "${seen}" || fail "admission saw no ${kind} request; it saw: ${seen:-nothing}"
+    done
+    echo "admission requests by kind: ${seen}"
+  else
+    echo "skip admission request check: an admission pod restarted"
+  fi
 fi
 
 for app in "${apps[@]}"; do

@@ -17,8 +17,8 @@ It runs on amd64 and arm64 runners. The nightly run uses client count 10. To run
 1. Installs the current branch with `uds run test-install`, with this commit's TAK, CloudTAK, and PostGIS images.
 2. Fetches the upstream TAK load tester (`src/testing/load_test` from the same commit as the `upstream/takserver` submodule, `5.7-RELEASE-14`) and installs its pinned Python requirements from `bench/load-test-requirements.txt`.
 3. Runs `bench/run.py`. For each config in `bench/configs/` that is not marked `skip: true`, and for each selected client count, it applies the config to the running cluster, runs the load, and writes `bench/out/<arch>/<config>.json`. A second or later client count adds `-c<count>` to the file name.
-4. Uploads the records as the `bench-<arch>` artifact.
-5. If both architectures succeed, the `benchmark-summary` job runs `bench/report.py` on all records. It writes `front.md` and `front.svg` and uploads them as the `bench-front` artifact. The report is also shown in the job summary.
+4. Uploads the records as the `bench-<arch>` artifact. If the install or the sweep fails, it also uploads the cluster debug output and logs as `debug-log-bench-<arch>-<run>-<attempt>`, with passwords masked by `.github/scripts/redact-logs.py`.
+5. The `benchmark-summary` job runs `bench/report.py` on all the records it finds, so one failed architecture still leaves a front for the other. It fails when neither architecture uploaded a record. It writes `front.md` and `front.svg` and uploads them as the `bench-front` artifact. The report is also shown in the job summary.
 
 Client certificates for the load are built at run time from `tests/extract-certs.sh`. They are not written into the repository or an image.
 

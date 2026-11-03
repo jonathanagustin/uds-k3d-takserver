@@ -24,8 +24,8 @@ export type TakDeploy = (typeof TAK_DEPLOYS)[number];
 const STOP_ORDER = ["takserver-plugins", "takserver-api", "takserver-messaging", "takserver-config"] as const;
 const START_ORDER = ["takserver-config", "takserver-messaging", "takserver-api", "takserver-plugins"] as const;
 
-const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
-const IGNITE_STATEFULSET = "takserver-ignite";
+export const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
+export const IGNITE_STATEFULSET = "takserver-ignite";
 export const CORE_CONFIGMAP = "core-config";
 export const STARTUP_CONFIGMAP = "takserver-startup";
 export const STARTUP_ANNOTATION = "uds.dev/tak-startup";

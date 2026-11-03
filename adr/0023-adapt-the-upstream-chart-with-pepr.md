@@ -47,8 +47,8 @@ The options:
 
 ### If `pepr-system` is down
 
-- The webhook matches only the `takserver` namespace and the four TAK app labels, so the rest of the cluster is not blocked. **V** [E12]
-- A new config, messaging, API, or plugins pod is denied until the module is back. Running pods keep running. **R**
+- The webhook matches only the TAK pods, Deployments, and Ignite objects in `takserver`, so the rest of the cluster is not blocked. **V** [E12]
+- A new config, messaging, API, or plugins pod is denied until the module is back, and so is a change to those Deployments or the Ignite objects. Running pods keep running. **R**
 - The watcher's work stops. A changed CA is not copied, CoreDNS is not updated, and `takserver-startup` is not written, so a Zarf deploy waits on that health check. **R**
 - With options 2 to 5, a `pepr-system` outage still affects UDS Core's own policies. This package cannot avoid that part. **R**
 
@@ -66,7 +66,7 @@ Keep the Pepr module. It is the only option here that is supported by both Zarf 
 
 - The package depends on UDS Core's Pepr controller image and version. Upgrade Core first.
 - The module must keep its webhook narrow. `pepr/scripts/finalize-chart.mjs` fails the build if a Pepr upgrade changes the template it edits.
-- The webhook's object selector matches the `app` label. Reading the upstream chart, the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet have no `app` label on the object itself, only in their pod templates. If so, their admission handlers never run, and the watcher's reconcile does that work after the object is stored. The pods are still prepared at admission. This was found while writing this record and has not been checked in a cluster.
+- The webhook's object selector matched the `app` label. In the upstream chart, the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet have no `app` label on the object itself, only in their pod templates. Their admission handlers never ran, and the watcher's reconcile did that work after each object was stored. The pods were still prepared at admission. Confirmed from CI admission logs in [#273](https://github.com/jonathanagustin/uds-k3d-takserver/issues/273). The webhook now matches those objects by name.
 - A new upstream release needs a check that the names and labels the module selects on still exist.
 
 ## Evidence
@@ -82,4 +82,4 @@ Keep the Pepr module. It is the only option here that is supported by both Zarf 
 - **E9.** [UDS Core `src/pepr`](https://github.com/defenseunicorns/uds-core/tree/main/src/pepr) holds the operator and the policies.
 - **E10.** `pepr/package.json` script `test:coverage` passes `--test-coverage-lines=100`, `--test-coverage-branches=100`, and `--test-coverage-functions=100`. Added in [#69](https://github.com/jonathanagustin/uds-k3d-takserver/pull/69).
 - **E11.** [#234](https://github.com/jonathanagustin/uds-k3d-takserver/pull/234) and `values/pepr-values.yaml`.
-- **E12.** `pepr/scripts/finalize-chart.mjs` narrows the webhook to the `takserver` namespace and the four app labels. The generated chart keeps `failurePolicy: Fail`. `tests/oidc-render.sh` checks both in a cluster.
+- **E12.** `pepr/scripts/finalize-chart.mjs` narrows the webhook to the `takserver` namespace and the TAK objects. The generated chart keeps `failurePolicy: Fail`. `tests/oidc-render.sh` checks both in a cluster.

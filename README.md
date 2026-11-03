@@ -307,7 +307,7 @@ Release Please opens a release pull request from the Conventional Commit titles.
 
 `<domain>` defaults to `uds.dev`. "443 SNI" means the passthrough gateway routes port 443 by the host name the client sends in TLS Server Name Indication (SNI). Ports 8443 and 8089 require a client certificate. A client can enroll on `<host>:8446` and stream to the same `<host>:8089`, the way ATAK expects ([ADR 12](adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)).
 
-**Browser sign-in:** members of the Keycloak group `/UDS Core/Admin` get `ROLE_ADMIN`. Groups under `/TAK/` with a `_READ` or `_WRITE` suffix become TAK groups. For example, `/TAK/Operators_READ` becomes the TAK group `Operators`.
+**Browser sign-in:** members of the Keycloak group `/UDS Core/Admin` get `ROLE_ADMIN`. Groups under `/TAK/` with a `_READ` or `_WRITE` suffix become TAK groups. For example, `/TAK/Operators_READ` becomes the TAK group `Operators`. Only `/UDS Core/Admin` can sign in to the TAK Server web UI. CloudTAK also lets in `/CloudTAK/Users`, a group for people who use the map but are not admins. See [docs/cloudtak.md](docs/cloudtak.md#who-can-sign-in).
 
 **TAK clients:** the deploy-time Job writes the CA and an admin certificate to the ConfigMap `cert-migration`. Import the CA into the client trust store, then use the admin certificate or enroll a user certificate on 8446 with a bearer token from the browser session. On k3d, host port 443 is the tenant gateway, so passthrough hosts need a port-forward to `passthrough-ingressgateway` or a load balancer in front of it. See [docs/sso.md](docs/sso.md) and [docs/networking.md](docs/networking.md).
 

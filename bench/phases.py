@@ -48,18 +48,45 @@ def _status_times(status):
     return started, finished
 
 
+def _event_time(event):
+    return parse_time(event.get("eventTime") or event.get("firstTimestamp") or event.get("lastTimestamp"))
+
+
 def _pull_seconds(events):
-    pulling = pulled = None
+    """Seconds the kubelet spent pulling this pod's images.
+
+    Each container's `Pulling` is paired with the next `Pulled` for the same
+    container (`involvedObject.fieldPath`), and the pairs are summed, since
+    the kubelet pulls one image at a time by default. A `Pulled` with no
+    `Pulling` before it is an image that was already present and adds
+    nothing. `kubectl get events` does not sort by time, and an init
+    container's `Pulled` can come before the main container's `Pulling`,
+    so pairing the first of each across the pod gave negative values
+    (-61 s on amd64 in Benchmark run 41613491855).
+    """
+    timed = []
     for event in events or []:
         reason = event.get("reason")
-        stamp = parse_time(event.get("firstTimestamp") or event.get("eventTime"))
+        if reason not in ("Pulling", "Pulled"):
+            continue
+        stamp = _event_time(event)
         if stamp is None:
             continue
-        if reason == "Pulling" and pulling is None:
-            pulling = stamp
-        elif reason == "Pulled" and pulled is None:
-            pulled = stamp
-    return elapsed(pulling, pulled)
+        path = (event.get("involvedObject") or {}).get("fieldPath") or ""
+        timed.append((stamp, reason, path))
+    timed.sort(key=lambda item: item[0])
+    pulling = {}
+    total = None
+    for stamp, reason, path in timed:
+        if reason == "Pulling":
+            pulling.setdefault(path, stamp)
+            continue
+        start = pulling.pop(path, None)
+        if start is None:
+            continue
+        seconds = elapsed(start, stamp)
+        total = round((total or 0.0) + seconds, 3)
+    return total
 
 
 def pod_phases(pod, events, log_text):

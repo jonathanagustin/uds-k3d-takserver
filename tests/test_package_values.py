@@ -125,6 +125,22 @@ class PackageValuesTests(unittest.TestCase):
         self.assertTrue(env["RENDER_IMAGE"].endswith(":9.9-RELEASE-9"))
         self.assertEqual(tak_tags(docs), {"9.9-RELEASE-9"})
 
+    def test_storage_classes_are_unset_by_default(self):
+        _out, docs = render()
+        for name in ("takserver-postgresql", "cloudtak-postgis"):
+            claim = find(docs, "StatefulSet", name)["spec"]["volumeClaimTemplates"][0]
+            self.assertNotIn("storageClassName", claim["spec"], name)
+
+    def test_storage_class_variables_set_each_volume(self):
+        _out, docs = render(variables=[
+            "POSTGRES_STORAGE_CLASS=tak-class",
+            "CLOUDTAK_STORAGE_CLASS=cloudtak-class",
+        ])
+        tak = find(docs, "StatefulSet", "takserver-postgresql")["spec"]["volumeClaimTemplates"][0]
+        cloud = find(docs, "StatefulSet", "cloudtak-postgis")["spec"]["volumeClaimTemplates"][0]
+        self.assertEqual(tak["spec"]["storageClassName"], "tak-class")
+        self.assertEqual(cloud["spec"]["storageClassName"], "cloudtak-class")
+
     def test_a_package_value_overrides_the_variable(self):
         out, docs = render(variables=["DOMAIN=example.com"], values=["global.domain=values.example"])
         self.assert_domain(out, docs, "values.example")

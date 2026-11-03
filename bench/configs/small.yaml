@@ -4,9 +4,9 @@
 name: small
 description: >
   Memory requests and limits from values/profiles/small.yaml and
-  small-cloudtak.yaml. Plugin memory is 320Mi / 512Mi here because the
-  chart ignores a plugins memory value; the post-helm patch on the package
-  is still 128Mi / 384Mi. CPU stays at whatever the install set. Steady
+  small-cloudtak.yaml. Plugin memory is 320Mi / 512Mi, the same values
+  the takserver-workload admission capability sets, because the chart
+  ignores a plugins memory value. CPU stays at whatever the install set. Steady
   working set is run 40174810574. Not a front until this record is compared.
 clients: [10, 50, 200]
 duration_s: 60

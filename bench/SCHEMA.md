@@ -24,7 +24,7 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `images.sum_bytes` | bytes | sum of layer sizes for this runner's platform, from `crane manifest` or `uds zarf tools registry manifest`, for every image in `zarf.yaml` |
 | `images.unique_bytes` | bytes | same layers counted once, by digest |
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
-| `start_phases.<app>.image_pull_s` | seconds | kubelet `Pulling` to `Pulled` for that pod. Null when the image was already present and no pull event was recorded |
+| `start_phases.<app>.image_pull_s` | seconds | Sum over the pod's containers of kubelet `Pulling` to the next `Pulled` for the same container (`involvedObject.fieldPath`). Null when every image was already present, so there was no `Pulling` |
 | `start_phases.<app>.inits` | list | each init container's `name` and `seconds` from its state timestamps |
 | `start_phases.<app>.jvm_to_log_s` | seconds | main container `startedAt` to the first `Started TAK Server` or `Tomcat started on port` log line |
 | `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition. This is the probe lag |

@@ -26,9 +26,10 @@ export const TAK_APPS = [
 
 // The TAK CA's CRL, written by the TakClient capability (ADR 22). CoreConfig
 // names certs/crl/ca.crl, and TAK fails client TLS without the file, so the
-// volume is not optional: a pod waits for the Secret.
+// volume is not optional: a pod waits for the Secret. The cluster images run
+// from /, so CoreConfig's relative certs/ paths resolve under /certs.
 export const CRL_VOLUME = "takserver-crl";
-export const CRL_MOUNT = "/opt/tak/certs/crl";
+export const CRL_MOUNT = "/certs/crl";
 
 export const RELOAD_LABEL = "uds.dev/oidc-reload";
 export const RELOAD_VALUE = "takserver";

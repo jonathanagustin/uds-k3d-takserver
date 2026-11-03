@@ -37,6 +37,7 @@ Enter
 Wait@120s /takserver \$\s*$/
 Sleep 2000ms
 Screenshot "demo/out/shots/network-policy-blocks-8089.png"
+Sleep 1s
 Type@70ms "# Releases are signed keylessly by the release workflow"
 Sleep 500ms
 Enter
@@ -49,6 +50,7 @@ Enter
 Wait@60s /takserver \$\s*$/
 Sleep 2000ms
 Screenshot "demo/out/shots/release-signature-verified.png"
+Sleep 1s
 # caption: Build provenance for the same package, attested with the release workflow's identity
 # fast
 Type@40ms "gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:{{VERSION}}-upstream --owner jonathanagustin"
@@ -57,3 +59,4 @@ Enter
 Wait@120s /takserver \$\s*$/
 Sleep 2500ms
 Screenshot "demo/out/shots/release-provenance-verified.png"
+Sleep 1s

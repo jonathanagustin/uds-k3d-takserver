@@ -34,6 +34,7 @@ Sleep 400ms
 Enter
 Sleep 3200ms
 Screenshot "demo/out/shots/zarf-registry-images.png"
+Sleep 1s
 # caption: The registry holds what the package brought with it
 Type@80ms "uds zarf tools registry catalog | head -12"
 Sleep 400ms

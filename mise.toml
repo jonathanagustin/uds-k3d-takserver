@@ -6,7 +6,7 @@
 
 [tools]
 # renovate: datasource=node depName=node versioning=node
-node = "24.22.2"
+node = "26.13.0"
 # renovate: datasource=github-releases depName=jdx/hk versioning=semver
 hk = "2.11.1"
 # renovate: datasource=github-releases depName=k3d-io/k3d versioning=semver-coerced

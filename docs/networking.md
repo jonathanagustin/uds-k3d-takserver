@@ -174,7 +174,7 @@ TAK 5.7-RELEASE-14 ships the QUIC native library for linux-x86_64 only. QUIC the
 The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on amd64:
 
 - A client with no certificate must be refused with a TLS alert. No answer at all fails the test, so a broken route cannot pass as a refusal.
-- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`.
+- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`. TAK 5.7 sometimes leaves a new stream out of that list, so the client reconnects once before the test fails, like the port 8089 check in `tests/api-smoke.sh`.
 
 The script skips on arm64. It also exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
 

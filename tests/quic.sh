@@ -6,7 +6,8 @@
 # absent and this exits 0. With it true, a client on the runner connects to
 # the gateway's UDP 8090 at its LoadBalancer address, requires a refusal when it
 # presents no certificate, and holds a stream open with the admin certificate
-# until /Marti/api/subscriptions/all lists the CoT uid.
+# until /Marti/api/subscriptions/all lists the CoT uid. If TAK leaves it out,
+# the client reconnects once.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -195,54 +196,95 @@ if ! run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" reject --host
   reject_failed=1
 fi
 
-uid="uds-quic-$(date +%s)"
-ready="${work}/ready"
-stop="${work}/stop"
-run_net "${work}/venv/bin/python" "${script_dir}/quic-cot.py" roundtrip \
-  --host "${gw_ip}" --port "${gw_port}" \
-  --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" \
-  --pass-file "${key_pass_file}" \
-  --uid "${uid}" --ready "${ready}" --stop "${stop}" &
-hold_pid=$!
-
-for _ in $(seq 1 40); do
-  if [[ -s "${ready}" ]]; then
-    break
-  fi
-  if ! kill -0 "${hold_pid}" >/dev/null 2>&1; then
-    wait "${hold_pid}" || true
-    echo "QUIC client exited before the stream was ready" >&2
-    diagnose
-    exit 1
-  fi
-  sleep 1
-done
-if [[ ! -s "${ready}" ]]; then
-  echo "QUIC client did not report a CoT event" >&2
-  diagnose
-  exit 1
-fi
-
 port="443"
 if [[ -f /tmp/tak-gateway-port ]]; then
   port="$(cat /tmp/tak-gateway-port)"
 fi
-listed=""
-for _ in $(seq 1 15); do
-  body="$(curl -k -sS --max-time 20 \
+
+subscriptions() {
+  curl -k -sS --max-time 20 \
     --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" --pass "${TAK_CLIENT_KEY_PASSPHRASE}" \
     --resolve "takserver-api.uds.dev:${port}:127.0.0.1" \
-    "https://takserver-api.uds.dev:${port}/Marti/api/subscriptions/all" || true)"
-  if grep -q "${uid}" <<< "${body}"; then
-    listed=1
+    "https://takserver-api.uds.dev:${port}/Marti/api/subscriptions/all" || true
+}
+
+# One line per subscription, so a failure shows what TAK did list.
+summarize() {
+  python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin).get("data", [])
+except ValueError:
+    print("subscriptions/all did not return JSON")
+    raise SystemExit(0)
+for s in data:
+    print(" ".join(f"{k}={s.get(k)!r}" for k in ("subscriptionUid", "callsign", "clientUid", "username", "protocol")))
+'
+}
+
+# Open a stream with the admin certificate, wait until TAK lists the uid,
+# then close it. Returns 0 when listed, 1 when not listed, 2 when the client
+# never got a stream.
+hold_and_check() {
+  uid="uds-quic-$(date +%s)-$1"
+  local ready="${work}/ready-$1" stop="${work}/stop-$1"
+  run_net "${work}/venv/bin/python" -u "${script_dir}/quic-cot.py" roundtrip \
+    --host "${gw_ip}" --port "${gw_port}" \
+    --cert "${cert_dir}/admin.pem" --key "${cert_dir}/admin.key" \
+    --pass-file "${key_pass_file}" \
+    --uid "${uid}" --ready "${ready}" --stop "${stop}" &
+  hold_pid=$!
+
+  for _ in $(seq 1 40); do
+    if [[ -s "${ready}" ]]; then
+      break
+    fi
+    if ! kill -0 "${hold_pid}" >/dev/null 2>&1; then
+      wait "${hold_pid}" || true
+      hold_pid=""
+      echo "QUIC client exited before the stream was ready" >&2
+      return 2
+    fi
+    sleep 1
+  done
+  if [[ ! -s "${ready}" ]]; then
+    echo "QUIC client did not report a CoT event" >&2
+    return 2
+  fi
+
+  local body="" listed=""
+  for _ in $(seq 1 15); do
+    body="$(subscriptions)"
+    if grep -q "${uid}" <<< "${body}"; then
+      listed=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "${listed}" ]]; then
+    echo "QUIC client ${uid} was not listed in /Marti/api/subscriptions/all. TAK listed:" >&2
+    summarize <<< "${body}" >&2
+  fi
+  printf 'stop\n' > "${stop}"
+  wait "${hold_pid}" || true
+  hold_pid=""
+  [[ -n "${listed}" ]]
+}
+
+# TAK 5.7 can leave a new subscription out of the listing even though it
+# holds the stream and set its callsign (seen on main run 41765540349). The
+# 8089 check in api-smoke.sh hits the same thing and reconnects once, as a
+# device would. Do the same here.
+rc=1
+for attempt in 1 2; do
+  rc=0
+  hold_and_check "${attempt}" || rc=$?
+  if [[ "${rc}" -ne 1 ]]; then
     break
   fi
-  sleep 2
+  echo "attempt ${attempt}: QUIC client not listed; reconnecting" >&2
 done
-printf 'stop\n' > "${stop}"
-wait "${hold_pid}" || true
-if [[ -z "${listed}" ]]; then
-  echo "QUIC client ${uid} was not listed in /Marti/api/subscriptions/all" >&2
+if [[ "${rc}" -ne 0 ]]; then
   diagnose
   exit 1
 fi

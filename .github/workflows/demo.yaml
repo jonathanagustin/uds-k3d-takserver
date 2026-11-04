@@ -86,9 +86,12 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "${APP_REF}"
-          git checkout FETCH_HEAD -- . \
-            ':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts' \
-            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml'
+          keep=(':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts'
+            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml')
+          git checkout FETCH_HEAD -- . "${keep[@]}"
+          # Files added after APP_REF would mix with its tree (a template
+          # calling a helper APP_REF does not have): remove them.
+          git diff --name-only --diff-filter=A -z FETCH_HEAD HEAD -- . "${keep[@]}" | xargs -0 -r git rm -q --
           echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
 
       - name: Trim the runner

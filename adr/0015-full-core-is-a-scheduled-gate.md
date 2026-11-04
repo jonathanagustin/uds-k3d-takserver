@@ -10,7 +10,7 @@ Accepted
 
 Per-PR CI deploys `k3d-core-slim-dev` and the slim test bundle. That never installs the logging, monitoring, backup, runtime security, metrics-server, or Portal layers. Those layers do not fit beside TAK on a 2 vCPU node.
 
-No workflow in this repository sets a larger GitHub-hosted runner label. amd64 jobs use `vars.TEST_RUNNER` when it is set, and `ubuntu-24.04` otherwise. arm64 jobs use `ubuntu-24.04-arm`. The Test workflow already trims preinstalled toolchains. It does not add swap. amd64 is pinned to `ubuntu-24.04` instead of `ubuntu-latest`: GitHub is moving `ubuntu-latest` to 26.04 between 2026-10-19 and 2026-11-19, and on 26.04 the Zarf checkpoint extraction under `/tmp` fails with `disk quota exceeded`.
+No workflow in this repository sets a larger GitHub-hosted runner label. amd64 jobs use `vars.TEST_RUNNER` when it is set, and `ubuntu-26.04` otherwise. arm64 jobs use `ubuntu-26.04-arm`. The Test workflow already trims preinstalled toolchains. It does not add swap. #219 pinned these jobs to `ubuntu-24.04` after the early 26.04 images failed the Zarf checkpoint extraction under `/tmp` with `disk quota exceeded`. The cause was not found. On Nov 3, 2026, `/tmp` was ext4 on both 26.04 images, and every cluster job passed on them in #279, so the pin was dropped.
 
 `create:test-bundle` in uds-common looks for `uds-bundle.yaml` in the directory given as `path`. A file named `bundle/uds-bundle-full.yaml` would not be that input.
 

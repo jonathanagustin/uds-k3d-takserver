@@ -112,6 +112,10 @@ The pod mounts only that Secret, read-only, and runs as a non-root user with no 
 
 **Network.** The pod may connect only to the passthrough gateway on ports 443, 8446, and 8089. Its HTTP answers carry only a pass or fail and a short reason, never certificate material.
 
+**What the certificate can and cannot do.** TAK accepts it on 8089 and 8443 because the deploy-time CA signed it. The `auth` block in `CoreConfig.xml` sets `x509groups="true"` and leaves `x509addAnonymous` at its default, `false`, so the certificate gets no groups. With no groups it receives no CoT from other clients, and data that TAK limits by group, such as missions and files, is not visible to it. It has no admin role, so admin pages and admin API calls are refused. It can still open a connection and call API endpoints that TAK does not limit by group, such as `/Marti/api/version`. The package does not set up certificate revocation checks in TAK, so to stop the certificate working before it expires, rotate the deploy-time CA.
+
+**With the TAK alerts.** These checks are in addition to the alerts in PrometheusRule `takserver` (see [Monitoring](configuration.md#monitoring)), not a replacement. Those alerts read the JMX exporter and kube-state-metrics: a Deployment scaled to 0, no available pods, a high JVM heap, or a restart loop. They do not show whether a client can connect. `tak-health` checks that. It does not see heap use or restarts.
+
 **Turn it off.** Set the package value `health.enabled` to `false`:
 
 ```bash
@@ -135,7 +139,7 @@ In a bundle, set `health.enabled: false` on chart `uds-takserver-config` the sam
 
 #### How CI tests it
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It then requires `probe_success` 1 for the three `tak-health` paths, scales `takserver-messaging` to zero, and requires `/stream` to drop to 0 while `/api` and `/enroll` stay up. It scales messaging back and requires `/stream` to return to 1. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It then requires `probe_success` 1 for the three `tak-health` paths, scales `takserver-messaging` to zero, requires `/stream` to drop to 0, and logs the `/api` and `/enroll` results at that point. It scales messaging back and requires `/stream` to return to 1. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
 
 ### Standard TAK ports
 

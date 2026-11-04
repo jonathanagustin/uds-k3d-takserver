@@ -125,7 +125,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   await clickLikeAPerson(page, page.getByRole("button", { name: "Sign In" }));
   await expect(page).toHaveURL(/phone\.html/, { timeout: 60_000 });
   await expect(page.locator(".screen iframe")).toBeVisible({ timeout: 30_000 });
-  await phoneOn(page);
+  await phoneOn(page, "The phone's own screen: ATAK-CIV's map, callsign ATAK-DEVICE (TEST LOCATION)");
   await page.waitForTimeout(8_000);
   await expectSecure(page);
   caption("The ATAK test device, connected to TAK over mutual TLS on 8089");
@@ -190,14 +190,14 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   if (marker) {
     const zoomed = await zooming;
     await page.bringToFront();
-    await phoneOn(page);
-    await showCursor(page);
-    await page.waitForTimeout(2_500);
-    caption(
+    await phoneOn(
+      page,
       zoomed
         ? "On the phone: the TEST MARKER from CloudTAK, east of the device's own marker"
         : "On the phone: the TEST MARKER arrives over the device's stream",
     );
+    await showCursor(page);
+    await page.waitForTimeout(2_500);
     mark("zoom", "0.5,0.5,1.5");
     await page.waitForTimeout(2_500);
     await still(page, "atak-test-marker");
@@ -244,10 +244,9 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   if (chat) {
     await page.bringToFront();
-    await phoneOn(page);
+    await phoneOn(page, "On the phone: the chat arrives over the device's stream (unread badge, top bar)");
     await showCursor(page);
     await page.waitForTimeout(2_000);
-    caption("On the phone: the chat arrives over the device's stream (unread badge, top bar)");
     mark("zoom", "0.5,0.5,1.4");
     await page.waitForTimeout(5_000);
     if (adb) await atakAdbLater("shot", "demo-chat");

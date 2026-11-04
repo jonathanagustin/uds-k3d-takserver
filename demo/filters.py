@@ -575,6 +575,10 @@ def render(mode, timeline, base, out, workdir, offset=0.0):
     inputs = ["-i", base]
     last = "b1"
     spans = closeup_spans(phones, duration)
+    for a, _, _, _ in spans:
+        # tests/demo/browser.ts phoneOn() captions every close-up as it starts.
+        if not any(e["kind"] == "caption" and a - 0.3 <= e["at"] <= a + 1.0 for e in events):
+            print(f"phone: the close-up at {a:.1f}s has no caption of its own", file=sys.stderr)
     if spans:
         graph.append(phone_closeup(events, spans, phone_src, work, duration, last, "b2"))
         inputs += ["-ss", f"{offset:.3f}", "-i", phone_src]

@@ -203,6 +203,22 @@ def wrap(text, fnt, max_w, draw):
     return lines
 
 
+def balanced(text, fnt, max_w, draw):
+    """Wraps TEXT in as few lines as wrap() would, with the lines as even as
+    possible: the narrowest width that still needs no extra line."""
+    lines = wrap(text, fnt, max_w, draw)
+    if len(lines) < 2:
+        return lines
+    lo, hi = max(draw.textlength(w, font=fnt) for w in text.split()), max_w
+    while hi - lo > 1:
+        mid = (lo + hi) / 2
+        if len(wrap(text, fnt, mid, draw)) <= len(lines):
+            hi = mid
+        else:
+            lo = mid
+    return wrap(text, fnt, hi, draw)
+
+
 def fitted(role, size, text, max_w, max_lines, draw):
     """The largest size up to SIZE whose wrapped text has at most MAX_LINES."""
     while size > 12:
@@ -220,6 +236,9 @@ def card(title, subtitle):
     draw = ImageDraw.Draw(img)
     tfont, tlines = fitted("title", TITLE_SIZE, title, TEXT_MAX_W, 2, draw)
     sfont, slines = fitted("mono", SUBTITLE_SIZE, subtitle, TEXT_MAX_W, 2, draw)
+    # Even lines: no word left alone on the last one.
+    tlines = balanced(" ".join(tlines), tfont, TEXT_MAX_W, draw)
+    slines = balanced(" ".join(slines), sfont, TEXT_MAX_W, draw)
     t_line = round(tfont.size * 1.2)
     s_line = round(sfont.size * 1.4)
     gap = 36

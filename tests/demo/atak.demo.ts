@@ -60,7 +60,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
 
   await expect(page).toHaveURL(/phone\.html/, { timeout: 60_000 });
   await expect(page.locator(".screen iframe")).toBeVisible({ timeout: 30_000 });
-  await phoneOn(page);
+  await phoneOn(page, "The phone's own screen: ATAK-CIV's map, callsign ATAK-DEVICE (TEST LOCATION)");
   await showCursor(page);
   // ws-scrcpy needs a few seconds for the first frame.
   await page.waitForTimeout(8_000);
@@ -110,8 +110,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
 
   await page.bringToFront();
 
-  await phoneOn(page);
+  await phoneOn(page, "Back on the phone: ATAK connected, self marker at the test location");
   await showCursor(page);
-  caption("Back on the phone: ATAK connected, self marker at the test location");
   await page.waitForTimeout(4_000);
 });

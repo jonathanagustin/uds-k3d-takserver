@@ -180,7 +180,7 @@ if [[ -f "${out}/10-operate-4.mp4" ]]; then
     fi
   done
 fi
-card c98 "What This Does Not Prove" "phone is an Android VM; fixed TEST LOCATION; one-node k3d; no radio or degraded links"
+card c98 "What This Does Not Prove" "Android VM phone · fixed TEST LOCATION · one-node k3d · no radio or degraded links"
 card c97 "github.com/jonathanagustin/uds-k3d-takserver" "open issues track the known gaps" last
 operate_video+=(c98 c97)
 

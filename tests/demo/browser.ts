@@ -46,7 +46,8 @@ export function holdSince(since: number) {
 }
 
 // Captions are not drawn in the page. demo/filters.py shows each one as a
-// short lower-third at the bottom left of the video.
+// short lower-third at the bottom left of the video, or beside the phone
+// during a phone close-up.
 export function caption(text: string) {
   mark("caption", text);
 }
@@ -353,12 +354,15 @@ export async function cloudtakReady(page: Page, callsign: string) {
 }
 
 // The phone page is in front: demo/filters.py lays the phone's own screen
-// recording over the browser's view of it from here, at the .screen box.
-export async function phoneOn(page: Page) {
+// recording over the browser's view of it from here, at the .screen box, and
+// shows it as a close-up. TEXT is the close-up's caption: say what the phone
+// shows, so no close-up starts without a caption or with the last page's.
+export async function phoneOn(page: Page, text: string) {
   const box = await page.locator(".screen").boundingBox();
   if (box) {
     mark("phone-on", [box.x, box.y, box.width, box.height].map((v) => v.toFixed(1)).join(","));
   }
+  caption(text);
 }
 
 export function phoneOff() {

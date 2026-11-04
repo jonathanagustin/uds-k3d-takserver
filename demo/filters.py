@@ -2,27 +2,35 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Build the ffmpeg filter chain for one demo segment.
+"""Turn one recorded segment into a styled 1920x1080 clip.
 
-terminal TAPE DURATION WORKDIR FONT [OFFSET]
-    Reads '# caption: text' and '# zoom: ax,ay,factor' lines from the tape
-    demo/ragged.py generated. Each applies to the next typed command and
-    starts when that command presses Enter. Times come from the tape itself:
-    characters x each chunk's typing speed, every Backspace, and every Sleep.
-web EVENTS DURATION WORKDIR FONT [OFFSET] [BASE_VIDEO]
-    Reads the events.json the Playwright walkthrough writes: zoom, caption,
-    and caption-clear events. With BASE_VIDEO, frames where the browser
-    shows a blank white page between two pages (a redirect or a page load)
-    are replaced with the last frame before them, so the video holds the
-    previous page instead of flashing white. Timing does not change.
-fit FONT TEXTFILE MAX_SIZE MAX_WIDTH
-    Prints the largest font size up to MAX_SIZE at which the text is at most
-    MAX_WIDTH pixels wide. The width is measured by rendering it with ffmpeg.
+prepare RAW EVENTS OUT_VIDEO OUT_EVENTS [DEVICE_VIDEO DEVICE_START]
+    For a browser recording. Crops Chrome's tab strip, covers the profile
+    and menu buttons at the right end of the toolbar (the address bar stays),
+    holds the last good frame over blank white pages and over "hold" ranges
+    the walkthrough marked, and lays the phone's own screen recording
+    (DEVICE_VIDEO, started at wall-clock DEVICE_START) over the ws-scrcpy
+    view while the phone page is in front. Inside those phone stretches, a
+    wait where nothing on screen changes for more than STALL seconds is cut
+    to KEEP seconds, and the caption showing then gets an emerald speed-up
+    tag. Also writes OUT_VIDEO.phone.mp4, the phone's screen alone with the
+    Android status and navigation bars cut off, for the close-up. Writes
+    the cut video and the events moved to match.
+render MODE TIMELINE BASE OUT WORKDIR [OFFSET]
+    MODE is terminal (TIMELINE is a generated tape) or web (TIMELINE is an
+    events.json). BASE is the content, CONTENT_W x CONTENT_H. Zooms gently
+    where the timeline asks, puts the content in the window frame on the
+    canvas, and shows each caption as a lower-third. While the phone page
+    is in front, the phone's screen grows out of the window into a large
+    close-up on the right, with a short label on the left.
+join OUT PART...
+    Joins the parts with short crossfades and prints where each starts.
+    Between two title cards the first card's text fades out before the
+    next card's fades in, so the two never overlap.
 
-The input segment is the content area, CONTENT_W x CONTENT_H. The chain
-zooms that area only (eased in, held, eased out), then pads a caption band
-below it so the frame is W x H, and draws captions inside the band. A
-caption never covers recorded content.
+The terminal timeline: '# caption: text' and '# zoom: ax,ay,factor' lines
+apply to the next typed command and start when it presses Enter. Times come
+from the tape: characters x typing speed, every Backspace, every Sleep.
 """
 
 import json
@@ -31,15 +39,27 @@ import subprocess
 import sys
 from pathlib import Path
 
-FPS = 24
-W, H = 1280, 720
-CONTENT_W, CONTENT_H = 1280, 630
-BAND = H - CONTENT_H
-BAND_COLOR = "0x11111b"
-# At least 8% of the width stays clear on each side of any text.
-TEXT_MAX_W = int(W * 0.84)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import style  # noqa: E402
+
+FPS = style.FPS
+CW, CH = style.CONTENT_W, style.CONTENT_H
 EASE = 0.6
 HOLD = 2.0
+# A zoom stays gentle whatever the timeline asks for.
+ZOOM_MAX = 1.15
+# Phone stretches: a still screen longer than STALL is cut to KEEP.
+STALL = 4.5
+KEEP = 3.0
+CROSSFADE = 0.3
+
+
+def run(*args, **kw):
+    return subprocess.run(list(args), check=True, capture_output=True, text=True, **kw)
+
+
+def duration_of(video):
+    return float(run("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video).stdout)
 
 
 def parse_ms(value):
@@ -52,14 +72,10 @@ def parse_ms(value):
 
 def terminal_events(tape):
     default_speed = 0.075
-    settings = Path("demo/settings.tape")
-    for line in settings.read_text().splitlines():
+    for line in Path("demo/settings.tape").read_text().splitlines():
         if line.startswith("Set TypingSpeed"):
             default_speed = parse_ms(line.split()[-1])
-    t = 0.0
-    shown = False
-    pending = []
-    events = []
+    t, shown, pending, events = 0.0, False, [], []
     for raw in Path(tape).read_text().splitlines():
         line = raw.strip()
         if line == "Show":
@@ -91,148 +107,591 @@ def terminal_events(tape):
     return events
 
 
-def smooth(p):
-    return f"({p})*({p})*(3-2*({p}))"
+# ---------------------------------------------------------------- prepare
+
+def gray_frames(video, vf, size):
+    """Raw 8-bit gray frames of VIDEO through VF, SIZE=(w, h), as bytes."""
+    w, h = size
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", video, "-vf", f"{vf},scale={w}:{h},format=gray",
+                          "-f", "rawvideo", "-"], check=True, capture_output=True).stdout
+    n = w * h
+    return [out[i:i + n] for i in range(0, len(out) - n + 1, n)]
 
 
-def zoom_filter(at, ax, ay, factor):
-    up = f"clip((it-{at:.3f})/{EASE},0,1)"
-    down = f"clip((it-{at + EASE + HOLD:.3f})/{EASE},0,1)"
-    z = f"1+{factor - 1:.3f}*({smooth(up)}-{smooth(down)})"
-    return (
-        f"scale={CONTENT_W * 2}:{CONTENT_H * 2}:flags=lanczos,"
-        f"zoompan=z='{z}':x='{ax}*(iw-iw/zoom)':y='{ay}*(ih-ih/zoom)'"
-        f":d=1:s={CONTENT_W}x{CONTENT_H}:fps={FPS}"
-    )
+def diffs(frames):
+    """Mean absolute difference of each frame from the one before (0-255)."""
+    out = [0.0]
+    for a, b in zip(frames, frames[1:]):
+        out.append(sum(abs(x - y) for x, y in zip(a, b)) / len(a))
+    return out
 
 
-def text_width(font, text_file, size=100):
-    """Rendered width in pixels of the text at the given font size."""
-    vf = (
-        f"drawtext=fontfile={font}:textfile={text_file}:fontsize={size}"
-        f":fontcolor=white:x=40:y=40,cropdetect=limit=24:round=2:reset=0"
-    )
-    result = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-f", "lavfi", "-i", "color=black:s=8000x300:d=0.2",
-         "-vf", vf, "-frames:v", "3", "-f", "null", "-"],
-        capture_output=True, text=True, check=True,
-    )
-    widths = [int(m) for m in re.findall(r"crop=(\d+):", result.stderr)]
-    if not widths:
-        raise SystemExit(f"could not measure {text_file}")
-    return widths[-1]
+def chrome_rows(raw, at):
+    """Tab strip height, toolbar bottom row, and the toolbar colour, read from
+    the column near the right edge of one frame."""
+    w = int(run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width",
+                "-of", "csv=p=0", raw).stdout)
+    col = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{at:.2f}", "-i", raw, "-frames:v", "1",
+                          "-vf", f"crop=1:200:{w - 6}:0,format=rgb24", "-f", "rawvideo", "-"],
+                         check=True, capture_output=True).stdout
+    px = [tuple(col[i:i + 3]) for i in range(0, len(col), 3)]
+
+    def far(a, b):
+        return sum(abs(x - y) for x, y in zip(a, b)) > 24
+
+    tab = next((y for y in range(1, len(px)) if far(px[y], px[0])), 0)
+    bar = next((y for y in range(tab + 2, len(px)) if far(px[y], px[tab + 4])), tab + 56)
+    color = "0x%02x%02x%02x" % px[min(tab + 4, len(px) - 1)]
+    return tab, bar, color
 
 
-def fit_size(font, text_file, max_size, max_width):
-    width = text_width(font, text_file)
-    return max(10, min(max_size, int(100 * max_width / max(width, 1))))
-
-
-def blank_ranges(video, top=0):
-    """Frame ranges where nearly every pixel of the page is white (a blank page).
-
-    signalstats YLOW is the 10th percentile of luma. A rendered page has
-    text, images, or a dark theme below that line. A blank page does not.
-    TOP is the height of the browser's tab strip and address bar, which are
-    left out of the measurement.
-    """
-    crop = f"crop=iw:ih-{top}:0:{top}," if top else ""
-    result = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", video, "-vf",
-         f"{crop}signalstats,metadata=print:key=lavfi.signalstats.YLOW:file=-", "-f", "null", "-"],
-        capture_output=True, text=True, check=True,
-    )
-    frames = []
-    frame = None
-    for line in result.stdout.splitlines():
-        match = re.match(r"frame:(\d+)", line)
-        if match:
-            frame = int(match.group(1))
+def blank_ranges(video, top):
+    """Frame ranges where nearly the whole page (below TOP) is white."""
+    crop = f"crop=iw:ih-{top}:0:{top}," if top > 0 else ""
+    out = run("ffmpeg", "-v", "error", "-i", video, "-vf",
+              f"{crop}signalstats,metadata=print:key=lavfi.signalstats.YLOW:file=-", "-f", "null", "-").stdout
+    frames, frame = [], None
+    for line in out.splitlines():
+        m = re.match(r"frame:(\d+)", line)
+        if m:
+            frame = int(m.group(1))
             continue
-        match = re.search(r"YLOW=([\d.]+)", line)
-        if match and frame is not None and float(match.group(1)) >= 230:
+        m = re.search(r"YLOW=([\d.]+)", line)
+        if m and frame is not None and float(m.group(1)) >= 230:
             frames.append(frame)
-    ranges = []
-    for frame in frames:
-        if ranges and frame == ranges[-1][1] + 1:
-            ranges[-1][1] = frame
+    return merge([(f, f) for f in frames])
+
+
+def merge(ranges):
+    out = []
+    for a, b in sorted(ranges):
+        if out and a <= out[-1][1] + 1:
+            out[-1][1] = max(out[-1][1], b)
         else:
-            ranges.append([frame, frame])
-    # Frame 0 has nothing before it to hold.
-    return [(a, b) for a, b in ranges if a > 0]
+            out.append([a, b])
+    return [(a, b) for a, b in out if a > 0]
 
 
-def hold_filters(ranges):
+def hold_chain(ranges, label_in, label_out):
+    if not ranges:
+        return f"[{label_in}]null[{label_out}]"
     stages = []
-    for index, (first, last) in enumerate(ranges):
-        source = f"[h{index}]" if index else ""
-        out = f"[h{index + 1}]" if index + 1 < len(ranges) else ""
-        stages.append(
-            f"{source}split[m{index}][r{index}];"
-            f"[m{index}][r{index}]freezeframes=first={first}:last={last}:replace={first - 1}{out}"
-        )
+    for i, (first, last) in enumerate(ranges):
+        src = f"[{label_in}]" if i == 0 else f"[h{i}]"
+        dst = f"[{label_out}]" if i == len(ranges) - 1 else f"[h{i + 1}]"
+        stages.append(f"{src}split[m{i}][r{i}];[m{i}][r{i}]freezeframes=first={first}:last={last}:replace={first - 1}{dst}")
     return ";".join(stages)
 
 
-def caption_filter(text_file, start, end, font):
-    size = fit_size(font, text_file, 26, TEXT_MAX_W)
-    fade = 0.25
-    alpha = (
-        f"if(lt(t,{start + fade:.3f}),(t-{start:.3f})/{fade},"
-        f"if(gt(t,{end - fade:.3f}),({end:.3f}-t)/{fade},1))"
-    )
-    return (
-        f"drawtext=fontfile={font}:textfile={text_file}:fontsize={size}:fontcolor=0xcdd6f4"
-        f":x=(w-text_w)/2:y={CONTENT_H}+({BAND}-text_h)/2"
-        f":enable='between(t,{start:.3f},{end:.3f})':alpha='{alpha}'"
-    )
+def video_size(video):
+    out = run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+              "stream=width,height", "-of", "csv=p=0", video).stdout
+    return tuple(int(v) for v in out.strip().split(","))
 
 
-def main():
-    if sys.argv[1] == "fit":
-        font, text_file, max_size, max_width = sys.argv[2:6]
-        print(fit_size(font, text_file, int(max_size), int(max_width)))
-        return
-    mode, source, duration, workdir, font = sys.argv[1:6]
-    # Seconds trimmed from the start of the source clip.
-    offset = float(sys.argv[6]) if len(sys.argv) > 6 else 0.0
-    duration = float(duration)
-    work = Path(workdir)
-    if mode == "terminal":
-        events = terminal_events(source)
+def phone_intervals(events, duration):
+    out, on = [], None
+    for e in events:
+        if e["kind"] == "phone-on" and on is None:
+            on = e
+        elif e["kind"] == "phone-off" and on is not None:
+            out.append((on["at"], e["at"], on["value"]))
+            on = None
+    if on is not None:
+        out.append((on["at"], duration, on["value"]))
+    return out
+
+
+def align(device, raw, box, intervals, guess, top):
+    """Seconds to add to device-video time to get recording time: the guess
+    from the wall clocks, refined by matching on-screen changes."""
+    x, y, w, h = box
+    sw, sh = 18, 32
+    try:
+        cap = diffs(gray_frames(raw, f"fps={FPS},crop={w}:{h}:{x}:{y + top}", (sw, sh)))
+        dev = diffs(gray_frames(device, f"fps={FPS}", (sw, sh)))
+    except subprocess.CalledProcessError:
+        return guess
+    best, best_score = guess, -1.0
+    span = int(3 * FPS)
+    base = int(round(guess * FPS))
+    idx = [i for a, b, _ in intervals for i in range(int(a * FPS), int(b * FPS)) if i < len(cap)]
+    if len(idx) < FPS * 3:
+        return guess
+    for lag in range(base - span, base + span + 1):
+        pairs = [(cap[i], dev[i - lag]) for i in idx if 0 <= i - lag < len(dev)]
+        if len(pairs) < FPS * 3:
+            continue
+        ma = sum(p[0] for p in pairs) / len(pairs)
+        mb = sum(p[1] for p in pairs) / len(pairs)
+        num = sum((a - ma) * (b - mb) for a, b in pairs)
+        da = sum((a - ma) ** 2 for a, _ in pairs) ** 0.5
+        db = sum((b - mb) ** 2 for _, b in pairs) ** 0.5
+        score = num / (da * db) if da and db else 0
+        if score > best_score:
+            best, best_score = lag / FPS, score
+    print(f"phone: device video offset {best:+.2f}s (clock guess {guess:+.2f}s, match {best_score:.2f})", file=sys.stderr)
+    return best if best_score >= 0.2 else guess
+
+
+def stall_cuts(video, intervals):
+    """(start, end) seconds to cut: still stretches inside phone intervals."""
+    out = run("ffmpeg", "-v", "error", "-i", video, "-vf",
+              "scale=480:-2,mpdecimate=hi=768:lo=320:frac=0.33,metadata=print:file=-", "-f", "null", "-").stdout
+    kept = [float(m.group(1)) for m in re.finditer(r"pts_time:([\d.]+)", out)]
+    cuts = []
+    for a, b in zip(kept, kept[1:] + [duration_of(video)]):
+        if b - a <= STALL:
+            continue
+        for s, e, _ in intervals:
+            lo, hi = max(a, s), min(b, e)
+            if hi - lo > STALL:
+                cuts.append((lo + KEEP, hi))
+    return cuts
+
+
+def remap(t, cuts):
+    shift = 0.0
+    for a, b in cuts:
+        if t >= b:
+            shift += b - a
+        elif t > a:
+            return a - shift
+    return t - shift
+
+
+def prepare(raw, events_file, out_video, out_events, device=None, device_start=None):
+    events = json.loads(Path(events_file).read_text())
+    duration = duration_of(raw)
+    tab, bar, bar_color = chrome_rows(raw, min(2.0, duration / 2))
+    w = int(run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width",
+                "-of", "csv=p=0", raw).stdout)
+    tops = [int(e["value"]) for e in events if e["kind"] == "chrome-top"]
+    page_top = (tops[0] if tops else bar) - tab
+    dpr = next((float(e["value"]) for e in events if e["kind"] == "dpr"), 1.0)
+    print(f"chrome: tab strip {tab}px, toolbar to {bar}px, page from {page_top}px after the crop", file=sys.stderr)
+
+    holds = blank_ranges(raw, tops[0] if tops else 0)
+    for e in events:
+        if e["kind"] == "hold":
+            holds.append((max(1, int(float(e["value"]) * FPS)), int(e["at"] * FPS) + 2))
+    holds = merge(holds)
+    for a, b in holds:
+        print(f"holding frame {a - 1} over frames {a}-{b}", file=sys.stderr)
+
+    # Chrome tints its toolbar from the policy's theme colour with a strong
+    # blue. Most of that saturation is taken out so it reads as slate.
+    tool_h = (max(bar - tab, 2) + 1) // 2 * 2
+    graph = [f"[0:v]fps={FPS},crop=iw:ih-{tab}:0:{tab},"
+             f"drawbox=x={w - 112}:y=0:w=112:h={max(bar - tab, 1)}:color={bar_color}:t=fill,split[t0][t1];"
+             f"[t1]crop=iw:{tool_h}:0:0,hue=s=0.3[t2];[t0][t2]overlay=0:0[c0]",
+             hold_chain(holds, "c0", "c1")]
+    inputs = ["-i", raw]
+    last = "c1"
+    phones = phone_intervals(events, duration)
+    if device and Path(device).is_file() and phones:
+        try:
+            box = [round(float(v) * dpr) for v in phones[0][2].split(",")]
+            start_wall = float(next(e["value"] for e in events if e["kind"] == "start"))
+            guess = float(Path(device_start).read_text().strip()) - start_wall if device_start else 0.0
+            offset = align(device, raw, box, phones, guess, tops[0] if tops else bar)
+            x, y, bw, bh = box
+            dev_w, dev_h = (int(v) for v in run(
+                "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                "-of", "csv=p=0", device).stdout.strip().split(","))
+            radius = round(34 * dpr)
+            mask = out_video + ".phone-mask.png"
+            from PIL import Image, ImageDraw
+            m = Image.new("L", (bw, bh), 0)
+            ImageDraw.Draw(m).rounded_rectangle((0, 0, bw - 1, bh - 1), radius, fill=255)
+            m.save(mask)
+            enable = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b, _ in phones)
+            shift = (f"setpts=PTS-STARTPTS+{offset:.3f}/TB" if offset >= 0
+                     else f"trim=start={-offset:.3f},setpts=PTS-STARTPTS")
+            inputs += ["-i", device]
+            graph.append(
+                f"[1:v]fps={FPS},{shift},split[dsrc][dfull];"
+                f"[dsrc]scale={bw}:{bh}:flags=lanczos,format=rgba[dv];"
+                f"color=black:s={dev_w}x{dev_h}:r={FPS}:d={duration:.3f}[dbk];"
+                f"[dbk][dfull]overlay=0:0:eof_action=pass:shortest=0,format=yuv420p[ph];"
+                f"movie={mask},format=gray,loop=loop=-1:size=1,setpts=N/{FPS}/TB[dm];[dv][dm]alphamerge[dev];"
+                f"[{last}][dev]overlay=x={x}:y={y + page_top}:enable='{enable}':eof_action=pass:shortest=0[c2]")
+            last = "c2"
+        except (OSError, ValueError, StopIteration, subprocess.CalledProcessError) as err:
+            print(f"phone: device recording not used: {err}", file=sys.stderr)
+            graph, inputs, last = graph[:2], inputs[:2], "c1"
+    first = out_video + ".p1.mp4"
+    phone_raw = out_video + ".phone1.mp4"
+    Path(phone_raw).unlink(missing_ok=True)
+    common = ["-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
+              "-pix_fmt", "yuv420p"]
+    enc = [*common, first]
+    try:
+        extra = ["-map", "[ph]", *common, phone_raw] if last == "c2" else []
+        run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *enc,
+            *extra)
+    except subprocess.CalledProcessError as err:
+        if last != "c2":
+            raise
+        # The device recording could not be laid over: keep the browser view.
+        print(f"phone: device recording not used: {err.stderr.strip()[-300:]}", file=sys.stderr)
+        Path(phone_raw).unlink(missing_ok=True)
+        run("ffmpeg", "-v", "error", "-y", "-i", raw, "-filter_complex", ";".join(graph[:2]), "-map", "[c1]", *enc)
+
+    cuts = stall_cuts(first, phones) if phones else []
+    if cuts:
+        keep = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in cuts)
+        for src, dst in ((first, out_video), (phone_raw, phone_raw + ".cut.mp4")):
+            if not Path(src).is_file():
+                continue
+            run("ffmpeg", "-v", "error", "-y", "-i", src, "-vf",
+                f"select='not({keep})',setpts=N/{FPS}/TB", "-an", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "14", "-pix_fmt", "yuv420p", dst)
+            Path(src).unlink()
+        if Path(phone_raw + ".cut.mp4").is_file():
+            Path(phone_raw + ".cut.mp4").rename(phone_raw)
+        for a, b in cuts:
+            print(f"cut a still stretch {a:.1f}-{b:.1f}s ({b - a:.1f}s)", file=sys.stderr)
     else:
-        events = json.loads(Path(source).read_text())
-    for event in events:
-        event["at"] = float(event["at"]) - offset
-    chain = []
-    holds = ""
-    if mode == "web" and len(sys.argv) > 7:
-        tops = [int(e["value"]) for e in events if e["kind"] == "chrome-top"]
-        ranges = blank_ranges(sys.argv[7], tops[0] if tops else 0)
-        for first, last in ranges:
-            print(f"holding frame {first - 1} over blank frames {first}-{last}", file=sys.stderr)
-        holds = hold_filters(ranges)
-    zooms = [e for e in events if e["kind"] == "zoom"]
+        Path(first).rename(out_video)
+    moved = []
+    for e in events:
+        e = dict(e)
+        e["at"] = round(remap(float(e["at"]), cuts), 3)
+        moved.append(e)
+    for a, b in cuts:
+        factor = (b - a + KEEP) / KEEP
+        moved.append({"kind": "speedup", "at": round(remap(a, cuts), 3), "value": f"{factor:.0f}× faster"})
+    if phones:
+        moved += phone_video(out_video, phone_raw, phones, cuts, dpr, page_top)
+    moved.sort(key=lambda e: e["at"])
+    Path(out_events).write_text(json.dumps(moved, indent=2))
+
+
+def dark_rows(video, times, w, h):
+    """Rows at the top and bottom that are nearly black in every sample:
+    Android's status and navigation bars, or letterboxing."""
+    top = bottom = h
+    for t in times:
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", video, "-frames:v", "1",
+                              "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
+        if len(raw) < w * h:
+            continue
+        # The median ignores the bars' small icons (clock, back, home).
+        level = [sorted(raw[r * w:(r + 1) * w])[w // 2] for r in range(h)]
+        t_rows = next((r for r in range(h) if level[r] > 8), h)
+        b_rows = next((r for r in range(h) if level[h - 1 - r] > 8), h)
+        top, bottom = min(top, t_rows), min(bottom, b_rows)
+    if top + bottom >= h // 2:
+        return 0, 0
+    return top, bottom
+
+
+def phone_video(out_video, phone_raw, phones, cuts, dpr, page_top):
+    """Writes OUT_VIDEO.phone.mp4, the phone screen alone on the prepared
+    timeline, without its dark bars, for the close-up in render. From the
+    device recording when there is one, else cropped from the browser view.
+    Returns the events that point render at it."""
+    target = out_video + ".phone.mp4"
+    x, y, w, h = (float(v) * dpr for v in phones[0][2].split(","))
+    rect = [round(x), round(y + page_top), round(w) // 2 * 2, round(h) // 2 * 2]
+    src = phone_raw
+    if not Path(phone_raw).is_file():
+        src = out_video + ".phone1.mp4"
+        run("ffmpeg", "-v", "error", "-y", "-i", out_video, "-vf", "crop={2}:{3}:{0}:{1}".format(*rect),
+            "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", src)
+    sw, sh = (int(v) for v in run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                   "stream=width,height", "-of", "csv=p=0", src).stdout.strip().split(","))
+    size = run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+               "-of", "csv=p=0", out_video).stdout.strip().split(",")
+    times = []
+    for a, b, _ in phones:
+        a, b = remap(a, cuts), remap(b, cuts)
+        times += [a + (b - a) * f for f in (0.3, 0.5, 0.7)]
+    top, bottom = dark_rows(src, times, sw, sh)
+    ch = (sh - top - bottom) // 2 * 2
+    run("ffmpeg", "-v", "error", "-y", "-i", src, "-vf", f"crop={sw}:{ch}:0:{top}", "-an", "-c:v", "libx264",
+        "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", target)
+    Path(src).unlink()
+    print(f"phone: close-up from {'the device' if src == phone_raw else 'the browser view'}, "
+          f"{sw}x{ch} after cutting {top}px at the top and {bottom}px at the bottom", file=sys.stderr)
+    return [{"kind": "phone-video", "at": 0, "value": target},
+            {"kind": "phone-rect", "at": 0, "value": ",".join(map(str, rect + size))}]
+
+
+# ----------------------------------------------------------------- render
+
+def zoom_filter(at, ax, ay, factor):
+    factor = min(factor, ZOOM_MAX)
+    up = f"clip((it-{at:.3f})/{EASE},0,1)"
+    down = f"clip((it-{at + EASE + HOLD:.3f})/{EASE},0,1)"
+    z = f"1+{factor - 1:.3f}*({up}*{up}*(3-2*{up})-{down}*{down}*(3-2*{down}))"
+    return (f"scale={CW * 2}:{CH * 2}:flags=lanczos,"
+            f"zoompan=z='{z}':x='{ax}*(iw-iw/zoom)':y='{ay}*(ih-ih/zoom)':d=1:s={CW}x{CH}:fps={FPS}")
+
+
+def split_caption(text):
+    """'Label (real time 2m 05s, shown about 9x faster)' -> ('Label', '9× faster · 2m 05s real')."""
+    m = re.match(r"^(.*?)\s*\(real time ([^,)]+)(?:, shown about (\d+)x faster)?\)$", text)
+    if not m:
+        return text, ""
+    label, real, faster = m.groups()
+    return label, (f"{faster}× faster · {real} real" if faster else "")
+
+
+def still_src(path, fmt="rgba"):
+    """An endless stream of one image, at FPS, made on demand."""
+    return f"movie={path},format={fmt},loop=loop=-1:size=1,setpts=N/{FPS}/TB"
+
+
+PHONE_EASE = 0.4
+PHONE_LABEL = ("ATAK on the device", "ATAK-CIV on Android-x86 in a KubeVirt VM")
+
+
+def smooth(t0, t1):
+    """0 before T0, 1 after T1, a smoothstep between, in ffmpeg's expression language."""
+    u = f"clip((t-{t0:.3f})/{t1 - t0:.3f},0,1)"
+    return f"({u}*{u}*(3-2*{u}))"
+
+
+def closeup_spans(phones, duration):
+    """The close-up spans as (start, end, eases in, eases out). A span that
+    runs to an edge of the part holds the close-up there, so the crossfade
+    goes straight to or from the next part."""
+    spans = [(max(a, 0.0), min(b, duration)) for a, b, _ in phones]
+    return [(a, b, a > 0.05, b < duration - 0.05) for a, b in spans if b - a > 2 * PHONE_EASE]
+
+
+def caption_pieces(start, end, spans):
+    """Splits a caption shown from START to END between the lower-third
+    (outside the close-ups) and the panel beside the phone (inside them).
+    Returns (where, from, to, fade in, fade out) pieces; the two cross over
+    while the phone moves."""
+    lower, panel, cap = [], [], 0.25
+    s, fin = start, cap
+    for a, b, ease_in, ease_out in spans:
+        if b <= start or a >= end:
+            continue
+        e = min(end, a + PHONE_EASE if ease_in else a)
+        if e - s > 0.05 and s < a:
+            lower.append((s, e, fin, PHONE_EASE if e < end and ease_in else cap))
+        ps, pin = (start, cap) if start >= a else (a, PHONE_EASE if ease_in else 0)
+        pe, pout = (end, cap) if end <= b else (b, PHONE_EASE if ease_out else 0)
+        if pe - ps > 0.05:
+            panel.append((ps, pe, pin, pout))
+        s, fin = (b - PHONE_EASE, PHONE_EASE) if ease_out else (b, 0)
+        if s < start:
+            s, fin = start, cap
+        if end <= b:
+            s = end
+    if end - s > 0.05:
+        lower.append((s, end, fin, cap))
+    return [("lower",) + p for p in lower] + [("panel",) + p for p in panel]
+
+
+def phone_closeup(events, spans, phone_src, work, duration, last, label):
+    """During each phone-on span the phone grows out of the framed window:
+    its screen moves from where it sits in the window to a large close-up
+    on the right, while the window fades to the background with the
+    PHONE_LABEL at the top left. Both ease in and out over PHONE_EASE
+    seconds. SPANS come from closeup_spans()."""
+    sw, sh = video_size(phone_src)
+    under, over, mask = (work / "phone-under.png", work / "phone-over.png", work / "phone-mask.png")
+    px, py, pw, ph = (int(v) for v in run(sys.executable, str(Path(__file__).with_name("style.py")), "phone",
+                                         str(under), str(over), str(mask), str(sw), str(sh),
+                                         *PHONE_LABEL).stdout.split())
+    # Where the phone sits in the framed window: the prepared video is
+    # fitted into the content area (scale s, centred), which sits at
+    # CONTENT_X, CONTENT_Y.
+    rect = next(e["value"] for e in events if e["kind"] == "phone-rect").split(",")
+    rx, ry, rw, rh, base_w, base_h = (float(v) for v in rect)
+    scale = min(style.CONTENT_W / base_w, style.CONTENT_H / base_h)
+    ox = style.CONTENT_X + (style.CONTENT_W - base_w * scale) / 2
+    oy = style.CONTENT_Y + (style.CONTENT_H - base_h * scale) / 2
+    w0 = rw * scale
+    h0 = w0 * ph / pw
+    x0 = ox + rx * scale
+    y0 = oy + (ry + rh / 2) * scale - h0 / 2
+    n = len(spans)
+    # The screen with its rounded corners and 1px border, at close-up size.
+    # It is scaled per frame on the way in and out; overlay takes frames of
+    # changing size into a fixed transparent canvas (pad does not).
+    parts = [f"[1:v]fps={FPS},scale={pw}:{ph}:flags=lanczos,format=rgba[pv];"
+             f"{still_src(mask, 'gray')}[pm];[pv][pm]alphamerge[pa];"
+             f"{still_src(over)},crop={pw}:{ph}:{px}:{py}[po];[pa][po]overlay=0:0:shortest=1,"
+             f"split={n}" + "".join(f"[pp{i}]" for i in range(n)),
+             f"{still_src(under)},split={n}" + "".join(f"[pb{i}]" for i in range(n))]
+    prev = last
+    for i, (a, b, ease_in, ease_out) in enumerate(spans):
+        k = f"({smooth(a, a + PHONE_EASE) if ease_in else 1}-{smooth(b - PHONE_EASE, b) if ease_out else 0})"
+        def lerp(v0, v1):
+            return f"({v0:.1f}+({v1 - v0:.1f})*{k})"
+        out = label if i + 1 == n else f"pc{i}"
+        on = f"between(t,{a:.3f},{b:.3f})"
+        parts.append(
+            f"[pb{i}]format=rgba"
+            + (f",fade=t=in:st={a:.3f}:d={PHONE_EASE}:alpha=1" if ease_in else "")
+            + (f",fade=t=out:st={b - PHONE_EASE:.3f}:d={PHONE_EASE}:alpha=1" if ease_out else "")
+            + f"[pf{i}];"
+            f"[{prev}][pf{i}]overlay=0:0:shortest=1:enable='{on}'[pg{i}];"
+            f"[pp{i}]scale=w='2*trunc({lerp(w0, pw)}/2)':h='2*trunc({lerp(h0, ph)}/2)':eval=frame:flags=bicubic[ps{i}];"
+            f"color=black@0:s={pw}x{ph}:r={FPS},format=rgba[pk{i}];"
+            f"[pk{i}][ps{i}]overlay=0:0:shortest=1:format=rgb,format=rgba[pq{i}];"
+            f"[pg{i}][pq{i}]overlay=x='{lerp(x0, px)}':y='{lerp(y0, py)}':shortest=1:enable='{on}'[{out}]")
+        prev = out
+    return ";".join(parts)
+
+
+def render(mode, timeline, base, out, workdir, offset=0.0):
+    work = Path(workdir)
+    duration = duration_of(base)
+    if mode == "terminal":
+        events = terminal_events(timeline) if Path(timeline).is_file() else []
+    else:
+        events = json.loads(Path(timeline).read_text()) if Path(timeline).is_file() else []
+    for e in events:
+        e["at"] = float(e["at"]) - offset
+    under, over, mask = (work / "frame-under.png", work / "frame-over.png", work / "frame-mask.png")
+    if not under.is_file():
+        run(sys.executable, str(Path(__file__).with_name("style.py")), "frame", str(under), str(over), str(mask))
+    content = [f"[0:v]fps={FPS}"]
+    phones = phone_intervals(events, duration) if mode == "web" else []
+    phone_src = next((e["value"] for e in events if e["kind"] == "phone-video"), None)
+    if not (phone_src and Path(phone_src).is_file()):
+        phones = []
+    # A zoom inside a phone close-up would only move the hidden window.
+    zooms = [e for e in events if e["kind"] == "zoom"
+             and not any(a - 1 <= e["at"] <= b for a, b, _ in phones)]
     if zooms:
         ax, ay, factor = (float(v) for v in str(zooms[0]["value"]).split(","))
         at = min(zooms[0]["at"] + 0.8, max(duration - 2 * EASE - HOLD, 0))
-        chain.append(zoom_filter(at, ax, ay, factor))
-    # The band is added after the zoom, so the zoom never touches it.
-    chain.append(f"pad={W}:{H}:0:0:color={BAND_COLOR}")
+        content.append(zoom_filter(at, ax, ay, factor))
+    content.append(f"format=rgba[c];{still_src(mask, 'gray')}[m];[c][m]alphamerge[cm]")
+    # Still images come from movie sources inside the graph: they are made
+    # on demand, so they never queue up ahead of the recording.
+    graph = [",".join(content),
+             f"{still_src(under)}[u];[u][cm]overlay={style.CONTENT_X}:{style.CONTENT_Y}:shortest=1[b0];"
+             f"{still_src(over)}[o];[b0][o]overlay=0:0:shortest=1[b1]"]
+    inputs = ["-i", base]
+    last = "b1"
+    spans = closeup_spans(phones, duration)
+    for a, _, _, _ in spans:
+        # tests/demo/browser.ts phoneOn() captions every close-up as it starts.
+        if not any(e["kind"] == "caption" and a - 0.3 <= e["at"] <= a + 1.0 for e in events):
+            print(f"phone: the close-up at {a:.1f}s has no caption of its own", file=sys.stderr)
+    if spans:
+        graph.append(phone_closeup(events, spans, phone_src, work, duration, last, "b2"))
+        inputs += ["-ss", f"{offset:.3f}", "-i", phone_src]
+        last = "b2"
+        sw, sh = video_size(phone_src)
     marks = [e for e in events if e["kind"] in ("caption", "caption-clear")]
-    stem = Path(source).stem
-    for index, event in enumerate(marks):
-        if event["kind"] != "caption":
+    speedups = [e for e in events if e["kind"] == "speedup"]
+    stem = Path(timeline).stem
+    n = 4
+    for i, e in enumerate(marks):
+        if e["kind"] != "caption":
             continue
-        start = max(event["at"] + 0.3, 0.0)
-        end = marks[index + 1]["at"] if index + 1 < len(marks) else duration
+        start = max(e["at"] + 0.3, 0.0)
+        end = marks[i + 1]["at"] if i + 1 < len(marks) else duration
         end = min(end - 0.2, duration - 0.2)
         if end - start < 1.0:
             continue
-        text_file = work / f"{stem}-caption-{index}.txt"
-        text_file.write_text(event["value"])
-        chain.append(caption_filter(text_file, start, end, font))
-    print(f"{holds},{','.join(chain)}" if holds else ",".join(chain))
+        text, tag = split_caption(e["value"])
+        sped = [s for s in speedups if start - 0.5 <= s["at"] <= end]
+        if sped and not tag:
+            tag = sped[0]["value"]
+        # Inside a phone close-up the caption moves to a larger panel
+        # beside the phone.
+        for where, s, e, fin, fout in caption_pieces(start, end, spans):
+            png = work / f"{stem}-{where}-{i}.png"
+            extra = [str(sw), str(sh)] if where == "panel" else []
+            x, y = run(sys.executable, str(Path(__file__).with_name("style.py")), where, str(png), text, tag,
+                       *extra).stdout.split()
+            fin, fout = min(fin, (e - s) / 2), min(fout, (e - s) / 2)
+            fades = (f",fade=t=in:st={s:.3f}:d={fin:.3f}:alpha=1" if fin > 0 else "") + \
+                    (f",fade=t=out:st={e - fout:.3f}:d={fout:.3f}:alpha=1" if fout > 0 else "")
+            graph.append(
+                f"{still_src(png)}{fades}[l{n}];"
+                f"[{last}][l{n}]overlay={x}:{y}:shortest=1:enable='between(t,{s:.3f},{e:.3f})'[b{n}]")
+            last, n = f"b{n}", n + 1
+    run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]",
+        "-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(FPS), out)
+
+
+# ------------------------------------------------------------------- join
+
+def frames_of(video):
+    out = run("ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+              "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", video).stdout
+    return int(out.strip())
+
+
+def is_card(path):
+    """Title cards are made by assemble.sh as v1.mp4, c02.mp4, c2a.mp4..."""
+    return re.fullmatch(r"v\d+|c\d+[a-z]?", Path(path).stem) is not None
+
+
+def join(out, parts):
+    """Joins PARTS with CROSSFADE-second crossfades and prints the start time
+    of each part in the joined video. Each crossfade is made on its own from
+    the end of one part and the start of the next, then the pieces are
+    concatenated, so no part waits in memory for the one before it."""
+    fade = round(CROSSFADE * FPS)
+    tmp = Path(out + ".parts")
+    tmp.mkdir(exist_ok=True)
+    enc = ["-an", "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p", "-r", str(FPS)]
+    counts = [frames_of(p) for p in parts]
+    pieces, starts, at = [], [], 0
+    for i, (part, n) in enumerate(zip(parts, counts)):
+        first = fade if i > 0 else 0
+        last = n - fade if i + 1 < len(parts) else n
+        starts.append((at - (fade if i > 0 else 0)) / FPS)
+        body = tmp / f"{i:03d}-body.mp4"
+        run("ffmpeg", "-v", "error", "-y", "-i", part, "-vf",
+            f"fps={FPS},trim=start_frame={first}:end_frame={last},setpts=PTS-STARTPTS", *enc, str(body))
+        pieces.append(body)
+        at += last - first
+        if i + 1 < len(parts):
+            mix = tmp / f"{i:03d}-fade.mp4"
+            head = (f"[0:v]fps={FPS},trim=start_frame={n - fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[a];"
+                    f"[1:v]fps={FPS},trim=end_frame={fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[b];")
+            if is_card(part) and is_card(parts[i + 1]):
+                # Two cards: crossfaded text overlaps, so the first card's
+                # text fades out to the plain background before the next
+                # one's fades in.
+                bg = tmp / "background.png"
+                if not bg.is_file():
+                    run(sys.executable, str(Path(__file__).with_name("style.py")), "background", str(bg))
+                half = (fade + 1) // 2
+                graph = (head + f"{still_src(bg, 'yuv420p')},trim=end_frame={fade}[bg];"
+                         f"[a]format=yuva420p,fade=t=out:s=0:n={half}:alpha=1[a2];"
+                         f"[b]format=yuva420p,fade=t=in:s={fade - half}:n={half}:alpha=1[b2];"
+                         f"[bg][a2]overlay=0:0[ab];[ab][b2]overlay=0:0,format=yuv420p")
+            else:
+                graph = head + f"[a][b]xfade=transition=fade:duration={CROSSFADE}:offset=0"
+            run("ffmpeg", "-v", "error", "-y", "-i", part, "-i", parts[i + 1], "-filter_complex", graph, *enc, str(mix))
+            pieces.append(mix)
+            at += fade
+    listing = tmp / "list.txt"
+    listing.write_text("".join(f"file '{p.resolve()}'\n" for p in pieces))
+    run("ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", out)
+    for p in tmp.iterdir():
+        p.unlink()
+    tmp.rmdir()
+    for t in starts:
+        print(f"{t:.3f}")
+
+def main():
+    cmd = sys.argv[1]
+    if cmd == "prepare":
+        prepare(*sys.argv[2:6], *(sys.argv[6:8] if len(sys.argv) > 7 else []))
+    elif cmd == "render":
+        mode, timeline, base, out, workdir = sys.argv[2:7]
+        render(mode, timeline, base, out, workdir, float(sys.argv[7]) if len(sys.argv) > 7 else 0.0)
+    elif cmd == "join":
+        join(sys.argv[2], sys.argv[3:])
+    else:
+        sys.exit(__doc__)
 
 
 if __name__ == "__main__":

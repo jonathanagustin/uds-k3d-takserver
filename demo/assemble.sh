@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Join title cards, the terminal chapters, and the web walkthroughs into two
-# videos: demo/out/demo.mp4 (deploy) and demo/out/demo-operate.mp4 (operate
+# 1920x1080, 30 fps videos, with 0.3 s crossfades between parts: demo/out/demo.mp4 (deploy) and demo/out/demo-operate.mp4 (operate
 # and trust). H.264, yuv420p, faststart, no audio, each under MAX_BYTES.
 # Each gets a NAME-chapters.txt with the start time of every part.
 # Also writes demo/out/poster.png and demo/out/preview.gif, one short clip
@@ -19,101 +19,93 @@ rm -rf "${work}"
 mkdir -p "${work}"
 
 max_bytes="${MAX_BYTES:-9500000}"
-fps=24
-# Recorded content fills 1280x630. demo/filters.py adds the 90 px caption
-# band below it, so every segment ends up 1280x720.
-size=1280:630
-band=0x11111b
-# Card text keeps at least 8% of the width clear on each side.
-text_max_w=1075
-bg=0x1e1e2e
-fg=0xcdd6f4
-accent=0xcba6f7
-title_font="$(fc-match -f '%{file}' 'DejaVu Sans:bold')"
-mono_font="$(fc-match -f '%{file}' 'JetBrains Mono')"
+# The look (canvas, palette, fonts, frame, cards, lower-thirds) is in
+# demo/style.py; demo/filters.py styles each segment with it.
+fps=30
+# Each recording is fitted into the window frame's content area.
+size=1632:840
+bg=0x0F172A
 # demo/record-browser.sh already trims the capture to the walkthrough's start.
 web_trim="${WEB_TRIM:-0}"
+# No fallback fonts: stop here if Inter or JetBrains Mono is missing.
+python3 demo/style.py fonts
 
 # card NAME TITLE SUBTITLE [last]
-# A card stays up long enough to read: one second plus three words per
-# second of title and subtitle, at least 3 s, and at least 4 s for the last
-# card. That time includes the fades. Font sizes shrink from 52 and 26 until
-# the text fits text_max_w. The last card does not fade out, so the video
-# ends on the full card.
-card_fade=0.4
+# A title card holds for 3.5 s between its crossfades (demo/filters.py join
+# fades 0.3 s into and out of each part; between two cards it fades the first
+# card's text out before the next one's comes in). The last card holds a
+# little longer.
 card() {
-  local name="$1" last="${4:-}" words secs min=3 title_size sub_size fades
+  local name="$1" last="${4:-}" secs=4.1
   printf '%s' "$2" > "${work}/${name}.title"
-  printf '%s' "$3" > "${work}/${name}.sub"
   if [[ "${last}" = "last" ]]; then
-    min=4
+    secs=4.5
   fi
-  words="$(cat "${work}/${name}.title" "${work}/${name}.sub" | wc -w)"
-  secs="$(awk -v w="${words}" -v m="${min}" 'BEGIN { s = 1 + w / 3; if (s < m) s = m; printf "%.1f", s }')"
-  title_size="$(python3 demo/filters.py fit "${title_font}" "${work}/${name}.title" 52 "${text_max_w}")"
-  sub_size="$(python3 demo/filters.py fit "${mono_font}" "${work}/${name}.sub" 26 "${text_max_w}")"
-  fades="fade=t=in:st=0:d=${card_fade}"
-  if [[ "${last}" != "last" ]]; then
-    fades="${fades},fade=t=out:st=$(awk "BEGIN{print ${secs}-${card_fade}}"):d=${card_fade}"
-  fi
-  echo "card ${name}: ${words} words, ${secs}s, title ${title_size}px, subtitle ${sub_size}px"
-  ffmpeg -v error -y -f lavfi -i "color=c=${bg}:s=1280x720:r=${fps}:d=${secs}" \
-    -vf "drawtext=fontfile=${title_font}:textfile=${work}/${name}.title:fontcolor=${fg}:fontsize=${title_size}:x=(w-text_w)/2:y=(h-text_h)/2-30,drawtext=fontfile=${mono_font}:textfile=${work}/${name}.sub:fontcolor=${accent}:fontsize=${sub_size}:x=(w-text_w)/2:y=(h/2)+40,${fades}" \
+  python3 demo/style.py card "${work}/${name}.png" "$2" "$3"
+  echo "card ${name}: ${secs}s"
+  ffmpeg -v error -y -loop 1 -framerate "${fps}" -i "${work}/${name}.png" -t "${secs}" \
     -c:v libx264 -crf 16 -pix_fmt yuv420p "${work}/${name}.mp4"
 }
 
 # clip NAME SOURCE MODE TIMELINE [TRIM_START]
-# MODE is terminal (TIMELINE is the tape) or web (TIMELINE is events.json).
+# MODE is terminal (TIMELINE is the tape), web (a browser recording and its
+# events.json) or cast (a rendered asciicast and its events.json).
 clip() {
-  local name="$1" src="$2" mode="$3" timeline="$4" start="${5:-0}"
-  ffmpeg -v error -y -ss "${start}" -i "${src}" -an \
-    -vf "scale=${size}:force_original_aspect_ratio=decrease,pad=${size}:(ow-iw)/2:(oh-ih)/2:color=${bg},fps=${fps},format=yuv420p" \
-    -c:v libx264 -crf 16 "${work}/${name}-base.mp4"
-  local secs effects
-  secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${name}-base.mp4")"
-  effects="pad=1280:720:0:0:color=${band}"
-  if [[ -f "${timeline}" ]]; then
-    effects="$(python3 demo/filters.py "${mode}" "${timeline}" "${secs}" "${work}" "${title_font}" "${start}" "${work}/${name}-base.mp4")"
-  fi
-  ffmpeg -v error -y -i "${work}/${name}-base.mp4" -an \
-    -vf "${effects},format=yuv420p" -c:v libx264 -crf 16 "${work}/${name}.mp4"
-  # A web clip whose first event is a caption gets that caption, without the
-  # "(real time ...)" note, as its chapter title. Other clips follow a card
-  # and get no chapter of their own. Caption chapters are indented under
-  # the card chapter they belong to.
+  local name="$1" src="$2" mode="$3" timeline="$4" start="${5:-0}" device
   if [[ "${mode}" = web && -f "${timeline}" ]]; then
+    # The phone's own screen recording, when the run made one.
+    device="demo/out/atak/$(basename "${src%.mp4}")-device.mp4"
+    python3 demo/filters.py prepare "${src}" "${timeline}" "${work}/${name}-prep.mp4" "${work}/${name}-prep.json" \
+      ${device:+"${device}"} ${device:+"${device%.mp4}.start"}
+    src="${work}/${name}-prep.mp4"
+    timeline="${work}/${name}-prep.json"
+  fi
+  ffmpeg -v error -y -ss "${start}" -i "${src}" -an \
+    -vf "scale=${size}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${size}:(ow-iw)/2:(oh-ih)/2:color=${bg},fps=${fps},format=yuv420p" \
+    -c:v libx264 -crf 14 "${work}/${name}-base.mp4"
+  python3 demo/filters.py render "${mode}" "${timeline}" "${work}/${name}-base.mp4" "${work}/${name}.mp4" "${work}" "${start}"
+  # A web or cast clip whose first event is a caption gets that caption,
+  # without the "(real time ...)" note, as its chapter title. Other clips
+  # follow a card and get no chapter of their own. Caption chapters are
+  # indented under the card chapter they belong to.
+  if [[ "${mode}" != terminal && -f "${timeline}" ]]; then
     python3 -c '
 import json, re, sys
 events = json.load(open(sys.argv[1]))
-if events and events[0]["kind"] == "caption" and events[0]["at"] <= 0.5:
-    print("  " + re.sub(r"\s*\(real time[^)]*\)$", "", events[0]["value"]), end="")
+captions = [e for e in events if e["kind"] == "caption"]
+if captions and captions[0]["at"] <= 0.5:
+    print("  " + re.sub(r"\s*\(real time[^)]*\)$", "", captions[0]["value"]), end="")
 ' "${timeline}" > "${work}/${name}.title"
     [[ -s "${work}/${name}.title" ]] || rm -f "${work}/${name}.title"
   fi
 }
 
-# build NAME PART... joins the parts into ${out}/NAME.mp4 under max_bytes and
-# writes ${out}/NAME-chapters.txt (start time and title of each card and
-# captioned web clip).
+# build NAME PART... joins the parts with crossfades into ${out}/NAME.mp4
+# under max_bytes and writes ${out}/NAME-chapters.txt (start time and title
+# of each card and captioned clip).
 build() {
-  local name="$1" list="${work}/$1-list.txt" chapters="${out}/$1-chapters.txt" at=0 part secs crf bytes
+  local name="$1" chapters="${out}/$1-chapters.txt" crf bytes i=0 at
   shift
-  : > "${list}"
+  local files=()
+  for part in "$@"; do
+    files+=("${work}/${part}.mp4")
+  done
+  mapfile -t starts < <(python3 demo/filters.py join "${work}/${name}-joined.mp4" "${files[@]}")
   : > "${chapters}"
   for part in "$@"; do
-    echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
+    at="${starts[${i}]}"
     if [[ -s "${work}/${part}.title" ]]; then
       printf '%s %s\n' "$(awk -v t="${at}" 'BEGIN { printf "%d:%04.1f", t / 60, t % 60 }')" \
         "$(cat "${work}/${part}.title")" >> "${chapters}"
     fi
-    secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/${part}.mp4")"
-    at="$(awk -v a="${at}" -v s="${secs}" 'BEGIN { print a + s }')"
+    i=$((i + 1))
   done
-  ffmpeg -v error -y -f concat -safe 0 -i "${list}" -c copy "${work}/${name}-joined.mp4"
-  for crf in 26 28 30 32 34 36; do
+  # Screen recordings are mostly still: veryslow with -tune animation and
+  # keyframes every 10 s keep 1080p sharp within max_bytes.
+  for crf in 24 26 28 30 32 34; do
     ffmpeg -v error -y -i "${work}/${name}-joined.mp4" -an \
-      -c:v libx264 -preset slow -crf "${crf}" -profile:v high -pix_fmt yuv420p \
-      -g $((fps * 4)) -movflags +faststart "${out}/${name}.mp4"
+      -c:v libx264 -preset veryslow -tune animation -crf "${crf}" -profile:v high -pix_fmt yuv420p \
+      -g $((fps * 10)) -movflags +faststart "${out}/${name}.mp4"
     bytes="$(stat -c%s "${out}/${name}.mp4")"
     echo "${name} crf ${crf}: ${bytes} bytes"
     if [[ "${bytes}" -le "${max_bytes}" ]]; then
@@ -130,7 +122,7 @@ deploy_video=(v1)
 card v1 "TAK Server on UDS: Deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
 if [[ -f "${out}/00-deploy-4.mp4" ]]; then
   for n in 1 2 3 4; do
-    clip "d0${n}" "${out}/00-deploy-${n}.mp4" web "${out}/00-deploy-${n}-events.json" 0
+    clip "d0${n}" "${out}/00-deploy-${n}.mp4" cast "${out}/00-deploy-${n}-events.json" 0
     deploy_video+=("d0${n}")
   done
 fi
@@ -174,7 +166,7 @@ if [[ -f "${out}/11-upgrade-5.mp4" ]]; then
   card c96 "Upgrades from the Last Signed Release" "install the verified release, upgrade in place, keep certificates and data"
   operate_video+=(c96)
   for n in 1 2 3 4 5; do
-    clip "u0${n}" "${out}/11-upgrade-${n}.mp4" web "${out}/11-upgrade-${n}-events.json" 0
+    clip "u0${n}" "${out}/11-upgrade-${n}.mp4" cast "${out}/11-upgrade-${n}-events.json" 0
     operate_video+=("u0${n}")
   done
 fi
@@ -183,12 +175,12 @@ if [[ -f "${out}/10-operate-4.mp4" ]]; then
   operate_video+=(c10)
   for n in 1 2 3 4 5; do
     if [[ -f "${out}/10-operate-${n}.mp4" ]]; then
-      clip "e0${n}" "${out}/10-operate-${n}.mp4" web "${out}/10-operate-${n}-events.json" 0
+      clip "e0${n}" "${out}/10-operate-${n}.mp4" cast "${out}/10-operate-${n}-events.json" 0
       operate_video+=("e0${n}")
     fi
   done
 fi
-card c98 "What This Does Not Prove" "phone is an Android VM; fixed TEST LOCATION; one-node k3d; no radio or degraded links"
+card c98 "What This Does Not Prove" "Android VM phone · fixed TEST LOCATION · one-node k3d · no radio or degraded links"
 card c97 "github.com/jonathanagustin/uds-k3d-takserver" "open issues track the known gaps" last
 operate_video+=(c98 c97)
 
@@ -201,25 +193,24 @@ build demo-operate "${operate_video[@]}"
 # so is a chapter with only its card.
 mkdir -p "${out}/clips"
 chapter() {
-  local slug="$1" list="${work}/clip-$1-list.txt" part card_secs n=0
+  local slug="$1" part card_secs files=()
   shift
-  : > "${list}"
   for part in "$@"; do
     if [[ -f "${work}/${part}.mp4" ]]; then
-      echo "file '$(pwd)/${work}/${part}.mp4'" >> "${list}"
-      n=$((n + 1))
+      files+=("${work}/${part}.mp4")
     fi
   done
-  if [[ "${n}" -lt 2 ]]; then
+  if [[ "${#files[@]}" -lt 2 ]]; then
     echo "clip ${slug}: not recorded, skipped"
     return 0
   fi
-  ffmpeg -v error -y -f concat -safe 0 -i "${list}" -an \
+  python3 demo/filters.py join "${work}/clip-${slug}-joined.mp4" "${files[@]}" > /dev/null
+  ffmpeg -v error -y -i "${work}/clip-${slug}-joined.mp4" -an \
     -c:v libx264 -preset slow -crf 28 -profile:v high -pix_fmt yuv420p \
     -g $((fps * 4)) -movflags +faststart "${out}/clips/demo-clip-${slug}.mp4"
   card_secs="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${work}/$1.mp4")"
   ffmpeg -v error -y -ss "$(awk -v c="${card_secs}" 'BEGIN { print c + 2 }')" -i "${out}/clips/demo-clip-${slug}.mp4" \
-    -frames:v 1 -q:v 4 "${out}/clips/demo-clip-${slug}.jpg"
+    -frames:v 1 -q:v 3 "${out}/clips/demo-clip-${slug}.jpg"
   echo "clip ${slug}: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "${out}/clips/demo-clip-${slug}.mp4")s"
 }
 chapter deploy v1 d01 d02 d03 d04
@@ -234,15 +225,17 @@ chapter secure c03 t03
 chapter upgrade c96 u01 u02 u03 u04 u05
 chapter self-healing c10 e01 e02 e03 e04 e05
 
-# The stills, as WebP for the docs (lossless: they are mostly text).
+# The stills, in the window frame on the canvas background, as WebP for the
+# docs (lossless: they are mostly text).
 for shot in "${out}"/shots/*.png; do
   [[ -f "${shot}" ]] || continue
-  ffmpeg -v error -y -i "${shot}" -c:v libwebp -lossless 1 -compression_level 6 "${shot%.png}.webp"
+  python3 demo/style.py still "${shot}" "${work}/still.png"
+  ffmpeg -v error -y -i "${work}/still.png" -c:v libwebp -lossless 1 -compression_level 6 "${shot%.png}.webp"
   echo "still $(basename "${shot%.png}"): $(stat -c%s "${shot%.png}.webp") bytes"
 done
 # The two videos' posters, as the docs site shows them.
-ffmpeg -v error -y -ss 1.5 -i "${out}/demo.mp4" -frames:v 1 -q:v 4 "${out}/demo-deploy.jpg"
-ffmpeg -v error -y -ss 1.5 -i "${out}/demo-operate.mp4" -frames:v 1 -q:v 4 "${out}/demo-operate-and-trust.jpg"
+ffmpeg -v error -y -ss 1.5 -i "${out}/demo.mp4" -frames:v 1 -q:v 3 "${out}/demo-deploy.jpg"
+ffmpeg -v error -y -ss 1.5 -i "${out}/demo-operate.mp4" -frames:v 1 -q:v 3 "${out}/demo-operate-and-trust.jpg"
 
 # Poster: the TAK landing page after sign-in, with its caption fully shown
 # and before the zoom starts. Preview: six seconds of the Package CR chapter.

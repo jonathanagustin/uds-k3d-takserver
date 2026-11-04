@@ -33,14 +33,6 @@ if ! kctl get svc takserver-messaging-quic -n takserver >/dev/null 2>&1; then
   exit 0
 fi
 
-# TAK 5.7-RELEASE-14 bundles the QUIC native library for linux-x86_64 only
-# (src/takserver-core/build.gradle), so the QUIC input cannot start on arm64.
-arch="$(kctl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')"
-if [[ "${arch}" != "amd64" ]]; then
-  echo "SKIP QUIC on ${arch}: TAK ships the QUIC native library for linux-x86_64 only."
-  exit 0
-fi
-
 # UDP counters on both ends of the gateway hop. Udp InDatagrams in the TAK
 # pod's network namespace counts packets that reached it, and OutDatagrams
 # counts its replies. The Envoy udp stats count what the proxy received and

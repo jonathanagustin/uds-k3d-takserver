@@ -24,6 +24,8 @@ import {
   expect,
   expectSecure,
   mark,
+  phoneOff,
+  phoneOn,
   showCursor,
   start,
   test,
@@ -123,11 +125,13 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   await clickLikeAPerson(page, page.getByRole("button", { name: "Sign In" }));
   await expect(page).toHaveURL(/phone\.html/, { timeout: 60_000 });
   await expect(page.locator(".screen iframe")).toBeVisible({ timeout: 30_000 });
+  await phoneOn(page);
   await page.waitForTimeout(8_000);
   await expectSecure(page);
   caption("The ATAK test device, connected to TAK over mutual TLS on 8089");
   await page.waitForTimeout(3_000);
 
+  phoneOff();
   const map = await page.context().newPage();
   map.setDefaultTimeout(30_000);
   await watchSecurity(map);
@@ -186,6 +190,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   if (marker) {
     const zoomed = await zooming;
     await page.bringToFront();
+    await phoneOn(page);
     await showCursor(page);
     await page.waitForTimeout(2_500);
     caption(
@@ -199,6 +204,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     const shot = adb ? atakAdbLater("shot", "demo-test-marker") : Promise.resolve(false);
     await page.waitForTimeout(3_500);
     await shot;
+    phoneOff();
     await map.bringToFront();
     await showCursor(map);
   }
@@ -238,6 +244,7 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   if (chat) {
     await page.bringToFront();
+    await phoneOn(page);
     await showCursor(page);
     await page.waitForTimeout(2_000);
     caption("On the phone: the chat arrives over the device's stream (unread badge, top bar)");
@@ -245,7 +252,9 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
     await page.waitForTimeout(5_000);
     if (adb) await atakAdbLater("shot", "demo-chat");
   }
-  if (adb) atakAdb("stop");
+  // The workflow stops the device recording through the same pod, then
+  // deletes it; a run without one deletes it here.
+  if (adb && !process.env.DEMO_DEVICE_RECORDING) atakAdb("stop");
 
   // Nothing to show if neither scene worked: fail so the take is left out.
   expect(marker || chat, "no sync scene worked").toBe(true);

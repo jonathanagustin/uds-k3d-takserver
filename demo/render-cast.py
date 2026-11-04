@@ -22,14 +22,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;5;245m$\x1b[0m "
+PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
 IDLE = 2.0
 # Short outputs read better large: CAST_FONT_SIZE, CAST_COLS and CAST_ROWS
 # override the font size and the terminal size agg renders.
-FONT_SIZE = int(os.environ.get("CAST_FONT_SIZE", "16"))
+FONT_SIZE = int(os.environ.get("CAST_FONT_SIZE", "22"))
 COLS = os.environ.get("CAST_COLS")
 ROWS = os.environ.get("CAST_ROWS")
 HOLD = os.environ.get("CAST_HOLD", "2.5")
+# The demo palette (demo/style.py) as an agg theme: background, foreground,
+# then the 16 ANSI colours.
+THEME = ",".join(c.lstrip("#") for c in (
+    "#0F172A", "#CBD5E1",
+    "#020617", "#F8FAFC", "#34D399", "#F8FAFC", "#818CF8", "#818CF8", "#818CF8", "#CBD5E1",
+    "#CBD5E1", "#F8FAFC", "#34D399", "#F8FAFC", "#818CF8", "#818CF8", "#818CF8", "#F8FAFC"))
 
 def human(seconds):
     seconds = int(round(seconds))
@@ -72,11 +78,11 @@ def main():
         subprocess.run([agg, "--font-size", str(FONT_SIZE), "--idle-time-limit", str(IDLE),
                         "--speed", f"{speed:.3f}", "--last-frame-duration", HOLD, "--no-loop",
                         *(["--cols", COLS] if COLS else []), *(["--rows", ROWS] if ROWS else []),
-                        "--theme", "monokai", str(seg), str(gif)], check=True,
+                        "--theme", THEME, "--font-family", "JetBrains Mono", str(seg), str(gif)], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         mp4 = Path(f"{prefix}-{n}.mp4")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(gif), "-an",
-                        "-vf", "fps=24,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+                        "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
                         "-c:v", "libx264", "-crf", "16", str(mp4)], check=True)
         sped = "" if speed <= 1.05 else f", shown about {math.floor(real / target)}x faster"
         caption = f"{label} (real time {human(real)}{sped})"

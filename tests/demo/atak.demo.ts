@@ -16,6 +16,8 @@ import {
   expect,
   expectSecure,
   mark,
+  phoneOff,
+  phoneOn,
   showCursor,
   start,
   still,
@@ -58,6 +60,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
 
   await expect(page).toHaveURL(/phone\.html/, { timeout: 60_000 });
   await expect(page.locator(".screen iframe")).toBeVisible({ timeout: 30_000 });
+  await phoneOn(page);
   await showCursor(page);
   // ws-scrcpy needs a few seconds for the first frame.
   await page.waitForTimeout(8_000);
@@ -70,6 +73,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
 
   // The same TAK Server from the browser map, in a second tab. Keycloak
   // already has a session, so there is no second sign-in.
+  phoneOff();
   const map = await page.context().newPage();
   await watchSecurity(map);
   await map.goto(mapUrl);
@@ -105,6 +109,8 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
   await map.waitForTimeout(6_000);
 
   await page.bringToFront();
+
+  await phoneOn(page);
   await showCursor(page);
   caption("Back on the phone: ATAK connected, self marker at the test location");
   await page.waitForTimeout(4_000);

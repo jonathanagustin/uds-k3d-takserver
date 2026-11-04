@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Record a Playwright walkthrough in a real, headed Google Chrome window:
-# its tab strip, address bar, and padlock are in the video. Chrome runs on
-# an Xvfb display the size of the content area and ffmpeg captures that
-# display with x11grab.
+# its address bar and padlock are in the video. Chrome runs on an Xvfb
+# display at 1.25x scale and ffmpeg captures that display with x11grab.
+# demo/filters.py later crops the tab strip, so the page and address bar
+# fill the 1632x840 content area of the window frame.
 #
 # usage: demo/record-browser.sh NAME SPEC
 #   NAME  writes demo/out/NAME.mp4 and demo/out/NAME-events.json
@@ -28,9 +29,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 name="$1"
 spec="$2"
-width=1280
-height=630
-fps=24
+# 840 px of address bar and page, plus Chrome's tab strip (51 px at 1.25x).
+width=1632
+height=891
+scale="${DEMO_SCALE:-1.25}"
+fps=30
 display=":${DEMO_DISPLAY:-99}"
 out="$(pwd)/demo/out"
 work="${out}/browser-${name}"
@@ -109,6 +112,7 @@ status=0
   "${pnpm[@]}" install --frozen-lockfile --silent
   DISPLAY="${display}" \
     DEMO_WINDOW="${width},${height}" \
+    DEMO_SCALE="${scale}" \
     DEMO_BROWSER_HOME="${work}/home" \
     DEMO_BROWSER_PROFILE="${work}/profile" \
     DEMO_EVENTS="${work}/events.json" \
@@ -137,14 +141,23 @@ PY
 lead="$(ffmpeg -v error -ss "${offset}" -t 15 -i "${work}/screen.mkv" -vf "signalstats,metadata=print:file=-" -f null - \
   | awk '/pts_time/ { t = $3; sub("pts_time:", "", t) } /YMIN=/ { split($0, a, "="); low = a[2] } /YMAX=/ { split($0, a, "="); if (a[2] - low > 16) { print t; exit } }')"
 lead="${lead:-0}"
-echo "Trimming ${offset}s from the start of the capture, then ${lead}s before Chrome's first frame."
-ffmpeg -v error -y -ss "$(awk "BEGIN { print ${offset} + ${lead} }")" -i "${work}/screen.mkv" -an -c:v libx264 -crf 14 -pix_fmt yuv420p "${out}/${name}.mp4"
+# Chrome closes before ffmpeg stops, so the capture ends on black frames.
+# Cut the video after the last frame that is not a single colour.
+begin="$(awk "BEGIN { print ${offset} + ${lead} }")"
+end="$(ffmpeg -v error -ss "${begin}" -i "${work}/screen.mkv" -vf "signalstats,metadata=print:file=-" -f null - \
+  | awk '/pts_time/ { t = $3; sub("pts_time:", "", t) } /YMIN=/ { split($0, a, "="); low = a[2] } /YMAX=/ { split($0, a, "="); if (a[2] - low > 16) last = t } END { print last }')"
+echo "Trimming ${offset}s from the start of the capture, then ${lead}s before Chrome's first frame; the video ends at ${end}s."
+ffmpeg -v error -y -ss "${begin}" -i "${work}/screen.mkv" ${end:+-t "$(awk "BEGIN { print ${end} + 1 / ${fps} }")"} \
+  -an -c:v libx264 -crf 14 -pix_fmt yuv420p "${out}/${name}.mp4"
 python3 - "${work}/events.json" "${lead}" "${out}/${name}-events.json" << 'PY'
 import json, sys
 events = json.load(open(sys.argv[1]))
 lead = float(sys.argv[2])
 for event in events:
     event["at"] = round(max(float(event["at"]) - lead, 0), 3)
+    # A hold's value is the time it starts.
+    if event["kind"] == "hold":
+        event["value"] = str(round(max(float(event["value"]) - lead, 0), 3))
 json.dump(events, open(sys.argv[3], "w"), indent=2)
 PY
 exit "${status}"

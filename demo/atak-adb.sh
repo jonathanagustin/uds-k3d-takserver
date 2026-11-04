@@ -6,9 +6,17 @@
 # pod with the atak-driver image and label (atak/deploy/device.yaml lets only
 # that label reach the device's adb port). atak/ci/e2e.sh must have run.
 #
-#   demo/atak-adb.sh start       create the pod and connect adb
+#   demo/atak-adb.sh start       create the pod and connect adb (keeps a
+#                                pod that is already connected)
+#   demo/atak-adb.sh prep        shorter Android animations, ATAK in front
 #   demo/atak-adb.sh zoom N      tap ATAK's + zoom button N times
 #   demo/atak-adb.sh shot NAME   save the device screen to demo/out/atak/NAME.png
+#   demo/atak-adb.sh record-start NAME
+#                                record the device screen on the device
+#                                (screenrecord, native size, up to 3 min)
+#   demo/atak-adb.sh record-stop NAME
+#                                stop it and save demo/out/atak/NAME-device.mp4
+#                                and NAME-device.start (wall-clock start)
 #   demo/atak-adb.sh stop        delete the pod
 #
 # ATAK keeps the view locked on its self marker (atak/driver/drive.sh), so
@@ -24,6 +32,11 @@ a() { k exec -n atak "${pod}" -- adb -s "${device}" "$@"; }
 
 case "${1:?usage: demo/atak-adb.sh start|zoom N|shot NAME|stop}" in
   start)
+    # A recording may be running through this pod: keep it when connected.
+    if a get-state 2>/dev/null | grep -q device; then
+      echo "adb already connected to ${device}"
+      exit 0
+    fi
     k delete pod -n atak "${pod}" --ignore-not-found --wait >/dev/null
     k apply -f - >/dev/null <<YAML
 apiVersion: v1
@@ -86,6 +99,42 @@ sys.exit("no tak_nav_zoom on screen")')"
   shot)
     mkdir -p demo/out/atak
     a exec-out screencap -p > "demo/out/atak/${2:?name}.png"
+    ;;
+  prep)
+    # Window and transition animations off, other animations at half: the
+    # VM renders in software, and short animations stutter less.
+    a shell settings put global window_animation_scale 0
+    a shell settings put global transition_animation_scale 0
+    a shell settings put global animator_duration_scale 0.5
+    ;;
+  record-start)
+    mkdir -p demo/out/atak
+    name="${2:?name}"
+    date +%s.%N > "demo/out/atak/${name}-device.start"
+    # Runs until record-stop, through the pod's adb connection.
+    nohup "${BASH_SOURCE[0]}" _record "${name}" > "demo/out/atak/${name}-device.log" 2>&1 &
+    echo $! > "demo/out/atak/${name}-device.pid"
+    sleep 1
+    ;;
+  _record)
+    a shell screenrecord --bit-rate 8000000 --time-limit 180 "/sdcard/${2}.mp4"
+    ;;
+  record-stop)
+    name="${2:?name}"
+    a shell pkill -INT screenrecord || true
+    if [[ -f "demo/out/atak/${name}-device.pid" ]]; then
+      for _ in $(seq 1 20); do
+        kill -0 "$(cat "demo/out/atak/${name}-device.pid")" 2>/dev/null || break
+        sleep 0.5
+      done
+    fi
+    sleep 1
+    a exec-out cat "/sdcard/${name}.mp4" > "demo/out/atak/${name}-device.mp4"
+    a shell rm -f "/sdcard/${name}.mp4"
+    if ! ffprobe -v error -show_entries format=duration -of csv=p=0 "demo/out/atak/${name}-device.mp4"; then
+      echo "The device recording ${name} is not a playable video; the browser view is used instead." >&2
+      rm -f "demo/out/atak/${name}-device.mp4"
+    fi
     ;;
   stop)
     k delete pod -n atak "${pod}" --ignore-not-found --wait=false >/dev/null

@@ -16,7 +16,10 @@ import { dirname } from "node:path";
 
 import { type BrowserContext, chromium, expect, type Locator, type Page, test as base } from "@playwright/test";
 
-const [windowWidth, windowHeight] = (process.env.DEMO_WINDOW || "1280,630").split(",").map(Number);
+const [windowWidth, windowHeight] = (process.env.DEMO_WINDOW || "1632,892").split(",").map(Number);
+// Chrome draws at this scale, so the page reads like a 1306 px wide window
+// but is captured sharp at 1080p.
+const scale = Number(process.env.DEMO_SCALE || "1.25");
 const eventsFile = process.env.DEMO_EVENTS || ".playwright/demo/events.json";
 
 type Event = { kind: string; at: number; value: string };
@@ -35,8 +38,16 @@ export function mark(kind: string, value: string) {
   events.push({ kind, at: (Date.now() - startedAt) / 1000, value });
 }
 
-// Captions are not drawn in the page. demo/assemble.sh draws them in a band
-// below the recorded area, so they never cover the UI.
+// Holds the frame from just before wall-clock time SINCE (ms) until now.
+// demo/filters.py shows that frame instead, so a moment the camera should
+// not show (a form flashing an error before it is typed in) stays off it.
+export function holdSince(since: number) {
+  mark("hold", String(Math.max(since - startedAt - 100, 0) / 1000));
+}
+
+// Captions are not drawn in the page. demo/filters.py shows each one as a
+// short lower-third at the bottom left of the video, or beside the phone
+// during a phone close-up.
 export function caption(text: string) {
   mark("caption", text);
 }
@@ -84,9 +95,11 @@ async function launch(): Promise<BrowserContext> {
     ignoreDefaultArgs: ["--enable-automation"],
     args: [
       "--window-position=0,0",
-      // On a display exactly the window's size, Chrome makes the window one
-      // pixel short each way and leaves a black edge. One pixel over fills it.
-      `--window-size=${windowWidth + 1},${windowHeight + 1}`,
+      `--force-device-scale-factor=${scale}`,
+      // The window size is in scaled pixels. On a display exactly the
+      // window's size, Chrome makes the window one pixel short each way and
+      // leaves a black edge. One pixel over fills it.
+      `--window-size=${Math.ceil(windowWidth / scale) + 1},${Math.ceil(windowHeight / scale) + 1}`,
       "--disable-features=Translate,PasswordLeakDetection,AutofillServerCommunication",
       "--hide-crash-restore-bubble",
     ],
@@ -110,13 +123,13 @@ const pointerOverlay = () => {
       #demo-cursor svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
       .demo-ripple { position: fixed; z-index: 2147483646; pointer-events: none;
         width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
-        border: 3px solid #cba6f7; animation: demo-ripple .6s ease-out forwards; }
+        border: 3px solid #818CF8; animation: demo-ripple .6s ease-out forwards; }
       @keyframes demo-ripple { from { transform: scale(.3); opacity: 1 } to { transform: scale(1.4); opacity: 0 } }`;
     document.head.appendChild(style);
     const cursor = document.createElement("div");
     cursor.id = "demo-cursor";
     cursor.innerHTML =
-      '<svg width="30" height="30" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 13.8 L10.6 20 L13.2 18.8 L10.2 12.6 L16.4 12.4 Z" fill="#ffffff" stroke="#11111b" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+      '<svg width="30" height="30" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 13.8 L10.6 20 L13.2 18.8 L10.2 12.6 L16.4 12.4 Z" fill="#F8FAFC" stroke="#0F172A" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     document.body.appendChild(cursor);
     const saved = sessionStorage.getItem("demo-cursor");
     if (saved) {
@@ -153,17 +166,32 @@ const pointerOverlay = () => {
   }
 };
 
+// Notes the wall-clock time CloudTAK's callsign field first appears.
+// CloudTAK marks the empty field invalid as soon as the form opens, so
+// cloudtakReady holds the frame from before then until a letter is typed.
+const callsignWatch = () => {
+  const check = () => {
+    const w = window as unknown as { demoCallsignAt?: number };
+    if (!w.demoCallsignAt && document.querySelector('input[placeholder="Enter your callsign"]')) {
+      w.demoCallsignAt = Date.now();
+    }
+  };
+  new MutationObserver(check).observe(document, { childList: true, subtree: true });
+};
+
 // The page fixture is a tab in the headed Chrome window. Events are written
 // even when the walkthrough fails, so a partial recording can be inspected.
 export const test = base.extend<{ page: Page }>({
   page: async ({}, use, testInfo) => {
     const context = await launch();
     await context.addInitScript(pointerOverlay);
+    await context.addInitScript(callsignWatch);
     const page = context.pages()[0] ?? (await context.newPage());
     page.on("dialog", (dialog) => dialog.accept());
-    // The browser chrome above the page. demo/filters.py looks for blank
-    // pages below it.
-    const top = await page.evaluate(() => window.outerHeight - window.innerHeight);
+    // The browser chrome above the page, in captured pixels. demo/filters.py
+    // looks for blank pages below it and places the phone recording.
+    const top = await page.evaluate(() => Math.round((window.outerHeight - window.innerHeight) * devicePixelRatio));
+    mark("dpr", String(await page.evaluate(() => devicePixelRatio)));
     try {
       await use(page);
     } finally {
@@ -294,9 +322,18 @@ export async function cloudtakReady(page: Page, callsign: string) {
     skipNow.waitFor({ state: "visible", timeout: 20_000 }),
   ]).catch(() => undefined);
   if (await welcome.isVisible().catch(() => false)) {
+    // The first letter goes in at once and the frames from before the form
+    // opened are held until then, so the empty-field error is never shown.
+    // The rest is typed on camera.
+    const field = page.getByPlaceholder("Enter your callsign");
+    await field.focus();
+    await page.keyboard.type(callsign.slice(0, 1));
+    const opened = await page.evaluate(() => (window as unknown as { demoCallsignAt?: number }).demoCallsignAt ?? 0);
+    if (opened) holdSince(opened);
     caption("First sign-in to CloudTAK: pick a callsign");
-    await clickLikeAPerson(page, page.getByPlaceholder("Enter your callsign"));
-    await typeLikeAPerson(page, callsign);
+    mark("zoom", "0.5,0.35,1.15");
+    await glideTo(page, field);
+    await typeLikeAPerson(page, callsign.slice(1));
     await page.waitForTimeout(500);
     await still(page, "cloudtak-callsign");
     await clickLikeAPerson(page, page.getByRole("button", { name: "Get Started" }));
@@ -314,4 +351,20 @@ export async function cloudtakReady(page: Page, callsign: string) {
     if (!open && !(await welcome.isVisible().catch(() => false))) break;
     await page.waitForTimeout(800);
   }
+}
+
+// The phone page is in front: demo/filters.py lays the phone's own screen
+// recording over the browser's view of it from here, at the .screen box, and
+// shows it as a close-up. TEXT is the close-up's caption: say what the phone
+// shows, so no close-up starts without a caption or with the last page's.
+export async function phoneOn(page: Page, text: string) {
+  const box = await page.locator(".screen").boundingBox();
+  if (box) {
+    mark("phone-on", [box.x, box.y, box.width, box.height].map((v) => v.toFixed(1)).join(","));
+  }
+  caption(text);
+}
+
+export function phoneOff() {
+  mark("phone-off", "");
 }

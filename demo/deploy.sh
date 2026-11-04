@@ -27,7 +27,7 @@ log="${DEPLOY_LOG:-/tmp/demo-deploy-extra.log}"
 # Extra create flags, as for `uds run create-dev-package` (e.g. a registry override).
 read -ra create_options <<< "${CREATE_OPTIONS:-}"
 
-prompt() { printf '\n\033[38;5;141muds-k3d-takserver\033[0m \033[38;5;245m$\033[0m %s\n' "$*"; }
+prompt() { printf '\n\033[38;2;129;140;248muds-k3d-takserver\033[0m \033[38;2;203;213;225m$\033[0m %s\n' "$*"; }
 run() {
   prompt "$*"
   "$@"

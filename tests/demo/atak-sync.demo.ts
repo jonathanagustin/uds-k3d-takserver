@@ -24,6 +24,8 @@ import {
   expect,
   expectSecure,
   mark,
+  phoneOff,
+  phoneOn,
   showCursor,
   start,
   test,
@@ -123,11 +125,13 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   await clickLikeAPerson(page, page.getByRole("button", { name: "Sign In" }));
   await expect(page).toHaveURL(/phone\.html/, { timeout: 60_000 });
   await expect(page.locator(".screen iframe")).toBeVisible({ timeout: 30_000 });
+  await phoneOn(page, "The phone's own screen: ATAK-CIV's map, callsign ATAK-DEVICE (TEST LOCATION)");
   await page.waitForTimeout(8_000);
   await expectSecure(page);
   caption("The ATAK test device, connected to TAK over mutual TLS on 8089");
   await page.waitForTimeout(3_000);
 
+  phoneOff();
   const map = await page.context().newPage();
   map.setDefaultTimeout(30_000);
   await watchSecurity(map);
@@ -186,19 +190,21 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
   if (marker) {
     const zoomed = await zooming;
     await page.bringToFront();
-    await showCursor(page);
-    await page.waitForTimeout(2_500);
-    caption(
+    await phoneOn(
+      page,
       zoomed
         ? "On the phone: the TEST MARKER from CloudTAK, east of the device's own marker"
         : "On the phone: the TEST MARKER arrives over the device's stream",
     );
+    await showCursor(page);
+    await page.waitForTimeout(2_500);
     mark("zoom", "0.5,0.5,1.5");
     await page.waitForTimeout(2_500);
     await still(page, "atak-test-marker");
     const shot = adb ? atakAdbLater("shot", "demo-test-marker") : Promise.resolve(false);
     await page.waitForTimeout(3_500);
     await shot;
+    phoneOff();
     await map.bringToFront();
     await showCursor(map);
   }
@@ -238,14 +244,16 @@ test("CloudTAK and the ATAK test device in sync", async ({ page }) => {
 
   if (chat) {
     await page.bringToFront();
+    await phoneOn(page, "On the phone: the chat arrives over the device's stream (unread badge, top bar)");
     await showCursor(page);
     await page.waitForTimeout(2_000);
-    caption("On the phone: the chat arrives over the device's stream (unread badge, top bar)");
     mark("zoom", "0.5,0.5,1.4");
     await page.waitForTimeout(5_000);
     if (adb) await atakAdbLater("shot", "demo-chat");
   }
-  if (adb) atakAdb("stop");
+  // The workflow stops the device recording through the same pod, then
+  // deletes it; a run without one deletes it here.
+  if (adb && !process.env.DEMO_DEVICE_RECORDING) atakAdb("stop");
 
   // Nothing to show if neither scene worked: fail so the take is left out.
   expect(marker || chat, "no sync scene worked").toBe(true);

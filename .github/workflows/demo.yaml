@@ -52,6 +52,9 @@ env:
   VHS_VERSION: 0.12.1
   AGG_VERSION: 1.9.0
   AGG_SHA256: f111e315cd71056b116302342553dd765b7297579ed511f111d0cedb442aeda6
+  # Inter for titles and captions (demo/style.py), from the upstream release.
+  INTER_VERSION: "4.1"
+  INTER_SHA256: 9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e
   VHS_SHA256: eb33787a5b1cebf91fe0b18bd231e2d71d36c1ff4babd99ddac1a6ab411efd10
 
 jobs:
@@ -83,9 +86,12 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "${APP_REF}"
-          git checkout FETCH_HEAD -- . \
-            ':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts' \
-            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml'
+          keep=(':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts'
+            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml')
+          git checkout FETCH_HEAD -- . "${keep[@]}"
+          # Files added after APP_REF would mix with its tree (a template
+          # calling a helper APP_REF does not have): remove them.
+          git diff --name-only --diff-filter=A -z FETCH_HEAD HEAD -- . "${keep[@]}" | xargs -0 -r git rm -q --
           echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
 
       - name: Trim the runner
@@ -159,7 +165,16 @@ jobs:
           }
           apt_try update
           apt_try install -y -o Dpkg::Use-Pty=0 --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
-            xvfb libnss3-tools
+            xvfb libnss3-tools python3-pil
+          curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
+          echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
+          sudo mkdir -p /usr/local/share/fonts/inter
+          sudo unzip -o -j -q /tmp/inter.zip 'extras/ttf/Inter-SemiBold.ttf' 'extras/ttf/Inter-Medium.ttf' -d /usr/local/share/fonts/inter
+          sudo fc-cache -f
+          python3 demo/style.py fonts
+          # The recording browser: no bookmark star or bookmarks bar, no
+          # sign-in, and a toolbar in the demo's background colour.
+          sudo install -D -m 0644 demo/chrome-policy.json /etc/opt/chrome/policies/managed/demo.json
           google-chrome --version
           # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04
           # blocks the unprivileged user namespaces that sandbox uses.
@@ -282,19 +297,36 @@ jobs:
         shell: bash
         timeout-minutes: 90
 
+      # The phone is also recorded on the device itself (screenrecord), and
+      # demo/filters.py lays that over the browser's view of it, which only
+      # updates a few times a second. Without a device recording the browser
+      # view is used.
       - name: Record the ATAK walkthrough
         if: env.ATAK == 'true'
-        run: ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev"
+        run: |
+          set -euo pipefail
+          ./demo/atak-adb.sh start
+          ./demo/atak-adb.sh prep
+          ./demo/atak-adb.sh record-start 08-atak
+          status=0
+          ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev" || status=$?
+          ./demo/atak-adb.sh record-stop 08-atak || true
+          exit "${status}"
         shell: bash
 
       - name: Record CloudTAK and ATAK in sync
         if: env.ATAK == 'true'
         # A failed take is left out of the video rather than failing the run.
         run: |
-          if ! ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"; then
+          if ./demo/atak-adb.sh start; then
+            ./demo/atak-adb.sh record-start 09-sync || true
+          fi
+          if ! DEMO_DEVICE_RECORDING=1 ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"; then
             rm -f demo/out/09-sync.mp4
             echo "::warning::The CloudTAK and ATAK sync chapter failed and is left out"
           fi
+          ./demo/atak-adb.sh record-stop 09-sync || true
+          ./demo/atak-adb.sh stop || true
         shell: bash
 
       # Footprint and self-healing, recorded like the deployment and rendered
@@ -341,7 +373,7 @@ jobs:
             echo "::warning::The upgrade chapter failed and is left out"
             exit 0
           fi
-          CAST_FONT_SIZE=20 CAST_COLS=120 CAST_ROWS=24 CAST_HOLD=5 \
+          CAST_FONT_SIZE=26 CAST_COLS=120 CAST_ROWS=24 CAST_HOLD=5 \
             python3 demo/render-cast.py demo/out/11-upgrade.cast demo/out/11-upgrade \
             "The last release's package verifies against its signature::5" \
             "Deploy the last signed release::10" \
@@ -397,6 +429,7 @@ jobs:
             /tmp/demo-upgrade-prepare.log
             demo/out/atak/*.png
             demo/out/atak/*.txt
+            demo/out/atak/*-device.*
             tests/.playwright/demo/**/*.png
             /tmp/demo-deploy.log
           if-no-files-found: ignore

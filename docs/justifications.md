@@ -11,6 +11,8 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 It prints the exempted-resource list and the security context of each TAK pod.
 
+[![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-policy.mp4)
+
 ## Exemptions
 
 Each section below is named after the `Exemption` object it describes.
@@ -62,6 +64,8 @@ Only the optional ATAK test device uses this. It is not part of the package: `at
 ## Differences from the default UDS posture
 
 These are not exemptions. The policy engine mutates these settings or leaves them alone, so no `Exemption` object exists.
+
+[![Demo clip: the ambient mesh, a generated network policy that drops a pod, and the release signature and provenance](../docs-site/public/demo/demo-clip-secure.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-secure.mp4)
 
 ### Non-root user and writable root filesystem
 

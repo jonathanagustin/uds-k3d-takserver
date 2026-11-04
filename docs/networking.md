@@ -169,14 +169,14 @@ UDS Core sends that UDP traffic through Envoy Gateway, not Istio. The UDS operat
 
 TAK itself requires a client certificate. In TAK 5.7-RELEASE-14 the QUIC TLS context uses `ClientAuth.REQUIRE`, and the input's `auth` defaults to `x509`, the same as 8089. The anonymous UDP input on 8087 and the multicast inputs are not added.
 
-TAK 5.7-RELEASE-14 ships the QUIC native library for linux-x86_64 only. QUIC therefore works on amd64 nodes only.
+The messaging image ships the Netty QUIC native library for both linux-x86_64 and linux-aarch_64, so QUIC works on amd64 and arm64 nodes.
 
-The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on amd64:
+The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on both amd64 and arm64:
 
 - A client with no certificate must be refused with a TLS alert. No answer at all fails the test, so a broken route cannot pass as a refusal.
-- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`.
+- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`. TAK can take about 30 seconds to add a new stream to that list, so the script waits up to about 90 seconds. If the uid still is not listed, the client reconnects once before the test fails, like the port 8089 check in `tests/api-smoke.sh`.
 
-The script skips on arm64. It also exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
+The script exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
 
 ## Tenant gateway to 8447
 
@@ -217,6 +217,8 @@ There is no `remoteGenerated: Anywhere` rule and no Prometheus scrape rule. TAK 
 The Ignite chart and the API, messaging, config, and plugins Deployments use ServiceAccount `takserver-ignite`. Each of those pod labels needs its own Kubernetes API rule. One rule limited to `app: takserver-ignite` drops the clients' API calls during the TLS handshake.
 
 `additionalNetworkAllow` appends deployer rules. Each entry needs a unique `description`.
+
+![A pod in another namespace cannot reach TAK's port 8089 because the generated network policy drops it](../docs-site/public/demo/screens/network-policy-blocks-8089.webp)
 
 ## Mesh
 

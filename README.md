@@ -18,7 +18,7 @@ The same guides are published at <https://jonathanagustin.github.io/uds-k3d-taks
 
 ### Deploy
 
-Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK (Android Team Awareness Kit) device. 3 min.
+Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK (Android Team Awareness Kit) device. 4 min.
 
 https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
@@ -26,12 +26,13 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 <summary>Chapters</summary>
 
 - 0:05 UDS Core (Slim) on a New k3d Cluster
-- 0:15 Build the Zarf Package
-- 0:24 Bundle the Package with UDS Core
-- 0:32 Deploy the Bundle
-- 0:44 Package Ready
-- 1:08 Sign In through UDS SSO
-- 1:38 A Real ATAK Device on the Same Server
+- 0:20 Build the Zarf Package
+- 0:35 Bundle the Package with UDS Core
+- 0:47 Deploy the Bundle
+- 1:06 Package Ready
+- 1:27 Sign In through UDS SSO
+- 1:56 CloudTAK for Regular Users
+- 2:36 A Real ATAK Device on the Same Server
 
 </details>
 
@@ -39,7 +40,7 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
 ### Operate and Trust
 
-Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 4 min.
+Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 6 min.
 
 https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 
@@ -47,12 +48,12 @@ https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 <summary>Chapters</summary>
 
 - 0:04 Air-Gapped Install
-- 0:38 Policy at Work
-- 1:03 CloudTAK and ATAK in Sync
-- 1:48 Secure by Default
-- 3:04 Upgrades from the Last Signed Release
-- 3:11 Footprint and Self-Healing
-- 3:48 What This Does Not Prove
+- 0:43 Policy at Work
+- 1:05 CloudTAK and ATAK in Sync
+- 2:57 Secure by Default
+- 3:51 Upgrades from the Last Signed Release
+- 4:53 Footprint and Self-Healing
+- 5:24 What This Does Not Prove
 
 </details>
 
@@ -165,6 +166,8 @@ Creating the package pulls the published images from GitHub Container Registry (
 
 Run `uds run --list` for the rest. `hk check` runs the pre-commit checks in [`hk.pkl`](hk.pkl). Run `hk install` once to use them as a git hook.
 
+[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-deploy.mp4)
+
 ### Deploy a release
 
 Releases are published as `oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream`, with one entry per architecture. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
@@ -175,6 +178,10 @@ uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 ```
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
+
+[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-airgap.mp4)
+
+![TAK pods with image references rewritten to the in-cluster Zarf registry](docs-site/public/demo/screens/zarf-registry-images.webp)
 
 ### Upgrade from 0.6
 
@@ -234,6 +241,10 @@ cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
   --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+![uds zarf package verify accepts the release package against the release workflow's signing identity](docs-site/public/demo/screens/release-signature-verified.webp)
+
+![gh attestation verify accepts the build provenance for the same release package](docs-site/public/demo/screens/release-provenance-verified.webp)
 
 ## Architecture
 

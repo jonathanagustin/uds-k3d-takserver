@@ -52,6 +52,8 @@ People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page
 5. It creates or updates the CloudTAK profile for that username with the certificate, and opens a CloudTAK login session with CloudTAK's own session code. Members of `sso.adminGroup` (default `/UDS Core/Admin`) become CloudTAK system administrators.
 6. The browser gets the session (login token, refresh token, session id) in the URL fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
 
+![CloudTAK asks a new user for a callsign on first sign-in](../docs-site/public/demo/screens/cloudtak-callsign.webp)
+
 ### Who can sign in
 
 Keycloak lets a user into CloudTAK only if they are a direct member of a group in `sso.groups` (`charts/cloudtak/values.yaml`). The UDS operator writes that list to the client's `groups.anyOf`. The default list is:
@@ -80,6 +82,10 @@ variables:
 ```
 
 `bundle/uds-bundle.yaml` and `bundle/full/uds-bundle.yaml` show the override (`cloudtak` component, `uds-cloudtak` chart, path `sso.groups`). A bundle of your own needs the same `overrides` entry. Group paths are case-sensitive.
+
+[![Demo clip: a member of /CloudTAK/Users signs in to CloudTAK and is refused at the TAK web UI](../docs-site/public/demo/demo-clip-cloudtak-user.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4)
+
+![Keycloak refuses a /CloudTAK/Users member at the TAK Server web UI](../docs-site/public/demo/screens/tak-admin-refused.webp)
 
 ### What CloudTAK does and does not provide
 
@@ -133,6 +139,10 @@ The admin certificate is mounted only in the bootstrap container. The CloudTAK c
 | `webtak` | `https://takserver-web.takserver.svc.cluster.local:8447` | Certificate enrollment for each Keycloak sign-in (bearer token) and for the admin account (password) |
 
 `webtak` is 8447, the connector the tenant gateway uses, rather than 8446. 8447 has a certificate whose SANs are the `takserver-web` Service names, so CloudTAK verifies it against the deploy-time CA (`NODE_EXTRA_CA_CERTS`). TAK's generated 8443 and 8089 server certificate names no in-cluster host. CloudTAK's TAK library does not verify the server certificate on its certificate-authenticated connections, as upstream ships it. The bootstrap container checks the 8443 chain against the CA and skips only the host name.
+
+[![Demo clip: the ATAK device's marker shows in CloudTAK, then a marker and a chat message sent from CloudTAK arrive on the device](../docs-site/public/demo/demo-clip-sync.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-sync.mp4)
+
+![The TEST MARKER placed in CloudTAK, shown in ATAK on the test device](../docs-site/public/demo/screens/atak-test-marker.webp)
 
 ## Network rules
 

@@ -92,7 +92,7 @@ spec:
 
 When `kubectl get takclient alpha-1 -n takclients` shows `Ready`, Secret `takclients/alpha-1` has `package.zip`. Copy it to the device's `Download` folder as `atak-alpha-1.dpk`, or open it with ATAK's Import Manager. The Secret also has `client.pem`, `client.key`, and `ca.pem` for other clients.
 
-Delete the `TakClient` to remove the device. The watcher deletes the TAK user and adds the certificate's serial to the CRL in Secret `takserver/takserver-crl`. UDS Core then restarts the TAK pods that mount it, and TAK rejects the certificate from then on. The restart drops every connected client for a few minutes. Until it finishes, the certificate still connects, with no groups. See [ADR 22](../adr/0022-takclient-operator.md).
+Delete the `TakClient` to remove the device. The watcher deletes the TAK user and adds the certificate's serial to the CRL in Secret `takserver/takserver-crl`. UDS Core then restarts the TAK pods that mount it, and TAK rejects the certificate from then on. The restart drops every connected client for a few minutes. Until it finishes, the certificate still connects, with no groups. This restart is accepted for now. Issue [#288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) tracks revocation without a restart. See [ADR 22](../adr/0022-takclient-operator.md).
 
 ## Network rules
 

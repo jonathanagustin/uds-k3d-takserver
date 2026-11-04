@@ -122,7 +122,7 @@ The upstream chart has no values for init containers, probes, or the extra objec
 
 The webhook covers only namespace `takserver`. It matches the four TAK pods by their `app` label. It matches the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet by name, through a `matchConditions` rule, because the upstream chart puts no `app` label on those objects. It fails closed, so while the module is down, Kubernetes refuses to create those pods and to create or update those objects. Other objects are not affected. `pepr/scripts/webhook-scope.ts` writes that scope.
 
-The watcher runs the reconciles. Its memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
+The watcher runs the reconciles. It runs as its own ServiceAccount, `pepr-<uuid>-watcher`, and only that account can read Secrets, including the TAK CA key in `takserver-ca-key`. The admission pods run as `pepr-<uuid>` and can read no Secret. `pepr/scripts/rbac-scope.ts` writes both sets of Roles. The watcher's memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
 
 Why a Pepr module and not a forked chart, a Helm post-renderer, Kustomize, or upstream changes: see [ADR 23](../adr/0023-adapt-the-upstream-chart-with-pepr.md). It also lists where each of those would be the better choice.
 

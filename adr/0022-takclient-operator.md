@@ -4,7 +4,7 @@ Date: 2026-11-03
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -13,7 +13,7 @@ A TAK client that uses a certificate needs four things: a key and a certificate 
 What is already true:
 
 - The CA key is not in ConfigMap `cert-migration`. Since [ADR 2](0002-generate-certificates-at-deploy-time.md), `ca-do-not-share.key` is in Secret `takserver/takserver-ca-key`, and the cert Job removes it from the ConfigMap on upgrade. The key is encrypted with `CAPASS` from Secret `takserver-keystore`. The ConfigMap still holds `ca.pem`, which is public. No change to where the key is stored is needed.
-- The module's admission pods and its watcher use one ServiceAccount, `pepr-c72fcf944a4f43bbb386d22371aa640f`, from the chart `pepr build` writes. `pepr/scripts/rbac-scope.ts` already moves the watched objects to named Roles.
+- The chart `pepr build` writes runs the module's admission pods and its watcher as one ServiceAccount, `pepr-c72fcf944a4f43bbb386d22371aa640f`. `pepr/scripts/rbac-scope.ts` already moves the watched objects to named Roles.
 - The watcher already reads Secret `takserver-certs` (`admin.pem`, `admin.key`) and Secret `takserver-keystore` to build CloudTAK's admin Secret.
 
 What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) supports for revocation, from its source:
@@ -43,15 +43,17 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 
 ### Who can read the CA key
 
-- The module's ServiceAccount gets `get`, `list`, and `watch` on Secret `takserver/takserver-ca-key`, by name, in the takserver Role that `pepr/scripts/rbac-scope.ts` writes. Before this change, only the cert Job and cluster administrators could read it.
-- The admission pods and the watcher share that ServiceAccount, because the chart `pepr build` writes uses one. The admission pods do not read the key, but they could. A watcher-only ServiceAccount, with the CA key grant bound only to it, is the next step and is not in this change. It needs every Role and binding in `rbac-scope.ts` to name both accounts.
+- The watcher runs as its own ServiceAccount, `pepr-<uuid>-watcher`. The admission pods keep `pepr-<uuid>`. `pepr/scripts/rbac-scope.ts` adds the account and points the watcher Deployment at it.
+- Every Secret rule and every `TakClient` rule is in a Role or ClusterRole named `pepr-<uuid>-watcher…`, bound only to the watcher account. That includes `get`, `list`, and `watch` on Secret `takserver/takserver-ca-key`, by name. The other rules (ConfigMaps, Deployments, pods, Services, and the rest) are bound to both accounts.
+- The admission pods read only ConfigMap `core-config`, so they can read no Secret at all. `tests/takclient.sh` checks this with `kubectl auth can-i` against both accounts.
+- Before this change, only the cert Job and cluster administrators could read the CA key.
 - Creating a `TakClient` is the same as being given a certificate for any TAK group. The CRD has no `aggregate-to-edit` or `aggregate-to-admin` label, so only cluster administrators can create one until someone grants it on purpose.
 
 ### Registering the client in TAK
 
 - The watcher calls TAK's admin API on `takserver-api:8443` with the admin certificate it already reads: `POST /user-management/api/new-user` with the callsign, the groups, and a random password that nobody keeps (TAK requires one). `X509Authenticator` then maps the certificate to that user by CN.
 - `UserAuthenticationFile.xml` is not on a volume, so a messaging restart loses the user. The watcher already watches `takserver-messaging` for the startup order. When it becomes Available, the watcher registers every `TakClient` again. A `TakClient` that is not `Ready` because the CA, the admin certificate, or TAK is not ready yet is tried again every minute: the watcher writes annotation `tak.jonathanagustin.github.io/reconcile-retry`, which sends another update.
-- The takserver Package allows ingress to `takserver-api` on 8443 from the watcher pods in `pepr-system` (`app: pepr-<uuid>-watcher`), with the module's ServiceAccount as `remoteServiceAccount`. `pepr-system` is ambient, like `takserver`.
+- The takserver Package allows ingress to `takserver-api` on 8443 from the watcher pods in `pepr-system` (`app: pepr-<uuid>-watcher`), with the watcher's ServiceAccount (`pepr-<uuid>-watcher`) as `remoteServiceAccount`. `pepr-system` is ambient, like `takserver`.
 - The TAK API's server certificate is not issued for the Service name, so the watcher checks the chain against the TAK CA and skips the host name check.
 
 ### Delete
@@ -76,10 +78,10 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 
 ## Consequences
 
-- Revocation needs a restart of the API and messaging pods. That drops every connected client for the length of the restart. Deleting many clients at once causes one restart per CRL write, unless the writes are batched. A short `validityDays` is still the main control, as [ADR 14](0014-atak-test-device-in-kubevirt.md) already says.
+- Revocation needs a restart of the TAK API and messaging pods. That drops every connected client for the length of the restart, a few minutes. Deleting many clients at once causes one restart per CRL write, unless the writes are batched. This is accepted for now. Issue [#288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) tracks revocation without a restart, through a TAK plugin or a proxy that checks revocation. A short `validityDays` is still the main control, as [ADR 14](0014-atak-test-device-in-kubevirt.md) already says.
 - Adding a CRL to `<security><tls>` turns on CRL checks for every certificate the TAK CA signed, including the admin certificate and CloudTAK's. An expired or unreadable CRL would reject all of them. The watcher keeps it current, and `tests/` checks that the CRL loads.
-- The module can now read the TAK CA key. A compromise of the watcher or admission pods is a compromise of the CA. Before this change, the cert Job was the only workload with that access.
+- The module's watcher can now read the TAK CA key. A compromise of the watcher pod is a compromise of the CA. The admission pods cannot read it. Before this change, the cert Job was the only workload with that access.
 - Deleting the `takclients` namespace, or uninstalling the module chart, deletes every `TakClient` Secret. If the watcher is not running then, the finalizers hold the delete until it is.
 - The watcher makes HTTPS calls to TAK, which it did not do before. That is a new network rule and a new failure mode, reported in the `Ready` condition.
-- Certificates are not renewed automatically. `status.notAfter` shows the expiry. Renewal is a later change.
+- Nothing schedules a renewal. A reconcile issues a new certificate when less than a third of its lifetime is left, but a reconcile runs only when the `TakClient` changes or the watcher starts. Annotation `tak.jonathanagustin.github.io/not-after` shows the expiry. Scheduled renewal is a later change.
 - Certificates that TAK issues through enrollment on 8446 are not affected. They are still revoked through TAK's own certificate table.

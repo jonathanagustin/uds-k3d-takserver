@@ -10,6 +10,8 @@
 #    serial to the CRL in Secret takserver-crl, and deletes the client's
 #    Secret. UDS Core restarts the TAK pods that mount the CRL. Then 8089
 #    must reject the certificate.
+# Before step 1 it checks the ServiceAccounts: only the watcher account can
+# read the TAK CA key, and the admission pods' account can read no Secret.
 #
 # The certificate and key exist only in Secret takclients/<name> and in a
 # temporary directory here, which is removed on exit.
@@ -41,6 +43,33 @@ fi
 
 echo "== apply TakClient ${name}"
 k get crd takclients.tak.jonathanagustin.github.io -o name
+
+echo "== ServiceAccounts"
+uuid="pepr-c72fcf944a4f43bbb386d22371aa640f"
+admission_sa="system:serviceaccount:pepr-system:${uuid}"
+watcher_sa="system:serviceaccount:pepr-system:${uuid}-watcher"
+can() { k auth can-i "$@" 2>/dev/null || true; }
+expect() {
+  local want="$1" who="$2"; shift 2
+  local got
+  got="$(can "$@" --as="${who}")"
+  if [[ "${got}" != "${want}" ]]; then
+    echo "kubectl auth can-i $* --as=${who}: got '${got}', want '${want}'" >&2
+    exit 1
+  fi
+}
+expect yes "${watcher_sa}" get secret/takserver-ca-key -n takserver
+expect yes "${watcher_sa}" create secrets -n takclients
+expect no "${admission_sa}" get secret/takserver-ca-key -n takserver
+expect no "${admission_sa}" list secrets --all-namespaces
+expect no "${admission_sa}" get secrets -n takclients
+expect no "${admission_sa}" patch takclients.tak.jonathanagustin.github.io -n takclients
+expect yes "${admission_sa}" get configmap/core-config -n takserver
+expect no "${watcher_sa}" get secret/takserver-db -n takserver
+for app in "${uuid}:${uuid}" "${uuid}-watcher:${uuid}-watcher"; do
+  account="$(k get deploy "${app%%:*}" -n pepr-system -o jsonpath='{.spec.template.spec.serviceAccountName}')"
+  [[ "${account}" = "${app##*:}" ]] || { echo "deploy ${app%%:*} runs as '${account}', want '${app##*:}'" >&2; exit 1; }
+done
 k apply -f - <<YAML
 apiVersion: tak.jonathanagustin.github.io/v1alpha1
 kind: TakClient

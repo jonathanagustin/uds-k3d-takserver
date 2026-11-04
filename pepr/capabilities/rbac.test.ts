@@ -15,7 +15,15 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { applyChartRbac, clusterRules, roleManifest } from "../scripts/rbac-scope.ts";
+import {
+  ADMISSION_SA,
+  applyChartRbac,
+  bindWatcher,
+  clusterRules,
+  roleManifest,
+  useWatcherAccount,
+  WATCHER_SA,
+} from "../scripts/rbac-scope.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -33,8 +41,10 @@ interface ManifestRule {
 
 interface ManifestDoc {
   kind: string;
-  metadata: { namespace?: string };
+  metadata: { name: string; namespace?: string };
   rules?: ManifestRule[];
+  roleRef?: { kind: string; name: string };
+  subjects?: { name: string; namespace: string }[];
 }
 
 const EXPECTED: Rule[] = [
@@ -160,16 +170,23 @@ test("the chart moves watched objects into namespaced Roles", () => {
       }
     }
   }
-  const takserver = roles.find(role => role.kind === "Role" && role.metadata.namespace === "takserver");
+  const takserver = roles.find(
+    role => role.kind === "Role" && role.metadata.namespace === "takserver" && role.metadata.name === ADMISSION_SA,
+  );
   assert.ok(takserver);
+  const takserverWatcher = roles.find(
+    role => role.kind === "Role" && role.metadata.namespace === "takserver" && role.metadata.name === WATCHER_SA,
+  );
+  assert.ok(takserverWatcher);
   const startupDelete = (takserver.rules ?? []).find(
     (rule: ManifestRule) =>
       (rule.resources ?? []).join(",") === "configmaps" && (rule.verbs ?? []).includes("delete"),
   );
   assert.deepEqual(startupDelete?.resourceNames, ["takserver-startup"]);
   assert.deepEqual(startupDelete?.verbs, ["delete"]);
-  const clusterWatch = roles.find(role => role.kind === "ClusterRole");
-  assert.ok(clusterWatch);
+  const clusterWatches = roles.filter(role => role.kind === "ClusterRole");
+  assert.equal(clusterWatches.length, 2);
+  const clusterWatch: ManifestDoc = { kind: "ClusterRole", metadata: { name: "all" }, rules: clusterWatches.flatMap(role => role.rules ?? []) };
   assert.equal(
     roles.some(role => role.kind === "ClusterRoleBinding"),
     true,
@@ -184,10 +201,16 @@ test("the chart moves watched objects into namespaced Roles", () => {
     }
     assert.ok((rule.resourceNames ?? []).length > 0);
   }
-  const caKey = (takserver.rules ?? []).filter((rule: ManifestRule) => (rule.resourceNames ?? []).includes("takserver-ca-key"));
+  assert.equal(
+    (takserver.rules ?? []).some(rule => (rule.resources ?? []).includes("secrets")),
+    false,
+  );
+  const caKey = (takserverWatcher.rules ?? []).filter((rule: ManifestRule) => (rule.resourceNames ?? []).includes("takserver-ca-key"));
   assert.equal(caKey.length, 1);
   assert.deepEqual(caKey[0].verbs, ["get", "list", "watch"]);
-  const clients = roles.find(role => role.kind === "Role" && role.metadata.namespace === "takclients");
+  const clients = roles.find(
+    role => role.kind === "Role" && role.metadata.namespace === "takclients" && role.metadata.name === WATCHER_SA,
+  );
   assert.ok(clients);
   assert.deepEqual(
     (clients.rules ?? []).map((rule: ManifestRule) => `${(rule.resources ?? []).join(",")}:${(rule.verbs ?? []).join(",")}`),
@@ -228,6 +251,11 @@ test("the chart moves watched objects into namespaced Roles", () => {
     join(dir, "values.yaml"),
     "image: example\nrbac:\n  - apiGroups: [\"\"]\n    resources: [\"namespaces\"]\n    verbs: [\"get\", \"create\"]\n  - apiGroups: [\"\"]\n    resources: [\"secrets\"]\n    verbs: [\"watch\"]\n",
   );
+  writeFileSync(
+    join(dir, "templates", "cluster-role-binding.yaml"),
+    "subjects:\n  - kind: ServiceAccount\n    name: pepr-abc\n    namespace: pepr-system\n",
+  );
+  writeFileSync(join(dir, "templates", "watcher-deployment.yaml"), "      serviceAccountName: {{ .Values.uuid }}\n");
   applyChartRbac(dir);
   const values = parse(readFileSync(join(dir, "values.yaml"), "utf8")) as { image: string; rbac: Rule[] };
   assert.equal(values.image, "example");
@@ -235,4 +263,75 @@ test("the chart moves watched objects into namespaced Roles", () => {
   assert.equal(readFileSync(join(dir, "templates", "namespaced-roles.yaml"), "utf8").includes("takserver-keystore"), true);
   assert.throws(() => clusterRules([]), /empty/);
   assert.throws(() => clusterRules([{ apiGroups: [""], resources: ["namespaces"], verbs: ["get"] }]), /watched resources/);
+});
+
+// The admission pods must not read the TAK CA key or any other Secret
+// (ADR 22). Only the watcher account is bound to the Secret and TakClient
+// rules.
+test("only the watcher ServiceAccount is bound to Secret and TakClient rules", () => {
+  const docs = roleManifest()
+    .split(/^---\n/m)
+    .map(part => parse(part) as ManifestDoc);
+  const roles = new Map(docs.filter(doc => doc.kind.endsWith("Role")).map(doc => [`${doc.kind}/${doc.metadata.namespace ?? ""}/${doc.metadata.name}`, doc]));
+  const bindings = docs.filter(doc => doc.kind.endsWith("Binding"));
+  assert.equal(bindings.length, roles.size);
+  const admission: ManifestRule[] = [];
+  const watcher: ManifestRule[] = [];
+  for (const binding of bindings) {
+    assert.ok(binding.roleRef);
+    const role = roles.get(`${binding.roleRef.kind}/${binding.metadata.namespace ?? ""}/${binding.roleRef.name}`);
+    assert.ok(role, binding.roleRef.name);
+    const subjects = (binding.subjects ?? []).map(subject => subject.name);
+    for (const subject of binding.subjects ?? []) {
+      assert.equal(subject.namespace, "pepr-system");
+    }
+    if (subjects.includes(ADMISSION_SA)) {
+      admission.push(...(role.rules ?? []));
+    }
+    if (subjects.includes(WATCHER_SA)) {
+      watcher.push(...(role.rules ?? []));
+    }
+  }
+  assert.equal(
+    admission.some(rule => (rule.resources ?? []).some(resource => resource === "secrets" || resource.startsWith("takclients"))),
+    false,
+  );
+  assert.equal(
+    watcher.some(rule => (rule.resources ?? []).includes("secrets") && (rule.resourceNames ?? []).includes("takserver-ca-key")),
+    true,
+  );
+  // The watcher keeps every rule the admission account has.
+  for (const rule of admission) {
+    assert.equal(watcher.includes(rule), true, (rule.resources ?? []).join(","));
+  }
+});
+
+test("the chart runs the watcher as its own ServiceAccount", () => {
+  const binding = [
+    "kind: ClusterRoleBinding",
+    "subjects:",
+    "  - kind: ServiceAccount",
+    "    name: pepr-abc",
+    "    namespace: pepr-system",
+    "",
+  ].join("\n");
+  const bound = parse(bindWatcher(binding)) as ManifestDoc;
+  assert.deepEqual(
+    (bound.subjects ?? []).map(subject => subject.name),
+    ["pepr-abc", WATCHER_SA],
+  );
+  assert.throws(() => bindWatcher("kind: ClusterRoleBinding\n"), /ServiceAccount subject/);
+  const deploy = "    spec:\n      serviceAccountName: {{ .Values.uuid }}\n      securityContext: {}\n";
+  assert.equal(useWatcherAccount(deploy).includes(`serviceAccountName: ${WATCHER_SA}\n`), true);
+  assert.throws(() => useWatcherAccount("spec: {}\n"), /serviceAccountName/);
+  const dir = mkdtempSync(join(tmpdir(), "pepr-sa-"));
+  mkdirSync(join(dir, "templates"));
+  writeFileSync(join(dir, "values.yaml"), "rbac:\n  - apiGroups: [\"\"]\n    resources: [\"namespaces\"]\n    verbs: [\"get\"]\n  - apiGroups: [\"\"]\n    resources: [\"secrets\"]\n    verbs: [\"watch\"]\n");
+  writeFileSync(join(dir, "templates", "cluster-role-binding.yaml"), binding);
+  writeFileSync(join(dir, "templates", "watcher-deployment.yaml"), deploy);
+  applyChartRbac(dir);
+  const account = parse(readFileSync(join(dir, "templates", "watcher-service-account.yaml"), "utf8")) as ManifestDoc;
+  assert.equal(account.kind, "ServiceAccount");
+  assert.equal(account.metadata.name, WATCHER_SA);
+  assert.equal(readFileSync(join(dir, "templates", "watcher-deployment.yaml"), "utf8").includes(WATCHER_SA), true);
 });

@@ -17,6 +17,34 @@ case "$(uname -m)" in
   *) echo "upgrade: unknown machine $(uname -m)" >&2; exit 1 ;;
 esac
 export UDS_ARCH="${arch}" FLAVOR=upstream
+
+# Disk. The upgrade holds the released images and this branch's images at the
+# same time. On a 72 GB amd64 runner that filled the disk: the kubelet tainted
+# the node disk-pressure:NoSchedule, and the pre-upgrade cert Job's pod never
+# started (#286). The kubelet's default eviction threshold is 15% free on the
+# image filesystem, and the k3d node's images live on the Docker root.
+disk_dir="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+[[ -d "${disk_dir}" ]] || disk_dir=/
+disk_kb() { df --output="$1" -k "${disk_dir}" | tail -1 | tr -d ' '; }
+disk_report() {
+  echo "disk ($1): $(( $(disk_kb avail) / 1048576 )) GB free of $(( $(disk_kb size) / 1048576 )) GB on ${disk_dir}"
+}
+# require_free LABEL NEED_KB: fail unless NEED_KB plus the eviction headroom is free.
+require_free() {
+  local label="$1" need_kb="$2" size_kb avail_kb headroom_kb
+  size_kb="$(disk_kb size)"
+  avail_kb="$(disk_kb avail)"
+  headroom_kb=$((size_kb * 15 / 100))
+  disk_report "${label}"
+  if ((avail_kb < need_kb + headroom_kb)); then
+    echo "::error title=Not enough disk for the upgrade test::${label}: $((avail_kb / 1048576)) GB free on ${disk_dir}, and the upgrade needs about $((need_kb / 1048576)) GB plus $((headroom_kb / 1048576)) GB (15% of the disk) to stay above the kubelet's eviction threshold. Below that, the node is tainted disk-pressure and new pods do not start (#286). Rerun on a runner with more disk."
+    exit 1
+  fi
+}
+# About 30 GB more is used between here and the end of the upgrade, after the
+# deletes below (from Test run 41720388353, see #286). Override with
+# UPGRADE_MIN_FREE_GB.
+require_free "before the released install" $(( ${UPGRADE_MIN_FREE_GB:-30} * 1048576 ))
 read_baseline() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "${baseline}" "$1"; }
 tag="$(read_baseline tag)"
 package="$(read_baseline package)"
@@ -67,10 +95,27 @@ uds create "${work}/bundle" --architecture="${arch}" --confirm --no-progress
 # deploys core 1.16.0 first, which pushes the Pepr v2.0.7 its module runs, so
 # it works from the same start. This branch's bundle then deploys its own core.
 SLIM_CORE_VERSION=1.15.0 uds run deploy-slim-core --no-progress
+# The cluster now exists, and nothing below deploys the checkpoint again.
+# On CI, delete its 5.5 GB package. Locally it stays as the cache for the
+# next run.
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  rm -f "${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"/zarf-package-k3d-core-slim-dev-*-1.15.0.tar.zst
+fi
 uds run fit-runner --no-progress
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')
 [[ "${#bundles[@]}" -eq 1 ]]
 UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts
+# The released package and bundle files are not used again. The bundle's
+# uds-bundle.yaml stays: the core-base comparison below reads it.
+rm -f "${bundles[0]}" "${released}"
+# Images in the node that no container uses, for example checkpoint images
+# for pods that are gone. The released TAK images are in use and stay, and
+# the Zarf registry still has every image if a pod needs one again.
+node="$(docker ps --filter name=k3d-uds-server-0 --format '{{.Names}}' | head -1)"
+if [[ -n "${node}" ]]; then
+  docker exec "${node}" crictl rmi --prune >/dev/null || echo "upgrade: crictl rmi --prune failed in ${node}; continuing" >&2
+fi
+disk_report "after the released install and the deletes"
 
 k() { uds zarf tools kubectl "$@"; }
 health() { uds run test:health-check --no-progress; }
@@ -222,6 +267,16 @@ echo "PASS released CloudTAK database is PostgreSQL ${released_cloudtak_version}
 # Only now create and deploy the PR package. Do not recreate identities or seed data.
 uds run create-dev-package --set FLAVOR=upstream --no-progress
 uds run create:test-bundle --set FLAVOR=upstream --no-progress
+mapfile -t next_bundles < <(find bundle -maxdepth 1 -name "uds-bundle-*-${arch}-*.tar.zst")
+[[ "${#next_bundles[@]}" -eq 1 ]]
+# The test bundle holds a copy of the package, and nothing below reads the
+# package file itself. On CI, delete it. Locally it stays for a later run.
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  rm -f "zarf-package-takserver-${arch}-dev-upstream.tar.zst"
+fi
+# The deploy extracts the bundle, pushes its images to the Zarf registry, and
+# the node pulls and unpacks them. Allow four times the bundle size for that.
+require_free "before the upgrade" $(( $(du -k "${next_bundles[0]}" | cut -f1) * 4 ))
 # core-base is already deployed by the released bundle. When this branch's
 # bundle has the same core-base entry (ref and overrides), deploying it again
 # changes nothing and costs about three minutes, so only TAK is upgraded.
@@ -235,6 +290,7 @@ else
   echo "core-base entry changed since ${tag}; the upgrade redeploys it"
 fi
 uds run deploy:test-bundle --no-progress --with options="${upgrade_options}"
+disk_report "after the upgrade"
 health
 mode="$(k get secret takserver-keystore -n takserver -o jsonpath='{.metadata.annotations.uds\.dev/keystore-password}')"
 after="$(k get secret takserver-keystore -n takserver -o jsonpath='{.data.CAPASS}' | base64 -d)"

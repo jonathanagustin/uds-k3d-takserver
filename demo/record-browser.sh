@@ -29,9 +29,10 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 name="$1"
 spec="$2"
-# 840 px of address bar and page, plus Chrome's tab strip (51 px at 1.25x).
+# About 840 px of address bar and page, plus Chrome's tab strip (51 px at
+# 1.25x). H.264 in yuv420p needs an even width and height.
 width=1632
-height=891
+height=892
 scale="${DEMO_SCALE:-1.25}"
 fps=30
 display=":${DEMO_DISPLAY:-99}"
@@ -100,6 +101,11 @@ for _ in $(seq 100); do
   fi
   sleep 0.1
 done
+if ! kill -0 "${ffmpeg_pid}" 2> /dev/null; then
+  cat "${work}/ffmpeg.log" >&2
+  echo "The screen capture did not start." >&2
+  exit 1
+fi
 
 # Node 25 and later ship without corepack. Keep corepack where it exists
 # (the CI runner's Node) and fall back to the pnpm that mise installs.
@@ -119,7 +125,7 @@ status=0
     "${pnpm[@]}" exec playwright test --config playwright.demo.config.ts "${spec}"
 ) || status=$?
 
-kill -INT "${ffmpeg_pid}"
+kill -INT "${ffmpeg_pid}" 2> /dev/null || true
 wait "${ffmpeg_pid}" || true
 ffmpeg_pid=""
 

@@ -16,7 +16,7 @@ import { dirname } from "node:path";
 
 import { type BrowserContext, chromium, expect, type Locator, type Page, test as base } from "@playwright/test";
 
-const [windowWidth, windowHeight] = (process.env.DEMO_WINDOW || "1632,891").split(",").map(Number);
+const [windowWidth, windowHeight] = (process.env.DEMO_WINDOW || "1632,892").split(",").map(Number);
 // Chrome draws at this scale, so the page reads like a 1306 px wide window
 // but is captured sharp at 1080p.
 const scale = Number(process.env.DEMO_SCALE || "1.25");

@@ -267,36 +267,52 @@ def prepare(raw, events_file, out_video, out_events, device=None, device_start=N
     for a, b in holds:
         print(f"holding frame {a - 1} over frames {a}-{b}", file=sys.stderr)
 
+    # Chrome tints its toolbar from the policy's theme colour with a strong
+    # blue. Most of that saturation is taken out so it reads as slate.
+    tool_h = (max(bar - tab, 2) + 1) // 2 * 2
     graph = [f"[0:v]fps={FPS},crop=iw:ih-{tab}:0:{tab},"
-             f"drawbox=x={w - 112}:y=0:w=112:h={max(bar - tab, 1)}:color={bar_color}:t=fill[c0]",
+             f"drawbox=x={w - 112}:y=0:w=112:h={max(bar - tab, 1)}:color={bar_color}:t=fill,split[t0][t1];"
+             f"[t1]crop=iw:{tool_h}:0:0,hue=s=0.3[t2];[t0][t2]overlay=0:0[c0]",
              hold_chain(holds, "c0", "c1")]
     inputs = ["-i", raw]
     last = "c1"
     phones = phone_intervals(events, duration)
     if device and Path(device).is_file() and phones:
-        box = [round(float(v) * dpr) for v in phones[0][2].split(",")]
-        start_wall = float(next(e["value"] for e in events if e["kind"] == "start"))
-        guess = float(Path(device_start).read_text().strip()) - start_wall if device_start else 0.0
-        offset = align(device, raw, box, phones, guess, tops[0] if tops else bar)
-        x, y, bw, bh = box
-        radius = round(34 * dpr)
-        mask = out_video + ".phone-mask.png"
-        from PIL import Image, ImageDraw
-        m = Image.new("L", (bw, bh), 0)
-        ImageDraw.Draw(m).rounded_rectangle((0, 0, bw - 1, bh - 1), radius, fill=255)
-        m.save(mask)
-        enable = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b, _ in phones)
-        shift = (f"setpts=PTS-STARTPTS+{offset:.3f}/TB" if offset >= 0
-                 else f"trim=start={-offset:.3f},setpts=PTS-STARTPTS")
-        inputs += ["-i", device]
-        graph.append(
-            f"[1:v]fps={FPS},{shift},scale={bw}:{bh}:flags=lanczos,format=rgba[dv];"
-            f"movie={mask},format=gray,loop=loop=-1:size=1,setpts=N/{FPS}/TB[dm];[dv][dm]alphamerge[dev];"
-            f"[{last}][dev]overlay=x={x}:y={y + page_top}:enable='{enable}':eof_action=pass:shortest=0[c2]")
-        last = "c2"
+        try:
+            box = [round(float(v) * dpr) for v in phones[0][2].split(",")]
+            start_wall = float(next(e["value"] for e in events if e["kind"] == "start"))
+            guess = float(Path(device_start).read_text().strip()) - start_wall if device_start else 0.0
+            offset = align(device, raw, box, phones, guess, tops[0] if tops else bar)
+            x, y, bw, bh = box
+            radius = round(34 * dpr)
+            mask = out_video + ".phone-mask.png"
+            from PIL import Image, ImageDraw
+            m = Image.new("L", (bw, bh), 0)
+            ImageDraw.Draw(m).rounded_rectangle((0, 0, bw - 1, bh - 1), radius, fill=255)
+            m.save(mask)
+            enable = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b, _ in phones)
+            shift = (f"setpts=PTS-STARTPTS+{offset:.3f}/TB" if offset >= 0
+                     else f"trim=start={-offset:.3f},setpts=PTS-STARTPTS")
+            inputs += ["-i", device]
+            graph.append(
+                f"[1:v]fps={FPS},{shift},scale={bw}:{bh}:flags=lanczos,format=rgba[dv];"
+                f"movie={mask},format=gray,loop=loop=-1:size=1,setpts=N/{FPS}/TB[dm];[dv][dm]alphamerge[dev];"
+                f"[{last}][dev]overlay=x={x}:y={y + page_top}:enable='{enable}':eof_action=pass:shortest=0[c2]")
+            last = "c2"
+        except (OSError, ValueError, StopIteration, subprocess.CalledProcessError) as err:
+            print(f"phone: device recording not used: {err}", file=sys.stderr)
+            graph, inputs, last = graph[:2], inputs[:2], "c1"
     first = out_video + ".p1.mp4"
-    run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]",
-        "-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", first)
+    enc = ["-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
+           "-pix_fmt", "yuv420p", first]
+    try:
+        run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *enc)
+    except subprocess.CalledProcessError as err:
+        if last != "c2":
+            raise
+        # The device recording could not be laid over: keep the browser view.
+        print(f"phone: device recording not used: {err.stderr.strip()[-300:]}", file=sys.stderr)
+        run("ffmpeg", "-v", "error", "-y", "-i", raw, "-filter_complex", ";".join(graph[:2]), "-map", "[c1]", *enc)
 
     cuts = stall_cuts(first, phones) if phones else []
     if cuts:

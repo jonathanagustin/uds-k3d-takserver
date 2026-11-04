@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.8.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.7.1...v0.8.0) (2026-11-04)
+
+
+### Features
+
+* **cloudtak:** let a non-admin group sign in to CloudTAK ([#263](https://github.com/jonathanagustin/uds-k3d-takserver/issues/263)) ([984c0a3](https://github.com/jonathanagustin/uds-k3d-takserver/commit/984c0a3953426f6aace7446a4538db7c72609ed2)), closes [#262](https://github.com/jonathanagustin/uds-k3d-takserver/issues/262)
+* **demo:** chapter clips, doc stills, and real upgrade and regular-user chapters ([#268](https://github.com/jonathanagustin/uds-k3d-takserver/issues/268)) ([6b5ef8e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/6b5ef8ea0c14da00b837f6886123a4cfbb73fba1))
+* expose TAK QUIC on UDP 8090 through Envoy Gateway ([#188](https://github.com/jonathanagustin/uds-k3d-takserver/issues/188)) ([288f62c](https://github.com/jonathanagustin/uds-k3d-takserver/commit/288f62cd6d7e5b6cb6db29c37bfad7f5b9ca827f))
+* **pepr:** set plugins memory from package values ([#275](https://github.com/jonathanagustin/uds-k3d-takserver/issues/275)) ([69c0efa](https://github.com/jonathanagustin/uds-k3d-takserver/commit/69c0efa76dba2ab17876a263c54a222ab8e3ae03))
+
+
+### Bug Fixes
+
+* **bench:** pair image pulls per container so pull time is never negative ([#250](https://github.com/jonathanagustin/uds-k3d-takserver/issues/250)) ([cfd43c4](https://github.com/jonathanagustin/uds-k3d-takserver/commit/cfd43c4e257c1d15c3576f1a3eef7dc1e2e95279))
+* **ci:** free disk in the upgrade test and fail early when the runner is too small ([#287](https://github.com/jonathanagustin/uds-k3d-takserver/issues/287)) ([004c11d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/004c11d772483518b757ff33d4e830366671e05c))
+* **ci:** retry the Copa patch when the package mirror drops ([#249](https://github.com/jonathanagustin/uds-k3d-takserver/issues/249)) ([6ff6e6a](https://github.com/jonathanagustin/uds-k3d-takserver/commit/6ff6e6af95fee2c2f1a2d8473cc43bd7e5e1ffcb))
+* close the code gaps from the 0.7 docs audit ([#246](https://github.com/jonathanagustin/uds-k3d-takserver/issues/246)) ([03dc46a](https://github.com/jonathanagustin/uds-k3d-takserver/commit/03dc46aac051e17f899676d5d06a92e0c5f9fe42))
+* **falco:** skip the cert-init container and redact passwords from CI logs ([#248](https://github.com/jonathanagustin/uds-k3d-takserver/issues/248)) ([710d674](https://github.com/jonathanagustin/uds-k3d-takserver/commit/710d67483b85a08c9004970016ee2064f87d2f61))
+* **pepr:** send the TAK Deployments and Ignite objects to admission ([#274](https://github.com/jonathanagustin/uds-k3d-takserver/issues/274)) ([e512984](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e512984280050bef184b5341209df6b9aee392a7))
+* **uptime:** probe TAK's own /login page and follow the UDS Core uptime pattern ([#253](https://github.com/jonathanagustin/uds-k3d-takserver/issues/253)) ([97e54b3](https://github.com/jonathanagustin/uds-k3d-takserver/commit/97e54b37d1bb2ca4050927e457a7db4e5d1f5f18))
+
+
+### Miscellaneous
+
+* **deps:** pnpm 12.16.1 for the Playwright tests (refs [#103](https://github.com/jonathanagustin/uds-k3d-takserver/issues/103)) ([#278](https://github.com/jonathanagustin/uds-k3d-takserver/issues/278)) ([41c926d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/41c926da318f5c372a1a5b9cefacefc6894ada84))
+* **deps:** update helm to v4.3.1 ([#251](https://github.com/jonathanagustin/uds-k3d-takserver/issues/251)) ([e1fb513](https://github.com/jonathanagustin/uds-k3d-takserver/commit/e1fb51307959c5b188134db165b6185b2753a094))
+* **deps:** update nats to v2.15.2 ([#247](https://github.com/jonathanagustin/uds-k3d-takserver/issues/247)) ([5b81c0b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/5b81c0b8e3fbfd564198a6e9c98de156cd74259d))
+* **deps:** update tak server package dependencies ([#242](https://github.com/jonathanagustin/uds-k3d-takserver/issues/242)) ([cf65254](https://github.com/jonathanagustin/uds-k3d-takserver/commit/cf6525411cace7ac895b8775d401e5d3ed2a65e5))
+* **deps:** update tak server support dependencies ([#243](https://github.com/jonathanagustin/uds-k3d-takserver/issues/243)) ([48ac7b1](https://github.com/jonathanagustin/uds-k3d-takserver/commit/48ac7b114317acf2e53e4a35a0df337369404396))
+* move to node 26 where it builds and batch Renovate weekly ([#265](https://github.com/jonathanagustin/uds-k3d-takserver/issues/265)) ([aa6635b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/aa6635b7e38aa65fa62e1ec00210cb50b9eeefa4))
+* **pepr:** describe all five capabilities and track the release version ([#270](https://github.com/jonathanagustin/uds-k3d-takserver/issues/270)) ([a1192bb](https://github.com/jonathanagustin/uds-k3d-takserver/commit/a1192bbbba47368713dc1d1cda1b92b3ad8ff2e1))
+
+
+### Documentation
+
+* **adr:** record why the upstream chart is adapted with Pepr ([#272](https://github.com/jonathanagustin/uds-k3d-takserver/issues/272)) ([2622e5b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/2622e5bc21176b2affb9d1842d80993477d36f94))
+* bring the guides up to 0.7 and fix the docs site layout ([#244](https://github.com/jonathanagustin/uds-k3d-takserver/issues/244)) ([4fa887d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/4fa887dd27f6f4c6551217f05ca795c25c78fb69))
+* **building:** stop naming a stale UBI tag and note PostGIS gets Copa ([#252](https://github.com/jonathanagustin/uds-k3d-takserver/issues/252)) ([1577067](https://github.com/jonathanagustin/uds-k3d-takserver/commit/15770677cb3eaa5f4b1a683e382173b28848e906))
+
 ## [0.7.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.7.0...v0.7.1) (2026-11-02)
 
 

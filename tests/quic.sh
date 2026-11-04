@@ -244,8 +244,11 @@ hold_and_check() {
     return 2
   fi
 
+  # TAK took about 27 seconds to list the client on a passing arm64 run and
+  # had not listed it after 30 seconds on the failing amd64 run, so poll for
+  # about 90 seconds.
   local body="" listed=""
-  for _ in $(seq 1 15); do
+  for _ in $(seq 1 45); do
     body="$(subscriptions)"
     if grep -q "${uid}" <<< "${body}"; then
       listed=1
@@ -264,9 +267,9 @@ hold_and_check() {
 }
 
 # TAK 5.7 can leave a new subscription out of the listing even though it
-# holds the stream and set its callsign (seen on main run 41765540349). The
-# 8089 check in api-smoke.sh hits the same thing and reconnects once, as a
-# device would. Do the same here.
+# holds the stream and set its callsign (main run 41765540349). The 8089
+# check in api-smoke.sh hits the same thing and reconnects once, as a device
+# would. Do the same here.
 rc=1
 for attempt in 1 2; do
   rc=0

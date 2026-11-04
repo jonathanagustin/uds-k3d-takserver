@@ -155,8 +155,9 @@ async def reject(host, port):
 
 async def roundtrip(host, port, cert, key, password, uid, ready, stop):
     transport = None
+    protocol = None
     try:
-        transport, _protocol, reader, writer = await asyncio.wait_for(
+        transport, protocol, reader, writer = await asyncio.wait_for(
             open_stream(host, port, configuration(cert, key, password)),
             20,
         )
@@ -174,14 +175,32 @@ async def roundtrip(host, port, cert, key, password, uid, ready, stop):
         else:
             print("no reply on the QUIC stream yet; the subscription check decides", file=sys.stderr)
         Path(ready).write_text(uid)
-        deadline = time.monotonic() + 60
+        # TAK can take about 30 seconds to list a new subscription, so hold
+        # the stream until the script says stop. A PING every 10 seconds
+        # keeps the connection inside its idle timeout.
+        deadline = time.monotonic() + 180
+        next_ping = time.monotonic() + 10
         while time.monotonic() < deadline and not Path(stop).exists():
+            if time.monotonic() >= next_ping:
+                next_ping = time.monotonic() + 10
+                try:
+                    await asyncio.wait_for(protocol.ping(), 5)
+                except (TimeoutError, ConnectionError) as exc:
+                    print(f"QUIC ping failed: {type(exc).__name__}", file=sys.stderr)
             await asyncio.sleep(0.5)
         return 0
     except Exception as exc:
         print(f"QUIC round trip failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     finally:
+        # Close the QUIC connection before the socket, so aioquic does not
+        # try to send on a closed transport.
+        if protocol is not None:
+            protocol.close()
+            try:
+                await asyncio.wait_for(protocol.wait_closed(), 2)
+            except TimeoutError:
+                pass
         if transport is not None:
             transport.close()
 

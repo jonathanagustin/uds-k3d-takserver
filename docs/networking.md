@@ -174,7 +174,7 @@ The messaging image ships the Netty QUIC native library for both linux-x86_64 an
 The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on both amd64 and arm64:
 
 - A client with no certificate must be refused with a TLS alert. No answer at all fails the test, so a broken route cannot pass as a refusal.
-- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`. TAK 5.7 sometimes leaves a new stream out of that list, so the client reconnects once before the test fails, like the port 8089 check in `tests/api-smoke.sh`.
+- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`. TAK can take about 30 seconds to add a new stream to that list, so the script waits up to about 90 seconds. If the uid still is not listed, the client reconnects once before the test fails, like the port 8089 check in `tests/api-smoke.sh`.
 
 The script exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
 

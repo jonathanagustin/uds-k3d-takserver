@@ -18,6 +18,7 @@ import {
   mark,
   showCursor,
   start,
+  still,
   test,
   typeLikeAPerson,
   watchSecurity,
@@ -99,6 +100,7 @@ test("ATAK test device and CloudTAK through UDS Core SSO", async ({ page }) => {
   }, testLocation);
   await map.waitForTimeout(3_000);
   caption("Its marker sits at a fixed TEST LOCATION on the National Mall, not a GPS fix");
+  await still(map, "cloudtak-atak-marker");
   mark("zoom", "0.5,0.5,1.6");
   await map.waitForTimeout(6_000);
 

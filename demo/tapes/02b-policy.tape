@@ -23,6 +23,8 @@ Type@75ms "kubectl get pods -n takserver -l app=takserver-messaging -o yaml | yq
 Sleep 400ms
 Enter
 Sleep 3200ms
+Screenshot "demo/out/shots/pepr-mutations.png"
+Sleep 1s
 # caption: Narrow, documented policy exemption: one policy, one hook pod
 Type@80ms "kubectl get exemptions -A"
 Sleep 400ms

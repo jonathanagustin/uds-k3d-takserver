@@ -84,9 +84,22 @@ The shell scripts, Helm templates and the TAK and CloudTAK behavior are tested b
 
 The two videos in the README come from the Demo workflow (`.github/workflows/demo.yaml`). Pull requests that touch `demo/` or `tests/demo/` run it as a check, and nothing is published.
 
-To update the videos, run the Demo workflow by hand from `main`. Its last job replaces `demo-deploy.mp4` and `demo-operate-and-trust.mp4` on the fixed `demo` release, so the README's download links stay valid across package releases.
+One run records everything from the same cluster:
 
-The inline players in the README are a separate thing. GitHub only plays a video in a page when it was uploaded through its web editor, and there is no API for that. After a run, download the two files from the `demo` release, upload them by hand in the README editor, and paste the new `user-attachments` URLs into `README.md`.
+- **The two videos.** `demo-deploy.mp4` and `demo-operate-and-trust.mp4`.
+- **One short clip per chapter.** For example `demo-clip-airgap.mp4`. The doc pages show these.
+- **Stills for the docs.** The tapes and the browser walkthroughs save them as they record, so a still can't show a different version than the video.
+
+The run shows the release in `.release-please-manifest.json`. It stamps that version on the package and the bundle, and it checks the published package for that version. Record after the release workflow has published it. The upgrade chapter runs last. It installs the release before that one on a new cluster, then upgrades it to this run's bundle (`demo/upgrade.sh`).
+
+To update everything after a release:
+
+1. Run the Demo workflow by hand from `main` with `atak` on. To record exactly the release, set `app_ref` to its tag, for example `v0.7.2`. The last jobs put the videos and clips on the fixed `demo` release and sign them, so the download links stay valid across package releases.
+2. Run `uds run demo-sync-assets --set DEMO_RUN_ID=<run id>`. It copies the posters and stills into `docs-site/public/demo/` and rewrites the README chapter lists and lengths.
+3. Update the README players by hand. GitHub only plays a video in a page when it was uploaded through its web editor, and there is no API for that. Download the two videos from the `demo` release, drag them into the README editor, and paste the new `user-attachments` URLs into `README.md`.
+4. Open a pull request with the changes.
+
+The doc pages link a clip as a poster image: `[![Alt text](../docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-airgap.mp4)`. GitHub shows the poster, which links to the clip. The docs site turns the same line into a player.
 
 ## License
 

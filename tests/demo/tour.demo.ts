@@ -17,6 +17,7 @@ import {
   start,
   test,
   typeLikeAPerson,
+  still,
   visit,
   watchSecurity,
 } from "./browser";
@@ -65,6 +66,7 @@ test("TAK web UI through UDS Core SSO", async ({ page }) => {
   await showCursor(page);
   await expectSecure(page);
   caption("Signed in to TAK with a Keycloak account: server monitor");
+  await still(page, "tak-dashboard");
   mark("zoom", "0.5,0.35,1.3");
   await page.waitForTimeout(4_000);
 

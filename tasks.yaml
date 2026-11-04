@@ -21,6 +21,9 @@ variables:
     default: 5.7-RELEASE-14
   - name: PACKAGE_NAME
     default: takserver
+  # The Demo Video run that demo-sync-assets copies from.
+  - name: DEMO_RUN_ID
+    default: ""
   - name: TARGET_REPO
     default: ghcr.io/jonathanagustin/uds-k3d-takserver
   # Extra zarf package create flags. Docker Hub limits anonymous pulls per IP
@@ -147,12 +150,22 @@ tasks:
     actions:
       - cmd: ./demo/record-terminal.sh
       - cmd: ./demo/record-web.sh
+      - cmd: |
+          if grep -q '/CloudTAK/Users' charts/cloudtak/values.yaml; then
+            DEMO_KEYCLOAK_USER=mapdemo DEMO_KEYCLOAK_GROUPS="/CloudTAK/Users,/TAK/Operators_READ" \
+              ./demo/record-web.sh 07-user cloudtak-user.demo.ts "map.uds.dev sso.uds.dev takserver.uds.dev"
+          fi
       # The ATAK chapter needs the device from atak/ci/e2e.sh (KVM, amd64).
       - cmd: |
           if uds zarf tools kubectl get vmi -n atak atak-device >/dev/null 2>&1; then
             ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev"
           fi
       - cmd: ./demo/assemble.sh
+
+  - name: demo-sync-assets
+    description: Copy a Demo Video run's posters, stills and chapter times into the docs (--set DEMO_RUN_ID=...)
+    actions:
+      - cmd: python3 ./demo/sync-assets.py "${DEMO_RUN_ID}"
 
   - name: test-full-core
     description: Deploy the functional layers on the slim checkpoint and run the full-core checks

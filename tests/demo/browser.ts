@@ -41,6 +41,15 @@ export function caption(text: string) {
   mark("caption", text);
 }
 
+// A still for the docs, from the same walkthrough as the video, so the two
+// cannot drift. demo/assemble.sh turns demo/out/shots/*.png into WebP.
+// Only the page is captured, not Chrome's own bars.
+export async function still(page: Page, name: string) {
+  const dir = process.env.DEMO_SHOTS || "../demo/out/shots";
+  mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: `${dir}/${name}.png` }).catch((error) => console.log(`still ${name}: ${error}`));
+}
+
 function saveEvents() {
   mkdirSync(dirname(eventsFile), { recursive: true });
   writeFileSync(eventsFile, JSON.stringify(events, null, 2));
@@ -289,6 +298,7 @@ export async function cloudtakReady(page: Page, callsign: string) {
     await clickLikeAPerson(page, page.getByPlaceholder("Enter your callsign"));
     await typeLikeAPerson(page, callsign);
     await page.waitForTimeout(500);
+    await still(page, "cloudtak-callsign");
     await clickLikeAPerson(page, page.getByRole("button", { name: "Get Started" }));
     await skipNow.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
   }

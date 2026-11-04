@@ -166,6 +166,12 @@ function rewriteDestination(fromSrc, destination, byPath) {
   let resolved = normalizeRepoPath(joined);
   const directoryLink = pathPart.endsWith('/');
   if (resolved.endsWith('/')) resolved = resolved.slice(0, -1);
+  // Docs show the demo stills and clip posters from docs-site/public/, so the
+  // same file works on GitHub (a repository path) and on the site (served
+  // from the site root).
+  if (resolved.startsWith('docs-site/public/')) {
+    return `${siteBase}/${resolved.slice('docs-site/public/'.length)}${hash}${suffix}`;
+  }
 
   const candidates = [resolved];
   if (!resolved.endsWith('.md')) candidates.push(`${resolved}.md`, `${resolved}/index.md`);
@@ -215,9 +221,24 @@ async function fetchDemoVideos() {
 function embedDemoVideos(markdown, videos) {
   // A README line that is only a user-attachments URL is GitHub's inline
   // player. On the site it becomes a <video> for the next demo download link.
+  // A line that is only a poster linking to a demo release video (a chapter
+  // clip on a doc page, written as [![alt](poster)](video) so GitHub shows
+  // the poster) becomes a <video> with that poster.
   const lines = markdown.split('\n');
   return lines
     .map((line, index) => {
+      const clip = line
+        .trim()
+        .match(/^\[!\[([^\]]*)\]\(([^)\s]+\.(?:jpg|png|webp))\)\]\(https:\/\/github\.com\/[^)\s]+\/releases\/download\/demo\/([\w.-]+\.mp4)\)$/);
+      if (clip) {
+        if (!videos.has(clip[3])) return line;
+        const label = clip[1].replace(/"/g, '&quot;');
+        return [
+          `<video controls preload="none" playsinline width="1280" height="720" poster="${clip[2]}" aria-label="${label}">`,
+          `  <source src="${siteBase}/demo/${clip[3]}" type="video/mp4" />`,
+          `</video>`,
+        ].join('\n');
+      }
       if (!/^https:\/\/github\.com\/user-attachments\/assets\/\S+$/.test(line.trim())) return line;
       const next = lines.slice(index + 1).join('\n').match(/releases\/download\/demo\/([\w.-]+\.mp4)/);
       if (!next || !videos.has(next[1])) return line;
@@ -291,7 +312,7 @@ async function writePage(page, byPath, videos, headings) {
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
   const local = titleLinkLabels(dropGithubOnly(dropFirstHeading(body)), page.src, headings);
   let content = rewriteLinks(local, page.src, byPath);
-  if (page.src === 'README.md') content = embedDemoVideos(content, videos);
+  content = embedDemoVideos(content, videos);
   const markdown = `${frontmatter(page, body)}${content}`;
   const destination = path.join(outRoot, `${page.slug}.md`);
   await mkdir(path.dirname(destination), { recursive: true });

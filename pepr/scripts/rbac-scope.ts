@@ -214,7 +214,8 @@ const ROLE_RULES = [
 
 // Secrets and TakClients are for the watcher only.
 export function watcherOnly(rule: ChartRule): boolean {
-  return (rule.resources ?? []).includes("secrets") || (rule.apiGroups ?? []).includes(TAKCLIENT_GROUP);
+  // An exact match on each API group, not a substring check.
+  return (rule.resources ?? []).includes("secrets") || (rule.apiGroups ?? []).some(group => group === TAKCLIENT_GROUP);
 }
 
 function roleDoc(kind: "Role" | "ClusterRole", name: string, namespace: string | undefined, rules: ChartRule[]) {

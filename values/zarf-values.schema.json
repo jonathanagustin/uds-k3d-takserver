@@ -54,6 +54,18 @@
           "type": "string"
         }
       }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "string", "enum": ["true", "false"] }
+          ]
+        }
+      }
     }
   }
 }

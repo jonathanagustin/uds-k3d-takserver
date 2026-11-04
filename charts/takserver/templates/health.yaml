@@ -1,0 +1,120 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+{{- if include "takserver.healthEnabled" . }}
+# TAK client-port health for UDS Core uptime checks. See files/health/ and
+# docs/networking.md. Uses the config image, which already has openssl and
+# the JDK. The client certificate is its own, issued by the cert-init Job
+# into Secret {{ .Values.health.secret }}. TAK has no user entry for it, so it
+# has no TAK groups and no admin role.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tak-health
+data:
+  health.sh: |
+{{ .Files.Get "files/health/health.sh" | indent 4 }}
+  Health.java: |
+{{ .Files.Get "files/health/Health.java" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tak-health
+  labels:
+    app: tak-health
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tak-health
+  template:
+    metadata:
+      labels:
+        app: tak-health
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: health
+          image: {{ .Values.certs.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "/health/health.sh"]
+          env:
+            - name: GATEWAY
+              value: {{ .Values.health.passthroughService | quote }}
+            - name: DOMAIN
+              value: {{ .Values.domain | quote }}
+            - name: PORT
+              value: {{ .Values.health.port | quote }}
+            - name: INTERVAL_SECONDS
+              value: {{ .Values.health.intervalSeconds | quote }}
+            - name: STALE_SECONDS
+              value: {{ .Values.health.staleSeconds | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.health.port }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 160Mi
+          volumeMounts:
+            - name: script
+              mountPath: /health
+              readOnly: true
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: tak-health
+        - name: certs
+          secret:
+            secretName: {{ .Values.health.secret | quote }}
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+              - key: client.pem
+                path: client.pem
+              - key: client.key
+                path: client.key
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tak-health
+spec:
+  selector:
+    app: tak-health
+  ports:
+    - name: http
+      port: {{ .Values.health.port }}
+      targetPort: http
+{{- end }}

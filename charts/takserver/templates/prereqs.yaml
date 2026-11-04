@@ -120,7 +120,7 @@ rules:
     verbs: ["get", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["takserver-keystore", "takserver-ca-key", "takserver-certs"]
+    resourceNames: ["takserver-keystore", "takserver-ca-key", "takserver-certs", "tak-health-client"]
     verbs: ["get", "update", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
@@ -165,8 +165,9 @@ spec:
         - name: certs
           image: {{ .Values.certs.image | quote }}
           imagePullPolicy: IfNotPresent
-          # issue-web-cert.sh and move-ca-key.sh exit 0 when the work is
-          # already done. A subshell keeps that from skipping the rest.
+          # issue-web-cert.sh, issue-health-cert.sh, and move-ca-key.sh exit 0
+          # when the work is already done. A subshell keeps that from skipping
+          # the rest.
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -175,6 +176,11 @@ spec:
               {{- if .Values.api.web.backendTLS.enabled }}
               (
               {{- .Files.Get "files/scripts/issue-web-cert.sh" | nindent 14 }}
+              )
+              {{- end }}
+              {{- if include "takserver.healthEnabled" . }}
+              (
+              {{- .Files.Get "files/scripts/issue-health-cert.sh" | nindent 14 }}
               )
               {{- end }}
               (
@@ -186,6 +192,8 @@ spec:
               value: {{ .Values.api.web.service | quote }}
             - name: WEB_KEYSTORE
               value: {{ .Values.api.web.backendTLS.keystore | quote }}
+            - name: HEALTH_SECRET
+              value: {{ .Values.health.secret | quote }}
             - name: CA_NAME
               value: {{ .Values.certs.caName | quote }}
             - name: STATE

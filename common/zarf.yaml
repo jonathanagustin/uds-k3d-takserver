@@ -23,6 +23,8 @@ components:
         values:
           - sourcePath: .global.domain
             targetPath: .domain
+          - sourcePath: .health.enabled
+            targetPath: .health.enabled
       # Admission module. Installed before the upstream chart so that every
       # TAK pod is created with the init container that renders the OIDC client
       # secret into CoreConfig.xml. The chart is built by pepr/build.sh when the

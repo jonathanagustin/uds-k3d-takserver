@@ -25,14 +25,14 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 <details>
 <summary>Chapters</summary>
 
-- 0:05 UDS Core (Slim) on a New k3d Cluster
-- 0:20 Build the Zarf Package
-- 0:35 Bundle the Package with UDS Core
-- 0:47 Deploy the Bundle
-- 1:06 Package Ready
-- 1:27 Sign In through UDS SSO
-- 1:56 CloudTAK for Regular Users
-- 2:36 A Real ATAK Device on the Same Server
+- 0:03 UDS Core (Slim) on a New k3d Cluster
+- 0:18 Build the Zarf Package
+- 0:33 Bundle the Package with UDS Core
+- 0:44 Deploy the Bundle
+- 1:03 Package Ready
+- 1:22 Sign In through UDS SSO
+- 1:50 CloudTAK for Regular Users
+- 2:27 A Real ATAK Device on the Same Server
 
 </details>
 
@@ -40,20 +40,20 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
 ### Operate and Trust
 
-Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 6 min.
+Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 5 min.
 
 https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
 
 <details>
 <summary>Chapters</summary>
 
-- 0:04 Air-Gapped Install
+- 0:03 Air-Gapped Install
 - 0:43 Policy at Work
-- 1:05 CloudTAK and ATAK in Sync
-- 2:57 Secure by Default
-- 3:51 Upgrades from the Last Signed Release
-- 4:53 Footprint and Self-Healing
-- 5:24 What This Does Not Prove
+- 1:04 CloudTAK and ATAK in Sync
+- 2:30 Secure by Default
+- 3:13 Upgrades from the Last Signed Release
+- 4:10 Footprint and Self-Healing
+- 4:42 What This Does Not Prove
 
 </details>
 

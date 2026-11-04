@@ -24,6 +24,13 @@ export const TAK_APPS = [
   "takserver-plugins",
 ];
 
+// The TAK CA's CRL, written by the TakClient capability (ADR 22). CoreConfig
+// names certs/crl/ca.crl, and TAK fails client TLS without the file, so the
+// volume is not optional: a pod waits for the Secret. The cluster images run
+// from /, so CoreConfig's relative certs/ paths resolve under /certs.
+export const CRL_VOLUME = "takserver-crl";
+export const CRL_MOUNT = "/certs/crl";
+
 export const RELOAD_LABEL = "uds.dev/oidc-reload";
 export const RELOAD_VALUE = "takserver";
 export const INIT_NAME = "render-oidc";
@@ -95,6 +102,7 @@ function renderVolumes(): Volume[] {
     { name: "oidc-template", configMap: { name: "core-config" } },
     { name: "oidc-secret", secret: { secretName: "takserver-sso" } },
     { name: "keystore-secret", secret: { secretName: "takserver-keystore" } },
+    { name: CRL_VOLUME, secret: { secretName: CRL_VOLUME, items: [{ key: "ca.crl", path: "ca.crl" }] } },
   ];
 }
 
@@ -148,6 +156,10 @@ export function addRender(pod: PodLike, image: string): boolean {
     const mounts = (main.volumeMounts ??= []);
     if (!mounts.some(existing => existing.name === CONFIG_MOUNT)) {
       mounts.push({ name: CONFIG_MOUNT, mountPath: "/conf" });
+      changed = true;
+    }
+    if (!mounts.some(existing => existing.name === CRL_VOLUME)) {
+      mounts.push({ name: CRL_VOLUME, mountPath: CRL_MOUNT, readOnly: true });
       changed = true;
     }
     const app = pod.metadata?.labels?.app;

@@ -41,6 +41,13 @@
 // for a different name stays forbidden, and an unfiltered list stays
 // forbidden. The chart schema still rejects `resourceNames` on `values.rbac`,
 // so this ClusterRole is its own manifest.
+//
+// Two ServiceAccounts (ADR 22). The admission pods keep `pepr-<uuid>`. The
+// watcher runs as `pepr-<uuid>-watcher`. Every Secret rule and every TakClient
+// rule goes into Roles and a ClusterRole bound only to the watcher account.
+// The admission pods read the core-config ConfigMap and nothing else, so they
+// cannot read any Secret, including `takserver-ca-key`. The other rules are
+// bound to both accounts.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -62,7 +69,13 @@ const MOVED = new Set([
   "deployments/scale",
   "statefulsets",
   "destinationrules",
+  "takclients",
 ]);
+
+const TAKCLIENT_GROUP = "tak.jonathanagustin.github.io";
+
+export const ADMISSION_SA = "{{ .Values.uuid }}";
+export const WATCHER_SA = "{{ .Values.uuid }}-watcher";
 
 const TAK = ["takserver-config", "takserver-messaging", "takserver-api", "takserver-plugins"];
 
@@ -86,9 +99,13 @@ const ROLE_RULES = [
       {
         apiGroups: [""],
         resources: ["secrets"],
-        resourceNames: ["takserver-keystore", "takserver-certs"],
+        resourceNames: ["takserver-keystore", "takserver-certs", "takserver-ca-key"],
         verbs: ["get", "list", "watch"],
       },
+      // The CRL the TakClient capability writes (ADR 22). Secret create
+      // cannot be pinned to a name.
+      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-crl"], verbs: ["get", "patch"] },
+      { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },
       { apiGroups: ["apps"], resources: ["deployments/scale"], resourceNames: TAK, verbs: ["get", "patch", "update"] },
@@ -112,6 +129,16 @@ const ROLE_RULES = [
         resourceNames: ["takserver-web"],
         verbs: ["get", "list", "watch"],
       },
+    ],
+  },
+  // TakClients and their Secrets (ADR 22). Only those Secrets live in this
+  // namespace, so the Secret verbs are not pinned to names.
+  {
+    namespace: "takclients",
+    rules: [
+      { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients"], verbs: ["get", "patch"] },
+      { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients/status"], verbs: ["get", "patch"] },
+      { apiGroups: [""], resources: ["secrets"], verbs: ["get", "create", "patch", "delete"] },
     ],
   },
   {
@@ -185,32 +212,34 @@ const ROLE_RULES = [
   },
 ];
 
-function roleDoc(namespace: string, rules: ChartRule[]) {
+// Secrets and TakClients are for the watcher only.
+export function watcherOnly(rule: ChartRule): boolean {
+  // An exact match on each API group, not a substring check.
+  return (rule.resources ?? []).includes("secrets") || (rule.apiGroups ?? []).some(group => group === TAKCLIENT_GROUP);
+}
+
+function roleDoc(kind: "Role" | "ClusterRole", name: string, namespace: string | undefined, rules: ChartRule[]) {
   return {
     apiVersion: "rbac.authorization.k8s.io/v1",
-    kind: "Role",
-    metadata: { name: "{{ .Values.uuid }}", namespace },
+    kind,
+    metadata: namespace ? { name, namespace } : { name },
     rules,
   };
 }
 
-function bindingDoc(namespace: string) {
+function bindingDoc(kind: "Role" | "ClusterRole", name: string, namespace: string | undefined, accounts: string[]) {
   return {
     apiVersion: "rbac.authorization.k8s.io/v1",
-    kind: "RoleBinding",
-    metadata: { name: "{{ .Values.uuid }}", namespace },
-    roleRef: {
-      apiGroup: "rbac.authorization.k8s.io",
-      kind: "Role",
-      name: "{{ .Values.uuid }}",
-    },
-    subjects: [{ kind: "ServiceAccount", name: "{{ .Values.uuid }}", namespace: "pepr-system" }],
+    kind: kind === "Role" ? "RoleBinding" : "ClusterRoleBinding",
+    metadata: namespace ? { name, namespace } : { name },
+    roleRef: { apiGroup: "rbac.authorization.k8s.io", kind, name },
+    subjects: accounts.map(account => ({ kind: "ServiceAccount", name: account, namespace: "pepr-system" })),
   };
 }
 
 // One rule per resource. Every name the Roles grant `watch` is listed here,
 // because the watcher asks for each of those names at cluster scope.
-function watchClusterRules(): ChartRule[] {
+export function watchClusterRules(): ChartRule[] {
   const grouped = new Map<string, ChartRule>();
   for (const entry of ROLE_RULES) {
     for (const rule of entry.rules) {
@@ -240,39 +269,70 @@ function watchClusterRules(): ChartRule[] {
       found.resourceNames = names;
     }
   }
-  return [...grouped.values()];
+  // The TakClient watch has no name filter, so it is cluster-wide. TakClients
+  // outside namespace takclients are ignored by the capability.
+  return [
+    ...grouped.values(),
+    { apiGroups: [TAKCLIENT_GROUP], resources: ["takclients"], verbs: ["list", "watch"] },
+  ];
 }
 
-function clusterWatchDoc(rules: ChartRule[]) {
-  return {
-    apiVersion: "rbac.authorization.k8s.io/v1",
-    kind: "ClusterRole",
-    metadata: { name: "{{ .Values.uuid }}-watch" },
-    rules,
-  };
-}
-
-function clusterWatchBindingDoc() {
-  return {
-    apiVersion: "rbac.authorization.k8s.io/v1",
-    kind: "ClusterRoleBinding",
-    metadata: { name: "{{ .Values.uuid }}-watch" },
-    roleRef: {
-      apiGroup: "rbac.authorization.k8s.io",
-      kind: "ClusterRole",
-      name: "{{ .Values.uuid }}-watch",
-    },
-    subjects: [{ kind: "ServiceAccount", name: "{{ .Values.uuid }}", namespace: "pepr-system" }],
-  };
+export function watcherServiceAccount(): string {
+  return stringify({
+    apiVersion: "v1",
+    kind: "ServiceAccount",
+    metadata: { name: WATCHER_SA, namespace: "pepr-system" },
+  });
 }
 
 export function roleManifest(): string {
-  const docs: object[] = [clusterWatchDoc(watchClusterRules()), clusterWatchBindingDoc()];
+  const watch = watchClusterRules();
+  const sharedWatch = watch.filter(rule => !watcherOnly(rule));
+  const watcherWatch = watch.filter(rule => watcherOnly(rule));
+  const both = [ADMISSION_SA, WATCHER_SA];
+  const docs: object[] = [
+    roleDoc("ClusterRole", `${ADMISSION_SA}-watch`, undefined, sharedWatch),
+    bindingDoc("ClusterRole", `${ADMISSION_SA}-watch`, undefined, both),
+    roleDoc("ClusterRole", `${WATCHER_SA}-watch`, undefined, watcherWatch),
+    bindingDoc("ClusterRole", `${WATCHER_SA}-watch`, undefined, [WATCHER_SA]),
+  ];
   for (const entry of ROLE_RULES) {
-    docs.push(roleDoc(entry.namespace, entry.rules));
-    docs.push(bindingDoc(entry.namespace));
+    const shared = entry.rules.filter(rule => !watcherOnly(rule));
+    const watcher = entry.rules.filter(rule => watcherOnly(rule));
+    if (shared.length > 0) {
+      docs.push(roleDoc("Role", ADMISSION_SA, entry.namespace, shared));
+      docs.push(bindingDoc("Role", ADMISSION_SA, entry.namespace, both));
+    }
+    if (watcher.length > 0) {
+      docs.push(roleDoc("Role", WATCHER_SA, entry.namespace, watcher));
+      docs.push(bindingDoc("Role", WATCHER_SA, entry.namespace, [WATCHER_SA]));
+    }
   }
   return docs.map(doc => stringify(doc, { aliasDuplicateObjects: false })).join("---\n");
+}
+
+// The generated ClusterRoleBinding names only the admission account. The
+// watcher needs the same cluster rules (namespaces, the store CRD,
+// peprstores), so it is added as a second subject.
+export function bindWatcher(text: string): string {
+  const subject = /^  - kind: ServiceAccount\n    name: \S+\n    namespace: pepr-system$/gm;
+  const found = text.match(subject);
+  if (found?.length !== 1) {
+    throw new Error("cluster-role-binding.yaml no longer has one ServiceAccount subject");
+  }
+  return text.replace(
+    found[0],
+    `${found[0]}\n  - kind: ServiceAccount\n    name: "${WATCHER_SA}"\n    namespace: pepr-system`,
+  );
+}
+
+// Points the watcher Deployment at its own ServiceAccount.
+export function useWatcherAccount(text: string): string {
+  const line = "      serviceAccountName: {{ .Values.uuid }}\n";
+  if (text.split(line).length !== 2) {
+    throw new Error("watcher-deployment.yaml no longer has one serviceAccountName line");
+  }
+  return text.replace(line, `      serviceAccountName: ${WATCHER_SA}\n`);
 }
 
 export function clusterRules(rules: ChartRule[]): ChartRule[] {
@@ -327,5 +387,14 @@ export function applyChartRbac(chartDir: string): void {
   }
   doc.set("rbac", next);
   writeFileSync(valuesPath, String(doc));
-  writeFileSync(join(chartDir, "templates", "namespaced-roles.yaml"), roleManifest());
+  const templates = join(chartDir, "templates");
+  writeFileSync(join(templates, "namespaced-roles.yaml"), roleManifest());
+  writeFileSync(join(templates, "watcher-service-account.yaml"), watcherServiceAccount());
+  for (const [file, edit] of [
+    ["cluster-role-binding.yaml", bindWatcher],
+    ["watcher-deployment.yaml", useWatcherAccount],
+  ] as const) {
+    const path = join(templates, file);
+    writeFileSync(path, edit(readFileSync(path, "utf8")));
+  }
 }

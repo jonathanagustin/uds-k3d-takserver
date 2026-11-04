@@ -26,6 +26,7 @@ tasks:
       - task: usage
       - task: cert-rotation
       - task: nats
+      - task: takclient
 
   - name: health-check
     description: Wait for TAK deployments, pods, and the Package CR
@@ -847,6 +848,11 @@ tasks:
     description: TLS handshake and HTTP status for the 8446 and 8443 gateway hosts
     actions:
       - cmd: ./tests/smoke.sh
+
+  - name: takclient
+    description: A TakClient gets a Ready status and a Secret, its certificate connects on 8089 and is listed in clientEndPoints, and deleting it revokes the certificate (ADR 22)
+    actions:
+      - cmd: ./tests/takclient.sh
 
   - name: api-smoke
     description: Marti API on 8443, 8447, 8446, and 8089 after install and upgrade

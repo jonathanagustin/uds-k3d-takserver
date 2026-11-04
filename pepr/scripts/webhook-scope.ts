@@ -78,3 +78,31 @@ export function pinLiterals(text: string, timeout: number, policy: string): stri
   }
   return pinned.replace(timeoutField, `$1${TIMEOUT_VALUE}`).replace(policyField, `$1${FAILURE_VALUE}`);
 }
+
+// Cuts the TakClient rule out of the TAK webhook entry and adds a second entry
+// that matches only TakClients in namespace takclients (ADR 22). The second
+// entry copies the first one's path, CA bundle, timeout, and failure policy,
+// but not its matchConditions, which match only TAK objects. Run it after
+// scopeWebhook.
+export function splitTakClientWebhook(text: string): string {
+  const ruleStart = text.indexOf("      - apiGroups:\n          - tak.jonathanagustin.github.io\n");
+  const ruleEnd = text.indexOf("    sideEffects:", ruleStart);
+  const entry = text.indexOf("  - admissionReviewVersions:");
+  if (ruleStart < 0 || ruleEnd < 0 || entry < 0) {
+    throw new Error("mutation-webhook.yaml no longer has the TakClient rule anchor");
+  }
+  const rule = text.slice(ruleStart, ruleEnd);
+  const pods = text.slice(0, ruleStart) + text.slice(ruleEnd);
+  const first = pods.slice(entry);
+  const selectorStart = first.indexOf("    namespaceSelector:\n");
+  const rulesStart = first.indexOf("    rules:\n");
+  const tailStart = first.indexOf("    sideEffects:");
+  const second = [
+    first.slice(0, selectorStart).replace("name: {{ .Values.uuid }}.pepr.dev", "name: takclients.{{ .Values.uuid }}.pepr.dev"),
+    "    namespaceSelector:\n      matchLabels:\n        kubernetes.io/metadata.name: takclients\n",
+    "    rules:\n",
+    rule,
+    first.slice(tailStart),
+  ].join("");
+  return `${pods.replace(/\n*$/, "\n")}${second}`;
+}

@@ -98,10 +98,12 @@ build() {
     fi
     i=$((i + 1))
   done
+  # Screen recordings are mostly still: veryslow with -tune animation and
+  # keyframes every 10 s keep 1080p sharp within max_bytes.
   for crf in 24 26 28 30 32 34; do
     ffmpeg -v error -y -i "${work}/${name}-joined.mp4" -an \
-      -c:v libx264 -preset slow -crf "${crf}" -profile:v high -pix_fmt yuv420p \
-      -g $((fps * 4)) -movflags +faststart "${out}/${name}.mp4"
+      -c:v libx264 -preset veryslow -tune animation -crf "${crf}" -profile:v high -pix_fmt yuv420p \
+      -g $((fps * 10)) -movflags +faststart "${out}/${name}.mp4"
     bytes="$(stat -c%s "${out}/${name}.mp4")"
     echo "${name} crf ${crf}: ${bytes} bytes"
     if [[ "${bytes}" -le "${max_bytes}" ]]; then

@@ -117,6 +117,29 @@ Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In
 
 `uds run test:gateway` writes `/tmp/tak-std-ports`. `tests/api-smoke.sh` enrolls a certificate on 8446, streams a CoT event on 8089 with it, and waits for the client in `/Marti/api/clientEndPoints` as seen by that user. That list only shows clients that share a group with the caller, and the admin certificate has none.
 
+### QUIC
+
+QUIC is off by default: `quic.enabled` is `false`. With it off, the chart adds no QUIC input, no UDP Service, and no UDP expose entry.
+
+When `quic.enabled` is `true`, the chart does three things:
+
+- CoreConfig gets `<input _name="quic" protocol="quic" port="8090" coreVersion="2"/>`.
+- Service `takserver-messaging-quic` publishes UDP 8090 to the messaging pods.
+- The Package exposes that Service with `protocol: UDP` and no host.
+
+UDS Core sends that UDP traffic through Envoy Gateway, not Istio. The UDS operator writes the route and one NetworkPolicy. That policy lets only the Envoy default gateway proxy reach the messaging pods on UDP 8090. Istio AuthorizationPolicy and mesh mTLS do not cover this path.
+
+TAK itself requires a client certificate. In TAK 5.7-RELEASE-14 the QUIC TLS context uses `ClientAuth.REQUIRE`, and the input's `auth` defaults to `x509`, the same as 8089. The anonymous UDP input on 8087 and the multicast inputs are not added.
+
+TAK 5.7-RELEASE-14 ships the QUIC native library for linux-x86_64 only. QUIC therefore works on amd64 nodes only.
+
+The test bundle selects `envoy-gateway` and `envoy-default-gateway` and sets `quic.enabled`. Other bundles leave all three off. `tests/quic.sh` then checks two things through the gateway's UDP 8090 on amd64:
+
+- A client with no certificate must be refused with a TLS alert. No answer at all fails the test, so a broken route cannot pass as a refusal.
+- A client with the admin certificate must stream a CoT event, and its uid must appear in `/Marti/api/subscriptions/all`.
+
+The script skips on arm64. It also exits early when the QUIC Service is missing, unless Envoy Gateway is installed, because then the flag did not reach the chart. See [ADR 20](../adr/0020-quic-through-envoy-gateway.md).
+
 ## Tenant gateway to 8447
 
 The Package CR `expose` entry cannot ask the gateway to use TLS toward the Service. The chart adds that part as plain Istio, outside the Package CR, when `api.web.backendTLS.enabled` is `true` (the default):
@@ -141,6 +164,7 @@ The package allows only the flows below. Every allow rule has its own descriptio
 | Egress | `remoteGenerated: KubeAPI`, one rule per pod label in `kubeApi.selectors` | Ignite Kubernetes discovery for that label |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JWKS |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, messaging selector, only when `sso.enabled` | Keycloak discovery and JWKS for 8089 clients |
+| Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled`. The UDS operator writes it from the UDP expose entry | QUIC from the Envoy default gateway |
 
 Postgres, NATS, and Ignite are installed in the `takserver` namespace by the upstream chart. There is no namespace-wide allow rule. Each pod-to-pod flow is its own rule pair, from `intraNamespace` in `charts/takserver/values.yaml`: an Egress rule on the client and an Ingress rule on the server, both limited to the port.
 

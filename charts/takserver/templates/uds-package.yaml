@@ -141,6 +141,18 @@ spec:
         gateway: passthrough
         host: {{ .Values.messaging.streaming.host | quote }}
         port: {{ .Values.messaging.streaming.port }}
+      {{- if .Values.quic.enabled }}
+      # UDP has no host. Envoy Gateway routes by port. Istio AuthorizationPolicy
+      # does not cover it. TAK requires the client certificate itself. The UDS
+      # operator writes the UDPRoute and the one ingress NetworkPolicy, from
+      # the Envoy default gateway proxy to the messaging pods on this port.
+      - description: tak-messaging-quic
+        service: takserver-messaging-quic
+        selector:
+          {{- toYaml .Values.messaging.selector | nindent 10 }}
+        protocol: UDP
+        port: {{ .Values.quic.port }}
+      {{- end }}
     allow:
       # Explicit pod-to-pod flows from values intraNamespace.flows. There is
       # no namespace-wide allow rule.

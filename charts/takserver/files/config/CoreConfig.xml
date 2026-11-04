@@ -4,6 +4,7 @@
 		xsi:schemaLocation="CoreConfig.xsd">
 	<network tomcatMaxPool="300" esyncEnableCache="1" multicastTTL="5">
 		<input _name="stdssl" protocol="tls" port="8089" coreVersion="2"/>
+<!-- TAK_QUIC -->
 		<!-- web connectors -->
 		<connector port="8443" _name="https"/>
 		<connector port="8444" useFederationTruststore="true" _name="fed_https"/>

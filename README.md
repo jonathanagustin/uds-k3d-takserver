@@ -20,7 +20,7 @@ The same guides are published at <https://jonathanagustin.github.io/uds-k3d-taks
 
 Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK (Android Team Awareness Kit) device. 4 min.
 
-https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
+https://github.com/user-attachments/assets/7d727d39-b4f1-4251-b440-57c7799c51d1
 
 <details>
 <summary>Chapters</summary>
@@ -42,7 +42,7 @@ https://github.com/user-attachments/assets/292e64b9-36b2-46af-8f4f-3275beaeb796
 
 Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 5 min.
 
-https://github.com/user-attachments/assets/ad25515c-36e6-48ee-85bc-25ccffae9a04
+https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 
 <details>
 <summary>Chapters</summary>

@@ -14,6 +14,12 @@ admission:
     # config image has bash and envsubst.
     - name: RENDER_IMAGE
       value: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:{{ .Values.tak.imageTag }}"
+    # Admission and the watcher both set the plugins memory, so both read
+    # the same package values. Different values would undo each other.
+    - name: PLUGINS_MEMORY_REQUEST
+      value: "{{ .Values.tak.plugins.memoryRequest }}"
+    - name: PLUGINS_MEMORY_LIMIT
+      value: "{{ .Values.tak.plugins.memoryLimit }}"
   # Two replicas keep admission available through a rollout. The requests
   # are small so both fit beside TAK on a 2 CPU node, as for pepr-uds-core.
   resources:
@@ -39,6 +45,10 @@ watcher:
       value: "{{ .Values.global.domain }}"
     - name: PASSTHROUGH_HOSTS
       value: "{{ .Values.dns.passthroughHosts }}"
+    - name: PLUGINS_MEMORY_REQUEST
+      value: "{{ .Values.tak.plugins.memoryRequest }}"
+    - name: PLUGINS_MEMORY_LIMIT
+      value: "{{ .Values.tak.plugins.memoryLimit }}"
   # The watcher caches every object its reconciles watch. At 256Mi it was
   # OOM-killed during CI installs, so the limit is 512Mi.
   resources:

@@ -18,11 +18,26 @@
     "tak": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["imageTag"],
+      "required": ["imageTag", "plugins"],
       "properties": {
         "imageTag": {
           "type": "string",
           "minLength": 1
+        },
+        "plugins": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["memoryRequest", "memoryLimit"],
+          "properties": {
+            "memoryRequest": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|k|M|G|T)?|###ZARF_VAR_PLUGINS_MEMORY_REQUEST###)$"
+            },
+            "memoryLimit": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|k|M|G|T)?|###ZARF_VAR_PLUGINS_MEMORY_LIMIT###)$"
+            }
+          }
         }
       }
     },

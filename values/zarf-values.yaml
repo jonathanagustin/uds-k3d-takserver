@@ -3,7 +3,8 @@
 
 # Package values. Zarf Values is beta. Each default is the matching Zarf
 # variable's placeholder, which Zarf replaces after Helm renders. So DOMAIN,
-# TAK_IMAGE_TAG, IN_CLUSTER_DNS and PASSTHROUGH_HOSTS from `--set` or a
+# TAK_IMAGE_TAG, IN_CLUSTER_DNS, PASSTHROUGH_HOSTS, PLUGINS_MEMORY_REQUEST
+# and PLUGINS_MEMORY_LIMIT from `--set` or a
 # bundle's uds-config.yaml still decide the result. `--set-values` or
 # `--values` on `uds zarf package deploy` override a variable for its key.
 # See docs/configuration.md.
@@ -11,6 +12,11 @@ global:
   domain: "###ZARF_VAR_DOMAIN###"
 tak:
   imageTag: "###ZARF_VAR_TAK_IMAGE_TAG###"
+  # Memory for the plugins Deployment. The takserver-oidc module sets it,
+  # not the chart, so a values profile cannot.
+  plugins:
+    memoryRequest: "###ZARF_VAR_PLUGINS_MEMORY_REQUEST###"
+    memoryLimit: "###ZARF_VAR_PLUGINS_MEMORY_LIMIT###"
 dns:
   inCluster: "###ZARF_VAR_IN_CLUSTER_DNS###"
   passthroughHosts: "###ZARF_VAR_PASSTHROUGH_HOSTS###"

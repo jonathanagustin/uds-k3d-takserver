@@ -24,8 +24,8 @@ export type TakDeploy = (typeof TAK_DEPLOYS)[number];
 const STOP_ORDER = ["takserver-plugins", "takserver-api", "takserver-messaging", "takserver-config"] as const;
 const START_ORDER = ["takserver-config", "takserver-messaging", "takserver-api", "takserver-plugins"] as const;
 
-const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
-const IGNITE_STATEFULSET = "takserver-ignite";
+export const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
+export const IGNITE_STATEFULSET = "takserver-ignite";
 export const CORE_CONFIGMAP = "core-config";
 export const STARTUP_CONFIGMAP = "takserver-startup";
 export const STARTUP_ANNOTATION = "uds.dev/tak-startup";
@@ -285,6 +285,51 @@ function setProbe(container: ContainerDoc, field: "startupProbe" | "livenessProb
 export interface StartupContext {
   image: string;
   issuerHost?: string;
+  pluginsMemory?: PluginsMemory;
+}
+
+export interface PluginsMemory {
+  request: string;
+  limit: string;
+}
+
+// The plugin heap is 128m. Steady working set on run 40174810574 was 263Mi
+// amd64 and 260Mi arm64, so the default request is 320Mi and the limit is
+// 512Mi. PLUGINS_MEMORY_REQUEST and PLUGINS_MEMORY_LIMIT come from the
+// tak.plugins package values (values/pepr-values.yaml).
+export const PLUGINS_MEMORY: PluginsMemory = { request: "320Mi", limit: "512Mi" };
+const QUANTITY = /^([0-9]+)(\.[0-9]+)?(Ki|Mi|Gi|Ti|k|M|G|T)?$/;
+
+function memoryValue(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
+  const value = env[name]?.trim();
+  if (!value) {
+    return fallback;
+  }
+  if (!QUANTITY.test(value)) {
+    throw new Error(`${name} is not a memory quantity: ${value}`);
+  }
+  return value;
+}
+
+const UNITS: Record<string, number> = { "": 1, k: 1e3, M: 1e6, G: 1e9, T: 1e12, Ki: 2 ** 10, Mi: 2 ** 20, Gi: 2 ** 30, Ti: 2 ** 40 };
+
+// The API server stores a quantity in canonical form, so 1.5Gi reads back as
+// 1536Mi. Compare bytes, so a stored value in another form is not patched.
+export function sameMemory(stored: string | undefined, want: string): boolean {
+  const a = QUANTITY.exec(stored ?? "");
+  const b = QUANTITY.exec(want);
+  if (!a || !b) {
+    return stored === want;
+  }
+  const bytes = (m: RegExpExecArray): number => Math.round(Number(`${m[1]}${m[2] ?? ""}`) * UNITS[m[3] ?? ""]!);
+  return bytes(a) === bytes(b);
+}
+
+export function pluginsMemory(env: NodeJS.ProcessEnv): PluginsMemory {
+  return {
+    request: memoryValue(env, "PLUGINS_MEMORY_REQUEST", PLUGINS_MEMORY.request),
+    limit: memoryValue(env, "PLUGINS_MEMORY_LIMIT", PLUGINS_MEMORY.limit),
+  };
 }
 
 function desiredInits(app: TakDeploy, ctx: StartupContext): ContainerDoc[] {
@@ -388,15 +433,14 @@ export function shapePodSpec(spec: WorkloadPodSpec, app: TakDeploy, ctx: Startup
     const resources = (main.resources ??= {});
     const requests = (resources.requests ??= {});
     const limits = (resources.limits ??= {});
-    // The chart template copies the API CPU limit and drops memory. 128m is
-    // the plugin heap. Steady working set on run 40174810574 was 263Mi amd64
-    // and 260Mi arm64, so the request is 320Mi and the limit is 512Mi.
-    if (requests.memory !== "320Mi") {
-      requests.memory = "320Mi";
+    // The chart template copies the API CPU limit and drops memory.
+    const memory = ctx.pluginsMemory ?? PLUGINS_MEMORY;
+    if (!sameMemory(requests.memory, memory.request)) {
+      requests.memory = memory.request;
       changed = true;
     }
-    if (limits.memory !== "512Mi") {
-      limits.memory = "512Mi";
+    if (!sameMemory(limits.memory, memory.limit)) {
+      limits.memory = memory.limit;
       changed = true;
     }
   }
@@ -451,7 +495,11 @@ export async function prepareDeployment(
     return;
   }
   const issuer = name === "takserver-config" || name === "takserver-plugins" ? undefined : await readIssuer(cluster);
-  const { next } = shapeDeployment(deploy, { image: env.RENDER_IMAGE ?? "", issuerHost: issuer });
+  const { next } = shapeDeployment(deploy, {
+    image: env.RENDER_IMAGE ?? "",
+    issuerHost: issuer,
+    pluginsMemory: pluginsMemory(env),
+  });
   deploy.spec = next.spec;
 }
 
@@ -741,7 +789,7 @@ export async function reconcileDeployment(
   }
   const image = env.RENDER_IMAGE ?? "";
   const issuer = name === "takserver-config" || name === "takserver-plugins" ? undefined : await readIssuer(cluster);
-  const { next, changed } = shapeDeployment(deploy, { image, issuerHost: issuer });
+  const { next, changed } = shapeDeployment(deploy, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env) });
   if (!changed) {
     return;
   }
@@ -761,7 +809,7 @@ export async function preparePod(pod: PodLike, env: NodeJS.ProcessEnv, cluster: 
   }
   const issuer = app === "takserver-config" || app === "takserver-plugins" ? undefined : await readIssuer(cluster);
   const spec = (pod.spec ??= {}) as WorkloadPodSpec;
-  shapePodSpec(spec, app, { image, issuerHost: issuer });
+  shapePodSpec(spec, app, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env) });
   addRender(pod, image);
 }
 

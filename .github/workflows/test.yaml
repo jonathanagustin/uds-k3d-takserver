@@ -323,9 +323,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
     name: validate-install (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     # A healthy install finishes in about 20 minutes. This job limit is what
@@ -372,7 +372,7 @@ jobs:
       # them (run 39686333898) Android alone took 136s of the 244s amd64
       # trim, so this starts while Compose and the UDS CLI install.
       - name: Start trimming the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh start
         env:
           TRIM_SKIP_ABOVE_GB: "60"
@@ -391,7 +391,7 @@ jobs:
           version: v0.41.0
 
       - name: Trim the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh finish
         env:
           # The test uses about 30 GB (see "Disk use after the test"), so a
@@ -548,9 +548,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
     name: validate-upgrade (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     # A healthy upgrade finishes in about 30 minutes. This job limit is what
@@ -586,9 +586,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
     name: validate-upgrade-pg15 (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 75

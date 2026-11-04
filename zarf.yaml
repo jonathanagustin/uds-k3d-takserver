@@ -54,6 +54,12 @@ variables:
   - name: PASSTHROUGH_HOSTS
     description: Hosts under DOMAIN that the passthrough gateway serves by SNI. charts/takserver/values.yaml api.cert.host and messaging.streaming.host. The dns.passthroughHosts package value defaults to this.
     default: "takserver-api takserver-stream"
+  - name: PLUGINS_MEMORY_REQUEST
+    description: Memory request for the TAK plugins container. The takserver-oidc module sets it at admission and in the watcher, so the chart and the values profiles cannot. The tak.plugins.memoryRequest package value defaults to this.
+    default: 320Mi
+  - name: PLUGINS_MEMORY_LIMIT
+    description: Memory limit for the TAK plugins container. The plugin heap is 128m. The tak.plugins.memoryLimit package value defaults to this.
+    default: 512Mi
   - name: FILESYSTEM_BACKUP
     description: When true, annotate the database volumes for Velero file-system backup and run the node-agent. Default false. The logical dump stays the full-bundle path. See adr/0021-velero-node-agent.md.
     default: "false"

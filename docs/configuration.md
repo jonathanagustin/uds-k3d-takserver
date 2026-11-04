@@ -16,13 +16,15 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
+| `PLUGINS_MEMORY_REQUEST` | `320Mi` | Memory request for the TAK plugins container. See [Profiles](profiles.md#plugins-memory) |
+| `PLUGINS_MEMORY_LIMIT` | `512Mi` | Memory limit for the TAK plugins container |
 | `FILESYSTEM_BACKUP` | `false` | `true` runs a Velero node-agent and marks the TAK Postgres and CloudTAK PostGIS volumes for file-system backup. See [Data](data.md#backup) |
 | `POSTGRES_STORAGE_CLASS` | empty | StorageClass for the TAK Postgres volume. Empty keeps the cluster default. Set it only on a new install, because a StatefulSet cannot change its volume claim template. See [Data](data.md#backup) |
 | `CLOUDTAK_STORAGE_CLASS` | empty | StorageClass for the CloudTAK PostGIS volume. Same rules as `POSTGRES_STORAGE_CLASS`. See [Data](data.md#backup) |
 
 ### Package values
 
-`values/zarf-values.yaml` is the package values file, checked by `values/zarf-values.schema.json`. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each upstream TAK image tag. The Pepr values file is templated, so the watcher env reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`.
+`values/zarf-values.yaml` is the package values file, checked by `values/zarf-values.schema.json`. Zarf Values is beta. Chart mappings copy `global.domain` onto the config chart and CloudTAK, and `tak.imageTag` onto each upstream TAK image tag. The Pepr values file is templated, so the watcher env reads `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. The admission and watcher env both read `tak.plugins.memoryRequest` and `tak.plugins.memoryLimit`.
 
 Each default is the placeholder of the matching variable, for example `global.domain: "###ZARF_VAR_DOMAIN###"`. Zarf replaces placeholders after Helm renders, so with no package value set the variable decides, exactly as before. `--set DOMAIN=`, a bundle's `uds-config.yaml`, and UDS CLI 0.40 bundles keep working unchanged. A package value only overrides its variable, for that key: `uds zarf package deploy --set-values global.domain=example.com`, or `--values`. The `images:` list and `certs.image` in `charts/takserver/values.yaml` read only `TAK_IMAGE_TAG`.
 
@@ -32,10 +34,12 @@ Each default is the placeholder of the matching variable, for example `global.do
 | `tak.imageTag` | `TAK_IMAGE_TAG` | the upstream TAK image tags and the watcher render image |
 | `dns.inCluster` | `IN_CLUSTER_DNS` | the watcher's CoreDNS rewrite switch |
 | `dns.passthroughHosts` | `PASSTHROUGH_HOSTS` | the watcher's passthrough host list |
+| `tak.plugins.memoryRequest` | `PLUGINS_MEMORY_REQUEST` | the plugins memory request |
+| `tak.plugins.memoryLimit` | `PLUGINS_MEMORY_LIMIT` | the plugins memory limit |
 
 `FILESYSTEM_BACKUP`, `POSTGRES_STORAGE_CLASS`, and `CLOUDTAK_STORAGE_CLASS` have no package value. Set them as variables. A package value cannot work for them. The charts decide while Helm renders whether to add the node-agent, the volume annotations, and `storageClassName`. A package value defaults to the variable's placeholder, and Zarf replaces that placeholder only after Helm renders. So with no package value set, Helm would see the placeholder text, not `true` or a class name. The variables reach the charts through values files that Zarf fills in before Helm runs.
 
-`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable. It also checks that both database volumes have no StorageClass by default and get the one their variable names.
+`tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable. It checks that the plugins memory reaches both the admission and watcher env. It also checks that both database volumes have no StorageClass by default and get the one their variable names.
 
 Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 
@@ -88,7 +92,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 | `ignite.image` | tag `2.17.0` on the chart's tak.gov repository | this repo's `takserver-ignite` tag | Same Ignite version, built here. |
 | `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; its own limit is ignored. `bundle/test-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; the template ignores its 500m CPU limit and copies the API limit | Steady working set on run 40174810574 was 911Mi (api) and 888Mi (messaging) at `-Xmx512m`. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. |
 | `takserver.config.resources` | unset | common and test values: request 50m and 1Gi, limit 1 CPU and 1280Mi | Steady working set on that run was 750Mi at `-Xmx512m`. Config does not run UserManager. 1280Mi is that set plus about half again. |
-| `takserver.plugins.resources.requests.cpu` | 1 | 50m in common values, 25m in test values. Admission sets memory request 320Mi and limit 512Mi | The plugins template reads this CPU request and then uses the API CPU limit. It ignores plugin memory. The `takserver-workload` admission hook supplies the memory. Steady working set was 263Mi. The heap is `-Xmx128m`. |
+| `takserver.plugins.resources.requests.cpu` | 1 | 50m in common values, 25m in test values. Admission sets memory request 320Mi and limit 512Mi by default (`PLUGINS_MEMORY_REQUEST`, `PLUGINS_MEMORY_LIMIT`) | The plugins template reads this CPU request and then uses the API CPU limit. It ignores plugin memory. The `takserver-workload` admission hook supplies the memory. Steady working set was 263Mi. The heap is `-Xmx128m`. |
 | `ignite.replicaCount` | chart default 2 | 1 | A second Ignite pod does not fit next to the slim core. |
 | `ignite.resources` | unset | common values: request 100m and 512Mi, limit 1 CPU and 1536Mi. test values: request 50m and 512Mi, limit 1 CPU and 1536Mi | Steady working set was 488Mi at `-Xmx512m`. 128m metaspace and a 384 MiB data region still have to fit: a 128 MiB region ran out of memory (`IgniteOutOfMemoryException`) during the API smoke test. 1536Mi is the limit those fit inside. |
 | `ignite.serviceAccount.name` | `takserver-ignite` | `takserver-ignite` | Unchanged. The API, messaging, config, and plugins Deployments also use that account, and the Package allows those pod labels to reach the Kubernetes API. |
@@ -109,10 +113,12 @@ The upstream chart has no values for init containers, probes, or the extra objec
 | Capability | What it does |
 | --- | --- |
 | `takserver-oidc-render` | Adds an init container to each new TAK pod. It renders the OIDC client secret and keystore password into `CoreConfig.xml`. The capability also swaps the `cert-migration` volume for Secret `takserver-certs`, and names the `metrics` port on the API and messaging pods. A pod it cannot prepare is rejected, not started unrendered. See [Single sign-on](sso.md#render-at-admission) |
-| `takserver-workload` | Writes the startup order, probes, plugins memory, and Ignite timeouts. It writes them onto the four TAK Deployments, the Ignite ConfigMap, and the Ignite StatefulSet. When the Deployments are Available, it creates ConfigMap `takserver-startup`. See [Startup order](#startup-order) |
+| `takserver-workload` | Writes the startup order, probes, plugins memory (from `PLUGINS_MEMORY_REQUEST` and `PLUGINS_MEMORY_LIMIT`), and Ignite timeouts. It writes them onto the four TAK Deployments, the Ignite ConfigMap, and the Ignite StatefulSet. When the Deployments are Available, it creates ConfigMap `takserver-startup`. See [Startup order](#startup-order) |
 | `takserver-coredns` | Adds CoreDNS rewrites so `DOMAIN` hosts reach the right Istio gateway inside the cluster. It runs only when `IN_CLUSTER_DNS` is true and `kube-system/coredns-custom` exists. See [Networking](networking.md#in-cluster-dns) |
 | `takserver-gateway-ca` | Copies the TAK CA certificate to the tenant gateway's namespace, where the gateway DestinationRule points. The gateway uses it to verify TAK's certificate on 8447. See [Networking](networking.md#tenant-gateway-to-8447) |
 | `takserver-cloudtak-admin` | Copies the TAK CA, the admin certificate and key, and the keystore password to the `cloudtak` namespace. CloudTAK uses them to connect to TAK. See [CloudTAK](cloudtak.md#tak-connection) |
+
+The webhook covers only namespace `takserver`. It matches the four TAK pods by their `app` label. It matches the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet by name, through a `matchConditions` rule, because the upstream chart puts no `app` label on those objects. It fails closed, so while the module is down, Kubernetes refuses to create those pods and to create or update those objects. Other objects are not affected. `pepr/scripts/webhook-scope.ts` writes that scope.
 
 The watcher runs the reconciles. Its memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
 

@@ -82,7 +82,7 @@ The image build applies `.github/container-and-chart/docker/cacheconfig-listener
 
 The `takserver-oidc` module is a Pepr mutating webhook. Its configuration is `pepr/`, and `pepr/build.sh` builds the chart when the package is created. It acts on pod creation for the four apps that read `CoreConfig.xml` (`takserver-config`, `takserver-messaging`, `takserver-api`, `takserver-plugins`) and adds the `render-oidc` init container, its volumes, the `/conf` mount, and the pod-reload label. Init containers cannot be added to a running pod, so a pod that has `render-oidc` has had it since its first start. The chart installs before the upstream chart, so the first pods are admitted through it.
 
-The webhook fails closed and is scoped to the `takserver` namespace and those four app labels. If the module is down, only those pods wait. Scoping it matters: a cluster-wide failing webhook blocks the Istio CNI pods the module needs after a node restart. `tests/oidc-render.sh` checks the webhook, that each pod completed `render-oidc`, and that each node's secret matches the cluster secret by length and hash.
+The webhook fails closed and is scoped to the `takserver` namespace. Within it, the webhook matches those four pods by app label, and it matches the TAK Deployments and Ignite objects by name. If the module is down, only those objects wait. Scoping it matters: a cluster-wide failing webhook blocks the Istio CNI pods the module needs after a node restart. `tests/oidc-render.sh` checks the webhook, that each pod completed `render-oidc`, and that each node's secret matches the cluster secret by length and hash.
 
 ## Groups
 

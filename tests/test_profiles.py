@@ -87,9 +87,12 @@ class ProfileTests(unittest.TestCase):
     def test_plugins_memory_is_set_at_admission(self):
         # The chart drops a plugins memory value. The takserver-workload
         # capability writes the request and limit before the pod is stored.
+        # Its fallback and the Zarf variable defaults are the same numbers.
         source = (ROOT / "pepr/capabilities/workload.ts").read_text(encoding="utf-8")
-        self.assertIn('requests.memory = "320Mi"', source)
-        self.assertIn('limits.memory = "512Mi"', source)
+        self.assertIn('PLUGINS_MEMORY: PluginsMemory = { request: "320Mi", limit: "512Mi" }', source)
+        variables = {v["name"]: v.get("default") for v in load("zarf.yaml")["variables"]}
+        self.assertEqual(variables["PLUGINS_MEMORY_REQUEST"], "320Mi")
+        self.assertEqual(variables["PLUGINS_MEMORY_LIMIT"], "512Mi")
 
     def test_documented_limit_sums(self):
         # Admission sets the plugins limit to 512Mi. NATS limits are 128Mi + 32Mi.

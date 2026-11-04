@@ -4,6 +4,8 @@
 
 It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [ADR 14](../adr/0014-atak-test-device-in-kubevirt.md).
 
+[![Demo clip: ATAK-CIV in a KubeVirt VM connects to the same TAK Server with its client certificate](../docs-site/public/demo/demo-clip-atak-device.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-atak-device.mp4)
+
 ## Requirements
 
 - amd64 nodes with `/dev/kvm`. The VM image is Android-x86 and the APK is built for `x86_64` only. There is no arm64 build (see [Supported architectures](../README.md#supported-architectures)).
@@ -69,6 +71,8 @@ The location is not a GPS fix, and the device never presents it as one. The call
 The settings are not in the data package, because importing `restoreRecordedLocation` into a running ATAK makes it record the current (empty) self position over `recordedLocation`. Override the point with `TEST_LAT`, `TEST_LON`, and `CALLSIGN`.
 
 After the device connects, the driver locks the map on the self marker and zooms in (`atak-test-location.png`). The self-coordinate overlay keeps a small red `NO GPS` source label. ATAK shows that label for any position that is not a live fix, including one placed by hand. That label is accurate for this device.
+
+![The ATAK device's marker at its fixed test location on the CloudTAK map](../docs-site/public/demo/screens/cloudtak-atak-marker.webp)
 
 ### Why not password enrollment
 

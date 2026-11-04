@@ -6,6 +6,10 @@ The package deploys the public TAK Server chart from [TAK-Product-Center/Server]
 
 The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream`.
 
+[![Demo clip: the Package custom resource reaches Ready after the deploy](../docs-site/public/demo/demo-clip-package-ready.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-package-ready.mp4)
+
+![kubectl get packages shows the TAK Package as Ready](../docs-site/public/demo/screens/packages-ready.webp)
+
 ## Values
 
 `values/common-values.yaml` is the overlay. `values/upstream-values.yaml` is an extra values file on the chart. Zarf replaces `###ZARF_VAR_DOMAIN###` and `###ZARF_VAR_TAK_IMAGE_TAG###` when the package is created. These are the package variables:
@@ -124,6 +128,8 @@ The webhook covers only namespace `takserver`. It matches the four TAK pods by t
 The watcher runs the reconciles. Its memory limit is 512Mi, because it caches every object it watches and was killed for running out of memory at 256Mi. `values/pepr-values.yaml` sets both. The unit tests are `pepr/capabilities/*.test.ts`.
 
 Why a Pepr module and not a forked chart, a Helm post-renderer, Kustomize, or upstream changes: see [ADR 23](../adr/0023-adapt-the-upstream-chart-with-pepr.md). It also lists where each of those would be the better choice.
+
+![Annotations on a TAK pod that record what the Pepr admission policies changed](../docs-site/public/demo/screens/pepr-mutations.webp)
 
 ## Single sign-on
 

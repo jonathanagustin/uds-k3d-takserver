@@ -21,6 +21,8 @@ The footprint below is the steady working set from `tests/usage.sh` at the end o
 
 Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup ran out of memory and was killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
 
+[![Demo clip: TAK's resource use after install, then Kubernetes replaces a deleted messaging pod and ATAK reconnects](../docs-site/public/demo/demo-clip-self-healing.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-self-healing.mp4)
+
 ## Default
 
 `values/common-values.yaml` is baked into the package. `charts/cloudtak/values.yaml` is the CloudTAK chart default. CI deploys `bundle/test-values.yaml` on top of the package. Those paths stay the default so the Test workflow does not change with this document. Pick a profile by adding it to a bundle. Do not use a profile as the only values file. It does not carry image names or passwords.

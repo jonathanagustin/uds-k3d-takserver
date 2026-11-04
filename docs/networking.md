@@ -218,6 +218,8 @@ The Ignite chart and the API, messaging, config, and plugins Deployments use Ser
 
 `additionalNetworkAllow` appends deployer rules. Each entry needs a unique `description`.
 
+![A pod in another namespace cannot reach TAK's port 8089 because the generated network policy drops it](../docs-site/public/demo/screens/network-policy-blocks-8089.webp)
+
 ## Mesh
 
 `network.serviceMesh.mode` is `ambient`. The operator labels namespace `takserver` with `istio.io/dataplane-mode=ambient` and does not inject `istio-proxy`. The package does not set `sidecar.istio.io/inject` or `istio-injection=enabled`. The test task requires that label and rejects an `istio-proxy` or `istio-validation` container before the gateway checks.

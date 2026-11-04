@@ -16,6 +16,13 @@ window frame around each recording, title cards and lower-thirds.
     style.py lower OUT.png TEXT [TAG]      a lower-third; prints "X Y" where
                                            it goes on the canvas
     style.py still IN.png OUT.png          a still for the docs, in the frame
+    style.py panel OUT.png TEXT TAG SCREEN_W SCREEN_H
+                                           the caption beside the phone
+                                           close-up; prints "X Y"
+    style.py phone UNDER.png OVER.png MASK.png SCREEN_W SCREEN_H [TITLE SUBTITLE]
+                                           the phone close-up: background and
+                                           label, screen border, rounded-corner
+                                           mask; prints "X Y W H" of the screen
 
 demo/assemble.sh and demo/filters.py use these. Pillow draws everything, so
 the sizes and colours below are exact.
@@ -136,6 +143,52 @@ def frame():
     return under, over, mask
 
 
+# The phone close-up: the device screen large on the right, on the
+# background. On the left: a short label level with the top of the screen,
+# and the current caption as a panel (panel()) in the middle.
+PHONE_H = 940
+PHONE_RIGHT = 96
+PHONE_RADIUS = 28
+PHONE_LABEL_SIZE = 40
+PANEL_X = 120
+PANEL_SIZE = 38
+
+
+def phone_box(screen_w, screen_h):
+    """x, y, w, h of the device screen in the close-up."""
+    h = PHONE_H
+    w = round(h * screen_w / screen_h) // 2 * 2
+    return W - PHONE_RIGHT - w, (H - h) // 2, w, h
+
+
+def phone(screen_w, screen_h, title="", subtitle=""):
+    """UNDER: the background with TITLE and SUBTITLE on the left. OVER: the
+    screen's 1px border. MASK: the screen's rounded corners."""
+    x, y, w, h = phone_box(screen_w, screen_h)
+    box = (x, y, x + w - 1, y + h - 1)
+    under = background().convert("RGBA")
+    draw = ImageDraw.Draw(under)
+    left, max_w = PANEL_X, x - 96 - PANEL_X
+    tfont, tlines = fitted("title", PHONE_LABEL_SIZE, title, max_w, 2, draw) if title else (None, [])
+    sfont, slines = fitted("mono", 28, subtitle, max_w, 2, draw) if subtitle else (None, [])
+    t_line = round(tfont.size * 1.2) if tfont else 0
+    s_line = round(sfont.size * 1.4) if sfont else 0
+    gap = 12 if tlines and slines else 0
+    ty = y + 8  # level with the top of the screen
+    for line in tlines:
+        draw.text((left, ty), line, font=tfont, fill=HEADER)
+        ty += t_line
+    ty += gap
+    for line in slines:
+        draw.text((left, ty), line, font=sfont, fill=INDIGO)
+        ty += s_line
+    over = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(over).rounded_rectangle(box, PHONE_RADIUS, outline=FRAME_BORDER, width=1)
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, w - 1, h - 1), PHONE_RADIUS, fill=255)
+    return under.convert("RGB"), over, mask
+
+
 def wrap(text, fnt, max_w, draw):
     words, lines, line = text.split(), [], ""
     for word in words:
@@ -182,17 +235,18 @@ def card(title, subtitle):
     return img.convert("RGB")
 
 
-def lower(text, tag=""):
+def text_box(text, tag="", size=LOWER_SIZE, max_w=LOWER_MAX_W, max_lines=2):
     """A floating box: 16/24px padding, 12px radius, soft shadow. TAG is an
-    emerald pill for a speed-up. Returns the image and its canvas position."""
+    emerald pill for a speed-up. Returns the image and the shadow margin
+    around the box."""
     probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
-    fnt = font("lower", LOWER_SIZE)
+    fnt = font("lower", size)
     tag_font = font("lower", 22)
     tag_w = probe.textlength(tag, font=tag_font) + 28 if tag else 0
-    lines = wrap(text, fnt, LOWER_MAX_W - tag_w, probe)[:2]
-    line_h = round(LOWER_SIZE * 1.3)
+    lines = wrap(text, fnt, max_w - tag_w, probe)[:max_lines]
+    line_h = round(size * 1.3)
     text_w = max(probe.textlength(l, font=fnt) for l in lines)
-    pad_x, pad_y = 24, 16
+    pad_x, pad_y = round(size * 6 / 7), round(size * 4 / 7)
     box_w = round(text_w + (tag_w + 16 if tag else 0) + 2 * pad_x)
     box_h = line_h * len(lines) + 2 * pad_y
     margin = 32  # room for the shadow
@@ -206,14 +260,27 @@ def lower(text, tag=""):
         draw.text((margin + pad_x, y + line_h / 2), line, font=fnt, fill=HEADER, anchor="lm")
         y += line_h
     if tag:
-        tx = margin + pad_x + text_w + 16
-        ty = margin + box_h / 2
+        tx = margin + pad_x + max(probe.textlength(l, font=fnt) for l in lines[-1:]) + 16
+        ty = y - line_h / 2
         pill = (tx, ty - 17, tx + tag_w, ty + 17)
         draw.rounded_rectangle(pill, 17, fill=hex_rgb(EMERALD) + (36,), outline=hex_rgb(EMERALD) + (140,), width=1)
         draw.text(((pill[0] + pill[2]) / 2, ty), tag, font=tag_font, fill=EMERALD, anchor="mm")
-    x = 48 - margin
-    y = H - 48 - box_h - margin
-    return img, x, y
+    return img, margin
+
+
+def lower(text, tag=""):
+    """A lower-third. Returns the image and its canvas position."""
+    img, margin = text_box(text, tag)
+    return img, 48 - margin, H - 48 - (img.height - 2 * margin) - margin
+
+
+def panel(text, tag="", screen_w=720, screen_h=1208):
+    """The caption beside the phone close-up: the lower-third's box, larger,
+    up to three lines, left-aligned at PANEL_X and centred on the screen.
+    Returns the image and its canvas position."""
+    max_w = phone_box(screen_w, screen_h)[0] - PANEL_X - 96
+    img, margin = text_box(text, tag, PANEL_SIZE, max_w, 3)
+    return img, PANEL_X - margin, (H - img.height) // 2
 
 
 def still(src):
@@ -252,10 +319,23 @@ def main():
         under.save(sys.argv[2])
         over.save(sys.argv[3])
         mask.save(sys.argv[4])
+    elif cmd == "phone":
+        # phone UNDER OVER MASK SCREEN_W SCREEN_H [TITLE SUBTITLE]: prints x y w h
+        sw, sh = int(sys.argv[5]), int(sys.argv[6])
+        under, over, mask = phone(sw, sh, *sys.argv[7:9])
+        under.save(sys.argv[2])
+        over.save(sys.argv[3])
+        mask.save(sys.argv[4])
+        print(*phone_box(sw, sh))
     elif cmd == "card":
         card(sys.argv[3], sys.argv[4]).save(sys.argv[2])
     elif cmd == "lower":
         img, x, y = lower(sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else "")
+        img.save(sys.argv[2])
+        print(x, y)
+    elif cmd == "panel":
+        # panel OUT.png TEXT TAG SCREEN_W SCREEN_H: prints x y
+        img, x, y = panel(sys.argv[3], sys.argv[4], int(sys.argv[5]), int(sys.argv[6]))
         img.save(sys.argv[2])
         print(x, y)
     elif cmd == "still":

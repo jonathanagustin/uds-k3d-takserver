@@ -13,14 +13,20 @@ prepare RAW EVENTS OUT_VIDEO OUT_EVENTS [DEVICE_VIDEO DEVICE_START]
     view while the phone page is in front. Inside those phone stretches, a
     wait where nothing on screen changes for more than STALL seconds is cut
     to KEEP seconds, and the caption showing then gets an emerald speed-up
-    tag. Writes the cut video and the events moved to match.
+    tag. Also writes OUT_VIDEO.phone.mp4, the phone's screen alone with the
+    Android status and navigation bars cut off, for the close-up. Writes
+    the cut video and the events moved to match.
 render MODE TIMELINE BASE OUT WORKDIR [OFFSET]
     MODE is terminal (TIMELINE is a generated tape) or web (TIMELINE is an
     events.json). BASE is the content, CONTENT_W x CONTENT_H. Zooms gently
     where the timeline asks, puts the content in the window frame on the
-    canvas, and shows each caption as a lower-third.
+    canvas, and shows each caption as a lower-third. While the phone page
+    is in front, the phone's screen grows out of the window into a large
+    close-up on the right, with a short label on the left.
 join OUT PART...
     Joins the parts with short crossfades and prints where each starts.
+    Between two title cards the first card's text fades out before the
+    next card's fades in, so the two never overlap.
 
 The terminal timeline: '# caption: text' and '# zoom: ax,ay,factor' lines
 apply to the next typed command and start when it presses Enter. Times come
@@ -177,6 +183,12 @@ def hold_chain(ranges, label_in, label_out):
     return ";".join(stages)
 
 
+def video_size(video):
+    out = run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+              "stream=width,height", "-of", "csv=p=0", video).stdout
+    return tuple(int(v) for v in out.strip().split(","))
+
+
 def phone_intervals(events, duration):
     out, on = [], None
     for e in events:
@@ -284,6 +296,9 @@ def prepare(raw, events_file, out_video, out_events, device=None, device_start=N
             guess = float(Path(device_start).read_text().strip()) - start_wall if device_start else 0.0
             offset = align(device, raw, box, phones, guess, tops[0] if tops else bar)
             x, y, bw, bh = box
+            dev_w, dev_h = (int(v) for v in run(
+                "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                "-of", "csv=p=0", device).stdout.strip().split(","))
             radius = round(34 * dpr)
             mask = out_video + ".phone-mask.png"
             from PIL import Image, ImageDraw
@@ -295,7 +310,10 @@ def prepare(raw, events_file, out_video, out_events, device=None, device_start=N
                      else f"trim=start={-offset:.3f},setpts=PTS-STARTPTS")
             inputs += ["-i", device]
             graph.append(
-                f"[1:v]fps={FPS},{shift},scale={bw}:{bh}:flags=lanczos,format=rgba[dv];"
+                f"[1:v]fps={FPS},{shift},split[dsrc][dfull];"
+                f"[dsrc]scale={bw}:{bh}:flags=lanczos,format=rgba[dv];"
+                f"color=black:s={dev_w}x{dev_h}:r={FPS}:d={duration:.3f}[dbk];"
+                f"[dbk][dfull]overlay=0:0:eof_action=pass:shortest=0,format=yuv420p[ph];"
                 f"movie={mask},format=gray,loop=loop=-1:size=1,setpts=N/{FPS}/TB[dm];[dv][dm]alphamerge[dev];"
                 f"[{last}][dev]overlay=x={x}:y={y + page_top}:enable='{enable}':eof_action=pass:shortest=0[c2]")
             last = "c2"
@@ -303,24 +321,35 @@ def prepare(raw, events_file, out_video, out_events, device=None, device_start=N
             print(f"phone: device recording not used: {err}", file=sys.stderr)
             graph, inputs, last = graph[:2], inputs[:2], "c1"
     first = out_video + ".p1.mp4"
-    enc = ["-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
-           "-pix_fmt", "yuv420p", first]
+    phone_raw = out_video + ".phone1.mp4"
+    Path(phone_raw).unlink(missing_ok=True)
+    common = ["-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
+              "-pix_fmt", "yuv420p"]
+    enc = [*common, first]
     try:
-        run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *enc)
+        extra = ["-map", "[ph]", *common, phone_raw] if last == "c2" else []
+        run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *enc,
+            *extra)
     except subprocess.CalledProcessError as err:
         if last != "c2":
             raise
         # The device recording could not be laid over: keep the browser view.
         print(f"phone: device recording not used: {err.stderr.strip()[-300:]}", file=sys.stderr)
+        Path(phone_raw).unlink(missing_ok=True)
         run("ffmpeg", "-v", "error", "-y", "-i", raw, "-filter_complex", ";".join(graph[:2]), "-map", "[c1]", *enc)
 
     cuts = stall_cuts(first, phones) if phones else []
     if cuts:
         keep = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in cuts)
-        run("ffmpeg", "-v", "error", "-y", "-i", first, "-vf",
-            f"select='not({keep})',setpts=N/{FPS}/TB", "-an", "-c:v", "libx264", "-preset", "veryfast",
-            "-crf", "14", "-pix_fmt", "yuv420p", out_video)
-        Path(first).unlink()
+        for src, dst in ((first, out_video), (phone_raw, phone_raw + ".cut.mp4")):
+            if not Path(src).is_file():
+                continue
+            run("ffmpeg", "-v", "error", "-y", "-i", src, "-vf",
+                f"select='not({keep})',setpts=N/{FPS}/TB", "-an", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "14", "-pix_fmt", "yuv420p", dst)
+            Path(src).unlink()
+        if Path(phone_raw + ".cut.mp4").is_file():
+            Path(phone_raw + ".cut.mp4").rename(phone_raw)
         for a, b in cuts:
             print(f"cut a still stretch {a:.1f}-{b:.1f}s ({b - a:.1f}s)", file=sys.stderr)
     else:
@@ -333,8 +362,61 @@ def prepare(raw, events_file, out_video, out_events, device=None, device_start=N
     for a, b in cuts:
         factor = (b - a + KEEP) / KEEP
         moved.append({"kind": "speedup", "at": round(remap(a, cuts), 3), "value": f"{factor:.0f}× faster"})
+    if phones:
+        moved += phone_video(out_video, phone_raw, phones, cuts, dpr, page_top)
     moved.sort(key=lambda e: e["at"])
     Path(out_events).write_text(json.dumps(moved, indent=2))
+
+
+def dark_rows(video, times, w, h):
+    """Rows at the top and bottom that are nearly black in every sample:
+    Android's status and navigation bars, or letterboxing."""
+    top = bottom = h
+    for t in times:
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", video, "-frames:v", "1",
+                              "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
+        if len(raw) < w * h:
+            continue
+        # The median ignores the bars' small icons (clock, back, home).
+        level = [sorted(raw[r * w:(r + 1) * w])[w // 2] for r in range(h)]
+        t_rows = next((r for r in range(h) if level[r] > 8), h)
+        b_rows = next((r for r in range(h) if level[h - 1 - r] > 8), h)
+        top, bottom = min(top, t_rows), min(bottom, b_rows)
+    if top + bottom >= h // 2:
+        return 0, 0
+    return top, bottom
+
+
+def phone_video(out_video, phone_raw, phones, cuts, dpr, page_top):
+    """Writes OUT_VIDEO.phone.mp4, the phone screen alone on the prepared
+    timeline, without its dark bars, for the close-up in render. From the
+    device recording when there is one, else cropped from the browser view.
+    Returns the events that point render at it."""
+    target = out_video + ".phone.mp4"
+    x, y, w, h = (float(v) * dpr for v in phones[0][2].split(","))
+    rect = [round(x), round(y + page_top), round(w) // 2 * 2, round(h) // 2 * 2]
+    src = phone_raw
+    if not Path(phone_raw).is_file():
+        src = out_video + ".phone1.mp4"
+        run("ffmpeg", "-v", "error", "-y", "-i", out_video, "-vf", "crop={2}:{3}:{0}:{1}".format(*rect),
+            "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", src)
+    sw, sh = (int(v) for v in run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                   "stream=width,height", "-of", "csv=p=0", src).stdout.strip().split(","))
+    size = run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+               "-of", "csv=p=0", out_video).stdout.strip().split(",")
+    times = []
+    for a, b, _ in phones:
+        a, b = remap(a, cuts), remap(b, cuts)
+        times += [a + (b - a) * f for f in (0.3, 0.5, 0.7)]
+    top, bottom = dark_rows(src, times, sw, sh)
+    ch = (sh - top - bottom) // 2 * 2
+    run("ffmpeg", "-v", "error", "-y", "-i", src, "-vf", f"crop={sw}:{ch}:0:{top}", "-an", "-c:v", "libx264",
+        "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", target)
+    Path(src).unlink()
+    print(f"phone: close-up from {'the device' if src == phone_raw else 'the browser view'}, "
+          f"{sw}x{ch} after cutting {top}px at the top and {bottom}px at the bottom", file=sys.stderr)
+    return [{"kind": "phone-video", "at": 0, "value": target},
+            {"kind": "phone-rect", "at": 0, "value": ",".join(map(str, rect + size))}]
 
 
 # ----------------------------------------------------------------- render
@@ -362,6 +444,104 @@ def still_src(path, fmt="rgba"):
     return f"movie={path},format={fmt},loop=loop=-1:size=1,setpts=N/{FPS}/TB"
 
 
+PHONE_EASE = 0.4
+PHONE_LABEL = ("ATAK on the device", "ATAK-CIV on Android-x86 in a KubeVirt VM")
+
+
+def smooth(t0, t1):
+    """0 before T0, 1 after T1, a smoothstep between, in ffmpeg's expression language."""
+    u = f"clip((t-{t0:.3f})/{t1 - t0:.3f},0,1)"
+    return f"({u}*{u}*(3-2*{u}))"
+
+
+def closeup_spans(phones, duration):
+    """The close-up spans as (start, end, eases in, eases out). A span that
+    runs to an edge of the part holds the close-up there, so the crossfade
+    goes straight to or from the next part."""
+    spans = [(max(a, 0.0), min(b, duration)) for a, b, _ in phones]
+    return [(a, b, a > 0.05, b < duration - 0.05) for a, b in spans if b - a > 2 * PHONE_EASE]
+
+
+def caption_pieces(start, end, spans):
+    """Splits a caption shown from START to END between the lower-third
+    (outside the close-ups) and the panel beside the phone (inside them).
+    Returns (where, from, to, fade in, fade out) pieces; the two cross over
+    while the phone moves."""
+    lower, panel, cap = [], [], 0.25
+    s, fin = start, cap
+    for a, b, ease_in, ease_out in spans:
+        if b <= start or a >= end:
+            continue
+        e = min(end, a + PHONE_EASE if ease_in else a)
+        if e - s > 0.05 and s < a:
+            lower.append((s, e, fin, PHONE_EASE if e < end and ease_in else cap))
+        ps, pin = (start, cap) if start >= a else (a, PHONE_EASE if ease_in else 0)
+        pe, pout = (end, cap) if end <= b else (b, PHONE_EASE if ease_out else 0)
+        if pe - ps > 0.05:
+            panel.append((ps, pe, pin, pout))
+        s, fin = (b - PHONE_EASE, PHONE_EASE) if ease_out else (b, 0)
+        if s < start:
+            s, fin = start, cap
+        if end <= b:
+            s = end
+    if end - s > 0.05:
+        lower.append((s, end, fin, cap))
+    return [("lower",) + p for p in lower] + [("panel",) + p for p in panel]
+
+
+def phone_closeup(events, spans, phone_src, work, duration, last, label):
+    """During each phone-on span the phone grows out of the framed window:
+    its screen moves from where it sits in the window to a large close-up
+    on the right, while the window fades to the background with the
+    PHONE_LABEL at the top left. Both ease in and out over PHONE_EASE
+    seconds. SPANS come from closeup_spans()."""
+    sw, sh = video_size(phone_src)
+    under, over, mask = (work / "phone-under.png", work / "phone-over.png", work / "phone-mask.png")
+    px, py, pw, ph = (int(v) for v in run(sys.executable, str(Path(__file__).with_name("style.py")), "phone",
+                                         str(under), str(over), str(mask), str(sw), str(sh),
+                                         *PHONE_LABEL).stdout.split())
+    # Where the phone sits in the framed window: the prepared video is
+    # fitted into the content area (scale s, centred), which sits at
+    # CONTENT_X, CONTENT_Y.
+    rect = next(e["value"] for e in events if e["kind"] == "phone-rect").split(",")
+    rx, ry, rw, rh, base_w, base_h = (float(v) for v in rect)
+    scale = min(style.CONTENT_W / base_w, style.CONTENT_H / base_h)
+    ox = style.CONTENT_X + (style.CONTENT_W - base_w * scale) / 2
+    oy = style.CONTENT_Y + (style.CONTENT_H - base_h * scale) / 2
+    w0 = rw * scale
+    h0 = w0 * ph / pw
+    x0 = ox + rx * scale
+    y0 = oy + (ry + rh / 2) * scale - h0 / 2
+    n = len(spans)
+    # The screen with its rounded corners and 1px border, at close-up size.
+    # It is scaled per frame on the way in and out; overlay takes frames of
+    # changing size into a fixed transparent canvas (pad does not).
+    parts = [f"[1:v]fps={FPS},scale={pw}:{ph}:flags=lanczos,format=rgba[pv];"
+             f"{still_src(mask, 'gray')}[pm];[pv][pm]alphamerge[pa];"
+             f"{still_src(over)},crop={pw}:{ph}:{px}:{py}[po];[pa][po]overlay=0:0:shortest=1,"
+             f"split={n}" + "".join(f"[pp{i}]" for i in range(n)),
+             f"{still_src(under)},split={n}" + "".join(f"[pb{i}]" for i in range(n))]
+    prev = last
+    for i, (a, b, ease_in, ease_out) in enumerate(spans):
+        k = f"({smooth(a, a + PHONE_EASE) if ease_in else 1}-{smooth(b - PHONE_EASE, b) if ease_out else 0})"
+        def lerp(v0, v1):
+            return f"({v0:.1f}+({v1 - v0:.1f})*{k})"
+        out = label if i + 1 == n else f"pc{i}"
+        on = f"between(t,{a:.3f},{b:.3f})"
+        parts.append(
+            f"[pb{i}]format=rgba"
+            + (f",fade=t=in:st={a:.3f}:d={PHONE_EASE}:alpha=1" if ease_in else "")
+            + (f",fade=t=out:st={b - PHONE_EASE:.3f}:d={PHONE_EASE}:alpha=1" if ease_out else "")
+            + f"[pf{i}];"
+            f"[{prev}][pf{i}]overlay=0:0:shortest=1:enable='{on}'[pg{i}];"
+            f"[pp{i}]scale=w='2*trunc({lerp(w0, pw)}/2)':h='2*trunc({lerp(h0, ph)}/2)':eval=frame:flags=bicubic[ps{i}];"
+            f"color=black@0:s={pw}x{ph}:r={FPS},format=rgba[pk{i}];"
+            f"[pk{i}][ps{i}]overlay=0:0:shortest=1:format=rgb,format=rgba[pq{i}];"
+            f"[pg{i}][pq{i}]overlay=x='{lerp(x0, px)}':y='{lerp(y0, py)}':shortest=1:enable='{on}'[{out}]")
+        prev = out
+    return ";".join(parts)
+
+
 def render(mode, timeline, base, out, workdir, offset=0.0):
     work = Path(workdir)
     duration = duration_of(base)
@@ -375,7 +555,13 @@ def render(mode, timeline, base, out, workdir, offset=0.0):
     if not under.is_file():
         run(sys.executable, str(Path(__file__).with_name("style.py")), "frame", str(under), str(over), str(mask))
     content = [f"[0:v]fps={FPS}"]
-    zooms = [e for e in events if e["kind"] == "zoom"]
+    phones = phone_intervals(events, duration) if mode == "web" else []
+    phone_src = next((e["value"] for e in events if e["kind"] == "phone-video"), None)
+    if not (phone_src and Path(phone_src).is_file()):
+        phones = []
+    # A zoom inside a phone close-up would only move the hidden window.
+    zooms = [e for e in events if e["kind"] == "zoom"
+             and not any(a - 1 <= e["at"] <= b for a, b, _ in phones)]
     if zooms:
         ax, ay, factor = (float(v) for v in str(zooms[0]["value"]).split(","))
         at = min(zooms[0]["at"] + 0.8, max(duration - 2 * EASE - HOLD, 0))
@@ -387,10 +573,17 @@ def render(mode, timeline, base, out, workdir, offset=0.0):
              f"{still_src(under)}[u];[u][cm]overlay={style.CONTENT_X}:{style.CONTENT_Y}:shortest=1[b0];"
              f"{still_src(over)}[o];[b0][o]overlay=0:0:shortest=1[b1]"]
     inputs = ["-i", base]
+    last = "b1"
+    spans = closeup_spans(phones, duration)
+    if spans:
+        graph.append(phone_closeup(events, spans, phone_src, work, duration, last, "b2"))
+        inputs += ["-ss", f"{offset:.3f}", "-i", phone_src]
+        last = "b2"
+        sw, sh = video_size(phone_src)
     marks = [e for e in events if e["kind"] in ("caption", "caption-clear")]
     speedups = [e for e in events if e["kind"] == "speedup"]
     stem = Path(timeline).stem
-    last, n = "b1", 4
+    n = 4
     for i, e in enumerate(marks):
         if e["kind"] != "caption":
             continue
@@ -403,14 +596,20 @@ def render(mode, timeline, base, out, workdir, offset=0.0):
         sped = [s for s in speedups if start - 0.5 <= s["at"] <= end]
         if sped and not tag:
             tag = sped[0]["value"]
-        png = work / f"{stem}-lower-{i}.png"
-        x, y = run(sys.executable, str(Path(__file__).with_name("style.py")), "lower", str(png), text, tag).stdout.split()
-        fade = 0.25
-        graph.append(
-            f"{still_src(png)},fade=t=in:st={start:.3f}:d={fade}:alpha=1,"
-            f"fade=t=out:st={end - fade:.3f}:d={fade}:alpha=1[l{n}];"
-            f"[{last}][l{n}]overlay={x}:{y}:shortest=1:enable='between(t,{start:.3f},{end:.3f})'[b{n}]")
-        last, n = f"b{n}", n + 1
+        # Inside a phone close-up the caption moves to a larger panel
+        # beside the phone.
+        for where, s, e, fin, fout in caption_pieces(start, end, spans):
+            png = work / f"{stem}-{where}-{i}.png"
+            extra = [str(sw), str(sh)] if where == "panel" else []
+            x, y = run(sys.executable, str(Path(__file__).with_name("style.py")), where, str(png), text, tag,
+                       *extra).stdout.split()
+            fin, fout = min(fin, (e - s) / 2), min(fout, (e - s) / 2)
+            fades = (f",fade=t=in:st={s:.3f}:d={fin:.3f}:alpha=1" if fin > 0 else "") + \
+                    (f",fade=t=out:st={e - fout:.3f}:d={fout:.3f}:alpha=1" if fout > 0 else "")
+            graph.append(
+                f"{still_src(png)}{fades}[l{n}];"
+                f"[{last}][l{n}]overlay={x}:{y}:shortest=1:enable='between(t,{s:.3f},{e:.3f})'[b{n}]")
+            last, n = f"b{n}", n + 1
     run("ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]",
         "-t", f"{duration:.3f}", "-an", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(FPS), out)
 
@@ -421,6 +620,11 @@ def frames_of(video):
     out = run("ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
               "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", video).stdout
     return int(out.strip())
+
+
+def is_card(path):
+    """Title cards are made by assemble.sh as v1.mp4, c02.mp4, c2a.mp4..."""
+    return re.fullmatch(r"v\d+|c\d+[a-z]?", Path(path).stem) is not None
 
 
 def join(out, parts):
@@ -445,10 +649,23 @@ def join(out, parts):
         at += last - first
         if i + 1 < len(parts):
             mix = tmp / f"{i:03d}-fade.mp4"
-            run("ffmpeg", "-v", "error", "-y", "-i", part, "-i", parts[i + 1], "-filter_complex",
-                f"[0:v]fps={FPS},trim=start_frame={n - fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[a];"
-                f"[1:v]fps={FPS},trim=end_frame={fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[b];"
-                f"[a][b]xfade=transition=fade:duration={CROSSFADE}:offset=0", *enc, str(mix))
+            head = (f"[0:v]fps={FPS},trim=start_frame={n - fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[a];"
+                    f"[1:v]fps={FPS},trim=end_frame={fade},setpts=PTS-STARTPTS,fps={FPS},format=yuv420p,setsar=1[b];")
+            if is_card(part) and is_card(parts[i + 1]):
+                # Two cards: crossfaded text overlaps, so the first card's
+                # text fades out to the plain background before the next
+                # one's fades in.
+                bg = tmp / "background.png"
+                if not bg.is_file():
+                    run(sys.executable, str(Path(__file__).with_name("style.py")), "background", str(bg))
+                half = (fade + 1) // 2
+                graph = (head + f"{still_src(bg, 'yuv420p')},trim=end_frame={fade}[bg];"
+                         f"[a]format=yuva420p,fade=t=out:s=0:n={half}:alpha=1[a2];"
+                         f"[b]format=yuva420p,fade=t=in:s={fade - half}:n={half}:alpha=1[b2];"
+                         f"[bg][a2]overlay=0:0[ab];[ab][b2]overlay=0:0,format=yuv420p")
+            else:
+                graph = head + f"[a][b]xfade=transition=fade:duration={CROSSFADE}:offset=0"
+            run("ffmpeg", "-v", "error", "-y", "-i", part, "-i", parts[i + 1], "-filter_complex", graph, *enc, str(mix))
             pieces.append(mix)
             at += fade
     listing = tmp / "list.txt"

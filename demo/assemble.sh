@@ -32,7 +32,9 @@ python3 demo/style.py fonts
 
 # card NAME TITLE SUBTITLE [last]
 # A title card holds for 3.5 s between its crossfades (demo/filters.py join
-# fades 0.3 s into and out of each part). The last card holds a little longer.
+# fades 0.3 s into and out of each part; between two cards it fades the first
+# card's text out before the next one's comes in). The last card holds a
+# little longer.
 card() {
   local name="$1" last="${4:-}" secs=4.1
   printf '%s' "$2" > "${work}/${name}.title"

@@ -18,7 +18,7 @@ export default defineConfig({
     // come before Starlight so it sees the fences first.
     mermaid({ theme: 'default', autoTheme: true }),
     starlight({
-      title: 'uds-k3d-takserver',
+      title: 'TAK Server on UDS',
       description:
         'TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.',
       social: [

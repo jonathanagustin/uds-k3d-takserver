@@ -4,7 +4,7 @@ Date: 2026-11-03
 
 ## Status
 
-Accepted
+Accepted. The **restart-on-revoke** path in Delete and Consequences is superseded by [ADR 24](0024-tak-signed-takclient-revocation.md). The resource, Secret shape, RBAC, and data package in this record still apply.
 
 ## Context
 
@@ -78,7 +78,7 @@ What TAK Server 5.7 (`5.7-RELEASE-14`, the upstream tag this repository builds) 
 
 ## Consequences
 
-- Revocation needs a restart of the TAK API and messaging pods. That drops every connected client for the length of the restart, a few minutes. Deleting many clients at once causes one restart per CRL write, unless the writes are batched. This is accepted for now. Issue [#288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) tracks revocation without a restart, through a TAK plugin or a proxy that checks revocation. A short `validityDays` is still the main control, as [ADR 14](0014-atak-test-device-in-kubevirt.md) already says.
+- ~~Revocation needs a restart of the TAK API and messaging pods.~~ Superseded by [ADR 24](0024-tak-signed-takclient-revocation.md): TakClient certificates are signed by TAK and revoked through the certadmin API, so a live connection closes without a pod restart. The CRL remains as a backstop without `uds.dev/pod-reload`.
 - Adding a CRL to `<security><tls>` turns on CRL checks for every certificate the TAK CA signed, including the admin certificate and CloudTAK's. An expired or unreadable CRL would reject all of them. The watcher keeps it current, and `tests/` checks that the CRL loads.
 - The module's watcher can now read the TAK CA key. A compromise of the watcher pod is a compromise of the CA. The admission pods cannot read it. Before this change, the cert Job was the only workload with that access.
 - Deleting the `takclients` namespace, or uninstalling the module chart, deletes every `TakClient` Secret. If the watcher is not running then, the finalizers hold the delete until it is.

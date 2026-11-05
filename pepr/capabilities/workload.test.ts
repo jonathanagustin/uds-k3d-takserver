@@ -33,6 +33,8 @@ import {
   STARTUP_ANNOTATION,
   tuneIgniteXml,
   waitGone,
+  waitIgniteEmpty,
+  igniteClientCount,
   waitMode,
   waitReady,
   waitSchema,
@@ -582,6 +584,7 @@ function igniteCluster(opts: {
   ready?: boolean;
   listPods?: () => Promise<{ metadata?: { deletionTimestamp?: string; creationTimestamp?: string }; status?: { phase?: string } }[]>;
   job?: { status?: { succeeded?: number; completionTime?: string } } | null;
+  podLogs?: () => Promise<string[]>;
 }) {
   const calls: string[] = [];
   const ops: JsonOp[] = [];
@@ -661,6 +664,10 @@ function igniteCluster(opts: {
       counts.set(name, replicas);
     },
     listPods: opts.listPods ?? (async () => []),
+    podLogs: async () => {
+      calls.push("read-ignite-log");
+      return opts.podLogs ? opts.podLogs() : ["[pod/takserver-ignite-0] [17:33:00] Topology snapshot [ver=9, locNode=a, servers=1, clients=0, state=ACTIVE]"];
+    },
     getJob: async () => {
       return opts.job === null ? undefined : (opts.job ?? { status: { succeeded: 1, completionTime: "2026-11-01T17:32:32Z" } });
     },
@@ -747,6 +754,8 @@ test("an ignite change scales consumers down, patches, restarts, and restores th
   });
   await reconcileIgnite("ADDED", cluster);
   assert.equal(calls[0], "delete-startup");
+  // The Ignite restart clears its topology, so no log read is needed.
+  assert.equal(calls.includes("read-ignite-log"), false);
   assert.deepEqual(
     calls.filter(call => call.startsWith("scale")),
     [
@@ -1003,6 +1012,8 @@ test("consumers started before the schema existed are stopped and started again 
   };
   await reconcileIgnite("ADDED", cluster);
   assert.equal(calls[0], "delete-startup");
+  const read = calls.indexOf("read-ignite-log");
+  assert.ok(read > calls.indexOf("scale takserver-config 0") && read < calls.indexOf("scale takserver-config 1"));
   assert.deepEqual(
     calls.filter(call => call.startsWith("scale")),
     [
@@ -1066,4 +1077,55 @@ test("terminating, finished, and unstamped pods do not trigger a restart", async
   assert.deepEqual(calls, ["stamp"]);
   const undated = { getJob: async () => ({ status: { succeeded: 1 } }) } as unknown as Cluster;
   assert.equal(await waitSchema(undated), 0);
+});
+
+const SNAPSHOT = (ver: number, clients: number) =>
+  `[pod/takserver-ignite-0] [21:48:${ver}] Topology snapshot [ver=${ver}, locNode=a1f793d3, servers=1, clients=${clients}, state=ACTIVE, CPUs=3]`;
+
+test("igniteClientCount reads the newest topology snapshot", () => {
+  assert.equal(igniteClientCount([]), undefined);
+  assert.equal(igniteClientCount(["[pod/takserver-ignite-0] Ignite node started OK"]), undefined);
+  assert.equal(igniteClientCount([SNAPSHOT(10, 1), SNAPSHOT(11, 2), "other", SNAPSHOT(12, 0)]), 0);
+  // Out-of-order lines: the highest ver wins.
+  assert.equal(igniteClientCount([SNAPSHOT(12, 1), SNAPSHOT(11, 0)]), 1);
+});
+
+test("waitIgniteEmpty waits for a stale client node to leave", async () => {
+  // The #296 sequence: one client is still listed after every pod is gone.
+  const logs = [[SNAPSHOT(10, 1)], [SNAPSHOT(10, 1)], [SNAPSHOT(10, 1), SNAPSHOT(11, 0)]];
+  let reads = 0;
+  let sleeps = 0;
+  const cluster = {
+    podLogs: async () => logs[Math.min(reads++, logs.length - 1)],
+    sleep: async () => {
+      sleeps += 1;
+    },
+  } as unknown as Cluster;
+  assert.equal(await waitIgniteEmpty(cluster, 60_000), true);
+  assert.equal(reads, 3);
+  assert.equal(sleeps, 2);
+});
+
+test("waitIgniteEmpty gives up after the timeout or on an unreadable log", async () => {
+  const stuck = { podLogs: async () => [SNAPSHOT(10, 1)], sleep: async () => undefined } as unknown as Cluster;
+  assert.equal(await waitIgniteEmpty(stuck, 0), false);
+  const broken = {
+    podLogs: async () => {
+      throw new Error("forbidden");
+    },
+    sleep: async () => undefined,
+  } as unknown as Cluster;
+  assert.equal(await waitIgniteEmpty(broken, 0), false);
+  let reads = 0;
+  const recovers = {
+    podLogs: async () => {
+      reads += 1;
+      if (reads === 1) {
+        throw new Error("not found");
+      }
+      return [SNAPSHOT(3, 0)];
+    },
+    sleep: async () => undefined,
+  } as unknown as Cluster;
+  assert.equal(await waitIgniteEmpty(recovers, 60_000), true);
 });

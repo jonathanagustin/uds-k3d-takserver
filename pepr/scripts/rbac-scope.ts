@@ -107,6 +107,9 @@ const ROLE_RULES = [
       { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-crl"], verbs: ["get", "patch"] },
       { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
+      // The Ignite reconcile reads the server's topology lines before it
+      // starts TAK again (#296).
+      { apiGroups: [""], resources: ["pods/log"], resourceNames: ["takserver-ignite-0"], verbs: ["get"] },
       { apiGroups: ["apps"], resources: ["deployments"], resourceNames: TAK, verbs: ["get", "list", "patch", "watch"] },
       { apiGroups: ["apps"], resources: ["deployments/scale"], resourceNames: TAK, verbs: ["get", "patch", "update"] },
       {

@@ -99,6 +99,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Record the runner image
+        run: echo "::notice::runner arch=$(uname -m) kernel=$(uname -r) ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+
       # ubuntu-26.04 runners boot with the kernel's inotify limits (128
       # instances) because the image's /etc/sysctl.conf is not applied
       # (actions/runner-images#15108). The k3d node shares those limits, and
@@ -197,6 +200,7 @@ jobs:
       - name: Debug Output
         if: always()
         run: uds run actions:debug-output
+        timeout-minutes: 3
         shell: bash
 
       - name: Node memory

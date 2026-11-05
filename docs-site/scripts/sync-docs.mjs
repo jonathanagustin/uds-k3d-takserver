@@ -284,10 +284,17 @@ function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
   // image or inline code. Fenced code is left untouched.
   return mapProse(markdown, (prose) =>
-    prose.replace(/\]\(([^)]+)\)/g, (full, destination) => {
-      const rewritten = rewriteDestination(fromSrc, destination, byPath);
-      return rewritten === null ? full : `](${rewritten})`;
-    }),
+    prose
+      .replace(/\]\(([^)]+)\)/g, (full, destination) => {
+        const rewritten = rewriteDestination(fromSrc, destination, byPath);
+        return rewritten === null ? full : `](${rewritten})`;
+      })
+      // The README uses raw HTML for its centered, width-limited screenshots.
+      // Those src paths are repo-relative too, so rewrite them the same way.
+      .replace(/(<img\s[^>]*\bsrc=")([^"]+)(")/g, (full, before, destination, after) => {
+        const rewritten = rewriteDestination(fromSrc, destination, byPath);
+        return rewritten === null ? full : `${before}${rewritten}${after}`;
+      }),
   );
 }
 

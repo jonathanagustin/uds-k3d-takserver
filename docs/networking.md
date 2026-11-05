@@ -11,15 +11,15 @@ The upstream chart's nginx ingress stays off. The Package exposes the same three
 | Host | Gateway | Service | Port | Why this port |
 | --- | --- | --- | --- | --- |
 | `takserver.<domain>` | tenant | `takserver-web` | 8447 | Browser UI. The gateway ends browser TLS and opens a new TLS connection to the pod. `clientAuth` off, admin UI and WebTAK on. |
-| `takserver.<domain>` | passthrough | `takserver-api-service` | 8446 | Certificate enrollment and the OIDC discovery document. Admin UI and WebTAK are off. |
+| `takserver.<domain>` | passthrough | `takserver-api-service` | 8446 | Certificate enrollment and the OpenID Connect (OIDC) discovery document. Admin UI and WebTAK are off. |
 | `takserver-api.<domain>` | passthrough | `takserver-api-service` | 8443 | Upstream `tak-api-cert`. The connector requires a client certificate. |
-| `takserver-stream.<domain>` | passthrough | `takserver-messaging-service` | 8089 | Upstream streaming ingress. ATAK usually dials 8089. Here that listener is SNI on the passthrough gateway. |
+| `takserver-stream.<domain>` | passthrough | `takserver-messaging-service` | 8089 | Upstream streaming ingress. ATAK usually dials 8089. Here that listener is Server Name Indication (SNI) on the passthrough gateway. |
 
 Ports 8444, 9000, and 9001 stay on the Services and have no gateway host. TLS on 8089, 8443, 8444, 8446, 9000, and 9001 is not terminated by the tenant gateway.
 
 Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the API, and Ignite.
 
-API and messaging also listen on plaintext 9100 for Prometheus (the JMX exporter javaagent). That port is not published. The Package monitor is what lets Prometheus scrape it.
+API and messaging also listen on plaintext 9100 for Prometheus (the Java Management Extensions (JMX) exporter javaagent). That port is not published. The Package monitor is what lets Prometheus scrape it.
 
 `k3d-core-slim-dev` does not select `istio-passthrough-gateway`. `bundle/uds-bundle.yaml` turns that optional component on for tests.
 
@@ -96,7 +96,7 @@ The `tak-health` pod fills that gap. Every 30 seconds it connects to TAK the way
 
 | Path | TAK port | Passes when |
 | --- | --- | --- |
-| `/stream` | 8089 (`takserver-stream.<domain>`) | the mutual TLS handshake succeeds and TAK answers a CoT ping (`t-x-c-t`) with a pong (`t-x-c-t-r`) |
+| `/stream` | 8089 (`takserver-stream.<domain>`) | the mutual TLS handshake succeeds and TAK answers a Cursor on Target (CoT) ping (`t-x-c-t`) with a pong (`t-x-c-t-r`) |
 | `/api` | 8443 (`takserver-api.<domain>` on 443) | the mutual TLS handshake succeeds and `GET /Marti/api/version` returns 200 |
 | `/enroll` | 8446 (`takserver-stream.<domain>`) | the TLS handshake succeeds and `GET /login` returns 200. No client certificate |
 
@@ -139,7 +139,7 @@ In a bundle, set `health.enabled: false` on chart `uds-takserver-config` the sam
 
 #### How CI tests it
 
-Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It then requires `probe_success` 1 for the three `tak-health` paths, scales `takserver-messaging` to zero, requires `/stream` to drop to 0, and logs the `/api` and `/enroll` results at that point. It scales messaging back and requires `/stream` to return to 1. It skips when the Probe CRD is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
+Slim core installs neither the Probe API nor Portal. The full-core job checks both. `tests/uptime-probes.sh` lists the TAK and CloudTAK probes. It requires `probe_success` 1 for both. For TAK it also requires status 200 with no redirect, so a redirect to Keycloak cannot pass in TAK's place. Then it scales CloudTAK to zero and back, and records the drop and the recovery. It then requires `probe_success` 1 for the three `tak-health` paths, scales `takserver-messaging` to zero, requires `/stream` to drop to 0, and logs the `/api` and `/enroll` results at that point. It scales messaging back and requires `/stream` to return to 1. It skips when the Probe custom resource definition (CRD) is absent. `tests/portal.sh` runs `tests/portal.spec.ts`, which signs in as an admin and expects exactly the "CloudTAK" and "TAK Server" tiles besides My Account, then signs in as `mapuser` (in `/CloudTAK/Users`, not an admin) and expects only "CloudTAK", then signs in as a user in neither group and expects neither tile.
 
 ### Standard TAK ports
 
@@ -200,7 +200,7 @@ The package allows only the flows below. Every allow rule has its own descriptio
 | Egress and Ingress | Ignite to Ignite, ports 47100 and 47500 | `Egress <port> from takserver-ignite to ignite-peers`, and the Ingress rule |
 | Egress and Ingress | every pair of API, messaging, config, and plugins, port 47100 | `Egress 47100 from <a> to <b>`, `Ingress 47100 to <b> from <a>` |
 | Egress | `remoteGenerated: KubeAPI`, one rule per pod label in `kubeApi.selectors` | Ignite Kubernetes discovery for that label |
-| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JWKS |
+| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JWKS (JSON Web Key Set) |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, messaging selector, only when `sso.enabled` | Keycloak discovery and JWKS for 8089 clients |
 | Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled`. The UDS operator writes it from the UDP expose entry | QUIC from the Envoy default gateway |
 

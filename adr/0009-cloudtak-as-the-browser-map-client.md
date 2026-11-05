@@ -26,7 +26,7 @@ Authservice in front of CloudTAK was the other option. It would gate the page, b
 
 ## Consequences
 
-- There is a browser map, built from source, that shows CoT from this TAK Server.
+- There is a browser map, built from source, that shows Cursor on Target (CoT) from this TAK Server.
 - One sign-in, on the UDS Keycloak page. The Keycloak user is the CloudTAK user and the subject of the TAK certificate CloudTAK uses for them, so TAK's audit trail and group membership follow the Keycloak user and their `/TAK/` groups.
 - The sign-in route imports CloudTAK's compiled modules and writes CloudTAK's session the way CloudTAK does. A CloudTAK release that changes those modules can break sign-in. The CI sign-in test runs on each Renovate pull request for CloudTAK. If upstream adds an OIDC route (issue #661), the `sso` container can go.
 - The redirect from CloudTAK's login page to Keycloak is a script nginx adds to the page, because CloudTAK has no setting for it.

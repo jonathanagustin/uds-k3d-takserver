@@ -88,7 +88,7 @@ One run records everything from the same cluster:
 
 - **The two videos.** `demo-deploy.mp4` and `demo-operate-and-trust.mp4`.
 - **One short clip per chapter.** For example `demo-clip-airgap.mp4`. The doc pages show these.
-- **Stills for the docs.** The tapes and the browser walkthroughs save them as they record, so a still can't show a different version than the video.
+- **Stills for the docs.** The video recordings and the browser walkthroughs save the stills as they record, so a still cannot show a different version than the video.
 
 The run shows the release in `.release-please-manifest.json`. It stamps that version on the package and the bundle, and it checks the published package for that version. Record after the release workflow has published it. The upgrade chapter runs last. It installs the release before that one on a new cluster, then upgrades it to this run's bundle (`demo/upgrade.sh`).
 

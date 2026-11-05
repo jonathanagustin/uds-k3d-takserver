@@ -4,6 +4,7 @@
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import mermaid from 'astro-mermaid';
+import starlightGitHubAlerts from 'starlight-github-alerts';
 import starlightLinksValidator from 'starlight-links-validator';
 
 // Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
@@ -35,7 +36,9 @@ export default defineConfig({
       // Shiki has no LogQL grammar. Show those blocks as plain text without a
       // build warning.
       expressiveCode: { shiki: { langAlias: { logql: 'txt' } } },
-      plugins: [starlightLinksValidator()],
+      // Renders GitHub alert syntax (> [!NOTE], > [!WARNING]) as callouts, so
+      // the same markdown works on GitHub and on the site.
+      plugins: [starlightGitHubAlerts(), starlightLinksValidator()],
       sidebar: [
         {
           label: 'Overview',

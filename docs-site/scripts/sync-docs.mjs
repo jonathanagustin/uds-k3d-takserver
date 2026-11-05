@@ -82,7 +82,7 @@ function firstParagraph(markdown) {
       continue;
     }
     if (paragraph.length === 0) {
-      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('```') || trimmed.startsWith('<')) {
+      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('```') || trimmed.startsWith('<') || trimmed.startsWith('[!') || trimmed.startsWith('![') || trimmed.startsWith('[![')) {
         continue;
       }
       paragraph.push(trimmed);

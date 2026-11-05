@@ -6,16 +6,12 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-<table>
-  <tr>
-    <td align="center" width="40%"><a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.png" alt="ATAK-CIV on an Android test device, connected to the server with its own marker" width="100%"></a></td>
-    <td align="center" width="60%"><a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="The same ATAK device's marker on the CloudTAK map in the browser" width="100%"></a></td>
-  </tr>
-  <tr>
-    <td align="center">A real ATAK device, connected over mutual TLS</td>
-    <td align="center">The same device on the CloudTAK map</td>
-  </tr>
-</table>
+<p align="center">
+  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
+</p>
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`) onto UDS Core. It adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking. It is built and tested on a local k3d cluster running `k3d-core-slim-dev` (UDS Core 1.16.0), on amd64 and arm64.
 

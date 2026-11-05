@@ -122,6 +122,7 @@ export interface Cluster {
   patchStatefulSet(namespace: string, name: string, ops: JsonOp[]): Promise<void>;
   restartStatefulSet(namespace: string, name: string, hasAnnotations: boolean): Promise<void>;
   listPods(namespace: string, app: string): Promise<PodDoc[]>;
+  podLogs(namespace: string, name: string): Promise<string[]>;
   getJob(namespace: string, name: string): Promise<JobDoc | undefined>;
   sleep(ms: number): Promise<void>;
 }
@@ -233,6 +234,7 @@ const live: TakClientCluster = {
     const list = await K8s(kind.Pod).InNamespace(namespace).WithLabel("app", app).Get();
     return (list.items ?? []) as PodDoc[];
   },
+  podLogs: (namespace, name) => K8s(kind.Pod).InNamespace(namespace).Logs(name),
   getJob: (namespace, name) => read(() => K8s(kind.Job).InNamespace(namespace).Get(name)) as Promise<JobDoc | undefined>,
   sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
   patchTakClientStatus: async (namespace, name, conditions: Condition[]) => {

@@ -26,6 +26,7 @@ const START_ORDER = ["takserver-config", "takserver-messaging", "takserver-api",
 
 export const IGNITE_CONFIGMAP = "takserver-ignite-configmap";
 export const IGNITE_STATEFULSET = "takserver-ignite";
+export const IGNITE_POD = "takserver-ignite-0";
 export const CORE_CONFIGMAP = "core-config";
 export const STARTUP_CONFIGMAP = "takserver-startup";
 export const STARTUP_ANNOTATION = "uds.dev/tak-startup";
@@ -38,6 +39,8 @@ export const DB_SETUP_JOB = "takserver-db-setup";
 export const POSTGRES_STATEFULSET = "takserver-postgresql";
 const NO_DB_GRACE_MS = 30_000;
 const SCHEMA_POLL_MS = 3_000;
+// Four times the 30s failure detection that drops a stale client node.
+const IGNITE_EMPTY_TIMEOUT_MS = 120_000;
 const ISSUER_TRIES = 3;
 const IGNITE_XML = "ignite-config.xml";
 const SPI = '<bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">';
@@ -981,6 +984,50 @@ export async function waitSchema(cluster: Cluster, timeoutMs = READY_TIMEOUT_MS)
   }
 }
 
+// The Ignite server prints a "Topology snapshot [ver=N, ..., clients=M, ...]"
+// line on every join and leave. Returns M from the highest ver, or undefined
+// when the log has no snapshot line yet.
+export function igniteClientCount(lines: string[]): number | undefined {
+  let ver = -1;
+  let clients: number | undefined;
+  for (const line of lines) {
+    const match = line.match(/Topology snapshot \[ver=(\d+),.*?\bclients=(\d+)/);
+    if (match !== null && Number(match[1]) > ver) {
+      ver = Number(match[1]);
+      clients = Number(match[2]);
+    }
+  }
+  return clients;
+}
+
+// Waits until the Ignite server lists no client nodes. A stopped consumer can
+// stay in the topology after its pod is gone. The server drops it only when
+// failure detection (30s) runs out. TAK's config service deploys
+// distributed-configuration with deployNodeSingleton. A new config node that
+// joins while the old one is still listed does not get the service. When the
+// old node is dropped, the service goes with it, and messaging and the API
+// fail with "Failed to find deployed service" (#296). Resolves true once the topology
+// is empty. On timeout or an unreadable log it resolves false, and the start
+// goes ahead as before.
+export async function waitIgniteEmpty(cluster: Cluster, timeoutMs = IGNITE_EMPTY_TIMEOUT_MS): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    let clients: number | undefined;
+    try {
+      clients = igniteClientCount(await cluster.podLogs("takserver", IGNITE_POD));
+    } catch {
+      clients = undefined;
+    }
+    if (clients === 0) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    await cluster.sleep(3_000);
+  }
+}
+
 // True when a running TAK consumer pod was created before the schema existed.
 async function startedBeforeSchema(cluster: Cluster, schemaAt: number): Promise<boolean> {
   for (const name of START_ORDER) {
@@ -1032,7 +1079,11 @@ export async function reconcileIgnite(phase: string, cluster: Cluster, readyTime
     const schemaAt = await waitSchema(cluster, readyTimeoutMs);
     if (schemaAt !== undefined && (await startedBeforeSchema(cluster, schemaAt))) {
       await cluster.deleteConfigMap("takserver", STARTUP_CONFIGMAP);
-      await startConsumers(cluster, await stopConsumers(cluster));
+      const desired = await stopConsumers(cluster);
+      // Ignite keeps running here, so its topology can still hold the old
+      // config node. The other branch restarts Ignite, which clears it.
+      await waitIgniteEmpty(cluster);
+      await startConsumers(cluster, desired);
     }
   }
   await resumeReplicas(cluster);

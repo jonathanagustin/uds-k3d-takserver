@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.8.0...v0.9.0) (2026-11-05)
+
+
+### Features
+
+* **pepr:** add a TakClient operator that issues TAK client certificates ([#271](https://github.com/jonathanagustin/uds-k3d-takserver/issues/271)) ([7c5cba6](https://github.com/jonathanagustin/uds-k3d-takserver/commit/7c5cba66516df548d5d0c4ed176b087a35b251e5))
+* **uptime:** check TAK's mTLS client ports with a tak-health pod ([#280](https://github.com/jonathanagustin/uds-k3d-takserver/issues/280)) ([21335ac](https://github.com/jonathanagustin/uds-k3d-takserver/commit/21335aca65a360417172e1877aff3fafb8938e0e))
+
+
+### Bug Fixes
+
+* **chart:** config waits for stale Ignite client nodes to leave before it starts ([#299](https://github.com/jonathanagustin/uds-k3d-takserver/issues/299)) ([9217f99](https://github.com/jonathanagustin/uds-k3d-takserver/commit/9217f99c66bdbdfca7c2f102230ad0f6cd5eb7c7)), closes [#298](https://github.com/jonathanagustin/uds-k3d-takserver/issues/298)
+* **pepr:** wait for Ignite to drop stopped TAK nodes before the restart ([#297](https://github.com/jonathanagustin/uds-k3d-takserver/issues/297)) ([5d75f9e](https://github.com/jonathanagustin/uds-k3d-takserver/commit/5d75f9e1ce4f33a784fc5566194e6bdc72c41245)), closes [#296](https://github.com/jonathanagustin/uds-k3d-takserver/issues/296)
+
+
+### Documentation
+
+* **demo:** posters, stills and chapter times from the restyled videos ([#293](https://github.com/jonathanagustin/uds-k3d-takserver/issues/293)) ([1a9286b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/1a9286bcc00b4d124ded868dce5374abb2d04c9e))
+* **demo:** v0.8.0 recording: chapter clips and stills on the doc pages ([#291](https://github.com/jonathanagustin/uds-k3d-takserver/issues/291)) ([9d3d55b](https://github.com/jonathanagustin/uds-k3d-takserver/commit/9d3d55b2cd4765d5da77c7c1b693448f874cd2d1))
+* **readme:** fill the cutoff caption band in the screenshots ([#303](https://github.com/jonathanagustin/uds-k3d-takserver/issues/303)) ([5d992bc](https://github.com/jonathanagustin/uds-k3d-takserver/commit/5d992bc1adff1662a399e320a7f074c9b24dab38))
+* **readme:** play the updated demo videos inline ([#294](https://github.com/jonathanagustin/uds-k3d-takserver/issues/294)) ([35e5489](https://github.com/jonathanagustin/uds-k3d-takserver/commit/35e5489491c94ad303a8c3e0ada8f1f3ed7d21eb))
+* **readme:** show the ATAK device and CloudTAK map side by side ([#301](https://github.com/jonathanagustin/uds-k3d-takserver/issues/301)) ([253bb96](https://github.com/jonathanagustin/uds-k3d-takserver/commit/253bb96ec2936054e0bdd302577f2af51cc9e308))
+* **readme:** stack the ATAK device and CloudTAK screenshots ([#302](https://github.com/jonathanagustin/uds-k3d-takserver/issues/302)) ([642806d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/642806da2e9d3b928f547efa6f5af410af921f2d))
+
 ## [0.8.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.7.1...v0.8.0) (2026-11-04)
 
 

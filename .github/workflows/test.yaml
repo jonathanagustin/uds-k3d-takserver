@@ -351,6 +351,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Record the runner image
+        run: echo "::notice::runner arch=$(uname -m) kernel=$(uname -r) ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+
       # ubuntu-26.04 runners boot with the kernel's inotify limits (128
       # instances) because the image's /etc/sysctl.conf is not applied
       # (actions/runner-images#15108). The k3d node shares those limits, and
@@ -461,18 +464,27 @@ jobs:
           df -h /
           sudo timeout 60 docker system df || true
 
+      # Diagnostic only: names the hosted-runner network wedge (#300) so it is
+      # not read as a product failure. It never changes the job result.
+      - name: Check for the runner network wedge
+        if: failure()
+        timeout-minutes: 1
+        run: ./.github/scripts/runner-wedge-probe.sh || true
+
       - name: Debug Output
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
         run: uds run actions:debug-output
+        timeout-minutes: 3
         shell: bash
 
       # debug-output has events but no container logs. A CloudTAK container
       # that restarts during the chart install shows up here.
       - name: CloudTAK pod details
         if: failure()
+        timeout-minutes: 3
         shell: bash
         run: |
-          k() { uds zarf tools kubectl "$@"; }
+          k() { timeout 30 uds zarf tools kubectl "$@"; }
           if ! k get namespace cloudtak >/dev/null 2>&1; then
             echo "namespace cloudtak does not exist"
             exit 0

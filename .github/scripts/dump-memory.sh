@@ -7,13 +7,16 @@
 # and each container lastState still print.
 set -u
 
+# On a wedged runner (#300) docker, kubectl and dmesg can block. Each call
+# gets its own bound so the later log steps keep their wall clock.
+
 k() {
   if command -v kubectl >/dev/null 2>&1; then
-    kubectl "$@"
+    timeout 30 kubectl "$@"
     return
   fi
   if [[ -x ./zarf ]]; then
-    ./zarf tools kubectl "$@"
+    timeout 30 ./zarf tools kubectl "$@"
     return
   fi
   echo "kubectl is not available" >&2
@@ -27,18 +30,18 @@ k() {
 echo "::group::runner memory, OOM kills, and k3d node restarts"
 free -m || true
 df -h / || true
-sudo dmesg -T 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process' | tail -20 ||
+sudo timeout 30 dmesg -T 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process' | tail -20 ||
   echo "No OOM kill in dmesg."
-for node in $(docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null); do
-  docker inspect "${node}" --format \
+for node in $(timeout 30 docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null); do
+  timeout 30 docker inspect "${node}" --format \
     '{{.Name}} restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' || true
 done
-docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
-for node in $(docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
+timeout 30 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
+for node in $(timeout 30 docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
   # The API server's 502/503 proxy lines while the kubelet is down would
   # push the fatal out of the tail, so they are left out.
   echo "--- ${node}: k3s starts, errors, and shutdown lines"
-  docker logs "${node}" 2>&1 |
+  timeout 30 docker logs "${node}" 2>&1 |
     grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' |
     grep -v 'Sending HTTP/1.1 50[23] response' | tail -40 || true
 done

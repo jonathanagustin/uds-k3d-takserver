@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.9.0...v0.9.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **docs-site:** rewrite raw HTML image paths from the README ([#308](https://github.com/jonathanagustin/uds-k3d-takserver/issues/308)) ([932b41d](https://github.com/jonathanagustin/uds-k3d-takserver/commit/932b41d777ed4dea331a80d8c2abc895e49c0945))
+
+
+### Documentation
+
+* **adr:** revoke TakClient certs through TAK's certificate table ([#310](https://github.com/jonathanagustin/uds-k3d-takserver/issues/310)) ([90dd8d5](https://github.com/jonathanagustin/uds-k3d-takserver/commit/90dd8d5c9caa0176c1c8d150619b8aa0fbbf5ef7))
+* expand first-use acronyms and clear a few unclear phrases ([#305](https://github.com/jonathanagustin/uds-k3d-takserver/issues/305)) ([3e9f6cd](https://github.com/jonathanagustin/uds-k3d-takserver/commit/3e9f6cdfc82459ccd95ef1336e990af0bf303127))
+* **site:** add favicon, fix Test badge and home preview, render GitHub alerts ([#304](https://github.com/jonathanagustin/uds-k3d-takserver/issues/304)) ([45ba1da](https://github.com/jonathanagustin/uds-k3d-takserver/commit/45ba1da8beb3a42c5e310ea9ed48729a65caf60a))
+* title the project TAK Server on UDS ([#307](https://github.com/jonathanagustin/uds-k3d-takserver/issues/307)) ([b471f89](https://github.com/jonathanagustin/uds-k3d-takserver/commit/b471f899e5369d0bf37e3761bc0eb7f888aa0a60))
+
 ## [0.9.0](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.8.0...v0.9.0) (2026-11-05)
 
 

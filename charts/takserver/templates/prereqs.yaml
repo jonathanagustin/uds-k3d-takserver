@@ -257,7 +257,8 @@ data:
 ---
 # The Ignite chart's ClusterRole lists pods and endpoints. This Role adds
 # Deployment reads so the wait init can see readyReplicas for the current
-# generation. A listening port is not that check.
+# generation. A listening port is not that check. It also lets the config
+# wait init read the Ignite server log.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -269,6 +270,11 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch"]
+  # The config wait init reads the Ignite server's topology lines (#298).
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    resourceNames: ["takserver-ignite-0"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

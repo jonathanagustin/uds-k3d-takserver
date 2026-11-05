@@ -8,8 +8,9 @@
 # stock readiness script passed. A listening port is not that gate.
 #
 # Modes:
-#   ignite    discovery port 47500, bound at 180s
-#   config    ignite, then takserver-config Ready, bound at 300s
+#   ignite    discovery port 47500, bound at 180s, then no stale Ignite
+#             client nodes, bound at 120s (config only, see wait_stale)
+#   config    ignite port, then takserver-config Ready, bound at 300s
 #   services  config, then messaging and the API Ready, bound at 300s each
 set -euo pipefail
 
@@ -108,9 +109,64 @@ wait_deploy() {
   done
 }
 
+# Client count from the newest "Topology snapshot" line in the Ignite server
+# log. Empty when the log cannot be read or has no such line yet.
+ignite_clients() {
+  local line
+  line="$(curl -fsS --max-time 30 --cacert "${ca}" \
+    -H "Authorization: Bearer ${token}" \
+    "${api}/api/v1/namespaces/${ns}/pods/takserver-ignite-0/log?container=ignite" 2>/dev/null |
+    grep -o 'Topology snapshot \[ver=[0-9]*, [^]]*clients=[0-9]*' || true)"
+  line="${line##*$'\n'}"
+  [[ -n "${line}" ]] || return 0
+  printf '%s' "${line##*clients=}"
+}
+
+# Ready pods of the other TAK Deployments. Each is a live Ignite client.
+# Terminating pods are not counted in readyReplicas.
+ready_peers() {
+  local total=0 name body ready
+  for name in takserver-messaging takserver-api takserver-plugins; do
+    body="$(curl -fsS --max-time 15 --cacert "${ca}" \
+      -H "Authorization: Bearer ${token}" \
+      "${api}/apis/apps/v1/namespaces/${ns}/deployments/${name}?pretty=false" 2>/dev/null || true)"
+    body="$(printf '%s' "${body}" | tr -d ' \n\t\r')"
+    ready="$(number_field "${body}" readyReplicas || true)"
+    total=$((total + ${ready:-0}))
+  done
+  printf '%s' "${total}"
+}
+
+# A stopped TAK pod's Ignite node can stay in the topology for up to the 30s
+# failure detection timeout after the pod is gone. If config joins in that
+# window it does not get the distributed-configuration service, and the
+# Ignite server can crash when the old node is dropped (#296, #298). Wait
+# until the server lists no more clients than the Ready messaging, API, and
+# plugins pods. After 120s config starts anyway, as it did before this check.
+wait_stale() {
+  local deadline=$((SECONDS + 120))
+  local clients peers
+  echo "waiting up to 120s for stale Ignite client nodes to leave"
+  while true; do
+    clients="$(ignite_clients)"
+    peers="$(ready_peers)"
+    if [[ -n "${clients}" ]] && [[ "${clients}" -le "${peers}" ]]; then
+      echo "Ignite lists ${clients} clients and ${peers} TAK pods are Ready"
+      return 0
+    fi
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
+      echo "Ignite still lists ${clients:-unknown} clients for ${peers} Ready TAK pods after 120s; starting anyway" >&2
+      return 0
+    fi
+    sleep 5
+  done
+}
+
 wait_ignite
 case "${mode}" in
-  ignite) ;;
+  ignite)
+    wait_stale
+    ;;
   config)
     wait_deploy takserver-config 300
     ;;

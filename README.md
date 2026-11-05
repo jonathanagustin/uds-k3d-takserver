@@ -9,7 +9,7 @@
 <table>
   <tr>
     <td align="center" width="40%"><a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.png" alt="ATAK-CIV on an Android test device, connected to the server with its own marker" width="100%"></a></td>
-    <td align="center" width="60%"><a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.png" alt="The same ATAK device's marker on the CloudTAK map in the browser" width="100%"></a></td>
+    <td align="center" width="60%"><a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="The same ATAK device's marker on the CloudTAK map in the browser" width="100%"></a></td>
   </tr>
   <tr>
     <td align="center">A real ATAK device, connected over mutual TLS</td>

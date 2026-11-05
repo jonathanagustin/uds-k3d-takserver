@@ -1,7 +1,7 @@
 # uds-k3d-takserver
 
 [![Release](https://img.shields.io/github/v/release/jonathanagustin/uds-k3d-takserver)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/latest)
-[![Test](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml)
+[![Test](https://img.shields.io/github/actions/workflow/status/jonathanagustin/uds-k3d-takserver/test.yaml?branch=main&label=Test)](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/jonathanagustin/uds-k3d-takserver/badge)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-k3d-takserver)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
@@ -15,6 +15,7 @@
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`) onto UDS Core. It adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking. It is built and tested on a local k3d cluster running `k3d-core-slim-dev` (UDS Core 1.16.0), on amd64 and arm64.
 
+> [!NOTE]
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
 <!-- github-only:start -->

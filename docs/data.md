@@ -43,7 +43,12 @@ Before you roll the new image out:
 2. Deploy `18-3.6`.
 3. Confirm `SHOW server_version_num` is 18 and `SELECT extversion FROM pg_extension WHERE extname = 'postgis'` is 3.6.
 
-Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start. Do not point `15-3.4` at a data directory PostgreSQL 18 has already written. A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
+Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start.
+
+> [!WARNING]
+> Do not point `15-3.4` at a data directory PostgreSQL 18 has already written.
+
+A directory that is not PostgreSQL 15 or 18 makes the `18-3.6` container exit.
 
 The upgrade test deploys the last release and writes a row. Then it deploys this branch and checks the row, its timestamp, the PVC, the server major version, and the PostGIS version. Since 0.7.0 the last release is already on PostgreSQL 18, so that job no longer runs the in-place upgrade from 15. A second job, `validate-upgrade-pg15`, pins release 0.6.0 with `UPGRADE_BASELINE_TAG=v0.6.0`, so the upgrade from 15 stays tested. It runs on pushes to `main`, and on a pull request with the `upgrade-pg15` label when a commit is pushed.
 

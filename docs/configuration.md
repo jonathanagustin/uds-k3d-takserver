@@ -67,7 +67,7 @@ Named overlays are in [Profiles](profiles.md). The package default stays `values
 
 ## Upstream chart values
 
-The TAK chart is used as published. Nothing under `src/takserver-cluster/deployments/helm` is copied into this repo. `charts/takserver/` is only the UDS Package and the ConfigMaps that chart mounts. It is not a fork of the TAK templates.
+This package uses the TAK chart as published. Nothing under `src/takserver-cluster/deployments/helm` is copied into this repo. `charts/takserver/` is only the UDS Package and the ConfigMaps that chart mounts. It is not a fork of the TAK templates.
 
 The chart has no defaults file. `developer-values.yaml` in tag `5.7-RELEASE-14` is the example these overrides are measured against. Probes are hardcoded in the upstream Deployments (`api-readiness.sh`, `config-readiness.sh`, `messaging-readiness.sh`, and the TCP liveness ports). This repo does not replace those templates.
 
@@ -122,7 +122,7 @@ The upstream chart has no values for init containers, probes, or the extra objec
 | `takserver-coredns` | Adds CoreDNS rewrites so `DOMAIN` hosts reach the right Istio gateway inside the cluster. It runs only when `IN_CLUSTER_DNS` is true and `kube-system/coredns-custom` exists. See [Networking](networking.md#in-cluster-dns) |
 | `takserver-gateway-ca` | Copies the TAK CA certificate to the tenant gateway's namespace, where the gateway DestinationRule points. The gateway uses it to verify TAK's certificate on 8447. See [Networking](networking.md#tenant-gateway-to-8447) |
 | `takserver-cloudtak-admin` | Copies the TAK CA, the admin certificate and key, and the keystore password to the `cloudtak` namespace. CloudTAK uses them to connect to TAK. See [CloudTAK](cloudtak.md#tak-connection) |
-| `takserver-takclient` | Turns each `TakClient` in namespace `takclients` into a client certificate signed by the TAK CA, a TAK file user with the listed groups, and a Secret with the certificate, the key, and an ATAK data package. Deleting a `TakClient` adds its serial to the CRL in Secret `takserver-crl`. See [ADR 22](../adr/0022-takclient-operator.md) and [the device docs](atak-device.md#provisioning-device-certificates) |
+| `takserver-takclient` | Turns each `TakClient` in namespace `takclients` into a client certificate signed by the TAK CA, a TAK file user with the listed groups, and a Secret with the certificate, the key, and an ATAK data package. Deleting a `TakClient` adds its serial to the certificate revocation list (CRL) in Secret `takserver-crl`. See [ADR 22](../adr/0022-takclient-operator.md) and [the device docs](atak-device.md#provisioning-device-certificates) |
 
 The webhook covers only namespace `takserver`. It matches the four TAK pods by their `app` label. It matches the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet by name, through a `matchConditions` rule, because the upstream chart puts no `app` label on those objects. It fails closed, so while the module is down, Kubernetes refuses to create those pods and to create or update those objects. Other objects are not affected. `pepr/scripts/webhook-scope.ts` writes that scope.
 

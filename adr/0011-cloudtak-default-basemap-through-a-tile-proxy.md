@@ -26,7 +26,7 @@ UDS Core 1.15 installs the ambient egress namespace (`istio-egress-ambient`) as 
   - TLS to the tile host is verified against the system CA bundle.
   - Tiles are cached on disk in `/tmp`, following the tile host's cache headers, or 7 days when it sends none. Stale tiles are served if the host fails.
   - Zoom levels outside `basemap.minzoom`..`basemap.maxzoom` are refused. Each session is limited to 20 tiles a second after a burst of 200, which a map view stays inside and bulk download does not.
-- The bootstrap container keeps a server basemap record pointing at that path, with the attribution and a TileJSON URL on `localhost:5000`, and makes it CloudTAK's default for new users (`map::basemap`). It recognises the record by its URL path and changes it when the settings change.
+- The bootstrap container keeps a server basemap record pointing at that path, with the attribution and a TileJSON URL on `localhost:5000`, and makes it CloudTAK's default for new users (`map::basemap`). It recognizes the record by its URL path and changes it when the settings change.
 - The Package allows egress from the `cloudtak` service account to the URL's host and port only, as a `remoteHost` rule. The pod gets its own `cloudtak` service account for that.
 - `basemap.enabled: false` removes the record, the proxy, and the egress rule. `basemap.url` points at another tile server, for example one inside an air-gapped network, and `basemap.egress` replaces the generated rule for a tile server inside the cluster.
 

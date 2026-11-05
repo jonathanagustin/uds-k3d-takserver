@@ -13,7 +13,7 @@
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
-Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, CoT from TAK, and the admin pages do.
+Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, Cursor on Target (CoT) from TAK, and the admin pages do.
 
 ## Image
 

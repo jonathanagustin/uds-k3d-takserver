@@ -280,11 +280,20 @@ function titleLinkLabels(markdown, fromSrc, headings) {
   );
 }
 
+// GitHub's workflow badge.svg is reliable on github.com (camo can fetch it).
+// On the docs site it has shown as a broken image in Chrome, so the site build
+// swaps it for the shields.io workflow-status badge, which sets CORP to
+// cross-origin. Keep both URLs in sync when either changes.
+const githubTestBadge =
+  'https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main';
+const siteTestBadge =
+  'https://img.shields.io/github/actions/workflow/status/jonathanagustin/uds-k3d-takserver/test.yaml?branch=main&label=Test';
+
 function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
   // image or inline code. Fenced code is left untouched.
-  return mapProse(markdown, (prose) =>
-    prose
+  return mapProse(markdown, (prose) => {
+    let next = prose
       .replace(/\]\(([^)]+)\)/g, (full, destination) => {
         const rewritten = rewriteDestination(fromSrc, destination, byPath);
         return rewritten === null ? full : `](${rewritten})`;
@@ -294,8 +303,12 @@ function rewriteLinks(markdown, fromSrc, byPath) {
       .replace(/(<img\s[^>]*\bsrc=")([^"]+)(")/g, (full, before, destination, after) => {
         const rewritten = rewriteDestination(fromSrc, destination, byPath);
         return rewritten === null ? full : `${before}${rewritten}${after}`;
-      }),
-  );
+      });
+    if (fromSrc === 'README.md') {
+      next = next.split(githubTestBadge).join(siteTestBadge);
+    }
+    return next;
+  });
 }
 
 async function adrPages() {

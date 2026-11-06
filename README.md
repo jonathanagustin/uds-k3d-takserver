@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/jonathanagustin/uds-k3d-takserver)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/latest)
 [![Test](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml)
-[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/jonathanagustin/uds-k3d-takserver?label=OpenSSF%20Scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-k3d-takserver)
+[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-k3d-takserver)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 

@@ -14,13 +14,17 @@
 # root filesystem.
 # cloudtak-upstream is not a registry image. docker-bake.hcl builds
 # upstream/cloudtak's Dockerfile unchanged and passes it in as a named
-# build context. Scorecard's Pinned-Dependencies check reads this file
-# alone and reports the name as an unpinned container image. A digest
-# cannot be added: the name selects that context, and pinning a registry
-# tag would build a different image than the submodule. hadolint DL3006
-# is the same finding.
-# hadolint ignore=DL3006
-FROM cloudtak-upstream AS built
+# build context. This file copies from that context, the same way the TAK
+# image copies from takserver-src. A FROM line would be an image reference.
+# Scorecard would then require a registry digest, and that digest would
+# not be the submodule build.
+#
+# npm prune needs npm. This is the same node:26-alpine3.24 tag upstream
+# copies into its image, pinned by the multi-arch index digest. Renovate
+# updates the digest when the tag moves.
+FROM node:26-alpine3.24@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS built
+COPY --from=cloudtak-upstream /home/etl/api /home/etl/api
+WORKDIR /home/etl/api
 # The API's package.json lists tsx and drizzle-kit as dependencies, and
 # @openaddresses/batch-generic names drizzle-kit as a peer, so npm keeps
 # them after the prune. The API runs the compiled dist/index.js with plain
@@ -43,7 +47,7 @@ FROM nginx:alpine3.24@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c
 # hadolint ignore=DL3018
 RUN apk add --no-cache bash nodejs-current openssl
 COPY --from=built /home/etl/api /home/etl/api
-COPY --from=built /home/etl/app/dist /home/etl/app/dist
+COPY --from=cloudtak-upstream /home/etl/app/dist /home/etl/app/dist
 
 ARG CLOUDTAK_VERSION
 ARG UPSTREAM_SHA

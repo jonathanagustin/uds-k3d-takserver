@@ -69,6 +69,7 @@ export default defineConfig({
             { label: 'Data', slug: 'data' },
             { label: 'Values profiles', slug: 'profiles' },
             { label: 'CI workflows', slug: 'ci' },
+            { label: 'Review rules for main', slug: 'branch-protection' },
             { label: 'Benchmarks', slug: 'benchmarks' },
           ],
         },

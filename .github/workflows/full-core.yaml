@@ -173,12 +173,20 @@ jobs:
         # the job limit so the log and dump steps below still run.
         timeout-minutes: 70
 
+      # Probe before any diagnostics that call Docker or Kubernetes. A routing
+      # timeout skips those calls; local sanitized logs are still printed.
+      - name: Check for the runner network wedge
+        id: runner-wedge
+        if: failure()
+        timeout-minutes: 1
+        run: ./.github/scripts/runner-wedge-probe.sh || true
+
       # test:full-core writes out/falco-events.txt only when it reaches
       # tests/falco-events.sh, so an earlier failure left the upload below
       # with no file. Collect the events here instead. The script skips when
       # Falco or Loki never came up, and it redacts passwords itself.
       - name: Collect Falco events when the test did not
-        if: failure()
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 10
         shell: bash
         run: |
@@ -190,7 +198,7 @@ jobs:
           FALCO_COLLECT_ONLY=1 ./tests/falco-events.sh
 
       - name: Disk use after the test
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 2
         shell: bash
         run: |
@@ -198,19 +206,19 @@ jobs:
           sudo timeout 60 docker system df || true
 
       - name: Debug Output
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:debug-output
         timeout-minutes: 3
         shell: bash
 
       - name: Node memory
-        if: failure()
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: ./.github/scripts/dump-memory.sh
         # A dead API server can hang kubectl; later always() steps still run.
         timeout-minutes: 5
 
       - name: Save logs
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:save-logs
         shell: bash
         timeout-minutes: 2

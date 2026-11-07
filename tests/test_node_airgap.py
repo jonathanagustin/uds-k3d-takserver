@@ -32,6 +32,18 @@ class AirgapContracts(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 AIRGAP.probe([], url, blocked=False)
 
+    def test_host_and_shared_namespaces_are_refused_before_any_firewall_command(self):
+        for mode in ("host", "container:other-container", "", None):
+            for operation in (lambda: AIRGAP.block_node("tagged-node", "iptables", []),
+                              lambda: AIRGAP.restore_node("tagged-node", "iptables")):
+                with self.subTest(mode=mode), patch.object(AIRGAP, "docker") as command:
+                    command.return_value = subprocess.CompletedProcess([], 0, json.dumps(mode), "")
+                    with self.assertRaisesRegex(RuntimeError, "host/shared"):
+                        operation()
+                    self.assertEqual(command.call_count, 1)
+                    self.assertEqual(command.call_args.args,
+                                     ("inspect", "--format", "{{json .HostConfig.NetworkMode}}", "tagged-node"))
+
     def test_ci_always_restores_and_offline_ui_keeps_the_core_flow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())
         job = workflow["jobs"]["validate-install"]

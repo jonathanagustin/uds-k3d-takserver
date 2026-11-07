@@ -31,7 +31,18 @@ def firewall(node, tool, *args, check=True):
     return docker("exec", node, tool, "-w", "5", *args, check=check)
 
 
+
+def require_private_network(node):
+    # Labels alone do not establish namespace isolation: a mislabeled
+    # --network=host container would otherwise change the daemon host's rules,
+    # and container:<id> shares another container's network namespace.
+    mode = json.loads(docker("inspect", "--format", "{{json .HostConfig.NetworkMode}}", node).stdout)
+    if not isinstance(mode, str) or not mode or mode == "host" or mode.startswith("container:"):
+        raise RuntimeError(f"{node}: refusing firewall changes in host/shared network mode")
+
+
 def restore_node(node, tool):
+    require_private_network(node)
     found = firewall(node, tool, "-L", CHAIN, check=False)
     if found.returncode == 1:
         return
@@ -44,6 +55,7 @@ def restore_node(node, tool):
 
 
 def block_node(node, tool, networks):
+    require_private_network(node)
     # Refuse to replace an unrelated chain or another test's active guard.
     firewall(node, tool, "-N", CHAIN)
     # Docker's embedded resolver can forward through the host. Refuse that
@@ -87,6 +99,7 @@ def discover(cluster):
     result = []
     for node in nodes:
         name = node["Name"].lstrip("/")
+        require_private_network(name)
         tools = ["iptables"]
         ipv6 = docker("exec", name, "cat", "/proc/sys/net/ipv6/conf/all/disable_ipv6", check=False)
         if ipv6.returncode == 0 and ipv6.stdout.strip() == "0":

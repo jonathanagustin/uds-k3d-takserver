@@ -144,7 +144,9 @@ checkpoint and creates the package and test bundle first. Before it deploys TAK
 or CloudTAK, `.github/scripts/node-airgap.py` installs a dedicated filter chain
 inside each k3d server and agent container's network namespace. Both node-origin
 `OUTPUT` and pod-forwarded `FORWARD` traffic are covered. The host firewall,
-Docker daemon, and other containers are unchanged. Network namespaces have
+Docker daemon, and other containers are unchanged. The guard rejects host and
+shared-container network modes before installing or restoring rules, even if a
+container carries k3d labels. Network namespaces have
 [separate firewall rules](https://man7.org/linux/man-pages/man7/network_namespaces.7.html).
 
 The allow list comes from the cluster's Docker networks, Kubernetes pod CIDRs,

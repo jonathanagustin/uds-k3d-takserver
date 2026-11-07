@@ -64,7 +64,7 @@ jobs:
             coverage report --include='tests/upgrade-*.py' --format=markdown
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: ATAK uptime result validation
+      - name: ATAK viewer uptime probe
         run: python3 -B -m unittest tests.test_atak_uptime -v
 
       - name: Loki query helper

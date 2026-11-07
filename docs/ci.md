@@ -50,7 +50,10 @@ The image workflows also attest the images they push. See [Verify a release](../
 Manual **ATAK e2e** runs accept an `uptime_probe` boolean. It adds only the Core
 monitoring layer, leaves Grafana at zero replicas, and checks the authenticated
 `/phone.html` target in Prometheus after the device test. The option is off by
-default while its extra memory and CPU footprint is measured beside the VM.
+default while its extra memory and CPU footprint is measured beside the VM, so
+a pull request run does not exercise it. `tests/test_atak_uptime.py` runs the
+opted-in check against Prometheus instant-query semantics, including a
+successful sample that is still inside the lookback window.
 See [Check the viewer uptime probe](atak-device.md#check-the-viewer-uptime-probe).
 
 ### Reused build outputs

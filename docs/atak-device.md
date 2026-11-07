@@ -63,9 +63,13 @@ After the device and viewer SSO checks pass, `atak/ci/uptime-probe.py` requires:
 - Probe `atak/uds-atak-tenant-uptime` targets exactly
   `https://atak.<domain>/phone.html` using the operator-generated
   `http_200x_sso_atak_uds-atak-viewer-probe` module.
-- Fresh `probe_success=1`, `probe_http_status_code=200`, and
-  `probe_http_redirects=0` samples for that exact target. A successful redirect
-  to Keycloak's login page cannot pass.
+- `probe_success=1`, `probe_http_status_code=200`, and
+  `probe_http_redirects=0` for that exact target, scraped within the last 120
+  seconds. Freshness is the scrape time from `timestamp(metric)`. Prometheus
+  still returns the last sample through its lookback period (five minutes by
+  default), and an instant query's sample timestamp is the evaluation time, so
+  that returned value is not fresh by itself. A redirect to Keycloak's login
+  page cannot pass.
 
 The operator provisions the probe client and its client-credentials module;
 the test does not copy its secret or edit Blackbox configuration. Evidence is

@@ -19,7 +19,7 @@ mkdir -p out
 : > "${log}"
 
 say() {
-  printf '%s\n' "$*" | tee -a "${log}"
+  printf '%sZ +%ss %s\n' "$(date -u +%H:%M:%S)" "${SECONDS}" "$*" | tee -a "${log}"
 }
 
 k() {
@@ -546,8 +546,18 @@ k scale deploy/cloudtak -n cloudtak --replicas=1
 k rollout status deploy/cloudtak -n cloudtak --timeout=600s
 
 say "api-smoke with the client certificate issued before the backup"
-TAK_CLIENT_CERT="${cert_dir}/admin.pem" \
-  TAK_CLIENT_KEY="${cert_dir}/admin.key" \
-  ./tests/api-smoke.sh
+# shellcheck source=.github/scripts/checked-pipe.sh
+source "${root}/.github/scripts/checked-pipe.sh"
+checked_pipe "${log}" "${root}/.github/scripts/redact-then-filter.sh" \
+  env TAK_CLIENT_CERT="${cert_dir}/admin.pem" TAK_CLIENT_KEY="${cert_dir}/admin.key" \
+  ./tests/api-smoke.sh || true
+say "api-smoke exit ${CHECKED_SMOKE_RC} filter ${CHECKED_FILTER_RC} tee ${CHECKED_TEE_RC}"
+if [[ "${CHECKED_FILTER_RC}" -ne 0 || "${CHECKED_TEE_RC}" -ne 0 ]]; then
+  say "api-smoke output omitted: unsanitizable"
+  exit 1
+fi
+if [[ "${CHECKED_SMOKE_RC}" -ne 0 ]]; then
+  exit "${CHECKED_SMOKE_RC}"
+fi
 
 say "backup-restore passed"

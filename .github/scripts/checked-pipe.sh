@@ -55,6 +55,8 @@ _sg_on_signal() {
   fi
   if [[ -z "${_sg_killer}" && -n "${_sg_leader}" ]]; then
     # New session: this grace killer must survive the watchdog group.
+    # $1 and $2 expand in that shell. Quoting them here would expand them now.
+    # shellcheck disable=SC2016
     setsid bash -c 'sleep "$1"; kill -KILL -"$2" 2>/dev/null || true' \
       bash "${_sg_kill_after}" "${_sg_leader}" >/dev/null 2>&1 </dev/null &
     _sg_killer=$!
@@ -125,8 +127,9 @@ supervise_group() {
   set +e
   setsid "$@" &
   _sg_leader=$!
-  setsid bash -c \
-    'sleep "$1"; printf "1\n" > "$2"; kill -TERM -"$3" 2>/dev/null || true; sleep "$4"; kill -KILL -"$3" 2>/dev/null || true' \
+  # $1 through $4 expand in the watchdog shell. Quoting them here would expand them now.
+  # shellcheck disable=SC2016
+  setsid bash -c 'sleep "$1"; printf "1\n" > "$2"; kill -TERM -"$3" 2>/dev/null || true; sleep "$4"; kill -KILL -"$3" 2>/dev/null || true' \
     bash "${deadline}" "${flag}" "${_sg_leader}" "${kill_after}" \
     >/dev/null 2>&1 </dev/null &
   _sg_wd=$!
@@ -244,6 +247,8 @@ checked_pipe() {
   # Background jobs in this shell have stdin set to /dev/null, so the
   # command opens its own output file instead of inheriting a redirect.
   set +e
+  # $0 and $@ expand in the command's shell. Quoting them here would expand them now.
+  # shellcheck disable=SC2016
   supervise_group "${smoke_deadline}" "${kill_after}" \
     bash -c 'exec "$@" >"$0" 2>&1' "${raw}" \
     env API_SMOKE_BOUNDED=1 "$@"
@@ -260,6 +265,8 @@ checked_pipe() {
   fi
 
   set +e
+  # $1, $2, and $3 expand in the filter's shell. Quoting them here would expand them now.
+  # shellcheck disable=SC2016
   supervise_group "${filter_deadline}" "${kill_after}" \
     bash -c 'exec "$1" <"$2" >"$3"' _ \
     "${filter}" "${raw}" "${clean}"

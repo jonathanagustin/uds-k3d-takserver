@@ -16,7 +16,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   webServer: {
-    command: 'npm run preview -- --host 127.0.0.1 --port 4321',
+    // Keep preview in the foreground even where Astro auto-backgrounds it.
+    command: 'npm run preview -- --host 127.0.0.1 --port 4321 --ignore-lock',
     url: `http://127.0.0.1:4321${base}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

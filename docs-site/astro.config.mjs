@@ -7,6 +7,83 @@ import mermaid from 'astro-mermaid';
 import starlightGitHubAlerts from 'starlight-github-alerts';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightLlmsTxt from 'starlight-llms-txt';
+import starlightSidebarTopics from 'starlight-sidebar-topics';
+import { readFileSync } from 'node:fs';
+
+const versions = JSON.parse(readFileSync(new URL('./src/generated/versions.json', import.meta.url), 'utf8'));
+
+const sidebarTemplate = [
+  {
+    label: 'Overview',
+    items: [
+      { label: 'Home', slug: 'index' },
+      { label: 'Getting started', slug: 'getting-started' },
+      { label: 'Contributing', slug: 'contributing' },
+    ],
+  },
+  {
+    label: 'How-to guides',
+    items: [{ autogenerate: { directory: 'how-to' } }],
+  },
+  {
+    label: 'Architecture',
+    items: [
+      { label: 'Networking', slug: 'networking' },
+      { label: 'Single sign-on', slug: 'sso' },
+    ],
+  },
+  {
+    label: 'Packages',
+    items: [
+      { label: 'TAK Server', slug: 'configuration' },
+      { label: 'CloudTAK', slug: 'cloudtak' },
+      { label: 'ATAK test device', slug: 'atak-device' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { label: 'Building images', slug: 'building' },
+      { label: 'Data', slug: 'data' },
+      { label: 'Values profiles', slug: 'profiles' },
+      { label: 'CI workflows', slug: 'ci' },
+      { label: 'Review rules for main', slug: 'branch-protection' },
+      { label: 'Benchmarks', slug: 'benchmarks' },
+    ],
+  },
+  {
+    label: 'Security',
+    items: [
+      { label: 'Reporting a vulnerability', slug: 'security' },
+      { label: 'Policy exemptions', slug: 'justifications' },
+    ],
+  },
+  {
+    label: 'Decisions',
+    items: [{ autogenerate: { directory: 'adr' } }],
+  },
+  {
+    label: 'Reference',
+    items: [{ label: 'Changelog', slug: 'changelog' }],
+  },
+];
+function versionItems(version) {
+  const route = (slug) => version.prefix ? (slug === 'index' ? version.prefix : `${version.prefix}/${slug}`) : slug;
+  return sidebarTemplate.flatMap((group) => {
+    const items = group.items.flatMap((item) => {
+      if (item.slug) return version.pages.includes(item.slug) ? [{ ...item, slug: route(item.slug) }] : [];
+      const directory = item.autogenerate.directory;
+      return version.pages.some((page) => page.startsWith(`${directory}/`))
+        ? [{ autogenerate: { directory: route(directory) } }] : [];
+    });
+    return items.length ? [{ ...group, items }] : [];
+  });
+}
+const topics = versions.map((version) => ({
+  id: version.id, label: version.label,
+  link: `/uds-k3d-takserver/${version.prefix ? version.prefix + '/' : ''}`,
+  items: versionItems(version),
+}));
 
 // Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
 // `site` is the origin. `base` is the repository path GitHub Pages serves.
@@ -76,6 +153,9 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
       components: {
         DraftContentNotice: './src/components/DraftContentNotice.astro',
+        ThemeSelect: './src/components/ThemeSelect.astro',
+        MarkdownContent: './src/components/MarkdownContent.astro',
+        Search: './src/components/Search.astro',
       },
       // Shiki has no LogQL grammar. Show those blocks as plain text without a
       // build warning.
@@ -83,67 +163,14 @@ export default defineConfig({
       // Renders GitHub alert syntax (> [!NOTE], > [!WARNING]) as callouts, so
       // the same markdown works on GitHub and on the site.
       plugins: [
+        starlightSidebarTopics(topics, { exclude: ['/404'] }),
         starlightGitHubAlerts(),
         starlightLinksValidator(),
         starlightLlmsTxt({
           promote: ['index*', 'getting-started*'],
         }),
       ],
-      sidebar: [
-        {
-          label: 'Overview',
-          items: [
-            { label: 'Home', slug: 'index' },
-            { label: 'Getting started', slug: 'getting-started' },
-            { label: 'Contributing', slug: 'contributing' },
-          ],
-        },
-        {
-          label: 'How-to guides',
-          items: [{ autogenerate: { directory: 'how-to' } }],
-        },
-        {
-          label: 'Architecture',
-          items: [
-            { label: 'Networking', slug: 'networking' },
-            { label: 'Single sign-on', slug: 'sso' },
-          ],
-        },
-        {
-          label: 'Packages',
-          items: [
-            { label: 'TAK Server', slug: 'configuration' },
-            { label: 'CloudTAK', slug: 'cloudtak' },
-            { label: 'ATAK test device', slug: 'atak-device' },
-          ],
-        },
-        {
-          label: 'Operations',
-          items: [
-            { label: 'Building images', slug: 'building' },
-            { label: 'Data', slug: 'data' },
-            { label: 'Values profiles', slug: 'profiles' },
-            { label: 'CI workflows', slug: 'ci' },
-            { label: 'Review rules for main', slug: 'branch-protection' },
-            { label: 'Benchmarks', slug: 'benchmarks' },
-          ],
-        },
-        {
-          label: 'Security',
-          items: [
-            { label: 'Reporting a vulnerability', slug: 'security' },
-            { label: 'Policy exemptions', slug: 'justifications' },
-          ],
-        },
-        {
-          label: 'Decisions',
-          items: [{ autogenerate: { directory: 'adr' } }],
-        },
-        {
-          label: 'Reference',
-          items: [{ label: 'Changelog', slug: 'changelog' }],
-        },
-      ],
+
     }),
   ],
 });

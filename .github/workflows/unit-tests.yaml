@@ -76,6 +76,9 @@ jobs:
       - name: CoreConfig cache listener
         run: python3 -B -m unittest tests.test_cacheconfig_patch -v
 
+      - name: Config secret redaction
+        run: python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig -v
+
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary
         env:

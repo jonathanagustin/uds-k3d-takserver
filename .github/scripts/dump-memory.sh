@@ -7,6 +7,12 @@
 # and each container lastState still print.
 set -u
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Failure logs are copied and printed later. Anything this script writes to
+# the job log has to go through the redactor, and CoreConfig is summarized
+# instead of printed: the rendered file holds the Keycloak client secret.
+redact() { python3 "${here}/redact-logs.py" -; }
+
 # On a wedged runner (#300) docker, kubectl and dmesg can block. Each call
 # gets its own bound so the later log steps keep their wall clock.
 
@@ -93,19 +99,19 @@ echo "::endgroup::"
 # shows an exit code. Drop the thread dump so the cause above it stays visible.
 echo "::group::takserver-ignite previous container log (thread dump removed)"
 k logs takserver-ignite-0 -n takserver --previous --tail=4000 2>/dev/null |
-  grep -Ev '^[[:space:]]+(at |Lock \[)|^Thread \[|^$' | tail -120 ||
+  grep -Ev '^[[:space:]]+(at |Lock \[)|^Thread \[|^$' | tail -120 | redact ||
   echo "No previous Ignite container log."
 echo "::endgroup::"
 
 echo "::group::takserver-api Ignite and exception lines"
 k logs deploy/takserver-api -n takserver -c takserver-api --tail=2000 2>/dev/null |
-  grep -E 'Ignite|disconnect|Exception|protocol_version' | grep -v 'ExceptionTranslationFilter' | tail -60 || true
+  grep -E 'Ignite|disconnect|Exception|protocol_version' | grep -v 'ExceptionTranslationFilter' | tail -60 | redact || true
 echo "::endgroup::"
 
 # The API reached Keycloak with "Received fatal alert: protocol_version".
 echo "::group::takserver-api JVM command line and TLS settings"
 k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
-  'tr "\0" " " < /proc/1/cmdline; echo; env | grep -iE "java|jvm|tls|ssl" | sed "s/=.*PASS.*/=<redacted>/"' 2>&1 | tail -20 || true
+  'tr "\0" " " < /proc/1/cmdline; echo; env | grep -iE "java|jvm|tls|ssl"' 2>&1 | tail -20 | redact || true
 echo "::endgroup::"
 
 echo "::group::istio gateway minimum TLS versions"
@@ -153,45 +159,32 @@ JAVA
 java /tmp/Probe.java 2>&1 | tail -12' 2>&1 | tail -20 || true
 echo "::endgroup::"
 
-# TAK's own OIDC discovery call offers only TLS 1.2, although the JVM probe above
-# reaches Keycloak at TLS 1.3. Show the effective TLS settings it reads and the
-# stack of the failing call, which names the TAK class that builds that client.
-echo "::group::takserver-api effective CoreConfig TLS settings"
-k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
-  'grep -n "tls context\|<tls\|openIdDiscovery\|context=" /conf/CoreConfig.xml 2>&1 | head -20' 2>&1 | tail -25 || true
+# The rendered CoreConfig holds the Keycloak client secret and the keystore
+# password. Print only which TLS context is set and whether those attributes
+# are present. Do not cat or grep the file onto the job log.
+echo "::group::takserver-api CoreConfig summary"
+k exec deploy/takserver-api -n takserver -c takserver-api -- cat /conf/CoreConfig.xml 2>/dev/null |
+  python3 "${here}/summarize-coreconfig.py" || echo "takserver-api: CoreConfig unreadable"
 echo "::endgroup::"
 
 echo "::group::takserver-api stack of the protocol_version failure"
 k logs deploy/takserver-api -n takserver -c takserver-api --tail=4000 2>/dev/null |
   grep -B2 -A45 'protocol_version' | grep -vE 'ExceptionTranslationFilter|FilterChainProxy|OncePerRequestFilter|org.apache.(catalina|coyote|tomcat)|java.base/(java.lang|sun.nio)' |
-  head -70 || true
+  head -70 | redact || true
 echo "::endgroup::"
 
-# unauthorized_client from Keycloak's token endpoint means TAK's rendered client
-# secret and Keycloak's disagree. Compare without printing the secret: when the
-# secret was last written against when each pod rendered it, whether the pod's
-# CoreConfig still holds the cluster's value, and how Keycloak answers those
-# credentials (invalid_grant for a bogus code means they are accepted).
-echo "::group::takserver OIDC client secret versus Keycloak"
+# Compare the cluster Secret with the copy each TAK pod rendered. Length and
+# an 8-character hash prefix are enough to see a mismatch. The values stay
+# in the pipeline and are not printed. Keycloak is not called with the secret.
+echo "::group::takserver OIDC client secret versus the rendered file"
 k get secret takserver-sso -n takserver \
   -o jsonpath='secret created={.metadata.creationTimestamp} resourceVersion={.metadata.resourceVersion}{"\n"}' 2>&1 || true
 k get pods -n takserver -o custom-columns=NAME:.metadata.name,STARTED:.status.startTime --no-headers 2>&1 || true
-sso_secret="$(k get secret takserver-sso -n takserver -o jsonpath='{.data.TAK_OIDC_CLIENT_SECRET}' 2>/dev/null | base64 -d || true)"
-fingerprint() { printf '%s' "$1" | sha256sum | cut -c1-8; }
-echo "cluster secret: length=${#sso_secret} sha=$(fingerprint "${sso_secret}")"
-# TAK nodes share CoreConfig through an Ignite cache and the last writer wins,
-# so the API can be using another node's copy of the secret. Compare each file.
+k get secret takserver-sso -n takserver -o jsonpath='{.data.TAK_OIDC_CLIENT_SECRET}' 2>/dev/null |
+  python3 "${here}/summarize-coreconfig.py" --b64 || echo "cluster-secret: unreadable"
 for d in config messaging api; do
-  if conf="$(k exec "deploy/takserver-${d}" -n takserver -c "takserver-${d}" -- cat /conf/CoreConfig.xml 2>&1)"; then
-    val="$(printf '%s' "${conf}" | grep -o 'openIdDiscoveryConfiguration[^>]*' | grep -o ' secret="[^"]*"' | head -1 | sed 's/^ secret="//; s/"$//')"
-    echo "takserver-${d}: file ${#conf} bytes, secret length=${#val} sha=$(fingerprint "${val}") placeholder=$(printf '%s' "${val}" | grep -c 'TAK_OIDC')"
-  else
-    echo "takserver-${d}: could not read /conf/CoreConfig.xml: $(printf '%s' "${conf}" | head -c 200)"
-  fi
+  echo "takserver-${d}:"
+  k exec "deploy/takserver-${d}" -n takserver -c "takserver-${d}" -- cat /conf/CoreConfig.xml 2>/dev/null |
+    python3 "${here}/summarize-coreconfig.py" || echo "takserver-${d}: CoreConfig unreadable"
 done
-curl -ksS --max-time 20 -X POST https://sso.uds.dev/realms/uds/protocol/openid-connect/token \
-  --data-urlencode grant_type=authorization_code --data-urlencode code=bogus \
-  --data-urlencode client_id=uds-takserver --data-urlencode "client_secret=${sso_secret}" \
-  --data-urlencode redirect_uri=https://takserver.uds.dev/login/redirect 2>&1 | head -c 400 || true
-echo
 echo "::endgroup::"

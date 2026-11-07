@@ -22,6 +22,13 @@ MASK = "[REDACTED]"
 # A value ends at whitespace, a quote, a backslash (escaped JSON) or a comma.
 # An already redacted value is left alone, so a second run changes nothing.
 VALUE = r"(?!\[REDACTED\])[^\s\"'\\,]+"
+# Credential attributes in rendered TAK config. The value may contain XML
+# escapes (&amp; &quot;) and may sit on its own line. clientId and other
+# non-secret attributes are left as they are. Single and double quotes both
+# occur. A second pass sees [REDACTED] and does not match VALUE-style text
+# inside the quotes only when the whole value is already the mask; the
+# negative lookahead below keeps a second pass from nesting the mask.
+ATTR = r"secret|keystorePass|truststorePass|password"
 PATTERNS = (
     # keytool -storepass X, -deststorepass X, -srckeypass X; openssl -key X,
     # -password X, -passin X, -passout X. An openssl "pass:" prefix is kept.
@@ -31,15 +38,31 @@ PATTERNS = (
     ),
     # openssl pass:X anywhere else, for example -passout pass:X.
     re.compile(r"(\bpass:)" + VALUE),
+    # <openIdDiscoveryConfiguration ... secret="..."/> and the keystore
+    # passwords on <tls> and <connection password="...">, one line or split.
+    re.compile(
+        rf"(\b(?:{ATTR})\s*=\s*\")(?!\[REDACTED\])[^\"]*(\")"
+    ),
+    re.compile(
+        rf"(\b(?:{ATTR})\s*=\s*')(?!\[REDACTED\])[^']*(')"
+    ),
+    # curl / form body: client_secret=VALUE
+    re.compile(r"(client_secret=)(?!\[REDACTED\])[^\s&\"']+"),
 )
 SKIP_SUFFIXES = (".gz", ".zip", ".png", ".jpg", ".webm", ".mp4", ".tar", ".zst")
 
 
+def _mask(match):
+    if match.lastindex == 2:
+        return match.group(1) + MASK + match.group(2)
+    return match.group(1) + MASK
+
+
 def redact_text(text):
-    """Return (text, count) with password values replaced by MASK."""
+    """Return (text, count) with password and config-secret values replaced by MASK."""
     total = 0
     for pattern in PATTERNS:
-        text, count = pattern.subn(lambda m: m.group(1) + MASK, text)
+        text, count = pattern.subn(_mask, text)
         total += count
     return text, total
 
@@ -72,6 +95,20 @@ def walk(path):
 
 
 def main(argv):
+    # "-" redacts stdin onto stdout and prints no summary, so a log pipe stays
+    # a log. "--stdout FILE" does the same for one file and does not rewrite it.
+    if argv == ["-"]:
+        sys.stdout.write(redact_text(sys.stdin.read())[0])
+        return 0
+    if len(argv) == 2 and argv[0] == "--stdout":
+        with open(argv[1], "rb") as handle:
+            raw = handle.read()
+        if b"\0" in raw[:8192]:
+            sys.stdout.buffer.write(raw)
+            return 0
+        text = raw.decode("utf-8", errors="surrogateescape")
+        sys.stdout.write(redact_text(text)[0])
+        return 0
     replaced = 0
     files = 0
     for arg in argv:

@@ -662,7 +662,7 @@ tasks:
           done
           if [ "${found}" -ne 1 ]; then
             echo "API pod logs do not contain a TAK startup line" >&2
-            printf '%s\n' "${logs}" | tail -n 40 >&2
+            printf '%s\n' "${logs}" | tail -n 40 | python3 .github/scripts/redact-logs.py - >&2
             exit 1
           fi
           if grep -q 'error pulling auth file' <<< "${logs}"; then

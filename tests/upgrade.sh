@@ -201,7 +201,7 @@ require_upgrade_log() {
     return 0
   fi
   echo "pod ${ns}/${pod} did not log an in-place PostgreSQL 15 upgrade" >&2
-  k logs -n "${ns}" "${pod}" -c "${container}" --tail=80 >&2 || true
+  k logs -n "${ns}" "${pod}" -c "${container}" --tail=80 2>&1 | python3 "${root}/.github/scripts/redact-logs.py" - >&2 || true
   exit 1
 }
 sso() {

@@ -490,13 +490,13 @@ jobs:
             exit 0
           fi
           k get pods -n cloudtak -o wide || true
-          k describe pods -n cloudtak || true
+          k describe pods -n cloudtak | python3 .github/scripts/redact-logs.py - || true
           for pod in $(k get pods -n cloudtak -o name); do
             for c in $(k get "${pod}" -n cloudtak -o jsonpath='{.spec.containers[*].name}'); do
               echo "::group::${pod} ${c}"
-              k logs "${pod}" -n cloudtak -c "${c}" --tail=200 || true
+              k logs "${pod}" -n cloudtak -c "${c}" --tail=200 | python3 .github/scripts/redact-logs.py - || true
               echo "--- previous"
-              k logs "${pod}" -n cloudtak -c "${c}" --previous --tail=200 || true
+              k logs "${pod}" -n cloudtak -c "${c}" --previous --tail=200 | python3 .github/scripts/redact-logs.py - || true
               echo "::endgroup::"
             done
           done

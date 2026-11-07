@@ -114,17 +114,18 @@ jobs:
           else
             echo "virtctl download did not match ${VIRTCTL_SHA256}" >&2
           fi
-          kubectl get pods -A -o wide || true
-          kubectl get vm,vmi -n atak -o yaml || true
-          kubectl get events -n atak --sort-by=.lastTimestamp || true
-          kubectl describe pod -n atak || true
-          kubectl logs -n kubevirt -l kubevirt.io=virt-handler --tail=100 || true
+          filter=.github/scripts/redact-then-filter.sh
+          kubectl get pods -A -o wide 2>/dev/null | "${filter}" || echo "omitted unsanitizable pod list"
+          kubectl get vm,vmi -n atak -o yaml 2>/dev/null | "${filter}" || echo "omitted unsanitizable virtual machine"
+          kubectl get events -n atak --sort-by=.lastTimestamp 2>/dev/null | "${filter}" || echo "omitted unsanitizable events"
+          kubectl describe pod -n atak 2>/dev/null | "${filter}" || echo "omitted unsanitizable pod description"
+          kubectl logs -n kubevirt -l kubevirt.io=virt-handler 2>/dev/null | "${filter}" --tail 100 || echo "omitted unsanitizable virt-handler log"
           for p in $(kubectl get pod -n atak -l kubevirt.io=virt-launcher -o name); do
-            kubectl logs -n atak "${p}" -c guest-console-log --tail=3000 || true
+            kubectl logs -n atak "${p}" -c guest-console-log 2>/dev/null | "${filter}" --tail 3000 || echo "omitted unsanitizable guest log"
           done
           pod="$(kubectl get pod -n atak -l kubevirt.io/domain=atak-device -o name | head -1)"
           if [ -n "${pod}" ]; then
-            kubectl logs -n atak "${pod}" -c compute --tail=200 || true
+            kubectl logs -n atak "${pod}" -c compute 2>/dev/null | "${filter}" --tail 200 || echo "omitted unsanitizable compute log"
           fi
 
       - name: Upload the evidence

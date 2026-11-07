@@ -162,10 +162,15 @@ spec:
 YAML
 k wait pod -n atak atak-driver --for condition=Ready --timeout=5m
 timeout 1500 sh -c 'until uds zarf tools kubectl exec -n atak atak-driver -- test -f /out/exit; do sleep 10; done'
-k logs -n atak atak-driver | tee "${OUT}/driver.log"
+k logs -n atak atak-driver | .github/scripts/redact-then-filter.sh | tee "${OUT}/driver.log" || echo "omitted unsanitizable driver log" >&2
 for f in atak-first-start.png atak-map.png atak-imported.png atak-connected.png atak-test-location.png ui.xml logcat.txt exit \
   cert-dialog.txt cert-dialog.png; do
   k cp "atak/atak-driver:/out/${f}" "${OUT}/${f}" || true
+done
+for f in driver.log ui.xml logcat.txt cert-dialog.txt exit; do
+  if [[ -f "${OUT}/${f}" ]]; then
+    python3 .github/scripts/redact-logs.py "${OUT}/${f}" || echo "omitted unsanitizable ${f}" >&2
+  fi
 done
 
 echo "== TAK sees the device"

@@ -60,25 +60,29 @@ udp_counters() {
 # Services and policies, whether TAK bound UDP 8090, and its QUIC log lines.
 diagnose() {
   set +e
+  local filter="${script_dir}/../.github/scripts/redact-then-filter.sh"
   echo "::group::QUIC diagnostics" >&2
   udp_counters "after"
-  kctl get gateway -n envoy-default-gateway -o yaml >&2
-  kctl get udproute -A -o yaml >&2
-  kctl get svc,endpointslices -n envoy-default-gateway -o wide >&2
-  kctl get endpointslices -n takserver -l kubernetes.io/service-name=takserver-messaging-quic -o yaml >&2
-  kctl get networkpolicy -n takserver -o name | grep -i -E 'udp|envoy|quic' >&2
+  kctl get gateway -n envoy-default-gateway -o yaml 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable gateway" >&2
+  kctl get udproute -A -o yaml 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable udproute" >&2
+  kctl get svc,endpointslices -n envoy-default-gateway -o wide 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable services" >&2
+  kctl get endpointslices -n takserver -l kubernetes.io/service-name=takserver-messaging-quic -o yaml 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable endpoints" >&2
+  kctl get networkpolicy -n takserver -o name 2>/dev/null | grep -i -E 'udp|envoy|quic' >&2
   for np in $(kctl get networkpolicy -n takserver -o name | grep -i -E 'udp|envoy|quic'); do
-    kctl get "${np}" -n takserver -o yaml >&2
+    kctl get "${np}" -n takserver -o yaml 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable network policy" >&2
   done
   local pod
   pod="$(kctl get pods -n takserver -l app=takserver-messaging -o jsonpath='{.items[0].metadata.name}')"
   # 8090 is 1F9A in /proc/net/udp.
   echo "UDP sockets in ${pod} (8090 = :1F9A):" >&2
-  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /proc/net/udp /proc/net/udp6 2>/dev/null' >&2
-  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'grep -i -h quic /opt/tak/logs/*.log 2>/dev/null | tail -40' >&2
-  kctl logs -n takserver "${pod}" -c takserver-messaging --tail=2000 | grep -i quic | tail -20 >&2
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /proc/net/udp /proc/net/udp6 2>/dev/null' 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable socket table" >&2
+  # Copy the whole log files out, then redact, then keep the quic lines.
+  # Grep inside the pod runs before redaction and can keep a fragment of a
+  # multiline secret.
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /opt/tak/logs/*.log 2>/dev/null' 2>/dev/null | "${filter}" --ignore-case --grep 'quic' --tail 40 >&2 || echo "omitted unsanitizable quic log" >&2
+  kctl logs -n takserver "${pod}" -c takserver-messaging 2>/dev/null | "${filter}" --ignore-case --grep 'quic' --tail 20 >&2 || echo "omitted unsanitizable messaging log" >&2
   for proxy in $(kctl get pods -n envoy-default-gateway -o name); do
-    kctl logs -n envoy-default-gateway "${proxy}" -c envoy --tail=50 >&2
+    kctl logs -n envoy-default-gateway "${proxy}" -c envoy 2>/dev/null | "${filter}" --tail 50 >&2 || echo "omitted unsanitizable envoy log" >&2
   done
   echo "::endgroup::" >&2
   set -e

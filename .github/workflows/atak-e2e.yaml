@@ -256,15 +256,16 @@ jobs:
           uds zarf tools kubectl get vm,vmi -n atak -o yaml || true
           uds zarf tools kubectl get events -n atak --sort-by=.lastTimestamp || true
           uds zarf tools kubectl get events -n kubevirt --sort-by=.lastTimestamp || true
-          uds zarf tools kubectl logs -n pepr-system -l app=pepr-uds-core-admission --tail=200 | grep -i -E "deny|kubevirt|atak" || true
+          filter=.github/scripts/redact-then-filter.sh
+          uds zarf tools kubectl logs -n pepr-system -l app=pepr-uds-core-admission 2>/dev/null | "${filter}" --ignore-case --grep 'deny|kubevirt|atak' --tail 200 || echo "omitted unsanitizable admission log"
           for p in $(uds zarf tools kubectl get pod -n atak -l kubevirt.io=virt-launcher -o name); do
-            uds zarf tools kubectl get -n atak "${p}" -o yaml || true
-            uds zarf tools kubectl logs -n atak "${p}" -c compute --tail=300 || true
-            uds zarf tools kubectl logs -n atak "${p}" -c guest-console-log --tail=400 || true
+            uds zarf tools kubectl get -n atak "${p}" -o yaml 2>/dev/null | "${filter}" || echo "omitted unsanitizable launcher"
+            uds zarf tools kubectl logs -n atak "${p}" -c compute 2>/dev/null | "${filter}" --tail 300 || echo "omitted unsanitizable compute log"
+            uds zarf tools kubectl logs -n atak "${p}" -c guest-console-log 2>/dev/null | "${filter}" --tail 400 || echo "omitted unsanitizable guest log"
           done
-          uds zarf tools kubectl logs -n kubevirt ds/virt-handler -c virt-handler --tail=400 || true
-          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-controller --tail=200 --prefix | grep -i -E "atak|error|fail" || true
-          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-api --tail=200 --prefix | grep -i -E "error|fail|denied" || true
+          uds zarf tools kubectl logs -n kubevirt ds/virt-handler -c virt-handler 2>/dev/null | "${filter}" --tail 400 || echo "omitted unsanitizable virt-handler log"
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-controller --prefix 2>/dev/null | "${filter}" --ignore-case --grep 'atak|error|fail' --tail 200 || echo "omitted unsanitizable virt-controller log"
+          uds zarf tools kubectl logs -n kubevirt -l kubevirt.io=virt-api --prefix 2>/dev/null | "${filter}" --ignore-case --grep 'error|fail|denied' --tail 200 || echo "omitted unsanitizable virt-api log"
           uds zarf tools kubectl get networkpolicy -n atak -o wide || true
 
       - name: Upload the evidence

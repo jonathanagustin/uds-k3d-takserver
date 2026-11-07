@@ -48,5 +48,5 @@ for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/phone.html
 sleep 15
 npx -y playwright@1.56.1 screenshot --channel chrome --viewport-size "560,1000" \
   --wait-for-timeout 25000 http://127.0.0.1:8000/phone.html "${OUT}/viewer-phone.png"
-kubectl logs -n "${NS}" atak-viewer --tail=100 > "${OUT}/viewer.log" || true
+kubectl logs -n "${NS}" atak-viewer 2>/dev/null | .github/scripts/redact-then-filter.sh --tail 100 > "${OUT}/viewer.log" || echo "omitted unsanitizable viewer log" > "${OUT}/viewer.log"
 ls -la "${OUT}"

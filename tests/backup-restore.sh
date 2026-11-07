@@ -174,23 +174,29 @@ velero_details() {
   esac
   # The server image is also the CLI. describe --details lists each error,
   # and the logs say which item failed. Neither is in the CR status.
+  local filter="${root}/.github/scripts/redact-then-filter.sh"
   if [[ -n "${verb}" ]]; then
-    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details >&2 || true
+    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details 2>/dev/null \
+      | "${filter}" >&2 || echo "omitted unsanitizable velero describe" >&2
     k exec -n velero deploy/velero -c velero -- /velero "${verb}" logs "${name}" 2>/dev/null \
-      | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+      | "${filter}" --grep 'level=(error|warning)' --tail 40 >&2 || echo "omitted unsanitizable velero log" >&2
   fi
   k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
-    -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' >&2 || true
-  k logs -n velero deploy/velero --tail=2000 2>/dev/null | grep -E 'level=(error|warning)' | tail -n 40 >&2 || true
+    -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' 2>/dev/null \
+    | "${filter}" >&2 || echo "omitted unsanitizable volume list" >&2
+  k logs -n velero deploy/velero 2>/dev/null \
+    | "${filter}" --grep 'level=(error|warning)' --tail 40 >&2 || echo "omitted unsanitizable velero log" >&2
   # The node-agent runs the data path; a canceled PVB says why only here,
   # and in the data-mover pod, which Velero deletes when it ends.
   echo "--- node-agent log (PVB/PVR, errors)" >&2
-  k logs -n velero ds/node-agent --tail=3000 2>/dev/null \
-    | grep -iE 'level=(error|warning)|cancel|podvolume|data path|exposer' | tail -n 60 >&2 || true
+  k logs -n velero ds/node-agent 2>/dev/null \
+    | "${filter}" --ignore-case --grep 'level=(error|warning)|cancel|podvolume|data path|exposer' --tail 60 >&2 \
+    || echo "omitted unsanitizable node-agent log" >&2
   local pod
   for pod in $(k get pods -n velero -l app.kubernetes.io/component=velero-data-mover -o name 2>/dev/null); do
     echo "--- ${pod}" >&2
-    k logs -n velero "${pod}" --all-containers --tail=200 >&2 || true
+    k logs -n velero "${pod}" --all-containers 2>/dev/null \
+      | "${filter}" --tail 200 >&2 || echo "omitted unsanitizable data-mover log" >&2
   done
 }
 
@@ -253,19 +259,22 @@ for _ in $(seq 1 30); do
   sleep 10
 done
 if [[ "${bsl_ok}" -ne 1 ]]; then
-  k describe backupstoragelocations.velero.io default -n velero >&2 || true
+  k describe backupstoragelocations.velero.io default -n velero 2>/dev/null \
+    | "${root}/.github/scripts/redact-then-filter.sh" >&2 || echo "omitted unsanitizable backup location" >&2
   exit 1
 fi
 
 say "wait for the Velero node-agent"
 if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
-  k describe daemonset/node-agent -n velero >&2 || true
-  k describe pods -n velero -l name=node-agent >&2 || true
+  k describe daemonset/node-agent -n velero 2>/dev/null \
+    | "${root}/.github/scripts/redact-then-filter.sh" >&2 || echo "omitted unsanitizable node-agent" >&2
+  k describe pods -n velero -l name=node-agent 2>/dev/null \
+    | "${root}/.github/scripts/redact-then-filter.sh" >&2 || echo "omitted unsanitizable node-agent" >&2
   exit 1
 fi
 agent_ok=0
 for _ in $(seq 1 30); do
-  if k logs -n velero -l name=node-agent --tail=300 2>/dev/null | grep -q "Starting controllers"; then
+  if k logs -n velero -l name=node-agent 2>/dev/null | grep -q "Starting controllers"; then
     agent_ok=1
     break
   fi
@@ -273,7 +282,8 @@ for _ in $(seq 1 30); do
 done
 if [[ "${agent_ok}" -ne 1 ]]; then
   say "node-agent did not log Starting controllers; it has not reached the Kubernetes API" >&2
-  k logs -n velero -l name=node-agent --tail=200 >&2 || true
+  k logs -n velero -l name=node-agent 2>/dev/null \
+    | "${root}/.github/scripts/redact-then-filter.sh" --tail 200 >&2 || echo "omitted unsanitizable node-agent log" >&2
   exit 1
 fi
 say "node-agent logged Starting controllers"

@@ -60,9 +60,11 @@ It holds `sample_interval_s: 5`, `containers`, and collection `errors`. Each
 container is identified by namespace, pod UID and container name, so a
 replacement pod remains a separate row. It stores:
 
-- `before` and `after`: Running-pod inventories around the sampling/load window,
+- `before` and `after`: Pod inventories around the sampling/load window,
   with the memory limit in bytes, restart count, readiness, current termination
-  reason and last termination reason. A missing boundary inventory is `null`.
+  reason, last termination reason and pod phase. Succeeded pods are excluded;
+  failed pods remain visible so their termination evidence is not lost.
+  A missing boundary inventory is `null`.
 - `samples`: peak and last `workingSetBytes`, peak and last `usageNanoCores`,
   memory/CPU observation counts, and first/last memory source timestamps from
   the kubelet Summary API. Missing metrics stay `null`; observed zero stays zero.

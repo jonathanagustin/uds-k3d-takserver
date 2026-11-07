@@ -34,6 +34,23 @@ def summary(uid="pod-1", memory=100, cpu=10, stamp="2026-11-07T23:00:00Z"):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_failed_pod_keeps_its_current_oom_termination_evidence(self):
+        errors, samples = [], {}
+        before = capacity.inventory([pod()], quantity, errors)
+        failed = pod()
+        failed["status"]["phase"] = "Failed"
+        status = failed["status"]["containerStatuses"][0]
+        status["ready"] = False
+        status["state"] = {"terminated": {"reason": "OOMKilled"}}
+        capacity.observe(summary(), samples, errors)
+        after = capacity.inventory([failed], quantity, errors)
+        result = capacity.assemble(before, after, samples, errors)
+        row = result["containers"][0]
+        self.assertEqual(row["after"]["pod_phase"], "Failed")
+        self.assertEqual(row["after"]["termination_reason"], "OOMKilled")
+        self.assertTrue(any("OOMKilled" in error for error in result["errors"]))
+        self.assertTrue(any("not Ready" in error for error in result["errors"]))
+
     def test_existing_sampler_collects_container_evidence_from_the_same_summary_poll(self):
         class Stop:
             stopped = False

@@ -25,7 +25,8 @@ def inventory(pods, quantity, errors):
     for pod in pods:
         metadata = pod.get("metadata") or {}
         namespace, uid = metadata.get("namespace"), metadata.get("uid")
-        if namespace not in NAMESPACES or (pod.get("status") or {}).get("phase") != "Running":
+        phase = (pod.get("status") or {}).get("phase")
+        if namespace not in NAMESPACES or phase == "Succeeded":
             continue
         if not uid:
             note(errors, f"{namespace}/{metadata.get('name')} has no pod UID")
@@ -50,6 +51,7 @@ def inventory(pods, quantity, errors):
                 note(errors, f"{namespace}/{metadata.get('name')}/{name} has no readable memory limit")
             found[key] = {
                 "namespace": namespace, "pod": metadata.get("name"), "pod_uid": uid, "container": name,
+                "pod_phase": phase,
                 "memory_limit_bytes": limit_bytes,
                 "restart_count": status.get("restartCount"),
                 "ready": status.get("ready"),

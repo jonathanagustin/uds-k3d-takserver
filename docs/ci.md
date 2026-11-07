@@ -47,6 +47,12 @@ The image workflows also attest the images they push. See [Verify a release](../
 | ATAK device VM | `atak-vm.yaml` | changes to `atak/vm/`, `atak/ci/`, or `atak/viewer/`, and by hand | Builds the containerDisk and the viewer, boots Android under KubeVirt on k3d, reaches it over adb, and opens the phone view in a browser |
 | ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GitHub Container Registry (GHCR) when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
 
+Manual **ATAK e2e** runs accept an `uptime_probe` boolean. It adds only the Core
+monitoring layer, leaves Grafana at zero replicas, and checks the authenticated
+`/phone.html` target in Prometheus after the device test. The option is off by
+default while its extra memory and CPU footprint is measured beside the VM.
+See [Check the viewer uptime probe](atak-device.md#check-the-viewer-uptime-probe).
+
 ### Reused build outputs
 
 The ATAK e2e run reuses anything whose inputs have not changed, so a typical run spends its time on the test, not on builds.

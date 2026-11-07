@@ -66,6 +66,16 @@ class LogUploadGateTests(unittest.TestCase):
                 self.assertNotIn("/tmp/uds-", body)
             self.assertGreater(gated, 0, path.name)
 
+    def test_a_failed_test_job_does_not_start_the_artifact_upload(self):
+        text = (ROOT / ".github" / "workflows" / "test.yaml").read_text()
+        gated = 0
+        for window, body in upload_blocks(text):
+            if "payload/" not in body:
+                continue
+            gated += 1
+            self.assertIn("success()", window)
+        self.assertGreater(gated, 0)
+
     def test_k3s_and_container_logs_are_redacted_before_they_are_filtered(self):
         dump = (ROOT / ".github" / "scripts" / "dump-memory.sh").read_text()
         k3s = dump.split("k3s starts, errors, and shutdown lines", 1)[1].split("done", 1)[0]

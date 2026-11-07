@@ -37,6 +37,7 @@ const pages = [
   { src: 'docs/data.md', slug: 'data', label: 'Data' },
   { src: 'docs/profiles.md', slug: 'profiles', label: 'Values profiles' },
   { src: 'docs/ci.md', slug: 'ci', label: 'CI workflows' },
+  { src: 'docs/branch-protection.md', slug: 'branch-protection', label: 'Review rules for main' },
   { src: 'docs/benchmarks.md', slug: 'benchmarks', label: 'Benchmarks' },
   { src: 'SECURITY.md', slug: 'security', label: 'Reporting a vulnerability' },
   { src: 'docs/justifications.md', slug: 'justifications', label: 'Policy exemptions' },

@@ -10,7 +10,17 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 stage="${root}/.github/scripts/stage-sanitized-logs.sh"
 sentinel="stage-sentinel-value"
 work="$(mktemp -d)"
-trap 'rm -rf "${work}"' EXIT
+# These names are created at the checkout root, which is the workflow cwd.
+# Remove them even when a later assertion fails. Refuse to clobber a
+# pre-existing directory.
+checkout_out="${root}/out"
+checkout_bad="${root}/out-bad"
+abs_log=""
+if [[ -e "${checkout_out}" || -e "${checkout_bad}" ]]; then
+  echo "checkout out/ already exists; refusing to reuse it" >&2
+  exit 1
+fi
+trap 'rm -rf "${work}" "${checkout_out}" "${checkout_bad}" ${abs_log:+"${abs_log}"}' EXIT
 
 fails=0
 ok() { echo "ok: $1"; }
@@ -316,6 +326,99 @@ elif [[ -p "${outside}/pipe.log" ]]; then
   ok "an external fifo symlink is refused and was not opened"
 else
   bad "external fifo symlink staging removed the fifo"
+fi
+
+# The workflow step sets no working-directory, so cwd is the checkout, and
+# it runs ./.github/scripts/stage-sanitized-logs.sh. A relative directory
+# must stay payload/<that-name>, not payload/<absolute-checkout>/<name>.
+# Kubelet 1.32 stores the alias text as the absolute CRI path
+# filepath.Join(LogDirectory, LogPath), which is /var/log/pods/... .
+rel_dest="${work}/rel-stage"
+if (
+  cd "${root}"
+  mkdir -p out/pods/ns_pod_uid/c out/containers
+  printf 'secret="%s"\n' "${sentinel}" > out/pods/ns_pod_uid/c/0.log
+  ln -s "../pods/ns_pod_uid/c/0.log" out/containers/relative.log
+  ln -s "/var/log/pods/ns_pod_uid/c/0.log" out/containers/absolute.log
+  ./.github/scripts/stage-sanitized-logs.sh "${rel_dest}" out
+); then
+  copied="${rel_dest}/payload/out/pods/ns_pod_uid/c/0.log"
+  if [[ -f "${copied}" && ! -L "${copied}" ]] \
+    && [[ ! -e "${rel_dest}/payload${root}" ]] \
+    && [[ -z "$(find -P "${rel_dest}/payload" \( ! -type d ! -type f \) -print -quit)" ]] \
+    && ! grep -q "${sentinel}" "${copied}" \
+    && grep -q 'secret="\[REDACTED\]"' "${copied}"; then
+    ok "relative out keeps payload/out and both alias forms redact the pods log"
+  else
+    bad "relative out landed at $(find "${rel_dest}/payload" -type f -print | head -n 5)"
+  fi
+else
+  bad "relative out staging failed"
+fi
+rm -rf "${checkout_out}"
+
+# Same cwd and invocation as the workflow, with an absolute /tmp source.
+# The upload step reads payload/tmp, so the absolute path must be preserved.
+abs_log="$(mktemp -d /tmp/uds-containerd-logs.XXXXXX)"
+mkdir -p "${abs_log}/pods/ns_pod_uid/c" "${abs_log}/containers"
+printf 'secret="%s"\n' "${sentinel}" > "${abs_log}/pods/ns_pod_uid/c/0.log"
+ln -s "/var/log/pods/ns_pod_uid/c/0.log" "${abs_log}/containers/cloudtak.log"
+abs_dest="${work}/abs-stage"
+if (
+  cd "${root}"
+  ./.github/scripts/stage-sanitized-logs.sh "${abs_dest}" "${abs_log}"
+); then
+  copied="${abs_dest}/payload${abs_log}/pods/ns_pod_uid/c/0.log"
+  if [[ -f "${copied}" && ! -L "${copied}" ]] \
+    && [[ "${copied}" == "${abs_dest}/payload/tmp/"* ]] \
+    && [[ -z "$(find -P "${abs_dest}/payload" \( ! -type d ! -type f \) -print -quit)" ]] \
+    && ! grep -q "${sentinel}" "${copied}" \
+    && grep -q 'secret="\[REDACTED\]"' "${copied}"; then
+    ok "absolute /tmp source stays under payload/tmp and the kubelet alias is redacted"
+  else
+    bad "absolute source was not staged at payload${abs_log}"
+  fi
+else
+  bad "absolute /tmp source staging failed"
+fi
+
+# An absolute alias that is not /var/log/pods must not be opened.
+abs_bad="${work}/abs-bad"
+mkdir -p "${abs_bad}/pods/ns_pod_uid/c" "${abs_bad}/containers"
+printf 'kept\n' > "${abs_bad}/pods/ns_pod_uid/c/0.log"
+ln -s "/etc/passwd" "${abs_bad}/containers/host.log"
+abs_bad_dest="${work}/abs-bad-stage"
+if "${stage}" "${abs_bad_dest}" "${abs_bad}"; then
+  bad "absolute host symlink staging exited 0"
+elif [[ -e "${abs_bad_dest}" ]]; then
+  bad "absolute host symlink staging left ${abs_bad_dest}"
+elif [[ ! -f /etc/passwd ]]; then
+  bad "absolute host symlink removed /etc/passwd"
+else
+  ok "an absolute host path is refused and was not used as the log"
+fi
+
+# /var/log/pods/../../.. escapes after the prefix rewrite. It must not open
+# the fifo that the escaped path names.
+fifo_abs="$(readlink -f "${outside}/pipe.log")"
+escape_text="/var/log/pods/../../../${fifo_abs#/}"
+escape_tree="${work}/escape-abs"
+mkdir -p "${escape_tree}/pods/ns_pod_uid/c" "${escape_tree}/containers"
+printf 'kept\n' > "${escape_tree}/pods/ns_pod_uid/c/0.log"
+ln -s "${escape_text}" "${escape_tree}/containers/escape.log"
+escape_dest="${work}/escape-abs-stage"
+set +e
+timeout 5 "${stage}" "${escape_dest}" "${escape_tree}" >/tmp/escape-abs.out 2>&1
+escape_code=$?
+set -e
+if [[ "${escape_code}" -eq 124 ]]; then
+  bad "absolute /var/log/pods escape opened the fifo"
+elif [[ "${escape_code}" -eq 0 || -e "${escape_dest}" ]]; then
+  bad "absolute /var/log/pods escape staging succeeded or left ${escape_dest}"
+elif [[ -p "${outside}/pipe.log" ]]; then
+  ok "an absolute /var/log/pods path that leaves the tree is refused"
+else
+  bad "absolute /var/log/pods escape removed the fifo"
 fi
 
 if (( fails > 0 )); then

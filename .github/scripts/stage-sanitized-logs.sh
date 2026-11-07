@@ -13,13 +13,17 @@
 # in that action's search). A symlink kept in this directory would publish
 # the target even when the redactor did not walk it. This script does not
 # copy symlinks. save-logs copies /var/log with docker cp, which keeps the
-# kubelet aliases in containers/*.log. Each of those is one relative link to
-# a regular file under pods/. The pods file is the log, so the alias is
-# omitted. Every other symlink, including a dangling link, a link outside
-# the tree, or a link reached through another symlink, still fails the
-# staging and removes the destination. Archives and other non-text suffixes
-# are not left in place: redaction replaces them and this script then fails.
-# There is no unsanitized copy to upload.
+# kubelet aliases in containers/*.log. Kubelet passes the absolute CRI log
+# path to os.Symlink, so the text is /var/log/pods/... even after the tree
+# is copied to /tmp/uds-containerd-logs. A relative ../pods/... link is the
+# same file. Either form is omitted when one lexical hop names a regular
+# file already under this tree's pods/ directory. The /var/log/pods prefix
+# is rewritten onto that directory and is never opened on the host. Every
+# other symlink still fails the staging and removes the destination. A
+# relative source directory keeps the path it was given, so `out` is
+# payload/out. Archives and other non-text suffixes are not left in place:
+# redaction replaces them and this script then fails. There is no
+# unsanitized copy to upload.
 #
 # --check fails unless DEST/SANITIZED exists, no payload file is newer than
 # that marker, and the payload has no symlink, archive, or other unsupported
@@ -87,11 +91,11 @@ trap cleanup EXIT
 # Lexical only. This does not stat or follow the path.
 normalize_path() {
   local path="$1" part joined=""
-  local -a raw=() parts=()
+  local -a segments=() parts=()
   local abs=0
   [[ "${path}" == /* ]] && abs=1
-  IFS='/' read -r -a raw <<< "${path}"
-  for part in "${raw[@]}"; do
+  IFS='/' read -r -a segments <<< "${path}"
+  for part in "${segments[@]}"; do
     case "${part}" in
       ""|.) ;;
       ..)
@@ -143,9 +147,21 @@ regular_under() {
   [[ -f "${cur}" ]]
 }
 
+# Map a kubelet alias onto the regular file in this collected tree.
+# Absolute /var/log/pods/... is the CRI path kubelet stored. After docker cp
+# relocates /var/log to this directory, that prefix is only a spelling of
+# ROOT/pods. This function does not stat or open the absolute path.
+relocate_pod_log() {
+  local root="$1" raw="$2" suffix relocated
+  [[ "${raw}" == /var/log/pods/* ]] || return 1
+  suffix="${raw#/var/log/pods/}"
+  [[ -n "${suffix}" && "${suffix}" != /* ]] || return 1
+  relocated="$(normalize_path "${root}/pods/${suffix}")"
+  printf '%s\n' "${relocated}"
+}
+
 # Kubelet writes containers/<pod>_<namespace>_<container>-<id>.log as one
-# relative symlink to pods/<namespace>_<pod>_<uid>/<container>/<n>.log.
-# docker cp keeps that symlink. The pods file is copied on its own.
+# symlink to the CRI log under pods/. The pods file is copied on its own.
 container_alias() {
   local link="$1" root="$2" raw target parent_dir
   [[ -L "${link}" ]] || return 1
@@ -154,7 +170,7 @@ container_alias() {
   raw="$(readlink -- "${link}")"
   [[ -n "${raw}" ]] || return 1
   if [[ "${raw}" == /* ]]; then
-    target="$(normalize_path "${raw}")"
+    target="$(relocate_pod_log "${root}" "${raw}")" || return 1
   else
     target="$(normalize_path "${parent_dir}/${raw}")"
   fi
@@ -176,7 +192,7 @@ refuse_special() {
   fi
   if [[ -d "${path}" ]]; then
     if [[ -z "${root}" ]]; then
-      root="$(cd "${path}" && pwd)"
+      root="${path%/}"
     fi
     if ! found="$(find -P "${root}" \( ! -type d ! -type f \) -print)"; then
       echo "stage-sanitized-logs: could not read ${path}" >&2
@@ -196,8 +212,16 @@ refuse_special() {
 # Copy a directory without reproducing symlinks. Allowed container aliases
 # are skipped. Any other non-regular node is refused and nothing is published.
 copy_directory() {
-  local root="$1" path rel parent
-  local dest_root="${dest}/payload${root}"
+  local root="$1" path rel parent dest_root
+  # Keep the source spelling. Absolutizing a relative directory with pwd
+  # would publish payload/<checkout>/out instead of payload/out. An absolute
+  # /tmp/... source stays absolute so the workflow upload of payload/tmp
+  # still matches.
+  if [[ "${root}" == /* ]]; then
+    dest_root="${dest}/payload${root}"
+  else
+    dest_root="${dest}/payload/${root}"
+  fi
   while IFS= read -r -d '' path; do
     if [[ "${path}" == "${root}" ]]; then
       continue
@@ -228,7 +252,7 @@ copy_one() {
   local src="$1" parent root
   [[ -e "${src}" || -L "${src}" ]] || return 0
   if [[ -d "${src}" && ! -L "${src}" ]]; then
-    root="$(cd "${src}" && pwd)"
+    root="${src%/}"
     refuse_special "${src}" "${root}"
     copy_directory "${root}"
     return 0

@@ -20,8 +20,18 @@
 # /tmp/tak-stream-uid so the Loki check can search for it.
 #
 # Each check prints PASS or FAIL. The last line is the count. Exit status is
-# non-zero when any check fails.
+# non-zero when any check fails. The whole script stops after 10 minutes.
+# The supervisor puts this process in its own group, signals that group, and
+# SIGKILLs anything still running after a short grace period. A foreground
+# timeout does not signal descendants, so a child holding a pipe would keep
+# the run alive. This is an enforced budget, not a sum of the curl ceilings.
 set -euo pipefail
+
+if [[ "${API_SMOKE_BOUNDED:-}" != 1 ]]; then
+  export API_SMOKE_BOUNDED=1
+  _api_smoke_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec "${_api_smoke_here}/../.github/scripts/checked-pipe.sh" supervise 600 5 "$0" "$@"
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"
@@ -93,9 +103,20 @@ request() {
   fi
 }
 
+# Failure text is not a redacted copy of the response. Login redirects carry
+# code and access_token in the query, and JSON bodies carry token fields the
+# log redactor does not name. Omit both. The PASS or FAIL line keeps the
+# check name and the HTTP status.
 show_err() {
   if [[ -s "${work}/curl.err" ]]; then
-    sed 's/^/  /' "${work}/curl.err" >&2 || true
+    echo "  curl error omitted" >&2
+  fi
+}
+
+show_body() {
+  local body="$1"
+  if [[ -s "${body}" ]]; then
+    echo "  response body omitted" >&2
   fi
 }
 
@@ -107,14 +128,12 @@ expect_ok() {
   if [[ "${code}" != "200" ]] && [[ "${code}" != "201" ]]; then
     fail "${name} HTTP ${code}"
     show_err
-    if [[ -s "${body}" ]]; then
-      sed 's/^/  /' "${body}" | head -n 20 >&2 || true
-    fi
+    show_body "${body}"
     return 0
   fi
   if [[ -n "${needle}" ]] && ! grep -q "${needle}" "${body}"; then
     fail "${name} HTTP ${code} missing ${needle}"
-    sed 's/^/  /' "${body}" | head -n 20 >&2 || true
+    show_body "${body}"
     return 0
   fi
   pass "${name} HTTP ${code}"
@@ -258,7 +277,7 @@ else
   after="${work}/after-login.html"
   after_url="$(curl -k -sS --max-time 40 -c "${login_jar}" -b "${login_jar}" -L --max-redirs 20 \
     -o "${after}" -w "%{url_effective}" -A "uds-tak-api-smoke" "${post_args[@]}" "${action}" || true)"
-  printf 'login landed on %s\n' "${after_url}"
+  printf 'login landed on %s\n' "${after_url%%[\?#]*}"
 fi
 
 token="$(python3 - "${login_jar}" <<'PY'
@@ -446,9 +465,7 @@ print(u)' "${work}/oidc")"
 else
   fail "8446 GET /login/.well-known/openid-configuration HTTP ${REPLY_CODE}"
   show_err
-  if [[ -s "${work}/oidc" ]]; then
-    sed 's/^/  /' "${work}/oidc" | head -n 20 >&2 || true
-  fi
+  show_body "${work}/oidc"
 fi
 
 if [[ "${#token}" -ge 20 ]]; then
@@ -493,14 +510,12 @@ PY
       pass "8089 TLS with the enrolled certificate, stream still open after 8s"
     else
       fail "8089 stream with the enrolled certificate (openssl exit ${stream_rc}; TAK closed it if not 124)"
-      printf '%s\n' "${stream}" | head -n 20 >&2 || true
+      echo "stream transcript omitted" >&2
     fi
   else
     fail "8446 POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
     show_err
-    if [[ -s "${work}/enroll.json" ]]; then
-      sed 's/^/  /' "${work}/enroll.json" | head -n 20 >&2 || true
-    fi
+    show_body "${work}/enroll.json"
   fi
 fi
 
@@ -527,6 +542,7 @@ if [[ -f /tmp/tak-std-ports ]] && [[ "${#token}" -ge 20 ]]; then
       "${api8443}" "${admin_cert}" "${admin_key}" "${admin_pass}" <<'PY'
 import json, os, socket, ssl, subprocess, sys, tempfile, time
 enroll, key, host, port, uid, api, acert, akey, apass = sys.argv[1:]
+
 cert = json.load(open(enroll, encoding="utf-8"))["signedCert"].strip()
 if "BEGIN CERTIFICATE" not in cert:
     cert = "".join(cert.split())
@@ -563,11 +579,7 @@ for attempt in range(2):
                     found = True
                     break
             if not found:
-                print(out[:2000], file=sys.stderr)
-                subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
-                                       "--pass", apass, api + "Marti/api/subscriptions/all"],
-                                      capture_output=True, text=True).stdout
-                print("subscriptions/all: " + subs[:2000], file=sys.stderr)
+                print("clientEndPoints omitted", file=sys.stderr)
     if found:
         break
     print(f"attempt {attempt + 1}: client not listed yet", file=sys.stderr)
@@ -594,7 +606,7 @@ print(c)' "${work}/std-enroll.json" > "${work}/std-cert.pem"
       pass "standard port 8089 without SNI, stream still open after 8s"
     else
       fail "standard port 8089 without SNI (openssl exit ${nosni_rc})"
-      printf '%s\n' "${nosni}" | head -n 20 >&2 || true
+      echo "stream transcript omitted" >&2
     fi
   else
     fail "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
@@ -612,7 +624,7 @@ if grep -Eiq 'certificate required|alert number 11[0-9]|bad certificate|handshak
   pass "8089 rejected TLS with no client certificate"
 else
   fail "8089 did not reject TLS with no client certificate"
-  printf '%s\n' "${bare}" | head -n 20 >&2 || true
+  echo "stream transcript omitted" >&2
 fi
 
 finish

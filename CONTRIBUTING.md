@@ -45,6 +45,13 @@ Release Please builds the changelog and the release pull requests from the merge
 
 ## Coding standards
 
+Task-oriented documentation belongs in `docs/how-to/`. Copy
+[`docs/how-to/_template.md`](docs/how-to/_template.md), name the new page for its
+task without a leading underscore, and keep the template's sections. These
+pages are discovered automatically by the docs sync and How-to sidebar; the
+template stays out of the published site. Existing reference pages keep their
+URLs when a how-to guide is added.
+
 - Shell scripts use strict mode (`set -euo pipefail`) and pass shellcheck.
 - YAML passes yamllint with [`.yamllint`](.yamllint).
 - Dockerfiles pass hadolint with [`.hadolint.yaml`](.hadolint.yaml).

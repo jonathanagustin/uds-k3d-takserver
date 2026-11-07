@@ -272,14 +272,18 @@ def main(argv):
                 print("redact-logs: could not read every log path", file=sys.stderr)
                 return 1
             if bad:
+                # Path only. The original bytes were already replaced.
+                print(f"redact-logs: omitted {path}", file=sys.stderr)
                 unsafe += 1
             elif count:
                 files += 1
                 replaced += count
     print(f"redact-logs: replaced {replaced} value(s) in {files} file(s)")
     if unsafe:
+        # 2 means the original bytes are gone and an omission stub remains.
+        # 1 is reserved for a read or listing failure, where the tree is not safe.
         print(f"redact-logs: {unsafe} file(s) could not be sanitized", file=sys.stderr)
-        return 1
+        return 2
     return 0
 
 

@@ -49,15 +49,15 @@ printf 'secret="%s"\n' "${sentinel}" > "${nul}"
 printf '\0' >> "${nul}"
 dirty="${work}/dirty"
 if "${stage}" "${dirty}" "${nul}"; then
-  bad "NUL log staging exited 0"
-else
-  if [[ -e "${dirty}" ]]; then
-    bad "failed staging left ${dirty}"
-  elif "${stage}" --check "${dirty}" 2>/dev/null; then
-    bad "missing staging directory passed --check"
+  copied="$(find "${dirty}/payload" -type f -name nul.log -print -quit)"
+  if [[ -n "${copied}" ]] \
+    && python3 -c 'import pathlib,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if b"\0" not in b and b"omitted: unsanitizable file" in b and sys.argv[2].encode() not in b else 1)' "${copied}" "${sentinel}"; then
+    ok "NUL log is staged as an omission and the bytes are gone"
   else
-    ok "NUL log removes the staging directory and --check fails"
+    bad "NUL log was staged with its original bytes"
   fi
+else
+  bad "NUL log omission was discarded with the rest of the tree"
 fi
 
 partial="${work}/partial"
@@ -419,6 +419,32 @@ elif [[ -p "${outside}/pipe.log" ]]; then
   ok "an absolute /var/log/pods path that leaves the tree is refused"
 else
   bad "absolute /var/log/pods escape removed the fifo"
+fi
+
+# A directory of real logs also contains screenshots and a non-text pod log.
+# Those must not be uploaded, and they must not discard the text logs.
+mix="${work}/mix"
+mkdir -p "${mix}"
+printf 'secret="%s"\n' "${sentinel}" > "${mix}/kept.log"
+printf 'not-a-png' > "${mix}/shot.png"
+printf 'secret="%s"\n' "${sentinel}" > "${mix}/binary.log"
+printf '\0' >> "${mix}/binary.log"
+mix_dest="${work}/mix-stage"
+if "${stage}" "${mix_dest}" "${mix}"; then
+  kept="$(find "${mix_dest}/payload" -type f -name kept.log -print -quit)"
+  binary="$(find "${mix_dest}/payload" -type f -name binary.log -print -quit)"
+  if [[ -n "${kept}" && -n "${binary}" ]] \
+    && ! find "${mix_dest}/payload" -name 'shot.png' -print -quit | grep -q . \
+    && ! grep -q "${sentinel}" "${kept}" \
+    && grep -q 'secret="\[REDACTED\]"' "${kept}" \
+    && python3 -c 'import pathlib,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if b"\0" not in b and b"omitted: unsanitizable file" in b and sys.argv[2].encode() not in b else 1)' "${binary}" "${sentinel}" \
+    && "${stage}" --check "${mix_dest}"; then
+    ok "non-text files are omitted and the text log stays redacted"
+  else
+    bad "mixed directory dropped the text log or kept a non-text file"
+  fi
+else
+  bad "mixed directory staging failed"
 fi
 
 if (( fails > 0 )); then

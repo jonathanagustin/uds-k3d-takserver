@@ -274,7 +274,10 @@ if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
 fi
 agent_ok=0
 for _ in $(seq 1 30); do
-  if k logs -n velero -l name=node-agent 2>/dev/null | grep -q "Starting controllers"; then
+  # Velero 1.18 logs "Starting Controller" (controller-runtime). Older
+  # builds logged "Starting controllers". Either line means the agent
+  # reached the API. Matching only the plural misses a running agent.
+  if k logs -n velero -l name=node-agent 2>/dev/null | grep -E -q "Starting [Cc]ontroller"; then
     agent_ok=1
     break
   fi

@@ -1,6 +1,76 @@
 # Review rules for main
 
-This is a runbook for the repository owner. It has not been applied. Ruleset `25580922` is unchanged. Run it only after the dependency-pin pull request is on `main`, and only if you want the stricter review. It does not add collaborators or change accounts.
+This is a runbook for the repository owner. The settings described below have
+not been applied. Ruleset `25580922` is unchanged. The solo-maintainer policy
+keeps merges possible with one collaborator. The independent-review policy
+requires a second person with write access. Neither policy adds collaborators
+or changes accounts.
+
+## Solo-maintainer policy
+
+With only `@jonathanagustin` able to review, keep
+`required_approving_review_count: 0`, `require_code_owner_review: false`, and
+`require_last_push_approval: false`. GitHub does not count the author's own
+approval. Enabling these requirements would block the owner's pull requests.
+Leave the existing stale-review dismissal and conversation resolution on.
+
+Two protections still work for a solo maintainer:
+
+- Remove the administrator bypass (`bypass_actors: []`) so administrators must
+  use pull requests and pass the required checks.
+- Require the branch to be up to date
+  (`strict_required_status_checks_policy: true`) so those checks cover the
+  current base branch.
+
+Keep all four existing checks, deletion protection, force-push protection,
+and allowed merge methods. Save the current ruleset using the backup command
+below, then generate the solo update from that backup rather than replacing
+unrelated settings:
+
+```bash
+jq '{name, target, enforcement, conditions, rules, bypass_actors: []}
+  | .rules |= map(
+      if .type == "required_status_checks" then
+        .parameters.strict_required_status_checks_policy = true
+      else . end
+    )' ruleset-25580922-backup.json > ruleset-25580922-solo.json
+```
+
+Before sending it, confirm the saved pull-request rule has zero required
+approvals, no required code-owner review, and no last-push approval. Confirm
+the only bypass being removed is the administrator role. If the read omits
+`bypass_actors`, stop: that connection cannot provide a complete backup.
+
+Apply with an account or token that can administer this repository:
+
+```bash
+gh api --method PUT \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2026-03-10" \
+  repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  --input ruleset-25580922-solo.json
+```
+
+GET the ruleset again and verify the empty bypass list, strict status checks,
+unchanged four checks, and the zero-approval pull-request rule. A `403`
+`Resource not accessible by integration` means the connection lacks settings
+write access; a successful GET alone does not establish that it can update.
+
+### What happens to the Scorecard alerts
+
+The **Branch-Protection** alert can still report missing approvers, code-owner
+reviews, and last-push approval under this policy. Those are documented limits
+of maintaining this repository alone. Do not add a bot or self-approval to
+simulate an independent review, or disable the check to hide the result.
+
+The **Code-Review** alert measures approval evidence in recent changesets.
+The reported `1/27` approved changesets is historical; changing branch rules
+does not retroactively approve those changes. Raising that score requires real
+independent reviews of future changes. Revisit the independent-review policy
+when a second human collaborator is available.
+
+The sections below describe that stricter, optional policy and the common
+backup and restore procedure.
 
 GitHub's rule reference: [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). The API is [REST API endpoints for rules](https://docs.github.com/en/rest/repos/rules) (`X-GitHub-Api-Version: 2026-03-10`). Reviews: [Approving a pull request with required reviews](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews).
 

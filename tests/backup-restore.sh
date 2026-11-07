@@ -276,6 +276,8 @@ agent_ok=0
 # shellcheck source=.github/scripts/node-agent-ready.sh
 source "${root}/.github/scripts/node-agent-ready.sh"
 for _ in $(seq 1 30); do
+  # Same two lines as #316: "Starting Controller" and "Starting controllers".
+  # The helper is what tests/test_node_agent_ready.sh exercises.
   if k logs -n velero -l name=node-agent 2>/dev/null | node_agent_controllers_started; then
     agent_ok=1
     break

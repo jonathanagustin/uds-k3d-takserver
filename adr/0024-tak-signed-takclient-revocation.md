@@ -82,3 +82,34 @@ Run [42072025085](https://github.com/jonathanagustin/uds-k3d-takserver/actions/r
 - An existing HTTP session on 8443 (`JSESSIONID`) may keep working until it expires, because the Spring pre-auth filter does not re-check a session that is already authenticated. Streaming on 8089 is what the trial confirmed.
 - A failure from TAK's `revokeCert.sh` during the admin revoke call is expected with our JKS-only CA config. TAK catches it after the database update; it is harmless.
 - No TAK source patch. The cost is depending on four documented REST endpoints (`signClient/v2`, `certadmin/cert/{hash}`, `certadmin/cert/revoke/{ids}`, user management) that ATAK enrollment and the admin UI also use.
+
+## Implementation and upgrade behavior
+
+The operator marks successfully enrolled certificates with
+`tak.jonathanagustin.github.io/issuer: tak` on the Secret and resource. A missing
+marker forces a one-time reissue. It revokes the old certificate before
+publishing its replacement; a missing fingerprint or failed certadmin request
+keeps Ready false, and a failed finalization retains the Secret and finalizer.
+The random file-user password is written to the Secret before creating the
+user, so retries and messaging restarts can reuse it. `spec.validityDays` is
+retained for compatibility but deprecated and ignored; TAK sets the lifetime.
+
+A locally signed legacy certificate still uses the reload fallback. The CRL
+stores `reload-at`, and subsequent CRL writes keep `uds.dev/pod-reload: true`
+until all API and messaging pods have creation timestamps after that update.
+Deleting a newly enrolled client cannot cancel a pending legacy reload. Once
+that condition holds, or on a fresh install with no legacy revocations, CRL
+writes set the reload label to false. Migration can therefore interrupt clients
+once and requires importing their newly issued data packages.
+
+`tests/takclient-revocation.py`, called by `tests/takclient.sh`, holds the target,
+another TakClient and an admin stream open; it checks target disconnect and
+reconnect rejection, surviving controls, actual CloudTAK status, removal from
+clientEndPoints, and unchanged API/messaging pod UIDs, start times and restart
+counts. Production dual-architecture cluster acceptance remains required before
+this implementation is released; the historical trial above is not its result.
+
+The CRL is still cached by Java. Its periodic refresh near `nextUpdate` (and
+replacement after a CA change) requests a reload so an old cached CRL cannot
+expire and reject every client. That maintenance reload is separate from
+per-client certificate-table revocation; it is not removed by this change.

@@ -2,14 +2,11 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# TakClient end to end (ADR 22, issue #36):
-# 1. Apply a TakClient for a test callsign and wait for Ready.
-# 2. Read its Secret, connect on 8089 with that certificate, send one CoT
-#    event, and wait until TAK lists the callsign in /Marti/api/clientEndPoints.
-# 3. Delete the TakClient. The finalizer deletes the TAK user, adds the
-#    serial to the CRL in Secret takserver-crl, and deletes the client's
-#    Secret. UDS Core restarts the TAK pods that mount the CRL. Then 8089
-#    must reject the certificate.
+# TakClient end to end (ADR 24, issue #288):
+# 1. Apply a TakClient and verify its certificate and data package.
+# 2. Connect and check TAK lists its callsign.
+# 3. Hold streaming sessions, delete it, and require immediate revoke,
+#    rejected reconnect, surviving controls, and unchanged TAK pod identity.
 # Before step 1 it checks the ServiceAccounts: only the watcher account can
 # read the TAK CA key, and the admission pods' account can read no Secret.
 #
@@ -80,7 +77,6 @@ spec:
   callsign: ${name}
   groups:
     - Operators
-  validityDays: 2
 YAML
 if ! k wait takclient "${name}" -n takclients --for=condition=Ready --timeout=300s; then
   filter="${script_dir}/../.github/scripts/redact-then-filter.sh"
@@ -99,7 +95,11 @@ secret ca\\.pem > "${work}/ca.pem"
 secret package\\.zip > "${work}/package.zip"
 serial="$(k get takclient "${name}" -n takclients -o jsonpath='{.metadata.annotations.tak\.jonathanagustin\.github\.io/serial}')"
 openssl verify -CAfile "${work}/ca.pem" "${work}/client.pem"
-[[ "$(openssl x509 -in "${work}/client.pem" -noout -serial | cut -d= -f2 | tr 'A-F' 'a-f')" = "${serial}" ]]
+actual_serial="$(openssl x509 -in "${work}/client.pem" -noout -serial | cut -d= -f2)"
+python3 - "${actual_serial}" "${serial}" <<'PY_SERIAL'
+import sys
+assert int(sys.argv[1], 16) == int(sys.argv[2], 16), "certificate serial differs from resource"
+PY_SERIAL
 python3 - "${work}/package.zip" "${name}" "takserver-stream.${domain}" <<'PY'
 import sys, zipfile
 path, name, host = sys.argv[1:]
@@ -149,73 +149,12 @@ if not found:
 print(f"PASS {uid} connected on 8089 and is listed in /Marti/api/clientEndPoints")
 PY
 
-echo "== delete revokes access"
-api_pod="$(k get pod -n takserver -l app=takserver-api -o jsonpath='{.items[0].metadata.uid}')"
-k delete takclient "${name}" -n takclients --timeout=180s
+echo "== delete revokes access without a TAK restart"
+cert_dir="$("${script_dir}/extract-certs.sh")"
+key_pass="$("${script_dir}/keystore-pass.sh")"
+TAKCLIENT_KEY_PASS="${key_pass}" python3 "${script_dir}/takclient-revocation.py" \
+  "${work}" "${gw_port}" "${name}" "${domain}" "${cert_dir}"
 if k get secret "${name}" -n takclients >/dev/null 2>&1; then
   echo "Secret takclients/${name} is still there after delete" >&2
   exit 1
 fi
-revoked="$(k get secret takserver-crl -n takserver -o jsonpath='{.data.revoked\.json}' | base64 -d)"
-grep -q "${serial}" <<< "${revoked}" || { echo "serial ${serial} is not in takserver-crl: ${revoked}" >&2; exit 1; }
-k get secret takserver-crl -n takserver -o jsonpath='{.data.ca\.crl}' | base64 -d > "${work}/ca.crl"
-# openssl exits non-zero for a revoked certificate. Capture the output first,
-# so pipefail does not turn that into a failed check.
-verify_out="$(openssl verify -crl_check -CAfile "${work}/ca.pem" -CRLfile "${work}/ca.crl" "${work}/client.pem" 2>&1 || true)"
-if grep -q "certificate revoked" <<< "${verify_out}"; then
-  echo "PASS the CRL in takserver-crl revokes ${serial}"
-else
-  echo "the CRL does not revoke ${serial}: ${verify_out}" >&2
-  exit 1
-fi
-# UDS Core pod-reload restarts the TAK pods that mount takserver-crl.
-for _ in $(seq 1 90); do
-  now_pod="$(k get pod -n takserver -l app=takserver-api -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null || true)"
-  if [[ -n "${now_pod}" && "${now_pod}" != "${api_pod}" ]]; then
-    break
-  fi
-  sleep 5
-done
-for deploy in takserver-config takserver-messaging takserver-api takserver-plugins; do
-  k rollout status "deploy/${deploy}" -n takserver --timeout=900s
-done
-cert_dir="$("${script_dir}/extract-certs.sh")"
-key_pass="$("${script_dir}/keystore-pass.sh")"
-python3 - "${work}" "${gw_port}" "${domain}" "${cert_dir}" "${key_pass}" <<'PY'
-import os, socket, ssl, sys, time
-work, port, domain, cert_dir, key_pass = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
-
-def handshake(cert, key, password=None):
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    # TLS 1.3 can return from the client handshake before a rejection arrives.
-    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
-    ctx.load_cert_chain(cert, key, password=password)
-    with socket.create_connection(("127.0.0.1", port), timeout=20) as raw:
-        with ctx.wrap_socket(raw, server_hostname=f"takserver-stream.{domain}"):
-            return
-
-deadline = time.time() + 600
-last = ""
-while time.time() < deadline:
-    # The admin certificate is the control: it must still connect, so a
-    # rejection below is TAK checking the CRL and not TAK being down.
-    try:
-        handshake(os.path.join(cert_dir, "admin.pem"), os.path.join(cert_dir, "admin.key"), key_pass)
-    except (ssl.SSLError, OSError) as err:
-        last = f"control certificate failed: {err}"
-        time.sleep(10)
-        continue
-    try:
-        handshake(os.path.join(work, "client.pem"), os.path.join(work, "client.key"))
-        last = "handshake with the revoked certificate succeeded"
-    except ssl.SSLError as err:
-        print(f"PASS 8089 rejects the revoked certificate ({err.reason}); the admin certificate still connects")
-        sys.exit(0)
-    except OSError as err:
-        last = f"revoked certificate: {err}"
-    time.sleep(10)
-print(f"8089 did not reject the revoked certificate: {last}", file=sys.stderr)
-sys.exit(1)
-PY

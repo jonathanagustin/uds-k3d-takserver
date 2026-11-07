@@ -1,16 +1,10 @@
 // Copyright 2026 uds-k3d-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Reconcile and Finalize for TakClient. See ADR 22.
-//
-// Reconcile signs a client certificate with the TAK CA, writes it, the key,
-// the CA, and an ATAK data package to a Secret with the TakClient's name in
-// namespace takclients, and
-// registers the callsign as a TAK file user with the requested groups.
-// Finalize deletes that user, adds the serial to the CRL in Secret
-// takserver-crl, and deletes the client's Secret. UDS Core restarts the TAK
-// pods that mount takserver-crl when it changes, because TAK reads the CRL
-// only at startup.
+// Reconcile and Finalize for TakClient, ADR 24. TAK signs certificates via
+// Basic enrollment, giving each a certificate-table row. Finalize revokes
+// that row before deleting its file user and Secret. The CRL is a backstop;
+// only legacy certificates still require a pod reload.
 
 import { randomBytes } from "node:crypto";
 import type { Cluster, SecretDoc } from "../cluster.ts";
@@ -19,12 +13,12 @@ import {
   crlNextUpdate,
   dataPackage,
   fingerprint,
-  issue,
   loadCa,
   type Ca,
   type Issued,
   type Revoked,
 } from "./takclient-pki.ts";
+import { enroll, revokeEnrolled } from "./takclient-enrollment.ts";
 
 export const TAK_NAMESPACE = "takserver";
 // TakClients and their Secrets live here and nowhere else, so the watcher's
@@ -39,6 +33,7 @@ export const CERT_CONFIGMAP = "cert-migration";
 export const SERIAL = `${GROUP}/serial`;
 export const NOT_AFTER = `${GROUP}/not-after`;
 export const FINGERPRINT = `${GROUP}/fingerprint`;
+export const ISSUER = `${GROUP}/issuer`;
 export const CALLSIGN = `${GROUP}/callsign`;
 export const RETRY = `${GROUP}/finalize-retry`;
 export const RECONCILE_RETRY = `${GROUP}/reconcile-retry`;
@@ -82,7 +77,8 @@ export interface TakResponse {
 }
 
 export interface TakApi {
-  request(tls: TakTls, method: string, path: string, body?: unknown): Promise<TakResponse>;
+  request(tls: TakTls, method: string, path: string, body?: unknown,
+    options?: { port: 8446; auth: string; contentType: "text/plain" }): Promise<TakResponse>;
 }
 
 export interface TakClientCluster extends Cluster {
@@ -176,15 +172,15 @@ export async function readAdmin(cluster: Cluster, ca: Ca): Promise<TakTls | unde
 }
 
 // A password TAK accepts (15 or more characters with upper, lower, digit,
-// and special). TAK needs one for a file user. Nobody keeps it: the client
-// authenticates with its certificate.
+// and special). It is persisted with the client key for Basic enrollment
+// and recreation after a messaging restart. Clients authenticate with TLS.
 export function unusedPassword(): string {
   return `${randomBytes(18).toString("base64url")}Aa1!`;
 }
 
 const USERS = "/user-management/api";
 
-export async function register(tak: TakApi, tls: TakTls, callsign: string, groups: string[]): Promise<void> {
+export async function register(tak: TakApi, tls: TakTls, callsign: string, groups: string[], password = unusedPassword()): Promise<void> {
   const update = await tak.request(tls, "PUT", `${USERS}/update-groups`, {
     username: callsign,
     groupList: groups,
@@ -196,7 +192,7 @@ export async function register(tak: TakApi, tls: TakTls, callsign: string, group
   }
   const created = await tak.request(tls, "POST", `${USERS}/new-user`, {
     username: callsign,
-    password: unusedPassword(),
+    password,
     groupList: groups,
     groupListIN: [],
     groupListOUT: [],
@@ -278,9 +274,10 @@ interface CrlState {
   number: number;
   pem?: string;
   ca?: string;
+  reloadAt?: string;
 }
 
-export function readCrlState(secret: SecretDoc | undefined): CrlState {
+export function readCrlState(secret: SecretDoc | undefined, now = new Date()): CrlState {
   const pem = decode(secret?.data?.["ca.crl"]);
   let entries: CrlState["entries"] = [];
   try {
@@ -290,21 +287,35 @@ export function readCrlState(secret: SecretDoc | undefined): CrlState {
     entries = [];
   }
   const number = Number.parseInt(decode(secret?.data?.number) ?? "0", 10);
-  return { entries, number: Number.isNaN(number) ? 0 : number, pem, ca: decode(secret?.data?.["ca-fingerprint"]) };
+  // An older module may have requested a reload just before this upgrade.
+  // Preserve it rather than cancelling it on the first new-style CRL write.
+  const reloadAt = decode(secret?.data?.["reload-at"]) ||
+    (secret?.metadata?.labels?.["uds.dev/pod-reload"] === "true" ? now.toISOString() : undefined);
+  return { entries, number: Number.isNaN(number) ? 0 : number, pem, ca: decode(secret?.data?.["ca-fingerprint"]), reloadAt };
 }
 
 async function writeCrl(cluster: Cluster, ca: Ca, state: CrlState, now: Date): Promise<void> {
+  // Do not cancel a legacy revocation reload while another finalizer writes
+  // the CRL. Only clear it once every consumer pod was created afterwards.
+  if (state.reloadAt) {
+    const pods = (await Promise.all(["takserver-api", "takserver-messaging"].map(app => cluster.listPods(TAK_NAMESPACE, app))));
+    if (pods.every(found => found.length > 0 && found.every(pod => !pod.metadata?.deletionTimestamp &&
+      pod.metadata?.creationTimestamp && new Date(pod.metadata.creationTimestamp) > new Date(state.reloadAt!)))) {
+      state.reloadAt = undefined;
+    }
+  }
   const number = state.number + 1;
   const pem = buildCrl(ca, state.entries, number, now, CRL_DAYS);
   await cluster.applySecret(
     TAK_NAMESPACE,
     CRL_SECRET,
-    { "uds.dev/pod-reload": "true", "app.kubernetes.io/part-of": "takserver" },
+    { "uds.dev/pod-reload": state.reloadAt ? "true" : "false", "app.kubernetes.io/part-of": "takserver" },
     {
       "ca.crl": encode(pem),
       "revoked.json": encode(JSON.stringify(state.entries)),
       number: encode(String(number)),
       "ca-fingerprint": encode(fingerprint(ca.pem)),
+      "reload-at": encode(state.reloadAt ?? ""),
     },
   );
 }
@@ -313,7 +324,7 @@ async function writeCrl(cluster: Cluster, ca: Ca, state: CrlState, now: Date): P
 // entries when nextUpdate is close. Expired entries are dropped then.
 export async function ensureCrl(cluster: Cluster, ca: Ca, now: Date): Promise<boolean> {
   return withCrlLock(async () => {
-    const state = readCrlState(await cluster.getSecret(TAK_NAMESPACE, CRL_SECRET));
+    const state = readCrlState(await cluster.getSecret(TAK_NAMESPACE, CRL_SECRET), now);
     const next = state.pem ? crlNextUpdate(state.pem) : undefined;
     const sameCa = state.ca === fingerprint(ca.pem);
     if (sameCa && next && next.getTime() - now.getTime() > CRL_REFRESH_DAYS * DAY) {
@@ -325,31 +336,37 @@ export async function ensureCrl(cluster: Cluster, ca: Ca, now: Date): Promise<bo
       state.entries = [];
     }
     state.entries = state.entries.filter(entry => !entry.notAfter || new Date(entry.notAfter) > now);
+    // Java caches nextUpdate along with the CRL. Refreshing only the file
+    // would eventually reject every client when the cached CRL expires.
+    // Initial creation needs no reload; periodic refresh and CA changes do.
+    if (state.pem) state.reloadAt = now.toISOString();
     await writeCrl(cluster, ca, state, now);
     return true;
   });
 }
 
-export async function revoke(cluster: Cluster, ca: Ca, serial: string, notAfter: string | undefined, now: Date) {
+export async function revoke(cluster: Cluster, ca: Ca, serial: string, notAfter: string | undefined, now: Date, legacy = true) {
   return withCrlLock(async () => {
-    const state = readCrlState(await cluster.getSecret(TAK_NAMESPACE, CRL_SECRET));
+    const state = readCrlState(await cluster.getSecret(TAK_NAMESPACE, CRL_SECRET), now);
     if (state.entries.some(entry => entry.serial === serial)) {
       return;
     }
     state.entries.push({ serial, date: now.toISOString(), notAfter });
+    if (legacy) state.reloadAt = now.toISOString();
     await writeCrl(cluster, ca, state, now);
   });
 }
 
-// Reissue when there is no Secret, when the Secret is for another serial or
-// callsign, or when less than a third of the lifetime is left.
+// Reissue legacy certificates once, missing/mismatched Secrets, changed
+// callsigns, and certificates with less than ten days remaining. TAK owns
+// the global lifetime; deprecated spec.validityDays no longer controls it.
 export function needsIssue(client: TakClientDoc, secret: SecretDoc & { metadata?: { annotations?: Record<string, string> } } | undefined, now: Date): boolean {
   const annotations = secret?.metadata?.annotations ?? {};
   const serial = client.metadata?.annotations?.[SERIAL];
-  if (!secret || !serial || annotations[SERIAL] !== serial || annotations[CALLSIGN] !== client.spec?.callsign) {
+  if (!secret || !serial || annotations[SERIAL] !== serial || annotations[CALLSIGN] !== client.spec?.callsign || annotations[ISSUER] !== "tak") {
     return true;
   }
-  const days = client.spec?.validityDays ?? DEFAULT_DAYS;
+  const days = DEFAULT_DAYS;
   const notAfter = new Date(annotations[NOT_AFTER] ?? 0).getTime();
   return notAfter - now.getTime() < (days * DAY) / 3;
 }
@@ -397,48 +414,50 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
   const current = (await cluster.getSecret(CLIENT_NAMESPACE, secretName(client))) as
     | (SecretDoc & { metadata?: { annotations?: Record<string, string> } })
     | undefined;
-  let notAfter = current?.metadata?.annotations?.[NOT_AFTER];
-  if (needsIssue(client, current, now)) {
-    const previous = client.metadata?.annotations?.[SERIAL];
-    const issued = issue(ca, callsign, spec.validityDays ?? DEFAULT_DAYS, now);
-    const password = randomBytes(16).toString("hex");
-    notAfter = issued.notAfter.toISOString();
-    const annotations = {
-      [SERIAL]: issued.serial,
-      [NOT_AFTER]: notAfter,
-      [FINGERPRINT]: issued.fingerprint,
-      [CALLSIGN]: callsign,
-    };
-    const data = secretData(callsign, issued, ca, streamHost(deps.domain), password);
-    await cluster.applySecretWithAnnotations(
-      CLIENT_NAMESPACE,
-      secretName(client),
-      { "app.kubernetes.io/managed-by": "takserver-oidc", [`${GROUP}/takclient`]: name },
-      annotations,
-      data,
-    );
-    await cluster.annotateTakClient(CLIENT_NAMESPACE, name, annotations);
-    if (previous && previous !== issued.serial) {
-      // The old certificate is replaced, so it should stop working too.
-      await revoke(cluster, ca, previous, client.metadata?.annotations?.[NOT_AFTER], now);
-    }
-  }
   const admin = await readAdmin(cluster, ca);
   if (!admin) {
     await setReady(deps, client, "False", "WaitingForAdmin", "The TAK admin certificate is not published yet");
     return true;
   }
+  let notAfter = current?.metadata?.annotations?.[NOT_AFTER];
+  // Store the password before creating a file user, so retries and messaging
+  // restarts can recreate that same user with the same enrollment credential.
+  const userPassword = decode(current?.data?.["user-password"]) ?? unusedPassword();
   try {
-    await register(deps.tak, admin, callsign, spec.groups!);
+    if (needsIssue(client, current, now)) {
+      const old = { ...client.metadata?.annotations, ...current?.metadata?.annotations };
+      if (old[SERIAL]) {
+        if (old[ISSUER] === "tak") {
+          if (!old[FINGERPRINT]) throw new Error("The old TAK certificate fingerprint is missing");
+          await revokeEnrolled(deps.tak, admin, old[FINGERPRINT]);
+        }
+        await revoke(cluster, ca, old[SERIAL], old[NOT_AFTER], now, old[ISSUER] !== "tak");
+        // Legacy file-user passwords were discarded. Recreate the user with
+        // the persisted password only after its old cert is revoked.
+        if (old[CALLSIGN]) await unregister(deps.tak, admin, old[CALLSIGN]);
+      }
+      await cluster.applySecretWithAnnotations(CLIENT_NAMESPACE, name,
+        { "app.kubernetes.io/managed-by": "takserver-oidc", [`${GROUP}/takclient`]: name },
+        current?.metadata?.annotations ?? {}, { ...current?.data, "user-password": encode(userPassword) });
+      await register(deps.tak, admin, callsign, spec.groups!, userPassword);
+      const issued = await enroll(deps.tak, admin, ca, callsign, userPassword, now);
+      const password = randomBytes(16).toString("hex");
+      notAfter = issued.notAfter.toISOString();
+      const annotations = { [SERIAL]: issued.serial, [NOT_AFTER]: notAfter,
+        [FINGERPRINT]: issued.fingerprint, [CALLSIGN]: callsign, [ISSUER]: "tak" };
+      const data = { ...secretData(callsign, issued, ca, streamHost(deps.domain), password),
+        "user-password": encode(userPassword) };
+      await cluster.applySecretWithAnnotations(CLIENT_NAMESPACE, name,
+        { "app.kubernetes.io/managed-by": "takserver-oidc", [`${GROUP}/takclient`]: name }, annotations, data);
+      await cluster.annotateTakClient(CLIENT_NAMESPACE, name, annotations);
+    } else {
+      await register(deps.tak, admin, callsign, spec.groups!, userPassword);
+    }
   } catch (err) {
+    // Never log response bodies or credentials. A failed enrollment/revoke
+    // leaves Ready false and retries; it does not publish a new certificate.
     deps.log(`TakClient ${name}: ${(err as Error).message}`);
-    await setReady(
-      deps,
-      client,
-      "False",
-      "TakUnavailable",
-      "The certificate is issued, but TAK did not accept the user. It is retried every minute",
-    );
+    await setReady(deps, client, "False", "TakUnavailable", "TAK enrollment or revocation is unavailable; retrying every minute");
     return true;
   }
   await setReady(deps, client, "True", "Issued", `Secret ${secretName(client)}, expires ${notAfter}`);
@@ -454,20 +473,27 @@ export async function finalizeTakClient(client: TakClientDoc, deps: Deps): Promi
     deps.log(`TakClient ${name}: the TAK CA is missing, so the certificate cannot be revoked yet`);
     return false;
   }
-  const callsign = client.spec?.callsign;
+  const current = await cluster.getSecret(CLIENT_NAMESPACE, name);
+  const annotations = { ...client.metadata?.annotations, ...current?.metadata?.annotations };
+  const callsign = annotations[CALLSIGN] ?? client.spec?.callsign;
   const admin = await readAdmin(cluster, ca);
+  const serial = annotations[SERIAL];
+  if (annotations[ISSUER] === "tak") {
+    if (!admin || !annotations[FINGERPRINT]) return false;
+    try {
+      await revokeEnrolled(deps.tak, admin, annotations[FINGERPRINT]);
+    } catch (err) {
+      deps.log(`TakClient ${name}: ${(err as Error).message}`);
+      return false;
+    }
+  }
+  if (serial) await revoke(cluster, ca, serial, annotations[NOT_AFTER], deps.now(), annotations[ISSUER] !== "tak");
   if (callsign && admin) {
     try {
       await unregister(deps.tak, admin, callsign);
     } catch (err) {
-      // The CRL is what stops the certificate. A user left behind has no
-      // certificate that TAK accepts once the pods restart.
       deps.log(`TakClient ${name}: ${(err as Error).message}`);
     }
-  }
-  const serial = client.metadata?.annotations?.[SERIAL];
-  if (serial) {
-    await revoke(cluster, ca, serial, client.metadata?.annotations?.[NOT_AFTER], deps.now());
   }
   await cluster.deleteSecret(CLIENT_NAMESPACE, secretName(client));
   return true;
@@ -490,7 +516,13 @@ export async function registerAll(deps: Deps): Promise<void> {
       continue;
     }
     try {
-      await register(deps.tak, admin, callsign!, client.spec!.groups!);
+      const secret = await deps.cluster.getSecret(CLIENT_NAMESPACE, secretName(client));
+      await register(deps.tak, admin, callsign!, client.spec!.groups!, decode(secret?.data?.["user-password"]));
+      if (needsIssue(client, secret, deps.now())) {
+        await setReady(deps, client, "False", "MigrationRequired", "The client certificate must be reissued by TAK");
+        await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
+        continue;
+      }
       await setReady(deps, client, "True", "Issued", `Secret ${secretName(client)}, expires ${client.metadata.annotations[NOT_AFTER]}`);
     } catch (err) {
       deps.log(`TakClient ${client.metadata?.name}: ${(err as Error).message}`);

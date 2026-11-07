@@ -1,0 +1,57 @@
+---
+title: Overview
+description: TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.
+template: splash
+editUrl: https://github.com/jonathanagustin/uds-k3d-takserver/edit/main/docs-site/src/home.mdx
+hero:
+  title: TAK Server on UDS
+  tagline: TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.
+  actions:
+    - text: Getting started
+      link: /uds-k3d-takserver/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/jonathanagustin/uds-k3d-takserver
+      icon: external
+      variant: minimal
+prev: false
+next: false
+sidebar:
+  label: Home
+  order: 0
+---
+
+{/*
+  sync-docs copies this file to src/content/docs/index.mdx.
+  The component import is relative to that copy.
+*/}
+import LegacyHomeHash from '../../components/LegacyHomeHash.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<LegacyHomeHash />
+
+[Getting started](/uds-k3d-takserver/getting-started/) has the install, the demos, and the deploy steps.
+
+<CardGrid>
+  <LinkCard
+    title="Deploy"
+    href="/uds-k3d-takserver/getting-started/#deploy-a-release"
+    description="Deploy a release onto a cluster that already runs UDS Core, or build the package and deploy it on k3d."
+  />
+  <LinkCard
+    title="Upgrade"
+    href="/uds-k3d-takserver/getting-started/#upgrade-from-06"
+    description="What an existing install notices, including the move from PostgreSQL 15 to 18."
+  />
+  <LinkCard
+    title="Back up"
+    href="/uds-k3d-takserver/data/#backup"
+    description="Logical dumps of the TAK and CloudTAK databases, and file-system backup of their volumes."
+  />
+  <LinkCard
+    title="Reference"
+    href="/uds-k3d-takserver/getting-started/#documentation"
+    description="Variables, hosts, and the guides for networking, sign-in, CloudTAK, and the rest."
+  />
+</CardGrid>

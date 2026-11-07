@@ -5,23 +5,54 @@
 """Pareto report over benchmark JSON. Records with a null axis are skipped."""
 
 import json
+import math
 import sys
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 
 VIEWS = (
     ("footprint_bytes", "throughput", False, True, "footprint vs throughput"),
     ("footprint_bytes", "latency_ms", False, False, "footprint vs mean latency"),
-    ("footprint_bytes", "ready_s", False, False, "footprint vs time-to-ready"),
+    ("footprint_bytes", "cold_ready_s", False, False, "footprint vs cold time-to-ready"),
+    ("footprint_bytes", "warm_ready_s", False, False, "footprint vs warm rollout time"),
 )
+
+
+def nonnegative(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
+        return value
+    return None
+
+
+def cohorts(records):
+    """Compare only matched revision, client count and measured duration.
+
+    Incomplete metadata isolates a record; unknown is not a shared workload.
+    Input JSON stays untouched so historical defects remain inspectable.
+    """
+    groups = {}
+    for index, record in enumerate(records):
+        load = record.get("load") or {}
+        revision = record.get("git_sha")
+        clients = nonnegative(load.get("clients"))
+        duration = nonnegative(load.get("duration_s"))
+        if revision and clients and duration:
+            key = (revision, clients, duration)
+            label = f"clients={clients}, duration={duration} s, revision={revision}"
+        else:
+            key = ("incomplete", index)
+            label = f"record {index + 1}: incomplete comparison metadata (not ranked against other records)"
+        groups.setdefault(key, (label, []))[1].append(record)
+    return list(groups.values())
 
 
 def point(record):
     load = record.get("load") or {}
     kubelet = record.get("kubelet") or {}
     ready = record.get("time_to_ready") or {}
-    duration = load.get("duration_s")
-    received = load.get("messages_received")
+    duration = nonnegative(load.get("duration_s"))
+    received = nonnegative(load.get("messages_received"))
     throughput = None
     if duration and received is not None:
         throughput = received / duration
@@ -31,10 +62,12 @@ def point(record):
     return {
         "config": record.get("config"),
         "arch": record.get("arch"),
-        "footprint_bytes": kubelet.get("steady_rss_bytes"),
+        "footprint_bytes": nonnegative(kubelet.get("steady_rss_bytes")),
         "throughput": throughput,
-        "latency_ms": load.get("ping_pong_ms_mean"),
-        "ready_s": ready_s,
+        "latency_ms": nonnegative(load.get("ping_pong_ms_mean")),
+        "ready_s": nonnegative(ready_s),
+        "cold_ready_s": nonnegative(ready.get("cold_s")),
+        "warm_ready_s": nonnegative(ready.get("warm_s")),
         "errors": record.get("errors") or [],
     }
 
@@ -84,39 +117,90 @@ def load_records(paths):
 
 def markdown(records):
     lines = ["# Benchmark front", ""]
-    by_arch = {}
-    for record in records:
-        by_arch.setdefault(record.get("arch"), []).append(point(record))
-    if not by_arch:
-        lines.append("No records.")
-        lines.extend(postgres_lines(records))
-        return "\n".join(lines) + "\n"
-    lines.append("The plot uses one scale per view for every architecture. Dominance below is per architecture.")
-    lines.append("")
-    for arch, points in sorted(by_arch.items()):
-        lines.append(f"## {arch}")
-        lines.append("")
-        for x_key, y_key, x_higher, y_higher, title in VIEWS:
-            kept, dominated = front(points, x_key, y_key, x_higher, y_higher)
-            lines.append(f"### {title}")
-            lines.append("")
-            if not kept and not dominated:
-                lines.append("No config had both axes.")
+    if not records:
+        return "# Benchmark front\n\nNo records.\n\nNo Postgres stats.\n"
+    lines.extend([
+        "Each workload cohort has one scale per view across architectures. Dominance is per architecture within a matched revision, client count and duration.",
+        "Cold pod age and warm rollout duration have separate views. Missing or invalid axes are not plotted. These are individual observations, not confidence intervals.",
+        "",
+    ])
+    for label, matched in cohorts(records):
+        lines.extend([f"## Cohort: {label}", ""])
+        by_arch = {}
+        for record in matched:
+            by_arch.setdefault(record.get("arch"), []).append(point(record))
+        for arch, points in sorted(by_arch.items()):
+            lines.extend([f"### {arch}", ""])
+            for x_key, y_key, x_higher, y_higher, title in VIEWS:
+                kept, dominated = front(points, x_key, y_key, x_higher, y_higher)
+                lines.extend([f"#### {title}", ""])
+                if not kept and not dominated:
+                    lines.extend(["No config had both axes.", ""])
+                    continue
+                lines.append("Front: " + ", ".join(sorted(p["config"] for p in kept)))
+                lines.append("Dominated: " + (", ".join(sorted(p["config"] for p in dominated)) or "none"))
                 lines.append("")
-                continue
-            lines.append("Front: " + ", ".join(sorted(p["config"] for p in kept)))
-            if dominated:
-                lines.append("Dominated: " + ", ".join(sorted(p["config"] for p in dominated)))
-            else:
-                lines.append("Dominated: none")
-            lines.append("")
-    lines.extend(postgres_lines(records))
+        lines.extend(measurement_lines(matched))
+        lines.extend(startup_lines(matched))
+        lines.extend(postgres_lines(matched))
+        lines.extend(["### Record caveats", ""])
+        caveats = [f"- {cell(r.get('arch'))} {cell(r.get('config'))}: {cell(error)}"
+                   for r in matched for error in r.get("errors") or []]
+        lines.extend(caveats or ["No collection errors were recorded. This does not establish comparability beyond the stored metadata."])
+        lines.append("")
     return "\n".join(lines)
+
+
+def cell(value):
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def measured(value, divisor=1):
+    if value is None:
+        return "not measured"
+    valid = nonnegative(value)
+    if valid is None:
+        return f"invalid ({cell(value)})"
+    return f"{valid / divisor:.3f}"
+
+
+def measurement_lines(records):
+    lines = ["### Observed load and footprint", "",
+             "| Architecture | Config | Steady working set (MiB) | Peak working set (MiB) | Steady CPU (m) | Received messages/s | Mean ping-pong (ms) | Cold pod age (s) | Warm rollout (s) |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    for record in records:
+        sample = point(record)
+        kubelet = record.get("kubelet") or {}
+        ready = record.get("time_to_ready") or {}
+        values = [cell(record.get("arch")), cell(record.get("config")),
+                  measured(kubelet.get("steady_rss_bytes"), 2**20), measured(kubelet.get("peak_rss_bytes"), 2**20),
+                  measured(kubelet.get("steady_cpu_nanocores"), 10**6), measured(sample["throughput"]),
+                  measured(sample["latency_ms"]), measured(ready.get("cold_s")), measured(ready.get("warm_s"))]
+        lines.append("| " + " | ".join(values) + " |")
+    return [*lines, ""]
+
+
+def startup_lines(records):
+    lines = ["### Observed pod startup phases", "",
+             "These are the pods observed at each config's collection time. A database-only rollout can reuse an earlier TAK pod; these rows are not proof that each config independently measured both a cold and a warm TAK start. Negative timings are invalid observations, not durations.", "",
+             "| Architecture | Config | App | Image pull (s) | Init containers (s) | JVM to first startup log (s) | Startup log to Ready (s) |",
+             "| --- | --- | --- | --- | --- | --- | --- |"]
+    for record in records:
+        phases = record.get("start_phases") or {}
+        for app in ("takserver-messaging", "takserver-api"):
+            phase = phases.get(app) or {}
+            inits = phase.get("inits")
+            init_text = "; ".join(f"{cell(item.get('name'))}: {measured(item.get('seconds'))}" for item in inits) if inits else "not measured"
+            values = [cell(record.get("arch")), cell(record.get("config")), app,
+                      measured(phase.get("image_pull_s")), init_text,
+                      measured(phase.get("jvm_to_log_s")), measured(phase.get("log_to_ready_s"))]
+            lines.append("| " + " | ".join(values) + " |")
+    return [*lines, ""]
 
 
 def postgres_lines(records):
     """Hit ratio, temp files, checkpoints, and RSS beside TAK throughput."""
-    lines = ["## Postgres", ""]
+    lines = ["### Postgres", ""]
     found = False
     for record in records:
         stats = record.get("postgres")
@@ -162,39 +246,52 @@ def _scale(values, low, high):
 
 
 def svg(records):
-    width, height, panel = 680, 220, 200
+    width, height = 740, 280
+    groups = cohorts(records)
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height * 3}">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height * len(VIEWS) * max(1, len(groups))}">',
     ]
-    by_arch = {}
-    for record in records:
-        by_arch.setdefault(record.get("arch"), []).append(point(record))
     colors = {"amd64": "#1f4e79", "arm64": "#9a3412"}
     offset = 0
-    for x_key, y_key, x_higher, y_higher, title in VIEWS:
-        parts.append(f'<text x="16" y="{offset + 18}" font-family="sans-serif" font-size="14">{title}</text>')
-        plotted = []
-        for arch, points in sorted(by_arch.items()):
-            kept, dominated = front(points, x_key, y_key, x_higher, y_higher)
-            for item in kept:
-                plotted.append((arch, item, True))
-            for item in dominated:
-                plotted.append((arch, item, False))
-        if plotted:
-            xs = _scale([row[1][x_key] for row in plotted], 40, width - 20)
-            ys = _scale([row[1][y_key] for row in plotted], offset + panel - 16, offset + 36)
-            for arch, item, on_front in plotted:
-                fill = colors.get(arch, "#333")
-                if on_front:
-                    attrs = f'fill="{fill}"'
-                else:
-                    attrs = f'fill="none" stroke="{fill}" stroke-width="2"'
-                parts.append(
-                    f'<circle cx="{xs[item[x_key]]:.1f}" cy="{ys[item[y_key]]:.1f}" r="5" {attrs}>'
-                    f"<title>{arch} {item['config']}</title></circle>"
-                )
-        offset += height
+    for label, matched in groups:
+        by_arch = {}
+        for record in matched:
+            by_arch.setdefault(record.get("arch"), []).append(point(record))
+        for x_key, y_key, x_higher, y_higher, title in VIEWS:
+            parts.append(f'<text x="16" y="{offset + 18}" font-family="sans-serif" font-size="14">{escape(title)}</text>')
+            parts.append(f'<text x="16" y="{offset + 35}" font-family="sans-serif" font-size="10">{escape(label)}</text>')
+            plotted = []
+            for arch, points in sorted(by_arch.items()):
+                kept, dominated = front(points, x_key, y_key, x_higher, y_higher)
+                plotted.extend((arch, item, True) for item in kept)
+                plotted.extend((arch, item, False) for item in dominated)
+            if plotted:
+                x_values = [row[1][x_key] for row in plotted]
+                y_values = [row[1][y_key] for row in plotted]
+                xs = _scale(x_values, 80, width - 25)
+                ys = _scale(y_values, offset + 195, offset + 65)
+                unit = "messages/s" if y_key == "throughput" else "ms" if y_key == "latency_ms" else "s"
+                parts.append(f'<path d="M80 {offset + 65}V{offset + 195}H{width - 25}" fill="none" stroke="#666"/>')
+                for value in sorted(set((min(x_values), max(x_values)))):
+                    parts.append(f'<text x="{xs[value]:.1f}" y="{offset + 212}" text-anchor="middle" font-family="sans-serif" font-size="10">{value / 2**20:.1f}</text>')
+                for value in sorted(set((min(y_values), max(y_values)))):
+                    parts.append(f'<text x="74" y="{ys[value] + 3:.1f}" text-anchor="end" font-family="sans-serif" font-size="10">{value:.3f}</text>')
+                parts.append(f'<text x="80" y="{offset + 55}" font-family="sans-serif" font-size="10">{unit}</text>')
+                parts.append(f'<text x="{width / 2}" y="{offset + 232}" text-anchor="middle" font-family="sans-serif" font-size="11">Steady working set (MiB)</text>')
+                for arch, item, on_front in plotted:
+                    fill = colors.get(arch, "#333")
+                    attrs = f'fill="{fill}"' if on_front else f'fill="none" stroke="{fill}" stroke-width="2"'
+                    parts.append(
+                        f'<circle cx="{xs[item[x_key]]:.1f}" cy="{ys[item[y_key]]:.1f}" r="5" {attrs}>'
+                        f"<title>{escape(str(arch))} {escape(str(item['config']))}</title></circle>"
+                    )
+            else:
+                parts.append(f'<text x="80" y="{offset + 100}" font-family="sans-serif" font-size="12">No records have both valid axes.</text>')
+            parts.append(f'<text x="16" y="{offset + 263}" fill="#1f4e79" font-family="sans-serif" font-size="11">amd64</text>')
+            parts.append(f'<text x="80" y="{offset + 263}" fill="#9a3412" font-family="sans-serif" font-size="11">arm64</text>')
+            parts.append(f'<text x="150" y="{offset + 263}" font-family="sans-serif" font-size="11">Filled: cohort front; open: dominated in that architecture</text>')
+            offset += height
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 

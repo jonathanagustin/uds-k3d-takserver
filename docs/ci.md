@@ -20,6 +20,8 @@ Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore
 
 "Docs" in the triggers above means Markdown files, images, `docs/`, `adr/`, `docs-site/`, and the Docs workflow file. A docs-only pull request skips Test and Package. Full Core decides in its own `changes` job and skips too. The checks that `main` requires still report on it: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`.
 
+Stricter review on `main` (one human approval, admins included, an up-to-date branch) is written in [Review rules for main](branch-protection.md). Those settings are not on.
+
 ## Package reuse
 
 The dev package is created once per architecture and set of inputs. `.github/scripts/dev-package.sh key` hashes the working tree after `pin-image-tags.sh` (so the image tags count) of every tracked file that can reach the package, plus the UDS CLI version, the create variables and the architecture. The Package workflow publishes it under that key; the tag is written once and never overwritten. Test, Full Core and Benchmark deploy the slim checkpoint first, then `create-dev-package` pulls the published package, waiting up to 10 to 15 minutes for the Package workflow (stopping once that run finishes without the tag), and creates it locally only when no package appears. Fork pull requests cannot publish, so they create in-job as before. `DEV_PACKAGE_REUSE=false` or `KEY_SALT` forces a create.

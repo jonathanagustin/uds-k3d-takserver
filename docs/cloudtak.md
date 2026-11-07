@@ -22,7 +22,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 [`.github/container-and-chart/cloudtak/`](../.github/container-and-chart/cloudtak/) holds the build:
 
 - `docker-bake.hcl` builds CloudTAK's own `Dockerfile` from the submodule with no changes. Its first stage downloads the CloudTAK-Data `v1.2.0` release zip, which upstream pins in that file.
-- `Dockerfile` copies the built API (with `npm prune --omit=dev`) and the built web app onto the same `nginx:alpine3.24` base with `nodejs-current`, `bash`, and `openssl`. The upstream image is about 2.2 GB because it keeps its compilers and build dependencies. This one is about 600 MB.
+- `Dockerfile` copies the built API and web app from that image. `docker-bake.hcl` passes it in as the `cloudtak-upstream` build context, and the Dockerfile copies from that context. The context is not a registry image, so it has no digest to pin on a `FROM` line. `npm prune --omit=dev` runs on `node:26-alpine3.24`, the Node tag upstream copies in, pinned by digest. The runtime stage is the same `nginx:alpine3.24` base with `nodejs-current`, `bash`, and `openssl`. The upstream image is about 2.2 GB because it keeps its compilers and build dependencies. This one is about 600 MB.
 - `start.sh` replaces upstream `api/start`. It renders the same `nginx.conf`, drops the `user` directive, and moves the pid file, logs, and temp paths under `/tmp`. The container runs as uid 101 with a read-only root filesystem.
 - `sso.mjs` is the `sso` container's Keycloak sign-in. `nginx-sso.conf` and `nginx-sso-head.conf` are the two nginx fragments `start.sh` adds for it. See [Sign-in](#sign-in).
 - `bootstrap.mjs` is the bootstrap container's script. See below.

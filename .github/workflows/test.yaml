@@ -544,8 +544,13 @@ jobs:
           # shellcheck disable=SC3028
           echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
 
+      # A failed install or upgrade must not start this upload.
+      # actions/upload-artifact v7.0.2 can ignore timeout-minutes. The job
+      # limit then cancels the job, and that job's log is not kept. The
+      # print step already wrote the sanitized logs. success() lets the
+      # failed job finish. A sanitizer that did not finish still cannot upload.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
+        if: success() && (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
         timeout-minutes: 5
         with:
           name: debug-log-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}

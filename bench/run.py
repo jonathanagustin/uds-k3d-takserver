@@ -30,6 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
+from bench import capacity
 from bench.phases import pod_phases
 from bench.startup import max_generation, max_restarts
 from bench.tester_exit import bind_tester, reap
@@ -594,7 +595,7 @@ def keystore_password():
     return "atakatak"
 
 
-def kubelet_samples(stop, sink, errors, pg_rss=None):
+def kubelet_samples(stop, sink, errors, pg_rss=None, containers=None, capacity_errors=None):
     while not stop.is_set():
         try:
             nodes = kubectl("get", "nodes", "-o", "name").stdout.split()
@@ -603,7 +604,10 @@ def kubelet_samples(stop, sink, errors, pg_rss=None):
             pg_bytes = None
             for node in nodes:
                 raw = kubectl("get", "--raw", f"/api/v1/nodes/{node.split('/', 1)[-1]}/proxy/stats/summary").stdout
-                for pod in json.loads(raw).get("pods", []):
+                summary = json.loads(raw)
+                if containers is not None:
+                    capacity.observe(summary, containers, capacity_errors)
+                for pod in summary.get("pods", []):
                     ref = pod.get("podRef", {})
                     if ref.get("namespace") not in ("takserver", "cloudtak"):
                         continue
@@ -631,6 +635,17 @@ def kubelet_samples(stop, sink, errors, pg_rss=None):
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             errors.append(f"kubelet summary: {error}")
         stop.wait(5)
+
+
+def capacity_inventory(errors):
+    pods = []
+    for namespace in capacity.NAMESPACES:
+        try:
+            raw = kubectl("get", "pods", "-n", namespace, "-o", "json").stdout
+            pods.extend(json.loads(raw).get("items", []))
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            capacity.note(errors, f"{namespace} capacity inventory: {error}")
+    return capacity.inventory(pods, quantity, errors)
 
 
 def run_load(clients, duration, password, tester):
@@ -753,6 +768,7 @@ def blank(arch, config, clients, duration):
         },
         "ci": {"wall_clock_s": None},
         "postgres": None,
+        "capacity": None,
         "errors": [],
     }
 
@@ -848,9 +864,13 @@ def one(config, clients, out_dir, tester, cold):
         samples = []
         pg_rss = []
         sample_errors = []
+        capacity_errors = []
+        containers = {}
+        capacity_before = capacity_inventory(capacity_errors)
         stop = threading.Event()
         thread = threading.Thread(
-            target=kubelet_samples, args=(stop, samples, sample_errors, pg_rss), daemon=True,
+            target=kubelet_samples,
+            args=(stop, samples, sample_errors, pg_rss, containers, capacity_errors), daemon=True,
         )
         thread.start()
         try:
@@ -867,6 +887,13 @@ def one(config, clients, out_dir, tester, cold):
             stop.set()
             thread.join(timeout=10)
         record["errors"].extend(sample_errors)
+        if thread.is_alive():
+            capacity_errors = list(capacity_errors)
+            capacity.note(capacity_errors, "sampler did not stop; per-container samples were omitted")
+            containers = {}
+        capacity_after = capacity_inventory(capacity_errors)
+        record["capacity"] = capacity.assemble(capacity_before, capacity_after, containers, capacity_errors)
+        record["errors"].extend(f"capacity: {error}" for error in record["capacity"]["errors"])
         try:
             record["postgres"] = read_postgres(pg_rss)
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:

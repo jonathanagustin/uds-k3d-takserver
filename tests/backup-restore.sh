@@ -277,7 +277,8 @@ for _ in $(seq 1 30); do
   # Velero 1.18 logs "Starting Controller" (controller-runtime). Older
   # builds logged "Starting controllers". Either line means the agent
   # reached the API. Matching only the plural misses a running agent.
-  if k logs -n velero -l name=node-agent 2>/dev/null | grep -E -q "Starting [Cc]ontroller"; then
+  if k logs -n velero -l name=node-agent 2>/dev/null \
+    | grep -F -e "Starting Controller" -e "Starting controllers" -q; then
     agent_ok=1
     break
   fi

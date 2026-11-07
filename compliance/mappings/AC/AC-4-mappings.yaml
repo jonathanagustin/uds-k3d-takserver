@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: AC-4
+  uuid: 79a96dd2-7dec-5a42-b67e-282471df87e3
+  justification: Proposed partial evidence association. The UDS Package declares ambient mesh and scoped ingress/egress
+    flows between TAK, its dependencies, and CloudTAK. This is workload network evidence, not a complete information
+    classification or cross-domain flow policy.
+  status: planned
+  source_entries:
+    - location: charts/takserver/templates/uds-package.yaml

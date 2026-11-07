@@ -57,6 +57,7 @@ export function fingerprint(certPem: string): string {
     .join(":");
 }
 
+// @lulaStart 12d1f817-a19b-5b3c-b021-aa47cc1071f5
 export function issue(ca: Ca, callsign: string, days: number, now: Date, serial = newSerial()): Issued {
   const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const keyPem = pair.privateKey.export({ type: "pkcs1", format: "pem" }).toString();
@@ -85,6 +86,7 @@ export function issue(ca: Ca, callsign: string, days: number, now: Date, serial 
   return { certPem, keyPem, serial, fingerprint: fingerprint(certPem), notAfter: cert.validity.notAfter };
 }
 
+// @lulaEnd 12d1f817-a19b-5b3c-b021-aa47cc1071f5
 // ATAK on Android 9 reads PKCS#12 with SHA-1 and 3DES only, as atak/ci/e2e.sh
 // notes for OpenSSL. node-forge writes that by default.
 export function clientP12(issued: Issued, ca: Ca, name: string, password: string): Buffer {

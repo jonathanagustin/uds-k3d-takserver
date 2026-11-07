@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: AU-12
+  uuid: 4ee5c35b-ef3a-54b5-bfda-d6c6fa15cdae
+  justification: Proposed partial evidence association. The Loki helper queries the deployment log stream and requires
+    the selected application messages. It is verification evidence for record generation/collection, not an implementation
+    of audit integrity, retention, time synchronization, or the organizational logging policy. Those controls depend
+    on Core and operations.
+  status: planned
+  source_entries:
+    - location: tests/query-loki.sh

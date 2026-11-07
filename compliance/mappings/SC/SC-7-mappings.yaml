@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: SC-7
+  uuid: 40374e8f-8bd9-5942-af2f-d6d0839d5363
+  justification: Proposed partial evidence association. A namespace-wide Istio DENY policy blocks plaintext port
+    8080, including the upstream actuator and Ignite REST listeners. Other boundaries rely on UDS Package network
+    rules and the deployment network. This does not establish every organizational boundary control.
+  status: planned
+  source_entries:
+    - location: charts/takserver/templates/prereqs.yaml

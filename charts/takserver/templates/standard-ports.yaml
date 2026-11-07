@@ -1,6 +1,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
+# @lulaStart c450acaf-db56-5342-b345-a3123f0fcddc
 {{- if .Values.standardPorts.enabled }}
 {{- $domain := .Values.domain }}
 # Standard TAK ports on the UDS Core passthrough gateway. Field clients such as
@@ -74,3 +75,4 @@ spec:
             port:
               number: {{ .Values.messaging.streaming.port }}
 {{- end }}
+# @lulaEnd c450acaf-db56-5342-b345-a3123f0fcddc

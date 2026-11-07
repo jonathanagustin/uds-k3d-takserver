@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: IA-2
+  uuid: 69b4fe63-5ea3-5eba-8054-8e16d71d0dbd
+  justification: Proposed partial evidence association. TAK browser access uses the Keycloak OIDC client and configured
+    group gate. This package does not require MFA by itself; realm policy, identity proofing, and privileged-user
+    authentication policy remain deployment responsibilities.
+  status: planned
+  source_entries:
+    - location: charts/takserver/templates/uds-package.yaml

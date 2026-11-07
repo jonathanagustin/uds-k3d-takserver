@@ -2,6 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
+# @lulaStart 614ae906-f071-5d33-af56-6b7157bdc9a2
 # Copy cert-migration into Secret takserver-certs and drop private keys from
 # the ConfigMap. The upstream chart can only mount a ConfigMap. The admission
 # module points that volume at the Secret, so the pods never see the ConfigMap.
@@ -351,3 +352,4 @@ while IFS=$'\t' read -r name _; do
   fi
 done < "${work}/after-fields.txt"
 echo "Secret takserver-certs holds the certificate files. ConfigMap cert-migration has no private keys."
+# @lulaEnd 614ae906-f071-5d33-af56-6b7157bdc9a2

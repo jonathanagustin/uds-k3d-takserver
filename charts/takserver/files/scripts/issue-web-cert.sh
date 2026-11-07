@@ -2,6 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
+# @lulaStart 1d49897a-a738-5e02-b561-715b77ff099b
 # Issue the server certificate for the 8447 web connector and add it to
 # ConfigMap cert-migration as takserver-web.jks. The tenant gateway connects
 # to 8447 over TLS and verifies this certificate against the deploy-time CA,
@@ -125,3 +126,4 @@ if [[ "${code}" != "200" ]]; then
   exit 1
 fi
 echo "Added ${key_name} for ${fqdn} to ConfigMap cert-migration"
+# @lulaEnd 1d49897a-a738-5e02-b561-715b77ff099b

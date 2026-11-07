@@ -1,0 +1,25 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: SC-13
+title: Cryptographic Protection
+family: SC
+description: Package evidence notes for Cryptographic Protection. Consult the authoritative NIST control and the
+  deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The web-certificate helper creates a server certificate for the in-cluster service
+  names and signs it with the deploy-time CA. Approved algorithms and FIPS validation require deployment assessment;
+  Android 9 client PKCS12 compatibility still uses SHA-1/3DES, so this is not a claim that all cryptography meets
+  a selected federal profile.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tasks/test.yaml,
+  pepr/capabilities/takclient.test.ts. Re-run deployment checks in the target environment and record outcomes before
+  assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tasks/test.yaml
+    rel: evidence
+    text: tasks/test.yaml
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/pepr/capabilities/takclient.test.ts
+    rel: evidence
+    text: pepr/capabilities/takclient.test.ts

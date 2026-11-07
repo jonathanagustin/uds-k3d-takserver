@@ -2,6 +2,10 @@ amends "package://github.com/jdx/hk/releases/download/v2.0.0/hk@2.0.0#/Config.pk
 
 // Pre-commit and CI. License headers are the shared lint:all task.
 steps {
+  ["compliance-mappings"] {
+    check = "uv run --no-project --with pyyaml==6.0.3 python -B .github/scripts/check-compliance.py"
+    glob = List("**/*")
+  }
   // --strict fails on warnings too.
   ["yamllint"] {
     check = "yamllint --strict . -c .yamllint"

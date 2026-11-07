@@ -146,6 +146,7 @@ jobs:
   # the index, so a failure here never blocks the publish. Verify with:
   #   gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream \
   #     --owner jonathanagustin
+  # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
   provenance:
     needs: publish
     runs-on: ubuntu-24.04
@@ -233,3 +234,4 @@ jobs:
           gh attestation verify "oci://${SUBJECT}" \
             --owner "${GITHUB_REPOSITORY_OWNER}" \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yaml"
+  # @lulaEnd 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17

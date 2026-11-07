@@ -143,6 +143,7 @@ subjects:
     name: takserver-cert-init
     namespace: {{ .Release.Namespace }}
 ---
+# @lulaStart 0f4f42a8-e89c-5cd0-90d7-66470d64d944
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -223,6 +224,7 @@ spec:
             limits:
               cpu: "1"
               memory: 512Mi
+# @lulaEnd 0f4f42a8-e89c-5cd0-90d7-66470d64d944
 ---
 {{- $core := .Files.Get "files/config/CoreConfig.xml" }}
 {{- $core = replace "<!-- TAK_WEB_CONNECTOR -->" (include "takserver.webConnector" .) $core }}
@@ -304,6 +306,7 @@ spec:
 # Messaging and the API bind plaintext 8080 and expose the actuator on it.
 # The Ignite chart also publishes 8080 for its REST connector. None of those
 # are gateway ports. This denies the port inside the mesh.
+# @lulaStart 40374e8f-8bd9-5942-af2f-d6d0839d5363
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -317,6 +320,7 @@ spec:
     - to:
         - operation:
             ports: ["8080"]
+# @lulaEnd 40374e8f-8bd9-5942-af2f-d6d0839d5363
 ---
 # The upstream post-install Job hardcodes
 # proxy.istio.io/config: holdApplicationUntilProxyStarts.

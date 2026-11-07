@@ -4,6 +4,12 @@ The Benchmark workflow measures how much CPU and memory TAK Server uses under a 
 
 ## When it runs
 
+The [retained ten-client snapshot](../bench/results/42361079121/README.md)
+contains matched baseline, Postgres buffers and Postgres WAL records from
+November 7, 2026, on both architectures, with source hashes and a corrected
+report. It records why those observations do not justify a tuning change,
+architecture default, or a 200-client load.
+
 [`.github/workflows/benchmark.yaml`](../.github/workflows/benchmark.yaml) runs:
 
 - daily at 09:41 UTC

@@ -145,6 +145,43 @@ so Node reads the new file at startup. TAK's bundle uses the existing
 `uds.dev/oidc-reload=takserver` selector so its API and messaging init containers
 also rebuild their JVM trust stores when the bundle changes.
 
+### Run the CA rotation acceptance test
+
+On a disposable test cluster with this package deployed, run:
+
+```bash title="Verify live CA propagation and SSO reloads"
+python3 -B tests/trust-bundle-live.py --ui
+```
+
+The script appends a temporary CA to the saved custom roots in ClusterConfig
+`uds-cluster-config`, waits for both namespace bundles and new API, messaging,
+and CloudTAK pod UIDs, and checks Keycloak discovery with Node inside the SSO
+container using its configured combined trust file. It then rotates to a
+second CA and repeats the checks. `--ui` also reruns the existing browser suite
+after each rotation, requiring Keycloak setup rather than allowing SSO tests
+to skip. The browser suite currently uses the development `uds.dev` domain;
+without `--ui`, set `DOMAIN` for another test domain.
+
+Existing custom roots and the include-public/DoD settings are preserved. On
+exit, the script restores the original custom CA setting and namespace bundles,
+then explicitly restarts the consumers to remove temporary roots from cached
+trust stores. It uses resource-version checks and refuses to overwrite a
+concurrent custom-CA edit. Temporary private keys stay in a private directory
+and are deleted. `out/trust-bundle-live.json` records CA fingerprints, pod UIDs,
+and cleanup success. `out/trust-bundle-original-ca.json` saves the original
+public CA settings before the first mutation, for manual recovery if the
+process is forcibly killed before cleanup can finish.
+
+The same test is available through **Test** workflow dispatch with
+`trust_bundle=true`, on both install architectures. It changes cluster-wide
+trust configuration and can restart Core's Istio consumers too, so it is an
+opt-in acceptance run. The normal install and upgrade paths remain unchanged.
+
+This test proves live propagation, reloads, and SSO with the existing gateway
+certificate. It does not replace that gateway certificate with a private-CA
+certificate. The separate `test_trust_bundle.py` HTTPS test proves private-CA
+verification and rejection when that CA is removed.
+
 ## TAK connection
 
 | CloudTAK setting | Value | Used for |

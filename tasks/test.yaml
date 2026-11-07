@@ -901,6 +901,10 @@ tasks:
             echo "Keycloak account page is not reachable. Skipping the SSO session."
             skip_sso=1
           fi
+          if [ "${REQUIRE_SSO_SETUP:-false}" = true ] && [ "${skip_sso}" -eq 1 ]; then
+            echo "Keycloak is required for this UI acceptance test." >&2
+            exit 1
+          fi
           docker run --rm \
             --network=host \
             --shm-size=1g \

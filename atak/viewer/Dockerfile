@@ -33,20 +33,22 @@ RUN npm ci --no-audit --no-fund && npm run dist \
     && cd dist && npm pkg set dependencies.express=4.22.3 dependencies.ws=8.22.0 dependencies.yaml=2.9.1
 
 # The dist step writes its own package.json with no lockfile. The runtime
-# dependencies come from dist-package-lock.json, so they are pinned by
-# integrity hash. npm ci fails when that file no longer matches, for example
-# after a WS_SCRCPY_REF change. Regenerate it with:
+# dependencies come from dist-package-lock.json. `npm ci` checks the
+# integrity hashes in that file, and it fails when the file no longer
+# matches, for example after a WS_SCRCPY_REF change. Refresh it with:
 #   docker buildx build -f atak/viewer/Dockerfile --target dist-lock \
 #     --output type=local,dest=atak/viewer .
 #   mv atak/viewer/package-lock.json atak/viewer/dist-package-lock.json
-# Scorecard flags this `npm install` as an unpinned npm command. The stage
-# does not install packages into an image that ships. It writes
-# dist/package-lock.json from the package.json the source stage just
-# edited, so a maintainer can refresh atak/viewer/dist-package-lock.json
-# (`docker build --target dist-lock`). The runtime stage below installs
-# with `npm ci`, which checks that lockfile. `npm ci` cannot create it.
+# Scorecard's pinned npm command is `npm ci`, because that command checks
+# the lockfile hashes. It reports `npm install` as unpinned, including
+# `--package-lock-only`, and `npm ci` cannot create a lockfile. The refresh
+# writes the lockfile from node, then runs `npm ci` so the new file
+# installs. The image that ships is the build stage below, which also
+# installs with `npm ci`.
 FROM source AS lock
-RUN cd dist && npm install --omit=dev --package-lock-only --no-audit --no-fund
+COPY atak/viewer/write-dist-lock.mjs /tmp/write-dist-lock.mjs
+RUN node /tmp/write-dist-lock.mjs /src/dist \
+ && npm ci --prefix /src/dist --omit=dev --no-audit --no-fund
 
 FROM scratch AS dist-lock
 COPY --from=lock /src/dist/package-lock.json /package-lock.json

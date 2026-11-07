@@ -14,7 +14,6 @@ from xml.sax.saxutils import escape
 VIEWS = (
     ("footprint_bytes", "throughput", False, True, "footprint vs throughput"),
     ("footprint_bytes", "latency_ms", False, False, "footprint vs mean latency"),
-    ("footprint_bytes", "cold_ready_s", False, False, "footprint vs cold time-to-ready"),
     ("footprint_bytes", "warm_ready_s", False, False, "footprint vs warm rollout time"),
 )
 
@@ -121,7 +120,7 @@ def markdown(records):
         return "# Benchmark front\n\nNo records.\n\nNo Postgres stats.\n"
     lines.extend([
         "Each workload cohort has one scale per view across architectures. Dominance is per architecture within a matched revision, client count and duration.",
-        "Cold pod age and warm rollout duration have separate views. Missing or invalid axes are not plotted. These are individual observations, not confidence intervals.",
+        "Cold install age is a shared reference in the evidence table, not a swept-config ranking. The readiness plot uses warm rollout duration only. Missing or invalid axes are not plotted. These are individual observations, not confidence intervals.",
         "",
     ])
     for label, matched in cohorts(records):
@@ -166,7 +165,7 @@ def measured(value, divisor=1):
 
 def measurement_lines(records):
     lines = ["### Observed load and footprint", "",
-             "| Architecture | Config | Steady working set (MiB) | Peak working set (MiB) | Steady CPU (m) | Received messages/s | Mean ping-pong (ms) | Cold pod age (s) | Warm rollout (s) |",
+             "| Architecture | Config | Steady working set (MiB) | Peak working set (MiB) | Steady CPU (m) | Received messages/s | Mean ping-pong (ms) | Cold install reference (s) | Warm rollout (s) |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for record in records:
         sample = point(record)

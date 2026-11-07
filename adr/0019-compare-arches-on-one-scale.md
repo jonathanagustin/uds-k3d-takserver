@@ -36,9 +36,10 @@ client count and load duration before calculating each architecture's front.
 Both architectures still share one scale within that cohort. Records missing
 comparison metadata are isolated rather than silently ranked together.
 
-Cold pod age and warm rollout duration now have separate readiness views.
-The previous fallback from a missing warm time to a cold time compared different
-operations. The markdown retains the observed startup phases and collection
+The readiness plot now uses warm rollout duration only. Cold install age is
+copied into every config as a shared reference, so it remains in the evidence
+table rather than ranking swept configs. The previous fallback from a missing
+warm time to a cold time compared different operations. The markdown retains the observed startup phases and collection
 caveats, labels invalid durations, and explains that a Postgres-only rollout
 can reuse an earlier TAK pod. No source measurement is rewritten, and this
 reporting correction makes no architecture or tuning recommendation.

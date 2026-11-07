@@ -55,8 +55,10 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 
 Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
-`kubelet.steady_rss_bytes`. Cold pod age and warm rollout duration are separate
-views. Dominance is decided only among records with the same `git_sha`,
+`kubelet.steady_rss_bytes`. The readiness plot uses only warm rollout duration.
+Cold install age is copied into each config as a shared reference; it is shown
+in the evidence table and never ranks swept configs. Dominance is decided only
+among records with the same `git_sha`,
 `load.clients`, `load.duration_s`, and architecture. Architectures share a scale
 inside each matched cohort. Missing cohort metadata isolates a record. Missing
 or invalid axes are not plotted; the markdown labels negative startup timings
@@ -67,9 +69,9 @@ invalid while preserving their original JSON values.
 Run 39556568533 measured the old scale-down on validate-install. amd64 job 119079081806 spent 103s in Helm and then 5m21s restarting config, messaging, api, and plugins. arm64 job 119079081713 spent 98s in Helm and then 5m08s. `startup.max_generation` and `startup.max_restart_count` are how a later run shows that second rollout is gone. This file does not store that later run.
 
 A config dominates another on one view when it is better or equal on both
-axes of that view and strictly better on one. The four views are footprint
-against throughput, footprint against mean latency, footprint against cold
-pod age, and footprint against warm rollout duration. arm64 and amd64 are
+axes of that view and strictly better on one. The three views are footprint
+against throughput, footprint against mean latency, and footprint against warm
+rollout duration. arm64 and amd64 are
 separate series on one scale per cohort and view, so a
 circle can be compared across architectures. Dominance is still decided
 inside one architecture. Dominated configs are marked in the job summary and

@@ -78,16 +78,17 @@ class BenchReportTests(unittest.TestCase):
         self.assertEqual(text.count("incomplete comparison metadata"), 2)
         self.assertNotIn("Dominated: slow", text)
 
-    def test_cold_and_warm_ready_times_have_distinct_views(self):
+    def test_cold_install_reference_is_not_ranked_against_warm_rollouts(self):
         cold = record("cold", "amd64", 20, 20, 60, 10, 120)
-        warm = record("warm", "amd64", 10, 20, 60, 10, None)
+        warm = record("warm", "amd64", 10, 20, 60, 10, 120)
         warm["time_to_ready"]["warm_s"] = 12
         text = report.markdown([cold, warm])
-        cold_view = text.split("#### footprint vs cold time-to-ready", 1)[1].split("####", 1)[0]
         warm_view = text.split("#### footprint vs warm rollout time", 1)[1].split("###", 1)[0]
-        self.assertIn("Front: cold", cold_view)
-        self.assertNotIn("Front: warm", cold_view)
         self.assertIn("Front: warm", warm_view)
+        self.assertNotIn("Front: cold", warm_view)
+        self.assertIn("Cold install reference (s)", text)
+        self.assertNotIn("footprint vs cold", text)
+        self.assertNotIn("footprint vs cold", report.svg([cold, warm]))
 
     def test_startup_table_marks_invalid_and_missing_timings_without_rewriting_data(self):
         sample = record("baseline", "amd64", 20, 20, 60, 10, -1)

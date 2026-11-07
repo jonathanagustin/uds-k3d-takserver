@@ -11,8 +11,6 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Failure logs are copied and printed later. Anything this script writes to
 # the job log has to go through the redactor, and CoreConfig is summarized
 # instead of printed: the rendered file holds the Keycloak client secret.
-redact() { python3 "${here}/redact-logs.py" -; }
-
 # On a wedged runner (#300) docker, kubectl and dmesg can block. Each call
 # gets its own bound so the later log steps keep their wall clock.
 
@@ -36,20 +34,24 @@ k() {
 echo "::group::runner memory, OOM kills, and k3d node restarts"
 free -m || true
 df -h / || true
-sudo timeout 30 dmesg -T 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process' | tail -20 ||
-  echo "No OOM kill in dmesg."
+sudo timeout 30 dmesg -T 2>/dev/null |
+  "${here}/redact-then-filter.sh" --ignore-case \
+    --grep 'out of memory|oom-kill|killed process' --tail 20 ||
+  echo "omitted unsanitizable dmesg"
 for node in $(timeout 30 docker ps -a --filter name=k3d- --format '{{.Names}}' 2>/dev/null); do
   timeout 30 docker inspect "${node}" --format \
     '{{.Name}} restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' || true
 done
 timeout 30 docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' 2>/dev/null || true
 for node in $(timeout 30 docker ps -a --filter name=k3d- --filter name=server --format '{{.Names}}' 2>/dev/null); do
-  # The API server's 502/503 proxy lines while the kubelet is down would
-  # push the fatal out of the tail, so they are left out.
+  # Redact the whole docker log, then keep the start and error lines.
+  # Filtering first can leave a fragment of a multiline secret.
   echo "--- ${node}: k3s starts, errors, and shutdown lines"
   timeout 30 docker logs "${node}" 2>&1 |
-    grep -iE 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' |
-    grep -v 'Sending HTTP/1.1 50[23] response' | tail -40 || true
+    "${here}/redact-then-filter.sh" --ignore-case \
+      --grep 'Starting k3s|level=fatal|level=error|panic|signal|shutting down|killed' \
+      --grep-v 'Sending HTTP/1.1 50[23] response' --tail 40 ||
+    echo "omitted unsanitizable k3s log"
 done
 echo "::endgroup::"
 
@@ -98,14 +100,18 @@ echo "::endgroup::"
 # The restarted Ignite server's own log says why it exited. lastState only
 # shows an exit code. Drop the thread dump so the cause above it stays visible.
 echo "::group::takserver-ignite previous container log (thread dump removed)"
-k logs takserver-ignite-0 -n takserver --previous --tail=4000 2>/dev/null |
-  grep -Ev '^[[:space:]]+(at |Lock \[)|^Thread \[|^$' | tail -120 | redact ||
-  echo "No previous Ignite container log."
+k logs takserver-ignite-0 -n takserver --previous 2>/dev/null |
+  "${here}/redact-then-filter.sh" \
+    --grep-v '^[[:space:]]+(at |Lock \[)|^Thread \[|^$' --tail 120 ||
+  echo "omitted unsanitizable ignite log"
 echo "::endgroup::"
 
 echo "::group::takserver-api Ignite and exception lines"
-k logs deploy/takserver-api -n takserver -c takserver-api --tail=2000 2>/dev/null |
-  grep -E 'Ignite|disconnect|Exception|protocol_version' | grep -v 'ExceptionTranslationFilter' | tail -60 | redact || true
+k logs deploy/takserver-api -n takserver -c takserver-api 2>/dev/null |
+  "${here}/redact-then-filter.sh" \
+    --grep 'Ignite|disconnect|Exception|protocol_version' \
+    --grep-v 'ExceptionTranslationFilter' --tail 60 ||
+  echo "omitted unsanitizable api log"
 echo "::endgroup::"
 
 # The process command line and environment are not printed. They carry
@@ -113,14 +119,20 @@ echo "::endgroup::"
 
 echo "::group::istio gateway minimum TLS versions"
 k get gateways.networking.istio.io -A -o yaml 2>/dev/null |
-  grep -nE '^    name:|minProtocolVersion|maxProtocolVersion|mode:' | head -40 || true
+  "${here}/redact-then-filter.sh" \
+    --grep '^    name:|minProtocolVersion|maxProtocolVersion|mode:' --tail 40 ||
+  echo "omitted unsanitizable gateway list"
 echo "::endgroup::"
 
 # protocol_version from the gateway: which TLS versions the API's JVM offers,
 # and which the tenant gateway accepts from a client in the same namespace.
 echo "::group::takserver-api JVM TLS protocols and security properties"
 k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
-  'java -XshowSettings:security:tls -version 2>&1 | grep -iE "protocols|TLSv1|jdk.tls" | head -20; echo ---; grep -rhE "^(jdk\.tls|crypto\.policy|security\.useSystemPropertiesFile)" /usr/lib/jvm/java-17/conf/security/java.security /etc/crypto-policies/back-ends/java.config 2>/dev/null | head -20' 2>&1 | tail -40 || true
+  'java -XshowSettings:security:tls -version 2>&1; echo ---; cat /usr/lib/jvm/java-17/conf/security/java.security /etc/crypto-policies/back-ends/java.config 2>/dev/null' 2>&1 |
+  "${here}/redact-then-filter.sh" --ignore-case \
+    --grep 'protocols|TLSv1|jdk\.tls|^---$|^crypto\.policy|^security\.useSystemPropertiesFile' \
+    --tail 40 ||
+  echo "omitted unsanitizable jvm settings"
 echo "::endgroup::"
 
 echo "::group::takserver-api JVM TLS probe to Keycloak (same host, TLS stack and trust store)"
@@ -153,7 +165,9 @@ public class Probe {
   }
 }
 JAVA
-java /tmp/Probe.java 2>&1 | tail -12' 2>&1 | tail -20 || true
+java /tmp/Probe.java 2>&1' 2>&1 |
+  "${here}/redact-then-filter.sh" --tail 20 ||
+  echo "omitted unsanitizable tls probe"
 echo "::endgroup::"
 
 # The rendered CoreConfig holds the Keycloak client secret and the keystore
@@ -165,9 +179,11 @@ k exec deploy/takserver-api -n takserver -c takserver-api -- cat /conf/CoreConfi
 echo "::endgroup::"
 
 echo "::group::takserver-api stack of the protocol_version failure"
-k logs deploy/takserver-api -n takserver -c takserver-api --tail=4000 2>/dev/null |
-  grep -B2 -A45 'protocol_version' | grep -vE 'ExceptionTranslationFilter|FilterChainProxy|OncePerRequestFilter|org.apache.(catalina|coyote|tomcat)|java.base/(java.lang|sun.nio)' |
-  head -70 | redact || true
+k logs deploy/takserver-api -n takserver -c takserver-api 2>/dev/null |
+  "${here}/redact-then-filter.sh" --grep 'protocol_version' --before 2 --after 45 \
+    --grep-v 'ExceptionTranslationFilter|FilterChainProxy|OncePerRequestFilter|org.apache.(catalina|coyote|tomcat)|java.base/(java.lang|sun.nio)' \
+    --tail 70 ||
+  echo "omitted unsanitizable protocol stack"
 echo "::endgroup::"
 
 # Say whether the cluster Secret and each rendered file have a client secret.

@@ -39,7 +39,7 @@ fi
 pattern='^('
 pattern+='bundle/'
 pattern+='|\.github/workflows/full-core\.yaml'
-pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|redact-logs|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
+pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|redact-logs|redact-then-filter|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
 pattern+='|tasks\.yaml'
 pattern+='|tasks/test\.yaml'
 pattern+='|tests/(backup-restore|db-dump-secret|local-path-local|grafana-alerts|falco-events|portal|uptime-probes|loki-client|exemptions)[^/]*'

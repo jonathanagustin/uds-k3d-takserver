@@ -44,6 +44,18 @@ class LogUploadGateTests(unittest.TestCase):
                 self.assertNotIn("/tmp/uds-", body)
             self.assertGreater(gated, 0, path.name)
 
+    def test_k3s_and_container_logs_are_redacted_before_they_are_filtered(self):
+        dump = (ROOT / ".github" / "scripts" / "dump-memory.sh").read_text()
+        k3s = dump.split("k3s starts, errors, and shutdown lines", 1)[1].split("done", 1)[0]
+        self.assertIn("redact-then-filter.sh", k3s)
+        self.assertNotIn("| grep", k3s)
+        self.assertNotIn("--tail=", k3s)
+        test = (ROOT / ".github" / "workflows" / "test.yaml").read_text()
+        cloudtak = test.split("CloudTAK pod details", 1)[1].split("Node memory", 1)[0]
+        self.assertIn("redact-then-filter.sh", cloudtak)
+        self.assertNotIn("--tail=", cloudtak)
+        self.assertNotIn("playwright", cloudtak.lower())
+
     def test_raw_tmp_logs_are_not_an_upload_path(self):
         for path in WORKFLOWS:
             text = path.read_text()

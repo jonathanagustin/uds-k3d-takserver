@@ -3,8 +3,10 @@
 
 """Rendered TAK config must not survive the log redactor."""
 
+import gzip
 import importlib.util
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -140,3 +142,53 @@ class RedactLogsTests(unittest.TestCase):
         body = target.read_bytes()
         self.assertNotIn(OIDC.encode("utf-8"), body)
         self.assertNotIn(b"\0", body)
+
+    def test_multiline_secret_is_removed_before_a_tail_could_split_it(self):
+        raw = f'level=error secret="{OIDC[:8]}\n{OIDC[8:]}"\nkept\n'
+        text, count = redact.redact_text(raw)
+        self.assertGreaterEqual(count, 1)
+        self.assertNotIn(OIDC, text)
+        self.assertNotIn(OIDC[:8], text)
+        self.assertNotIn(OIDC[8:], text)
+        self.assertIn('secret="[REDACTED]"', text)
+        self.assertIn("kept", text)
+
+    def test_archive_bytes_are_not_left_in_place(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-logs.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "api.log.gz"
+            target.write_bytes(gzip.compress(f'secret="{OIDC}"\n'.encode("utf-8")))
+            result = subprocess.run(
+                ["python3", str(script), str(target)],
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            body = target.read_bytes()
+            self.assertNotIn(OIDC.encode("utf-8"), body)
+            self.assertIn(b"omitted: unsanitizable file", body)
+
+    def test_symlink_target_outside_the_tree_is_not_read_or_modified(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-logs.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside"
+            outside.mkdir()
+            secret = outside / "hid.log"
+            secret.write_text(f'secret="{OIDC}"\n', encoding="utf-8")
+            link = root / "link.log"
+            link.symlink_to(secret)
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "via-dir").symlink_to(outside, target_is_directory=True)
+            result = subprocess.run(
+                ["python3", str(script), str(link), str(nested)],
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(secret.read_text(encoding="utf-8"), f'secret="{OIDC}"\n')
+            self.assertFalse(link.is_symlink())
+            self.assertNotIn(OIDC, link.read_text(encoding="utf-8"))
+            self.assertFalse((nested / "via-dir").is_symlink())
+            self.assertNotIn(OIDC, (nested / "via-dir").read_text(encoding="utf-8"))

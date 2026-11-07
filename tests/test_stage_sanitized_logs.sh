@@ -71,6 +71,86 @@ else
   ok "a file written after the marker is not uploadable"
 fi
 
+outside="${work}/outside"
+mkdir -p "${outside}"
+printf 'secret="%s"\n' "${sentinel}" > "${outside}/hid.log"
+ln -s "${outside}/hid.log" "${work}/link.log"
+linked="${work}/linked-stage"
+if "${stage}" "${linked}" "${work}/link.log"; then
+  bad "file symlink staging exited 0"
+else
+  if [[ -e "${linked}" ]]; then
+    bad "file symlink staging left ${linked}"
+  elif [[ "$(cat "${outside}/hid.log")" != "secret=\"${sentinel}\"" ]]; then
+    bad "file symlink staging modified the outside target"
+  else
+    ok "file symlink is refused and the outside target is unchanged"
+  fi
+fi
+
+tree="${work}/tree"
+mkdir -p "${tree}"
+ln -s "${outside}" "${tree}/via"
+dirlink="${work}/dirlink-stage"
+if "${stage}" "${dirlink}" "${tree}"; then
+  bad "directory symlink staging exited 0"
+else
+  if [[ -e "${dirlink}" ]]; then
+    bad "directory symlink staging left ${dirlink}"
+  elif [[ "$(cat "${outside}/hid.log")" != "secret=\"${sentinel}\"" ]]; then
+    bad "directory symlink staging modified the outside target"
+  else
+    ok "directory symlink is refused and the outside target is unchanged"
+  fi
+fi
+
+printf 'secret="%s"\n' "${sentinel}" | gzip > "${work}/api.log.gz"
+archived="${work}/archive-stage"
+if "${stage}" "${archived}" "${work}/api.log.gz"; then
+  bad "gzip staging exited 0"
+else
+  if [[ -e "${archived}" ]]; then
+    bad "gzip staging left ${archived}"
+  elif ! gzip -dc "${work}/api.log.gz" | grep -q "${sentinel}"; then
+    bad "gzip staging modified the source archive"
+  else
+    ok "gzip archive is not staged"
+  fi
+fi
+
+printf 'not-a-png' > "${work}/shot.png"
+binary="${work}/binary-stage"
+if "${stage}" "${binary}" "${work}/shot.png"; then
+  bad "png staging exited 0"
+else
+  if [[ -e "${binary}" ]]; then
+    bad "png staging left ${binary}"
+  else
+    ok "png is not staged as a sanitized log"
+  fi
+fi
+
+marked_link="${work}/marked-link"
+mkdir -p "${marked_link}/payload"
+printf 'plain\n' > "${marked_link}/payload/a.log"
+printf 'sanitized\n' > "${marked_link}/SANITIZED"
+ln -s "${outside}/hid.log" "${marked_link}/payload/leak.log"
+if "${stage}" --check "${marked_link}"; then
+  bad "a symlink passed --check"
+else
+  ok "a symlink does not pass --check"
+fi
+
+marked_gz="${work}/marked-gz"
+mkdir -p "${marked_gz}/payload"
+printf 'sanitized\n' > "${marked_gz}/SANITIZED"
+cp "${work}/api.log.gz" "${marked_gz}/payload/api.log.gz"
+if "${stage}" --check "${marked_gz}"; then
+  bad "a gzip file passed --check"
+else
+  ok "a gzip file does not pass --check"
+fi
+
 if (( fails > 0 )); then
   echo "${fails} case(s) failed" >&2
   exit 1

@@ -15,10 +15,10 @@ Usage:
   redact-logs.py --stdout F  redact one file onto stdout without rewriting it
 
 A file that contains a NUL or is not valid UTF-8 is not passed through.
-Rewriting replaces it with a one-line omission and exits non-zero. Stdout
-modes print the omission and exit non-zero, and do not print the original
-bytes. Image, archive, and compressed suffixes are left unchanged because
-they are not log text.
+Archives, compressed logs, images, and symlinks are not log text this script
+can redact. Rewriting replaces each of those with a one-line omission and
+exits non-zero. It does not follow a symlink and does not leave the original
+bytes in place. Stdout modes print the omission and exit non-zero.
 """
 
 import os
@@ -83,7 +83,12 @@ PATTERNS = (
         re.IGNORECASE,
     ),
 )
-SKIP_SUFFIXES = (".gz", ".zip", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".webm", ".mp4", ".tar", ".zst")
+# These are not rewritten as text. Leaving them unchanged would publish the
+# original bytes from a successful sanitize, so they are omitted instead.
+UNSUPPORTED_SUFFIXES = (
+    ".gz", ".tgz", ".zip", ".tar", ".zst", ".bz2", ".xz", ".7z",
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".webm", ".mp4",
+)
 
 
 class Unsanitizable(Exception):
@@ -115,16 +120,28 @@ def decode_log(raw):
         raise Unsanitizable("utf-8") from exc
 
 
+def _unsupported_name(path):
+    return path.lower().endswith(UNSUPPORTED_SUFFIXES)
+
+
 def _write_omission(path):
+    """Replace path with a regular file. A symlink is removed, not followed."""
     tmp = path + ".omit"
     with open(tmp, "w", encoding="utf-8") as handle:
         handle.write(OMITTED)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if os.path.islink(path):
+        os.unlink(path)
     os.replace(tmp, path)
 
 
 def redact_file(path):
     """Rewrite one file. Return (count, unsafe). Unsafe files keep no original bytes."""
-    if path.endswith(SKIP_SUFFIXES):
+    if os.path.islink(path) or _unsupported_name(path):
+        _write_omission(path)
+        return 0, True
+    if not os.path.isfile(path):
         return 0, False
     try:
         with open(path, "rb") as handle:
@@ -144,10 +161,20 @@ def redact_file(path):
 
 
 def walk(path):
-    if os.path.isfile(path):
+    """Yield files and symlinks. Do not follow a symlink into another tree."""
+    if os.path.islink(path) or os.path.isfile(path):
         yield path
         return
-    for root, _dirs, files in os.walk(path):
+    if not os.path.isdir(path):
+        return
+    for root, dirs, files in os.walk(path, followlinks=False):
+        linked = []
+        for name in dirs:
+            candidate = os.path.join(root, name)
+            if os.path.islink(candidate):
+                linked.append(name)
+                yield candidate
+        dirs[:] = [name for name in dirs if name not in linked]
         for name in files:
             yield os.path.join(root, name)
 
@@ -169,13 +196,14 @@ def main(argv):
     if argv == ["-"]:
         return _stdout_bytes(sys.stdin.buffer.read())
     if len(argv) == 2 and argv[0] == "--stdout":
+        # A symlink is not opened, so its target is neither printed nor modified.
+        if os.path.islink(argv[1]) or _unsupported_name(argv[1]):
+            sys.stdout.write(OMITTED)
+            return 1
         try:
             with open(argv[1], "rb") as handle:
                 raw = handle.read()
         except OSError:
-            sys.stdout.write(OMITTED)
-            return 1
-        if argv[1].endswith(SKIP_SUFFIXES):
             sys.stdout.write(OMITTED)
             return 1
         return _stdout_bytes(raw)

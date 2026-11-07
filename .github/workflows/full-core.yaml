@@ -229,8 +229,7 @@ jobs:
           ./.github/scripts/stage-sanitized-logs.sh "${dest}" \
             out \
             /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log \
-            /tmp/uds-containerd-logs /tmp/k3d-uds-*.log \
-            tests/.playwright/screenshots
+            /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
           echo "ok=true" >> "${GITHUB_OUTPUT}"
           echo "dir=${dest}" >> "${GITHUB_OUTPUT}"
 
@@ -268,7 +267,6 @@ jobs:
             ${{ steps.sanitize.outputs.dir }}/payload/out/grafana-search.json
             ${{ steps.sanitize.outputs.dir }}/payload/out/prometheus-tak-rules.json
             ${{ steps.sanitize.outputs.dir }}/payload/out/alertmanager-alerts.json
-            ${{ steps.sanitize.outputs.dir }}/payload/tests/.playwright/screenshots/tak-dashboard.png
           if-no-files-found: warn
           retention-days: 14
 
@@ -289,16 +287,6 @@ jobs:
         with:
           name: kubectl-top-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
           path: ${{ steps.sanitize.outputs.dir }}/payload/out/kubectl-top.txt
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload portal screenshots
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
-        timeout-minutes: 5
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: portal-tiles-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.uniq.outputs.suffix }}
-          path: ${{ steps.sanitize.outputs.dir }}/payload/tests/.playwright/screenshots
           if-no-files-found: warn
           retention-days: 14
 

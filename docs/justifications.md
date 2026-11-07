@@ -136,3 +136,63 @@ The same script writes every Falco event whose payload names `takserver`, `cloud
 1. Keep the matcher as narrow as it can be. Never use `.*`.
 2. Name only the policies the workload triggers.
 3. Add a section above with the policy, matcher, reason, and what would remove it.
+
+## Airgap validation
+
+The Test workflow adds `validate-install (amd64, airgap)`. It retrieves the slim
+checkpoint and creates the package and test bundle first. Before it deploys TAK
+or CloudTAK, `.github/scripts/node-airgap.py` installs a dedicated filter chain
+inside each k3d server and agent container's network namespace. Both node-origin
+`OUTPUT` and pod-forwarded `FORWARD` traffic are covered. The host firewall,
+Docker daemon, and other containers are unchanged. Network namespaces have
+[separate firewall rules](https://man7.org/linux/man-pages/man7/network_namespaces.7.html).
+
+The allow list comes from the cluster's Docker networks, Kubernetes pod CIDRs,
+and existing Service addresses. It also covers the ambient mesh's synthetic DNS
+addresses and IPv6 link-local discovery. Other IPv4 and IPv6 destinations are
+rejected. Docker's embedded DNS forwarder is rejected separately so it cannot
+relay external queries through the runner. Kubernetes DNS and the tenant
+and passthrough gateways are checked by the existing `test:all` suite.
+
+A public-IP HTTP control has to succeed from every node before blocking and
+fail after blocking. This distinguishes enforcement from an endpoint outage or
+a DNS lookup failure. The suite then installs and starts TAK and CloudTAK from
+the packaged images, creates the test identities, and runs `test:all`, including
+SSO, client certificates, CoT streaming, file transfer, and the CloudTAK map.
+`basemap.enabled=false` removes the external tile source. The browser test still
+checks sign-in and the TAK connection, and requires no packaged basemap or tile
+requests in this variant. The last step repeats the denied control and prints
+filter counters.
+
+This is a node and workload egress test. The test runner remains online for
+package signature verification and host-side test dependencies. It can still
+reach the Kubernetes API and GitHub; it is not a test of an offline workstation.
+The trusted runner and Docker bridge services stay reachable from the nodes.
+
+An EXIT/signal trap restores the dedicated chains, and an `always()` workflow
+step retries restoration after a step timeout or cancellation. Restoration
+removes only this test's chain and jumps. A killed or unreachable runner may
+prevent cleanup; GitHub then destroys that job's ephemeral cluster.
+
+Run it on Linux with Docker and a fresh test cluster using `uds run test-airgap`.
+The node image must provide `wget`, `iptables`, and, when IPv6 is enabled,
+`ip6tables`. The job fails instead of silently leaving an address family open.
+The optional Docker integration test exercises local allowed and denied
+networks, a still-reachable host connection, packet counters, and restoration:
+
+```bash title="Check firewall isolation with local Docker traffic"
+docker build --secret id=ca,src=/etc/ssl/certs/ca-certificates.crt \
+  -t tak-airgap-firewall-test tests/fixtures/airgap
+AIRGAP_FIREWALL_INTEGRATION=1 python3 -B -m unittest tests.test_node_airgap -v
+```
+
+Set `AIRGAP_FIREWALL_IPV6=1` as well to exercise IPv6 Docker networks on a
+host with IPv6 packet filtering. The managed development environment supports
+the IPv4 test but cannot create an IPv6 Docker network because its kernel lacks
+the IPv6 filter table. The production guard still refuses to proceed with an
+enabled but unfilterable IPv6 stack.
+
+The local firewall test does not establish that the full application suite has
+passed without egress. That result comes from the airgap CI job; keep issue
+[#256](https://github.com/jonathanagustin/uds-k3d-takserver/issues/256) open until
+that job completes successfully.

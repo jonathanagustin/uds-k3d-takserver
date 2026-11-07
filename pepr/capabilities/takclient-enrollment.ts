@@ -51,14 +51,26 @@ export async function enroll(
       !cert.keyUsage?.includes("1.3.6.1.5.5.7.3.2") || leaf.validity.notAfter <= now || leaf.validity.notBefore > now) {
     throw new Error("TAK enrollment certificate has invalid subject, usage or validity");
   }
-  return { certPem, keyPem, serial: leaf.serialNumber.toLowerCase(), fingerprint: fingerprint(certPem), notAfter: leaf.validity.notAfter };
+  return {
+    certPem,
+    keyPem,
+    serial: leaf.serialNumber.toLowerCase(),
+    fingerprint: fingerprint(certPem),
+    notBefore: leaf.validity.notBefore,
+    notAfter: leaf.validity.notAfter,
+  };
 }
 
 export async function revokeEnrolled(tak: TakApi, tls: TakTls, hash: string): Promise<void> {
   const lookup = await tak.request(tls, "GET", `/Marti/api/certadmin/cert/${encodeURIComponent(hash)}`);
   if (lookup.status !== 200) throw new Error(`TAK certificate lookup returned HTTP ${lookup.status}`);
   const body = responseJson(lookup.body);
-  const id = (body.data ?? body).id;
+  const row = body.data ?? body;
+  // A retry after a successful revoke must not fail user cleanup. TAK keeps
+  // the row and sets revocationDate; that is the state we want.
+  const revokedAt = row.revocationDate;
+  if (typeof revokedAt === "string" && revokedAt.length > 0) return;
+  const id = row.id;
   if (!/^[1-9][0-9]*$/.test(String(id))) throw new Error("TAK certificate lookup has no valid id");
   const result = await tak.request(tls, "DELETE", `/Marti/api/certadmin/cert/revoke/${id}`);
   if (result.status !== 200) throw new Error(`TAK certificate revoke returned HTTP ${result.status}`);

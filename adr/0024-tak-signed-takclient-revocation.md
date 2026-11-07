@@ -93,6 +93,12 @@ keeps Ready false, and a failed finalization retains the Secret and finalizer.
 The random file-user password is written to watcher-private state before
 creating the user, so retries and messaging restarts can reuse it. `spec.validityDays` is
 retained for compatibility but deprecated and ignored; TAK sets the lifetime.
+Renewal uses the last third of the validity on the enrolled certificate, so a
+shorter global lifetime does not reissue on the next reconcile. Deleting the
+Basic enrollment user is fail-closed: a failed `delete-user` keeps the device
+Secret, the private enrollment entry, and the finalizer. A retry is idempotent
+when the certificate row already has `revocationDate` or the file user is
+already gone.
 
 A locally signed legacy certificate still uses the reload fallback. The CRL
 stores `reload-at`, and subsequent CRL writes keep `uds.dev/pod-reload: true`

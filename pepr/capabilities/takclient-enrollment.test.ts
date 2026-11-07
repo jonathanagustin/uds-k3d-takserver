@@ -48,6 +48,7 @@ test("TAK enroll uses a signed CSR, Basic auth and the returned certificate life
   };
   const issued = await enroll({ request }, tls, ca, "client.one", "secret", NOW);
   assert.equal(issued.serial, "02");
+  assert.equal(issued.notBefore.toISOString(), "2026-11-07T11:59:00.000Z");
   assert.equal(issued.notAfter.toISOString(), "2026-11-08T12:00:00.000Z");
   assert.equal(new X509Certificate(issued.certPem).subject, "CN=client.one\nO=TAK\nOU=UDS");
   assert.equal(issued.keyPem.includes("PRIVATE KEY"), true);
@@ -108,4 +109,16 @@ test("certadmin revocation validates the lookup and never treats errors as succe
   }
   await assert.rejects(revokeEnrolled({ request: async (_tls, method) =>
     method === "GET" ? { status: 200, body: '{"id":1}' } : { status: 503, body: "" } }, tls, "AA"), /HTTP 503/);
+  const already: string[] = [];
+  await revokeEnrolled({ request: async (_tls, method, path) => {
+    already.push(`${method} ${path}`);
+    return { status: 200, body: '{"data":{"revocationDate":"2026-11-07T00:00:00.000Z"}}' };
+  } }, tls, "AA:BB");
+  assert.deepEqual(already, ["GET /Marti/api/certadmin/cert/AA%3ABB"]);
+  const emptyDate: string[] = [];
+  await revokeEnrolled({ request: async (_tls, method, path) => {
+    emptyDate.push(`${method} ${path}`);
+    return { status: 200, body: method === "GET" ? '{"data":{"id":4,"revocationDate":""}}' : "" };
+  } }, tls, "CC");
+  assert.deepEqual(emptyDate, ["GET /Marti/api/certadmin/cert/CC", "DELETE /Marti/api/certadmin/cert/revoke/4"]);
 });

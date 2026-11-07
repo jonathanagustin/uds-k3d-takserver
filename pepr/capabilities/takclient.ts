@@ -6,7 +6,7 @@
 // that row before deleting its file user and Secret. The CRL is a backstop;
 // only legacy certificates still require a pod reload.
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, X509Certificate } from "node:crypto";
 import type { Cluster, SecretDoc } from "../cluster.ts";
 import {
   buildCrl,
@@ -32,6 +32,7 @@ export const KEYSTORE_SECRET = "takserver-keystore";
 export const CERTS_SECRET = "takserver-certs";
 export const CERT_CONFIGMAP = "cert-migration";
 export const SERIAL = `${GROUP}/serial`;
+export const NOT_BEFORE = `${GROUP}/not-before`;
 export const NOT_AFTER = `${GROUP}/not-after`;
 export const FINGERPRINT = `${GROUP}/fingerprint`;
 export const ISSUER = `${GROUP}/issuer`;
@@ -358,18 +359,40 @@ export async function revoke(cluster: Cluster, ca: Ca, serial: string, notAfter:
   });
 }
 
-// Reissue legacy certificates once, missing/mismatched Secrets, changed
-// callsigns, and certificates with less than ten days remaining. TAK owns
-// the global lifetime; deprecated spec.validityDays no longer controls it.
+function finiteWindow(notBefore: number, notAfter: number): { notBefore: number; notAfter: number } | undefined {
+  if (!Number.isFinite(notBefore) || !Number.isFinite(notAfter) || notAfter <= notBefore) return undefined;
+  return { notBefore, notAfter };
+}
+
+// The certificate TAK signed is the lifetime. Annotations are only a fallback
+// when the PEM cannot be read. spec.validityDays is ignored, and so is a
+// fixed fraction of the old 30-day default: a 7-day global certificate would
+// otherwise be inside the last ten days on the reconcile that issued it.
+function issuedValidity(secret: SecretDoc & { metadata?: { annotations?: Record<string, string> } }): { notBefore: number; notAfter: number } | undefined {
+  const pem = decode(secret.data?.["client.pem"]);
+  if (pem) {
+    try {
+      const cert = new X509Certificate(pem);
+      return finiteWindow(Date.parse(cert.validFrom), Date.parse(cert.validTo));
+    } catch {
+      // A damaged PEM falls through to the dates stored at enrollment.
+    }
+  }
+  const stored = secret.metadata!.annotations!;
+  return finiteWindow(Date.parse(stored[NOT_BEFORE] ?? ""), Date.parse(stored[NOT_AFTER] ?? ""));
+}
+
+// Reissue legacy certificates once, missing or mismatched Secrets, changed
+// callsigns, and certificates in the last third of the lifetime TAK issued.
 export function needsIssue(client: TakClientDoc, secret: SecretDoc & { metadata?: { annotations?: Record<string, string> } } | undefined, now: Date): boolean {
   const annotations = secret?.metadata?.annotations ?? {};
   const serial = client.metadata?.annotations?.[SERIAL];
   if (!secret || !serial || annotations[SERIAL] !== serial || annotations[CALLSIGN] !== client.spec?.callsign || annotations[ISSUER] !== "tak") {
     return true;
   }
-  const days = DEFAULT_DAYS;
-  const notAfter = new Date(annotations[NOT_AFTER] ?? 0).getTime();
-  return notAfter - now.getTime() < (days * DAY) / 3;
+  const window = issuedValidity(secret);
+  if (!window) return true;
+  return window.notAfter - now.getTime() < (window.notAfter - window.notBefore) / 3;
 }
 
 export function streamHost(domain: string): string {
@@ -442,7 +465,7 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
       const issued = await enroll(deps.tak, admin, ca, callsign, userPassword, now);
       const password = randomBytes(16).toString("hex");
       notAfter = issued.notAfter.toISOString();
-      const annotations = { [SERIAL]: issued.serial, [NOT_AFTER]: notAfter,
+      const annotations = { [SERIAL]: issued.serial, [NOT_BEFORE]: issued.notBefore.toISOString(), [NOT_AFTER]: notAfter,
         [FINGERPRINT]: issued.fingerprint, [CALLSIGN]: callsign, [ISSUER]: "tak" };
       const data = secretData(callsign, issued, ca, streamHost(deps.domain), password);
       await cluster.applySecretWithAnnotations(CLIENT_NAMESPACE, name,
@@ -486,11 +509,19 @@ export async function finalizeTakClient(client: TakClientDoc, deps: Deps): Promi
     }
   }
   if (serial) await revoke(cluster, ca, serial, annotations[NOT_AFTER], deps.now(), annotations[ISSUER] !== "tak");
-  if (callsign && admin) {
+  // The Basic file user can enroll again. Do not drop the Secret or the
+  // finalizer until TAK confirms that user is gone. 400 and 404 are already
+  // gone, so a retry after a successful delete is safe.
+  if (callsign) {
+    if (!admin) {
+      deps.log(`TakClient ${name}: the TAK admin certificate is missing, so the enrollment user cannot be deleted yet`);
+      return false;
+    }
     try {
       await unregister(deps.tak, admin, callsign);
     } catch (err) {
       deps.log(`TakClient ${name}: ${(err as Error).message}`);
+      return false;
     }
   }
   await cluster.deleteSecret(CLIENT_NAMESPACE, secretName(client));

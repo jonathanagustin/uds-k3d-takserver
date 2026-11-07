@@ -201,7 +201,11 @@ require_upgrade_log() {
     return 0
   fi
   echo "pod ${ns}/${pod} did not log an in-place PostgreSQL 15 upgrade" >&2
-  k logs -n "${ns}" "${pod}" -c "${container}" --tail=80 2>&1 | python3 "${root}/.github/scripts/redact-logs.py" - >&2 || true
+  local filter="${root}/.github/scripts/redact-then-filter.sh"
+  echo "current log:" >&2
+  k logs -n "${ns}" "${pod}" -c "${container}" 2>&1 | "${filter}" --tail 80 >&2 || echo "omitted unsanitizable log" >&2
+  echo "previous log:" >&2
+  printf '%s\n' "${logs}" | "${filter}" --tail 80 >&2 || echo "omitted unsanitizable log" >&2
   exit 1
 }
 sso() {

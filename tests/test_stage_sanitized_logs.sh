@@ -151,6 +151,51 @@ else
   ok "a gzip file does not pass --check"
 fi
 
+mkdir -p "${work}/fifodir"
+mkfifo "${work}/fifodir/pipe.log"
+fifo_stage="${work}/fifo-stage"
+set +e
+timeout 5 "${stage}" "${fifo_stage}" "${work}/fifodir" >/tmp/fifo-stage.out 2>&1
+fifo_code=$?
+set -e
+if [[ "${fifo_code}" -eq 124 ]]; then
+  bad "fifo staging blocked on a read"
+elif [[ "${fifo_code}" -eq 0 || -e "${fifo_stage}" ]]; then
+  bad "fifo staging succeeded or left ${fifo_stage}"
+elif [[ -p "${work}/fifodir/pipe.log" ]]; then
+  ok "fifo is refused and was not opened"
+else
+  bad "fifo staging removed the source fifo"
+fi
+
+marked_fifo="${work}/marked-fifo"
+mkdir -p "${marked_fifo}/payload"
+printf 'sanitized\n' > "${marked_fifo}/SANITIZED"
+mkfifo "${marked_fifo}/payload/pipe.log"
+set +e
+timeout 5 "${stage}" --check "${marked_fifo}" >/dev/null 2>&1
+check_code=$?
+set -e
+if [[ "${check_code}" -eq 124 ]]; then
+  bad "--check blocked on a fifo"
+elif [[ "${check_code}" -eq 0 ]]; then
+  bad "a fifo passed --check"
+else
+  ok "a fifo does not pass --check"
+fi
+
+python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "${work}/node.sock"
+sock_stage="${work}/sock-stage"
+if "${stage}" "${sock_stage}" "${work}/node.sock"; then
+  bad "socket staging exited 0"
+elif [[ -e "${sock_stage}" ]]; then
+  bad "socket staging left ${sock_stage}"
+elif [[ -S "${work}/node.sock" ]]; then
+  ok "socket is refused and was not opened"
+else
+  bad "socket staging removed the source socket"
+fi
+
 if (( fails > 0 )); then
   echo "${fails} case(s) failed" >&2
   exit 1

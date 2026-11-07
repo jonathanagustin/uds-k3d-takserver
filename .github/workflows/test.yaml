@@ -490,7 +490,7 @@ jobs:
             exit 0
           fi
           k get pods -n cloudtak -o wide || true
-          k describe pods -n cloudtak | python3 .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable pod description"
+          k describe pods -n cloudtak | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable pod description"
           for pod in $(k get pods -n cloudtak -o name); do
             for c in $(k get "${pod}" -n cloudtak -o jsonpath='{.spec.containers[*].name}'); do
               echo "::group::${pod} ${c}"

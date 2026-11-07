@@ -236,7 +236,7 @@ if k get deploy tak-health -n takserver >/dev/null 2>&1; then
       up=1
       break
     fi
-    k logs deploy/tak-health -n takserver --tail=6 2>&1 | tee -a "${log}" || true
+    k logs deploy/tak-health -n takserver 2>&1 | "${root}/.github/scripts/redact-then-filter.sh" --tail 6 | tee -a "${log}" || true
     sleep 10
   done
   if [[ "${up}" -ne 1 ]]; then
@@ -262,7 +262,7 @@ if k get deploy tak-health -n takserver >/dev/null 2>&1; then
     fi
     sleep 10
   done
-  k logs deploy/tak-health -n takserver --tail=6 2>&1 | tee -a "${log}" || true
+  k logs deploy/tak-health -n takserver 2>&1 | "${root}/.github/scripts/redact-then-filter.sh" --tail 6 | tee -a "${log}" || true
   say "uptime: scaling TAK messaging back to ${mreplicas}"
   restore_messaging
   if [[ "${dropped}" -ne 1 ]]; then

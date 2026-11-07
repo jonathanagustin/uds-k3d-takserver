@@ -5,6 +5,8 @@
 
 import gzip
 import importlib.util
+import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -85,6 +87,21 @@ class RedactLogsTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(text, 'secret="[REDACTED]"')
         self.assertNotIn("a&amp;b", text)
+
+    def test_escaped_quotes_match_values_that_cross_lines(self):
+        half1, half2 = OIDC[:8], OIDC[8:]
+        forms = (
+            f'secret=&quot;{half1}\n{half2}&quot;\n',
+            f"secret=&apos;{half1}\n{half2}&apos;\n",
+            f'secret=\\"{half1}\n{half2}\\"\n',
+        )
+        for raw in forms:
+            text, count = redact.redact_text(raw)
+            self.assertGreaterEqual(count, 1, raw)
+            self.assertNotIn(OIDC, text)
+            self.assertNotIn(half1, text)
+            self.assertNotIn(half2, text)
+            self.assertIn("[REDACTED]", text)
 
     def test_html_escaped_and_backslash_quotes(self):
         raw = (
@@ -192,3 +209,60 @@ class RedactLogsTests(unittest.TestCase):
             self.assertNotIn(OIDC, link.read_text(encoding="utf-8"))
             self.assertFalse((nested / "via-dir").is_symlink())
             self.assertNotIn(OIDC, (nested / "via-dir").read_text(encoding="utf-8"))
+
+    def test_fifo_is_not_opened(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-logs.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            fifo = Path(tmp) / "pipe.log"
+            os.mkfifo(fifo)
+            result = subprocess.run(
+                ["timeout", "5", "python3", str(script), str(fifo)],
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 124)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn(OIDC.encode("utf-8"), result.stdout)
+            self.assertFalse(stat.S_ISFIFO(os.lstat(fifo).st_mode))
+            self.assertIn(b"omitted: unsanitizable file", fifo.read_bytes())
+
+    def test_directory_listing_error_is_not_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            secret = root / "a.log"
+            secret.write_text(f'secret="{OIDC}"\n', encoding="utf-8")
+            real = redact.os.walk
+
+            def boom(path, topdown=True, onerror=None, followlinks=False):
+                if onerror is not None:
+                    onerror(OSError(13, "denied", str(path)))
+                return iter(())
+
+            redact.os.walk = boom
+            try:
+                code = redact.main([str(root)])
+            finally:
+                redact.os.walk = real
+            self.assertEqual(code, 1)
+            self.assertEqual(secret.read_text(encoding="utf-8"), f'secret="{OIDC}"\n')
+
+    def test_shell_filter_is_not_run_with_python(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-then-filter.sh"
+        raw = f'secret="{OIDC}"\n'.encode("utf-8")
+        as_python = subprocess.run(
+            ["python3", str(script)],
+            input=raw,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(as_python.returncode, 0)
+        self.assertNotIn(OIDC.encode("utf-8"), as_python.stdout)
+        as_shell = subprocess.run(
+            ["bash", str(script)],
+            input=raw,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(as_shell.returncode, 0)
+        self.assertNotIn(OIDC.encode("utf-8"), as_shell.stdout)
+        self.assertIn(b"[REDACTED]", as_shell.stdout)

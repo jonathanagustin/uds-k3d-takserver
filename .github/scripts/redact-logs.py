@@ -23,6 +23,7 @@ bytes in place. Stdout modes print the omission and exit non-zero.
 
 import os
 import re
+import stat
 import sys
 
 MASK = "[REDACTED]"
@@ -57,17 +58,19 @@ PATTERNS = (
         re.IGNORECASE,
     ),
     # secret=&quot;value&quot; and secret=&apos;value&apos;
+    # [\s\S] crosses newlines. A tail that kept only the second line of an
+    # escaped value used to leave that fragment unmatched.
     re.compile(
-        rf"(\b(?:{NAMES})\s*=\s*&quot;){NOT_MASK}(?:(?!&quot;).)*(&quot;)",
+        rf"(\b(?:{NAMES})\s*=\s*&quot;){NOT_MASK}(?:(?!&quot;)[\s\S])*(&quot;)",
         re.IGNORECASE,
     ),
     re.compile(
-        rf"(\b(?:{NAMES})\s*=\s*&apos;){NOT_MASK}(?:(?!&apos;).)*(&apos;)",
+        rf"(\b(?:{NAMES})\s*=\s*&apos;){NOT_MASK}(?:(?!&apos;)[\s\S])*(&apos;)",
         re.IGNORECASE,
     ),
     # secret=\"value\" as it appears in JSON and escaped shell logs.
     re.compile(
-        rf"(\b(?:{NAMES})\s*=\s*\\\"){NOT_MASK}(?:(?!\\\").)*(\\\")",
+        rf"(\b(?:{NAMES})\s*=\s*\\\"){NOT_MASK}(?:(?!\\\")[\s\S])*(\\\")",
         re.IGNORECASE,
     ),
     # Unquoted secret=value, TAK_OIDC_CLIENT_SECRET=value, client_secret=value.
@@ -124,30 +127,56 @@ def _unsupported_name(path):
     return path.lower().endswith(UNSUPPORTED_SUFFIXES)
 
 
+def _lstat(path):
+    try:
+        return os.lstat(path)
+    except OSError as exc:
+        raise Unsanitizable("stat") from exc
+
+
+def _regular(mode):
+    return stat.S_ISREG(mode)
+
+
 def _write_omission(path):
-    """Replace path with a regular file. A symlink is removed, not followed."""
+    """Replace path with a regular file. Do not open a symlink, fifo, or device."""
     tmp = path + ".omit"
-    with open(tmp, "w", encoding="utf-8") as handle:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(OMITTED)
         handle.flush()
         os.fsync(handle.fileno())
-    if os.path.islink(path):
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        info = None
+    except OSError as exc:
+        os.unlink(tmp)
+        raise Unsanitizable("stat") from exc
+    if info is not None and not _regular(info.st_mode):
         os.unlink(path)
     os.replace(tmp, path)
 
 
 def redact_file(path):
-    """Rewrite one file. Return (count, unsafe). Unsafe files keep no original bytes."""
-    if os.path.islink(path) or _unsupported_name(path):
+    """Rewrite one file. Return (count, unsafe). Unsafe nodes keep no original bytes.
+
+    A fifo, socket, or device is not opened. A read or stat error is unsafe so
+    the caller cannot treat the tree as sanitized.
+    """
+    info = _lstat(path)
+    if not _regular(info.st_mode) or _unsupported_name(path):
         _write_omission(path)
         return 0, True
-    if not os.path.isfile(path):
-        return 0, False
     try:
         with open(path, "rb") as handle:
             raw = handle.read()
-    except OSError:
-        return 0, False
+    except OSError as exc:
+        try:
+            _write_omission(path)
+        except OSError:
+            pass
+        raise Unsanitizable("read") from exc
     try:
         text = decode_log(raw)
     except Unsanitizable:
@@ -161,22 +190,35 @@ def redact_file(path):
 
 
 def walk(path):
-    """Yield files and symlinks. Do not follow a symlink into another tree."""
-    if os.path.islink(path) or os.path.isfile(path):
+    """Yield files and non-directories. Do not follow a symlink.
+
+    os.walk ignores listing errors unless onerror is set. A directory that
+    cannot be listed would otherwise be marked sanitized with its files unread.
+    """
+    info = _lstat(path)
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
         yield path
         return
-    if not os.path.isdir(path):
-        return
-    for root, dirs, files in os.walk(path, followlinks=False):
+    problems = []
+
+    def onerror(err):
+        problems.append(err)
+
+    for root, dirs, files in os.walk(path, followlinks=False, onerror=onerror):
         linked = []
         for name in dirs:
             candidate = os.path.join(root, name)
-            if os.path.islink(candidate):
-                linked.append(name)
-                yield candidate
+            try:
+                if stat.S_ISLNK(os.lstat(candidate).st_mode):
+                    linked.append(name)
+                    yield candidate
+            except OSError as exc:
+                problems.append(exc)
         dirs[:] = [name for name in dirs if name not in linked]
         for name in files:
             yield os.path.join(root, name)
+    if problems:
+        raise Unsanitizable("walk")
 
 
 def _stdout_bytes(raw):
@@ -196,8 +238,13 @@ def main(argv):
     if argv == ["-"]:
         return _stdout_bytes(sys.stdin.buffer.read())
     if len(argv) == 2 and argv[0] == "--stdout":
-        # A symlink is not opened, so its target is neither printed nor modified.
-        if os.path.islink(argv[1]) or _unsupported_name(argv[1]):
+        # A symlink, fifo, socket, or device is not opened.
+        try:
+            info = os.lstat(argv[1])
+        except OSError:
+            sys.stdout.write(OMITTED)
+            return 1
+        if not _regular(info.st_mode) or _unsupported_name(argv[1]):
             sys.stdout.write(OMITTED)
             return 1
         try:
@@ -211,10 +258,19 @@ def main(argv):
     files = 0
     unsafe = 0
     for arg in argv:
-        if not os.path.exists(arg):
+        if not os.path.lexists(arg):
             continue
-        for path in walk(arg):
-            count, bad = redact_file(path)
+        try:
+            paths = list(walk(arg))
+        except Unsanitizable:
+            print("redact-logs: could not read every log path", file=sys.stderr)
+            return 1
+        for path in paths:
+            try:
+                count, bad = redact_file(path)
+            except Unsanitizable:
+                print("redact-logs: could not read every log path", file=sys.stderr)
+                return 1
             if bad:
                 unsafe += 1
             elif count:

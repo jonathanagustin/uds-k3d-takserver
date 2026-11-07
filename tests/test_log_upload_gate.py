@@ -11,6 +11,26 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+DIAGNOSTICS = (
+    ".github/workflows/test.yaml",
+    ".github/workflows/full-core.yaml",
+    ".github/workflows/benchmark.yaml",
+    ".github/workflows/atak-e2e.yaml",
+    ".github/workflows/atak-vm.yaml",
+    ".github/scripts/dump-memory.sh",
+    ".github/scripts/runner-wedge-probe.sh",
+    ".github/scripts/print-logs.sh",
+    "tasks/test.yaml",
+    "tests/upgrade.sh",
+    "tests/backup-restore.sh",
+    "tests/uptime-probes.sh",
+    "tests/quic.sh",
+    "tests/takclient.sh",
+    "tests/oidc-render.sh",
+    "atak/ci/viewer-smoke.sh",
+    "atak/ci/e2e.sh",
+    "bench/run.py",
+)
 WORKFLOWS = (
     ROOT / ".github" / "workflows" / "test.yaml",
     ROOT / ".github" / "workflows" / "full-core.yaml",
@@ -55,6 +75,32 @@ class LogUploadGateTests(unittest.TestCase):
         self.assertIn("redact-then-filter.sh", cloudtak)
         self.assertNotIn("--tail=", cloudtak)
         self.assertNotIn("playwright", cloudtak.lower())
+
+    def test_diagnostics_redact_before_they_truncate(self):
+        for rel in DIAGNOSTICS:
+            text = (ROOT / rel).read_text()
+            self.assertNotIn("python3 .github/scripts/redact-then-filter.sh", text, rel)
+            self.assertNotIn("python3 ${", text, rel)
+            for lineno, line in enumerate(text.splitlines(), 1):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if "python3" in line and "redact-then-filter.sh" in line:
+                    self.fail(f"{rel}:{lineno} runs the shell redactor with python3")
+                body = line.replace("--tail=-1", "")
+                marks = [body.find(token) for token in ("redact", '"${filter}"', "${filter}")]
+                marks = [pos for pos in marks if pos != -1]
+                redact_at = min(marks) if marks else -1
+                tails = [body.find(token) for token in ("--tail", "| tail", "|tail")]
+                tails = [pos for pos in tails if pos != -1]
+                if not tails:
+                    continue
+                tail_at = min(tails)
+                dumps_a_log = any(token in body for token in ("logs", "describe", "dmesg", "docker logs"))
+                if not dumps_a_log:
+                    continue
+                if redact_at == -1 or tail_at < redact_at:
+                    self.fail(f"{rel}:{lineno} truncates before redaction: {stripped}")
 
     def test_raw_tmp_logs_are_not_an_upload_path(self):
         for path in WORKFLOWS:

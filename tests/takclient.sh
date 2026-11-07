@@ -83,8 +83,9 @@ spec:
   validityDays: 2
 YAML
 if ! k wait takclient "${name}" -n takclients --for=condition=Ready --timeout=300s; then
-  k get takclient "${name}" -n takclients -o yaml >&2
-  k logs -n pepr-system -l pepr.dev/controller=watcher --tail=100 >&2 || true
+  filter="${script_dir}/../.github/scripts/redact-then-filter.sh"
+  k get takclient "${name}" -n takclients -o yaml 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable takclient" >&2
+  k logs -n pepr-system -l pepr.dev/controller=watcher 2>/dev/null | "${filter}" --tail 100 >&2 || echo "omitted unsanitizable watcher log" >&2
   exit 1
 fi
 k get takclient "${name}" -n takclients -o jsonpath='{.status.conditions[0].message}{"\n"}'

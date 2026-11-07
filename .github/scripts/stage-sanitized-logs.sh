@@ -34,20 +34,28 @@ unsupported() {
 }
 
 check_dir() {
-  local dest="$1" marker newer link bad
+  local dest="$1" marker newer special bad
   marker="${dest}/SANITIZED"
-  [[ -f "${marker}" ]] || return 1
-  [[ -d "${dest}/payload" ]] || return 1
-  link="$(find -P "${dest}/payload" -type l -print -quit 2>/dev/null || true)"
-  [[ -z "${link}" ]] || return 1
-  bad="$(find -P "${dest}/payload" -type f -print 2>/dev/null | while IFS= read -r path; do
+  [[ -f "${marker}" && ! -L "${marker}" ]] || return 1
+  [[ -d "${dest}/payload" && ! -L "${dest}/payload" ]] || return 1
+  # A listing error is a failure. Hiding it would let a marker through while
+  # a fifo, device, or unreadable directory stayed in the tree.
+  if ! special="$(find -P "${dest}/payload" \( ! -type d ! -type f \) -print -quit)"; then
+    return 1
+  fi
+  [[ -z "${special}" ]] || return 1
+  if ! bad="$(find -P "${dest}/payload" -type f -print | while IFS= read -r path; do
     if unsupported "${path}"; then
       printf '%s\n' "${path}"
       break
     fi
-  done)"
+  done)"; then
+    return 1
+  fi
   [[ -z "${bad}" ]] || return 1
-  newer="$(find -P "${dest}/payload" -type f -newer "${marker}" -print -quit 2>/dev/null || true)"
+  if ! newer="$(find -P "${dest}/payload" -type f -newer "${marker}" -print -quit)"; then
+    return 1
+  fi
   [[ -z "${newer}" ]]
 }
 
@@ -62,31 +70,46 @@ rm -rf "${dest}"
 mkdir -p "${dest}/payload"
 
 cleanup() {
-  rm -rf "${dest}"
+  local status=$?
+  # Any failure, including a refused fifo or a redactor error, removes the
+  # tree. A successful exit leaves it for the upload.
+  if [[ "${status}" -ne 0 ]]; then
+    rm -rf "${dest}"
+  fi
 }
-trap cleanup ERR INT TERM
+trap cleanup EXIT
 
-copy_one() {
-  local src="$1" parent link
-  [[ -e "${src}" || -L "${src}" ]] || return 0
-  if [[ -L "${src}" ]]; then
-    echo "stage-sanitized-logs: refusing symlink ${src}" >&2
+# Refuse before cp -a. cp -a would reproduce a symlink, fifo, socket, or device
+# node, and opening a fifo to inspect it would block.
+refuse_special() {
+  local path="$1" found
+  if [[ -L "${path}" || -p "${path}" || -S "${path}" || -b "${path}" || -c "${path}" ]]; then
+    echo "stage-sanitized-logs: refusing non-regular ${path}" >&2
     return 1
   fi
-  if [[ -d "${src}" ]]; then
-    link="$(find -P "${src}" -type l -print -quit 2>/dev/null || true)"
-    if [[ -n "${link}" ]]; then
-      echo "stage-sanitized-logs: refusing symlink ${link}" >&2
+  if [[ -d "${path}" ]]; then
+    if ! found="$(find -P "${path}" \( ! -type d ! -type f \) -print -quit)"; then
+      echo "stage-sanitized-logs: could not read ${path}" >&2
+      return 1
+    fi
+    if [[ -n "${found}" ]]; then
+      echo "stage-sanitized-logs: refusing non-regular ${found}" >&2
       return 1
     fi
   fi
+}
+
+copy_one() {
+  local src="$1" parent
+  [[ -e "${src}" || -L "${src}" ]] || return 0
+  refuse_special "${src}"
   if [[ "${src}" = /* ]]; then
     parent="${dest}/payload$(dirname "${src}")"
   else
     parent="${dest}/payload/$(dirname "${src}")"
   fi
   mkdir -p "${parent}"
-  # The source has no symlink. cp -a then copies regular files and directories.
+  # The source has no non-regular node. cp -a then copies files and directories.
   cp -a "${src}" "${parent}/"
 }
 
@@ -96,7 +119,6 @@ done
 
 python3 "${here}/redact-logs.py" "${dest}/payload"
 # The marker is last. --check rejects a payload file newer than it, and also
-# rejects a symlink or unsupported file that a later bug left behind.
+# rejects a symlink, fifo, device, or unsupported file left behind.
 printf 'sanitized\n' > "${dest}/SANITIZED"
 check_dir "${dest}"
-trap - ERR INT TERM

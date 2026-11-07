@@ -333,6 +333,18 @@ async function adrPages() {
   });
 }
 
+async function howToPages() {
+  const names = (await readdir(path.join(repoRoot, 'docs/how-to')))
+    .filter((name) => name.endsWith('.md') && !name.startsWith('_'))
+    .sort();
+  return names.map((name, index) => ({
+    src: `docs/how-to/${name}`,
+    slug: `how-to/${name.replace(/\.md$/, '')}`,
+    label: name.replace(/\.md$/, ''),
+    order: index + 1,
+  }));
+}
+
 async function writePage(page, byPath, videos, headings) {
   const raw = await readFile(path.join(repoRoot, page.src), 'utf8');
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
@@ -365,12 +377,13 @@ ${items}
 }
 
 const adrs = await adrPages();
-for (const page of adrs) {
+const howTos = await howToPages();
+for (const page of [...adrs, ...howTos]) {
   const raw = await readFile(path.join(repoRoot, page.src), 'utf8');
   page.heading = firstHeading(raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')) || page.label;
   page.label = page.heading;
 }
-const all = [...pages, ...adrs];
+const all = [...pages, ...adrs, ...howTos];
 const byPath = new Map(all.map((page) => [page.src, page.slug]));
 const headings = new Map();
 for (const page of all) {

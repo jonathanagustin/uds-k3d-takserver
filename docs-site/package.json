@@ -10,7 +10,7 @@
   "scripts": {
     "sync": "node scripts/sync-docs.mjs",
     "dev": "node scripts/sync-docs.mjs && astro dev",
-    "build": "node scripts/sync-docs.mjs && astro build",
+    "build": "node scripts/sync-docs.mjs && astro build && node --test scripts/how-to.test.mjs",
     "preview": "astro preview",
     "test": "playwright test"
   },

@@ -27,6 +27,9 @@ On k3d, host port 443 is the tenant gateway. Tests port-forward `svc/passthrough
 
 ### Uptime probes and Portal tiles
 
+For a step-by-step check, see
+[Check uptime probes and Portal tiles](how-to/check-uptime-and-portal.md).
+
 The Package `expose` entries also tell UDS Core what to monitor and what to show in UDS Portal:
 
 | Expose entry | Portal tile | Uptime check |

@@ -26,6 +26,9 @@ CI tags each image with the ATAK version and a hash of its inputs, for example `
 
 ## Deploy
 
+For deployment, provisioning, and connection checks in one procedure, see
+[Connect the ATAK test device](how-to/connect-atak-test-device.md).
+
 ```bash
 uds zarf package create atak --set ATAK_TAG=5.5.1.10 --confirm
 uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=uds.dev --confirm

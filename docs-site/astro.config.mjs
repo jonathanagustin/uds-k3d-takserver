@@ -99,6 +99,10 @@ export default defineConfig({
           ],
         },
         {
+          label: 'How-to guides',
+          items: [{ autogenerate: { directory: 'how-to' } }],
+        },
+        {
           label: 'Architecture',
           items: [
             { label: 'Networking', slug: 'networking' },

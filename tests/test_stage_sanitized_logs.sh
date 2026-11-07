@@ -196,6 +196,128 @@ else
   bad "socket staging removed the source socket"
 fi
 
+# kubelet container aliases. docker cp of /var/log keeps
+# containers/<pod>_<namespace>_<container>-<id>.log -> ../pods/.../<n>.log
+# The pods file is the log. The alias must not be uploaded as a symlink.
+kroot="${work}/k8s-log"
+poddir="${kroot}/pods/cloudtak_cloudtak-78468f484c-kpr9j_uid/sso"
+mkdir -p "${poddir}" "${kroot}/containers"
+printf 'secret="%s"\n' "${sentinel}" > "${poddir}/0.log"
+ln -s "../pods/cloudtak_cloudtak-78468f484c-kpr9j_uid/sso/0.log" \
+  "${kroot}/containers/cloudtak-78468f484c-kpr9j_cloudtak_sso-hash.log"
+kdest="${work}/k8s-stage"
+if "${stage}" "${kdest}" "${kroot}"; then
+  copied="$(find "${kdest}/payload" -type f -name 0.log -print -quit)"
+  aliases="$(find -P "${kdest}/payload" -path '*/containers/*' -print)"
+  if "${stage}" --check "${kdest}" \
+    && [[ -n "${copied}" && ! -L "${copied}" ]] \
+    && [[ -z "${aliases}" ]] \
+    && ! find -P "${kdest}/payload" \( ! -type d ! -type f \) -print -quit | grep -q . \
+    && ! grep -q "${sentinel}" "${copied}" \
+    && grep -q 'secret="\[REDACTED\]"' "${copied}"; then
+    ok "container alias is omitted and the pods log is redacted"
+  else
+    bad "container alias was not staged as the pods log"
+  fi
+else
+  bad "container alias staging failed"
+fi
+
+# A link that is not the containers -> pods alias still fails closed,
+# including one that stays inside the tree.
+inside="${work}/inside-link"
+mkdir -p "${inside}/pods/ns_pod_uid/c" "${inside}/other"
+printf 'secret="%s"\n' "${sentinel}" > "${inside}/pods/ns_pod_uid/c/0.log"
+ln -s "../pods/ns_pod_uid/c/0.log" "${inside}/other/alias.log"
+inside_dest="${work}/inside-stage"
+if "${stage}" "${inside_dest}" "${inside}"; then
+  bad "non-alias internal symlink staging exited 0"
+elif [[ -e "${inside_dest}" ]]; then
+  bad "non-alias internal symlink staging left ${inside_dest}"
+else
+  ok "a symlink outside containers/ is refused"
+fi
+
+# containers/*.log is not a blanket exception. The target has to be the pods file.
+notpods="${work}/notpods"
+mkdir -p "${notpods}/pods/ns_pod_uid/c" "${notpods}/elsewhere" "${notpods}/containers"
+printf 'secret="%s"\n' "${sentinel}" > "${notpods}/pods/ns_pod_uid/c/0.log"
+printf 'secret="%s"\n' "${sentinel}" > "${notpods}/elsewhere/note.log"
+ln -s "../elsewhere/note.log" "${notpods}/containers/note.log"
+notpods_dest="${work}/notpods-stage"
+if "${stage}" "${notpods_dest}" "${notpods}"; then
+  bad "containers link outside pods staging exited 0"
+elif [[ -e "${notpods_dest}" ]]; then
+  bad "containers link outside pods staging left ${notpods_dest}"
+else
+  ok "a containers link is refused unless it names a pods file"
+fi
+
+dangling="${work}/dangling"
+mkdir -p "${dangling}/pods/ns_pod_uid/c" "${dangling}/containers"
+printf 'secret="%s"\n' "${sentinel}" > "${dangling}/pods/ns_pod_uid/c/0.log"
+ln -s "../pods/ns_pod_uid/c/missing.log" "${dangling}/containers/missing.log"
+dangling_dest="${work}/dangling-stage"
+if "${stage}" "${dangling_dest}" "${dangling}"; then
+  bad "dangling container alias staging exited 0"
+elif [[ -e "${dangling_dest}" ]]; then
+  bad "dangling container alias staging left ${dangling_dest}"
+else
+  ok "a dangling container alias is refused"
+fi
+
+external="${work}/external"
+mkdir -p "${external}/pods/ns_pod_uid/c" "${external}/containers"
+printf 'kept\n' > "${external}/pods/ns_pod_uid/c/0.log"
+ln -s "${outside}/hid.log" "${external}/containers/evil.log"
+external_dest="${work}/external-stage"
+if "${stage}" "${external_dest}" "${external}"; then
+  bad "external container symlink staging exited 0"
+elif [[ -e "${external_dest}" ]]; then
+  bad "external container symlink staging left ${external_dest}"
+elif [[ "$(cat "${outside}/hid.log")" != "secret=\"${sentinel}\"" ]]; then
+  bad "external container symlink modified the outside target"
+else
+  ok "an external container symlink is refused and the target is unchanged"
+fi
+
+# pods/ itself is a symlink, so the alias would leave the tree.
+escaped="${work}/escaped"
+mkdir -p "${escaped}/containers" "${outside}/via/ns/c"
+printf 'secret="%s"\n' "${sentinel}" > "${outside}/via/ns/c/0.log"
+ln -s "${outside}/via" "${escaped}/pods"
+ln -s "../pods/ns/c/0.log" "${escaped}/containers/via.log"
+escaped_dest="${work}/escaped-stage"
+if "${stage}" "${escaped_dest}" "${escaped}"; then
+  bad "pods symlink staging exited 0"
+elif [[ -e "${escaped_dest}" ]]; then
+  bad "pods symlink staging left ${escaped_dest}"
+elif [[ "$(cat "${outside}/via/ns/c/0.log")" != "secret=\"${sentinel}\"" ]]; then
+  bad "pods symlink staging modified the outside target"
+else
+  ok "a pods symlink is not followed"
+fi
+
+mkfifo "${outside}/pipe.log"
+held="${work}/held"
+mkdir -p "${held}/pods/ns_pod_uid/c" "${held}/containers"
+printf 'kept\n' > "${held}/pods/ns_pod_uid/c/0.log"
+ln -s "${outside}/pipe.log" "${held}/containers/held.log"
+held_dest="${work}/held-stage"
+set +e
+timeout 5 "${stage}" "${held_dest}" "${held}" >/tmp/held-stage.out 2>&1
+held_code=$?
+set -e
+if [[ "${held_code}" -eq 124 ]]; then
+  bad "external fifo symlink was opened"
+elif [[ "${held_code}" -eq 0 || -e "${held_dest}" ]]; then
+  bad "external fifo symlink staging succeeded or left ${held_dest}"
+elif [[ -p "${outside}/pipe.log" ]]; then
+  ok "an external fifo symlink is refused and was not opened"
+else
+  bad "external fifo symlink staging removed the fifo"
+fi
+
 if (( fails > 0 )); then
   echo "${fails} case(s) failed" >&2
   exit 1

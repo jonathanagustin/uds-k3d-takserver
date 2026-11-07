@@ -21,12 +21,16 @@
 #
 # Each check prints PASS or FAIL. The last line is the count. Exit status is
 # non-zero when any check fails. The whole script stops after 10 minutes.
-# That is an enforced budget, not a sum of the curl ceilings.
+# The supervisor puts this process in its own group, signals that group, and
+# SIGKILLs anything still running after a short grace period. A foreground
+# timeout does not signal descendants, so a child holding a pipe would keep
+# the run alive. This is an enforced budget, not a sum of the curl ceilings.
 set -euo pipefail
 
 if [[ "${API_SMOKE_BOUNDED:-}" != 1 ]]; then
   export API_SMOKE_BOUNDED=1
-  exec timeout --foreground 600 "$0" "$@"
+  _api_smoke_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec "${_api_smoke_here}/../.github/scripts/checked-pipe.sh" supervise 600 5 "$0" "$@"
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -170,7 +170,8 @@ jobs:
         shell: bash
         # Passing amd64 run 42180258293 finished in 68m45s, including a
         # completed api-smoke. The 70 minute cap cut later amd64 runs after
-        # that smoke had started. api-smoke.sh now stops itself at 10 minutes.
+        # that smoke had started. api-smoke.sh now stops itself at 10 minutes
+        # and SIGKILLs that process group after a short grace period.
         # 80 minutes is 69 minutes (that measured pass, rounded up) plus that
         # enforced 10 minute smoke budget. It is a measured margin plus the
         # cap, not a sum of curl or handshake ceilings. A restore rollout

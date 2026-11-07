@@ -618,5 +618,64 @@ class RestoreTests(unittest.TestCase):
             runner.snapshot(self.CONFIG, run)
 
 
+class RestartEvidenceTests(unittest.TestCase):
+    def test_a_restart_still_fails_and_records_the_exit(self):
+        text = runner.format_restart(
+            "cloudtak-abc",
+            [{
+                "name": "cloudtak",
+                "restartCount": 2,
+                "lastState": {"terminated": {"reason": "Error", "exitCode": 1, "signal": 0}},
+                "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+            }],
+            {"cloudtak": "previous=Error: listen failed"},
+        )
+        self.assertIn("cloudtak-abc restarted, so this is not a cold start", text)
+        self.assertIn("previous reason=Error exit=1 signal=0", text)
+        self.assertIn("waiting=CrashLoopBackOff", text)
+        self.assertIn("listen failed", text)
+
+    def test_ready_age_redacts_the_previous_log_and_still_fails(self):
+        pod = {
+            "metadata": {"name": "cloudtak-abc"},
+            "status": {"containerStatuses": [{
+                "name": "cloudtak",
+                "restartCount": 1,
+                "lastState": {"terminated": {"reason": "Error", "exitCode": 137, "signal": 9}},
+                "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+            }]},
+        }
+
+        class Result:
+            def __init__(self, stdout, returncode=0):
+                self.stdout = stdout
+                self.stderr = ""
+                self.returncode = returncode
+
+        def fake_kubectl(*args, check=True):
+            if args[:2] == ("get", "pods") and args[3] == "takserver":
+                return Result(json.dumps({"items": []}))
+            if args[:2] == ("get", "pods") and args[3] == "cloudtak":
+                return Result(json.dumps({"items": [pod]}))
+            if args[0] == "logs":
+                return Result('secret="restart-sentinel-value"\nError: listen failed\n')
+            return Result("", returncode=1)
+
+        original = runner.kubectl
+        runner.kubectl = fake_kubectl
+        try:
+            age, errors = runner.ready_age()
+        finally:
+            runner.kubectl = original
+        self.assertIsNone(age)
+        joined = " ".join(errors)
+        self.assertIn("restarted, so this is not a cold start", joined)
+        self.assertIn("exit=137", joined)
+        self.assertIn("signal=9", joined)
+        self.assertNotIn("restart-sentinel-value", joined)
+        self.assertIn("[REDACTED]", joined)
+        self.assertIn("listen failed", joined)
+
+
 if __name__ == "__main__":
     unittest.main()

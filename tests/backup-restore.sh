@@ -19,7 +19,7 @@ mkdir -p out
 : > "${log}"
 
 say() {
-  printf '%s\n' "$*" | tee -a "${log}"
+  printf '%sZ +%ss %s\n' "$(date -u +%H:%M:%S)" "${SECONDS}" "$*" | tee -a "${log}"
 }
 
 k() {
@@ -546,8 +546,16 @@ k scale deploy/cloudtak -n cloudtak --replicas=1
 k rollout status deploy/cloudtak -n cloudtak --timeout=600s
 
 say "api-smoke with the client certificate issued before the backup"
+smoke_rc=0
+set +e
 TAK_CLIENT_CERT="${cert_dir}/admin.pem" \
   TAK_CLIENT_KEY="${cert_dir}/admin.key" \
-  ./tests/api-smoke.sh
+  ./tests/api-smoke.sh 2>&1 | tee -a "${log}"
+smoke_rc=${PIPESTATUS[0]}
+set -e
+say "api-smoke exit ${smoke_rc}"
+if [[ "${smoke_rc}" -ne 0 ]]; then
+  exit "${smoke_rc}"
+fi
 
 say "backup-restore passed"

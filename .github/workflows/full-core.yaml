@@ -168,10 +168,15 @@ jobs:
       - name: Deploy full core and test
         run: uds run test-full-core --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         shell: bash
-        # The deploy and tests take about 50 minutes on amd64, and the
-        # TakClient test adds about 5 for its TAK restart. This fires before
-        # the job limit so the log and dump steps below still run.
-        timeout-minutes: 70
+        # A passing amd64 run finished in 68.8 minutes (42180258293). The two
+        # amd64 failures at 70.2 minutes had already printed the post-restore
+        # api-smoke line and had not printed backup-restore passed. api-smoke
+        # does not retry: each curl stops at 40s, the stream holds are 15s,
+        # and the clientEndPoints poll is at most two attempts of ten 2s
+        # sleeps. 80 minutes is that measured pass plus one healthy smoke,
+        # with room for the same variance. It is not a hang allowance. Each
+        # restore rollout still fails the script at its own 600s.
+        timeout-minutes: 80
 
       # test:full-core writes out/falco-events.txt only when it reaches
       # tests/falco-events.sh, so an earlier failure left the upload below

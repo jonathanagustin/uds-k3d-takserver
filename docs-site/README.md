@@ -10,7 +10,7 @@ The README's demo players are GitHub `user-attachments` URLs, which only play on
 
 Pages then serves them as `video/mp4`. The posters in `public/demo/` are committed; the videos are gitignored. In CI a failed download fails the build. A local build without network keeps the download links and warns.
 
-`astro-mermaid` renders the `mermaid` code blocks as diagrams, in the light or dark theme.
+`astro-mermaid` renders the `mermaid` code blocks as diagrams, in the light or dark theme. Those diagrams set `htmlLabels` to false and do not use `<br>` or angle brackets. With HTML labels on, GitHub strips the label markup and the boxes draw empty.
 
 ```bash
 npm ci

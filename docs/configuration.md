@@ -65,6 +65,32 @@ The CI runners have 4 CPU and about 15984Mi on both architectures. TAK, CloudTAK
 
 Named overlays are in [Profiles](profiles.md). The package default stays `values/common-values.yaml`.
 
+## Portal tiles and classification banners
+
+The browser expose entries use `uds.dev/title` for their Portal titles. CloudTAK
+also supplies its own map icon. Set `exposeAnnotations` on `uds-takserver-config`
+or `uds-cloudtak` to add `portal.uds.dev/*` annotations or override the title and
+icon. For example, a bundle override for the CloudTAK chart is:
+
+```yaml title="CloudTAK Portal annotation override"
+overrides:
+  cloudtak:
+    uds-cloudtak:
+      values:
+        - path: exposeAnnotations
+          value:
+            uds.dev/title: Operations map
+```
+
+Put this under the TAK package's `overrides` in your bundle. The TAK browser
+entry accepts the same map under component `takserver`, chart
+`uds-takserver-config`. These overrides apply to browser entries; the client
+ports and health endpoint keep their hidden annotations.
+
+UDS Core classification banners also work on these tenant-gateway browser
+hosts. Configure them in Core following the
+[classification banner guide](https://docs.defenseunicorns.com/core/how-to-guides/platform-features/enable-classification-banner/).
+
 ## Upstream chart values
 
 This package uses the TAK chart as published. Nothing under `src/takserver-cluster/deployments/helm` is copied into this repo. `charts/takserver/` is only the UDS Package and the ConfigMaps that chart mounts. It is not a fork of the TAK templates.

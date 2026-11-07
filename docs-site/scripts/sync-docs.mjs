@@ -26,7 +26,7 @@ const demoRelease = `${repoUrl}/releases/download/demo`;
 const demoDir = path.resolve(import.meta.dirname, '../public/demo');
 
 const pages = [
-  { src: 'README.md', slug: 'index', label: 'Getting started' },
+  { src: 'README.md', slug: 'getting-started', label: 'Getting started' },
   { src: 'CONTRIBUTING.md', slug: 'contributing', label: 'Contributing' },
   { src: 'docs/networking.md', slug: 'networking', label: 'Networking' },
   { src: 'docs/sso.md', slug: 'sso', label: 'Single sign-on' },
@@ -404,9 +404,9 @@ try {
 }
 for (const page of all) await writePage(page, byPath, videos, headings);
 await writeFile(path.join(outRoot, 'adr/index.md'), adrIndex(adrs));
-// Starlight's own /404 route reads this entry with getEntry(). draft keeps
-// it out of the [...slug] pages in a production build, so the two routes do
-// not both try to write /404.
+// Starlight's /404 route reads this entry with getEntry(). draft keeps it out
+// of the [...slug] pages, so the two routes do not both try to write /404.
+// DraftContentNotice.astro skips the draft banner for this entry.
 await writeFile(
   path.join(outRoot, '404.md'),
   `---
@@ -414,11 +414,18 @@ title: "Page not found"
 draft: true
 description: "That page is not in these guides."
 editUrl: false
+pagefind: false
 sidebar:
   hidden: true
 ---
 
-That page is not in these guides. The [overview](${siteHref('index', '')}) lists what is published.
+That page is not in these guides. The [home page](${siteHref('index', '')}) links to them.
 `,
 );
-console.log(`sync-docs: wrote ${all.length + 2} pages`);
+// The splash page is site-only. README.md is Getting started. A hash on the
+// home URL is forwarded to that page so older links keep their section.
+// home.mdx imports LegacyHomeHash from the copied path, src/content/docs/.
+const homePath = path.resolve(import.meta.dirname, '../src/home.mdx');
+const home = await readFile(homePath, 'utf8');
+await writeFile(path.join(outRoot, 'index.mdx'), home.endsWith('\n') ? home : `${home}\n`);
+console.log(`sync-docs: wrote ${all.length + 3} pages`);

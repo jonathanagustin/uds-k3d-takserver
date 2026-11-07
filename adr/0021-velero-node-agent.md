@@ -124,3 +124,69 @@ Keep the current owner until a staged migration is tested:
 
 The ownership change remains open in issue 258. No production override or
 Helm ownership metadata was changed by this investigation.
+
+### Follow-up: bootstrap and ownership mechanisms
+
+The admission ordering problem has a supported Core configuration path.
+Core 1.16.0's
+[`src/pepr/zarf.yaml`](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/zarf.yaml)
+includes the required component `uds-exemptions`, with chart `uds-exemptions`
+in namespace `uds-policy-exemptions`. Its
+[`exemptions.custom` value](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/uds-exemptions/values.yaml)
+accepts named Exemptions. `core-base` installs that component before the bundle
+reaches `core-backup-restore`.
+
+An opt-in migration bundle can therefore set
+`core-base.overrides.uds-exemptions.uds-exemptions.values` at path
+`exemptions.custom`, with an entry named `velero-node-agent-bootstrap` containing
+exactly the existing local Exemption's two `spec.exemptions` entries. The separate
+name avoids taking over the local chart's Exemption. Local rendering of the
+Core chart with Helm 4.3.1 confirmed that the resulting `spec` is identical to
+the enabled TAK chart's Exemption, including every policy and matcher. This
+does not broaden the privileged namespace or policy list. It also leaves the
+app-owned Exemption in place. An existing custom exemption list must be merged,
+not replaced, when preparing a real bundle override.
+
+UDS CLI 0.41.0's
+[bundle schema](https://github.com/defenseunicorns/uds-cli/blob/v0.41.0/uds.schema.json)
+has no bundle or package `actions`/`hooks` fields. A bundle-level `before` hook
+is not an available ordering mechanism in that version. Zarf component actions
+are supported, but introducing another package only for admission bootstrap is
+unnecessary when Core's existing exemption chart can do it.
+
+The installed UDS CLI 0.41.0 reports embedded Zarf 0.89.0, whose
+[`go.mod`](https://github.com/zarf-dev/zarf/blob/v0.89.0/go.mod) pins Helm 4.3.0.
+Helm's
+[`pkg/kube/client.go`](https://github.com/helm/helm/blob/v4.3.0/pkg/kube/client.go)
+fetches a live resource before deleting resources omitted by an upgrade, and
+skips deletion when the live annotation is `helm.sh/resource-policy: keep`.
+This means a controlled handoff can protect the existing DaemonSet before
+removing it from the TAK chart; the previous release manifest need not already
+contain that annotation. Source inspection establishes this deletion behavior,
+not the full transfer of release metadata or server-side field ownership.
+
+A migration still needs an opt-in local-chart owner setting and a tested
+orchestrator. Keep the legacy owner as the default. The forward test must
+establish the bootstrap exemption first, protect and transfer the existing
+DaemonSet's Helm ownership to release `velero` in namespace `velero`, enable the
+Core chart's agent and its new configuration, and then upgrade TAK with its
+local DaemonSet omitted. Check that the DaemonSet UID survives the old release's
+upgrade and that the agent reads the new configuration before deleting the old
+ConfigMap. Unknown existing release owners must stop the migration. A rollback
+must restore the old owner and configuration in the reverse order while the
+bootstrap exemption remains available; a raw rollback of either release alone
+is not established as safe.
+
+Test a fresh install, an existing local owner, retry after each intermediate
+failure, an unexpected owner, and reversal to the local owner. Verify live Helm
+release manifests, ownership annotations, field-manager conflicts, DaemonSet
+identity, Ready pods and completed backup/restore objects at the boundaries.
+Do not enable the Core owner in the standard full bundle until those checks
+pass on both architectures.
+
+A local minimal k3d test was attempted with the pinned Kubernetes 1.37.1 image
+digest. The managed Docker 29.9.2 daemon answered, but the k3s server repeatedly
+exited with code 1 before emitting startup logs; k3d could not get a ready API.
+The retained node reported no OOM kill or runtime error text. The test cluster
+was removed. No handoff or rollback result is claimed from that attempt, and
+no runtime owner switch is introduced here.

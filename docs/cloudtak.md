@@ -163,9 +163,12 @@ to skip. The browser suite currently uses the development `uds.dev` domain;
 without `--ui`, set `DOMAIN` for another test domain.
 
 Existing custom roots and the include-public/DoD settings are preserved. On
-exit, the script restores the original custom CA setting and namespace bundles,
-then explicitly restarts the consumers to remove temporary roots from cached
-trust stores. It uses resource-version checks and refuses to overwrite a
+exit, the script restores the saved custom CA setting and waits for the
+generated bundles. If an administrator changed public/DoD settings during the
+trial, cleanup preserves those new settings and roots while requiring the saved
+custom roots to return and all trial-only roots to disappear. With unchanged
+settings, it requires the original complete bundle. It then explicitly restarts
+the consumers to remove temporary roots from cached trust stores. It uses resource-version checks and refuses to overwrite a
 concurrent custom-CA edit. Temporary private keys stay in a private directory
 and are deleted. `out/trust-bundle-live.json` records CA fingerprints, pod UIDs,
 and cleanup success. `out/trust-bundle-original-ca.json` saves the original

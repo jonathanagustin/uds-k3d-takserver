@@ -31,6 +31,7 @@ class FakeKubectl:
         self.fail_after_patch = False
         self.fail_discovery = False
         self.discovery_checks = []
+        self.restart_calls = []
 
     def config(self):
         return copy.deepcopy(self.current)
@@ -59,7 +60,13 @@ class FakeKubectl:
 
     def bundle(self, _namespace):
         value = live.certs_value(self.current)
-        return "" if value is live.MISSING else base64.b64decode(value).decode()
+        content = "" if value is live.MISSING else base64.b64decode(value).decode()
+        flags = self.current.get("spec", {}).get("caBundle", {})
+        if flags.get("includePublicCerts"):
+            content += pem("public-root")
+        if flags.get("includeDoDCerts"):
+            content += pem("dod-root")
+        return content
 
     def pods(self):
         return {f"{ns}/{name}": {f"{name}-{self.generation}"} for ns, name in live.WORKLOADS}
@@ -70,7 +77,8 @@ class FakeKubectl:
             raise RuntimeError("SSO failed")
         return "SSO discovery passed"
 
-    def run(self, *_args):
+    def run(self, *args):
+        self.restart_calls.append(args)
         self.generation += 1
         return ""
 
@@ -97,14 +105,50 @@ class TrustBundleLiveTests(unittest.TestCase):
             self.assertEqual(operations[0]["path"], "/metadata/resourceVersion")
             self.assertTrue(all(op["path"] in ("/metadata/resourceVersion", "/spec/caBundle/certs") for op in operations))
 
-    def test_concurrent_non_certificate_settings_are_preserved(self):
+    def test_concurrent_flag_changes_preserve_new_roots_and_reach_cleanup_restarts(self):
+        for flag, value in (("includeDoDCerts", True), ("includePublicCerts", False)):
+            with self.subTest(flag=flag):
+                kube = FakeKubectl()
+                trial = live.Trial(kube, "uds.dev")
+                temporary = trial.phase(pem("temporary"))
+                kube.current["spec"]["caBundle"][flag] = value
+                # This fake now includes/removes public/DoD roots according to
+                # the flags, so the whole restored bundle differs from baseline.
+                with patch.object(live, "wait_for", side_effect=lambda check, *_args: check()):
+                    trial.restore()
+                self.assertEqual(kube.current["spec"]["caBundle"][flag], value)
+                self.assertEqual(live.certs_value(kube.current), kube.saved)
+                restored = live.fingerprints(kube.bundle("cloudtak"))
+                self.assertNotIn(temporary, restored)
+                self.assertTrue(live.fingerprints(pem("original")) <= restored)
+                if flag == "includeDoDCerts":
+                    self.assertTrue(live.fingerprints(pem("dod-root")) <= restored)
+                else:
+                    self.assertFalse(live.fingerprints(pem("public-root")) & restored)
+                self.assertEqual(len(kube.restart_calls), len(live.WORKLOADS))
+
+    def test_unchanged_flags_still_require_the_original_entire_bundle(self):
+        kube = FakeKubectl()
+        trial = live.Trial(kube, "uds.dev")
+        trial.phase(pem("temporary"))
+        bundle = kube.bundle
+        with patch.object(kube, "bundle", side_effect=lambda namespace: bundle(namespace) + pem("unexpected-root")), \
+                patch.object(live, "wait_for", side_effect=lambda check, *_args: check()):
+            with self.assertRaisesRegex(ValueError, "original CA bundles"):
+                trial.restore()
+        self.assertEqual(kube.restart_calls, [])
+
+    def test_concurrent_flags_do_not_allow_a_trial_root_to_survive_cleanup(self):
         kube = FakeKubectl()
         trial = live.Trial(kube, "uds.dev")
         trial.phase(pem("temporary"))
         kube.current["spec"]["caBundle"]["includeDoDCerts"] = True
-        trial.restore()
-        self.assertTrue(kube.current["spec"]["caBundle"]["includeDoDCerts"])
-        self.assertEqual(live.certs_value(kube.current), kube.saved)
+        bundle = kube.bundle
+        with patch.object(kube, "bundle", side_effect=lambda namespace: bundle(namespace) + pem("temporary")), \
+                patch.object(live, "wait_for", side_effect=lambda check, *_args: check()):
+            with self.assertRaisesRegex(ValueError, "removed trial roots"):
+                trial.restore()
+        self.assertEqual(kube.restart_calls, [])
 
     def test_missing_original_certs_are_removed_again(self):
         kube = FakeKubectl(existing=False)

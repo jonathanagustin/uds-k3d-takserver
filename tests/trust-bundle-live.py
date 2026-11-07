@@ -172,18 +172,37 @@ class Trial:
             operations[-1] = {"op": "remove", "path": "/spec/caBundle"}
         self.kube.patch(operations)
 
-        def original_bundles():
-            if any(fingerprints(self.kube.bundle(ns)) != saved for ns, saved in self.original_bundles.items()):
-                raise ValueError("original CA bundles have not returned")
+        saved_custom = fingerprints("" if self.saved is MISSING else base64.b64decode(self.saved).decode())
+        baseline = set().union(*self.original_bundles.values(), saved_custom)
+        trial_only = set().union(*(fingerprints(base64.b64decode(value).decode()) for value in self.issued)) - baseline
 
-        wait_for(original_bundles, "restore original namespace bundles", 180)
+        def non_custom_settings(config):
+            return {key: value for key, value in config.get("spec", {}).get("caBundle", {}).items() if key != "certs"}
+
+        def restored_bundles():
+            latest = self.kube.config()
+            if certs_value(latest) != self.saved:
+                raise ValueError("custom CA certs changed again during cleanup")
+            flags_changed = non_custom_settings(latest) != non_custom_settings(self.original)
+            for namespace, saved in self.original_bundles.items():
+                found = fingerprints(self.kube.bundle(namespace))
+                if flags_changed:
+                    # An administrator may have legitimately added or removed
+                    # public/DoD roots. Preserve those flags and roots, but still
+                    # require our saved custom roots and removal of trial roots.
+                    if not saved_custom <= found or trial_only & found:
+                        raise ValueError(f"{namespace} has not restored custom trust and removed trial roots")
+                elif found != saved:
+                    raise ValueError("original CA bundles have not returned")
+
+        wait_for(restored_bundles, "restore namespace trust without replacing concurrent CA settings", 180)
         # Empty original bundles are deleted by Core. Restart explicitly in
         # cleanup so a cached temporary root cannot survive a ConfigMap deletion.
         before = wait_for(self.kube.pods, "consumers ready before cleanup restart")
         for namespace, name in WORKLOADS:
             self.kube.run("rollout", "restart", f"deploy/{name}", "-n", namespace)
         wait_for(lambda: self.replaced_pods(before), "cleanup consumer rollouts")
-        print("Original Core custom CA setting and namespace bundles restored; consumers restarted", flush=True)
+        print("Saved Core custom CA setting restored and temporary roots removed; consumers restarted", flush=True)
 
 
 def generate_ca(directory, name):

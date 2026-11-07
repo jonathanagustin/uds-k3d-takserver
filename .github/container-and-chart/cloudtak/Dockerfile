@@ -48,6 +48,11 @@ FROM nginx:alpine3.24@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c
 RUN apk add --no-cache bash nodejs-current openssl
 COPY --from=built /home/etl/api /home/etl/api
 COPY --from=cloudtak-upstream /home/etl/app/dist /home/etl/app/dist
+# node-tak 12.31.1 (CloudTAK v13.112.3's lock) drops the TLS error listener
+# if 'end' arrives first. Fail the build if that handler is not the expected one.
+COPY patch-node-tak.mjs /tmp/patch-node-tak.mjs
+RUN node /tmp/patch-node-tak.mjs /home/etl/api/node_modules/@tak-ps/node-tak/dist/index.js \
+ && rm /tmp/patch-node-tak.mjs
 
 ARG CLOUDTAK_VERSION
 ARG UPSTREAM_SHA
@@ -63,6 +68,9 @@ COPY --chmod=0644 bootstrap.mjs basemap.mjs /home/etl/uds/
 COPY --chmod=0644 nginx-sso.conf nginx-sso-head.conf /home/etl/uds/
 # Next to dist/ and node_modules/ so its imports resolve like CloudTAK's.
 COPY --chmod=0644 sso.mjs /home/etl/api/uds-sso.mjs
+# --import runs uds-tak-error-guard.mjs. It imports tak-error-guard.mjs
+# from the same directory and @tak-ps/node-tak from node_modules here.
+COPY --chmod=0644 tak-error-guard.mjs uds-tak-error-guard.mjs /home/etl/api/
 
 ENV HOME=/tmp
 WORKDIR /home/etl/api

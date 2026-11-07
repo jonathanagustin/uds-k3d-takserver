@@ -272,7 +272,29 @@ for src in "$@"; do
   copy_one "${src}"
 done
 
+set +e
 python3 "${here}/redact-logs.py" "${dest}/payload"
+redact_rc=$?
+set -e
+# 1 is a read or listing failure. The tree may still hold original bytes.
+if [[ "${redact_rc}" -eq 1 ]]; then
+  exit 1
+fi
+if [[ "${redact_rc}" -ne 0 && "${redact_rc}" -ne 2 ]]; then
+  exit "${redact_rc}"
+fi
+# The redactor replaces an archive or image with a stub but keeps the name.
+# --check rejects that name, so drop it. A pod log that was not valid text
+# keeps a regular omission stub and the other logs stay.
+while IFS= read -r -d '' path; do
+  if unsupported "${path}"; then
+    rm -f "${path}"
+  fi
+done < <(find -P "${dest}/payload" -type f -print0)
+if ! find -P "${dest}/payload" -type f -print -quit | grep -q .; then
+  echo "stage-sanitized-logs: no log text remained" >&2
+  exit 1
+fi
 # The marker is last. --check rejects a payload file newer than it, and also
 # rejects a symlink, fifo, device, or unsupported file left behind.
 printf 'sanitized\n' > "${dest}/SANITIZED"

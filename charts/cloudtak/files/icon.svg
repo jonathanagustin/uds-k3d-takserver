@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="CloudTAK map">
+  <rect width="200" height="200" rx="32" fill="#1f4e79"/>
+  <path d="m24 66 50-18 52 18 50-18v104l-50 18-52-18-50 18z" fill="#fff"/>
+  <path d="M74 48v104m52-86v104" stroke="#1f4e79" stroke-width="6"/>
+  <path d="M100 34a25 25 0 0 0-25 25c0 19 25 43 25 43s25-24 25-43a25 25 0 0 0-25-25" fill="#2e9d5b"/>
+  <circle cx="100" cy="59" r="9" fill="#fff"/>
+</svg>

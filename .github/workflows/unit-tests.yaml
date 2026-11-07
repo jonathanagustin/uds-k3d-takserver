@@ -100,10 +100,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Node, uv, and UDS CLI
+      - name: Install Node, uv, Helm, and UDS CLI
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
-          install_args: node uv aqua:defenseunicorns/uds-cli
+          install_args: node uv helm aqua:defenseunicorns/uds-cli
           cache: true
 
       - name: Build the Pepr chart
@@ -112,4 +112,4 @@ jobs:
       - name: Package values follow the variables
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_expose_annotations -v

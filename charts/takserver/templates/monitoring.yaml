@@ -69,6 +69,29 @@ spec:
             severity: warning
           annotations:
             summary: A TAK container restarted more than 3 times in 15 minutes
+        {{- if include "takserver.healthEnabled" . }}
+        - alert: TAKCertificateExpiryWarning
+          expr: tak_certificate_not_after_seconds{namespace="takserver"} - time() < 30 * 86400
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: A TAK CA or passthrough server certificate expires in less than 30 days
+        - alert: TAKCertificateExpiryCritical
+          expr: tak_certificate_not_after_seconds{namespace="takserver"} - time() < 7 * 86400
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: A TAK CA or passthrough server certificate expires in less than 7 days
+        - alert: TAKCertificateReadFailed
+          expr: tak_certificate_read_success{namespace="takserver"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: TAK certificate expiry monitoring cannot read a public certificate
+        {{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap

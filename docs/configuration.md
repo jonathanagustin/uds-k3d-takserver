@@ -178,7 +178,28 @@ The API and messaging images load the Prometheus JMX (Java Management Extensions
 
 ## Monitoring
 
-When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
+When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods and, when health checks are enabled, `tak-health`. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
+
+The CloudTAK chart adds alerts for its Deployment and its PostGIS StatefulSet:
+scaling either to zero fires after two minutes, and one desired replica with no
+available or ready pod fires after ten minutes. A container that restarts more
+than three times in fifteen minutes raises a warning after five minutes.
+
+`tak-health` exposes `tak_certificate_not_after_seconds` and
+`tak_certificate_read_success` on `/metrics`. It reads only the public
+`ca.pem` and `takserver.pem` files projected from `cert-migration`, and receives
+no server private key or extra Kubernetes API permission. The latter PEM's
+first certificate is the generated server leaf used by the passthrough
+connectors on 8443, 8446 and 8089. The alerts fire after five minutes below
+30 days (warning) and 7 days (critical), including already expired certificates.
+A malformed or missing file raises `TAKCertificateReadFailed` instead of
+silently retaining an old expiry timestamp. Projected certificate updates are
+read on each scrape.
+
+These metrics describe the generated certificate files. A custom connector
+keystore must be monitored separately if it uses another certificate. The
+tenant gateway's certificate still uses Core's `UDSProbeTLSExpiry*` alerts.
+Setting `health.enabled=false` removes the expiry exporter and its alerts.
 
 ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". JVM heap, GC, and HTTP rate read the TAK API and messaging scrape. Postgres ready, pod restarts, messaging replicas, and container memory read kube-state-metrics and cAdvisor, which the full bundle already scrapes.
 

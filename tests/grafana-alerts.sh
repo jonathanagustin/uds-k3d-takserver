@@ -38,6 +38,7 @@ k get configmap takserver-loki-rules -n takserver >/dev/null
 work="$(mktemp -d)"
 pids=()
 messaging_scaled=0
+cloudtak_scaled=0
 restore_messaging() {
   if [[ "${messaging_scaled}" -ne 1 ]]; then
     return 0
@@ -48,6 +49,9 @@ restore_messaging() {
 cleanup() {
   local pid
   restore_messaging
+  if [[ "${cloudtak_scaled}" -eq 1 ]]; then
+    k scale deploy/cloudtak -n cloudtak --replicas=1 || true
+  fi
   for pid in "${pids[@]+"${pids[@]}"}"; do
     kill "${pid}" >/dev/null 2>&1 || true
   done
@@ -153,7 +157,15 @@ for _ in $(seq 1 18); do
     && grep -q 'TAKMessagingTargetDown' out/prometheus-tak-rules.json \
     && grep -q 'TAKJVMHeapHigh' out/prometheus-tak-rules.json \
     && grep -q 'TAKPodRestartLoop' out/prometheus-tak-rules.json \
-    && grep -q 'TAKDeploymentUnavailable' out/prometheus-tak-rules.json; then
+    && grep -q 'TAKDeploymentUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKTargetDown' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKDeploymentUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPostGISTargetDown' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPostGISUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPodRestartLoop' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateExpiryWarning' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateExpiryCritical' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateReadFailed' out/prometheus-tak-rules.json; then
     rules_ok=1
     break
   fi
@@ -164,6 +176,32 @@ if [[ "${rules_ok}" -ne 1 ]]; then
   exit 1
 fi
 echo "Prometheus /api/v1/rules lists the TAK alerts"
+
+expiry_ok=0
+for _ in $(seq 1 18); do
+  code="$(curl -sS -G -o out/prometheus-certificates.json -w '%{http_code}' --max-time 20 \
+    "http://127.0.0.1:9091/api/v1/query" \
+    --data-urlencode 'query=tak_certificate_not_after_seconds{namespace="takserver"}' || true)"
+  if [[ "${code}" == "200" ]] && python3 - <<'PY'
+import json
+import math
+import sys
+result = json.load(open("out/prometheus-certificates.json")).get("data", {}).get("result", [])
+certificates = {row.get("metric", {}).get("certificate") for row in result
+                if math.isfinite(float(row["value"][1])) and float(row["value"][1]) > 0}
+sys.exit(0 if certificates == {"ca", "server"} else 1)
+PY
+  then
+    expiry_ok=1
+    break
+  fi
+  sleep 10
+done
+if [[ "${expiry_ok}" -ne 1 ]]; then
+  echo "TAK CA and server certificate expiry metrics were not scraped" >&2
+  exit 1
+fi
+echo "Prometheus scraped the TAK CA and passthrough server expiry timestamps"
 
 scrape_ok=0
 for _ in $(seq 1 30); do
@@ -299,6 +337,8 @@ fi
 
 messaging_scaled=1
 k scale deploy/takserver-messaging -n takserver --replicas=0
+cloudtak_scaled=1
+k scale deploy/cloudtak -n cloudtak --replicas=0
 echo "grafana-alerts: test scaled takserver-messaging to 0"
 
 fired=0
@@ -308,11 +348,9 @@ for _ in $(seq 1 40); do
   if [[ "${code}" == "200" ]] && python3 -c '
 import json, sys
 alerts = json.load(open("out/alertmanager-alerts.json"))
-ok = any(
-    item.get("labels", {}).get("alertname") == "TAKMessagingTargetDown"
-    and item.get("status", {}).get("state") == "active"
-    for item in alerts
-)
+active = {item.get("labels", {}).get("alertname") for item in alerts
+          if item.get("status", {}).get("state") == "active"}
+ok = {"TAKMessagingTargetDown", "CloudTAKTargetDown"}.issubset(active)
 sys.exit(0 if ok else 1)
 '; then
     fired=1
@@ -321,10 +359,14 @@ sys.exit(0 if ok else 1)
   sleep 15
 done
 if [[ "${fired}" -ne 1 ]]; then
-  echo "TAKMessagingTargetDown did not reach active in Alertmanager" >&2
+  echo "TAKMessagingTargetDown and CloudTAKTargetDown did not both reach active in Alertmanager" >&2
   exit 1
 fi
 echo "grafana-alerts: TAKMessagingTargetDown is firing in Alertmanager"
+k scale deploy/cloudtak -n cloudtak --replicas=1
+cloudtak_scaled=0
+k rollout status deploy/cloudtak -n cloudtak --timeout=600s
+echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"
 
 if command -v docker >/dev/null 2>&1; then
   mkdir -p tests/.playwright/screenshots

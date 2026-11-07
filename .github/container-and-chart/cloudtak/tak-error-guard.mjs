@@ -24,6 +24,10 @@ export function holdErrorsUntilListener(tak, { deadlineMs = LISTENER_DEADLINE_MS
     }
     const buffered = [];
     let settled = false;
+    // Set in newListener, before the real listener is stored and before
+    // on/addListener/once/prependListener/prependOnceListener return.
+    // A same-turn emit then reaches only that listener.
+    let passThrough = false;
     let timer;
 
     function userListeners() {
@@ -34,51 +38,46 @@ export function holdErrorsUntilListener(tak, { deadlineMs = LISTENER_DEADLINE_MS
         clearTimeout(timer);
         tak.removeListener('error', onError);
         tak.removeListener('newListener', onNew);
-        tak.removeListener('removeListener', onRemove);
     }
 
-    function release() {
-        if (settled || userListeners().length === 0) return;
+    function failClosed() {
+        if (settled) return;
         settled = true;
         const pending = buffered.splice(0);
         detach();
         for (const err of pending) tak.emit('error', err);
     }
 
-    function failClosed() {
+    function release() {
         if (settled) return;
-        if (userListeners().length > 0) {
-            release();
+        if (userListeners().length === 0) {
+            if (buffered.length > 0) failClosed();
             return;
         }
         settled = true;
         const pending = buffered.splice(0);
         detach();
-        for (const err of pending) tak.emit('error', err);
+        for (const err of pending) {
+            if (tak.listeners('error').length === 0) {
+                tak.emit('error', err);
+                return;
+            }
+            tak.emit('error', err);
+        }
     }
 
     function onError(err) {
-        if (!settled) buffered.push(err);
+        if (settled || passThrough) return;
+        buffered.push(err);
     }
 
-    // newListener is emitted by every registration method, before the
-    // listener is stored. The microtask runs after that store.
-    function onNew(event) {
-        if (event === 'error') queueMicrotask(release);
-    }
-
-    function onRemove(event) {
-        if (event !== 'error' || settled) return;
-        queueMicrotask(() => {
-            if (!settled && userListeners().length === 0 && buffered.length > 0) {
-                // The pool added a listener and removed it before delivery.
-                // The deadline still ends the hold.
-            }
-        });
+    function onNew(event, listener) {
+        if (settled || event !== 'error' || listener === onError) return;
+        passThrough = true;
+        queueMicrotask(release);
     }
 
     tak.on('newListener', onNew);
-    tak.on('removeListener', onRemove);
     tak.on('error', onError);
     timer = setTimeout(failClosed, deadlineMs);
     if (typeof timer.unref === 'function') timer.unref();

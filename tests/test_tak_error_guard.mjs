@@ -10,6 +10,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { patchNodeTakSource } from '../.github/container-and-chart/cloudtak/patch-node-tak.mjs';
 import { holdErrorsUntilListener } from '../.github/container-and-chart/cloudtak/tak-error-guard.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,48 @@ function flush() {
         setImmediate(resolve);
     });
 }
+
+test('same-turn register and emit delivers once for every registration method', async () => {
+    for (const method of ['on', 'addListener', 'once', 'prependListener', 'prependOnceListener']) {
+        const tak = new EventEmitter();
+        holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+        const seen = [];
+        tak[method]('error', (got) => seen.push(got.message));
+        tak.emit('error', reset(method));
+        await flush();
+        assert.deepEqual(seen, [method], method);
+    }
+});
+
+test('several buffered errors are replayed once, in order', async () => {
+    const tak = new EventEmitter();
+    holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+    tak.emit('error', reset('one'));
+    tak.emit('error', reset('two'));
+    const seen = [];
+    tak.on('error', (got) => seen.push(got.message));
+    await flush();
+    assert.deepEqual(seen, ['one', 'two']);
+    tak.emit('error', reset('three'));
+    assert.deepEqual(seen, ['one', 'two', 'three']);
+});
+
+test('once consumes one buffered error and the next is not held', () => {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import { EventEmitter } from 'node:events';
+        import { holdErrorsUntilListener } from ${JSON.stringify(path.join(cloudtakDir, 'tak-error-guard.mjs'))};
+        const tak = new EventEmitter();
+        holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+        tak.emit('error', Object.assign(new Error('first'), { code: 'ECONNRESET' }));
+        tak.emit('error', Object.assign(new Error('second'), { code: 'ECONNRESET' }));
+        tak.once('error', (err) => console.log('GOT ' + err.message));
+        setTimeout(() => console.log('STILL_UP'), 50);
+    `], { encoding: 'utf8' });
+    assert.match(result.stdout, /GOT first/);
+    assert.match(result.stderr, /second/);
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.stdout, /STILL_UP/);
+});
 
 test('addListener, once, and prependOnce each receive a buffered reset once', async () => {
     for (const method of ['addListener', 'once', 'prependListener', 'prependOnceListener']) {
@@ -76,6 +119,101 @@ test('a missing pool listener fails closed after the deadline', () => {
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /no pool listener/);
     assert.doesNotMatch(result.stdout, /STILL_UP/);
+});
+
+test('patcher rejects a node-tak build without the end-handler destroy', () => {
+    assert.throws(() => patchNodeTakSource('nothing here'), /found 0 times/);
+});
+
+function realTakReset(version) {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tak-real-'));
+    const api = path.join(work, 'api');
+    fs.mkdirSync(api);
+    fs.copyFileSync(path.join(cloudtakDir, 'tak-error-guard.mjs'), path.join(api, 'tak-error-guard.mjs'));
+    fs.copyFileSync(path.join(cloudtakDir, 'uds-tak-error-guard.mjs'), path.join(api, 'uds-tak-error-guard.mjs'));
+    const installed = spawnSync('npm', ['install', '--silent', '--prefix', api, `@tak-ps/node-tak@${version}`], {
+        encoding: 'utf8',
+    });
+    assert.equal(installed.status, 0, installed.stderr);
+    return { work, api };
+}
+
+test('pinned node-tak 12.31.0 and locked 12.31.1 replay one reset across the pool gap', () => {
+    // package.json of CloudTAK v13.112.3 says ^12.31.0. Its lockfile installs
+    // 12.31.1. ConnectionPool.#add is not imported: it needs Postgres and the
+    // rest of the API. The await below is that function's gap.
+    for (const version of ['12.31.0', '12.31.1']) {
+    const { work, api } = realTakReset(version);
+    const installedVersion = JSON.parse(fs.readFileSync(path.join(api, 'node_modules', '@tak-ps', 'node-tak', 'package.json'), 'utf8')).version;
+    assert.equal(installedVersion, version);
+    const dist = path.join(api, 'node_modules', '@tak-ps', 'node-tak', 'dist', 'index.js');
+    const original = fs.readFileSync(dist, 'utf8');
+    fs.writeFileSync(dist, patchNodeTakSource(original));
+    const key = path.join(work, 'key.pem');
+    const cert = path.join(work, 'cert.pem');
+    const made = spawnSync('openssl', [
+        'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+        '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost',
+    ], { encoding: 'utf8' });
+    assert.equal(made.status, 0, made.stderr);
+    fs.writeFileSync(path.join(api, 'pool.mjs'), `
+        import fs from 'node:fs';
+        import net from 'node:net';
+        import TAK from '@tak-ps/node-tak';
+        if (process.env.EXPECT_GUARD === '1' && !TAK.connect.__takErrorGuard) {
+            console.error('GUARD_NOT_INSTALLED');
+            process.exit(2);
+        }
+        const server = net.createServer((socket) => socket.destroy());
+        await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const url = new URL('ssl://127.0.0.1:' + server.address().port);
+        const tak = await TAK.connect(url, {
+            cert: fs.readFileSync(process.env.CERT, 'utf8'),
+            key: fs.readFileSync(process.env.KEY, 'utf8'),
+        }, { id: 'pool' });
+        // CloudTAK v13.112.3 ConnectionPool.#add awaits certificate setup
+        // between TAK.connect() and tak.on('error').
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const seen = [];
+        tak.on('error', (err) => seen.push(err.message));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        server.close();
+        if (seen.length !== 1 || !seen[0].includes('before secure TLS connection was established')) {
+            console.error('SEEN ' + JSON.stringify(seen));
+            process.exit(4);
+        }
+        console.log('REAL_TAK_ONE_RESET');
+    `);
+    const withGuard = spawnSync(process.execPath, [path.join(api, 'pool.mjs')], {
+        cwd: api,
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            EXPECT_GUARD: '1',
+            NODE_OPTIONS: `--max-old-space-size=640 --import ${path.join(api, 'uds-tak-error-guard.mjs')}`,
+            CERT: cert,
+            KEY: key,
+        },
+    });
+    const bare = spawnSync(process.execPath, [path.join(api, 'pool.mjs')], {
+        cwd: api,
+        encoding: 'utf8',
+        env: { ...process.env, EXPECT_GUARD: '', NODE_OPTIONS: '', CERT: cert, KEY: key },
+    });
+    fs.writeFileSync(dist, original);
+    const unpatched = spawnSync(process.execPath, [path.join(api, 'pool.mjs')], {
+        cwd: api,
+        encoding: 'utf8',
+        env: { ...process.env, EXPECT_GUARD: '', NODE_OPTIONS: '', CERT: cert, KEY: key },
+    });
+    fs.rmSync(work, { recursive: true, force: true });
+    assert.equal(withGuard.status, 0, `${version}\n${withGuard.stdout}\n${withGuard.stderr}`);
+    assert.match(withGuard.stdout, /REAL_TAK_ONE_RESET/);
+    assert.notEqual(bare.status, 0, version);
+    assert.match(bare.stderr, /before secure TLS connection was established/);
+    assert.notEqual(unpatched.status, 0, version);
+    assert.match(unpatched.stderr, /before secure TLS connection was established/);
+    }
 });
 
 test('production NODE_OPTIONS preload installs and one TLS reset reaches addListener', () => {

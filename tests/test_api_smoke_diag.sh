@@ -171,6 +171,9 @@ fi
 
 bound="${work}/bound.log"
 : > "${bound}"
+# API_SMOKE_BOUNDED is set by checked_pipe for the inner shell.
+# Expanding it here would see the empty value from this shell.
+# shellcheck disable=SC2016
 checked_pipe "${bound}" cat bash -c 'printf "%s\n" "${API_SMOKE_BOUNDED}"' \
   || bad "bounded marker command failed"
 if grep -qx '1' "${bound}"; then

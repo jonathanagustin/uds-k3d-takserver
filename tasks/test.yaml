@@ -78,7 +78,7 @@ tasks:
           exit 1
 
   - name: cert-rotation
-    description: After the CloudTAK tests, rotating cert-migration updates the copied CA Secrets without a redeploy
+    description: After the CloudTAK tests, a valid CA PEM update propagates to copied Secrets without a redeploy
     actions:
       - shell:
           linux: bash
@@ -92,9 +92,10 @@ tasks:
           [ -n "${secret}" ]
           orig="$(k get cm cert-migration -n takserver -o jsonpath='{.binaryData.ca\.pem}')"
           [ -n "${orig}" ]
+          patch_file="$(mktemp)"
           patch_ca() {
-            python3 -c 'import json,sys; print(json.dumps({"binaryData":{"ca.pem":sys.argv[1]}}))' "$1" > /tmp/cert-rotation.json
-            k patch cm cert-migration -n takserver --type merge --patch-file /tmp/cert-rotation.json
+            python3 -c 'import json,sys; print(json.dumps({"binaryData":{"ca.pem":sys.argv[1]}}))' "$1" > "${patch_file}"
+            k patch cm cert-migration -n takserver --type merge --patch-file "${patch_file}"
           }
           wait_for() {
             local want="$1" gw admin
@@ -110,14 +111,21 @@ tasks:
             echo "gateway cacert and cloudtak ca.pem did not follow cert-migration" >&2
             return 1
           }
-          first="${orig:0:1}"
-          if [ "${first}" = "A" ]; then
-            rotated="B${orig:1}"
-          else
-            rotated="A${orig:1}"
-          fi
+          # Change bytes while retaining the same valid X.509 certificate.
+          # This tests propagation, not signing-key or certificate rollover.
+          rotated="$(python3 -c 'import base64,sys; pem=base64.b64decode(sys.argv[1], validate=True); print(base64.b64encode(pem + b"\n").decode())' "${orig}")"
           [ "${rotated}" != "${orig}" ]
-          trap 'patch_ca "${orig}"; wait_for "${orig}"' EXIT
+          cleanup() {
+            local code=$?
+            trap - EXIT
+            if ! patch_ca "${orig}" || ! wait_for "${orig}"; then
+              echo "failed to restore the original CA payload" >&2
+              code=1
+            fi
+            rm -f "${patch_file}"
+            exit "${code}"
+          }
+          trap cleanup EXIT
           patch_ca "${rotated}"
           wait_for "${rotated}"
 

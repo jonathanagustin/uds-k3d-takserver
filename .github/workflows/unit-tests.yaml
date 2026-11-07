@@ -86,7 +86,7 @@ jobs:
       - name: Profiles, benchmark harness, and Full Core summary
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top tests.test_ca_propagation -v
 
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.

@@ -59,6 +59,9 @@ COPY --chmod=0644 bootstrap.mjs basemap.mjs /home/etl/uds/
 COPY --chmod=0644 nginx-sso.conf nginx-sso-head.conf /home/etl/uds/
 # Next to dist/ and node_modules/ so its imports resolve like CloudTAK's.
 COPY --chmod=0644 sso.mjs /home/etl/api/uds-sso.mjs
+# Loaded with node --import before dist/index.js. It has to sit next to
+# node_modules so its import of @tak-ps/node-tak resolves.
+COPY --chmod=0644 tak-error-guard.mjs /home/etl/api/uds-tak-error-guard.mjs
 
 ENV HOME=/tmp
 WORKDIR /home/etl/api

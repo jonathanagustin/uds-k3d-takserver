@@ -273,12 +273,10 @@ if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
   exit 1
 fi
 agent_ok=0
+# shellcheck source=.github/scripts/node-agent-ready.sh
+source "${root}/.github/scripts/node-agent-ready.sh"
 for _ in $(seq 1 30); do
-  # Velero 1.18 logs "Starting Controller" (controller-runtime). Older
-  # builds logged "Starting controllers". Either line means the agent
-  # reached the API. Matching only the plural misses a running agent.
-  if k logs -n velero -l name=node-agent 2>/dev/null \
-    | grep -F -e "Starting Controller" -e "Starting controllers" -q; then
+  if k logs -n velero -l name=node-agent 2>/dev/null | node_agent_controllers_started; then
     agent_ok=1
     break
   fi

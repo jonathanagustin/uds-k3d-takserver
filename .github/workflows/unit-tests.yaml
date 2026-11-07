@@ -82,6 +82,8 @@ jobs:
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
           bash tests/test_api_smoke_diag.sh
+          bash tests/test_node_agent_ready.sh
+          node --test tests/test_tak_error_guard.mjs
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary

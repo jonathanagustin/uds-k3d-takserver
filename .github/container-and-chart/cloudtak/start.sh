@@ -6,7 +6,9 @@
 # /etc/nginx/nginx.conf, starts nginx as root, and runs `npm run prod` in a
 # loop. This renders the same nginx.conf into /tmp, drops the `user`
 # directive, moves the pid file, logs, and temp paths under /tmp, and runs
-# the API once so Kubernetes sees a crash and restarts the container.
+# the API once. A TLS reset on TAK's 8089 during the pool's connect gap
+# used to kill this process; tak-error-guard.mjs holds that error until
+# the pool's own listener retries. Other exceptions still end the process.
 set -euo pipefail
 
 mkdir -p /tmp/nginx
@@ -49,4 +51,5 @@ if [[ ! -e /proc/net/if_inet6 ]]; then
 fi
 nginx -e /dev/stderr -c /tmp/nginx/nginx.conf
 
+export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--import /home/etl/api/uds-tak-error-guard.mjs"
 exec node dist/index.js

@@ -259,29 +259,30 @@ cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
 ## Architecture
 
 ```mermaid
+%%{init: {"htmlLabels": false}}%%
 flowchart TB
   browser["Browser"]
-  atak["ATAK device<br/>phone, or the KubeVirt test VM"]
+  atak["ATAK device: phone or KubeVirt test VM"]
 
   subgraph core["UDS Core"]
-    tenant["Tenant gateway<br/>443"]
-    passthrough["Passthrough gateway<br/>443 SNI, 8446, 8089"]
+    tenant["Tenant gateway, port 443"]
+    passthrough["Passthrough gateway: 443 SNI, 8446, 8089"]
     keycloak["Keycloak"]
   end
 
   subgraph tak["Namespace takserver"]
-    web["TAK API and web UI<br/>8447, 8446, 8443"]
-    messaging["TAK messaging<br/>8089"]
-    backing["PostgreSQL (PostGIS),<br/>Ignite, NATS"]
+    web["TAK API and web UI: 8447, 8446, 8443"]
+    messaging["TAK messaging, port 8089"]
+    backing["PostgreSQL with PostGIS, Ignite, NATS"]
   end
 
   subgraph ct["Namespace cloudtak"]
-    cloudtak["CloudTAK<br/>5000"]
+    cloudtak["CloudTAK, port 5000"]
     ctdb["PostGIS"]
   end
 
-  browser -- "takserver.#60;domain#62;" --> tenant
-  browser -- "map.#60;domain#62;" --> tenant
+  browser -- "takserver.domain" --> tenant
+  browser -- "map.domain" --> tenant
   browser -. "sign-in" .-> keycloak
   atak -- "mutual TLS" --> passthrough
   tenant -- "re-encrypted TLS" --> web
@@ -304,13 +305,14 @@ Zarf installs the config chart (`charts/takserver/`) before the upstream chart. 
 ### Build and release
 
 ```mermaid
+%%{init: {"htmlLabels": false}}%%
 flowchart LR
-  src["Public source<br/>TAK, CloudTAK, PostGIS"] --> images["Multi-arch images<br/>in GHCR"]
+  src["Public source: TAK, CloudTAK, PostGIS"] --> images["Multi-arch images in GHCR"]
   images --> pkg["uds zarf package create"]
-  pkg --> bundle["Test bundle<br/>with UDS Core"]
-  bundle --> deploy["uds deploy on k3d<br/>and the test suite"]
-  pkg -- "release on main" --> sign["Keyless signature<br/>and SLSA provenance"]
-  sign --> ghcr["GHCR<br/>takserver:#60;version#62;-upstream"]
+  pkg --> bundle["Test bundle with UDS Core"]
+  bundle --> deploy["uds deploy on k3d and the test suite"]
+  pkg -- "release on main" --> sign["Keyless signature and SLSA provenance"]
+  sign --> ghcr["GHCR takserver:version-upstream"]
 ```
 
 Release Please opens a release pull request from the Conventional Commit titles. Merging it tags the release, and `release.yaml` creates, signs, verifies, and publishes the package for each architecture, then attests its provenance.

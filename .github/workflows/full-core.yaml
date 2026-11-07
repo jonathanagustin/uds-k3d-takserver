@@ -252,8 +252,13 @@ jobs:
           # shellcheck disable=SC3028
           echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
 
+      # A failed deploy must not start these uploads. actions/upload-artifact
+      # v7.0.2 can ignore timeout-minutes. This job's limit then cancels the
+      # job, and GitHub keeps no log of the failure. The print step already
+      # wrote the sanitized logs. success() lets that job finish. A sanitizer
+      # that did not finish still cannot upload.
       - name: Upload uptime probe log
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -263,7 +268,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Grafana and Prometheus rule check
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -276,7 +281,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Falco events
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -286,7 +291,7 @@ jobs:
           retention-days: 14
 
       - name: Upload kubectl top
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -296,7 +301,7 @@ jobs:
           retention-days: 14
 
       - name: Upload backup restore log
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -306,7 +311,7 @@ jobs:
           retention-days: 14
 
       - name: Upload debug logs
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

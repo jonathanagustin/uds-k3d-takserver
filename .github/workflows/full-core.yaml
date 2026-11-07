@@ -169,18 +169,13 @@ jobs:
         run: uds run test-full-core --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         shell: bash
         # Passing amd64 run 42180258293 finished in 68m45s, including a
-        # completed api-smoke. The 70 minute cap cut the later amd64 runs
-        # after that smoke had started. api-smoke does not loop. Its ceilings
-        # are 20 request() calls at 40s (800s), two login curls at 40s (80s),
-        # stream holds of 15s, 15s, and 20s (50s), and two client-list
-        # attempts of a 20s connect, ten 2s sleeps plus 20s curls, and one
-        # 20s subscriptions call (520s). That is 1450s, 24m10s. 95 minutes is
-        # 69m plus 26m: the measured pass rounded up, plus that ceiling
-        # rounded up, so a run shaped like the pass can still finish a smoke
-        # that hits every ceiling. It is not a hang allowance, and it does
-        # not cover five 600s restore rollouts stacked on the measured pass.
-        # Each of those still fails the script on its own.
-        timeout-minutes: 95
+        # completed api-smoke. The 70 minute cap cut later amd64 runs after
+        # that smoke had started. api-smoke.sh now stops itself at 10 minutes.
+        # 80 minutes is 69 minutes (that measured pass, rounded up) plus that
+        # enforced 10 minute smoke budget. It is a measured margin plus the
+        # cap, not a sum of curl or handshake ceilings. A restore rollout
+        # still fails this script at its own 600s.
+        timeout-minutes: 80
 
       # test:full-core writes out/falco-events.txt only when it reaches
       # tests/falco-events.sh, so an earlier failure left the upload below

@@ -7,8 +7,10 @@
 # targets and the Pepr module target are up, and a JVM query returns data.
 # Slim has no monitoring API and this script exits 0.
 #
-# Then it scales takserver-messaging to 0, waits until Alertmanager reports
-# TAKMessagingTargetDown active, scales it back to 1, and waits for Ready.
+# Then it scales takserver-messaging and CloudTAK to 0, waits until
+# Alertmanager reports both down alerts, brings messaging back to Ready,
+# and only then brings CloudTAK back. CloudTAK exits on the 8089 reset
+# while messaging has no endpoints, so it cannot become Ready first.
 # Saves a Playwright screenshot of the dashboard when docker is available.
 set -euo pipefail
 
@@ -362,10 +364,21 @@ if [[ "${fired}" -ne 1 ]]; then
   echo "TAKMessagingTargetDown and CloudTAKTargetDown did not both reach active in Alertmanager" >&2
   exit 1
 fi
-echo "grafana-alerts: TAKMessagingTargetDown is firing in Alertmanager"
+echo "grafana-alerts: TAKMessagingTargetDown and CloudTAKTargetDown are firing in Alertmanager"
+restore_messaging
+if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
+  echo "takserver-messaging did not become Ready after scaling back to 1" >&2
+  k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
+  exit 1
+fi
+echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
 k scale deploy/cloudtak -n cloudtak --replicas=1
 cloudtak_scaled=0
-k rollout status deploy/cloudtak -n cloudtak --timeout=600s
+if ! k rollout status deploy/cloudtak -n cloudtak --timeout=600s; then
+  echo "cloudtak did not become Ready after messaging was restored" >&2
+  k get pods -n cloudtak -l app=cloudtak -o wide >&2 || true
+  exit 1
+fi
 echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"
 
 if command -v docker >/dev/null 2>&1; then
@@ -390,12 +403,5 @@ else
   exit 1
 fi
 
-restore_messaging
-# The next tests use messaging. Its startup probe allows 80 periods of 10s
-# after the dependency waits, so wait up to 15 minutes for Ready.
-if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
-  echo "takserver-messaging did not become Ready after scaling back to 1" >&2
-  k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
-  exit 1
-fi
-echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
+# Messaging was restored before CloudTAK so the 8089 connect does not
+# kill the API process. The next tests use that Ready deployment.

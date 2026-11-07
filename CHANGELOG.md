@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.2](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.9.1...v0.9.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **docs:** restore README badges that GitHub camo could not fetch ([#311](https://github.com/jonathanagustin/uds-k3d-takserver/issues/311)) ([eb65d72](https://github.com/jonathanagustin/uds-k3d-takserver/commit/eb65d723c1135edbc98460a586dcdfa26ebac57b))
+* **docs:** serve Release and License badges from the repo ([#314](https://github.com/jonathanagustin/uds-k3d-takserver/issues/314)) ([68b44db](https://github.com/jonathanagustin/uds-k3d-takserver/commit/68b44db46326285f6533d1ff4dd59a410f20b6c1))
+* **docs:** serve the OpenSSF Scorecard badge from the repo ([#313](https://github.com/jonathanagustin/uds-k3d-takserver/issues/313)) ([703c9ad](https://github.com/jonathanagustin/uds-k3d-takserver/commit/703c9ad62546e9a77e6d7d24d83cbe15f35affe5))
+* draw the architecture diagrams with plain SVG text ([#317](https://github.com/jonathanagustin/uds-k3d-takserver/issues/317)) ([cb4bd85](https://github.com/jonathanagustin/uds-k3d-takserver/commit/cb4bd8577795a541f7f2b16fba6a9eca2729f59b))
+
 ## [0.9.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.9.0...v0.9.1) (2026-11-05)
 
 

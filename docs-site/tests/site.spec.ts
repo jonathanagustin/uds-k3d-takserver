@@ -3,7 +3,7 @@
 
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 
-// This site has no version switch. These checks do not add one.
+// Current-feature checks use /main/; version-channel behavior is tested separately.
 
 async function head(page: Page, path: string): Promise<APIResponse> {
   return page.request.fetch(path, { method: 'HEAD' });
@@ -14,19 +14,19 @@ test('home page links the four tasks and the theme toggle changes the document',
   await expect(page.getByRole('heading', { level: 1, name: 'TAK Server on UDS' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Deploy', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/getting-started/#deploy-a-release',
+    '/uds-k3d-takserver/main/getting-started/#deploy-a-release',
   );
   await expect(page.getByRole('link', { name: 'Upgrade', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/getting-started/#upgrade-from-06',
+    '/uds-k3d-takserver/main/getting-started/#upgrade-from-06',
   );
   await expect(page.getByRole('link', { name: 'Back up', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/data/#backup',
+    '/uds-k3d-takserver/main/data/#backup',
   );
   await expect(page.getByRole('link', { name: 'Reference', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/getting-started/#documentation',
+    '/uds-k3d-takserver/main/getting-started/#documentation',
   );
 
   const theme = page.getByLabel('Select theme').first();
@@ -50,7 +50,7 @@ test('an unknown page is a 404 with a link home', async ({ page }) => {
   const home = page.getByRole('link', { name: 'home page', exact: true });
   await expect(home).toHaveAttribute('href', '/uds-k3d-takserver/');
   await home.click();
-  await expect(page.getByRole('link', { name: 'Deploy', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'TAK Server on UDS' })).toBeVisible();
 });
 
 test('Getting started serves the demo videos without preloading them', async ({ page }) => {
@@ -100,16 +100,16 @@ test('YAML examples show the file title', async ({ page }) => {
 });
 
 test('llms.txt lists the guides', async ({ page }) => {
-  const listing = await page.request.get('llms.txt');
+  const listing = await page.request.get('/uds-k3d-takserver/llms.txt');
   expect(listing.status()).toBe(200);
   const text = await listing.text();
   expect(text).toContain('# TAK Server on UDS');
   expect(text).toContain('llms-full.txt');
 
-  const full = await head(page, 'llms-full.txt');
+  const full = await head(page, '/uds-k3d-takserver/llms-full.txt');
   expect(full.status()).toBe(200);
   expect(full.headers()['content-type'] ?? '').toContain('text/plain');
-  const fullBody = await (await page.request.get('llms-full.txt')).text();
+  const fullBody = await (await page.request.get('/uds-k3d-takserver/llms-full.txt')).text();
   expect(fullBody).toContain('Quick start');
   expect(fullBody).toContain('Deploy a release');
 });

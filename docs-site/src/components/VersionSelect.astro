@@ -1,0 +1,35 @@
+---
+// Copyright 2026 uds-k3d-takserver authors
+// SPDX-License-Identifier: GPL-3.0-only
+
+import versions from '../generated/versions.json';
+import { relativePage, versionForPath, versionHref } from '../lib/versions.mjs';
+
+const current = versionForPath(Astro.url.pathname, versions);
+const page = relativePage(Astro.url.pathname, current);
+---
+
+<label class="version-select">
+  <span class="sr-only">Documentation version</span>
+  <select aria-label="Documentation version" data-version-select>
+    {versions.map((version) => <option value={versionHref(version, page)}
+      selected={version.id === current.id} data-preserve-hash={version.pages.includes(page)}>
+      {version.label}
+    </option>)}
+  </select>
+</label>
+
+<script>
+  for (const select of document.querySelectorAll<HTMLSelectElement>('[data-version-select]')) {
+    select.addEventListener('change', () => {
+      const option = select.selectedOptions[0];
+      location.assign(select.value + (option.dataset.preserveHash === 'true' ? location.hash : ''));
+    });
+  }
+</script>
+
+<style>
+  select { background: var(--sl-color-bg-nav); color: var(--sl-color-text);
+    border: 1px solid var(--sl-color-gray-5); border-radius: .25rem; padding: .35rem;
+    max-width: 12rem; font: inherit; font-size: var(--sl-text-sm); }
+</style>

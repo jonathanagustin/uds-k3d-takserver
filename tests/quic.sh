@@ -76,7 +76,10 @@ diagnose() {
   # 8090 is 1F9A in /proc/net/udp.
   echo "UDP sockets in ${pod} (8090 = :1F9A):" >&2
   kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /proc/net/udp /proc/net/udp6 2>/dev/null' 2>/dev/null | "${filter}" >&2 || echo "omitted unsanitizable socket table" >&2
-  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'grep -i -h quic /opt/tak/logs/*.log 2>/dev/null' 2>/dev/null | "${filter}" --tail 40 >&2 || echo "omitted unsanitizable quic log" >&2
+  # Copy the whole log files out, then redact, then keep the quic lines.
+  # Grep inside the pod runs before redaction and can keep a fragment of a
+  # multiline secret.
+  kctl exec -n takserver "${pod}" -c takserver-messaging -- sh -c 'cat /opt/tak/logs/*.log 2>/dev/null' 2>/dev/null | "${filter}" --ignore-case --grep 'quic' --tail 40 >&2 || echo "omitted unsanitizable quic log" >&2
   kctl logs -n takserver "${pod}" -c takserver-messaging 2>/dev/null | "${filter}" --ignore-case --grep 'quic' --tail 20 >&2 || echo "omitted unsanitizable messaging log" >&2
   for proxy in $(kctl get pods -n envoy-default-gateway -o name); do
     kctl logs -n envoy-default-gateway "${proxy}" -c envoy 2>/dev/null | "${filter}" --tail 50 >&2 || echo "omitted unsanitizable envoy log" >&2

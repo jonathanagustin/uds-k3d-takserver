@@ -7,6 +7,7 @@ A cancelled job and a sanitizer that did not finish must not upload the
 original /tmp logs. This reads the workflow files; it does not start a run.
 """
 
+import re
 import unittest
 from pathlib import Path
 
@@ -29,6 +30,7 @@ DIAGNOSTICS = (
     "tests/oidc-render.sh",
     "atak/ci/viewer-smoke.sh",
     "atak/ci/e2e.sh",
+    "atak/driver/drive.sh",
     "bench/run.py",
 )
 WORKFLOWS = (
@@ -81,7 +83,22 @@ class LogUploadGateTests(unittest.TestCase):
             text = (ROOT / rel).read_text()
             self.assertNotIn("python3 .github/scripts/redact-then-filter.sh", text, rel)
             self.assertNotIn("python3 ${", text, rel)
+            logical = []
+            pending = ""
+            start_line = 1
             for lineno, line in enumerate(text.splitlines(), 1):
+                if pending:
+                    pending = pending[:-1].rstrip() + " " + line.strip()
+                else:
+                    pending = line
+                    start_line = lineno
+                if pending.rstrip().endswith("\\"):
+                    continue
+                logical.append((start_line, pending))
+                pending = ""
+            if pending:
+                logical.append((start_line, pending))
+            for lineno, line in logical:
                 stripped = line.strip()
                 if not stripped or stripped.startswith("#"):
                     continue
@@ -91,16 +108,25 @@ class LogUploadGateTests(unittest.TestCase):
                 marks = [body.find(token) for token in ("redact", '"${filter}"', "${filter}")]
                 marks = [pos for pos in marks if pos != -1]
                 redact_at = min(marks) if marks else -1
-                tails = [body.find(token) for token in ("--tail", "| tail", "|tail")]
-                tails = [pos for pos in tails if pos != -1]
-                if not tails:
-                    continue
-                tail_at = min(tails)
-                dumps_a_log = any(token in body for token in ("logs", "describe", "dmesg", "docker logs"))
+                # --grep is the redactor's own flag. A bare grep is a filter.
+                greps = [match.start() for match in re.finditer(r"(?<![\w-])grep\b", body)]
+                tails = []
+                for token in ("--tail", "| tail", "|tail"):
+                    pos = body.find(token)
+                    if pos != -1:
+                        tails.append(pos)
+                dumps_a_log = any(
+                    token in body
+                    for token in ("logs", "logcat", "describe", "dmesg", "docker logs", "/opt/tak/logs")
+                )
                 if not dumps_a_log:
                     continue
-                if redact_at == -1 or tail_at < redact_at:
-                    self.fail(f"{rel}:{lineno} truncates before redaction: {stripped}")
+                if redact_at != -1:
+                    early = [pos for pos in greps + tails if pos < redact_at]
+                    if early:
+                        self.fail(f"{rel}:{lineno} filters before redaction: {stripped}")
+                elif greps and tails and min(greps) < min(tails):
+                    self.fail(f"{rel}:{lineno} greps a log and then tails it: {stripped}")
 
     def test_raw_tmp_logs_are_not_an_upload_path(self):
         for path in WORKFLOWS:

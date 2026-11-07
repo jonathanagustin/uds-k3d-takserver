@@ -509,11 +509,13 @@ tasks:
           live=false
           for i in $(seq 1 40); do
             if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs status 2>&1)"; then
+              echo "attempt ${i}: status command succeeded"
               printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable status"
               echo "CloudTAK has a live TAK connection"
               live=true
               break
             fi
+            echo "attempt ${i}: status command failed"
             printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh --tail 3 || echo "omitted unsanitizable status"
             sleep 15
           done
@@ -614,11 +616,13 @@ tasks:
             grep -qF "${host}" /tmp/cloudtak-se.txt
             for i in $(seq 1 20); do
               if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs basemap 2>&1)"; then
+                echo "attempt ${i}: basemap command succeeded"
                 printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable basemap status"
                 echo "The default basemap serves tiles"
                 deny_other_sa "${host}"
                 exit 0
               fi
+              echo "attempt ${i}: basemap command failed"
               printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh --tail 3 || echo "omitted unsanitizable basemap status"
               sleep 15
             done

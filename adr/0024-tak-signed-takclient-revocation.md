@@ -29,7 +29,7 @@ Have TAK sign TakClient certificates, and revoke them through TAK's certificate 
 
 ### Signing
 
-- The watcher still creates the file user, but it **keeps** the password in the client's Secret (today `unusedPassword()` throws it away). The password is needed again for renewal and for any re-sign.
+- The watcher still creates the file user and keeps its password for renewal and recovery. The original decision put it in the client Secret; the security correction below stores it only in `takserver/takclient-enrollment`.
 - The watcher generates a key and a CSR (`CN=<callsign>, O=TAK, OU=UDS`, matching `certificateConfig` in CoreConfig). It POSTs the CSR to `https://takserver-api:8446/Marti/api/tls/signClient/v2?clientUid=<uid>` with **Basic auth** as that file user. Basic auth, not OAuth: an OAuth enrollment stores a token on the row, and `x509tokenAuth` would then treat the client as a token user.
 - TAK signs with the global `TAKServerCAConfig` lifetime (`validityDays="30"` today). `TakClient.spec.validityDays` can no longer set a per-client lifetime. The field is removed or ignored when this ships.
 - The package allows ingress on **8446** to the API pod from the Pepr watcher (8443 is already allowed). No Istio change.
@@ -46,7 +46,7 @@ Have TAK sign TakClient certificates, and revoke them through TAK's certificate 
 ### What does not change
 
 - Admin and CloudTAK certificates have no row in the table. The lookup returns null, so they are unaffected. The CRL backstop still covers them after a normal restart, as today.
-- The data package, the Secret shape (aside from storing the file-user password), RBAC for the CA key, and the `takclients` namespace stay as in ADR 22.
+- The data package, the device Secret shape, RBAC for the CA key, and the `takclients` namespace stay as in ADR 22. Enrollment passwords have separate watcher-private storage.
 - The watcher still does not need the CA key for TakClient signing once this ships. Reading the CA key for the CRL signature remains until the CRL is signed another way or dropped for new certificates.
 
 ### Confirmed on a cluster
@@ -76,7 +76,7 @@ Run [42072025085](https://github.com/jonathanagustin/uds-k3d-takserver/actions/r
 
 - Revoking a TakClient no longer restarts TAK. Connected clients that are not revoked stay up.
 - Validity is global (`TAKServerCAConfig`), not per `TakClient`. Operators who need a shorter life set the global value or delete and reissue.
-- The watcher stores a per-client file-user password in the Secret. That Secret already holds the client key; the password is one more secret value in the same place.
+- The watcher stores per-client file-user passwords in a separate, named Secret in `takserver`. Device Secret readers do not gain Basic enrollment capability.
 - New Package allow: ingress on 8446 from the watcher.
 - Certificates issued before the change have no table row. They stay on the CRL path until they are reissued. Reconcile already reissues when the Secret changes; a one-time reissue at upgrade covers the rest.
 - An existing HTTP session on 8443 (`JSESSIONID`) may keep working until it expires, because the Spring pre-auth filter does not re-check a session that is already authenticated. Streaming on 8089 is what the trial confirmed.
@@ -90,8 +90,8 @@ The operator marks successfully enrolled certificates with
 marker forces a one-time reissue. It revokes the old certificate before
 publishing its replacement; a missing fingerprint or failed certadmin request
 keeps Ready false, and a failed finalization retains the Secret and finalizer.
-The random file-user password is written to the Secret before creating the
-user, so retries and messaging restarts can reuse it. `spec.validityDays` is
+The random file-user password is written to watcher-private state before
+creating the user, so retries and messaging restarts can reuse it. `spec.validityDays` is
 retained for compatibility but deprecated and ignored; TAK sets the lifetime.
 
 A locally signed legacy certificate still uses the reload fallback. The CRL
@@ -113,3 +113,28 @@ The CRL is still cached by Java. Its periodic refresh near `nextUpdate` (and
 replacement after a CA change) requests a reload so an old cached CRL cannot
 expire and reject every client. That maintenance reload is separate from
 per-client certificate-table revocation; it is not removed by this change.
+
+## Security correction: enrollment capability is not device material
+
+[Issue 345](https://github.com/jonathanagustin/uds-k3d-takserver/issues/345) records
+a flaw in the original storage decision. A device Secret reader given the
+reusable Basic password could enroll extra certificate-table rows that a revoke
+of the operator's fingerprint would miss. The released locally signed path did
+not expose this password; the initial draft implementation did and must not be
+released in that form.
+
+Passwords now live only in Secret `takserver/takclient-enrollment`, with one
+entry per TakClient name. Watcher RBAC grants named `get` and `patch`; its
+existing Secret-create grant is sufficient. Neither admission accounts nor
+accounts limited to reading the `takclients` namespace gain access. The
+operator never copies that password into device Secrets or data packages.
+There are no cross-namespace owner references.
+
+A process-local lock serializes writes so one client's update or cleanup does
+not drop another's entry (the watcher runs one replica). The credential is saved
+before creating the TAK user. Losing that private entry forces revocation and
+reissue with a new user password; a device-provided field is not trusted as
+private state. Finalization removes the entry only after successful revoke and
+client Secret cleanup. If revoke fails, both the credential and finalizer stay.
+The containing private Secret may remain empty and is included in the TAK
+namespace backup.

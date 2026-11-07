@@ -11,6 +11,7 @@ import { createPublicKey, generateKeyPairSync, verify, X509Certificate } from "n
 import { inflateRawSync } from "node:zlib";
 import { afterEach, test } from "node:test";
 import forge from "node-forge";
+import { ENROLLMENT_SECRET, readCredential } from "./takclient-credentials.ts";
 import type { ConfigMapDoc, DeploymentDoc, SecretDoc } from "../cluster.ts";
 import { runtime } from "../cluster.ts";
 import {
@@ -141,6 +142,10 @@ interface Calls {
 
 function fake(opts: { store?: Store; clients?: TakClientDoc[]; tak?: (method: string, path: string) => TakResponse } = {}) {
   const store = opts.store ?? material();
+  if (opts.clients) {
+    store.secrets[`takserver/${ENROLLMENT_SECRET}`] = { data: Object.fromEntries(
+      opts.clients.map(doc => [doc.metadata!.name!, b64("fake-enrollment-pass-Aa1!")])) };
+  }
   const calls: Calls = { status: [], annotate: [], deleted: [], sleeps: [], tak: [], logs: [] };
   const cluster = {
     getConfigMap: async (ns: string, name: string) => store.configMaps[`${ns}/${name}`],
@@ -422,6 +427,8 @@ test("reconcile issues a Secret, annotates the TakClient, registers it, and repo
   assert.equal(cert.serialNumber.toLowerCase(), annotations[SERIAL]);
   assert.equal(unb64(secret.data!["ca.pem"]), CA_FILES.pem);
   assert.equal(unb64(secret.data!["client.key"]).includes("PRIVATE KEY"), true);
+  assert.equal(secret.data!["user-password"], undefined);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
   const files = unzip(Buffer.from(secret.data!["package.zip"], "base64"));
   assert.equal(files["certs/server.pref"].includes(`${streamHost("uds.dev")}:8089:ssl`), true);
   assert.equal(files["certs/server.pref"].includes(unb64(secret.data!.password)), true);
@@ -662,7 +669,8 @@ test("legacy certificates migrate through the CRL restart fallback before TAK en
   assert.equal(crl.labels["uds.dev/pod-reload"], "true");
   assert.equal(calls.tak[0].method, "DELETE");
   assert.equal(calls.tak.some(call => call.path.includes("certadmin")), false);
-  assert.ok(store.secrets["takclients/takclient-test"].data!["user-password"]);
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
   const withoutCallsign = fake();
   await reconcileTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "bb" } } }), "MODIFIED", withoutCallsign.d);
   assert.equal(withoutCallsign.calls.tak[0].method, "PUT");
@@ -675,6 +683,7 @@ test("TAK-issued certificate revocation failures retain the finalizer and Secret
   d.tak.request = async () => ({ status: 503, body: "" });
   assert.equal(await finalizeTakClient(doc, d), false);
   assert.ok(store.secrets["takclients/takclient-test"]);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
   delete store.secrets["takserver/takserver-certs"];
   assert.equal(await finalizeTakClient(doc, d), false);
 });
@@ -709,6 +718,40 @@ test("partial password-only Secrets recover without treating them as issued cert
     assert.equal(calls.status.at(-1)!.conditions[0].status, "True");
     assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![ISSUER], "tak");
   }
+});
+
+test("missing private state revokes and reissues instead of trusting a device-supplied password", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const before = calls.annotate.at(-1)!.annotations;
+  delete store.secrets[`takserver/${ENROLLMENT_SECRET}`];
+  store.secrets["takclients/takclient-test"].data!["user-password"] = b64("attacker-chosen");
+  const doc = client({ metadata: { name: "takclient-test", annotations: before } });
+  d.cluster.listTakClients = async () => [doc];
+  await registerAll(d);
+  assert.equal(calls.status.at(-1)!.conditions[0].reason, "EnrollmentStateMissing");
+  assert.equal(await reconcileTakClient(doc, "MODIFIED", d), false);
+  assert.notEqual(calls.annotate.at(-1)!.annotations[SERIAL], before[SERIAL]);
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.notEqual(await readCredential(d.cluster, "takclient-test"), "attacker-chosen");
+  assert.ok(calls.tak.some(call => call.path.includes("cert/revoke/")));
+  const finalDoc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  assert.equal(await finalizeTakClient(finalDoc, d), true);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+});
+
+test("finalization uses the delivered certificate even if resource annotation failed", async () => {
+  const { d, calls, store } = fake();
+  d.cluster.annotateTakClient = async () => { throw new Error("annotation conflict"); };
+  assert.equal(await reconcileTakClient(client(), "ADDED", d), true);
+  const annotations = store.secrets["takclients/takclient-test"].metadata!.annotations!;
+  assert.equal(annotations[ISSUER], "tak");
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.equal(await finalizeTakClient(client(), d), true);
+  const hash = annotations["tak.jonathanagustin.github.io/fingerprint"];
+  assert.ok(calls.tak.some(call => call.path === `/Marti/api/certadmin/cert/${encodeURIComponent(hash)}`));
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
 });
 
 test("registerAll registers every issued TakClient again", async () => {

@@ -56,6 +56,9 @@ expect() {
   fi
 }
 expect yes "${watcher_sa}" get secret/takserver-ca-key -n takserver
+expect yes "${watcher_sa}" get secret/takclient-enrollment -n takserver
+expect no "${admission_sa}" get secret/takclient-enrollment -n takserver
+expect no "system:serviceaccount:takclients:default" get secret/takclient-enrollment -n takserver
 expect yes "${watcher_sa}" create secrets -n takclients
 expect no "${admission_sa}" get secret/takserver-ca-key -n takserver
 expect no "${admission_sa}" list secrets --all-namespaces
@@ -93,6 +96,11 @@ secret client\\.pem > "${work}/client.pem"
 secret client\\.key > "${work}/client.key"
 secret ca\\.pem > "${work}/ca.pem"
 secret package\\.zip > "${work}/package.zip"
+k get secret "${name}" -n takclients -o json | python3 -c '
+import json, sys
+assert "user-password" not in json.load(sys.stdin)["data"], "device Secret exposes enrollment capability"
+'
+
 serial="$(k get takclient "${name}" -n takclients -o jsonpath='{.metadata.annotations.tak\.jonathanagustin\.github\.io/serial}')"
 openssl verify -CAfile "${work}/ca.pem" "${work}/client.pem"
 actual_serial="$(openssl x509 -in "${work}/client.pem" -noout -serial | cut -d= -f2)"
@@ -158,3 +166,7 @@ if k get secret "${name}" -n takclients >/dev/null 2>&1; then
   echo "Secret takclients/${name} is still there after delete" >&2
   exit 1
 fi
+k get secret takclient-enrollment -n takserver -o json | python3 -c '
+import json, sys
+assert sys.argv[1] not in json.load(sys.stdin).get("data", {}), "private credential was not cleaned up"
+' "${name}"

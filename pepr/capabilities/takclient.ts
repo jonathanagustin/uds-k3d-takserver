@@ -19,6 +19,7 @@ import {
   type Revoked,
 } from "./takclient-pki.ts";
 import { enroll, revokeEnrolled } from "./takclient-enrollment.ts";
+import { readCredential, rememberCredential, forgetCredential } from "./takclient-credentials.ts";
 
 export const TAK_NAMESPACE = "takserver";
 // TakClients and their Secrets live here and nowhere else, so the watcher's
@@ -420,11 +421,12 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
     return true;
   }
   let notAfter = current?.metadata?.annotations?.[NOT_AFTER];
-  // Store the password before creating a file user, so retries and messaging
-  // restarts can recreate that same user with the same enrollment credential.
-  const userPassword = decode(current?.data?.["user-password"]) ?? unusedPassword();
+  // Keep the reusable enrollment capability out of device-delivered data.
+  // Losing private state forces revoke/reissue with a new file-user password.
+  const priorPassword = await readCredential(cluster, name);
   try {
-    if (needsIssue(client, current, now)) {
+    const userPassword = priorPassword ?? await rememberCredential(cluster, name);
+    if (needsIssue(client, current, now) || !priorPassword) {
       const old = { ...client.metadata?.annotations, ...current?.metadata?.annotations };
       if (old[SERIAL]) {
         if (old[ISSUER] === "tak") {
@@ -436,17 +438,13 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
         // the persisted password only after its old cert is revoked.
         if (old[CALLSIGN]) await unregister(deps.tak, admin, old[CALLSIGN]);
       }
-      await cluster.applySecretWithAnnotations(CLIENT_NAMESPACE, name,
-        { "app.kubernetes.io/managed-by": "takserver-oidc", [`${GROUP}/takclient`]: name },
-        current?.metadata?.annotations ?? {}, { ...current?.data, "user-password": encode(userPassword) });
       await register(deps.tak, admin, callsign, spec.groups!, userPassword);
       const issued = await enroll(deps.tak, admin, ca, callsign, userPassword, now);
       const password = randomBytes(16).toString("hex");
       notAfter = issued.notAfter.toISOString();
       const annotations = { [SERIAL]: issued.serial, [NOT_AFTER]: notAfter,
         [FINGERPRINT]: issued.fingerprint, [CALLSIGN]: callsign, [ISSUER]: "tak" };
-      const data = { ...secretData(callsign, issued, ca, streamHost(deps.domain), password),
-        "user-password": encode(userPassword) };
+      const data = secretData(callsign, issued, ca, streamHost(deps.domain), password);
       await cluster.applySecretWithAnnotations(CLIENT_NAMESPACE, name,
         { "app.kubernetes.io/managed-by": "takserver-oidc", [`${GROUP}/takclient`]: name }, annotations, data);
       await cluster.annotateTakClient(CLIENT_NAMESPACE, name, annotations);
@@ -496,6 +494,7 @@ export async function finalizeTakClient(client: TakClientDoc, deps: Deps): Promi
     }
   }
   await cluster.deleteSecret(CLIENT_NAMESPACE, secretName(client));
+  await forgetCredential(cluster, name);
   return true;
 }
 
@@ -517,7 +516,13 @@ export async function registerAll(deps: Deps): Promise<void> {
     }
     try {
       const secret = await deps.cluster.getSecret(CLIENT_NAMESPACE, secretName(client));
-      await register(deps.tak, admin, callsign!, client.spec!.groups!, decode(secret?.data?.["user-password"]));
+      const password = await readCredential(deps.cluster, secretName(client));
+      if (!password) {
+        await setReady(deps, client, "False", "EnrollmentStateMissing", "Private enrollment state is missing; reissue required");
+        await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
+        continue;
+      }
+      await register(deps.tak, admin, callsign!, client.spec!.groups!, password);
       if (needsIssue(client, secret, deps.now())) {
         await setReady(deps, client, "False", "MigrationRequired", "The client certificate must be reissued by TAK");
         await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });

@@ -19,7 +19,7 @@ mkdir -p out
 : > "${log}"
 
 say() {
-  printf '%s\n' "$*" | tee -a "${log}"
+  printf '%sZ +%ss %s\n' "$(date -u +%H:%M:%S)" "${SECONDS}" "$*" | tee -a "${log}"
 }
 
 k() {
@@ -273,12 +273,12 @@ if ! k rollout status daemonset/node-agent -n velero --timeout=300s; then
   exit 1
 fi
 agent_ok=0
+# shellcheck source=.github/scripts/node-agent-ready.sh
+source "${root}/.github/scripts/node-agent-ready.sh"
 for _ in $(seq 1 30); do
-  # Velero 1.18 logs "Starting Controller" (controller-runtime). Older
-  # builds logged "Starting controllers". Either line means the agent
-  # reached the API. Matching only the plural misses a running agent.
-  if k logs -n velero -l name=node-agent 2>/dev/null \
-    | grep -F -e "Starting Controller" -e "Starting controllers" -q; then
+  # Velero 1.18 logs "Starting Controller". Older builds logged the plural.
+  # The helper matches both and is what tests/test_node_agent_ready.sh exercises.
+  if k logs -n velero -l name=node-agent 2>/dev/null | node_agent_controllers_started; then
     agent_ok=1
     break
   fi
@@ -550,8 +550,18 @@ k scale deploy/cloudtak -n cloudtak --replicas=1
 k rollout status deploy/cloudtak -n cloudtak --timeout=600s
 
 say "api-smoke with the client certificate issued before the backup"
-TAK_CLIENT_CERT="${cert_dir}/admin.pem" \
-  TAK_CLIENT_KEY="${cert_dir}/admin.key" \
-  ./tests/api-smoke.sh
+# shellcheck source=.github/scripts/checked-pipe.sh
+source "${root}/.github/scripts/checked-pipe.sh"
+checked_pipe "${log}" "${root}/.github/scripts/redact-then-filter.sh" \
+  env TAK_CLIENT_CERT="${cert_dir}/admin.pem" TAK_CLIENT_KEY="${cert_dir}/admin.key" \
+  ./tests/api-smoke.sh || true
+say "api-smoke exit ${CHECKED_SMOKE_RC} filter ${CHECKED_FILTER_RC} tee ${CHECKED_TEE_RC}"
+if [[ "${CHECKED_FILTER_RC}" -ne 0 || "${CHECKED_TEE_RC}" -ne 0 ]]; then
+  say "api-smoke output omitted: unsanitizable"
+  exit 1
+fi
+if [[ "${CHECKED_SMOKE_RC}" -ne 0 ]]; then
+  exit "${CHECKED_SMOKE_RC}"
+fi
 
 say "backup-restore passed"

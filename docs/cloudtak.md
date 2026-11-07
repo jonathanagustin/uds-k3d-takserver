@@ -130,6 +130,21 @@ The `bootstrap` container runs [`bootstrap.mjs`](../.github/container-and-chart/
 
 The admin certificate is mounted only in the bootstrap container. The CloudTAK container gets only `ca.pem`. CloudTAK still stores the admin certificate and key in its database, because its admin connection (connection 0) uses them. Treat that database as holding a TAK admin credential.
 
+## Trust bundle
+
+CloudTAK's API and SSO containers use `NODE_EXTRA_CA_CERTS` with one PEM file
+containing the deploy-time TAK CA and UDS Core's `uds-trust-bundle`. This lets
+Keycloak discovery and token exchange verify a private gateway CA supplied
+through Core's `CA_BUNDLE_CERTS`. Node's built-in public roots still apply.
+The init container assembles the file; the Node containers mount it read-only.
+An absent or empty Core bundle keeps the TAK CA alone, as on slim core.
+
+The operator labels the bundle ConfigMap for pod reload, restricted to
+`app=cloudtak` in the CloudTAK namespace. A bundle change restarts CloudTAK
+so Node reads the new file at startup. TAK's bundle uses the existing
+`uds.dev/oidc-reload=takserver` selector so its API and messaging init containers
+also rebuild their JVM trust stores when the bundle changes.
+
 ## TAK connection
 
 | CloudTAK setting | Value | Used for |

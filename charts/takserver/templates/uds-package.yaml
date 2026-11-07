@@ -31,6 +31,10 @@ spec:
     configMap:
       name: uds-trust-bundle
       key: ca-bundle.pem
+      labels:
+        uds.dev/pod-reload: "true"
+      annotations:
+        uds.dev/pod-reload-selector: "uds.dev/oidc-reload=takserver"
   {{- if .Values.sso.enabled }}
   sso:
     - name: TAK Server Login

@@ -74,7 +74,7 @@ tasks:
             sleep 10
           done
           echo "Package takserver did not become Ready" >&2
-          uds zarf tools kubectl describe package takserver -n takserver || true
+          uds zarf tools kubectl describe package takserver -n takserver | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable package description" >&2
           exit 1
 
   - name: cert-rotation
@@ -456,11 +456,11 @@ tasks:
             exit 0
           fi
           dump() {
-            k get pods,svc,pvc -n cloudtak -o wide || true
-            k describe pods -n cloudtak | tail -n 60 || true
-            k logs -n cloudtak deploy/cloudtak -c bootstrap --tail=40 || true
-            k logs -n cloudtak deploy/cloudtak -c sso --tail=40 || true
-            k logs -n cloudtak deploy/cloudtak -c cloudtak --tail=40 || true
+            k get pods,svc,pvc -n cloudtak -o wide | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable pod list"
+            k describe pods -n cloudtak | .github/scripts/redact-then-filter.sh --tail 60 || echo "omitted unsanitizable pod description"
+            k logs -n cloudtak deploy/cloudtak -c bootstrap | .github/scripts/redact-then-filter.sh --tail 40 || echo "omitted unsanitizable bootstrap log"
+            k logs -n cloudtak deploy/cloudtak -c sso | .github/scripts/redact-then-filter.sh --tail 40 || echo "omitted unsanitizable sso log"
+            k logs -n cloudtak deploy/cloudtak -c cloudtak | .github/scripts/redact-then-filter.sh --tail 40 || echo "omitted unsanitizable cloudtak log"
           }
           trap dump ERR
           k rollout status statefulset/cloudtak-postgis -n cloudtak --timeout=600s
@@ -509,12 +509,14 @@ tasks:
           live=false
           for i in $(seq 1 40); do
             if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs status 2>&1)"; then
-              echo "${out}"
+              echo "attempt ${i}: status command succeeded"
+              printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable status"
               echo "CloudTAK has a live TAK connection"
               live=true
               break
             fi
-            echo "attempt ${i}: ${out}" | tail -n 3
+            echo "attempt ${i}: status command failed"
+            printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh --tail 3 || echo "omitted unsanitizable status"
             sleep 15
           done
           if [ "${live}" != "true" ]; then
@@ -581,9 +583,9 @@ tasks:
               fi
               sleep 2
             done
-            k logs -n cloudtak basemap-denied || true
+            k logs -n cloudtak basemap-denied | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable basemap log"
             if [ -z "${code}" ]; then
-              k describe pod basemap-denied -n cloudtak || true
+              k describe pod basemap-denied -n cloudtak | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable pod description"
               echo "basemap-denied did not finish" >&2
               return 1
             fi
@@ -614,12 +616,14 @@ tasks:
             grep -qF "${host}" /tmp/cloudtak-se.txt
             for i in $(seq 1 20); do
               if out="$(k exec -n cloudtak deploy/cloudtak -c bootstrap -- node /home/etl/uds/bootstrap.mjs basemap 2>&1)"; then
-                echo "${out}"
+                echo "attempt ${i}: basemap command succeeded"
+                printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh || echo "omitted unsanitizable basemap status"
                 echo "The default basemap serves tiles"
                 deny_other_sa "${host}"
                 exit 0
               fi
-              echo "attempt ${i}: ${out}" | tail -n 3
+              echo "attempt ${i}: basemap command failed"
+              printf '%s\n' "${out}" | .github/scripts/redact-then-filter.sh --tail 3 || echo "omitted unsanitizable basemap status"
               sleep 15
             done
             echo "The default basemap did not serve a tile" >&2
@@ -662,7 +666,7 @@ tasks:
           done
           if [ "${found}" -ne 1 ]; then
             echo "API pod logs do not contain a TAK startup line" >&2
-            printf '%s\n' "${logs}" | tail -n 40 >&2
+            printf '%s\n' "${logs}" | .github/scripts/redact-then-filter.sh --tail 40 >&2 || echo "omitted unsanitizable api log" >&2
             exit 1
           fi
           if grep -q 'error pulling auth file' <<< "${logs}"; then

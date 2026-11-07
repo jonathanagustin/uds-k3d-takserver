@@ -7,7 +7,8 @@
 # is created. Init containers cannot be added to a running pod, so a pod that
 # has render-oidc has had it since its first start.
 #
-# Prints lengths and short hashes. Never prints the secret.
+# Says whether the rendered secret matches the cluster secret. It does not
+# print the value, its length, or a hash.
 set -euo pipefail
 
 kctl() {
@@ -29,13 +30,12 @@ fail() {
   failures=$((failures + 1))
 }
 
-fingerprint() {
-  printf '%s' "$1" | sha256sum | cut -c1-8
-}
-
 cluster_secret="$(kctl get secret takserver-sso -n "${ns}" -o jsonpath='{.data.TAK_OIDC_CLIENT_SECRET}' | base64 -d)"
-want="len=${#cluster_secret} sha=$(fingerprint "${cluster_secret}")"
-echo "cluster secret ${want}"
+if [[ -z "${cluster_secret}" ]]; then
+  fail "cluster secret is absent"
+else
+  echo "cluster secret present"
+fi
 
 # The webhook has to fail closed and be limited to the TAK apps.
 hook="$(kctl get mutatingwebhookconfiguration -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.webhooks[0].failurePolicy}{" "}{.webhooks[0].namespaceSelector.matchLabels}{"\n"}{end}' | grep -E '^pepr-[0-9a-f]{32} ' || true)"
@@ -122,11 +122,10 @@ for app in "${apps[@]}"; do
       | grep -o ' secret="[^"]*"' | head -1 \
       | sed -e 's/^ secret="//' -e 's/"$//' \
             -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g')"
-    have="len=${#value} sha=$(fingerprint "${value}")"
-    if [[ "${have}" = "${want}" ]]; then
-      echo "PASS ${pod} render-oidc completed, rendered secret ${have}"
+    if [[ -n "${value}" && "${value}" == "${cluster_secret}" ]]; then
+      echo "PASS ${pod} render-oidc completed, secret present"
     else
-      fail "${pod}: rendered secret ${have} does not match the cluster secret ${want}"
+      fail "${pod}: rendered secret is absent or does not match the cluster secret"
     fi
   done
 done

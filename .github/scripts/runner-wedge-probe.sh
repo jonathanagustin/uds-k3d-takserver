@@ -11,8 +11,10 @@ if ! timeout 5 ip -4 route >/dev/null 2>&1; then
   echo "ip -4 route did not answer within 5 seconds."
   wedged=1
 fi
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 hung="$(sudo timeout 10 dmesg -T 2>/dev/null |
-  grep -E 'blocked for more than [0-9]+ seconds|hung_task|rtnl_lock' | tail -10 || true)"
+  "${here}/redact-then-filter.sh" \
+    --grep 'blocked for more than [0-9]+ seconds|hung_task|rtnl_lock' --tail 10 || true)"
 if [[ -n "${hung}" ]]; then
   echo "Kernel hung-task lines:"
   echo "${hung}"

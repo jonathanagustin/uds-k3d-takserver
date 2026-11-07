@@ -233,4 +233,4 @@ PY
 fi
 shot atak-test-location
 a logcat -d -t 3000 > "${OUT}/logcat.txt" 2>&1 || true
-grep -E "ImportManager|MissionPackage|Import.*Sort|CertificateManager|TAKServer|CommsMapComponent|AndroidRuntime" "${OUT}/logcat.txt" | tail -n 60 || true
+echo "logcat saved to ${OUT}/logcat.txt"

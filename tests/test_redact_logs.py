@@ -4,6 +4,7 @@
 """Rendered TAK config must not survive the log redactor."""
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -82,3 +83,60 @@ class RedactLogsTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(text, 'secret="[REDACTED]"')
         self.assertNotIn("a&amp;b", text)
+
+    def test_html_escaped_and_backslash_quotes(self):
+        raw = (
+            f'secret=&quot;{OIDC}&quot;\n'
+            f'secret=\\"{OIDC}\\"\n'
+            f'secret=&apos;{OIDC}&apos;\n'
+        )
+        text, _count = redact.redact_text(raw)
+        self.assertNotIn(OIDC, text)
+        self.assertIn("&quot;[REDACTED]&quot;", text)
+        self.assertIn('\\"[REDACTED]\\"', text)
+        self.assertIn("&apos;[REDACTED]&apos;", text)
+
+    def test_unquoted_env_and_jvm_credentials(self):
+        raw = (
+            f"TAK_OIDC_CLIENT_SECRET={OIDC}\n"
+            f"OIDC_CLIENT_SECRET={OIDC}\n"
+            f"CAPASS={KEYSTORE}\n"
+            f"-Djavax.net.ssl.keyStorePassword={KEYSTORE}\n"
+            f"clientId=uds-takserver\n"
+        )
+        text, _count = redact.redact_text(raw)
+        self.assertNotIn(OIDC, text)
+        self.assertNotIn(KEYSTORE, text)
+        self.assertIn("TAK_OIDC_CLIENT_SECRET=[REDACTED]", text)
+        self.assertIn("-Djavax.net.ssl.keyStorePassword=[REDACTED]", text)
+        self.assertIn("clientId=uds-takserver", text)
+
+    def test_stdout_nul_does_not_pass_the_secret_through(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-logs.py"
+        blob = f'secret="{OIDC}"\n'.encode("utf-8") + b"\0" + OIDC.encode("utf-8")
+        result = subprocess.run(
+            ["python3", str(script), "-"],
+            input=blob,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(OIDC.encode("utf-8"), result.stdout)
+        self.assertNotIn(b"\0", result.stdout)
+
+    def test_rewrite_replaces_nul_file_and_exits_nonzero(self):
+        script = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "redact-logs.py"
+        folder = Path(__file__).resolve().parents[1] / "tests"
+        target = folder / ".redact-nul-fixture.log"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        target.write_bytes(f'secret="{OIDC}"'.encode("utf-8") + b"\0")
+        result = subprocess.run(
+            ["python3", str(script), str(target)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        body = target.read_bytes()
+        self.assertNotIn(OIDC.encode("utf-8"), body)
+        self.assertNotIn(b"\0", body)

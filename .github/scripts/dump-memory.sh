@@ -108,11 +108,8 @@ k logs deploy/takserver-api -n takserver -c takserver-api --tail=2000 2>/dev/nul
   grep -E 'Ignite|disconnect|Exception|protocol_version' | grep -v 'ExceptionTranslationFilter' | tail -60 | redact || true
 echo "::endgroup::"
 
-# The API reached Keycloak with "Received fatal alert: protocol_version".
-echo "::group::takserver-api JVM command line and TLS settings"
-k exec deploy/takserver-api -n takserver -c takserver-api -- sh -c \
-  'tr "\0" " " < /proc/1/cmdline; echo; env | grep -iE "java|jvm|tls|ssl"' 2>&1 | tail -20 | redact || true
-echo "::endgroup::"
+# The process command line and environment are not printed. They carry
+# unquoted passwords and client secrets that a value regex can miss.
 
 echo "::group::istio gateway minimum TLS versions"
 k get gateways.networking.istio.io -A -o yaml 2>/dev/null |
@@ -173,9 +170,8 @@ k logs deploy/takserver-api -n takserver -c takserver-api --tail=4000 2>/dev/nul
   head -70 | redact || true
 echo "::endgroup::"
 
-# Compare the cluster Secret with the copy each TAK pod rendered. Length and
-# an 8-character hash prefix are enough to see a mismatch. The values stay
-# in the pipeline and are not printed. Keycloak is not called with the secret.
+# Say whether the cluster Secret and each rendered file have a client secret.
+# The values are not printed. Keycloak is not called with the secret.
 echo "::group::takserver OIDC client secret versus the rendered file"
 k get secret takserver-sso -n takserver \
   -o jsonpath='secret created={.metadata.creationTimestamp} resourceVersion={.metadata.resourceVersion}{"\n"}' 2>&1 || true

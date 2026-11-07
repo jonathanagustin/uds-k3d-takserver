@@ -5,25 +5,18 @@
 """Summarize a rendered CoreConfig without printing secret values.
 
 Stdin is the XML. The report names TLS contexts and says whether each
-credential attribute is present, how long it is, and an 8-character sha256
-prefix so two copies can be compared. The attribute values are not printed.
+credential attribute is absent, a ${} placeholder, or present. It does not
+print the value, its length, or a hash.
 
     summarize-coreconfig.py --b64
 
-reads a base64 secret (the Secret's data field) on stdin and prints the same
-length and prefix. A decode failure prints "unreadable" and not the input.
+reads a base64 secret (the Secret's data field) on stdin and prints only
+present, absent, or unreadable. A decode failure does not echo the input.
 """
 
 import base64
-import hashlib
 import re
 import sys
-
-CREDENTIALS = ("secret", "keystorePass", "truststorePass", "password")
-
-
-def _sha8(value):
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
 
 
 def _attr(name, attrs):
@@ -33,10 +26,9 @@ def _attr(name, attrs):
     if match is None:
         return f"{name}=absent"
     value = match.group(1)
-    placeholder = "yes" if value.startswith("${") else "no"
-    return (
-        f"{name}=set length={len(value)} sha8={_sha8(value)} placeholder={placeholder}"
-    )
+    if value.startswith("${") or value == "":
+        return f"{name}=placeholder" if value.startswith("${") else f"{name}=absent"
+    return f"{name}=present"
 
 
 def summarize(xml):
@@ -69,12 +61,14 @@ def summarize(xml):
 def summarize_b64(raw):
     raw = raw.strip()
     if not raw:
-        return "cluster-secret: unreadable\n"
+        return "cluster-secret=absent\n"
     try:
-        value = base64.b64decode(raw, validate=True).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return "cluster-secret: unreadable\n"
-    return f"cluster-secret length={len(value)} sha8={_sha8(value)}\n"
+        value = base64.b64decode(raw, validate=True)
+    except ValueError:
+        return "cluster-secret=unreadable\n"
+    if not value:
+        return "cluster-secret=absent\n"
+    return "cluster-secret=present\n"
 
 
 def main(argv):

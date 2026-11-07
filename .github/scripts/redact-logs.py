@@ -2,16 +2,23 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Redact passwords from CI logs before they are printed or uploaded.
+"""Redact passwords and config secrets from CI logs before they are printed.
 
 TAK's makeCert.sh, openssl and keytool take keystore passwords on the command
-line. Falco and container logs can record those command lines, and the
-artifacts and job logs of this public repository are readable by anyone
-signed in to GitHub. Each deploy generates its own passwords, but they still
-do not belong in an artifact.
+line. Rendered CoreConfig and JVM options can carry the Keycloak client secret
+and the keystore password. This script masks those values. It does not decide
+whether a credential outlives the cluster that created it.
 
-Usage: redact-logs.py PATH... (files or directories; missing paths are skipped)
-Rewrites matching text files in place and prints how many values it replaced.
+Usage:
+  redact-logs.py PATH...     rewrite text files in place
+  redact-logs.py -           redact stdin onto stdout
+  redact-logs.py --stdout F  redact one file onto stdout without rewriting it
+
+A file that contains a NUL or is not valid UTF-8 is not passed through.
+Rewriting replaces it with a one-line omission and exits non-zero. Stdout
+modes print the omission and exit non-zero, and do not print the original
+bytes. Image, archive, and compressed suffixes are left unchanged because
+they are not log text.
 """
 
 import os
@@ -19,37 +26,68 @@ import re
 import sys
 
 MASK = "[REDACTED]"
+OMITTED = "omitted: unsanitizable file\n"
 # A value ends at whitespace, a quote, a backslash (escaped JSON) or a comma.
 # An already redacted value is left alone, so a second run changes nothing.
 VALUE = r"(?!\[REDACTED\])[^\s\"'\\,]+"
-# Credential attributes in rendered TAK config. The value may contain XML
-# escapes (&amp; &quot;) and may sit on its own line. clientId and other
-# non-secret attributes are left as they are. Single and double quotes both
-# occur. A second pass sees [REDACTED] and does not match VALUE-style text
-# inside the quotes only when the whole value is already the mask; the
-# negative lookahead below keeps a second pass from nesting the mask.
-ATTR = r"secret|keystorePass|truststorePass|password"
+# Credential names in XML, HTML-escaped XML, JSON, env assignments, and -D flags.
+# clientId is not in this list.
+NAMES = (
+    r"secret|keystorePass|truststorePass|password|client_secret|"
+    r"TAK_OIDC_CLIENT_SECRET|OIDC_CLIENT_SECRET|TAK_KEYSTORE_PASS|CAPASS"
+)
+NOT_MASK = r"(?!\[REDACTED\])"
 PATTERNS = (
     # keytool -storepass X, -deststorepass X, -srckeypass X; openssl -key X,
     # -password X, -passin X, -passout X. An openssl "pass:" prefix is kept.
     re.compile(
         r"(-(?:deststorepass|srcstorepass|storepass|destkeypass|srckeypass|keypass|key|password|passin|passout)\s+(?:pass:)?)"
-        + VALUE
+        + VALUE,
+        re.IGNORECASE,
     ),
     # openssl pass:X anywhere else, for example -passout pass:X.
-    re.compile(r"(\bpass:)" + VALUE),
-    # <openIdDiscoveryConfiguration ... secret="..."/> and the keystore
-    # passwords on <tls> and <connection password="...">, one line or split.
+    re.compile(r"(\bpass:)" + VALUE, re.IGNORECASE),
+    # secret="value" and secret='value', including values that contain &amp;
     re.compile(
-        rf"(\b(?:{ATTR})\s*=\s*\")(?!\[REDACTED\])[^\"]*(\")"
+        rf"(\b(?:{NAMES})\s*=\s*\"){NOT_MASK}[^\"]*(\")",
+        re.IGNORECASE,
     ),
     re.compile(
-        rf"(\b(?:{ATTR})\s*=\s*')(?!\[REDACTED\])[^']*(')"
+        rf"(\b(?:{NAMES})\s*=\s*'){NOT_MASK}[^']*(')",
+        re.IGNORECASE,
     ),
-    # curl / form body: client_secret=VALUE
-    re.compile(r"(client_secret=)(?!\[REDACTED\])[^\s&\"']+"),
+    # secret=&quot;value&quot; and secret=&apos;value&apos;
+    re.compile(
+        rf"(\b(?:{NAMES})\s*=\s*&quot;){NOT_MASK}(?:(?!&quot;).)*(&quot;)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(\b(?:{NAMES})\s*=\s*&apos;){NOT_MASK}(?:(?!&apos;).)*(&apos;)",
+        re.IGNORECASE,
+    ),
+    # secret=\"value\" as it appears in JSON and escaped shell logs.
+    re.compile(
+        rf"(\b(?:{NAMES})\s*=\s*\\\"){NOT_MASK}(?:(?!\\\").)*(\\\")",
+        re.IGNORECASE,
+    ),
+    # Unquoted secret=value, TAK_OIDC_CLIENT_SECRET=value, client_secret=value.
+    re.compile(
+        rf"(\b(?:{NAMES})\s*=\s*){NOT_MASK}(?![\"'\\])(?!&quot;)(?!&apos;)[^\s<&'\"\\]+",
+        re.IGNORECASE,
+    ),
+    # -Djavax.net.ssl.keyStorePassword=value and similar JVM system properties.
+    re.compile(
+        r"(-D[\w.]*?(?:password|passwd|secret|keystorepass|truststorepass)=)"
+        + NOT_MASK
+        + r"\S+",
+        re.IGNORECASE,
+    ),
 )
-SKIP_SUFFIXES = (".gz", ".zip", ".png", ".jpg", ".webm", ".mp4", ".tar", ".zst")
+SKIP_SUFFIXES = (".gz", ".zip", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".webm", ".mp4", ".tar", ".zst")
+
+
+class Unsanitizable(Exception):
+    """The bytes are not log text, so they must not be copied through."""
 
 
 def _mask(match):
@@ -67,22 +105,42 @@ def redact_text(text):
     return text, total
 
 
+def decode_log(raw):
+    """Return UTF-8 text, or raise Unsanitizable. Never returns the raw bytes."""
+    if b"\0" in raw:
+        raise Unsanitizable("nul")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise Unsanitizable("utf-8") from exc
+
+
+def _write_omission(path):
+    tmp = path + ".omit"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(OMITTED)
+    os.replace(tmp, path)
+
+
 def redact_file(path):
+    """Rewrite one file. Return (count, unsafe). Unsafe files keep no original bytes."""
     if path.endswith(SKIP_SUFFIXES):
-        return 0
+        return 0, False
     try:
         with open(path, "rb") as handle:
             raw = handle.read()
     except OSError:
-        return 0
-    if b"\0" in raw[:8192]:
-        return 0
-    text = raw.decode("utf-8", errors="surrogateescape")
+        return 0, False
+    try:
+        text = decode_log(raw)
+    except Unsanitizable:
+        _write_omission(path)
+        return 0, True
     new, count = redact_text(text)
     if new != text:
-        with open(path, "wb") as handle:
-            handle.write(new.encode("utf-8", errors="surrogateescape"))
-    return count
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(new)
+    return count, False
 
 
 def walk(path):
@@ -94,32 +152,50 @@ def walk(path):
             yield os.path.join(root, name)
 
 
+def _stdout_bytes(raw):
+    try:
+        text = decode_log(raw)
+    except Unsanitizable:
+        sys.stdout.write(OMITTED)
+        return 1
+    sys.stdout.write(redact_text(text)[0])
+    return 0
+
+
 def main(argv):
     # "-" redacts stdin onto stdout and prints no summary, so a log pipe stays
     # a log. "--stdout FILE" does the same for one file and does not rewrite it.
+    # Neither mode prints bytes it could not sanitize.
     if argv == ["-"]:
-        sys.stdout.write(redact_text(sys.stdin.read())[0])
-        return 0
+        return _stdout_bytes(sys.stdin.buffer.read())
     if len(argv) == 2 and argv[0] == "--stdout":
-        with open(argv[1], "rb") as handle:
-            raw = handle.read()
-        if b"\0" in raw[:8192]:
-            sys.stdout.buffer.write(raw)
-            return 0
-        text = raw.decode("utf-8", errors="surrogateescape")
-        sys.stdout.write(redact_text(text)[0])
-        return 0
+        try:
+            with open(argv[1], "rb") as handle:
+                raw = handle.read()
+        except OSError:
+            sys.stdout.write(OMITTED)
+            return 1
+        if argv[1].endswith(SKIP_SUFFIXES):
+            sys.stdout.write(OMITTED)
+            return 1
+        return _stdout_bytes(raw)
     replaced = 0
     files = 0
+    unsafe = 0
     for arg in argv:
         if not os.path.exists(arg):
             continue
         for path in walk(arg):
-            count = redact_file(path)
-            if count:
+            count, bad = redact_file(path)
+            if bad:
+                unsafe += 1
+            elif count:
                 files += 1
                 replaced += count
     print(f"redact-logs: replaced {replaced} value(s) in {files} file(s)")
+    if unsafe:
+        print(f"redact-logs: {unsafe} file(s) could not be sanitized", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -22,7 +22,13 @@ for path in "$@"; do
       exit 0
     fi
     echo "::group::${file}"
-    python3 "${here}/redact-logs.py" --stdout "${file}" | tail -n "${lines}" || true
+    tmp="$(mktemp)"
+    if python3 "${here}/redact-logs.py" --stdout "${file}" > "${tmp}"; then
+      tail -n "${lines}" -- "${tmp}" || true
+    else
+      echo "omitted unsanitizable file"
+    fi
+    rm -f "${tmp}"
     echo "::endgroup::"
   done < <(find "${path}" -type f \( -name '*.log' -o -name '*.txt' -o -name '*.json' \) -print0 2>/dev/null || true)
 done

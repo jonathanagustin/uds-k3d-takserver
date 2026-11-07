@@ -4,7 +4,6 @@
 """The CoreConfig summary reports shape, never the secret values."""
 
 import base64
-import hashlib
 import importlib.util
 import unittest
 from pathlib import Path
@@ -30,27 +29,26 @@ XML = f"""<Configuration>
 """
 
 
-def sha8(value):
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
-
-
 class SummarizeCoreconfigTests(unittest.TestCase):
-    def test_report_omits_every_secret_value(self):
+    def test_report_says_present_and_omits_every_secret_value(self):
         text = summary.summarize(XML)
         for secret in (OIDC, KEYSTORE, DB, "trust-sentinel"):
             self.assertNotIn(secret, text)
+        self.assertNotIn("length=", text)
+        self.assertNotIn("sha8=", text)
         self.assertIn("tls context=TLSv1.3", text)
         self.assertIn("openIdDiscovery=present", text)
-        self.assertIn(f"secret=set length={len(OIDC)} sha8={sha8(OIDC)} placeholder=no", text)
-        self.assertIn(f"keystorePass=set length={len(KEYSTORE)} sha8={sha8(KEYSTORE)} placeholder=no", text)
-        self.assertIn(f"password=set length={len(DB)} sha8={sha8(DB)} placeholder=no", text)
+        self.assertIn("secret=present", text)
+        self.assertIn("keystorePass=present", text)
+        self.assertIn("password=present", text)
         self.assertNotIn("uds-takserver", text)
         self.assertNotIn("jdbc:", text)
 
     def test_placeholder_is_labeled_and_not_printed(self):
         text = summary.summarize('<openIdDiscoveryConfiguration secret="${TAK_OIDC_CLIENT_SECRET}"/>')
-        self.assertIn("placeholder=yes", text)
+        self.assertIn("secret=placeholder", text)
         self.assertNotIn("${TAK_OIDC_CLIENT_SECRET}", text)
+        self.assertNotIn("length=", text)
 
     def test_non_xml_is_not_echoed(self):
         raw = "error: secret=" + OIDC
@@ -58,14 +56,15 @@ class SummarizeCoreconfigTests(unittest.TestCase):
         self.assertEqual(text, "coreconfig: unreadable\n")
         self.assertNotIn(OIDC, text)
 
-    def test_b64_secret_is_not_echoed(self):
+    def test_b64_secret_is_presence_only(self):
         encoded = base64.b64encode(OIDC.encode("utf-8")).decode("ascii")
         text = summary.summarize_b64(encoded + "\n")
-        self.assertEqual(text, f"cluster-secret length={len(OIDC)} sha8={sha8(OIDC)}\n")
+        self.assertEqual(text, "cluster-secret=present\n")
         self.assertNotIn(OIDC, text)
         self.assertNotIn(encoded, text)
+        self.assertNotIn("length=", text)
 
     def test_bad_b64_is_not_echoed(self):
         text = summary.summarize_b64("@@@not-base64@@@")
-        self.assertEqual(text, "cluster-secret: unreadable\n")
+        self.assertEqual(text, "cluster-secret=unreadable\n")
         self.assertNotIn("@@@", text)

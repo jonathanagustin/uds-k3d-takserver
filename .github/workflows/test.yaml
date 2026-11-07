@@ -513,51 +513,52 @@ jobs:
         shell: bash
         timeout-minutes: 2
 
-      - name: Redact passwords from the logs
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
-        # TAK's cert tools take keystore passwords as arguments, and container
-        # logs can record those command lines.
-        run: ./.github/scripts/redact-logs.py /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
-        shell: bash
+      - name: Stage sanitized logs
+        id: sanitize
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled()
+        # Copies into a new directory and redacts there. ok=true only if that
+        # script exits 0. A timeout or cancel leaves ok unset, so the uploads
+        # below do not run and the raw /tmp logs are not published.
         timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest="${RUNNER_TEMP}/sanitized-logs"
+          ./.github/scripts/stage-sanitized-logs.sh "${dest}" \
+            /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log \
+            /tmp/uds-containerd-logs /tmp/k3d-uds-*.log \
+            tests/.playwright/reports tests/.playwright/screenshots
+          echo "ok=true" >> "${GITHUB_OUTPUT}"
+          echo "dir=${dest}" >> "${GITHUB_OUTPUT}"
 
-      - name: Print logs before the upload
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
-        # A hung upload-artifact can outlast its step timeout; the job log keeps these.
-        run: ./.github/scripts/print-logs.sh /tmp/zarf-*.log /tmp/uds-*.log /tmp/maru-*.log /tmp/debug-*.log /tmp/uds-containerd-logs /tmp/k3d-uds-*.log
-        shell: bash
+      - name: Print sanitized logs
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
         timeout-minutes: 3
+        shell: bash
+        run: ./.github/scripts/print-logs.sh "${{ steps.sanitize.outputs.dir }}/payload"
 
       - name: Generate unique suffix
         id: uniq
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
         shell: bash
         run: |
           # shellcheck disable=SC3028
           echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
         timeout-minutes: 5
         with:
           name: debug-log-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
-          path: |
-            /tmp/zarf-*.log
-            /tmp/uds-*.log
-            /tmp/maru-*.log
-            /tmp/debug-*.log
-            /tmp/uds-containerd-logs
-            /tmp/k3d-uds-*.log
+          path: ${{ steps.sanitize.outputs.dir }}/payload/tmp
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && !cancelled() && steps.sanitize.outputs.ok == 'true'
         timeout-minutes: 5
         with:
           name: playwright-report-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
-          path: |
-            tests/.playwright/reports
-            tests/.playwright/screenshots
+          path: ${{ steps.sanitize.outputs.dir }}/payload/tests/.playwright
           retention-days: 30
           if-no-files-found: ignore
 

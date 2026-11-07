@@ -3,3 +3,6 @@ dist/
 .astro/
 src/content/docs/
 public/demo/*.mp4
+test-results/
+playwright-report/
+blob-report/

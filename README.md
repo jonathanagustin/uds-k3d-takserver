@@ -219,7 +219,7 @@ uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 
 In a UDS bundle, put the same check on the package entry, as `core-base` has in [bundle/uds-bundle.yaml](bundle/uds-bundle.yaml):
 
-```yaml
+```yaml title="uds-bundle.yaml"
   - name: takserver
     repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
     ref: <version>-upstream # the VERSION you verified above, followed by -upstream

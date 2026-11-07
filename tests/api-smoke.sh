@@ -93,9 +93,25 @@ request() {
   fi
 }
 
+# Redact the whole failure text, then keep a short tail. A head or a slice
+# first can leave the second half of a multiline secret with nothing to match.
+export REDACT_LOGS="${script_dir}/../.github/scripts/redact-logs.py"
+redact_diag() {
+  local lines="${1:-20}"
+  "${script_dir}/../.github/scripts/redact-then-filter.sh" --tail "${lines}" \
+    || echo "omitted unsanitizable diagnostic"
+}
+
 show_err() {
   if [[ -s "${work}/curl.err" ]]; then
-    sed 's/^/  /' "${work}/curl.err" >&2 || true
+    redact_diag 20 < "${work}/curl.err" | sed 's/^/  /' >&2 || true
+  fi
+}
+
+show_body() {
+  local body="$1"
+  if [[ -s "${body}" ]]; then
+    redact_diag 20 < "${body}" | sed 's/^/  /' >&2 || true
   fi
 }
 
@@ -107,14 +123,12 @@ expect_ok() {
   if [[ "${code}" != "200" ]] && [[ "${code}" != "201" ]]; then
     fail "${name} HTTP ${code}"
     show_err
-    if [[ -s "${body}" ]]; then
-      sed 's/^/  /' "${body}" | head -n 20 >&2 || true
-    fi
+    show_body "${body}"
     return 0
   fi
   if [[ -n "${needle}" ]] && ! grep -q "${needle}" "${body}"; then
     fail "${name} HTTP ${code} missing ${needle}"
-    sed 's/^/  /' "${body}" | head -n 20 >&2 || true
+    show_body "${body}"
     return 0
   fi
   pass "${name} HTTP ${code}"
@@ -258,7 +272,7 @@ else
   after="${work}/after-login.html"
   after_url="$(curl -k -sS --max-time 40 -c "${login_jar}" -b "${login_jar}" -L --max-redirs 20 \
     -o "${after}" -w "%{url_effective}" -A "uds-tak-api-smoke" "${post_args[@]}" "${action}" || true)"
-  printf 'login landed on %s\n' "${after_url}"
+  printf 'login landed on %s\n' "${after_url}" | redact_diag 5
 fi
 
 token="$(python3 - "${login_jar}" <<'PY'
@@ -446,9 +460,7 @@ print(u)' "${work}/oidc")"
 else
   fail "8446 GET /login/.well-known/openid-configuration HTTP ${REPLY_CODE}"
   show_err
-  if [[ -s "${work}/oidc" ]]; then
-    sed 's/^/  /' "${work}/oidc" | head -n 20 >&2 || true
-  fi
+  show_body "${work}/oidc"
 fi
 
 if [[ "${#token}" -ge 20 ]]; then
@@ -493,14 +505,12 @@ PY
       pass "8089 TLS with the enrolled certificate, stream still open after 8s"
     else
       fail "8089 stream with the enrolled certificate (openssl exit ${stream_rc}; TAK closed it if not 124)"
-      printf '%s\n' "${stream}" | head -n 20 >&2 || true
+      printf '%s\n' "${stream}" | redact_diag 20 >&2 || true
     fi
   else
     fail "8446 POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
     show_err
-    if [[ -s "${work}/enroll.json" ]]; then
-      sed 's/^/  /' "${work}/enroll.json" | head -n 20 >&2 || true
-    fi
+    show_body "${work}/enroll.json"
   fi
 fi
 
@@ -527,6 +537,24 @@ if [[ -f /tmp/tak-std-ports ]] && [[ "${#token}" -ge 20 ]]; then
       "${api8443}" "${admin_cert}" "${admin_key}" "${admin_pass}" <<'PY'
 import json, os, socket, ssl, subprocess, sys, tempfile, time
 enroll, key, host, port, uid, api, acert, akey, apass = sys.argv[1:]
+
+def diag(label, text):
+    script = os.environ.get("REDACT_LOGS", "")
+    if not script:
+        print("omitted unsanitizable diagnostic", file=sys.stderr)
+        return
+    proc = subprocess.run(
+        [sys.executable, script, "-"],
+        input=(text or "").encode("utf-8", "replace"),
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        print("omitted unsanitizable diagnostic", file=sys.stderr)
+        return
+    redacted = proc.stdout.decode("utf-8", "replace")
+    print(label, file=sys.stderr)
+    print("\n".join(redacted.splitlines()[:40]), file=sys.stderr)
+
 cert = json.load(open(enroll, encoding="utf-8"))["signedCert"].strip()
 if "BEGIN CERTIFICATE" not in cert:
     cert = "".join(cert.split())
@@ -563,11 +591,11 @@ for attempt in range(2):
                     found = True
                     break
             if not found:
-                print(out[:2000], file=sys.stderr)
+                diag("clientEndPoints", out)
                 subs = subprocess.run(["curl", "-k", "-sS", "--max-time", "20", "--cert", acert, "--key", akey,
                                        "--pass", apass, api + "Marti/api/subscriptions/all"],
                                       capture_output=True, text=True).stdout
-                print("subscriptions/all: " + subs[:2000], file=sys.stderr)
+                diag("subscriptions/all", subs)
     if found:
         break
     print(f"attempt {attempt + 1}: client not listed yet", file=sys.stderr)
@@ -594,7 +622,7 @@ print(c)' "${work}/std-enroll.json" > "${work}/std-cert.pem"
       pass "standard port 8089 without SNI, stream still open after 8s"
     else
       fail "standard port 8089 without SNI (openssl exit ${nosni_rc})"
-      printf '%s\n' "${nosni}" | head -n 20 >&2 || true
+      printf '%s\n' "${nosni}" | redact_diag 20 >&2 || true
     fi
   else
     fail "standard port 8446 on ${std_host} POST /Marti/api/tls/signClient/v2 HTTP ${REPLY_CODE}"
@@ -612,7 +640,7 @@ if grep -Eiq 'certificate required|alert number 11[0-9]|bad certificate|handshak
   pass "8089 rejected TLS with no client certificate"
 else
   fail "8089 did not reject TLS with no client certificate"
-  printf '%s\n' "${bare}" | head -n 20 >&2 || true
+  printf '%s\n' "${bare}" | redact_diag 20 >&2 || true
 fi
 
 finish

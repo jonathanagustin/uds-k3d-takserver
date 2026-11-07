@@ -547,12 +547,18 @@ k rollout status deploy/cloudtak -n cloudtak --timeout=600s
 
 say "api-smoke with the client certificate issued before the backup"
 smoke_rc=0
+filter_rc=0
 set +e
 TAK_CLIENT_CERT="${cert_dir}/admin.pem" \
   TAK_CLIENT_KEY="${cert_dir}/admin.key" \
-  ./tests/api-smoke.sh 2>&1 | tee -a "${log}"
+  ./tests/api-smoke.sh 2>&1 | "${root}/.github/scripts/redact-then-filter.sh" | tee -a "${log}"
 smoke_rc=${PIPESTATUS[0]}
+filter_rc=${PIPESTATUS[1]}
 set -e
+if [[ "${filter_rc}" -ne 0 ]]; then
+  say "api-smoke output omitted: unsanitizable"
+  exit 1
+fi
 say "api-smoke exit ${smoke_rc}"
 if [[ "${smoke_rc}" -ne 0 ]]; then
   exit "${smoke_rc}"

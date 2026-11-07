@@ -81,6 +81,7 @@ jobs:
           python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate -v
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
+          bash tests/test_api_smoke_diag.sh
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary

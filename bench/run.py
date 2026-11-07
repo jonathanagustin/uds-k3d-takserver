@@ -84,8 +84,20 @@ def kubectl_cmd():
     raise RuntimeError("kubectl is not available")
 
 
-def kubectl(*args, check=True):
-    result = subprocess.run([*kubectl_cmd(), *args], check=False, capture_output=True, text=True)
+def kubectl(*args, check=True, timeout=None):
+    try:
+        result = subprocess.run(
+            [*kubectl_cmd(), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        # Drop any partial stream. It was cut off before redaction.
+        if check:
+            raise RuntimeError(f"kubectl timed out after {timeout}s")
+        return subprocess.CompletedProcess(list(args), 124, stdout="", stderr="")
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         command = " ".join(str(part) for part in result.args)
@@ -189,12 +201,16 @@ def redacted_text(text, tail=None):
     """
     script = ROOT / ".github" / "scripts" / "redact-logs.py"
     raw = text.encode("utf-8", errors="replace") if isinstance(text, str) else (text or b"")
-    result = subprocess.run(
-        [sys.executable, str(script), "-"],
-        input=raw,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "-"],
+            input=raw,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return "omitted: unsanitizable stream"
     if result.returncode != 0:
         return "omitted: unsanitizable stream"
     body = result.stdout.decode("utf-8", errors="replace")
@@ -318,13 +334,22 @@ def format_restart(pod_name, statuses, logs_by_container):
     return "; ".join(parts)
 
 
+# A dead API server can leave kubectl logs blocked. This is only the
+# cold-start diagnostic, so give up and keep the exit fields.
+_LOG_TIMEOUT_S = 30
+
+
 def _container_excerpt(namespace, pod_name, container):
     """Redacted tail of the previous log, then the current log."""
     excerpts = []
     for label, extra in (("previous", ["--previous"]), ("current", [])):
         result = kubectl(
-            "logs", "-n", namespace, pod_name, "-c", container, *extra, check=False,
+            "logs", "-n", namespace, pod_name, "-c", container, *extra,
+            check=False, timeout=_LOG_TIMEOUT_S,
         )
+        if result.returncode == 124:
+            excerpts.append(f"{label}=timed out")
+            continue
         body = result.stdout or ""
         if result.returncode != 0 and not body.strip():
             excerpts.append(f"{label}=unreadable")

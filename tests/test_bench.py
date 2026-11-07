@@ -652,7 +652,7 @@ class RestartEvidenceTests(unittest.TestCase):
                 self.stderr = ""
                 self.returncode = returncode
 
-        def fake_kubectl(*args, check=True):
+        def fake_kubectl(*args, check=True, timeout=None):
             if args[:2] == ("get", "pods") and args[3] == "takserver":
                 return Result(json.dumps({"items": []}))
             if args[:2] == ("get", "pods") and args[3] == "cloudtak":
@@ -675,6 +675,27 @@ class RestartEvidenceTests(unittest.TestCase):
         self.assertNotIn("restart-sentinel-value", joined)
         self.assertIn("[REDACTED]", joined)
         self.assertIn("listen failed", joined)
+
+    def test_log_timeout_discards_the_partial_stream(self):
+        def expired(*_args, **_kwargs):
+            raise subprocess.TimeoutExpired(
+                cmd="kubectl",
+                timeout=30,
+                output='secret="timeout-sentinel-value"\n'.encode("utf-8"),
+            )
+
+        original_run = runner.subprocess.run
+        original_cmd = runner.kubectl_cmd
+        runner.subprocess.run = expired
+        runner.kubectl_cmd = lambda: ["kubectl"]
+        try:
+            text = runner._container_excerpt("cloudtak", "cloudtak-abc", "cloudtak")
+        finally:
+            runner.subprocess.run = original_run
+            runner.kubectl_cmd = original_cmd
+        self.assertIn("previous=timed out", text)
+        self.assertIn("current=timed out", text)
+        self.assertNotIn("timeout-sentinel-value", text)
 
 
 if __name__ == "__main__":

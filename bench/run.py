@@ -181,6 +181,28 @@ def footprint():
     }, errors
 
 
+def redacted_text(text, tail=None):
+    """Redact a complete log, then optionally keep the last lines.
+
+    Truncating first can leave a fragment of a multiline secret with nothing
+    for the redactor to match. A stream that cannot be redacted is not returned.
+    """
+    script = ROOT / ".github" / "scripts" / "redact-logs.py"
+    raw = text.encode("utf-8", errors="replace") if isinstance(text, str) else (text or b"")
+    result = subprocess.run(
+        [sys.executable, str(script), "-"],
+        input=raw,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return "omitted: unsanitizable stream"
+    body = result.stdout.decode("utf-8", errors="replace")
+    if tail is None:
+        return body
+    return "\n".join(body.splitlines()[-tail:])
+
+
 def start_phases():
     """Pull, init, JVM, and Ready for messaging and the API. Missing stays None."""
     found = {}
@@ -213,7 +235,10 @@ def start_phases():
         containers = pod.get("spec", {}).get("containers") or []
         container = containers[0]["name"] if containers else app
         try:
-            log_text = kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps", "--tail=400").stdout
+            log_text = redacted_text(
+                kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps").stdout,
+                tail=400,
+            )
         except (RuntimeError, subprocess.CalledProcessError):
             log_text = ""
         found[app] = pod_phases(pod, events, log_text)
@@ -438,17 +463,17 @@ def diagnose(namespace, workload):
     """What a timed-out rollout was waiting on. The nightly keeps no cluster."""
     lines = [f"--- {workload} in {namespace} did not finish rolling out"]
     pods = kubectl("get", "pods", "-n", namespace, "-o", "wide", check=False)
-    lines.append(pods.stdout.strip() or pods.stderr.strip())
+    lines.append(redacted_text(pods.stdout.strip() or pods.stderr.strip()))
     events = kubectl(
         "get", "events", "-n", namespace, "--sort-by=.lastTimestamp", check=False,
     )
-    lines.extend((events.stdout.strip() or events.stderr.strip()).splitlines()[-25:])
+    lines.append(redacted_text(events.stdout.strip() or events.stderr.strip(), tail=25))
     if workload.startswith("deployment/"):
-        for container, tail in (("wait-deps", "40"), (workload.split("/", 1)[1], "80")):
+        for container, tail in (("wait-deps", 40), (workload.split("/", 1)[1], 80)):
             logs = kubectl(
-                "logs", workload, "-n", namespace, "-c", container, f"--tail={tail}", check=False,
+                "logs", workload, "-n", namespace, "-c", container, check=False,
             )
-            text = logs.stdout.strip() or logs.stderr.strip()
+            text = redacted_text(logs.stdout.strip() or logs.stderr.strip(), tail=tail)
             lines.append(f"--- {container} logs")
             lines.append(text)
     print("\n".join(lines), file=sys.stderr)

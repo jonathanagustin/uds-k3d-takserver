@@ -54,6 +54,9 @@ The upgrade test deploys the last release and writes a row. Then it deploys this
 
 ## Backup
 
+For a step-by-step recovery procedure, see
+[Back up and restore TAK Server](how-to/backup-and-restore.md).
+
 Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.16.0-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
 
 Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, kept for 240h, `snapshotVolumes: false`. UDS Core 1.16.0 does not deploy a node-agent, and k3d local-path has no snapshot API, so the default backup is API objects only. The Postgres files on the volume are not in it.

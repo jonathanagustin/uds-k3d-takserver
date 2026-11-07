@@ -97,8 +97,9 @@ Renewal uses the last third of the validity on the enrolled certificate, so a
 shorter global lifetime does not reissue on the next reconcile. Deleting the
 Basic enrollment user is fail-closed: a failed `delete-user` keeps the device
 Secret, the private enrollment entry, and the finalizer. A retry is idempotent
-when the certificate row already has `revocationDate` or the file user is
-already gone.
+when the certificate row already has `revocationDate`, when delete returns
+TAK's `User not found!` response, or when `list-users` succeeds and omits the
+callsign. A generic HTTP 400 and an RMI lookup HTTP 404 are not absence.
 
 A locally signed legacy certificate still uses the reload fallback. The CRL
 stores `reload-at`, and subsequent CRL writes keep `uds.dev/pod-reload: true`

@@ -398,15 +398,45 @@ test("the unused password passes TAK's complexity rule", () => {
   assert.match(password, /[!]/);
 });
 
-test("unregister treats a missing user as done", async () => {
+test("unregister accepts deletion or TAK's missing-user response, not an ambiguous status", async () => {
   const tls = { ca: "", cert: "", key: "", passphrase: "" };
-  for (const status of [200, 400, 404]) {
-    const { d, calls } = fake({ tak: () => ({ status, body: "" }) });
+  const verified = '{"status":"BAD_REQUEST","code":2,"message":"Invalid Request: User not found!"}';
+  for (const response of [{ status: 200, body: "" }, { status: 400, body: verified }]) {
+    const { d, calls } = fake({ tak: () => response });
     await unregister(d.tak, tls, "a b/c");
+    assert.equal(calls.tak.length, 1);
     assert.equal(calls.tak[0].path, "/user-management/api/delete-user/a%20b%2Fc");
   }
-  const { d } = fake({ tak: () => ({ status: 500, body: "" }) });
-  await assert.rejects(unregister(d.tak, tls, "abcd"), /HTTP 500/);
+  const ambiguous = [
+    { status: 400, body: "" },
+    { status: 400, body: '{"message":"Invalid Request: bad input"}' },
+    { status: 404, body: '{"message":"RMI Service Not Found"}' },
+    { status: 500, body: '{"message":"User not found!"}' },
+  ];
+  for (const response of ambiguous) {
+    const { d } = fake({
+      tak: (_method, path) => path.endsWith("/list-users")
+        ? { status: 404, body: '{"message":"RMI Service Not Found"}' }
+        : response,
+    });
+    await assert.rejects(unregister(d.tak, tls, "takclient-test"), (error: Error) =>
+      error.message === `TAK delete-user returned HTTP ${response.status}` && !error.message.includes("bad input")
+      && !error.message.includes("RMI Service Not Found"));
+  }
+  const readback = (body: string) => fake({
+    tak: (_method, path) => path.endsWith("/list-users") ? { status: 200, body } : { status: 400, body: '{"message":"Invalid Request"}' },
+  });
+  await unregister(readback("[]").d.tak, tls, "takclient-test");
+  await unregister(readback('[{"username":"other.user"}]').d.tak, tls, "takclient-test");
+  for (const body of ["not-json", "{}", "[1]", "[null]", "[{}]", '[{"username":"takclient-test"}]']) {
+    await assert.rejects(unregister(readback(body).d.tak, tls, "takclient-test"), /HTTP 400/);
+  }
+  const unread = fake({
+    tak: (_method, path) => path.endsWith("/list-users")
+      ? { status: 503, body: "[]" }
+      : { status: 400, body: "" },
+  });
+  await assert.rejects(unregister(unread.d.tak, tls, "takclient-test"), /HTTP 400/);
 });
 
 test("condition keeps the transition time while the status holds", () => {
@@ -655,7 +685,8 @@ test("failed user deletion keeps the Secret until an idempotent retry removes th
     }
     if (method === "DELETE" && path.includes("delete-user")) {
       users += 1;
-      return users === 1 ? { status: 500, body: "hidden-account" } : { status: 400, body: "" };
+      return users === 1 ? { status: 500, body: "hidden-account" }
+        : { status: 400, body: '{"message":"Invalid Request: User not found!"}' };
     }
     if (method === "DELETE" && path.includes("/certadmin/cert/revoke/")) return { status: 200, body: "" };
     return { status: 200, body: "" };
@@ -672,6 +703,50 @@ test("failed user deletion keeps the Secret until an idempotent retry removes th
   assert.equal(calls.tak.filter(call => call.path.includes("delete-user")).length, 2);
   assert.deepEqual(calls.deleted, ["takclients/takclient-test"]);
   assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+});
+
+test("ambiguous delete-user responses keep the finalizer, device Secret, and private credential", async () => {
+  const responses = [
+    { status: 400, body: '{"message":"Invalid Request: bad input"}' },
+    { status: 400, body: "" },
+    { status: 404, body: '{"message":"RMI Service Not Found"}' },
+  ];
+  for (const response of responses) {
+    const { d, calls, store } = fake();
+    await reconcileTakClient(client(), "ADDED", d);
+    const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+    d.tak.request = async (_tls, method, path) => {
+      calls.tak.push({ method, path });
+      if (method === "GET" && path.includes("/certadmin/cert/")) return { status: 200, body: '{"data":{"id":7}}' };
+      if (method === "DELETE" && path.includes("/certadmin/cert/revoke/")) return { status: 200, body: "" };
+      if (path.includes("list-users")) return { status: 503, body: "[]" };
+      if (method === "DELETE" && path.includes("delete-user")) return response;
+      return { status: 200, body: "" };
+    };
+    assert.equal(await finalizeTakClient(doc, d), false);
+    assert.ok(store.secrets["takclients/takclient-test"]);
+    assert.ok(await readCredential(d.cluster, "takclient-test"));
+    assert.deepEqual(calls.deleted, []);
+    assert.equal(calls.logs.some(line => line.includes(`HTTP ${response.status}`)), true);
+    assert.equal(calls.logs.some(line => line.includes("bad input") || line.includes("RMI Service Not Found")), false);
+  }
+});
+
+test("list-users readback that omits the callsign finishes cleanup after an ambiguous delete", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  d.tak.request = async (_tls, method, path) => {
+    calls.tak.push({ method, path });
+    if (method === "GET" && path.includes("/certadmin/cert/")) return { status: 200, body: '{"data":{"id":7,"revocationDate":"2026-11-07T12:00:00.000Z"}}' };
+    if (path.endsWith("/list-users")) return { status: 200, body: '[{"username":"other.user"}]' };
+    if (method === "DELETE" && path.includes("delete-user")) return { status: 400, body: '{"message":"Invalid Request"}' };
+    return { status: 200, body: "" };
+  };
+  assert.equal(await finalizeTakClient(doc, d), true);
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+  assert.equal(calls.tak.some(call => call.path.endsWith("/list-users")), true);
 });
 
 test("onFinalize retries through an annotation when finalize cannot finish", async () => {

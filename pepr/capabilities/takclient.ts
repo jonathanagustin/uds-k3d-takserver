@@ -204,12 +204,44 @@ export async function register(tak: TakApi, tls: TakTls, callsign: string, group
   }
 }
 
+// TAK 5.7-RELEASE-14 (5187abd4) deleteUser throws InvalidParameterException
+// ("User not found!") when the file user is already gone. CustomExceptionHandler
+// maps that IllegalArgumentException to HTTP 400 and the message
+// "Invalid Request: User not found!". Other invalid requests are also 400.
+// RemoteLookupFailureException is HTTP 404 with "RMI Service Not Found",
+// which is not account absence. The status code alone is not proof.
+const MISSING_USER = "User not found!";
+
+function missingUserResponse(status: number, body: string): boolean {
+  return status === 400 && body.includes(MISSING_USER);
+}
+
+function accountNames(body: string): string[] | undefined {
+  let value: unknown;
+  try {
+    value = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(value)) return undefined;
+  const names: string[] = [];
+  for (const item of value) {
+    const username = item && typeof item === "object" ? (item as { username?: unknown }).username : undefined;
+    if (typeof username !== "string") return undefined;
+    names.push(username);
+  }
+  return names;
+}
+
 export async function unregister(tak: TakApi, tls: TakTls, callsign: string): Promise<void> {
   const res = await tak.request(tls, "DELETE", `${USERS}/delete-user/${encodeURIComponent(callsign)}`);
-  // 400 is TAK's "User not found!", which is the state we want.
-  if (res.status >= 300 && res.status !== 400 && res.status !== 404) {
-    throw new Error(`TAK delete-user returned HTTP ${res.status}`);
-  }
+  if (res.status < 300 || missingUserResponse(res.status, res.body)) return;
+  // An ambiguous 400 or 404 does not finish cleanup. A parsed list-users
+  // read that omits the callsign does.
+  const listed = await tak.request(tls, "GET", `${USERS}/list-users`);
+  const names = listed.status < 300 ? accountNames(listed.body) : undefined;
+  if (names && !names.includes(callsign)) return;
+  throw new Error(`TAK delete-user returned HTTP ${res.status}`);
 }
 
 export function condition(
@@ -510,8 +542,8 @@ export async function finalizeTakClient(client: TakClientDoc, deps: Deps): Promi
   }
   if (serial) await revoke(cluster, ca, serial, annotations[NOT_AFTER], deps.now(), annotations[ISSUER] !== "tak");
   // The Basic file user can enroll again. Do not drop the Secret or the
-  // finalizer until TAK confirms that user is gone. 400 and 404 are already
-  // gone, so a retry after a successful delete is safe.
+  // finalizer until delete succeeded, TAK's missing-user response was
+  // verified, or list-users shows the callsign is gone.
   if (callsign) {
     if (!admin) {
       deps.log(`TakClient ${name}: the TAK admin certificate is missing, so the enrollment user cannot be deleted yet`);

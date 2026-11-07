@@ -28,6 +28,67 @@ function flush() {
     });
 }
 
+test('a second emit after once is uncaught, with no leftover holder', () => {
+    for (const method of ['once', 'prependOnceListener']) {
+        const tak = new EventEmitter();
+        holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+        const seen = [];
+        tak[method]('error', (got) => seen.push(got.message));
+        assert.equal(tak.listenerCount('error'), 1, method);
+        tak.emit('error', reset('error1'));
+        assert.deepEqual(seen, ['error1'], method);
+        assert.equal(tak.listenerCount('error'), 0, method);
+        assert.throws(() => tak.emit('error', reset('error2')), /error2/);
+    }
+});
+
+test('an emit after every listener is removed is uncaught', () => {
+    const tak = new EventEmitter();
+    holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+    const seen = [];
+    const first = (got) => seen.push(got.message);
+    const second = (got) => seen.push('other ' + got.message);
+    tak.on('error', first);
+    tak.on('error', second);
+    tak.removeListener('error', first);
+    tak.removeListener('error', second);
+    assert.equal(tak.listenerCount('error'), 0);
+    assert.throws(() => tak.emit('error', reset('after-remove')), /after-remove/);
+    assert.deepEqual(seen, []);
+});
+
+test('once exhaustion and removal are uncaught in a fresh process', () => {
+    const onceResult = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import { EventEmitter } from 'node:events';
+        import { holdErrorsUntilListener } from ${JSON.stringify(path.join(cloudtakDir, 'tak-error-guard.mjs'))};
+        const tak = new EventEmitter();
+        holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+        tak.once('error', (err) => console.log('GOT ' + err.message));
+        tak.emit('error', Object.assign(new Error('error1'), { code: 'ECONNRESET' }));
+        tak.emit('error', Object.assign(new Error('error2'), { code: 'ECONNRESET' }));
+        console.log('STILL_UP');
+    `], { encoding: 'utf8' });
+    assert.match(onceResult.stdout, /GOT error1/);
+    assert.match(onceResult.stderr, /error2/);
+    assert.notEqual(onceResult.status, 0);
+    assert.doesNotMatch(onceResult.stdout, /STILL_UP/);
+
+    const removed = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import { EventEmitter } from 'node:events';
+        import { holdErrorsUntilListener } from ${JSON.stringify(path.join(cloudtakDir, 'tak-error-guard.mjs'))};
+        const tak = new EventEmitter();
+        holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+        const fn = () => console.log('GOT');
+        tak.on('error', fn);
+        tak.removeListener('error', fn);
+        tak.emit('error', Object.assign(new Error('after-remove'), { code: 'ECONNRESET' }));
+        console.log('STILL_UP');
+    `], { encoding: 'utf8' });
+    assert.match(removed.stderr, /after-remove/);
+    assert.notEqual(removed.status, 0);
+    assert.doesNotMatch(removed.stdout, /STILL_UP|GOT/);
+});
+
 test('same-turn register and emit delivers once for every registration method', async () => {
     for (const method of ['on', 'addListener', 'once', 'prependListener', 'prependOnceListener']) {
         const tak = new EventEmitter();
@@ -86,23 +147,16 @@ test('addListener, once, and prependOnce each receive a buffered reset once', as
     }
 });
 
-test('removing the pool listener before delivery does not keep the error forever', async () => {
-    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
-        import { EventEmitter } from 'node:events';
-        import { holdErrorsUntilListener } from ${JSON.stringify(path.join(cloudtakDir, 'tak-error-guard.mjs'))};
-        const tak = new EventEmitter();
-        holdErrorsUntilListener(tak, { deadlineMs: 40 });
-        const err = new Error('removed before delivery');
-        err.code = 'ECONNRESET';
-        tak.emit('error', err);
-        const fn = () => {};
-        tak.addListener('error', fn);
-        tak.removeListener('error', fn);
-        setTimeout(() => console.log('STILL_UP'), 200);
-    `], { encoding: 'utf8' });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /removed before delivery/);
-    assert.doesNotMatch(result.stdout, /STILL_UP/);
+test('a buffered error is delivered on registration, and the next emit after removal is uncaught', () => {
+    const tak = new EventEmitter();
+    holdErrorsUntilListener(tak, { deadlineMs: 5_000 });
+    tak.emit('error', reset('buffered'));
+    const seen = [];
+    const fn = (got) => seen.push(got.message);
+    tak.addListener('error', fn);
+    assert.deepEqual(seen, ['buffered']);
+    tak.removeListener('error', fn);
+    assert.throws(() => tak.emit('error', reset('after-remove')), /after-remove/);
 });
 
 test('a missing pool listener fails closed after the deadline', () => {
@@ -213,6 +267,107 @@ test('pinned node-tak 12.31.0 and locked 12.31.1 replay one reset across the poo
     assert.match(bare.stderr, /before secure TLS connection was established/);
     assert.notEqual(unpatched.status, 0, version);
     assert.match(unpatched.stderr, /before secure TLS connection was established/);
+    }
+});
+
+function cloudTakRetryMs(retryCount) {
+    // ConnectionPool.retry in CloudTAK v13.112.3. The first retry does not
+    // wait. Later waits grow by one second and stop at 15 seconds.
+    const isFirstRetry = retryCount === 0;
+    const nextRetry = Math.min(retryCount + 1, 15);
+    return isFirstRetry ? 0 : Math.min(nextRetry * 1000, 15_000);
+}
+
+test('clean EOF reconnects through patched node-tak and the pool retry delays', () => {
+    assert.equal(cloudTakRetryMs(0), 0);
+    assert.equal(cloudTakRetryMs(1), 2_000);
+    assert.equal(cloudTakRetryMs(14), 15_000);
+    assert.equal(cloudTakRetryMs(20), 15_000);
+    for (const version of ['12.31.0', '12.31.1']) {
+        const { work, api } = realTakReset(version);
+        const dist = path.join(api, 'node_modules', '@tak-ps', 'node-tak', 'dist', 'index.js');
+        fs.writeFileSync(dist, patchNodeTakSource(fs.readFileSync(dist, 'utf8')));
+        const key = path.join(work, 'key.pem');
+        const cert = path.join(work, 'cert.pem');
+        const made = spawnSync('openssl', [
+            'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+            '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost',
+        ], { encoding: 'utf8' });
+        assert.equal(made.status, 0, made.stderr);
+        fs.writeFileSync(path.join(api, 'eof.mjs'), `
+            import fs from 'node:fs';
+            import tls from 'node:tls';
+            import TAK from '@tak-ps/node-tak';
+            const cert = fs.readFileSync(process.env.CERT, 'utf8');
+            const key = fs.readFileSync(process.env.KEY, 'utf8');
+            let connections = 0;
+            let firstSocket;
+            let markConnected;
+            const connected = new Promise((resolve) => { markConnected = resolve; });
+            const server = tls.createServer({ cert, key }, (socket) => {
+                connections += 1;
+                console.log('SERVER ' + connections);
+                if (connections === 1) {
+                    firstSocket = socket;
+                    markConnected();
+                }
+            });
+            await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+            const tak = await TAK.connect(new URL('ssl://127.0.0.1:' + server.address().port), {
+                cert, key,
+            }, { id: 'pool' });
+            await connected;
+            // Same yield as ConnectionPool.#add before it registers listeners.
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            let retry = 0;
+            let retrying = false;
+            async function retryLikePool(kind) {
+                console.log('EVENT ' + kind);
+                if (retrying) return;
+                retrying = true;
+                const isFirstRetry = retry === 0;
+                const nextRetry = Math.min(retry + 1, 15);
+                const retryms = isFirstRetry ? 0 : Math.min(nextRetry * 1000, 15000);
+                retry = nextRetry;
+                console.log('DELAY ' + retryms);
+                if (retryms > 0) await new Promise((resolve) => setTimeout(resolve, retryms));
+                await tak.reconnect();
+                console.log('RECONNECTED');
+                retrying = false;
+            }
+            tak.on('close', () => retryLikePool('close'))
+                .on('end', () => retryLikePool('end'))
+                .on('error', (err) => retryLikePool('error ' + err.message));
+            firstSocket.end();
+            const deadline = Date.now() + 2000;
+            while (Date.now() < deadline && connections < 2) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+            tak.destroy();
+            server.close();
+            if (connections < 2) {
+                console.error('NO_RECONNECT ' + connections);
+                process.exit(4);
+            }
+            console.log('CLEAN_EOF_RECONNECT');
+        `);
+        const result = spawnSync(process.execPath, [path.join(api, 'eof.mjs')], {
+            cwd: api,
+            encoding: 'utf8',
+            timeout: 15_000,
+            env: {
+                ...process.env,
+                NODE_OPTIONS: `--max-old-space-size=640 --import ${path.join(api, 'uds-tak-error-guard.mjs')}`,
+                CERT: cert,
+                KEY: key,
+            },
+        });
+        fs.rmSync(work, { recursive: true, force: true });
+        assert.equal(result.status, 0, `${version}\n${result.stdout}\n${result.stderr}`);
+        assert.match(result.stdout, /CLEAN_EOF_RECONNECT/);
+        assert.match(result.stdout, /DELAY 0/);
+        assert.match(result.stdout, /SERVER 2/);
+        assert.doesNotMatch(result.stderr, /uncaught|NO_RECONNECT/);
     }
 });
 

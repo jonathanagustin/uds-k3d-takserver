@@ -251,6 +251,7 @@ def svg(records):
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height * len(VIEWS) * max(1, len(groups))}">',
+        '<rect width="100%" height="100%" fill="white"/>',
     ]
     colors = {"amd64": "#1f4e79", "arm64": "#9a3412"}
     offset = 0

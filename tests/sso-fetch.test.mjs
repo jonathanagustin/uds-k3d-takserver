@@ -15,6 +15,7 @@ import {
     issuerTrust,
     LIVE_BUNDLE_FILE,
     readOptional,
+    sanitizeDiagnostic,
     TAK_CA_FILE,
 } from '../.github/container-and-chart/cloudtak/sso-fetch.mjs';
 
@@ -42,6 +43,50 @@ test('an aggregate transport failure keeps its code', () => {
 
 test('a plain failure reason stays bounded', () => {
     assert.equal(boundedCause('missing or expired state cookie'), 'missing or expired state cookie');
+    const text = boundedCause(`preface ${'x'.repeat(5000)}`);
+    assert.equal(text.length <= 240, true);
+    assert.equal(text.startsWith('preface'), true);
+});
+
+test('complete pem blocks are redacted and surrounding text remains', () => {
+    const text = sanitizeDiagnostic(
+        '-----BEGIN CERTIFICATE-----\nONESECRET\n-----END CERTIFICATE----- kept '
+        + '-----BEGIN PRIVATE KEY-----\nTWOSECRET\n-----END PRIVATE KEY-----',
+    );
+    assert.equal(text.includes('ONESECRET'), false);
+    assert.equal(text.includes('TWOSECRET'), false);
+    assert.equal(text.includes('BEGIN'), false);
+    assert.equal(text.includes('kept'), true);
+});
+
+test('an unclosed pem block redacts every later fragment', () => {
+    const text = sanitizeDiagnostic(
+        'preface -----BEGIN PRIVATE KEY-----\nSHORTKEYFRAGMENT\n'
+        + '-----BEGIN RSA PRIVATE KEY-----\nSECONDFRAGMENT',
+    );
+    assert.equal(text.includes('SHORTKEYFRAGMENT'), false);
+    assert.equal(text.includes('SECONDFRAGMENT'), false);
+    assert.equal(text.includes('BEGIN'), false);
+    assert.equal(text.includes('preface'), true);
+    const bounded = boundedCause(`-----BEGIN PRIVATE KEY-----\n${'SECRETUNCLOSED'.repeat(100)}`);
+    assert.equal(bounded.includes('SECRETUNCLOSED'), false);
+    assert.equal(bounded.length <= 240, true);
+});
+
+test('long and repeated pem input stays redacted without a slow scan', () => {
+    const body = `${'A'.repeat(200000)}SECRETLONG`;
+    const longBlock = sanitizeDiagnostic(
+        `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\nkept-tail`,
+    );
+    assert.equal(longBlock.includes('SECRETLONG'), false);
+    assert.equal(longBlock.includes('kept-tail'), true);
+    const attack = `${'-----BEGIN -----'.repeat(20000)}SHORTKEYFRAGMENT`;
+    const started = performance.now();
+    const repeated = sanitizeDiagnostic(attack);
+    const elapsed = performance.now() - started;
+    assert.equal(repeated.includes('SHORTKEYFRAGMENT'), false);
+    assert.equal(repeated.includes('BEGIN'), false);
+    assert.equal(elapsed < 1000, true);
 });
 
 function lookupLocal(_hostname, options, callback) {

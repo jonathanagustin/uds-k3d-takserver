@@ -11,13 +11,66 @@ import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
 
-const PEM = /-----BEGIN [A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*-----/g;
 const JWT = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g;
 const LONG_TOKEN = /[A-Za-z0-9+/_-]{40,}={0,2}/g;
+const PEM_BEGIN = '-----BEGIN ';
+const PEM_END = '-----END ';
+
+function pemHeaderClose(text, from) {
+    const limit = Math.min(text.length, from + 64);
+    for (let i = from; i < limit; i += 1) {
+        const code = text.charCodeAt(i);
+        if (code === 45) return text.startsWith('-----', i) ? i : -1;
+        const digit = code >= 48 && code <= 57;
+        const upper = code >= 65 && code <= 90;
+        if (!digit && !upper && code !== 32) return -1;
+    }
+    return -1;
+}
+
+// One forward pass. An opening header without a closing header redacts the
+// rest of the text, so an unclosed key cannot remain after the marker.
+function redactPemBlocks(text) {
+    const parts = [];
+    let index = 0;
+    while (index < text.length) {
+        const start = text.indexOf(PEM_BEGIN, index);
+        if (start < 0) {
+            parts.push(text.slice(index));
+            break;
+        }
+        const headerClose = pemHeaderClose(text, start + PEM_BEGIN.length);
+        if (headerClose < 0) {
+            parts.push(text.slice(index, start + PEM_BEGIN.length));
+            index = start + PEM_BEGIN.length;
+            continue;
+        }
+        parts.push(text.slice(index, start));
+        let scan = headerClose + 5;
+        let closed = false;
+        while (scan < text.length) {
+            const end = text.indexOf(PEM_END, scan);
+            if (end < 0) break;
+            const endClose = pemHeaderClose(text, end + PEM_END.length);
+            if (endClose >= 0) {
+                parts.push('[redacted]');
+                index = endClose + 5;
+                closed = true;
+                break;
+            }
+            scan = end + PEM_END.length;
+        }
+        if (!closed) {
+            parts.push('[redacted]');
+            index = text.length;
+        }
+    }
+    return parts.join('');
+}
 
 export function sanitizeDiagnostic(value) {
     let text = String(value || '');
-    text = text.replace(PEM, '[redacted]');
+    text = redactPemBlocks(text);
     text = text.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]');
     text = text.replace(JWT, '[redacted]');
     text = text.replace(/https?:\/\/[^\s]+/g, (url) => {

@@ -97,6 +97,16 @@ class AirgapContracts(unittest.TestCase):
                     self.assertEqual(command.call_args.args,
                                      ("inspect", "--format", "{{json .HostConfig.NetworkMode}}", "tagged-node"))
 
+    def test_restore_does_not_request_dns_lookups_for_either_family(self):
+        for tool in ("iptables", "ip6tables"):
+            def result(_node, _tool, *args, **_kwargs):
+                return subprocess.CompletedProcess([], 1 if "-C" in args else 0, "", "")
+            with self.subTest(tool=tool), patch.object(AIRGAP, "require_private_network"), \
+                    patch.object(AIRGAP, "firewall", side_effect=result) as command:
+                AIRGAP.restore_node("node", tool)
+                listings = [call.args for call in command.call_args_list if "-L" in call.args]
+                self.assertEqual(listings, [("node", tool, "-L", AIRGAP.CHAIN, "-n")])
+
     def test_ci_always_restores_and_offline_ui_keeps_the_core_flow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())
         job = workflow["jobs"]["validate-install"]
@@ -113,6 +123,34 @@ class AirgapContracts(unittest.TestCase):
         config = yaml.safe_load((ROOT / "bundle/airgap-config.yaml").read_text())
         self.assertIs(config["variables"]["takserver"]["CLOUDTAK_BASEMAP_ENABLED"], False)
         self.assertIn('-e AIRGAP_TEST="${AIRGAP_TEST:-false}"', (ROOT / "tasks/test.yaml").read_text())
+
+
+@unittest.skipUnless(os.environ.get("AIRGAP_CLEANUP_INTEGRATION") == "1", "set AIRGAP_CLEANUP_INTEGRATION=1 for real DNS-blocked cleanup")
+class AirgapCleanupIntegration(unittest.TestCase):
+    def test_numeric_cleanup_finishes_with_unresponsive_dns(self):
+        name = f"airgap-cleanup-{uuid.uuid4().hex[:10]}"
+        try:
+            AIRGAP.docker("run", "-d", "--network", "none", "--cap-add", "NET_ADMIN", "--name", name,
+                          os.environ.get("AIRGAP_FIREWALL_IMAGE", "tak-airgap-firewall-test:latest"),
+                          "sh", "-c", "nc -u -l -p 53 >/dev/null & exec sleep infinity")
+            # All mutations are inside this disposable private network namespace.
+            AIRGAP.docker("exec", name, "sh", "-c",
+                          'printf "nameserver 127.0.0.1\\noptions timeout:1 attempts:1\\n" > /etc/resolv.conf')
+            AIRGAP.firewall(name, "iptables", "-N", AIRGAP.CHAIN)
+            for address in ("10.43.0.1", "10.43.0.2", "10.43.0.3", "10.43.0.4"):
+                AIRGAP.firewall(name, "iptables", "-A", AIRGAP.CHAIN, "-d", address, "-j", "RETURN")
+            # Bound the old behavior inside the container so its process is
+            # terminated too; no hanging child remains after the comparison.
+            old = AIRGAP.docker("exec", name, "timeout", "-s", "KILL", "2", "iptables", "-w", "5",
+                                "-L", AIRGAP.CHAIN, check=False)
+            self.assertEqual(old.returncode, 137, old.stderr)
+            numeric = AIRGAP.firewall(name, "iptables", "-L", AIRGAP.CHAIN, "-n")
+            self.assertIn("10.43.0.1", numeric.stdout)
+            AIRGAP.restore_node(name, "iptables")
+            self.assertEqual(AIRGAP.firewall(name, "iptables", "-L", AIRGAP.CHAIN, "-n", check=False).returncode, 1)
+            AIRGAP.restore_node(name, "iptables")
+        finally:
+            AIRGAP.docker("rm", "-f", name, check=False)
 
 
 @unittest.skipUnless(os.environ.get("AIRGAP_WGET_INTEGRATION") == "1", "set AIRGAP_WGET_INTEGRATION=1 for real BusyBox wget")

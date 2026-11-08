@@ -44,7 +44,9 @@ def require_private_network(node):
 
 def restore_node(node, tool):
     require_private_network(node)
-    found = firewall(node, tool, "-L", CHAIN, check=False)
+    # DNS is intentionally unavailable while guarded. Listing without -n can
+    # block on reverse lookups before any rule is removed.
+    found = firewall(node, tool, "-L", CHAIN, "-n", check=False)
     if found.returncode == 1:
         return
     found.check_returncode()
@@ -105,7 +107,7 @@ def discover(cluster):
         ipv6 = docker("exec", name, "cat", "/proc/sys/net/ipv6/conf/all/disable_ipv6", check=False)
         if ipv6.returncode == 0 and ipv6.stdout.strip() == "0":
             # If IPv6 is enabled but its filter is unavailable, fail closed.
-            firewall(name, "ip6tables", "-L")
+            firewall(name, "ip6tables", "-L", "-n")
             tools.append("ip6tables")
         result.append({"name": name, "tools": tools, "networks": by_family})
     return result
@@ -161,7 +163,7 @@ def main():
         probe(nodes, url, blocked=False)
         for node in nodes:
             for tool in node["tools"]:
-                if firewall(node["name"], tool, "-L", CHAIN, check=False).returncode == 0:
+                if firewall(node["name"], tool, "-L", CHAIN, "-n", check=False).returncode == 0:
                     raise RuntimeError(f"{node['name']}: {CHAIN} already exists")
         args.state.parent.mkdir(parents=True, exist_ok=True)
         args.state.write_text(json.dumps(nodes, indent=2))

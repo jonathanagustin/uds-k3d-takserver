@@ -12,7 +12,7 @@
 </p>
 <!-- github-only:end -->
 
-<p align="center">An all-in-one solution for deploying, securing, and operating TAK Server.</p>
+<p align="center">An all-in-one solution for packaging, deploying, and operating TAK Server.</p>
 
 <!-- github-only:start -->
 <p align="center">

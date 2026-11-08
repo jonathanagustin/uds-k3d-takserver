@@ -1,7 +1,7 @@
 // Copyright 2026 uds-k3d-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
-export const base = '/uds-k3d-takserver';
+export const base = '/uds-takserver';
 
 export function versionForPath(pathname, versions) {
   const relative = pathname.replace(new RegExp(`^${base}/?`), '').replace(/\/$/, '');

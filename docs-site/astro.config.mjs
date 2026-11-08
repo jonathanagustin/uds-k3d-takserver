@@ -81,15 +81,15 @@ function versionItems(version) {
 }
 const topics = versions.map((version) => ({
   id: version.id, label: version.label,
-  link: `/uds-k3d-takserver/${version.prefix ? version.prefix + '/' : ''}`,
+  link: `/uds-takserver/${version.prefix ? version.prefix + '/' : ''}`,
   items: versionItems(version),
 }));
 
-// Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
+// Project site: https://jonathanagustin.github.io/uds-takserver/
 // `site` is the origin. `base` is the repository path GitHub Pages serves.
 export default defineConfig({
   site: 'https://jonathanagustin.github.io',
-  base: '/uds-k3d-takserver',
+  base: '/uds-takserver',
   trailingSlash: 'always',
   integrations: [
     // Renders the ```mermaid blocks in the README and the guides. It has to
@@ -109,7 +109,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image',
-            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+            content: 'https://jonathanagustin.github.io/uds-takserver/og.png',
           },
         },
         {
@@ -135,7 +135,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'twitter:image',
-            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+            content: 'https://jonathanagustin.github.io/uds-takserver/og.png',
           },
         },
       ],
@@ -143,11 +143,11 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/jonathanagustin/uds-k3d-takserver',
+          href: 'https://github.com/jonathanagustin/uds-takserver',
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/jonathanagustin/uds-k3d-takserver/edit/main/',
+        baseUrl: 'https://github.com/jonathanagustin/uds-takserver/edit/main/',
       },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],

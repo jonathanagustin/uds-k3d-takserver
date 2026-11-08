@@ -4,7 +4,7 @@
 import { expect, test } from '@playwright/test';
 import versions from '../src/generated/versions.json' with { type: 'json' };
 
-const base = '/uds-k3d-takserver/';
+const base = '/uds-takserver/';
 
 test('released root and unreleased main show the correct sources and retain the selected page', async ({ page }, testInfo) => {
   await page.goto(`${base}data/`);

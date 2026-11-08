@@ -26,7 +26,10 @@ args = sys.argv[1:]
 state_file = Path(os.environ["ALERT_TEST_STATE"])
 
 if name == "docker":
-    raise SystemExit(1 if os.environ.get("ALERT_TEST_DOCKER_FAIL") == "1" else 0)
+    raise SystemExit(0)
+if name == "sleep":
+    # Exercise the retry contract without spending ten minutes in the test.
+    raise SystemExit(0)
 if name == "curl":
     url = next(arg for arg in args if arg.startswith("http://"))
     if "/api/search" in url:
@@ -54,6 +57,8 @@ if name == "curl":
     elif "/api/v2/alerts" in url:
         state = json.loads(state_file.read_text())
         assert state["messaging"] == state["cloudtak"] == 0
+        if os.environ.get("ALERT_TEST_ALERTS_FAIL") == "1":
+            raise SystemExit(23)
         body = [{"labels": {"alertname": alert}, "status": {"state": "active"}}
                 for alert in ("TAKMessagingTargetDown", "CloudTAKTargetDown")]
     else:
@@ -101,7 +106,7 @@ else:
 
 
 class GrafanaAlertsTests(unittest.TestCase):
-    def run_script(self, docker_failure=False, script_text=None):
+    def run_script(self, alert_failure=False, script_text=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tests, binary = root / "tests", root / "bin"
@@ -112,7 +117,7 @@ class GrafanaAlertsTests(unittest.TestCase):
             router = binary / "router"
             router.write_text(f"#!{sys.executable}\n" + CLI_STUB)
             router.chmod(0o755)
-            for name in ("uds", "curl", "docker"):
+            for name in ("uds", "curl", "docker", "sleep"):
                 (binary / name).symlink_to(router)
             state_file = root / "state.json"
             state_file.write_text(json.dumps({
@@ -122,7 +127,7 @@ class GrafanaAlertsTests(unittest.TestCase):
             process = subprocess.Popen(["bash", str(script)], cwd=root, env={
                 **os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
                 "ALERT_TEST_STATE": str(state_file),
-                "ALERT_TEST_DOCKER_FAIL": "1" if docker_failure else "0",
+                "ALERT_TEST_ALERTS_FAIL": "1" if alert_failure else "0",
             }, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
             try:
                 stdout, stderr = process.communicate(timeout=20)
@@ -145,10 +150,11 @@ class GrafanaAlertsTests(unittest.TestCase):
         self.assertFalse(state["premature_cloudtak_restore"])
         self.assertIn("TAKMessagingTargetDown and CloudTAKTargetDown are firing", output)
 
-    def test_failure_after_alerts_restores_both_replica_counts(self):
-        code, output, state = self.run_script(docker_failure=True)
+    def test_unavailable_alertmanager_restores_both_replica_counts(self):
+        code, output, state = self.run_script(alert_failure=True)
         self.assertNotEqual(code, 0, output)
         self.assertEqual((state["messaging"], state["cloudtak"]), (1, 1))
+        self.assertIn("did not both reach active in Alertmanager", output)
 
 
 if __name__ == "__main__":

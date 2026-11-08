@@ -359,7 +359,10 @@ jobs:
             runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
           - arch: arm64
             runner: ubuntu-26.04-arm
-    name: validate-install (${{ matrix.arch }})
+          - arch: amd64
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
+            airgap: true
+    name: validate-install (${{ matrix.arch }}${{ matrix.airgap && ', airgap' || '' }})
     runs-on: ${{ matrix.runner }}
     # A healthy install finishes in about 20 minutes. This job limit is what
     # stops a step whose own timeout does not, such as actions/upload-artifact.
@@ -372,6 +375,7 @@ jobs:
       id-token: write
     env:
       TEST_TYPE: install
+      AIRGAP_TEST: ${{ matrix.airgap && 'true' || 'false' }}
       # Pull the Package workflow's build (same key) instead of creating it.
       # Fork pull requests cannot publish one, so they create at once.
       DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && '600' || '0' }}
@@ -471,12 +475,24 @@ jobs:
         run: ./.github/scripts/pin-image-tags.sh
 
       - name: Test
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true'
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
         # A normal install test takes about 20 minutes. This fires before the
         # job limit so the log and dump steps below still run.
         timeout-minutes: 40
+
+      - name: Install and test without node internet egress
+        if: env.TEST_TYPE == 'install' && env.AIRGAP_TEST == 'true'
+        run: uds run test-airgap --set FLAVOR=upstream --no-progress
+        timeout-minutes: 50
+
+      # A killed shell cannot run its EXIT trap. The runner's Docker access
+      # is unaffected, so this retries namespace-scoped cleanup on cancellation.
+      - name: Restore airgap node egress
+        if: always() && env.AIRGAP_TEST == 'true'
+        run: python3 .github/scripts/node-airgap.py restore --state "${RUNNER_TEMP}/tak-airgap-state.json"
+        timeout-minutes: 2
 
       - name: Upgrade from the released package and check retained state
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'upgrade')

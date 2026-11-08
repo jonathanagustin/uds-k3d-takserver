@@ -84,6 +84,15 @@ class FakeKubectl:
 
 
 class TrustBundleLiveTests(unittest.TestCase):
+    def test_sso_check_requires_the_bundled_signer_and_keeps_the_first_error(self):
+        source = Path(__file__).with_name("trust-bundle-live.py").read_text()
+        discovery = source.split("def discovery", 1)[1]
+        self.assertIn("tls.rootCertificates", discovery)
+        self.assertIn("trusted by public roots without the bundled CA", discovery)
+        self.assertIn("trial_ca_rejected=true", discovery)
+        self.assertIn("slice(0,300)", discovery)
+        self.assertNotIn("rejectUnauthorized:false", discovery)
+        self.assertIn("rejectUnauthorized:true", discovery)
     def test_append_preserves_existing_custom_roots(self):
         original = base64.b64encode(pem("old").encode()).decode()
         combined = base64.b64decode(live.append_ca(original, pem("new"))).decode()

@@ -155,12 +155,17 @@ python3 -B tests/trust-bundle-live.py --ui
 
 The script appends a temporary CA to the saved custom roots in ClusterConfig
 `uds-cluster-config`, waits for both namespace bundles and new API, messaging,
-and CloudTAK pod UIDs, and checks Keycloak discovery with Node inside the SSO
-container using its configured combined trust file. It then rotates to a
-second CA and repeats the checks. `--ui` also reruns the existing browser suite
-after each rotation, requiring Keycloak setup rather than allowing SSO tests
-to skip. The browser suite currently uses the development `uds.dev` domain;
-without `--ui`, set `DOMAIN` for another test domain.
+and CloudTAK pod UIDs, and checks Keycloak from the SSO container. Node must
+reject the live gateway certificate when using only public roots, accept it
+when trusting only the signing CA found in the combined trust file, and reject
+it when trusting only the unrelated trial CA. If the server sends a signing CA
+that is not yet in the bundle, the script installs that CA and waits for the
+same reloads before the check. It then rotates to a second trial CA and repeats
+the checks. The first Node error is kept, bounded to 300 characters, with no
+certificate body. `--ui` also reruns the existing browser suite after each
+rotation, requiring Keycloak setup rather than allowing SSO tests to skip. The
+browser suite currently uses the development `uds.dev` domain; without `--ui`,
+set `DOMAIN` for another test domain.
 
 Existing custom roots and the include-public/DoD settings are preserved. On
 exit, the script restores the saved custom CA setting and waits for the
@@ -180,10 +185,12 @@ The same test is available through **Test** workflow dispatch with
 trust configuration and can restart Core's Istio consumers too, so it is an
 opt-in acceptance run. The normal install and upgrade paths remain unchanged.
 
-This test proves live propagation, reloads, and SSO with the existing gateway
-certificate. It does not replace that gateway certificate with a private-CA
-certificate. The separate `test_trust_bundle.py` HTTPS test proves private-CA
-verification and rejection when that CA is removed.
+This test proves the live gateway certificate chains to a CA in the combined
+trust file, that public roots alone do not accept it, and that an unrelated
+trial CA does not accept it. It also proves both TAK workloads and CloudTAK
+restart when that bundle changes. It does not mint a replacement gateway
+certificate. The separate `test_trust_bundle.py` HTTPS test proves the merge
+script with two local CAs.
 
 ## TAK connection
 

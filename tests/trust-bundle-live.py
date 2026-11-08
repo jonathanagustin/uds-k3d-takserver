@@ -4,9 +4,11 @@
 
 """Exercise Core CA propagation and automatic consumer reloads on a test cluster.
 
-Only appends temporary public roots to the existing custom bundle. The actual
-Keycloak gateway certificate is not changed; this checks propagation, reloads,
-and live SSO discovery. test_trust_bundle.py separately tests private-CA TLS.
+Appends temporary roots to the saved custom bundle and proves the live SSO
+certificate is accepted only by its signing CA from the combined trust file.
+Public roots and the unrelated trial CA must reject it. A signing CA missing
+from the bundle is installed, then the consumers reload. test_trust_bundle.py
+separately tests private-CA TLS with local servers.
 """
 
 import argparse
@@ -76,21 +78,70 @@ class Kubectl:
             result[f"{namespace}/{name}"] = {pod["metadata"]["uid"] for pod in items}
         return result
 
+    def exec_sso(self, code, *args):
+        result = subprocess.run(
+            ["uds", "zarf", "tools", "kubectl", "exec", "-n", "cloudtak", "deploy/cloudtak",
+             "-c", "sso", "--", "node", "-e", code, *args],
+            text=True, capture_output=True, timeout=60)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        detail = (result.stderr or result.stdout or "no error text").strip().splitlines()
+        first = detail[-1][:300] if detail else "no error text"
+        raise RuntimeError(f"CloudTAK SSO trust check failed: {first}")
+
+    def signing_status(self, domain):
+        # The inspection handshake records the peer certificate only. Acceptance
+        # uses a separate connection that requires the bundled signing CA.
+        code = r"""const tls=require('node:tls');const crypto=require('node:crypto');const fs=require('node:fs');
+const host=process.argv[1];
+function pems(text){return text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[]}
+function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
+function derPem(raw){const b64=raw.toString('base64');return '-----BEGIN CERTIFICATE-----\n'+b64.match(/.{1,64}/g).join('\n')+'\n-----END CERTIFICATE-----\n'}
+(async()=>{
+  const peer=await new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,rejectUnauthorized:false,timeout:20000},()=>{const cert=socket.getPeerCertificate(true);socket.end();resolve(cert)});socket.on('error',reject)});
+  if(!peer||!peer.raw) throw new Error('SSO server sent no certificate');
+  const leaf=new crypto.X509Certificate(peer.raw);
+  const bundled=pems(fs.readFileSync('/var/run/combined-trust/ca-bundle.pem','utf8')).map(pem=>new crypto.X509Certificate(pem));
+  const signer=bundled.find(ca=>{try{return fp(ca)===fp(leaf)||leaf.verify(ca.publicKey)}catch{return false}});
+  if(signer){console.log('IN_BUNDLE '+fp(signer));return}
+  if(!peer.issuerCertificate||!peer.issuerCertificate.raw) throw new Error('SSO signing CA is not in the combined trust file and the server sent no issuer certificate: peer='+fp(leaf));
+  const issuerPem=derPem(peer.issuerCertificate.raw);
+  const issuer=new crypto.X509Certificate(issuerPem);
+  if(!(fp(issuer)===fp(leaf)||leaf.verify(issuer.publicKey))) throw new Error('presented issuer did not sign the SSO certificate: peer='+fp(leaf));
+  console.log('NEED_CA '+Buffer.from(issuerPem).toString('base64'));
+})().catch(error=>{console.error(String(error&&error.message||error).replace(/\s+/g,' ').slice(0,300));process.exitCode=1});"""
+        return self.exec_sso(code, f"sso.{domain}")
+
     def discovery(self, domain, fingerprint):
-        code = r"""const fs = require('node:fs'); const { X509Certificate } = require('node:crypto');
-(async () => {
-  if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') throw Error('TLS validation is disabled');
-  const path = '/var/run/combined-trust/ca-bundle.pem';
-  if (process.env.NODE_EXTRA_CA_CERTS !== path) throw Error('combined trust file is not configured');
-  const certificates = fs.readFileSync(path, 'utf8').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
-  const hashes = certificates.map(pem => new X509Certificate(pem).fingerprint256.replaceAll(':', '').toLowerCase());
-  if (!hashes.includes(process.argv[2])) throw Error('test CA is missing from the process trust file');
-  const response = await fetch(process.argv[1] + '/.well-known/openid-configuration', { signal: AbortSignal.timeout(20000) });
-  if (!response.ok || (await response.json()).issuer !== process.argv[1]) throw Error('Keycloak discovery failed');
-  console.log('CloudTAK SSO Node discovery verified with the combined trust file');
-})().catch(() => { console.error('CloudTAK SSO trust/discovery check failed'); process.exitCode = 1; });"""
-        return self.run("exec", "-n", "cloudtak", "deploy/cloudtak", "-c", "sso", "--", "node", "-e", code,
-                        f"https://sso.{domain}/realms/uds", fingerprint).strip()
+        code = r"""const tls=require('node:tls');const https=require('node:https');const fs=require('node:fs');const crypto=require('node:crypto');
+const realm=process.argv[1];const host=new URL(realm).host;const trial=process.argv[2];
+if(process.env.NODE_TLS_REJECT_UNAUTHORIZED==='0') throw new Error('TLS validation is disabled');
+const path='/var/run/combined-trust/ca-bundle.pem';
+if(process.env.NODE_EXTRA_CA_CERTS!==path) throw new Error('combined trust file is not configured');
+function pems(text){return text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[]}
+function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
+function connect(ca){return new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,ca,rejectUnauthorized:true,timeout:20000},()=>{const peer=socket.getPeerCertificate();socket.end();if(!peer||!peer.raw) reject(new Error('SSO server sent no certificate')); else resolve(peer)});socket.on('error',reject)})}
+(async()=>{
+  const parsed=pems(fs.readFileSync(path,'utf8')).map(pem=>new crypto.X509Certificate(pem));
+  const trialCert=parsed.find(cert=>fp(cert)===trial);
+  if(!trialCert) throw new Error('trial CA is missing from the combined trust file');
+  let publiclyTrusted=false;
+  try{await connect(tls.rootCertificates);publiclyTrusted=true}catch{publiclyTrusted=false}
+  if(publiclyTrusted) throw new Error('SSO certificate is trusted by public roots without the bundled CA');
+  const peer=await connect(parsed.map(cert=>cert.toString()));
+  const leaf=new crypto.X509Certificate(peer.raw);
+  const signer=parsed.find(cert=>{try{return fp(cert)===fp(leaf)||leaf.verify(cert.publicKey)}catch{return false}});
+  if(!signer) throw new Error('SSO signing CA is not in the combined trust file: peer='+fp(leaf));
+  await connect([signer.toString()]);
+  const body=await new Promise((resolve,reject)=>{const req=https.get(realm+'/.well-known/openid-configuration',{ca:[signer.toString()],servername:host,rejectUnauthorized:true,timeout:20000},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(chunks).toString('utf8')}))});req.on('error',reject)});
+  const document=JSON.parse(body.text);
+  if(body.status!==200||document.issuer!==realm) throw new Error('Keycloak discovery failed: HTTP '+body.status);
+  let unrelatedRejected=false;
+  try{await connect([trialCert.toString()])}catch{unrelatedRejected=true}
+  if(!unrelatedRejected) throw new Error('unrelated trial CA validated the SSO certificate');
+  console.log('CloudTAK SSO verified peer='+fp(leaf)+' signer='+fp(signer)+' trial_ca_rejected=true');
+})().catch(error=>{console.error(String(error&&error.message||error).replace(/\s+/g,' ').slice(0,300));process.exitCode=1});"""
+        return self.exec_sso(code, f"https://sso.{domain}/realms/uds", fingerprint)
 
 
 def certs_value(config):
@@ -120,8 +171,33 @@ class Trial:
         self.original = copy.deepcopy(kube.config())
         self.saved = certs_value(self.original)
         self.issued = []
+        self.signer_pem = None
         self.original_bundles = {ns: fingerprints(kube.bundle(ns)) for ns in ("takserver", "cloudtak")}
         self.evidence = []
+
+    def desired_certs(self, certificate):
+        base = self.saved
+        if self.signer_pem:
+            base = append_ca(base, self.signer_pem)
+        return append_ca(base, certificate)
+
+    def ensure_signing_ca(self):
+        status = self.kube.signing_status(self.domain)
+        if status.startswith("IN_BUNDLE "):
+            print(f"SSO signing CA {status.split()[1]} is already in the combined trust file", flush=True)
+            return
+        if not status.startswith("NEED_CA "):
+            raise RuntimeError(f"CloudTAK SSO trust check failed: {status[:300]}")
+        pem_text = base64.b64decode(status.split(" ", 1)[1]).decode()
+        if "PRIVATE KEY" in pem_text:
+            raise RuntimeError("refusing a private key from the gateway handshake")
+        self.signer_pem = pem_text
+        fingerprint = next(iter(fingerprints(pem_text)))
+        before = self.kube.pods()
+        self.set_certs(append_ca(self.saved, pem_text))
+        wait_for(lambda: self.bundles_match(fingerprint), "signing CA propagation", 180)
+        wait_for(lambda: self.replaced_pods(before), "reload after installing the SSO signing CA")
+        print(f"installed SSO signing CA {fingerprint} into the trust bundle and reloaded consumers", flush=True)
 
     def set_certs(self, desired):
         expected = self.issued[-1] if self.issued else self.saved
@@ -146,15 +222,17 @@ class Trial:
     def phase(self, certificate, excluded=None):
         fingerprint = next(iter(fingerprints(certificate)))
         before = self.kube.pods()
-        self.set_certs(append_ca(self.saved, certificate))
+        self.set_certs(self.desired_certs(certificate))
         wait_for(lambda: self.bundles_match(fingerprint, excluded), "CA ConfigMap propagation", 180)
         after = wait_for(lambda: self.replaced_pods(before), "automatic consumer rollouts")
-        print(wait_for(lambda: self.kube.discovery(self.domain, fingerprint), "CloudTAK SSO discovery", 180), flush=True)
+        sso = wait_for(lambda: self.kube.discovery(self.domain, fingerprint), "CloudTAK SSO discovery", 180)
+        print(sso, flush=True)
         if self.ui:
             subprocess.run(["uds", "run", "test:ui", "--no-progress"], check=True, timeout=900,
                            env={**os.environ, "REQUIRE_SSO_SETUP": "true"})
         self.evidence.append({"ca_sha256": fingerprint, "pods_before": {k: sorted(v) for k, v in before.items()},
-                              "pods_after": {k: sorted(v) for k, v in after.items()}, "sso_ui": self.ui})
+                              "pods_after": {k: sorted(v) for k, v in after.items()}, "sso_ui": self.ui,
+                              "sso": sso[:300]})
         print(f"CA {fingerprint}: both namespace bundles and all three automatic rollouts verified", flush=True)
         return fingerprint
 
@@ -233,6 +311,7 @@ def main():
     restored = False
     with tempfile.TemporaryDirectory(prefix="trust-bundle-live-") as directory:
         try:
+            trial.ensure_signing_ca()
             first = trial.phase(generate_ca(Path(directory), "uds-test-ca-a"))
             trial.phase(generate_ca(Path(directory), "uds-test-ca-b"), excluded=first)
         finally:

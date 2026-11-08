@@ -41,6 +41,8 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
   .stack, .copy { flex-direction: column; width: 100%; align-items: center; }
   .stack { gap: 2rem; }
   .copy { gap: 1.5rem; }
+  .copy .tagline { text-align: center; font-size: clamp(1.125rem, 2vw, 1.75rem);
+    line-height: 1.35; font-weight: 600; }
   h1 { width: min(100%, 44rem); margin: 0; }
   .project-wordmark { display: block; }
   .project-wordmark img { display: block; width: 100%; height: auto; }

@@ -10,12 +10,15 @@
     <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="440" height="110">
   </picture>
 </p>
+<!-- github-only:end -->
+
+<p align="center">TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.</p>
+
+<!-- github-only:start -->
 <p align="center">
   <a href="https://jonathanagustin.github.io/uds-takserver/">Read the documentation</a>
 </p>
 <!-- github-only:end -->
-
-TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.
 
 <details>
 <summary>Contents</summary>

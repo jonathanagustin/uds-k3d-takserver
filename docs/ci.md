@@ -130,6 +130,13 @@ one-second kill grace; the kernel-log probe has a ten-second budget and the
 same grace. If routing times out, those network diagnostics are skipped.
 Local log sanitizing and printing still run. A missing command or permission
 is reported as inconclusive and does not suppress diagnostics.
+If the probe does not return within 20 seconds, the step still exits 0 and
+records the route as stalled only if the routing probe has not reported yet.
+A healthy route stays healthy when only the kernel-log probe hangs. Probe output
+is spooled locally so blocked descendants cannot retain the step log pipes.
+The wrapper signals the probe process group without waiting for stuck tasks.
+That timeout is not the install or upgrade
+failure; the failed deploy step above it is.
 
 This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-k3d-takserver/issues/300).
 It does not repair the kernel, interrupt a process stuck in uninterruptible

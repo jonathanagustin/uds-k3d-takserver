@@ -11,6 +11,7 @@ import { createPublicKey, generateKeyPairSync, verify, X509Certificate } from "n
 import { inflateRawSync } from "node:zlib";
 import { afterEach, test } from "node:test";
 import forge from "node-forge";
+import { ENROLLMENT_SECRET, readCredential } from "./takclient-credentials.ts";
 import type { ConfigMapDoc, DeploymentDoc, SecretDoc } from "../cluster.ts";
 import { runtime } from "../cluster.ts";
 import {
@@ -42,12 +43,14 @@ import {
 } from "./takclient-pki.ts";
 import {
   CALLSIGN,
+  ISSUER,
   condition,
   CRL_SECRET,
   ensureCrl,
   finalizeTakClient,
   needsIssue,
   NOT_AFTER,
+  NOT_BEFORE,
   readAdmin,
   readCa,
   readCrlState,
@@ -138,8 +141,14 @@ interface Calls {
   logs: string[];
 }
 
-function fake(opts: { store?: Store; clients?: TakClientDoc[]; tak?: (method: string, path: string) => TakResponse } = {}) {
+function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: number; tak?: (method: string, path: string) => TakResponse } = {}) {
   const store = opts.store ?? material();
+  if (opts.clients) {
+    store.secrets[`takserver/${ENROLLMENT_SECRET}`] = { data: Object.fromEntries(
+      opts.clients.map(doc => [doc.metadata!.name!, b64("fake-enrollment-pass-Aa1!")])) };
+  }
+  const issuedDays = opts.issuedDays ?? 30;
+  let at = NOW;
   const calls: Calls = { status: [], annotate: [], deleted: [], sleeps: [], tak: [], logs: [] };
   const cluster = {
     getConfigMap: async (ns: string, name: string) => store.configMaps[`${ns}/${name}`],
@@ -163,6 +172,7 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; tak?: (method: st
       calls.annotate.push({ name, annotations });
     },
     listTakClients: async () => opts.clients ?? [],
+    listPods: async () => [],
     deleteSecret: async (ns: string, name: string) => {
       calls.deleted.push(`${ns}/${name}`);
       delete store.secrets[`${ns}/${name}`];
@@ -174,11 +184,26 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; tak?: (method: st
   const tak: TakApi = {
     request: async (_tls, method, path, body) => {
       calls.tak.push({ method, path, body });
-      return opts.tak ? opts.tak(method, path) : { status: 200, body: "" };
+      if (opts.tak) return opts.tak(method, path);
+      if (path.includes("signClient/v2")) {
+        const csr = forge.pki.certificationRequestFromPem(body as string);
+        const cert = forge.pki.createCertificate();
+        cert.publicKey = csr.publicKey!;
+        cert.serialNumber = newSerial();
+        cert.setSubject(csr.subject.attributes);
+        cert.setIssuer(CA.cert.subject.attributes);
+        cert.validity.notBefore = new Date(at.getTime() - DAY);
+        cert.validity.notAfter = new Date(at.getTime() + issuedDays * DAY);
+        cert.setExtensions([{ name: "extKeyUsage", clientAuth: true }]);
+        cert.sign(CA.key, forge.md.sha256.create());
+        return { status: 200, body: JSON.stringify({ signedCert: forge.pki.certificateToPem(cert) }) };
+      }
+      if (path.startsWith("/Marti/api/certadmin/cert/") && method === "GET") return { status: 200, body: '{"data":{"id":1}}' };
+      return { status: 200, body: "" };
     },
   };
-  const d: Deps = { cluster, tak, now: () => NOW, domain: "uds.dev", log: msg => calls.logs.push(msg) };
-  return { d, calls, store };
+  const d: Deps = { cluster, tak, now: () => at, domain: "uds.dev", log: msg => calls.logs.push(msg) };
+  return { d, calls, store, setNow: (value: Date) => { at = value; } };
 }
 
 function client(extra: Partial<TakClientDoc> = {}): TakClientDoc {
@@ -373,15 +398,45 @@ test("the unused password passes TAK's complexity rule", () => {
   assert.match(password, /[!]/);
 });
 
-test("unregister treats a missing user as done", async () => {
+test("unregister accepts deletion or TAK's missing-user response, not an ambiguous status", async () => {
   const tls = { ca: "", cert: "", key: "", passphrase: "" };
-  for (const status of [200, 400, 404]) {
-    const { d, calls } = fake({ tak: () => ({ status, body: "" }) });
+  const verified = '{"status":"BAD_REQUEST","code":2,"message":"Invalid Request: User not found!"}';
+  for (const response of [{ status: 200, body: "" }, { status: 400, body: verified }]) {
+    const { d, calls } = fake({ tak: () => response });
     await unregister(d.tak, tls, "a b/c");
+    assert.equal(calls.tak.length, 1);
     assert.equal(calls.tak[0].path, "/user-management/api/delete-user/a%20b%2Fc");
   }
-  const { d } = fake({ tak: () => ({ status: 500, body: "" }) });
-  await assert.rejects(unregister(d.tak, tls, "abcd"), /HTTP 500/);
+  const ambiguous = [
+    { status: 400, body: "" },
+    { status: 400, body: '{"message":"Invalid Request: bad input"}' },
+    { status: 404, body: '{"message":"RMI Service Not Found"}' },
+    { status: 500, body: '{"message":"User not found!"}' },
+  ];
+  for (const response of ambiguous) {
+    const { d } = fake({
+      tak: (_method, path) => path.endsWith("/list-users")
+        ? { status: 404, body: '{"message":"RMI Service Not Found"}' }
+        : response,
+    });
+    await assert.rejects(unregister(d.tak, tls, "takclient-test"), (error: Error) =>
+      error.message === `TAK delete-user returned HTTP ${response.status}` && !error.message.includes("bad input")
+      && !error.message.includes("RMI Service Not Found"));
+  }
+  const readback = (body: string) => fake({
+    tak: (_method, path) => path.endsWith("/list-users") ? { status: 200, body } : { status: 400, body: '{"message":"Invalid Request"}' },
+  });
+  await unregister(readback("[]").d.tak, tls, "takclient-test");
+  await unregister(readback('[{"username":"other.user"}]').d.tak, tls, "takclient-test");
+  for (const body of ["not-json", "{}", "[1]", "[null]", "[{}]", '[{"username":"takclient-test"}]']) {
+    await assert.rejects(unregister(readback(body).d.tak, tls, "takclient-test"), /HTTP 400/);
+  }
+  const unread = fake({
+    tak: (_method, path) => path.endsWith("/list-users")
+      ? { status: 503, body: "[]" }
+      : { status: 400, body: "" },
+  });
+  await assert.rejects(unregister(unread.d.tak, tls, "takclient-test"), /HTTP 400/);
 });
 
 test("condition keeps the transition time while the status holds", () => {
@@ -405,6 +460,8 @@ test("reconcile issues a Secret, annotates the TakClient, registers it, and repo
   assert.equal(cert.serialNumber.toLowerCase(), annotations[SERIAL]);
   assert.equal(unb64(secret.data!["ca.pem"]), CA_FILES.pem);
   assert.equal(unb64(secret.data!["client.key"]).includes("PRIVATE KEY"), true);
+  assert.equal(secret.data!["user-password"], undefined);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
   const files = unzip(Buffer.from(secret.data!["package.zip"], "base64"));
   assert.equal(files["certs/server.pref"].includes(`${streamHost("uds.dev")}:8089:ssl`), true);
   assert.equal(files["certs/server.pref"].includes(unb64(secret.data!.password)), true);
@@ -447,8 +504,15 @@ test("a replaced certificate is revoked", async () => {
   assert.equal(state.entries[0].notAfter, old[NOT_AFTER]);
 });
 
-test("needsIssue renews in the last third of the lifetime and on a callsign change", () => {
-  const annotations = { [SERIAL]: "aa", [CALLSIGN]: "takclient-test", [NOT_AFTER]: new Date(NOW.getTime() + 20 * DAY).toISOString() };
+test("needsIssue renews in the last third of the issued lifetime and on a callsign change", () => {
+  const notAfter = new Date(NOW.getTime() + 20 * DAY);
+  const annotations = {
+    [ISSUER]: "tak",
+    [SERIAL]: "aa",
+    [CALLSIGN]: "takclient-test",
+    [NOT_BEFORE]: new Date(notAfter.getTime() - 30 * DAY).toISOString(),
+    [NOT_AFTER]: notAfter.toISOString(),
+  };
   const doc = client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "aa" } } });
   const secret = { metadata: { annotations }, data: {} };
   assert.equal(needsIssue(doc, secret, NOW), false);
@@ -458,10 +522,77 @@ test("needsIssue renews in the last third of the lifetime and on a callsign chan
   assert.equal(needsIssue(client(), secret, NOW), true);
   assert.equal(needsIssue(doc, { metadata: { annotations: { ...annotations, [SERIAL]: "bb" } } }, NOW), true);
   assert.equal(needsIssue(doc, { data: {} }, NOW), true);
-  const noDate = { metadata: { annotations: { [SERIAL]: "aa", [CALLSIGN]: "takclient-test" } } };
+  const noDate = { metadata: { annotations: { [ISSUER]: "tak", [SERIAL]: "aa", [CALLSIGN]: "takclient-test" } } };
   assert.equal(needsIssue(doc, noDate, NOW), true);
   const longer = client({ metadata: { name: "x", annotations: { [SERIAL]: "aa" } }, spec: { callsign: "takclient-test", validityDays: 90 } });
-  assert.equal(needsIssue(longer, secret, NOW), true);
+  assert.equal(needsIssue(longer, secret, NOW), false);
+  const sameInstant = { metadata: { annotations: { ...annotations, [NOT_BEFORE]: annotations[NOT_AFTER] } }, data: {} };
+  assert.equal(needsIssue(doc, sameInstant, NOW), true);
+  const noEnd = { metadata: { annotations: { ...annotations, [NOT_AFTER]: "" } }, data: {} };
+  assert.equal(needsIssue(doc, noEnd, NOW), true);
+});
+
+function clientPem(notBefore: Date, notAfter: Date): string {
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = forge.pki.publicKeyFromPem(pair.publicKey.export({ type: "spki", format: "pem" }).toString());
+  cert.serialNumber = "0a";
+  cert.validity.notBefore = notBefore;
+  cert.validity.notAfter = notAfter;
+  cert.setSubject([{ shortName: "CN", value: "takclient-test" }]);
+  cert.setIssuer(CA.cert.subject.attributes);
+  cert.sign(CA.key, forge.md.sha256.create());
+  return forge.pki.certificateToPem(cert);
+}
+
+test("a seven-day issued certificate renews on its own lifetime, not a ten-day threshold", () => {
+  const doc = client({
+    metadata: { name: "takclient-test", annotations: { [SERIAL]: "aa" } },
+    spec: { callsign: "takclient-test", groups: ["Operators"], validityDays: 90 },
+  });
+  const notBefore = NOW;
+  const notAfter = new Date(NOW.getTime() + 7 * DAY);
+  const annotations = {
+    [ISSUER]: "tak",
+    [SERIAL]: "aa",
+    [CALLSIGN]: "takclient-test",
+    [NOT_BEFORE]: new Date(NOW.getTime() - 23 * DAY).toISOString(),
+    [NOT_AFTER]: new Date(NOW.getTime() + 7 * DAY).toISOString(),
+  };
+  const pem = b64(clientPem(notBefore, notAfter));
+  const secret = { metadata: { annotations }, data: { "client.pem": pem } };
+  assert.equal(needsIssue(doc, secret, NOW), false);
+  assert.equal(needsIssue(doc, secret, new Date(NOW.getTime() + 4 * DAY)), false);
+  assert.equal(needsIssue(doc, secret, new Date(NOW.getTime() + 5 * DAY)), true);
+  const damaged = { metadata: { annotations: { ...annotations, [NOT_BEFORE]: notBefore.toISOString() } }, data: { "client.pem": b64("not-a-cert") } };
+  assert.equal(needsIssue(doc, damaged, NOW), false);
+  assert.equal(needsIssue(doc, { metadata: { annotations: { ...annotations, [NOT_BEFORE]: annotations[NOT_AFTER] } }, data: { "client.pem": b64("not-a-cert") } }, NOW), true);
+});
+
+test("reconcile keeps a seven-day certificate until the last third of the issued lifetime", async () => {
+  const { d, calls, store, setNow } = fake({ issuedDays: 7 });
+  const spec = { callsign: "takclient-test", groups: ["Operators"], validityDays: 1 };
+  await reconcileTakClient(client({ spec }), "ADDED", d);
+  const first = store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL];
+  const current = () => {
+    const annotations = store.secrets["takclients/takclient-test"].metadata!.annotations!;
+    return client({ metadata: { name: "takclient-test", generation: 1, annotations }, spec, status: { conditions: calls.status.at(-1)!.conditions } });
+  };
+  assert.equal(needsIssue(current(), store.secrets["takclients/takclient-test"], NOW), false);
+  setNow(new Date(NOW.getTime() + 2 * DAY));
+  await reconcileTakClient(current(), "MODIFIED", d);
+  assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL], first);
+  setNow(new Date(NOW.getTime() + 5 * DAY));
+  assert.equal(needsIssue(current(), store.secrets["takclients/takclient-test"], d.now()), true);
+  await reconcileTakClient(current(), "MODIFIED", d);
+  const renewed = store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL];
+  assert.notEqual(renewed, first);
+  await reconcileTakClient(current(), "MODIFIED", d);
+  assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL], renewed);
+  const cert = new X509Certificate(unb64(store.secrets["takclients/takclient-test"].data!["client.pem"]));
+  const lifetime = Date.parse(cert.validTo) - Date.parse(cert.validFrom);
+  assert.equal(lifetime < 10 * DAY, true);
+  assert.equal(Date.parse(cert.validTo) - d.now().getTime() > lifetime / 3, true);
 });
 
 test("reconcile reports why it is not Ready", async () => {
@@ -518,10 +649,11 @@ test("finalize deletes the TAK user, revokes the serial, and deletes the Secret"
   assert.equal(readCrlState(store.secrets[`takserver/${CRL_SECRET}`]).number, 2);
 });
 
-test("finalize keeps going when TAK is down, and waits when the CA is gone", async () => {
+test("finalize waits when the enrollment user or the CA cannot be cleaned up", async () => {
   const down = fake({ tak: () => ({ status: 500, body: "" }) });
-  assert.equal(await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab" } } }), down.d), true);
+  assert.equal(await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab" } } }), down.d), false);
   assert.equal(down.calls.logs[0].includes("HTTP 500"), true);
+  assert.deepEqual(down.calls.deleted, []);
   const unissued = fake();
   assert.equal(await finalizeTakClient(client({ spec: { callsign: undefined } as never }), unissued.d), true);
   assert.equal(unissued.calls.tak.length, 0);
@@ -530,6 +662,91 @@ test("finalize keeps going when TAK is down, and waits when the CA is gone", asy
   const noCa = fake({ store });
   assert.equal(await finalizeTakClient(client(), noCa.d), false);
   assert.equal(noCa.calls.logs[0].includes("cannot be revoked"), true);
+  const adminless = material();
+  delete adminless.secrets["takserver/takserver-certs"];
+  adminless.secrets["takclients/takclient-test"] = { data: { password: b64("x") } };
+  const noAdmin = fake({ store: adminless });
+  assert.equal(await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab", [CALLSIGN]: "takclient-test" } } }), noAdmin.d), false);
+  assert.deepEqual(noAdmin.calls.deleted, []);
+  assert.ok(adminless.secrets["takclients/takclient-test"]);
+  assert.equal(noAdmin.calls.logs.some(line => line.includes("enrollment user")), true);
+});
+
+test("failed user deletion keeps the Secret until an idempotent retry removes the account", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  let users = 0;
+  d.tak.request = async (_tls, method, path) => {
+    calls.tak.push({ method, path });
+    if (method === "GET" && path.includes("/certadmin/cert/")) {
+      const revocationDate = users > 0 ? "2026-11-07T12:00:00.000Z" : "";
+      return { status: 200, body: JSON.stringify({ data: { id: 7, revocationDate } }) };
+    }
+    if (method === "DELETE" && path.includes("delete-user")) {
+      users += 1;
+      return users === 1 ? { status: 500, body: "hidden-account" }
+        : { status: 400, body: '{"message":"Invalid Request: User not found!"}' };
+    }
+    if (method === "DELETE" && path.includes("/certadmin/cert/revoke/")) return { status: 200, body: "" };
+    return { status: 200, body: "" };
+  };
+  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.ok(store.secrets["takclients/takclient-test"]);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
+  assert.deepEqual(calls.deleted, []);
+  assert.equal(calls.logs.some(line => line.includes("HTTP 500") && !line.includes("hidden-account")), true);
+  const revokeDeletes = () => calls.tak.filter(call => call.method === "DELETE" && call.path.includes("/certadmin/cert/revoke/")).length;
+  assert.equal(revokeDeletes(), 1);
+  assert.equal(await finalizeTakClient(doc, d), true);
+  assert.equal(revokeDeletes(), 1);
+  assert.equal(calls.tak.filter(call => call.path.includes("delete-user")).length, 2);
+  assert.deepEqual(calls.deleted, ["takclients/takclient-test"]);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+});
+
+test("ambiguous delete-user responses keep the finalizer, device Secret, and private credential", async () => {
+  const responses = [
+    { status: 400, body: '{"message":"Invalid Request: bad input"}' },
+    { status: 400, body: "" },
+    { status: 404, body: '{"message":"RMI Service Not Found"}' },
+  ];
+  for (const response of responses) {
+    const { d, calls, store } = fake();
+    await reconcileTakClient(client(), "ADDED", d);
+    const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+    d.tak.request = async (_tls, method, path) => {
+      calls.tak.push({ method, path });
+      if (method === "GET" && path.includes("/certadmin/cert/")) return { status: 200, body: '{"data":{"id":7}}' };
+      if (method === "DELETE" && path.includes("/certadmin/cert/revoke/")) return { status: 200, body: "" };
+      if (path.includes("list-users")) return { status: 503, body: "[]" };
+      if (method === "DELETE" && path.includes("delete-user")) return response;
+      return { status: 200, body: "" };
+    };
+    assert.equal(await finalizeTakClient(doc, d), false);
+    assert.ok(store.secrets["takclients/takclient-test"]);
+    assert.ok(await readCredential(d.cluster, "takclient-test"));
+    assert.deepEqual(calls.deleted, []);
+    assert.equal(calls.logs.some(line => line.includes(`HTTP ${response.status}`)), true);
+    assert.equal(calls.logs.some(line => line.includes("bad input") || line.includes("RMI Service Not Found")), false);
+  }
+});
+
+test("list-users readback that omits the callsign finishes cleanup after an ambiguous delete", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  d.tak.request = async (_tls, method, path) => {
+    calls.tak.push({ method, path });
+    if (method === "GET" && path.includes("/certadmin/cert/")) return { status: 200, body: '{"data":{"id":7,"revocationDate":"2026-11-07T12:00:00.000Z"}}' };
+    if (path.endsWith("/list-users")) return { status: 200, body: '[{"username":"other.user"}]' };
+    if (method === "DELETE" && path.includes("delete-user")) return { status: 400, body: '{"message":"Invalid Request"}' };
+    return { status: 200, body: "" };
+  };
+  assert.equal(await finalizeTakClient(doc, d), true);
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+  assert.equal(calls.tak.some(call => call.path.endsWith("/list-users")), true);
 });
 
 test("onFinalize retries through an annotation when finalize cannot finish", async () => {
@@ -565,7 +782,7 @@ test("ensureCrl writes an empty CRL once and refreshes it close to nextUpdate", 
   assert.equal(await ensureCrl(d.cluster, CA, NOW), true);
   assert.equal(await ensureCrl(d.cluster, CA, NOW), false);
   const secret = store.secrets[`takserver/${CRL_SECRET}`] as SecretDoc & { labels: Record<string, string> };
-  assert.equal(secret.labels["uds.dev/pod-reload"], "true");
+  assert.equal(secret.labels["uds.dev/pod-reload"], "false");
   const old = { serial: "aa", date: NOW.toISOString(), notAfter: new Date(NOW.getTime() + DAY).toISOString() };
   const keep = { serial: "bb", date: NOW.toISOString() };
   store.secrets[`takserver/${CRL_SECRET}`] = {
@@ -573,6 +790,7 @@ test("ensureCrl writes an empty CRL once and refreshes it close to nextUpdate", 
   };
   const late = new Date(NOW.getTime() + 700 * DAY);
   assert.equal(await ensureCrl(d.cluster, CA, late), true);
+  assert.equal((store.secrets[`takserver/${CRL_SECRET}`] as SecretDoc & { labels: Record<string, string> }).labels["uds.dev/pod-reload"], "true");
   const state = readCrlState(store.secrets[`takserver/${CRL_SECRET}`]);
   assert.deepEqual(state.entries.map(entry => entry.serial), ["bb"]);
   assert.equal(state.number, 2);
@@ -586,10 +804,12 @@ test("ensureCrl writes an empty CRL once and refreshes it close to nextUpdate", 
 });
 
 test("readCrlState tolerates missing and damaged fields", () => {
-  assert.deepEqual(readCrlState(undefined), { entries: [], number: 0, pem: undefined, ca: undefined });
+  assert.deepEqual(readCrlState(undefined), { entries: [], number: 0, pem: undefined, ca: undefined, reloadAt: undefined });
   assert.deepEqual(readCrlState({ data: { "revoked.json": b64("{bad"), number: b64("x") } }).entries, []);
   assert.equal(readCrlState({ data: { number: b64("x") } }).number, 0);
   assert.deepEqual(readCrlState({ data: { "revoked.json": b64("{}") } }).entries, []);
+  assert.equal(readCrlState({ metadata: { labels: { "uds.dev/pod-reload": "true" } } }, NOW).reloadAt, NOW.toISOString());
+  assert.equal(readCrlState({ metadata: { labels: {} } }, NOW).reloadAt, undefined);
 });
 
 test("CRL writes run one at a time", async () => {
@@ -609,6 +829,122 @@ test("CRL writes run one at a time", async () => {
   await assert.rejects(failing);
   await third;
   assert.deepEqual(order, ["first", "second", "third"]);
+});
+
+test("legacy CRL reload cannot be cancelled until both consumer pods were recreated", async () => {
+  const { d, store } = fake();
+  await revoke(d.cluster, CA, "a1", undefined, NOW);
+  const labels = () => (store.secrets[`takserver/${CRL_SECRET}`] as SecretDoc & { labels: Record<string, string> }).labels;
+  assert.equal(labels()["uds.dev/pod-reload"], "true");
+  await revoke(d.cluster, CA, "a2", undefined, NOW, false);
+  assert.equal(labels()["uds.dev/pod-reload"], "true");
+  d.cluster.listPods = async () => [{ metadata: { creationTimestamp: NOW.toISOString() } }];
+  await revoke(d.cluster, CA, "a3", undefined, NOW, false);
+  assert.equal(labels()["uds.dev/pod-reload"], "true");
+  d.cluster.listPods = async () => [{ metadata: {} }];
+  await revoke(d.cluster, CA, "a4", undefined, NOW, false);
+  assert.equal(labels()["uds.dev/pod-reload"], "true");
+  d.cluster.listPods = async () => [{ metadata: { deletionTimestamp: NOW.toISOString() } }];
+  await revoke(d.cluster, CA, "a5", undefined, NOW, false);
+  assert.equal(labels()["uds.dev/pod-reload"], "true");
+  d.cluster.listPods = async () => [{ metadata: { creationTimestamp: new Date(NOW.getTime() + 1000).toISOString() } }];
+  await revoke(d.cluster, CA, "a6", undefined, NOW, false);
+  assert.equal(labels()["uds.dev/pod-reload"], "false");
+  assert.equal(readCrlState(store.secrets[`takserver/${CRL_SECRET}`]).reloadAt, undefined);
+});
+
+test("legacy certificates migrate through the CRL restart fallback before TAK enrollment", async () => {
+  const { d, calls, store } = fake();
+  const legacy = client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "aa", [CALLSIGN]: "takclient-test" } } });
+  assert.equal(await reconcileTakClient(legacy, "MODIFIED", d), false);
+  assert.equal(calls.annotate.at(-1)!.annotations[ISSUER], "tak");
+  const crl = store.secrets[`takserver/${CRL_SECRET}`] as SecretDoc & { labels: Record<string, string> };
+  assert.equal(crl.labels["uds.dev/pod-reload"], "true");
+  assert.equal(calls.tak[0].method, "DELETE");
+  assert.equal(calls.tak.some(call => call.path.includes("certadmin")), false);
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
+  const withoutCallsign = fake();
+  await reconcileTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "bb" } } }), "MODIFIED", withoutCallsign.d);
+  assert.equal(withoutCallsign.calls.tak[0].method, "PUT");
+});
+
+test("TAK-issued certificate revocation failures retain the finalizer and Secret", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  d.tak.request = async () => ({ status: 503, body: "" });
+  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.ok(store.secrets["takclients/takclient-test"]);
+  assert.ok(await readCredential(d.cluster, "takclient-test"));
+  delete store.secrets["takserver/takserver-certs"];
+  assert.equal(await finalizeTakClient(doc, d), false);
+});
+
+test("a replacement cannot bypass a missing certificate fingerprint", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const annotations = { ...calls.annotate.at(-1)!.annotations };
+  delete annotations["tak.jonathanagustin.github.io/fingerprint"];
+  store.secrets["takclients/takclient-test"].metadata!.annotations = annotations;
+  const doc = client({ metadata: { name: "takclient-test", annotations }, spec: { callsign: "different" } });
+  assert.equal(await reconcileTakClient(doc, "MODIFIED", d), true);
+  assert.equal(calls.status.at(-1)!.conditions[0].status, "False");
+  assert.equal(await finalizeTakClient(doc, d), false);
+});
+
+test("registerAll retains Ready for a current TAK-issued certificate", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  d.cluster.listTakClients = async () => [doc];
+  await registerAll(d);
+  assert.equal(calls.status.at(-1)!.conditions[0].status, "True");
+  assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![ISSUER], "tak");
+});
+
+test("partial password-only Secrets recover without treating them as issued certificates", async () => {
+  for (const secret of [{ data: {} }, { metadata: {}, data: {} }]) {
+    const { d, store, calls } = fake();
+    store.secrets["takclients/takclient-test"] = secret;
+    assert.equal(await reconcileTakClient(client(), "MODIFIED", d), false);
+    assert.equal(calls.status.at(-1)!.conditions[0].status, "True");
+    assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![ISSUER], "tak");
+  }
+});
+
+test("missing private state revokes and reissues instead of trusting a device-supplied password", async () => {
+  const { d, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const before = calls.annotate.at(-1)!.annotations;
+  delete store.secrets[`takserver/${ENROLLMENT_SECRET}`];
+  store.secrets["takclients/takclient-test"].data!["user-password"] = b64("attacker-chosen");
+  const doc = client({ metadata: { name: "takclient-test", annotations: before } });
+  d.cluster.listTakClients = async () => [doc];
+  await registerAll(d);
+  assert.equal(calls.status.at(-1)!.conditions[0].reason, "EnrollmentStateMissing");
+  assert.equal(await reconcileTakClient(doc, "MODIFIED", d), false);
+  assert.notEqual(calls.annotate.at(-1)!.annotations[SERIAL], before[SERIAL]);
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.notEqual(await readCredential(d.cluster, "takclient-test"), "attacker-chosen");
+  assert.ok(calls.tak.some(call => call.path.includes("cert/revoke/")));
+  const finalDoc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
+  assert.equal(await finalizeTakClient(finalDoc, d), true);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+});
+
+test("finalization uses the delivered certificate even if resource annotation failed", async () => {
+  const { d, calls, store } = fake();
+  d.cluster.annotateTakClient = async () => { throw new Error("annotation conflict"); };
+  assert.equal(await reconcileTakClient(client(), "ADDED", d), true);
+  const annotations = store.secrets["takclients/takclient-test"].metadata!.annotations!;
+  assert.equal(annotations[ISSUER], "tak");
+  assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
+  assert.equal(await finalizeTakClient(client(), d), true);
+  const hash = annotations["tak.jonathanagustin.github.io/fingerprint"];
+  assert.ok(calls.tak.some(call => call.path === `/Marti/api/certadmin/cert/${encodeURIComponent(hash)}`));
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
 });
 
 test("registerAll registers every issued TakClient again", async () => {

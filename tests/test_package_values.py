@@ -91,6 +91,18 @@ def hostnames(text, domain):
 # CI installs uds. A local run without it skips instead of failing.
 @unittest.skipUnless(shutil.which("uds") or os.environ.get("CI"), "uds CLI is not installed")
 class PackageValuesTests(unittest.TestCase):
+    def test_takclient_watcher_can_enroll_and_revoke_with_its_own_identity(self):
+        _out, docs = render()
+        account = f"pepr-{MODULE}-watcher"
+        rules = [rule for rule in find(docs, "Package", "takserver")["spec"]["network"]["allow"]
+                 if rule.get("remoteServiceAccount") == account]
+        self.assertEqual(sorted(rule["port"] for rule in rules), [8443, 8446])
+        for rule in rules:
+            self.assertEqual(rule["direction"], "Ingress")
+            self.assertEqual(rule["selector"], {"app": "takserver-api"})
+            self.assertEqual(rule["remoteNamespace"], "pepr-system")
+        self.assertIn('x509checkRevocation="true"', core_config(docs))
+
     def assert_domain(self, out, docs, domain, old="uds.dev"):
         hosts = gateway_hosts(docs)
         expected = [f"takserver.{domain}", f"takserver-stream.{domain}"]

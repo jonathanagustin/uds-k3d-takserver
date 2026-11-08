@@ -141,7 +141,10 @@ The same script writes every Falco event whose payload names `takserver`, `cloud
 
 The Test workflow adds `validate-install (amd64, airgap)`. It retrieves the slim
 checkpoint and creates the package and test bundle first. Before it deploys TAK
-or CloudTAK, `.github/scripts/node-airgap.py` installs a dedicated filter chain
+or CloudTAK, CI pins the airgap bundle's TAK image tag to the same immutable
+input tag included in the package. This keeps certificate setup and the other
+TAK pods from requesting an unpackaged mutable tag. Then
+`.github/scripts/node-airgap.py` installs a dedicated filter chain
 inside each k3d server and agent container's network namespace. Both node-origin
 `OUTPUT` and pod-forwarded `FORWARD` traffic are covered. The host firewall,
 Docker daemon, and other containers are unchanged. The guard rejects host and

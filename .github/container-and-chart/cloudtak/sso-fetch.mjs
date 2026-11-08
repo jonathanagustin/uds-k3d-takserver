@@ -1,10 +1,12 @@
 // Copyright 2026 uds-k3d-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Discovery and token calls to Keycloak. The init container copies the trust
-// bundle once. Core does not reload a pod the first time that bundle appears,
-// while the mounted bundle file does update. Read it again on each call and
-// keep certificate verification enabled.
+// Discovery and token calls to Keycloak. The TAK CA is stable. Core's live
+// bundle is the only source of Core roots: a CA Core removes is not trusted
+// on the next call, and a missing bundle does not fall back to the init copy.
+// Certificate verification stays enabled.
+export const TAK_CA_FILE = '/var/run/tak-ca/ca.pem';
+export const LIVE_BUNDLE_FILE = '/var/run/uds-trust/ca-bundle.pem';
 import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
@@ -54,22 +56,21 @@ export function certificates(text) {
     return String(text || '').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
 }
 
-export function readTrustFiles(paths, readFileSync) {
-    const texts = [];
-    for (const path of paths) {
-        if (!path) continue;
-        try {
-            texts.push(readFileSync(path, 'utf8'));
-        } catch (error) {
-            if (!error || error.code !== 'ENOENT') throw error;
-        }
+export function readOptional(path, readFileSync) {
+    try {
+        return readFileSync(path, 'utf8');
+    } catch (error) {
+        if (!error || error.code !== 'ENOENT') throw error;
+        return null;
     }
-    return texts;
 }
 
-// Public roots stay available. Extra files add the TAK CA and the live bundle.
-export function discoveryCa(texts, roots = tls.rootCertificates) {
-    return [...roots, ...texts.flatMap(certificates)];
+// `liveBundle === null` means Core has no bundle file. An empty file means
+// Core currently publishes no custom roots. The init container's combined
+// copy is intentionally not an input.
+export function issuerTrust({ takCa = '', liveBundle = null, roots = tls.rootCertificates } = {}) {
+    const core = liveBundle == null ? [] : certificates(liveBundle);
+    return [...roots, ...certificates(takCa), ...core];
 }
 
 export function issuerRequest(url, options, ca) {
@@ -90,6 +91,7 @@ export function issuerRequest(url, options, ca) {
             ca,
             rejectUnauthorized: true,
             servername: net.isIP(parsed.hostname) ? undefined : parsed.hostname,
+            lookup: options.lookup,
             timeout: 20000,
         }, (response) => {
             const chunks = [];

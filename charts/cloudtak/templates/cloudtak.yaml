@@ -208,6 +208,14 @@ spec:
             - name: combined-trust
               mountPath: /var/run/combined-trust
               readOnly: true
+            # Live Core bundle. The init copy is not updated when Core adds
+            # or removes a CA, and this container is the one that calls Keycloak.
+            - name: uds-trust
+              mountPath: /var/run/uds-trust
+              readOnly: true
+            - name: tak-ca
+              mountPath: /var/run/tak-ca
+              readOnly: true
         # Talks to CloudTAK on 127.0.0.1, inside the pod. See bootstrap.mjs
         # in the image source.
         - name: bootstrap

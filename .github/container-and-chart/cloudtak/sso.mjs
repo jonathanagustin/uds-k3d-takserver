@@ -23,7 +23,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { boundedCause, discoveryCa, issuerRequest, readTrustFiles } from './sso-fetch.mjs';
+import { boundedCause, issuerRequest, issuerTrust, LIVE_BUNDLE_FILE, readOptional, TAK_CA_FILE } from './sso-fetch.mjs';
 import { Pool } from '@openaddresses/batch-generic';
 import { TAKAPI, APIAuthToken } from '@tak-ps/node-tak';
 import Models from './dist/common/models.js';
@@ -69,12 +69,12 @@ const users = new UserControl(config);
 
 let discovery;
 function issuerCa() {
-    // Read on every attempt. Curl retries this route while Core creates the
-    // namespace bundle, and the init container may already have exited.
-    return discoveryCa(readTrustFiles([
-        process.env.NODE_EXTRA_CA_CERTS,
-        '/var/run/uds-trust/ca-bundle.pem',
-    ], fs.readFileSync));
+    // The combined init file can still contain a Core CA after Core deletes
+    // it. The mounted TAK CA and the live bundle are the authorities instead.
+    return issuerTrust({
+        takCa: readOptional(TAK_CA_FILE, fs.readFileSync) || '',
+        liveBundle: readOptional(LIVE_BUNDLE_FILE, fs.readFileSync),
+    });
 }
 
 async function oidc() {

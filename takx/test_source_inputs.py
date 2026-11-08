@@ -6,6 +6,7 @@
 import copy
 import hashlib
 import io
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -115,6 +116,25 @@ class SourceGuards(unittest.TestCase):
         self.assertEqual(self.destination.read_bytes(), original)
         self.assertEqual(list(self.cache.iterdir()), [])
 
+    def test_valid_download_is_verified_then_cached_and_materialized(self):
+        self.pointer()
+        with patch.object(source_inputs.urllib.request, "urlopen", return_value=io.BytesIO(self.data)):
+            source_inputs.materialize(self.source, self.cache, self.lock)
+        self.assertEqual(self.destination.read_bytes(), self.data)
+        self.assertEqual((self.cache / self.entry["sha256"]).read_bytes(), self.data)
+
+    def test_unused_client_reference_does_not_invalidate_native_inputs(self):
+        lock_path = Path(self.temporary.name) / "lock.json"
+        lock_path.write_text(json.dumps(self.lock))
+        key = source_inputs.cache_key(lock_path, self.source, self.cache, "toolchain")
+        lock = copy.deepcopy(self.lock)
+        lock["future_takx_sources"] = {"revision": "future client reference", "note": "not a native input"}
+        lock_path.write_text(json.dumps(lock))
+        self.assertEqual(key, source_inputs.cache_key(lock_path, self.source, self.cache, "toolchain"))
+        lock["archives"][0]["sha256"] = "0" * 64
+        lock_path.write_text(json.dumps(lock))
+        self.assertNotEqual(key, source_inputs.cache_key(lock_path, self.source, self.cache, "toolchain"))
+
     def test_non_official_url_is_rejected_before_network(self):
         lock = copy.deepcopy(self.lock)
         lock["archives"][0]["url"] = "https://example.invalid/source.tar.gz"
@@ -122,6 +142,54 @@ class SourceGuards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "official"):
                 source_inputs.materialize(self.source, self.cache, lock)
             network.assert_not_called()
+
+
+class BuildCacheLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.output = Path(self.temporary.name) / "build"
+
+    def complete_fixture(self):
+        source_inputs.start_cache(self.output, "original")
+        for name in (*source_inputs.ARTIFACTS, "lib/libcurl.a"):
+            path = self.output / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"checksum lifecycle fixture, not executable")
+        source_inputs.complete_cache(self.output, "original")
+
+    def test_matching_interrupted_build_resumes_but_changed_inputs_refuse(self):
+        source_inputs.start_cache(self.output, "original")
+        (self.output / "partial.o").write_bytes(b"partial build")
+        self.assertEqual(source_inputs.cache_status(self.output, "original"), "resume")
+        source_inputs.start_cache(self.output, "original")
+        with self.assertRaisesRegex(ValueError, "fresh TAKX_BUILD_DIR"):
+            source_inputs.cache_status(self.output, "new toolchain")
+
+    def test_completed_changed_key_is_not_incrementally_relabeled(self):
+        self.complete_fixture()
+        self.assertEqual(source_inputs.cache_status(self.output, "original"), "complete")
+        with self.assertRaisesRegex(ValueError, "fresh TAKX_BUILD_DIR"):
+            source_inputs.cache_status(self.output, "changed inputs")
+
+    def test_completed_transitive_corruption_refuses_rebuild_and_overwrite(self):
+        self.complete_fixture()
+        (self.output / "lib/libcurl.a").write_bytes(b"newer but corrupt")
+        for operation in (source_inputs.cache_status, source_inputs.complete_cache):
+            with self.assertRaisesRegex(ValueError, "fresh TAKX_BUILD_DIR"):
+                operation(self.output, "original")
+
+    def test_corrupt_start_metadata_refuses_resume(self):
+        source_inputs.start_cache(self.output, "original")
+        (self.output / "build-inputs.json").write_text("not json")
+        with self.assertRaisesRegex(ValueError, "fresh TAKX_BUILD_DIR"):
+            source_inputs.cache_status(self.output, "original")
+
+    def test_unknown_nonempty_prefix_is_not_adopted(self):
+        self.output.mkdir()
+        (self.output / "old-library.a").write_bytes(b"unknown origin")
+        with self.assertRaisesRegex(ValueError, "fresh TAKX_BUILD_DIR"):
+            source_inputs.start_cache(self.output, "original")
 
 
 if __name__ == "__main__":

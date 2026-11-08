@@ -108,8 +108,13 @@ def materialize(source, cache, lock, offline=False):
 
 
 def cache_key(lock_path, source, output, toolchain):
-    files = [lock_path, Path(__file__), Path(__file__).with_name("build-commoncommo.sh"), Path(__file__).with_name("CommonCommoSmoke.java")]
-    payload = {"inputs": [digest(p) for p in files], "source": str(source.resolve()), "output": str(output.resolve()), "toolchain": toolchain}
+    lock = json.loads(lock_path.read_text())
+    native_inputs = {field: lock[field] for field in ("atak_source", "commoncommo_version", "archives")}
+    recipe = Path(__file__).with_name("build-commoncommo.sh")
+    payload = {
+        "native_inputs": native_inputs, "recipe": digest(recipe),
+        "source": str(source.resolve()), "output": str(output.resolve()), "toolchain": toolchain,
+    }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -124,9 +129,73 @@ def artifact_state(output, key):
     return {"schema": 1, "key": key, "artifacts": {str(path.relative_to(output)): digest(path) for path in files}}
 
 
+
+def lifecycle_error(reason):
+    raise ValueError(f"{reason}; choose a fresh TAKX_BUILD_DIR")
+
+
+def expected_start(key):
+    return {"schema": 1, "key": key}
+
+
+def read_state(path):
+    try:
+        state = json.loads(path.read_text())
+    except (ValueError, OSError):
+        lifecycle_error("Invalid build metadata")
+    if not isinstance(state, dict):
+        lifecycle_error("Invalid build metadata")
+    return state
+
+
+def cache_status(output, key):
+    start_file = output / "build-inputs.json"
+    complete_file = output / "build-state.json"
+    if complete_file.exists():
+        if not start_file.exists() or read_state(start_file) != expected_start(key):
+            lifecycle_error("Completed prefix has a different or missing build input key")
+        previous = read_state(complete_file)
+        if previous.get("key") != key:
+            lifecycle_error("Completed prefix was built with different inputs")
+        try:
+            current = artifact_state(output, key)
+        except FileNotFoundError:
+            lifecycle_error("Completed prefix has missing artifacts")
+        if previous != current:
+            lifecycle_error("Completed prefix artifact integrity mismatch")
+        return "complete"
+    if start_file.exists():
+        if read_state(start_file) != expected_start(key):
+            lifecycle_error("Interrupted prefix has different build inputs")
+        return "resume"
+    if output.exists() and any(output.iterdir()):
+        lifecycle_error("Nonempty prefix has no recorded build start")
+    return "new"
+
+
+def start_cache(output, key):
+    status = cache_status(output, key)
+    if status == "complete":
+        lifecycle_error("Prefix is already a completed build")
+    if status == "new":
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "build-inputs.json").write_text(json.dumps(expected_start(key), indent=2) + "\n")
+
+
+def complete_cache(output, key):
+    start_file = output / "build-inputs.json"
+    if not start_file.exists() or read_state(start_file) != expected_start(key):
+        lifecycle_error("No matching build start was recorded")
+    if (output / "build-state.json").exists():
+        cache_status(output, key)
+        return
+    state = artifact_state(output, key)
+    (output / "build-state.json").write_text(json.dumps(state, indent=2) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("verify", "cache-check", "cache-write"))
+    parser.add_argument("command", choices=("verify", "cache-check", "cache-start", "cache-write"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--lock", type=Path, default=Path(__file__).with_name("sources.lock.json"))
     parser.add_argument("--cache", type=Path)
@@ -144,23 +213,19 @@ def main():
         return
     if args.output is None:
         parser.error("cache commands require --output")
-    state_file = args.output / "build-state.json"
     key = cache_key(args.lock, args.source, args.output, args.toolchain)
     if args.command == "cache-check":
-        if not state_file.is_file():
-            sys.exit(1)
-        previous = json.loads(state_file.read_text())
-        try:
-            current = artifact_state(args.output, key)
-        except FileNotFoundError:
-            sys.exit(1)
-        sys.exit(0 if previous == current else 1)
-    state = artifact_state(args.output, key)
-    state_file.write_text(json.dumps(state, indent=2) + "\n")
+        sys.exit(0 if cache_status(args.output, key) == "complete" else 1)
+    if args.command == "cache-start":
+        start_cache(args.output, key)
+    else:
+        complete_cache(args.output, key)
+
 
 
 if __name__ == "__main__":
     try:
         main()
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
-        sys.exit(str(error))
+        print(error, file=sys.stderr)
+        sys.exit(2)

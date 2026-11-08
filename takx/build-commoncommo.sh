@@ -37,6 +37,9 @@ if [[ "${mode}" != --smoke-only ]]; then
   if "${state[@]}" cache-check; then
     echo "Verified local build cache; skipping native compilation"
   else
+    cache_status=$?
+    if [[ "${cache_status}" != 1 ]]; then exit "${cache_status}"; fi
+    "${state[@]}" cache-start
     # The upstream core buildstamp runs git from the copied sources. Keep its
     # identity tied to ATAK even when the output is outside that checkout.
     export GIT_DIR
@@ -74,6 +77,7 @@ if [[ "${mode}" != --smoke-only ]]; then
     run make -C "${output}/protobuf/src" -j1 install-nobase_includeHEADERS
     install -m 644 "${output}/protobuf/src/.libs/libprotobuf-lite.a" "${output}/lib/libprotobuf-lite.a"
     run "${make_source[@]}" "-j${jobs}" "${output}/lib/libcommoncommo.a"
+    mkdir -p "${output}/java"
     run "${make_source[@]}" "-j${jobs}" "${output}/lib/libcommoncommojni.so"
   fi
 fi

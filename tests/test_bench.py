@@ -38,8 +38,10 @@ def record(config, arch, rss, received, duration, mean, ready):
         "schema": 1,
         "arch": arch,
         "config": config,
+        "git_sha": "fixture-revision",
         "kubelet": {"steady_rss_bytes": rss},
         "load": {
+            "clients": 10,
             "messages_received": received,
             "duration_s": duration,
             "ping_pong_ms_mean": mean,
@@ -50,6 +52,64 @@ def record(config, arch, rss, received, duration, mean, ready):
 
 
 class BenchReportTests(unittest.TestCase):
+    def test_different_loads_durations_and_revisions_do_not_dominate_each_other(self):
+        for dimension in ("clients", "duration_s", "git_sha"):
+            with self.subTest(dimension=dimension):
+                slow = record("slow", "amd64", 20, 20, 60, 10, 20)
+                fast = record("fast", "amd64", 10, 200, 60, 1, 10)
+                if dimension == "git_sha":
+                    fast["git_sha"] = "another-revision"
+                else:
+                    fast["load"][dimension] = 50 if dimension == "clients" else 120
+                groups = report.cohorts([slow, fast])
+                self.assertEqual([len(rows) for _label, rows in groups], [1, 1])
+                text = report.markdown([slow, fast])
+                self.assertIn("Front: slow", text)
+                self.assertIn("Front: fast", text)
+                self.assertNotIn("Dominated: slow", text)
+                self.assertEqual(report.svg([slow, fast]).count("footprint vs throughput"), 2)
+
+    def test_records_without_comparison_metadata_are_isolated(self):
+        slow = record("slow", "amd64", 20, 20, 60, 10, 20)
+        fast = record("fast", "amd64", 10, 200, 60, 1, 10)
+        del slow["load"]["clients"]
+        del fast["load"]["clients"]
+        text = report.markdown([slow, fast])
+        self.assertEqual(text.count("incomplete comparison metadata"), 2)
+        self.assertNotIn("Dominated: slow", text)
+
+    def test_cold_install_reference_is_not_ranked_against_warm_rollouts(self):
+        cold = record("cold", "amd64", 20, 20, 60, 10, 120)
+        warm = record("warm", "amd64", 10, 20, 60, 10, 120)
+        warm["time_to_ready"]["warm_s"] = 12
+        text = report.markdown([cold, warm])
+        warm_view = text.split("#### footprint vs warm rollout time", 1)[1].split("###", 1)[0]
+        self.assertIn("Front: warm", warm_view)
+        self.assertNotIn("Front: cold", warm_view)
+        self.assertIn("Cold install reference (s)", text)
+        self.assertNotIn("footprint vs cold", text)
+        self.assertNotIn("footprint vs cold", report.svg([cold, warm]))
+
+    def test_startup_table_marks_invalid_and_missing_timings_without_rewriting_data(self):
+        sample = record("baseline", "amd64", 20, 20, 60, 10, -1)
+        sample["start_phases"] = {
+            "takserver-messaging": {
+                "image_pull_s": -61,
+                "inits": [{"name": "wait-deps", "seconds": 22}],
+                "jvm_to_log_s": 34.849,
+                "log_to_ready_s": None,
+            },
+        }
+        before = json.dumps(sample, sort_keys=True)
+        text = report.markdown([sample])
+        self.assertIn("invalid (-61)", text)
+        self.assertIn("invalid (-1)", text)
+        self.assertIn("wait-deps: 22.000", text)
+        self.assertIn("34.849", text)
+        self.assertIn("not measured", text)
+        self.assertIsNone(report.point(sample)["cold_ready_s"])
+        self.assertEqual(json.dumps(sample, sort_keys=True), before)
+
     def test_a_worse_config_is_dominated_on_footprint_and_throughput(self):
         points = [
             {"config": "low", "arch": "amd64", "footprint_bytes": 10, "throughput": 5, "latency_ms": 20, "ready_s": 30, "errors": []},

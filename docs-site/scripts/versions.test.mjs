@@ -122,7 +122,16 @@ test('a titleless README uses its centered introduction without consuming fenced
     writeFileSync(path.join(source, 'adr/0001-example.md'), '# Example decision\n\nA decision.\n');
     const readme = `<p align="center"><img src="badge.svg" alt="Badge"></p>
 
-<p align="center">TAK Server and <strong>CloudTAK</strong> on UDS Core.</p>
+<!-- A multiline metadata comment
+must never become the description. -->
+<script>
+throw new Error('Script text must not become metadata.');
+</script>
+<style>
+body { color: red; }
+</style>
+<p align="center">TAK Server and <!-- hidden inline
+comment --> <strong>CloudTAK</strong> on UDS Core.</p>
 
 ## Install
 
@@ -144,6 +153,7 @@ echo 'A second fenced block.'
     const generated = readFileSync(path.join(output, 'getting-started.md'), 'utf8');
     assert.match(generated, /^title: "Getting started"$/m);
     assert.match(generated, /^description: "TAK Server and CloudTAK on UDS Core\."$/m);
+    assert.doesNotMatch(generated.split('---')[1], /metadata comment|Script text|color: red|hidden inline/);
     assert.deepEqual(generated.match(/(```[\s\S]*?```|~~~~[\s\S]*?~~~~)/g), readme.match(/(```[\s\S]*?```|~~~~[\s\S]*?~~~~)/g));
     assert.ok(generated.includes('# Create the package from this directory.'));
   } finally {

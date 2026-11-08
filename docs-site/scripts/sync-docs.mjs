@@ -12,6 +12,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { howToSteps } from './how-to-ui.mjs';
+import { fromHtml } from 'hast-util-from-html';
 
 const { values: args } = parseArgs({ options: {
   'repo-root': { type: 'string' },
@@ -112,34 +113,39 @@ function firstHeading(markdown) {
   return '';
 }
 
+// Extract description text with the HTML parser, never by filtering tag
+// delimiters. This is metadata extraction, not sanitization of page content.
+function metadataText(markdown) {
+  const prose = [...markdownLines(dropGithubOnly(markdown))]
+    .map(({ line, fenced }) => fenced ? '' : line).join('\n');
+  const tree = fromHtml(prose, { fragment: true });
+  const excluded = new Set(['script', 'style', 'template', 'noscript', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+  const blocks = new Set(['div', 'section', 'article', 'aside', 'header', 'footer', 'main', 'nav', 'blockquote', 'ul', 'ol', 'li', 'details', 'summary']);
+  const text = (node) => {
+    if (node.type === 'text') return node.value;
+    if (node.type === 'comment' || excluded.has(node.tagName)) return '';
+    if (node.tagName === 'br') return '\n';
+    const children = (node.children ?? []).map(text).join('');
+    if (node.tagName === 'p') return `\n\n${children.replace(/\s+/g, ' ').trim()}\n\n`;
+    return blocks.has(node.tagName) ? `\n\n${children}\n\n` : children;
+  };
+  return text(tree);
+}
+
 function firstParagraph(markdown) {
   const paragraph = [];
-  for (const { line, fenced } of markdownLines(dropGithubOnly(markdown))) {
-    if (fenced) {
-      if (paragraph.length) break;
-      continue;
-    }
+  for (const line of metadataText(markdown).split('\n')) {
     const trimmed = line.trim();
-    // README's centered description is an HTML paragraph. Image-only badge
-    // and branding paragraphs have no text and cannot become the description.
-    const htmlParagraph = /^<p(?:\s[^>]*)?>(.*?)<\/p>\s*$/i.exec(trimmed);
-    if (htmlParagraph) {
-      const text = htmlParagraph[1].replace(/<!--.*?-->/g, '').replace(/<[^>]*>/g, '').trim();
-      if (!text) continue;
-      if (!paragraph.length) paragraph.push(text);
-      break;
-    }
     if (paragraph.length === 0) {
-      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('<') || trimmed.startsWith('[!') || trimmed.startsWith('![')) continue;
+      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('[!') || trimmed.startsWith('![')) continue;
       paragraph.push(trimmed);
       continue;
     }
-    if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('<')) break;
+    if (trimmed === '' || trimmed.startsWith('#')) break;
     paragraph.push(trimmed);
   }
   let text = paragraph.join(' ');
-  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
-  text = text.replace(/<[^>]*>/g, '').replace(/[*_`]/g, '');
+  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '');
   if (text.length > 180) {
     text = `${text.slice(0, 177).replace(/\s+\S*$/, '')}...`;
   }

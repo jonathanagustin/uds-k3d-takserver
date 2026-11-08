@@ -18,7 +18,7 @@ const guides = [
 
 test('the four operational guides are published and use the how-to sections', () => {
   for (const slug of guides) {
-    const output = path.join(siteRoot, 'dist/how-to', slug, 'index.html');
+    const output = path.join(siteRoot, 'dist/main/how-to', slug, 'index.html');
     assert.ok(existsSync(output), `missing guide route: ${slug}`);
     const html = readFileSync(output, 'utf8');
     for (const section of ['what-youll-accomplish', 'prerequisites', 'before-you-begin',
@@ -30,12 +30,12 @@ test('the four operational guides are published and use the how-to sections', ()
 });
 
 test('the authoring template is not published', () => {
-  assert.ok(!existsSync(path.join(siteRoot, 'src/content/docs/how-to/_template.md')));
-  assert.ok(!existsSync(path.join(siteRoot, 'dist/how-to/_template')));
+  assert.ok(!existsSync(path.join(siteRoot, 'src/content/docs/main/how-to/_template.md')));
+  assert.ok(!existsSync(path.join(siteRoot, 'dist/main/how-to/_template')));
 });
 
 test('the original reference routes remain available', () => {
   for (const route of ['data', 'atak-device', 'networking']) {
-    assert.ok(existsSync(path.join(siteRoot, 'dist', route, 'index.html')), `missing ${route}`);
+    assert.ok(existsSync(path.join(siteRoot, 'dist/main', route, 'index.html')), `missing ${route}`);
   }
 });

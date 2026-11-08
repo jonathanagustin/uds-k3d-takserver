@@ -10,13 +10,29 @@ import { createHash } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { parseArgs } from 'node:util';
 
-const repoRoot = path.resolve(import.meta.dirname, '../..');
-const outRoot = path.resolve(import.meta.dirname, '../src/content/docs');
+const { values: args } = parseArgs({ options: {
+  'repo-root': { type: 'string' },
+  'output-root': { type: 'string' },
+  'url-prefix': { type: 'string', default: '' },
+  'git-ref': { type: 'string', default: 'HEAD' },
+  'source-ref': { type: 'string', default: 'main' },
+  'version-id': { type: 'string', default: 'main' },
+  'keep-output': { type: 'boolean', default: false },
+  'skip-video-download': { type: 'boolean', default: false },
+  'include-404': { type: 'boolean', default: false },
+} });
+const repoRoot = path.resolve(args['repo-root'] || path.resolve(import.meta.dirname, '../..'));
+const outRoot = path.resolve(args['output-root'] || path.resolve(import.meta.dirname, '../src/content/docs'));
+const sourceRef = args['source-ref'];
+const gitRef = args['git-ref'];
+const unreleased = args['version-id'] === 'main';
 const repoUrl = 'https://github.com/jonathanagustin/uds-k3d-takserver';
 // Root-relative, including the Pages base. The link checker rejects relative
 // links, and it looks these paths up against the built routes.
-const siteBase = '/uds-k3d-takserver';
+const assetBase = '/uds-k3d-takserver';
+const siteBase = `${assetBase}${args['url-prefix'] ? '/' + args['url-prefix'] : ''}`;
 // The demo videos are assets on the fixed `demo` release. GitHub serves a
 // release download as application/octet-stream, and the user-attachments
 // players in the README only work on github.com, so the build copies the
@@ -103,7 +119,7 @@ function firstParagraph(markdown) {
 
 function lastUpdated(src) {
   try {
-    const iso = execFileSync('git', ['log', '-1', '--format=%cI', '--', src], {
+    const iso = execFileSync('git', ['log', '-1', '--format=%cI', gitRef, '--', src], {
       cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -122,9 +138,10 @@ function frontmatter(page, markdown) {
     '---',
     `title: ${quote(title)}`,
     `description: ${quote(description)}`,
-    `editUrl: ${quote(`${repoUrl}/edit/main/${page.src}`)}`,
+    `editUrl: ${quote(`${repoUrl}/${unreleased ? 'edit' : 'blob'}/${sourceRef}/${page.src}`)}`,
   ];
   if (updated) lines.push(`lastUpdated: ${updated}`);
+  if (unreleased) lines.push('banner:', `  content: ${quote('You are reading unreleased main documentation. Use the version selector for a released package.')}`);
   lines.push('sidebar:');
   lines.push(`  label: ${quote(page.label)}`);
   if (page.order !== undefined) lines.push(`  order: ${page.order}`);
@@ -171,7 +188,7 @@ function rewriteDestination(fromSrc, destination, byPath) {
   // same file works on GitHub (a repository path) and on the site (served
   // from the site root).
   if (resolved.startsWith('docs-site/public/')) {
-    return `${siteBase}/${resolved.slice('docs-site/public/'.length)}${hash}${suffix}`;
+    return `${assetBase}/${resolved.slice('docs-site/public/'.length)}${hash}${suffix}`;
   }
 
   const candidates = [resolved];
@@ -189,7 +206,7 @@ function rewriteDestination(fromSrc, destination, byPath) {
   else if (!existsSync(absolute)) {
     console.warn(`sync-docs: ${fromSrc} links to missing path ${resolved}`);
   }
-  return `${repoUrl}/${kind}/main/${resolved}${hash}${suffix}`;
+  return `${repoUrl}/${kind}/${sourceRef}/${resolved}${hash}${suffix}`;
 }
 
 async function fetchDemoVideos() {
@@ -236,7 +253,7 @@ function embedDemoVideos(markdown, videos) {
         const label = clip[1].replace(/"/g, '&quot;');
         return [
           `<video controls preload="none" playsinline width="1280" height="720" poster="${clip[2]}" aria-label="${label}">`,
-          `  <source src="${siteBase}/demo/${clip[3]}" type="video/mp4" />`,
+          `  <source src="${assetBase}/demo/${clip[3]}" type="video/mp4" />`,
           `</video>`,
         ].join('\n');
       }
@@ -245,8 +262,8 @@ function embedDemoVideos(markdown, videos) {
       if (!next || !videos.has(next[1])) return line;
       const base = next[1].replace(/\.mp4$/, '');
       return [
-        `<video controls preload="none" playsinline width="1280" height="720" poster="${siteBase}/demo/${base}.jpg">`,
-        `  <source src="${siteBase}/demo/${next[1]}" type="video/mp4" />`,
+        `<video controls preload="none" playsinline width="1280" height="720" poster="${assetBase}/demo/${base}.jpg">`,
+        `  <source src="${assetBase}/demo/${next[1]}" type="video/mp4" />`,
         `</video>`,
       ].join('\n');
     })
@@ -334,6 +351,7 @@ async function adrPages() {
 }
 
 async function howToPages() {
+  if (!existsSync(path.join(repoRoot, 'docs/how-to'))) return [];
   const names = (await readdir(path.join(repoRoot, 'docs/how-to')))
     .filter((name) => name.endsWith('.md') && !name.startsWith('_'))
     .sort();
@@ -364,13 +382,13 @@ function adrIndex(adrs) {
   return `---
 title: "Architecture decisions"
 description: "Why the package is put together the way it is."
-editUrl: ${quote(`${repoUrl}/tree/main/adr`)}
+editUrl: ${quote(`${repoUrl}/tree/${sourceRef}/adr`)}
 sidebar:
   label: "Index"
   order: 0
 ---
 
-The records below are the files in \`adr/\`. [\`adr/template.md\`](${repoUrl}/blob/main/adr/template.md) is the shape of a new one, not a decision.
+The records below are the files in \`adr/\`. [\`adr/template.md\`](${repoUrl}/blob/${sourceRef}/adr/template.md) is the shape of a new one, not a decision.
 
 ${items}
 `;
@@ -383,7 +401,7 @@ for (const page of [...adrs, ...howTos]) {
   page.heading = firstHeading(raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')) || page.label;
   page.label = page.heading;
 }
-const all = [...pages, ...adrs, ...howTos];
+const all = [...pages.filter((page) => existsSync(path.join(repoRoot, page.src))), ...adrs, ...howTos];
 const byPath = new Map(all.map((page) => [page.src, page.slug]));
 const headings = new Map();
 for (const page of all) {
@@ -391,11 +409,12 @@ for (const page of all) {
   headings.set(page.src, firstHeading(raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')) || page.label);
 }
 
-await rm(outRoot, { recursive: true, force: true });
+if (!args['keep-output']) await rm(outRoot, { recursive: true, force: true });
 await mkdir(outRoot, { recursive: true });
 let videos = new Set();
 try {
-  videos = await fetchDemoVideos();
+  if (!args['skip-video-download']) videos = await fetchDemoVideos();
+  else videos = new Set((await readdir(demoDir)).filter((name) => name.endsWith('.mp4')));
 } catch (error) {
   // CI must publish the players. A local build without network keeps the
   // download links and warns.
@@ -407,7 +426,7 @@ await writeFile(path.join(outRoot, 'adr/index.md'), adrIndex(adrs));
 // Starlight's /404 route reads this entry with getEntry(). draft keeps it out
 // of the [...slug] pages, so the two routes do not both try to write /404.
 // DraftContentNotice.astro skips the draft banner for this entry.
-await writeFile(
+if (args['include-404']) await writeFile(
   path.join(outRoot, '404.md'),
   `---
 title: "Page not found"
@@ -425,7 +444,47 @@ That page is not in these guides. The [home page](${siteHref('index', '')}) link
 // The splash page is site-only. README.md is Getting started. A hash on the
 // home URL is forwarded to that page so older links keep their section.
 // home.mdx imports LegacyHomeHash from the copied path, src/content/docs/.
-const homePath = path.resolve(import.meta.dirname, '../src/home.mdx');
-const home = await readFile(homePath, 'utf8');
+// A tag predating the splash page gets a small navigation shell; every guide
+// body still comes from that tag. main uses its authored splash content.
+const homePath = path.join(repoRoot, 'docs-site/src/home.mdx');
+const componentPath = posix(path.relative(outRoot, path.resolve(import.meta.dirname, '../src/components/LegacyHomeHash.astro')));
+const legacyImport = componentPath.startsWith('.') ? componentPath : `./${componentPath}`;
+let home;
+if (existsSync(homePath)) {
+  home = await readFile(homePath, 'utf8');
+  home = home.replaceAll('/uds-k3d-takserver/', `${siteBase}/`);
+  home = home.replace('../../components/LegacyHomeHash.astro', legacyImport);
+  if (!unreleased) home = home.replace(`${repoUrl}/edit/main/`, `${repoUrl}/blob/${sourceRef}/`);
+} else {
+  home = `---
+title: TAK Server on UDS
+description: Documentation for ${sourceRef}.
+template: splash
+hero:
+  title: TAK Server on UDS
+  tagline: Documentation for released package ${sourceRef}.
+  actions:
+    - text: Getting started
+      link: ${siteHref('getting-started', '')}
+      icon: right-arrow
+editUrl: false
+prev: false
+next: false
+sidebar:
+  label: Home
+---
+
+import LegacyHomeHash from '${legacyImport}';
+
+<LegacyHomeHash />
+
+[Getting started](${siteHref('getting-started', '')}) contains the deployment instructions for ${sourceRef}.
+
+- [Configuration](${siteHref('configuration', '')})
+- [Networking](${siteHref('networking', '')})
+- [Data and backups](${siteHref('data', '')})
+`;
+}
+if (unreleased) home = home.replace('---\n', `---\nbanner:\n  content: ${quote('You are reading unreleased main documentation. Use the version selector for a released package.')}\n`);
 await writeFile(path.join(outRoot, 'index.mdx'), home.endsWith('\n') ? home : `${home}\n`);
-console.log(`sync-docs: wrote ${all.length + 3} pages`);
+console.log(`sync-docs: wrote ${all.length + 2} pages from ${sourceRef} to ${siteBase}/`);

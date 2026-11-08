@@ -1,0 +1,70 @@
+---
+// Copyright 2026 uds-k3d-takserver authors
+// SPDX-License-Identifier: GPL-3.0-only
+
+import versions from '../generated/versions.json';
+import { versionForPath } from '../lib/versions.mjs';
+
+const version = versionForPath(Astro.url.pathname, versions);
+---
+
+<version-search data-version={version.id} data-label={version.label}>
+  <button type="button" data-open-search aria-label="Search" aria-keyshortcuts="Control+K">Search</button>
+  <dialog aria-label={`Search ${version.label} documentation`}>
+    <div class="search-heading"><strong>Search {version.label}</strong><button type="button" data-close-search>Close</button></div>
+    <div class="search-results"></div>
+  </dialog>
+</version-search>
+
+<script>
+  import '@pagefind/default-ui/css/ui.css';
+
+  class VersionSearch extends HTMLElement {
+    connectedCallback() {
+      const dialog = this.querySelector('dialog')!;
+      const open = this.querySelector<HTMLButtonElement>('[data-open-search]')!;
+      const close = this.querySelector<HTMLButtonElement>('[data-close-search]')!;
+      let search: Promise<unknown> | undefined;
+      const initialize = () => search ||= (async () => {
+        // @ts-expect-error Pagefind's default UI does not ship TypeScript declarations.
+        const { PagefindUI } = await import('@pagefind/default-ui');
+        const ui = new PagefindUI({
+          element: this.querySelector('.search-results'),
+          baseUrl: import.meta.env.BASE_URL,
+          bundlePath: import.meta.env.BASE_URL.replace(/\/$/, '') + '/pagefind/',
+          showImages: false,
+          showSubResults: true,
+        });
+        ui.triggerFilters({ version: this.dataset.version });
+        return ui;
+      })();
+      const show = async () => {
+        dialog.showModal();
+        if (!import.meta.env.DEV) await initialize();
+        this.querySelector<HTMLInputElement>('input')?.focus();
+      };
+      open.addEventListener('click', show);
+      close.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+      window.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+          event.preventDefault();
+          if (dialog.open) dialog.close(); else void show();
+        }
+      });
+    }
+  }
+  customElements.define('version-search', VersionSearch);
+</script>
+
+<style>
+  button { color: var(--sl-color-text); background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-gray-5); border-radius: .35rem; padding: .4rem .7rem; cursor: pointer; font: inherit; }
+  dialog { width: min(42rem, calc(100vw - 2rem)); max-height: 80vh; border: 1px solid var(--sl-color-gray-5);
+    border-radius: .5rem; padding: 1rem; color: var(--sl-color-text); background: var(--sl-color-bg); }
+  dialog::backdrop { background: #0008; }
+  .search-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  /* Version is chosen by the page selector, rather than a removable search
+     filter. Keep the backend filter active for every query. */
+  :global(version-search .pagefind-ui__filter-panel) { display: none; }
+</style>

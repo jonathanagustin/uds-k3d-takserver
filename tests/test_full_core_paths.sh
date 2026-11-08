@@ -25,6 +25,9 @@ check() {
 
 check false push false ""
 check false push false "docs/ci.md"
+check false push false $'takx/build-commoncommo.sh\nupstream/takx'
+check false pull_request false $'takx/source_inputs.py\nupstream/takx'
+check true pull_request false $'takx/source_inputs.py\nbundle/full/uds-config.yaml'
 check false push false "charts/takserver/templates/prereqs.yaml"
 check true push false "charts/takserver/templates/monitoring.yaml"
 check true push false "bundle/full/uds-config.yaml"

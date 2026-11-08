@@ -25,6 +25,8 @@ on:
       - "bench/**"
       - "demo/**"
       - "upstream/atak-civ"
+      - "takx/**"
+      - "upstream/takx"
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/pull_request_template.md"
       - ".github/test-infra/**"

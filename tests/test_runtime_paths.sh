@@ -83,6 +83,9 @@ check_match ".github/workflows/scan.yaml" ignore
 check_match ".github/test-infra/aws/eks/main.tf" ignore
 check_match "atak/vm/Dockerfile" ignore
 check_match "upstream/atak-civ" ignore
+check_match "takx/build-commoncommo.sh" ignore
+check_match "takx/patches/desktop.patch" ignore
+check_match "upstream/takx" ignore
 check_match "bench/run.py" ignore
 check_match "demo/sync-assets.py" ignore
 check_match "assets/icon.svg" ignore
@@ -133,6 +136,9 @@ check_decide false "docs/ci.md"
 check_decide false $'README.md\nhk.pkl\n.github/workflows/lint.yaml'
 check_decide false '.github/workflows/scorecard-analysis.yaml'
 check_decide false "atak/ci/build-apk.sh"
+check_decide false $'takx/build-commoncommo.sh\nupstream/takx'
+check_decide true $'takx/source_inputs.py\nupstream/takserver'
+check_decide true $'takx/source_inputs.py\n.gitmodules'
 check_decide false "pepr/capabilities/workload.test.ts"
 check_decide true "charts/takserver/templates/prereqs.yaml"
 check_decide true "pepr/capabilities/workload.ts"
@@ -212,7 +218,7 @@ while IFS= read -r path; do
     fi
   fi
   case "${path}" in
-    docs/* | adr/* | docs-site/* | atak/* | bench/* | demo/* | assets/*)
+    docs/* | adr/* | docs-site/* | atak/* | takx/* | upstream/takx | bench/* | demo/* | assets/*)
       if [[ "${got}" != ignore ]]; then
         bad "docs or device path still starts the matrix: ${path}"
       fi

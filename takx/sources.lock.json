@@ -75,6 +75,6 @@
     "repository": "https://github.com/TAK-Product-Center/TAKX",
     "develop": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
     "release_5_7": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
-    "note": "Reference pins only; no TAKX checkout, compatible SDK or application build is supplied."
+    "note": "Official upstream/takx checkout reference; full application is not built and no compatible SDK is supplied."
   }
 }

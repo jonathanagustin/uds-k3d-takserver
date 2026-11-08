@@ -32,7 +32,7 @@ When a source ref contains `src/home.mdx`, it provides that channel's splash pag
 An older release without this file receives a small navigation shell pointing to
 its own guides. README is published at Getting started. On an authored splash,
 a home URL hash such as `/#quick-start` opens that section on Getting started.
-The header logo is `assets/icon.svg`; `public/favicon.svg` is the same mark.
+The header logo is `assets/tak-mark.svg`; `public/favicon.svg` is the same mark.
 `public/og.png` is the static social image.
 
 `starlight-llms-txt` writes `/llms.txt`, `/llms-full.txt`, and `/llms-small.txt` during the build.
@@ -77,3 +77,15 @@ header version selector and its mobile-menu counterpart remain the channel
 controls. Historical releases get a shared navigation shell whose links still
 point to that release's source-backed guides. Browser checks cover active-page
 navigation, keyboard search, and narrow screens in addition to version routing.
+
+Search opens as an upper-centered modal on desktop and fills the viewport on
+mobile, matching UDS/Starlight. Results scroll inside the panel so the Close
+button remains available. Escape and desktop backdrop clicks dismiss it; clicks
+inside the panel do not. Browser checks cover placement and short viewports.
+
+The landing page uses a native SVG wordmark with outlined lettering, so it does
+not depend on fonts or raster images. `assets/tak-on-uds-dark.svg` has light
+lettering for dark surfaces; `assets/tak-on-uds-light.svg` has dark lettering.
+The shared beacon mark is `assets/tak-mark.svg`, also copied to the favicon.
+`src/components/Hero.astro` keeps the accessible page heading and renders the
+appropriate logo for the selected theme.

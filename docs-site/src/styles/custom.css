@@ -125,14 +125,6 @@ SPDX-License-Identifier: GPL-3.0-only
   gap: 1.5rem;
 }
 
-.hero::before {
-  content: '';
-  display: block;
-  width: 7rem;
-  height: 7rem;
-  background: url('../../../assets/icon.svg') center / contain no-repeat;
-  flex-shrink: 0;
-}
 
 .hero .stack,
 .hero .copy { align-items: center; }
@@ -167,7 +159,6 @@ SPDX-License-Identifier: GPL-3.0-only
   .site-title img { width: 2rem; height: 2rem; flex-shrink: 0; }
   .site-title span { text-overflow: ellipsis; }
   .hero { padding-block: 1rem 2rem; }
-  .hero::before { width: 5rem; height: 5rem; }
   .hero .tagline { font-size: 1.05rem; }
   .sl-link-card { min-height: 0; padding: 1.25rem; }
 }

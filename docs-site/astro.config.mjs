@@ -102,7 +102,7 @@ export default defineConfig({
       // public/favicon.svg is the same mark, already served at /favicon.svg.
       // This path is the repository icon, so the header does not keep a second copy.
       logo: {
-        src: '../assets/icon.svg',
+        src: '../assets/tak-mark.svg',
       },
       head: [
         {
@@ -152,6 +152,7 @@ export default defineConfig({
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
       components: {
+        Hero: './src/components/Hero.astro',
         DraftContentNotice: './src/components/DraftContentNotice.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
         MarkdownContent: './src/components/MarkdownContent.astro',

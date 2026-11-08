@@ -12,9 +12,11 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { howToSteps } from './how-to-ui.mjs';
+import { fromHtml } from 'hast-util-from-html';
 
 const { values: args } = parseArgs({ options: {
   'repo-root': { type: 'string' },
+  'landing-source': { type: 'string' },
   'output-root': { type: 'string' },
   'url-prefix': { type: 'string', default: '' },
   'git-ref': { type: 'string', default: 'HEAD' },
@@ -85,25 +87,57 @@ function quote(value) {
   return JSON.stringify(value);
 }
 
+// Keep original line offsets so removing a prose heading cannot alter code.
+function* markdownLines(markdown) {
+  let fence = null;
+  let start = 0;
+  for (const raw of markdown.split(/(?<=\n)/)) {
+    const line = raw.replace(/\r?\n$/, '');
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    const fenced = Boolean(fence || marker);
+    if (fence) {
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length && marker[2].trim() === '') fence = null;
+    } else if (marker) {
+      fence = { character: marker[1][0], length: marker[1].length };
+    }
+    yield { line, start, end: start + raw.length, fenced };
+    start += raw.length;
+  }
+}
+
 function firstHeading(markdown) {
-  const match = markdown.match(/^#\s+(.+?)\s*$/m);
-  return match ? match[1].trim() : '';
+  for (const { line, fenced } of markdownLines(markdown)) {
+    const match = !fenced && /^#\s+(.+?)\s*$/.exec(line);
+    if (match) return match[1].trim();
+  }
+  return '';
+}
+
+// Extract description text with the HTML parser, never by filtering tag
+// delimiters. This is metadata extraction, not sanitization of page content.
+function metadataText(markdown) {
+  const prose = [...markdownLines(dropGithubOnly(markdown))]
+    .map(({ line, fenced }) => fenced ? '' : line).join('\n');
+  const tree = fromHtml(prose, { fragment: true });
+  const excluded = new Set(['script', 'style', 'template', 'noscript', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+  const blocks = new Set(['div', 'section', 'article', 'aside', 'header', 'footer', 'main', 'nav', 'blockquote', 'ul', 'ol', 'li', 'details', 'summary']);
+  const text = (node) => {
+    if (node.type === 'text') return node.value;
+    if (node.type === 'comment' || excluded.has(node.tagName)) return '';
+    if (node.tagName === 'br') return '\n';
+    const children = (node.children ?? []).map(text).join('');
+    if (node.tagName === 'p') return `\n\n${children.replace(/\s+/g, ' ').trim()}\n\n`;
+    return blocks.has(node.tagName) ? `\n\n${children}\n\n` : children;
+  };
+  return text(tree);
 }
 
 function firstParagraph(markdown) {
-  const lines = markdown.split('\n');
   const paragraph = [];
-  let seenHeading = false;
-  for (const line of lines) {
+  for (const line of metadataText(markdown).split('\n')) {
     const trimmed = line.trim();
-    if (!seenHeading) {
-      if (trimmed.startsWith('#')) seenHeading = true;
-      continue;
-    }
     if (paragraph.length === 0) {
-      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('```') || trimmed.startsWith('<') || trimmed.startsWith('[!') || trimmed.startsWith('![') || trimmed.startsWith('[![')) {
-        continue;
-      }
+      if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith('|') || trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('[!') || trimmed.startsWith('![')) continue;
       paragraph.push(trimmed);
       continue;
     }
@@ -111,8 +145,7 @@ function firstParagraph(markdown) {
     paragraph.push(trimmed);
   }
   let text = paragraph.join(' ');
-  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
-  text = text.replace(/[*_`]/g, '');
+  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '');
   if (text.length > 180) {
     text = `${text.slice(0, 177).replace(/\s+\S*$/, '')}...`;
   }
@@ -274,8 +307,12 @@ function embedDemoVideos(markdown, videos) {
 
 function dropFirstHeading(markdown) {
   // Starlight prints the frontmatter title as the page heading, so the body's
-  // own first H1 would show twice.
-  return markdown.replace(/^#\s+.+\r?\n(\r?\n)?/m, '');
+  // own first H1 would show twice. A shell comment inside a fence is not H1.
+  for (const { line, start, end, fenced } of markdownLines(markdown)) {
+    if (fenced || !/^#\s+.+/.test(line)) continue;
+    return markdown.slice(0, start) + markdown.slice(end).replace(/^\r?\n/, '');
+  }
+  return markdown;
 }
 
 function dropGithubOnly(markdown) {
@@ -450,7 +487,11 @@ That page is not in these guides. The [home page](${siteHref('index', '')}) link
 // home.mdx imports LegacyHomeHash from the copied path, src/content/docs/.
 // A tag predating the splash page gets a small navigation shell; every guide
 // body still comes from that tag. main uses its authored splash content.
-const homePath = path.join(repoRoot, 'docs-site/src/home.mdx');
+// The latest root may explicitly use the current project landing while all
+// guides and version metadata continue to come from the release source.
+const currentLanding = Boolean(args['landing-source']);
+const homePath = currentLanding ? path.resolve(args['landing-source']) : path.join(repoRoot, 'docs-site/src/home.mdx');
+if (currentLanding && !existsSync(homePath)) throw new Error(`Landing source not found: ${homePath}`);
 const componentPath = posix(path.relative(outRoot, path.resolve(import.meta.dirname, '../src/components/LegacyHomeHash.astro')));
 const legacyImport = componentPath.startsWith('.') ? componentPath : `./${componentPath}`;
 let home;
@@ -459,7 +500,12 @@ if (existsSync(homePath)) {
   home = home.replace(/(^|[\s"'(=])\/uds-(?:k3d-)?takserver\//g, `$1${siteBase}/`);
   home = home.replaceAll('https://github.com/jonathanagustin/uds-k3d-takserver/', `${repoUrl}/`);
   home = home.replace('../../components/LegacyHomeHash.astro', legacyImport);
-  if (!unreleased) home = home.replace(`${repoUrl}/edit/main/`, `${repoUrl}/blob/${sourceRef}/`);
+  if (currentLanding) {
+    const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(home);
+    if (!front) throw new Error('The current landing source requires frontmatter.');
+    const fields = front[1].replace(/^editUrl:.*(?:\r?\n|$)/m, '');
+    home = `---\n${fields}\neditUrl: ${quote(`${repoUrl}/edit/main/docs-site/src/home.mdx`)}\n---${home.slice(front[0].length)}`;
+  } else if (!unreleased) home = home.replace(`${repoUrl}/edit/main/`, `${repoUrl}/blob/${sourceRef}/`);
 } else {
   home = `---
 title: TAK Server on UDS

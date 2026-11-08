@@ -71,7 +71,10 @@ export async function buildVersions(repoRoot = path.resolve(import.meta.dirname,
         '--git-ref', version.id === 'main' ? 'HEAD' : version.ref,
         '--version-id', version.id, '--keep-output',
         ...(version.id === 'main' ? [] : ['--skip-video-download']),
-        ...(version.prefix === '' ? ['--include-404'] : []),
+        // Only the latest landing is a current project shell. Guides and
+        // archived homes still use their checked-out release source.
+        ...(version.prefix === '' ? ['--include-404', '--landing-source',
+          path.join(repoRoot, 'docs-site/src/home.mdx')] : []),
       ], { cwd: siteRoot, stdio: 'inherit' });
       // Root also contains the version subdirectories, which belong to their
       // own manifests. Keep only this version's routes.

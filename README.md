@@ -1,5 +1,3 @@
-# uds-takserver
-
 <p align="center">
   <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="docs-site/public/badges/release.svg" alt="Release"></a>
   <a href="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml"><img src="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main" alt="Test"></a>
@@ -12,12 +10,21 @@
     <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="440" height="110">
   </picture>
 </p>
+<!-- github-only:end -->
+
+<p align="center">All-in-one solution for packaging, deploying, and operating TAK Server</p>
+
+<!-- github-only:start -->
 <p align="center">
   <a href="https://jonathanagustin.github.io/uds-takserver/">Read the documentation</a>
 </p>
 <!-- github-only:end -->
 
-TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.
+TAK Server on UDS brings applications, identity, networking, security, and operations together in one integrated environment. [TAK Server](https://github.com/TAK-Product-Center/Server) provides the services that connect TAK clients and exchange data. Deploying it on a shared platform also requires identity integration, client certificates, gateways, network rules, databases, and an upgrade process. Adding [CloudTAK](https://github.com/dfpc-coe/CloudTAK) introduces a browser application and its own database. Those pieces need to work together and stay aligned as the deployment changes.
+
+This package connects TAK Server and CloudTAK to [UDS Core](https://docs.defenseunicorns.com/core/)'s Keycloak sign-in, gateways, and default-deny networking. It supplies deployment charts and configuration, uses TAK's certificate tooling at install time, and includes database backup and recovery workflows. Operators get a defined integration to deploy, test, and maintain alongside their other UDS applications.
+
+Zarf packages the application charts, container images, and deployment configuration into versioned artifacts. This repository builds the TAK, CloudTAK, and PostGIS images for amd64 and arm64, publishes signed release packages with build provenance, and includes automated installation and upgrade checks on k3d. Deploy a published package onto an existing UDS Core cluster, or use the local test environment to develop and validate changes. The operating guides cover certificates, sign-in, network access, backup and restore, resource profiles, and the optional Android ATAK test device.
 
 <details>
 <summary>Contents</summary>
@@ -43,8 +50,6 @@ TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.
 </details>
 
 ## Background
-
-[TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
 
 The repository is `uds-takserver`; the Zarf package remains `takserver`, and its Pepr module is `takserver-oidc`. Those component names and the existing GHCR namespace are retained for compatibility.
 

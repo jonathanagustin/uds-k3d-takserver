@@ -7,6 +7,7 @@ import base64
 import copy
 import importlib.util
 from pathlib import Path
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -84,15 +85,19 @@ class FakeKubectl:
 
 
 class TrustBundleLiveTests(unittest.TestCase):
-    def test_sso_check_requires_the_bundled_signer_and_keeps_the_first_error(self):
+    def test_negative_controls_reject_only_certificate_authority_errors(self):
+        script = Path(__file__).with_name("sso-trust-class.test.mjs")
+        result = subprocess.run(
+            ["node", "--test", str(script)],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         source = Path(__file__).with_name("trust-bundle-live.py").read_text()
         discovery = source.split("def discovery", 1)[1]
-        self.assertIn("tls.rootCertificates", discovery)
-        self.assertIn("trusted by public roots without the bundled CA", discovery)
-        self.assertIn("trial_ca_rejected=true", discovery)
-        self.assertIn("slice(0,300)", discovery)
-        self.assertNotIn("rejectUnauthorized:false", discovery)
-        self.assertIn("rejectUnauthorized:true", discovery)
+        self.assertIn("sso-trust-class.mjs", source)
+        self.assertIn("negativeControl", discovery)
+        self.assertNotIn("publiclyTrusted=false", discovery)
+        self.assertNotIn("unrelatedRejected=true", discovery)
     def test_append_preserves_existing_custom_roots(self):
         original = base64.b64encode(pem("old").encode()).decode()
         combined = base64.b64decode(live.append_ca(original, pem("new"))).decode()

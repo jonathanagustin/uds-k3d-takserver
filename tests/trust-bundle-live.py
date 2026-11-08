@@ -113,34 +113,37 @@ function derPem(raw){const b64=raw.toString('base64');return '-----BEGIN CERTIFI
         return self.exec_sso(code, f"sso.{domain}")
 
     def discovery(self, domain, fingerprint):
-        code = r"""const tls=require('node:tls');const https=require('node:https');const fs=require('node:fs');const crypto=require('node:crypto');
+        classifier = Path(__file__).with_name("sso-trust-class.mjs").read_text().replace("export function", "function")
+        code = classifier + r"""
+const tls=require('node:tls');const https=require('node:https');const fs=require('node:fs');const crypto=require('node:crypto');
 const realm=process.argv[1];const host=new URL(realm).host;const trial=process.argv[2];
 if(process.env.NODE_TLS_REJECT_UNAUTHORIZED==='0') throw new Error('TLS validation is disabled');
 const path='/var/run/combined-trust/ca-bundle.pem';
 if(process.env.NODE_EXTRA_CA_CERTS!==path) throw new Error('combined trust file is not configured');
 function pems(text){return text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[]}
 function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
-function connect(ca){return new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,ca,rejectUnauthorized:true,timeout:20000},()=>{const peer=socket.getPeerCertificate();socket.end();if(!peer||!peer.raw) reject(new Error('SSO server sent no certificate')); else resolve(peer)});socket.on('error',reject)})}
+function connect(ca){return new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,ca,rejectUnauthorized:true,timeout:20000},()=>{const peer=socket.getPeerCertificate();socket.end();if(!peer||!peer.raw) reject(new Error('SSO server sent no certificate')); else resolve(peer)});socket.on('timeout',()=>{const error=new Error('TLS connection timed out');error.code='ETIMEDOUT';socket.destroy();reject(error)});socket.on('error',reject)})}
+async function outcome(ca){try{await connect(ca);return {kind:'success',detail:''}}catch(error){return {kind:classifyTlsError(error),detail:boundedDiagnostic(error)}}}
 (async()=>{
   const parsed=pems(fs.readFileSync(path,'utf8')).map(pem=>new crypto.X509Certificate(pem));
   const trialCert=parsed.find(cert=>fp(cert)===trial);
   if(!trialCert) throw new Error('trial CA is missing from the combined trust file');
-  let publiclyTrusted=false;
-  try{await connect(tls.rootCertificates);publiclyTrusted=true}catch{publiclyTrusted=false}
-  if(publiclyTrusted) throw new Error('SSO certificate is trusted by public roots without the bundled CA');
+  const publicOutcome=await outcome(tls.rootCertificates);
+  if(publicOutcome.kind==='success') throw new Error('SSO certificate is trusted by public roots without the bundled CA');
+  const publicDecision=negativeControl(publicOutcome,'public-root check');
+  if(!publicDecision.pass) throw new Error(publicDecision.reason);
   const peer=await connect(parsed.map(cert=>cert.toString()));
   const leaf=new crypto.X509Certificate(peer.raw);
   const signer=parsed.find(cert=>{try{return fp(cert)===fp(leaf)||leaf.verify(cert.publicKey)}catch{return false}});
   if(!signer) throw new Error('SSO signing CA is not in the combined trust file: peer='+fp(leaf));
   await connect([signer.toString()]);
-  const body=await new Promise((resolve,reject)=>{const req=https.get(realm+'/.well-known/openid-configuration',{ca:[signer.toString()],servername:host,rejectUnauthorized:true,timeout:20000},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(chunks).toString('utf8')}))});req.on('error',reject)});
+  const body=await new Promise((resolve,reject)=>{const req=https.get(realm+'/.well-known/openid-configuration',{ca:[signer.toString()],servername:host,rejectUnauthorized:true,timeout:20000},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(chunks).toString('utf8')}))});req.on('error',reject);req.on('timeout',()=>{req.destroy();const error=new Error('TLS connection timed out');error.code='ETIMEDOUT';reject(error)})});
   const document=JSON.parse(body.text);
   if(body.status!==200||document.issuer!==realm) throw new Error('Keycloak discovery failed: HTTP '+body.status);
-  let unrelatedRejected=false;
-  try{await connect([trialCert.toString()])}catch{unrelatedRejected=true}
-  if(!unrelatedRejected) throw new Error('unrelated trial CA validated the SSO certificate');
+  const trialDecision=negativeControl(await outcome([trialCert.toString()]),'trial-CA check');
+  if(!trialDecision.pass) throw new Error(trialDecision.reason);
   console.log('CloudTAK SSO verified peer='+fp(leaf)+' signer='+fp(signer)+' trial_ca_rejected=true');
-})().catch(error=>{console.error(String(error&&error.message||error).replace(/\s+/g,' ').slice(0,300));process.exitCode=1});"""
+})().catch(error=>{console.error(boundedDiagnostic(error));process.exitCode=1});"""
         return self.exec_sso(code, f"https://sso.{domain}/realms/uds", fingerprint)
 
 

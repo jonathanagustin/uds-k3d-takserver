@@ -3,13 +3,8 @@
 
 name: CloudTAK image
 
-# Builds ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak from the
-# upstream/cloudtak submodule. The Test workflow also builds it on pull
-# requests, but it skips a pull request that only changes
-# .github/container-and-chart. The package and scan workflows wait for the
-# image, so a pull request that only changes it needs this build too. Both
-# builds use build.sh --if-changed, so whichever runs second finds the tag
-# already carries the same inputs.
+# Test and this workflow share immutable-key producer queues. The first
+# successful producer publishes; later producers recheck and reuse the tag.
 on:
   workflow_dispatch:
     inputs:
@@ -46,10 +41,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  image-keys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cloudtak: ${{ steps.keys.outputs.cloudtak }}
+      postgis: ${{ steps.keys.outputs.postgis }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve immutable image keys
+        id: keys
+        run: |
+          echo "cloudtak=$(./.github/container-and-chart/cloudtak/build.sh --tag)" >> "$GITHUB_OUTPUT"
+          echo "postgis=$(./.github/container-and-chart/postgis/build.sh --tag)" >> "$GITHUB_OUTPUT"
+
   # One native runner per architecture, each pushing <version>-<key>-<arch>
   # and, on main, <version>-<arch>. index joins them under <version>, the
   # tag zarf.yaml references.
   build:
+    needs: image-keys
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-cloudtak-${{ needs.image-keys.outputs.cloudtak }}-${{ matrix.arch }}
+      queue: max
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -100,8 +117,14 @@ jobs:
           refs-file: ${{ runner.temp }}/pushed-refs.txt
 
   index:
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-cloudtak-${{ needs.image-keys.outputs.cloudtak }}-index
+      queue: max
+      cancel-in-progress: false
     timeout-minutes: 15
-    needs: build
+    needs: [image-keys, build]
     runs-on: ubuntu-latest
     permissions:
       contents: read

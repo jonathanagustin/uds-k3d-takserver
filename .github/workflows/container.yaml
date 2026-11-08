@@ -50,11 +50,12 @@ jobs:
   # One decision for both architectures, so the two builds and the manifest
   # merge always agree on whether this run publishes anything.
   plan:
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-      actions: write
+      actions: read
     outputs:
       build: ${{ steps.image.outputs.build }}
       tag: ${{ steps.image.outputs.tag }}
@@ -101,7 +102,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: write
+      actions: read
       id-token: write
       attestations: write
     if: needs.plan.outputs.build == 'true'
@@ -202,11 +203,12 @@ jobs:
   # this also writes the plain tag that zarf.yaml and releases reference,
   # including when the keyed images were already built on a pull request.
   manifest:
+    timeout-minutes: 15
     needs: [plan, build]
     permissions:
       contents: read
       packages: write
-      actions: write
+      actions: read
       id-token: write
       attestations: write
     if: >-

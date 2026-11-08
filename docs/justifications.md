@@ -156,9 +156,15 @@ rejected. Docker's embedded DNS forwarder is rejected separately so it cannot
 relay external queries through the runner. Kubernetes DNS and the tenant
 and passthrough gateways are checked by the existing `test:all` suite.
 
-A public-IP HTTP control has to succeed from every node before blocking and
-fail after blocking. This distinguishes enforcement from an endpoint outage or
-a DNS lookup failure. The suite then installs and starts TAK and CloudTAK from
+A public-IP HTTP transport control must be reachable from every node before
+blocking, with no successful request or HTTP response after blocking. BusyBox
+wget uses `-Y off` to bypass proxies and `-S` to report response headers. Receipt
+of any HTTP status, including a redirect or error followed by a failed transfer,
+proves network reachability; it does not prove resource health. Failure with no
+HTTP response fails preflight instead of passing an endpoint outage as isolation.
+The IP literal prevents an initial DNS failure from masquerading as enforcement.
+This improves the control's transport semantics; it does not establish that TLS
+or a redirect caused the earlier CI preflight failure. The suite then installs and starts TAK and CloudTAK from
 the packaged images, creates the test identities, and runs `test:all`, including
 SSO, client certificates, CoT streaming, file transfer, and the CloudTAK map.
 `basemap.enabled=false` removes the external tile source. The browser test still
@@ -185,8 +191,14 @@ networks, a still-reachable host connection, packet counters, and restoration:
 ```bash title="Check firewall isolation with local Docker traffic"
 docker build --secret id=ca,src=/etc/ssl/certs/ca-certificates.crt \
   -t tak-airgap-firewall-test tests/fixtures/airgap
-AIRGAP_FIREWALL_INTEGRATION=1 python3 -B -m unittest tests.test_node_airgap -v
+AIRGAP_FIREWALL_INTEGRATION=1 AIRGAP_WGET_INTEGRATION=1 \
+  python3 -B -m unittest tests.test_node_airgap -v
 ```
+
+`AIRGAP_WGET_INTEGRATION=1` also runs actual BusyBox wget against an isolated
+local HTTP redirect fixture, with an unreachable TLS target and deliberately
+invalid proxy settings. It tests transport classification without public egress
+or firewall changes.
 
 Set `AIRGAP_FIREWALL_IPV6=1` as well to exercise IPv6 Docker networks on a
 host with IPv6 packet filtering. The managed development environment supports

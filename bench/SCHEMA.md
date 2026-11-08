@@ -53,6 +53,35 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `postgres.settings` | text | `current_setting` for `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, `checkpoint_timeout` |
 | `errors` | strings | why a null field was not measured |
 
+### Per-container capacity evidence
+
+`capacity` is an additive schema-1 object. Older records have no such field.
+It holds `sample_interval_s: 5`, `containers`, and collection `errors`. Each
+container is identified by namespace, pod UID and container name, so a
+replacement pod remains a separate row. It stores:
+
+- `before` and `after`: Pod inventories around the sampling/load window,
+  with the memory limit in bytes, restart count, readiness, current termination
+  reason, last termination reason and pod phase. Succeeded pods are excluded;
+  failed pods remain visible so their termination evidence is not lost.
+  A missing boundary inventory is `null`.
+- `samples`: peak and last `workingSetBytes`, peak and last `usageNanoCores`,
+  memory/CPU observation counts, and first/last memory source timestamps from
+  the kubelet Summary API. Missing metrics stay `null`; observed zero stays zero.
+
+The collector retains aggregates for at most 256 container identities per
+inventory and sampled set, rather than storing every poll. Truncation and
+missing limits, status or samples are recorded as errors. The existing aggregate
+footprint and Postgres fields are unchanged.
+
+These are sampled working sets, not a continuous maximum or process RSS.
+Before raising a load from 50 to 200 clients, inspect messaging's sampled peak
+against its unchanged limit on both architectures, confirm adequate headroom,
+and check that the pod identity, limit, restart count and healthy state persisted
+across the window. An OOM termination, replacement, missing observation or sparse
+sampling prevents a capacity conclusion. No automatic safe-capacity verdict is
+made, and an absence of sampled pressure cannot guarantee no transient peak.
+
 Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
 `kubelet.steady_rss_bytes`. The readiness plot uses only warm rollout duration.

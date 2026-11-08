@@ -13,12 +13,18 @@ and older than 120 seconds must fail.
 import copy
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
 import threading
 import unittest
 from urllib.parse import parse_qs, urlparse
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("atak_uptime", ROOT / "atak/ci/uptime-probe.py")
@@ -263,20 +269,133 @@ class AtakUptimeTests(unittest.TestCase):
                 uptime.validate_metric("probe_success", "1", response, fresh, TARGET)
 
 
+# Chart pin from uds-core v1.16.0 src/prometheus-stack/common/zarf.yaml, the
+# kube-prometheus-stack inside core-monitoring 1.16.0-upstream.
+KPS_CHART = "prometheus-community/kube-prometheus-stack"
+KPS_VERSION = "92.14.0"
+KPS_REPO = "https://prometheus-community.github.io/helm-charts"
+
+
+def load_yaml(path):
+    return yaml.safe_load((ROOT / path).read_text())
+
+
+def bundle_overrides():
+    bundle = load_yaml("atak/ci/monitoring/uds-bundle.yaml")
+    package = bundle["packages"][0]
+    if package["name"] != "core-monitoring" or package["ref"] != "1.16.0-upstream":
+        raise AssertionError("opt-in bundle must keep core-monitoring 1.16.0-upstream")
+    return package["overrides"]
+
+
+def value_map(overrides, component, chart):
+    return {item["path"]: item["value"] for item in overrides[component][chart]["values"]}
+
+
+def nest_values(paths):
+    root = {}
+    for path, value in paths.items():
+        cursor = root
+        parts = path.split(".")
+        for part in parts[:-1]:
+            cursor = cursor.setdefault(part, {})
+        cursor[parts[-1]] = value
+    return root
+
+
+def render_prometheus_stack(values):
+    helm = shutil.which("helm")
+    if helm is None:
+        raise AssertionError("helm is required to render kube-prometheus-stack 92.14.0")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        values_path = tmp / "values.yaml"
+        values_path.write_text(yaml.safe_dump(values))
+        env = os.environ.copy()
+        env["HELM_CONFIG_HOME"] = str(tmp / "config")
+        env["HELM_CACHE_HOME"] = str(tmp / "cache")
+        env["HELM_DATA_HOME"] = str(tmp / "data")
+        subprocess.run(
+            [helm, "repo", "add", "prometheus-community", KPS_REPO],
+            check=True, env=env, capture_output=True, text=True,
+        )
+        subprocess.run(
+            [helm, "repo", "update", "prometheus-community"],
+            check=True, env=env, capture_output=True, text=True,
+        )
+        rendered = subprocess.run(
+            [helm, "template", "kps", KPS_CHART, "--version", KPS_VERSION,
+             "--namespace", "monitoring", "-f", str(values_path)],
+            check=True, env=env, capture_output=True, text=True,
+        )
+    return [doc for doc in yaml.safe_load_all(rendered.stdout) if isinstance(doc, dict)]
+
+
+def named(docs, kind):
+    return [
+        (doc.get("metadata") or {}).get("name")
+        for doc in docs
+        if doc.get("kind") == kind
+    ]
+
+
+def vm_domain(doc):
+    return doc["spec"]["template"]["spec"]["domain"]
+
+
+def smoke_vm():
+    text = (ROOT / "atak/ci/vm-smoke.sh").read_text()
+    marker = "cat <<YAML | kubectl apply -n \"${NS}\" -f -\n"
+    start = text.index(marker) + len(marker)
+    body = text[start:text.index("\nYAML\n", start)]
+    return yaml.safe_load(body)
+
+
 class MonitoringBundleTests(unittest.TestCase):
-    def test_opt_in_bundle_drops_unused_monitoring_weight(self):
-        text = (ROOT / "atak/ci/monitoring/uds-bundle.yaml").read_text()
-        for path in (
-            "alertmanager.enabled",
-            "kube-state-metrics.enabled",
-            "nodeExporter.enabled",
-            "prometheus-node-exporter.enabled",
-            "prometheus.prometheusSpec.resources.requests.memory",
-        ):
-            self.assertIn(path, text)
-        self.assertIn("256Mi", text)
-        self.assertIn("value: false", text)
-        self.assertIn("value: 0", text)
+    def test_opt_in_bundle_keeps_prometheus_and_drops_state_metrics(self):
+        overrides = bundle_overrides()
+        self.assertEqual(set(overrides), {"grafana", "kube-prometheus-stack"})
+        self.assertEqual(value_map(overrides, "grafana", "grafana"), {"replicas": 0})
+        stack = value_map(overrides, "kube-prometheus-stack", "kube-prometheus-stack")
+        self.assertEqual(stack["kubeStateMetrics.enabled"], False)
+        self.assertNotIn("kube-state-metrics.enabled", stack)
+        self.assertEqual(stack["alertmanager.enabled"], False)
+        self.assertEqual(stack["nodeExporter.enabled"], False)
+        self.assertEqual(stack["prometheus-node-exporter.enabled"], False)
+        self.assertEqual(stack["prometheus.prometheusSpec.resources.requests.memory"], "256Mi")
+        self.assertEqual(stack["prometheus.prometheusSpec.resources.limits.memory"], "1Gi")
+
+        rendered = render_prometheus_stack(nest_values(stack))
+        self.assertFalse(any("kube-state-metrics" in (name or "") for name in named(rendered, "Deployment")))
+        self.assertFalse(any("node-exporter" in (name or "") for name in named(rendered, "DaemonSet")))
+        self.assertNotIn("Alertmanager", {doc.get("kind") for doc in rendered})
+        prometheus = [doc for doc in rendered if doc.get("kind") == "Prometheus"]
+        self.assertEqual(len(prometheus), 1)
+        self.assertEqual(
+            prometheus[0]["spec"]["resources"]["requests"]["memory"],
+            "256Mi",
+        )
+
+        stale = dict(stack)
+        stale.pop("kubeStateMetrics.enabled")
+        stale["kube-state-metrics.enabled"] = False
+        still_there = render_prometheus_stack(nest_values(stale))
+        self.assertTrue(any(name == "kps-kube-state-metrics" for name in named(still_there, "Deployment")))
+        self.assertEqual(len([doc for doc in still_there if doc.get("kind") == "Prometheus"]), 1)
+
+    def test_device_guest_is_2gi_without_overcommit_or_graphics_changes(self):
+        device_docs = [
+            doc for doc in yaml.safe_load_all((ROOT / "atak/deploy/device.yaml").read_text())
+            if isinstance(doc, dict)
+        ]
+        vms = [smoke_vm(), next(doc for doc in device_docs if doc.get("kind") == "VirtualMachine")]
+        for vm in vms:
+            domain = vm_domain(vm)
+            self.assertEqual(domain["memory"]["guest"], "2Gi")
+            self.assertEqual(domain["cpu"]["cores"], 2)
+            self.assertNotIn("resources", domain)
+            self.assertNotIn("autoattachGraphicsDevice", domain["devices"])
+            self.assertIn("video=720x1280", domain["firmware"]["kernelBoot"]["kernelArgs"])
 
 
 if __name__ == "__main__":

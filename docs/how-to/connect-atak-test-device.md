@@ -12,8 +12,9 @@ a `TakClient`, and see its callsign in TAK and CloudTAK.
 
 - A working TAK deployment with the standard passthrough port 8089 and the
   in-cluster DNS rewrite. See [Standard TAK ports](../networking.md#standard-tak-ports).
-- An amd64 node with `/dev/kvm`, about 3 GiB RAM and 2 vCPU for the VM, plus
-  capacity for KubeVirt. Android-x86 and this APK have no arm64 build.
+- An amd64 node with `/dev/kvm`. The VM guest is 2Gi with 2 vCPU, plus
+  capacity for KubeVirt's launcher overhead. 2Gi is the configured guest, not
+  a measured minimum. Android-x86 and this APK have no arm64 build.
 - The UDS CLI, Docker, k3d, and a checkout of this repository for the test driver.
 - Published images matching the `ATAK_TAG` you select, including `atak-driver`
   for the automated provisioning path.

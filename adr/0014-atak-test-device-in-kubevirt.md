@@ -30,7 +30,7 @@ Options:
 - The VM has no GPS, so the driver stages an ATAK defaults preferences file before first start that gives ATAK a fixed test location (National Mall, Washington, DC) with ATAK's restore-location settings and turns internal GPS off, and the callsign `ATAK-DEVICE (TEST LOCATION)` marks it as a test position wherever it appears. It is never a real fix.
 - KVM is required. It is amd64 only; there is no arm64 Android-x86 build, so arm64 clusters cannot run it ([ADR 10](0010-amd64-and-arm64.md)).
 - `virt-handler` runs privileged on every node, with the UDS policy exemptions listed in [the device docs](../docs/atak-device.md#policy-exemptions). That is a much larger trust grant than anything else in this repository, and is the main reason the component is opt-in.
-- CI cost: a cold APK build is more than an hour and the e2e job deploys UDS Core, TAK, KubeVirt, and a 3 GiB VM on one runner. The build layers live in a GHCR registry cache because the Actions cache is too small.
+- CI cost: a cold APK build is more than an hour and the e2e job deploys UDS Core, TAK, KubeVirt, and a VM with a 2Gi guest on one runner. 2Gi is the configured guest, not a measured minimum. The build layers live in a GHCR registry cache because the Actions cache is too small.
 - Image size: the containerDisk is about 950 MB, and KubeVirt adds its own images.
 - Android-x86 9 (2020) is old and unmaintained. ATAK 5.5 still supports Android 9, but this does not show behavior on current Android.
 - adb on the device has no authentication. Network rules limit it to the viewer and the driver.

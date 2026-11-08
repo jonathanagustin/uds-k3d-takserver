@@ -26,15 +26,18 @@ packages:
             - path: replicas
               value: 0
       # Run 42424190273 requested 10850Mi after this bundle and the 3348Mi
-      # virt-launcher stayed Pending (Insufficient memory). The viewer check
-      # needs Prometheus and Blackbox, not Alertmanager, node-exporter, or
-      # kube-state-metrics.
+      # virt-launcher (3Gi guest plus overhead) stayed Pending. The viewer
+      # check needs Prometheus and Blackbox. kube-prometheus-stack 92.14.0,
+      # the chart in Core monitoring 1.16.0, installs kube-state-metrics only
+      # when kubeStateMetrics.enabled is true. The subchart key
+      # kube-state-metrics has no enabled field, so that path left the
+      # Deployment running.
       kube-prometheus-stack:
         kube-prometheus-stack:
           values:
             - path: alertmanager.enabled
               value: false
-            - path: kube-state-metrics.enabled
+            - path: kubeStateMetrics.enabled
               value: false
             - path: nodeExporter.enabled
               value: false

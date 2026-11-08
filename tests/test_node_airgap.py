@@ -26,6 +26,56 @@ SPEC = importlib.util.spec_from_file_location("node_airgap", ROOT / ".github/scr
 AIRGAP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AIRGAP)
 
+# Ordinary Test events keep this producer output. A trust-only manual trial
+# may omit the airgap row, but only through the same function.
+INSTALL_MATRIX_EXPRESSION = "${{ fromJSON(needs.check-flavor.outputs.install-matrix) }}"
+
+
+def airgap_rows(rows):
+    if not isinstance(rows, list) or not rows or not all(isinstance(row, dict) for row in rows):
+        raise AssertionError("install matrix rows must be mappings")
+    return [row for row in rows if row.get("airgap")]
+
+
+def resolve_install_matrices(workflow, root):
+    """Return the install rows a workflow will actually run.
+
+    A static include list is used as written. The fromJSON expression is
+    executed through test-validation-mode.py; a bare string is not a matrix.
+    """
+    matrix = workflow["jobs"]["validate-install"]["strategy"]["matrix"]
+    if isinstance(matrix, dict):
+        include = matrix.get("include")
+        if isinstance(include, str):
+            raise AssertionError("install matrix include is an expression; resolve its producer")
+        return {"ordinary": include}
+    if not isinstance(matrix, str) or matrix.strip() != INSTALL_MATRIX_EXPRESSION:
+        raise AssertionError("dynamic install matrix must be fromJSON(needs.check-flavor.outputs.install-matrix)")
+    producer = Path(root) / ".github/scripts/test-validation-mode.py"
+    if not producer.is_file():
+        raise AssertionError(f"missing install-matrix producer: {producer}")
+    spec = importlib.util.spec_from_file_location(f"validation_mode_{producer.stat().st_mtime_ns}", producer)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not callable(getattr(module, "install_matrix", None)):
+        raise AssertionError("install-matrix producer must define install_matrix")
+    runner = "ubuntu-26.04"
+    return {
+        "ordinary": module.install_matrix("pull_request", "false", runner)["include"],
+        "push": module.install_matrix("push", "false", runner)["include"],
+        "dispatch": module.install_matrix("workflow_dispatch", "false", runner)["include"],
+        "trust": module.install_matrix("workflow_dispatch", "true", runner)["include"],
+    }
+
+
+def assert_native_plus_one_airgap(test, rows):
+    selected = airgap_rows(rows)
+    test.assertEqual(len(selected), 1)
+    native = [row for row in rows if not row.get("airgap")]
+    test.assertEqual([row["arch"] for row in native], ["amd64", "arm64"])
+    test.assertEqual(selected[0]["arch"], "amd64")
+    test.assertEqual(selected[0]["runner"], native[0]["runner"])
+
 
 class AirgapContracts(unittest.TestCase):
     def test_unreachable_precontrol_fails_closed_and_reports_wget(self):
@@ -110,7 +160,15 @@ class AirgapContracts(unittest.TestCase):
     def test_ci_always_restores_and_offline_ui_keeps_the_core_flow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())
         job = workflow["jobs"]["validate-install"]
-        self.assertEqual(sum(bool(row.get("airgap")) for row in job["strategy"]["matrix"]["include"]), 1)
+        resolved = resolve_install_matrices(workflow, ROOT)
+        assert_native_plus_one_airgap(self, resolved["ordinary"])
+        for name in ("push", "dispatch"):
+            if name in resolved:
+                assert_native_plus_one_airgap(self, resolved[name])
+        if "trust" in resolved:
+            self.assertEqual(airgap_rows(resolved["trust"]), [])
+            self.assertEqual([row["arch"] for row in resolved["trust"]], ["amd64", "arm64"])
+        self.assertIn("matrix.airgap", job["env"]["AIRGAP_TEST"])
         steps = {step.get("name"): step for step in job["steps"]}
         restore = steps["Restore airgap node egress"]
         self.assertIn("always()", restore["if"])
@@ -123,6 +181,37 @@ class AirgapContracts(unittest.TestCase):
         config = yaml.safe_load((ROOT / "bundle/airgap-config.yaml").read_text())
         self.assertIs(config["variables"]["takserver"]["CLOUDTAK_BASEMAP_ENABLED"], False)
         self.assertIn('-e AIRGAP_TEST="${AIRGAP_TEST:-false}"', (ROOT / "tasks/test.yaml").read_text())
+
+    def test_dynamic_matrix_keeps_ordinary_airgap_and_trust_trial_omits_it(self):
+        producer = '''
+def install_matrix(event, requested, amd64_runner):
+    include = [{"arch": "amd64", "runner": amd64_runner},
+               {"arch": "arm64", "runner": "ubuntu-26.04-arm"}]
+    if not (event == "workflow_dispatch" and requested == "true"):
+        include.append({"arch": "amd64", "runner": amd64_runner, "airgap": True})
+    return {"include": include}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / ".github/scripts/test-validation-mode.py"
+            script.parent.mkdir(parents=True)
+            script.write_text(producer)
+            workflow = {"jobs": {"validate-install": {"strategy": {"matrix": INSTALL_MATRIX_EXPRESSION}}}}
+            resolved = resolve_install_matrices(workflow, root)
+        for name in ("ordinary", "push", "dispatch"):
+            assert_native_plus_one_airgap(self, resolved[name])
+        self.assertEqual(airgap_rows(resolved["trust"]), [])
+        self.assertEqual([row["arch"] for row in resolved["trust"]], ["amd64", "arm64"])
+
+    def test_unresolved_matrix_text_fails_closed(self):
+        for matrix in (
+            "${{ fromJSON(needs.other.outputs.matrix) }}",
+            {"include": INSTALL_MATRIX_EXPRESSION},
+            "include",
+        ):
+            workflow = {"jobs": {"validate-install": {"strategy": {"matrix": matrix}}}}
+            with self.subTest(matrix=matrix), self.assertRaises(AssertionError):
+                resolve_install_matrices(workflow, ROOT)
 
 
 @unittest.skipUnless(os.environ.get("AIRGAP_CLEANUP_INTEGRATION") == "1", "set AIRGAP_CLEANUP_INTEGRATION=1 for real DNS-blocked cleanup")

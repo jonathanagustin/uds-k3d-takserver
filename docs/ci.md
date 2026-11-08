@@ -137,6 +137,13 @@ kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
 fresh runner and retain the image and kernel notice for the investigation.
 
+Lint, Unit tests, CodeQL, dependency review, image scanning, and PR title checks
+cancel superseded runs for the same pull request or branch. CodeQL schedules
+remain separate from push validation. Test, Lint, Unit tests,
+and PR title checks do not rerun when a milestone is assigned. PR title checks
+still validate title and body edits, so a skipped edit cannot replace a failed
+required title check.
+
 ## Limits on supporting jobs
 
 Build, index, scan, and reporting jobs have explicit job timeouts rather than

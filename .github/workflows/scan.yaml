@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the latest validation for each pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   images:
     runs-on: ubuntu-latest

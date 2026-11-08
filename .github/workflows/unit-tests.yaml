@@ -5,13 +5,18 @@ name: Unit tests
 
 on:
   pull_request:
-    types: [milestoned, opened, reopened, synchronize]
+    types: [opened, reopened, synchronize]
   push:
     branches:
       - main
 
 permissions:
   contents: read
+
+# Keep only the latest validation for each pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Offline unit tests with coverage. The Pepr tests also run in

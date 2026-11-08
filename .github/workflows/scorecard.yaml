@@ -40,5 +40,6 @@ jobs:
       security-events: write
       # Publish results for the Scorecard badge.
       id-token: write
-    uses: defenseunicorns/uds-common/.github/workflows/callable-scorecard.yaml@9cb4ebfd9f9a5efd1dbc454bf3aae843d0b57b9f # v1.32.2
-    secrets: inherit
+    uses: ./.github/workflows/scorecard-analysis.yaml
+    secrets:
+      SCORECARD_READ_TOKEN: ${{ secrets.SCORECARD_READ_TOKEN }}

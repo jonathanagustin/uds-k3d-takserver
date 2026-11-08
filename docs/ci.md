@@ -163,7 +163,9 @@ these limits do not suppress errors or automatically retry failed work.
 
 The shared lint workflow receives only its automatic GitHub token. Container
 image jobs keep package publication and attestation permissions, but Actions API
-access is read-only. Scorecard retains inherited secrets because its pinned
-reusable workflow references `SCORECARD_READ_TOKEN` without declaring it in
-`workflow_call.secrets`; explicitly passing that secret requires an upstream
-interface change or a separately reviewed local workflow.
+access is read-only. Scorecard uses a local reusable adapter that accepts only the optional
+`SCORECARD_READ_TOKEN`. Its upstream call inherits that restricted context, rather
+than all repository secrets. The pinned analysis still supplies SARIF artifacts,
+code-scanning uploads and badge publication. The adapter retains the upstream
+permission contract; it does not change the token fallback when the named secret
+is unset. Neither reusable layer attaches an environment with additional secrets.

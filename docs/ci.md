@@ -165,7 +165,34 @@ these limits do not suppress errors or automatically retry failed work.
 
 The shared lint workflow receives only its automatic GitHub token. Container
 image jobs keep package publication and attestation permissions, but Actions API
-access is read-only. Scorecard retains inherited secrets because its pinned
-reusable workflow references `SCORECARD_READ_TOKEN` without declaring it in
-`workflow_call.secrets`; explicitly passing that secret requires an upstream
-interface change or a separately reviewed local workflow.
+access is read-only. Scorecard uses a local reusable adapter that accepts only the optional
+`SCORECARD_READ_TOKEN`. Its upstream call inherits that restricted context, rather
+than all repository secrets. The pinned analysis still supplies SARIF artifacts,
+code-scanning uploads and badge publication. The adapter retains the upstream
+permission contract; it does not change the token fallback when the named secret
+is unset. Neither reusable layer attaches an environment with additional secrets.
+
+## Image producer queues
+
+Test and the dedicated CloudTAK/PostGIS workflows resolve the same immutable
+input tags before scheduling native architecture builds. Their build jobs share
+one concurrency group per image key and architecture; index writers have a
+separate group per image key. A queued job rechecks the published input label
+before compiling. PostGIS smoke checks and attestations remain inside the build
+job; publication and index validation retain their existing failure behavior.
+Manual force rebuilds still rebuild explicitly, under the same queue.
+
+These jobs use GitHub's [`queue: max` concurrency policy](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+with cancellation disabled inside the shared group. Unlike the default single
+pending slot, this preserves up to 100 FIFO waiters; GitHub cancels overflow
+rather than growing an unlimited queue. A failed producer releases its slot,
+and the next producer can build the missing tag. Existing workflow/job limits
+still bound execution; package/index consumers retain their bounded waits.
+Different input keys and architectures do not share a global pending queue.
+Fork token permissions and fallback behavior are unchanged.
+
+Local tests validate the workflow queue contracts and run the real PostGIS build
+script against a registry fixture to check reuse after serialization and retry
+after a failed producer. They do not emulate the hosted Actions scheduler or
+prove a cold native compilation on GitHub. Issue #353 stays open pending that
+live evidence; no cold builds were dispatched solely to demonstrate savings.

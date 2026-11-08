@@ -109,7 +109,7 @@ jobs:
           bash tests/test_api_smoke_diag.sh
           bash tests/test_node_agent_ready.sh
           node --test tests/test_tak_error_guard.mjs tests/sso-fetch.test.mjs tests/sso-trust-class.test.mjs
-          python3 -B -m unittest tests.test_cloudtak_sso_mount -v
+          python3 -B -m unittest tests.test_cloudtak_sso_mount tests.test_playwright_collection -v
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary

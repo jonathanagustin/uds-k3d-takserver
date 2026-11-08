@@ -29,6 +29,11 @@ function clientCertificates() {
 const skipSsoSetup = process.env.SKIP_SSO_SETUP === "1";
 
 export default defineConfig({
+  // Browser specs only. Node unit files (*.test.mjs) in this directory run
+  // under `node --test` in the unit job. The UI container mounts only this
+  // directory at /app, so Playwright's default *.test.* match both runs those
+  // files here and breaks imports that live outside tests/.
+  testMatch: /.*\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

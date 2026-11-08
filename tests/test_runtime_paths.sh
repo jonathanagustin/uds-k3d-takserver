@@ -74,6 +74,7 @@ check_match ".github/workflows/lint.yaml" ignore
 check_match ".github/workflows/codeql.yaml" ignore
 check_match ".github/workflows/dependency-review.yaml" ignore
 check_match ".github/workflows/unit-tests.yaml" ignore
+check_match ".github/workflows/scorecard-analysis.yaml" ignore
 check_match ".github/workflows/benchmark.yaml" ignore
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
@@ -130,6 +131,7 @@ check_match "mise.toml" relevant
 
 check_decide false "docs/ci.md"
 check_decide false $'README.md\nhk.pkl\n.github/workflows/lint.yaml'
+check_decide false '.github/workflows/scorecard-analysis.yaml'
 check_decide false "atak/ci/build-apk.sh"
 check_decide false "pepr/capabilities/workload.test.ts"
 check_decide true "charts/takserver/templates/prereqs.yaml"

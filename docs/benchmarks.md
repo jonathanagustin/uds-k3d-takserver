@@ -54,3 +54,24 @@ The report compares configs on three views: footprint against throughput, footpr
 The markdown report includes the observed CPU, working set, throughput, latency, startup phases, Postgres counters and record caveats. Missing timings stay "not measured"; negative or non-finite timings are shown as invalid and never treated as durations. The source records are unchanged. A startup-phase row describes the pod present when that config was collected. A Postgres-only rollout can reuse an earlier TAK pod, so repeated rows are not independent cold and warm TAK startup measurements.
 
 A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config. Do not treat any config, or either [values profile](profiles.md), as a sizing result yet.
+
+## Check capacity before a larger load
+
+New records retain `capacity.containers` from the same five-second kubelet
+polls as the aggregate working set. Each row has the namespace, pod UID and
+container name, sampled memory/CPU peaks and last values, source timestamps,
+and before/after memory limits, readiness, restart counts and termination
+reasons. Older records do not have this evidence. See the
+[record schema](../bench/SCHEMA.md#per-container-capacity-evidence).
+
+For the 50-client point, inspect `takserver-messaging` on both architectures
+before attempting 200 clients. Compare its sampled working-set peak with its
+memory limit, require headroom, and check that its UID, limit, healthy state and
+restart count stayed stable. Review both termination-reason fields for OOMs.
+Do not infer messaging's headroom from the total TAK and CloudTAK working set.
+Missing data, a changed pod or limit, restarts, or insufficient samples leave
+the gate unresolved. Polling can miss a transient peak, so a small observed
+margin is not evidence that a larger load fits.
+
+The collector bounds its stored identities and retains aggregates, not a
+time-series dump. It changes neither client-count defaults nor workload limits.

@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for your interest in uds-k3d-takserver. Bug reports, feature requests, and pull requests are all welcome.
+Thanks for your interest in uds-takserver. Bug reports, feature requests, and pull requests are all welcome.
 
 ## Reporting bugs and requesting features
 
-Open an issue at <https://github.com/jonathanagustin/uds-k3d-takserver/issues>. Search the existing issues first, since yours may already be there.
+Open an issue at <https://github.com/jonathanagustin/uds-takserver/issues>. Search the existing issues first, since yours may already be there.
 
 For a bug, include:
 
@@ -41,7 +41,7 @@ Release Please builds the changelog and the release pull requests from the merge
 
 - **No secrets.** Never commit private keys, keystores, passwords, or enrolled certificates. Certificates are generated at deploy time ([ADR 2](adr/0002-generate-certificates-at-deploy-time.md)).
 - **Pinned dependencies.** Pin images and GitHub Actions by digest or full commit SHA, with the version in a comment. Renovate keeps them current.
-- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes. The [docs site](https://jonathanagustin.github.io/uds-k3d-takserver/) is built from those files by the Docs workflow. A new page under `docs/` also needs an entry in `docs-site/scripts/sync-docs.mjs` and the sidebar in `docs-site/astro.config.mjs`. Run `npm ci && npm run build` in `docs-site/` to check it: a broken internal link fails the build. `npm test` there runs the browser checks against that build. Install the browser once with `npx playwright install chromium`.
+- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes. The [docs site](https://jonathanagustin.github.io/uds-takserver/) is built from those files by the Docs workflow. A new page under `docs/` also needs an entry in `docs-site/scripts/sync-docs.mjs` and the sidebar in `docs-site/astro.config.mjs`. Run `npm ci && npm run build` in `docs-site/` to check it: a broken internal link fails the build. `npm test` there runs the browser checks against that build. Install the browser once with `npx playwright install chromium`.
 
 ## Coding standards
 
@@ -107,7 +107,7 @@ To update everything after a release:
 3. Update the README players by hand. GitHub only plays a video in a page when it was uploaded through its web editor, and there is no API for that. Download the two videos from the `demo` release, drag them into the README editor, and paste the new `user-attachments` URLs into `README.md`.
 4. Open a pull request with the changes.
 
-The doc pages link a clip as a poster image: `[![Alt text](../docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-airgap.mp4)`. GitHub shows the poster, which links to the clip. The docs site turns the same line into a player.
+The doc pages link a clip as a poster image: `[![Alt text](../docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-airgap.mp4)`. GitHub shows the poster, which links to the clip. The docs site turns the same line into a player.
 
 ## License
 

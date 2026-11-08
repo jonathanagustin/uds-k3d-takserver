@@ -83,7 +83,7 @@ variables:
 
 `bundle/uds-bundle.yaml` and `bundle/full/uds-bundle.yaml` show the override (`cloudtak` component, `uds-cloudtak` chart, path `sso.groups`). A bundle of your own needs the same `overrides` entry. Group paths are case-sensitive.
 
-[![Demo clip: a member of /CloudTAK/Users signs in to CloudTAK and is refused at the TAK web UI](../docs-site/public/demo/demo-clip-cloudtak-user.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4)
+[![Demo clip: a member of /CloudTAK/Users signs in to CloudTAK and is refused at the TAK web UI](../docs-site/public/demo/demo-clip-cloudtak-user.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4)
 
 ![Keycloak refuses a /CloudTAK/Users member at the TAK Server web UI](../docs-site/public/demo/screens/tak-admin-refused.webp)
 
@@ -140,7 +140,7 @@ The admin certificate is mounted only in the bootstrap container. The CloudTAK c
 
 `webtak` is 8447, the connector the tenant gateway uses, rather than 8446. 8447 has a certificate whose SANs are the `takserver-web` Service names, so CloudTAK verifies it against the deploy-time CA (`NODE_EXTRA_CA_CERTS`). TAK's generated 8443 and 8089 server certificate names no in-cluster host. CloudTAK's TAK library does not verify the server certificate on its certificate-authenticated connections, as upstream ships it. The bootstrap container checks the 8443 chain against the CA and skips only the host name.
 
-[![Demo clip: the ATAK device's marker shows in CloudTAK, then a marker and a chat message sent from CloudTAK arrive on the device](../docs-site/public/demo/demo-clip-sync.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-sync.mp4)
+[![Demo clip: the ATAK device's marker shows in CloudTAK, then a marker and a chat message sent from CloudTAK arrive on the device](../docs-site/public/demo/demo-clip-sync.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sync.mp4)
 
 ![The TEST MARKER placed in CloudTAK, shown in ATAK on the test device](../docs-site/public/demo/screens/atak-test-marker.webp)
 
@@ -166,7 +166,7 @@ The namespace has no waypoint of its own: it is ambient and Authservice is not e
 New users get OpenStreetMap as their default basemap. CloudTAK fetches the basemap's tiles through nginx in its own container, which proxies and caches them from the tile host. See [ADR 11](../adr/0011-cloudtak-default-basemap-through-a-tile-proxy.md) for why it is not CloudTAK's own tile route.
 
 - The browser asks for `https://map.<domain>/uds-basemap/tiles/{z}/{x}/{y}?token=<session>`. nginx checks the token with CloudTAK, so only signed-in users get tiles. Zoom levels outside `minzoom`..`maxzoom` get 404, and a session that asks for more than 20 tiles a second after a burst of 200 gets 429.
-- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.112.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
+- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.112.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
 - Tiles are cached in the pod's `/tmp` (`cacheSize`, default 256m), for as long as the tile host's cache headers allow, or 7 days when it sends none. Responses carry `X-Cache-Status`.
 - The bootstrap container creates the server basemap record "OpenStreetMap" with the attribution "© OpenStreetMap contributors", and sets it as CloudTAK's default basemap (`map::basemap`). It updates the record when the settings change. Users who signed in before keep their basemap and can choose this one in the basemap menu.
 - The Package allows egress to the tile host on its port only, from the `cloudtak` service account (see [Network rules](#network-rules)).

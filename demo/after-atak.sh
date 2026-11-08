@@ -12,7 +12,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 domain="${DOMAIN:-uds.dev}"
 device="${ATAK_DEVICE_USER:-atak-device}"
 k() { uds zarf tools kubectl "$@"; }
-prompt() { printf '\n\033[38;2;129;140;248muds-k3d-takserver\033[0m \033[38;2;203;213;225m$\033[0m %s\n' "$*"; }
+prompt() { printf '\n\033[38;2;129;140;248muds-takserver\033[0m \033[38;2;203;213;225m$\033[0m %s\n' "$*"; }
 run() {
   prompt "$*"
   "$@"

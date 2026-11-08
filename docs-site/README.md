@@ -62,7 +62,7 @@ npm test
 npm run dev
 ```
 
-The published site is <https://jonathanagustin.github.io/uds-k3d-takserver/>.
+The published site is <https://jonathanagustin.github.io/uds-takserver/>.
 
 ## Appearance
 

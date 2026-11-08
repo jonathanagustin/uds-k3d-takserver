@@ -67,7 +67,7 @@ git archive "${tag}" bundle values | tar -x -C "${work}"
 export UPGRADE_PACKAGE_REF="${version}-upstream"
 # Releases from v0.3.0 on are signed keylessly by release.yaml, and uds create
 # refuses a signed package without the identity to verify it against.
-export UPGRADE_SIGNER_REGEXP='^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
+export UPGRADE_SIGNER_REGEXP='^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 uds zarf tools yq -i '
   (.packages[] | select(.name == "takserver") | .path) = "../" |
   (.packages[] | select(.name == "takserver") | .ref) = strenv(UPGRADE_PACKAGE_REF) |

@@ -6,6 +6,7 @@
 window frame around each recording, title cards and lower-thirds.
 
     style.py fonts                         check the fonts (no fallbacks)
+    style.py branding DIRECTORY             render title/endcard preview PNGs
     style.py background OUT.png            the canvas background
     style.py frame UNDER.png OVER.png MASK.png
                                            the window frame: shadow and title
@@ -28,7 +29,10 @@ demo/assemble.sh and demo/filters.py use these. Pillow draws everything, so
 the sizes and colours below are exact.
 """
 
+import io
 import subprocess
+from functools import lru_cache
+from pathlib import Path
 import sys
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -68,6 +72,23 @@ SUBTITLE_SIZE = 32
 LOWER_SIZE = 28
 TEXT_MAX_W = int(W * 0.84)
 LOWER_MAX_W = 1180
+LOGO = Path(__file__).resolve().parents[1] / "assets" / "tak-on-uds-dark.svg"
+REPOSITORY = "github.com/jonathanagustin/uds-takserver"
+
+
+@lru_cache(maxsize=8)
+def logo(width):
+    """Rasterize the canonical vector artwork; no recreated lettering/fonts."""
+    result = subprocess.run([
+        "ffmpeg", "-v", "error", "-i", str(LOGO), "-vf", f"scale={width}:-1",
+        "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-",
+    ], capture_output=True, check=True)
+    return Image.open(io.BytesIO(result.stdout)).convert("RGBA")
+
+
+def watermark(image, x, y, width=104):
+    """Native artwork in frame chrome or canvas margin, outside recordings."""
+    image.alpha_composite(logo(width), (x, y))
 
 
 def hex_rgb(value):
@@ -135,6 +156,7 @@ def frame():
         cx = FRAME_X + 20 + i * 20
         dd.ellipse((cx - 6, dot_y - 6, cx + 6, dot_y + 6), fill=hex_rgb(BODY) + (90,))
     under.alpha_composite(dots)
+    watermark(under, FRAME_X + FRAME_W - 124, FRAME_Y + 5)
     over = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(over).rounded_rectangle(box, RADIUS, outline=FRAME_BORDER, width=1)
     mask = Image.new("L", (CONTENT_W, CONTENT_H), 0)
@@ -167,6 +189,7 @@ def phone(screen_w, screen_h, title="", subtitle=""):
     x, y, w, h = phone_box(screen_w, screen_h)
     box = (x, y, x + w - 1, y + h - 1)
     under = background().convert("RGBA")
+    watermark(under, PANEL_X, H - 92, 200)
     draw = ImageDraw.Draw(under)
     left, max_w = PANEL_X, x - 96 - PANEL_X
     tfont, tlines = fitted("title", PHONE_LABEL_SIZE, title, max_w, 2, draw) if title else (None, [])
@@ -233,6 +256,7 @@ def fitted(role, size, text, max_w, max_lines, draw):
 
 def card(title, subtitle):
     img = background().convert("RGBA")
+    watermark(img, (W - 520) // 2, 200, 520)
     draw = ImageDraw.Draw(img)
     tfont, tlines = fitted("title", TITLE_SIZE, title, TEXT_MAX_W, 2, draw)
     sfont, slines = fitted("mono", SUBTITLE_SIZE, subtitle, TEXT_MAX_W, 2, draw)
@@ -251,6 +275,7 @@ def card(title, subtitle):
     for line in slines:
         draw.text((W / 2, y), line, font=sfont, fill=INDIGO, anchor="mt")
         y += s_line
+    draw.text((W / 2, H - 70), REPOSITORY, font=font("mono", 24), fill=BODY, anchor="mm")
     return img.convert("RGB")
 
 
@@ -320,6 +345,8 @@ def still(src):
     for i in range(3):
         cx, cy = m + 20 + i * 20, m + TITLE_BAR // 2
         draw.ellipse((cx - 6, cy - 6, cx + 6, cy + 6), fill=hex_rgb(BODY) + (90,))
+    if cw >= 240:
+        watermark(img, m + fw - 124, m + 5)
     mask = Image.new("L", (cw, ch), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, -RADIUS * 2, cw - 1, ch - 1), RADIUS, fill=255)
     img.paste(shot, (m, m + TITLE_BAR), mask)
@@ -331,6 +358,15 @@ def main():
     cmd = sys.argv[1]
     if cmd == "fonts":
         check_fonts()
+    elif cmd == "branding":
+        out = Path(sys.argv[2])
+        out.mkdir(parents=True, exist_ok=True)
+        card("Deploy", "Upstream TAK, packaged with Zarf, deployed on UDS Core").save(out / "title.png")
+        card("Get started", "uds run test-install").save(out / "endcard.png")
+        under, _, _ = frame()
+        under.save(out / "frame.png")
+        under, _, _ = phone(720, 1208, "ATAK device", "Demonstration layout preview")
+        under.save(out / "phone.png")
     elif cmd == "background":
         background().save(sys.argv[2])
     elif cmd == "frame":

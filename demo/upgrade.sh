@@ -28,10 +28,10 @@ work="${DEMO_UPGRADE_DIR:-/tmp/demo-upgrade}"
 arch=amd64
 current="${DEMO_VERSION:-$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')}"
 # The release workflow's keyless signing identity, as in demo/shell.sh.
-RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
+RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 RELEASE_ISSUER=https://token.actions.githubusercontent.com
 k() { uds zarf tools kubectl "$@"; }
-prompt() { printf '\n\033[38;2;129;140;248muds-k3d-takserver\033[0m \033[38;2;203;213;225m$\033[0m %s\n' "$*"; }
+prompt() { printf '\n\033[38;2;129;140;248muds-takserver\033[0m \033[38;2;203;213;225m$\033[0m %s\n' "$*"; }
 
 previous_version() {
   if [[ -n "${UPGRADE_FROM:-}" ]]; then

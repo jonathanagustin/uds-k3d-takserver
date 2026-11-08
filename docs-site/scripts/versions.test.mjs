@@ -22,12 +22,12 @@ test('release selection keeps newest stable patch per minor, numerically, with a
 });
 
 test('version navigation preserves matching pages and falls back when the destination lacks one', () => {
-  const current = versionForPath('/uds-k3d-takserver/main/data/', versions);
+  const current = versionForPath('/uds-takserver/main/data/', versions);
   assert.equal(current.id, 'main');
-  assert.equal(relativePage('/uds-k3d-takserver/main/data/', current), 'data');
-  assert.equal(versionHref(versions[0], 'data'), '/uds-k3d-takserver/data/');
-  assert.equal(versionHref(versions[0], 'not-a-page'), '/uds-k3d-takserver/');
-  assert.equal(versionForPath('/uds-k3d-takserver/mainly/', versions).id, versions[0].id);
+  assert.equal(relativePage('/uds-takserver/main/data/', current), 'data');
+  assert.equal(versionHref(versions[0], 'data'), '/uds-takserver/data/');
+  assert.equal(versionHref(versions[0], 'not-a-page'), '/uds-takserver/');
+  assert.equal(versionForPath('/uds-takserver/mainly/', versions).id, versions[0].id);
 });
 
 test('each channel publishes its own content, search filter, source links, and navigation', () => {

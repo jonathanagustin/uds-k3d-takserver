@@ -88,6 +88,7 @@ What a namespace backup contains:
 | ConfigMap `cert-migration` | Yes. Certificates and truststores. Private keys and keystores are removed from it. |
 | Secret `takserver-certs` | Yes. Private keys and keystores the pods mount. A restored server presents the same CA. |
 | Secrets `takserver-ca-key` and `takserver-keystore` | Yes. The CA key, and the keystore password. |
+| Secret `takclient-enrollment` | Yes, in `takserver`. Watcher-only file-user passwords for TakClient renewal and recovery; never distribute it with device material. |
 | Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |
 | Secrets `tak-db-dump` and `cloudtak-db-dump` | Yes, when the CronJob or `tests/backup-restore.sh` has written them. |
 | TAK Postgres volume | Yes on the full-core deploy, where `FILESYSTEM_BACKUP=true` and the volume is on `local-path-local`. Velero copies the volume named `data`. Slim does not. The restore test still loads the logical dump after the namespaces come back. |

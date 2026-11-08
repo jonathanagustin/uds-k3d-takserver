@@ -105,6 +105,8 @@ const ROLE_RULES = [
       // The CRL the TakClient capability writes (ADR 22). Secret create
       // cannot be pinned to a name.
       { apiGroups: [""], resources: ["secrets"], resourceNames: ["takserver-crl"], verbs: ["get", "patch"] },
+      // Reusable enrollment credentials are never in the device namespace.
+      { apiGroups: [""], resources: ["secrets"], resourceNames: ["takclient-enrollment"], verbs: ["get", "patch"] },
       { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       // The Ignite reconcile reads the server's topology lines before it

@@ -169,6 +169,9 @@ also observed `7.0.0-1017-azure` on Ubuntu 24. This is a temporary label
 comparison, not a kernel root-cause finding or proof of a universal fix.
 Ubuntu 22 is deprecated and [retires on 2027-04-17](https://github.com/actions/runner-images/issues/14254),
 so retain this comparison only while the supported-runner investigation continues.
+Cluster workflows select Python 3.12 explicitly before deployment and test virtual
+environments. The pinned QUIC dependencies require a newer interpreter than the
+Ubuntu 22 system Python 3.10; their package versions and assertions stay pinned.
 
 Lint, Unit tests, CodeQL, dependency review, image scanning, and PR title checks
 cancel superseded runs for the same pull request or branch. CodeQL schedules

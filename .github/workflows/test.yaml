@@ -442,6 +442,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up test Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Verify test Python before cluster work
+        run: python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version; print(sys.version)'
+
       - name: Record the runner image
         run: echo "::notice::runner arch=$(uname -m) kernel=$(uname -r) ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
 

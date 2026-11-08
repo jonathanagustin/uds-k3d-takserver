@@ -260,3 +260,6 @@ if ((fails > 0)); then
   echo "${fails} case(s) failed"
   exit 1
 fi
+
+# Exercise the actual package key without downloading or compiling packages.
+python3 -B tests/test_dev_package_key.py

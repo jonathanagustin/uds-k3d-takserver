@@ -12,6 +12,7 @@ import argparse
 import ipaddress
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 from urllib.parse import urlparse
@@ -110,16 +111,37 @@ def discover(cluster):
     return result
 
 
+def probe_failure(node, blocked, result):
+    """Fail closed with a short wget diagnostic.
+
+    An unreachable control before the firewall is not an egress denial.
+    stderr is one line and bounded so a hung transfer cannot fill the log.
+    """
+    outcome = "succeeded" if blocked else "failed"
+    detail = (result.stderr or "").replace("\r", " ").replace("\n", " ")
+    detail = "".join(ch if ch.isprintable() else " " for ch in detail)
+    detail = " ".join(detail.split())
+    if len(detail) > 160:
+        detail = detail[:160] + "..."
+    message = f"{node}: external control unexpectedly {outcome} (exit {result.returncode}"
+    if detail:
+        message += f": {detail}"
+    return RuntimeError(message + ")")
+
+
 def probe(nodes, url, blocked):
     host = urlparse(url).hostname
     if not host or not ipaddress.ip_address(host).is_global:
         raise ValueError("AIRGAP_PROBE_URL must use a public IP literal, not DNS or a local address")
-    # wget is provided by the k3d node's BusyBox. No DNS failure can masquerade
-    # as an egress denial because this control uses an IP literal.
+    # Test direct transport reachability, not resource health. A redirect or
+    # HTTP error proves egress even when wget later fails (for example on TLS).
+    # Disable proxies so an allowed local proxy cannot stand in for the IP.
     for node in nodes:
-        result = docker("exec", node["name"], "wget", "-T", "5", "-q", "-O", "/dev/null", url, check=False)
-        if (result.returncode == 0) == blocked:
-            raise RuntimeError(f"{node['name']}: external control unexpectedly {'succeeded' if blocked else 'failed'}")
+        result = docker("exec", node["name"], "wget", "-Y", "off", "-S", "-T", "5", "-q", "-O", "/dev/null", url, check=False)
+        response = re.search(r"^\s*HTTP/[0-9]+(?:\.[0-9]+)? [1-5][0-9]{2}(?:\s|$)", result.stderr or "", re.MULTILINE)
+        reachable = result.returncode == 0 or response is not None
+        if reachable == blocked:
+            raise probe_failure(node["name"], blocked, result)
         print(f"{node['name']}: external IP control {'denied' if blocked else 'reachable'}")
 
 

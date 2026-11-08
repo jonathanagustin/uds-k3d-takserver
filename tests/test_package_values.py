@@ -16,6 +16,7 @@ import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
+from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 
@@ -25,13 +26,80 @@ TAK_APPS = ("takserver-api", "takserver-messaging", "takserver-config", "takserv
 _cache = {}
 
 
+_DOWNLOAD_URL = re.compile(r"(?:could not download|failed to fetch)\s+(https://[^\s]+)", re.IGNORECASE)
+_STATUS_NEAR = re.compile(
+    r"HTTP\s+(\d{3})\b|:\s*(\d{3})\s+Gateway\b|(\d{3})\s+Gateway\s+Time-?out\b",
+    re.IGNORECASE,
+)
+_STATUS_ANY = re.compile(r"\bHTTP\s+(\d{3})\b|\b(\d{3})\s+Gateway\s+Time-?out\b", re.IGNORECASE)
+_SAFE_SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
+_BUILD_DEPS = "unable to build dependencies"
+
+
+def _status_code(match):
+    return next(group for group in match.groups() if group)
+
+
+def _public_download_url(raw):
+    """Host and path of one https download. Userinfo, query, and fragment stay out."""
+    raw = raw.split("-----", 1)[0].rstrip(".,;:")
+    try:
+        parts = urlsplit(raw)
+    except ValueError:
+        return None
+    if parts.scheme != "https" or not parts.hostname:
+        return None
+    segments = [segment for segment in parts.path.split("/") if segment]
+    if not segments or len(segments) > 8:
+        return None
+    if any(_SAFE_SEGMENT.fullmatch(segment) is None for segment in segments):
+        return None
+    host = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return urlunsplit(("https", host, "/" + "/".join(segments), "", ""))
+
+
 def render_failure(result):
-    """Keep a short diagnostic. The default CalledProcessError text omits stderr."""
-    text = f"{result.stderr or ''}\n{result.stdout or ''}"
-    text = re.sub(r"-----BEGIN [A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*-----", "[redacted]", text)
-    text = re.sub(r"[A-Za-z0-9+/]{80,}={0,2}", "[redacted]", text)
-    text = " ".join(text.split())
-    return f"package render failed ({result.returncode}): {text[:500] or 'no error text'}"
+    """Exit status plus a dependency URL and HTTP status, when stderr has them.
+
+    Rendered manifests and every other child byte stay out of the message.
+    """
+    stderr = result.stderr if isinstance(result.stderr, str) else ""
+    code = result.returncode if isinstance(result.returncode, int) else "unknown"
+    facts = []
+    if _BUILD_DEPS in stderr:
+        facts.append(_BUILD_DEPS)
+    seen = {}
+    order = []
+    for match in _DOWNLOAD_URL.finditer(stderr):
+        url = _public_download_url(match.group(1))
+        if url is None:
+            continue
+        status_match = _STATUS_NEAR.search(stderr[match.end():match.end() + 160])
+        status = _status_code(status_match) if status_match else None
+        if url not in seen:
+            order.append(url)
+            seen[url] = status
+        elif status and not seen[url]:
+            seen[url] = status
+    if order and any(seen[url] is None for url in order):
+        statuses = {_status_code(item) for item in _STATUS_ANY.finditer(stderr)}
+        if len(statuses) == 1:
+            only = statuses.pop()
+            for url in order:
+                seen[url] = seen[url] or only
+    for url in order:
+        item = f"could not download {url}"
+        if seen[url]:
+            item += f": HTTP {seen[url]}"
+        facts.append(item)
+    if not order:
+        status_match = _STATUS_ANY.search(stderr)
+        if status_match:
+            facts.append(f"HTTP {_status_code(status_match)}")
+    detail = "; ".join(facts) if facts else "no allowlisted diagnostic"
+    return f"package render failed ({code}): {detail}"
 
 
 def render(variables=(), values=()):
@@ -236,19 +304,78 @@ class PackageValuesTests(unittest.TestCase):
         self.assertNotIn("Issued client certificate", str(find(docs, "Job", "takserver-cert-init")))
 
 
+_NATS_CHART = "https://github.com/nats-io/k8s/releases/download/nats-1.0.1/nats-1.0.1.tgz"
+_DEPENDENCY_FAILURE = (
+    "unable to build dependencies for the chart: "
+    f"could not download {_NATS_CHART}: failed to fetch {_NATS_CHART} : 504 Gateway Time-out"
+)
+_DEPENDENCY_DIAGNOSTIC = (
+    "package render failed (1): unable to build dependencies; "
+    f"could not download {_NATS_CHART}: HTTP 504"
+)
+
+
 class RenderFailureTests(unittest.TestCase):
-    def test_a_failed_render_reports_redacted_stderr(self):
-        secret = "-----BEGIN PRIVATE KEY-----\nSECRETKEYDATA\n-----END PRIVATE KEY-----"
+    def _message(self, stderr, stdout="", variable="DOMAIN=failure.example"):
         result = subprocess.CompletedProcess(
-            args=["uds"], returncode=1,
-            stdout="", stderr=f"helm pull failed: HTTP 504 {secret}",
+            args=["uds"], returncode=1, stdout=stdout, stderr=stderr,
         )
         with mock.patch.object(subprocess, "run", return_value=result):
             with self.assertRaises(AssertionError) as caught:
-                render(variables=["DOMAIN=failure.example"])
-        message = str(caught.exception)
-        self.assertIn("package render failed (1)", message)
-        self.assertIn("HTTP 504", message)
+                render(variables=[variable])
+        return str(caught.exception)
+
+    def test_dependency_failure_reports_the_url_and_status(self):
+        message = self._message(_DEPENDENCY_FAILURE, variable="DOMAIN=dependency.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+
+    def test_failed_render_omits_short_credentials(self):
+        dirty = (
+            "https://ci-user:hunter2@github.com/nats-io/k8s/releases/download/"
+            "nats-1.0.1/nats-1.0.1.tgz?access_token=short-sensitive-token"
+        )
+        stderr = (
+            "Authorization: Bearer short-sensitive-token\n"
+            "unable to build dependencies for the chart: "
+            f"could not download {dirty}: failed to fetch {dirty} : 504 Gateway Time-out"
+        )
+        message = self._message(stderr, variable="DOMAIN=credential.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("hunter2", message)
+        self.assertNotIn("ci-user", message)
+        self.assertNotIn("access_token", message)
+        self.assertNotIn("Bearer", message)
+
+    def test_failed_render_omits_secret_yaml(self):
+        secret = "apiVersion: v1\nkind: Secret\ndata:\n  password: c2VjcmV0\n"
+        message = self._message(secret + _DEPENDENCY_FAILURE, stdout=secret, variable="DOMAIN=secret.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("c2VjcmV0", message)
+        self.assertNotIn("kind: Secret", message)
+        self.assertNotIn("password", message)
+
+    def test_failed_render_omits_incomplete_pem(self):
+        pem = "-----BEGIN PRIVATE KEY-----\nSHORTKEYFRAGMENT"
+        message = self._message(pem + "\n" + _DEPENDENCY_FAILURE, variable="DOMAIN=pem.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("SHORTKEYFRAGMENT", message)
+        self.assertNotIn("BEGIN PRIVATE KEY", message)
+
+    def test_failed_render_omits_stdout(self):
+        stdout = "UNIQUE_STDOUT_MARKER\nkind: Secret\ndata:\n  token: stdout-only-secret\n"
+        message = self._message(_DEPENDENCY_FAILURE, stdout=stdout, variable="DOMAIN=stdout.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("UNIQUE_STDOUT_MARKER", message)
+        self.assertNotIn("stdout-only-secret", message)
+
+    def test_http_status_survives_a_complete_pem_without_copying_it(self):
+        stderr = (
+            "helm pull failed: HTTP 504\n"
+            "-----BEGIN PRIVATE KEY-----\nSECRETKEYDATA\n-----END PRIVATE KEY-----\n"
+        )
+        message = self._message(stderr, variable="DOMAIN=status.example")
+        self.assertEqual(message, "package render failed (1): HTTP 504")
         self.assertNotIn("SECRETKEYDATA", message)
         self.assertNotIn("PRIVATE KEY", message)
 

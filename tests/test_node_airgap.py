@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.request import ProxyHandler, build_opener
@@ -27,6 +28,42 @@ SPEC.loader.exec_module(AIRGAP)
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_unreachable_precontrol_fails_closed_and_reports_wget(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out\n")
+        with patch.object(AIRGAP, "docker", return_value=failed) as command:
+            with self.assertRaisesRegex(RuntimeError, r"k3d-node: external control unexpectedly failed \(exit 1: wget: download timed out\)"):
+                AIRGAP.probe([{"name": "k3d-node"}], "http://1.1.1.1/cdn-cgi/trace", blocked=False)
+        self.assertEqual(command.call_args.args[:3], ("exec", "k3d-node", "wget"))
+
+    def test_a_denied_control_is_not_reported_as_a_precontrol_failure(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: connection refused")
+        with patch.object(AIRGAP, "docker", return_value=failed):
+            AIRGAP.probe([{"name": "k3d-node"}], "http://1.1.1.1/", blocked=True)
+
+    def test_wget_diagnostics_are_bounded(self):
+        failed = subprocess.CompletedProcess([], 4, "body", "x" * 500)
+        with patch.object(AIRGAP, "docker", return_value=failed):
+            with self.assertRaises(RuntimeError) as raised:
+                AIRGAP.probe([{"name": "n"}], "http://8.8.8.8/", blocked=False)
+        message = str(raised.exception)
+        self.assertLess(len(message), 280)
+        self.assertIn("...", message)
+        self.assertNotIn("body", message)
+
+    def test_precontrol_failure_does_not_install_the_firewall(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out")
+        nodes = [{"name": "k3d-uds-server-0", "tools": ["iptables"], "networks": {"4": [], "6": []}}]
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            with patch.object(AIRGAP, "discover", return_value=nodes), \
+                    patch.object(AIRGAP, "docker", return_value=failed), \
+                    patch.object(AIRGAP, "block_node") as block, \
+                    patch("sys.argv", ["node-airgap.py", "block", "--state", str(state)]):
+                with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                    AIRGAP.main()
+            block.assert_not_called()
+            self.assertFalse(state.exists())
+
     def test_external_control_requires_a_public_ip_literal(self):
         for url in ("http://localhost", "http://127.0.0.1", "http://172.18.0.1", "http://example.com"):
             with self.subTest(url=url), self.assertRaises(ValueError):

@@ -110,6 +110,24 @@ def discover(cluster):
     return result
 
 
+def probe_failure(node, blocked, result):
+    """Fail closed with a short wget diagnostic.
+
+    An unreachable control before the firewall is not an egress denial.
+    stderr is one line and bounded so a hung transfer cannot fill the log.
+    """
+    outcome = "succeeded" if blocked else "failed"
+    detail = (result.stderr or "").replace("\r", " ").replace("\n", " ")
+    detail = "".join(ch if ch.isprintable() else " " for ch in detail)
+    detail = " ".join(detail.split())
+    if len(detail) > 160:
+        detail = detail[:160] + "..."
+    message = f"{node}: external control unexpectedly {outcome} (exit {result.returncode}"
+    if detail:
+        message += f": {detail}"
+    return RuntimeError(message + ")")
+
+
 def probe(nodes, url, blocked):
     host = urlparse(url).hostname
     if not host or not ipaddress.ip_address(host).is_global:
@@ -119,7 +137,7 @@ def probe(nodes, url, blocked):
     for node in nodes:
         result = docker("exec", node["name"], "wget", "-T", "5", "-q", "-O", "/dev/null", url, check=False)
         if (result.returncode == 0) == blocked:
-            raise RuntimeError(f"{node['name']}: external control unexpectedly {'succeeded' if blocked else 'failed'}")
+            raise probe_failure(node["name"], blocked, result)
         print(f"{node['name']}: external IP control {'denied' if blocked else 'reachable'}")
 
 

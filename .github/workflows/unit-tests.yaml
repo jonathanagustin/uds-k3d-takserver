@@ -67,6 +67,9 @@ jobs:
       - name: Loki query helper
         run: bash tests/test_query_loki.sh
 
+      - name: Grafana alert recovery
+        run: python3 -B -m unittest tests.test_grafana_alerts -v
+
       - name: Full Core path filter
         run: bash tests/test_full_core_paths.sh
 

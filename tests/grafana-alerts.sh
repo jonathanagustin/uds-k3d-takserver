@@ -362,11 +362,7 @@ if [[ "${fired}" -ne 1 ]]; then
   echo "TAKMessagingTargetDown and CloudTAKTargetDown did not both reach active in Alertmanager" >&2
   exit 1
 fi
-echo "grafana-alerts: TAKMessagingTargetDown is firing in Alertmanager"
-k scale deploy/cloudtak -n cloudtak --replicas=1
-cloudtak_scaled=0
-k rollout status deploy/cloudtak -n cloudtak --timeout=600s
-echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"
+echo "grafana-alerts: TAKMessagingTargetDown and CloudTAKTargetDown are firing in Alertmanager"
 
 if command -v docker >/dev/null 2>&1; then
   mkdir -p tests/.playwright/screenshots
@@ -399,3 +395,10 @@ if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; th
   exit 1
 fi
 echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
+
+# CloudTAK's bootstrap connects to messaging. Restore that dependency and
+# wait for it before starting CloudTAK, so its readiness can recover too.
+k scale deploy/cloudtak -n cloudtak --replicas=1
+cloudtak_scaled=0
+k rollout status deploy/cloudtak -n cloudtak --timeout=600s
+echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"

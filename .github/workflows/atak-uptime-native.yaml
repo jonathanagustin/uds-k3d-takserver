@@ -32,6 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Prometheus
+        shell: bash
         run: |
           set -euo pipefail
           archive="${RUNNER_TEMP}/prometheus.tar.gz"
@@ -45,6 +46,7 @@ jobs:
           echo "PROMETHEUS_BIN=${bin}" >> "${GITHUB_ENV}"
 
       - name: Query native Prometheus
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
@@ -52,6 +54,7 @@ jobs:
 
       - name: Show native Prometheus evidence
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
           test -f out/atak-uptime-native.json

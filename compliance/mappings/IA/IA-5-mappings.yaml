@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: IA-5
+  uuid: 614ae906-f071-5d33-af56-6b7157bdc9a2
+  justification: Proposed partial evidence association. The certificate migration helper separates private keys
+    and keystores into Secrets instead of leaving them in the ConfigMap mounted by the upstream chart. Secret encryption
+    at rest, access review, recovery, rotation policy, and operator credential custody are inherited or operational
+    responsibilities.
+  status: planned
+  source_entries:
+    - location: charts/takserver/files/scripts/split-key-material.sh

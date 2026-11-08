@@ -1,0 +1,23 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: IA-5
+title: Authenticator Management
+family: IA
+description: Package evidence notes for Authenticator Management. Consult the authoritative NIST control and the
+  deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The certificate migration helper separates private keys and keystores into Secrets
+  instead of leaving them in the ConfigMap mounted by the upstream chart. Secret encryption at rest, access review,
+  recovery, rotation policy, and operator credential custody are inherited or operational responsibilities.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tests/test_move_ca_key.py,
+  tests/api-smoke.sh. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/test_move_ca_key.py
+    rel: evidence
+    text: tests/test_move_ca_key.py
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/api-smoke.sh
+    rel: evidence
+    text: tests/api-smoke.sh

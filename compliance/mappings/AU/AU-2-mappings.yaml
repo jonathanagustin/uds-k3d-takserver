@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: AU-2
+  uuid: b1f7cb05-0c51-51e0-a1ed-7c7633245bd6
+  justification: Proposed partial evidence association. The logs task requires a TAK startup event on container
+    stdout and verifies selected TAK/CloudTAK messages in Loki when logging is installed. This is evidence of a
+    limited event stream and its test, not an approved audit-event inventory. File-only API access, database audit,
+    and ESAPI logs are not collected by these queries.
+  status: planned
+  source_entries:
+    - location: tasks/test.yaml

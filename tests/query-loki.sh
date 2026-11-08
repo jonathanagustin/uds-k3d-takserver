@@ -2,6 +2,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
+# @lulaStart 4ee5c35b-ef3a-54b5-bfda-d6c6fa15cdae
 # Ask loki-gateway for log lines over the last hour. Exit 0 when the response
 # contains one of the match strings. Exit 3 when no Loki Service exists so a
 # slim cluster can skip. An instant query rejects a stream selector, so this
@@ -142,3 +143,4 @@ if [[ "${found}" != "1" ]]; then
   cat /tmp/loki-pf.log >&2 || true
   exit 1
 fi
+# @lulaEnd 4ee5c35b-ef3a-54b5-bfda-d6c6fa15cdae

@@ -1,0 +1,23 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: IA-2
+title: Identification and Authentication (Organizational Users)
+family: IA
+description: Package evidence notes for Identification and Authentication (Organizational Users). Consult the authoritative
+  NIST control and the deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: TAK browser access uses the Keycloak OIDC client and configured group gate. This
+  package does not require MFA by itself; realm policy, identity proofing, and privileged-user authentication policy
+  remain deployment responsibilities.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tests/sso.spec.ts,
+  tests/sso-denied.spec.ts. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/sso.spec.ts
+    rel: evidence
+    text: tests/sso.spec.ts
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/sso-denied.spec.ts
+    rel: evidence
+    text: tests/sso-denied.spec.ts

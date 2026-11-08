@@ -1,0 +1,13 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: SI-7
+  uuid: 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
+  justification: Proposed partial evidence association. The optional Cosign workflow can sign published TAK images.
+    Release provenance is generated and verified in the release workflow. Image signing is opt-in, and runtime enforcement
+    or firmware assurance is not established by these jobs. This mapping must not be read as mandatory signature
+    verification on every image pull.
+  status: planned
+  source_entries:
+    - location: .github/workflows/cosign.yaml
+    - location: .github/workflows/release.yaml

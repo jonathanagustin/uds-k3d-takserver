@@ -1,0 +1,23 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: SC-8
+title: Transmission Confidentiality and Integrity
+family: SC
+description: Package evidence notes for Transmission Confidentiality and Integrity. Consult the authoritative NIST
+  control and the deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: CoreConfig enables TLS streaming and certificate-authenticated connectors with
+  a truststore and CRL. The browser gateway re-encrypts to TAK. This evidence concerns those paths; it does not
+  assert that every internal database, adb, bootstrap, or upstream client-library path verifies TLS.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tasks/test.yaml,
+  tests/api-smoke.sh. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tasks/test.yaml
+    rel: evidence
+    text: tasks/test.yaml
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/api-smoke.sh
+    rel: evidence
+    text: tests/api-smoke.sh

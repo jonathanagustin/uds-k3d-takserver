@@ -97,3 +97,19 @@ After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and n
 ## Logs when an upload hangs
 
 `actions/upload-artifact` has hung past its step timeout in the install, upgrade and Full Core jobs. Before the uploads, `.github/scripts/print-logs.sh` prints the last 300 lines of each log the job uploads (at most 60 files) in collapsed groups, so the job log keeps them. Upload steps time out after 5 minutes, and the job timeout stops a hang the step timeout misses.
+
+### Hosted-runner routing stalls
+
+After a failed install, upgrade, or Full Core deploy,
+`.github/scripts/runner-wedge-probe.sh` checks `ip -4 route` before Docker,
+Kubernetes, and Falco diagnostics. Routing has a five-second budget and a
+one-second kill grace; the kernel-log probe has a ten-second budget and the
+same grace. If routing times out, those network diagnostics are skipped.
+Local log sanitizing and printing still run. A missing command or permission
+is reported as inconclusive and does not suppress diagnostics.
+
+This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-k3d-takserver/issues/300).
+It does not repair the kernel, interrupt a process stuck in uninterruptible
+kernel sleep, or guarantee that the runner can finish reporting to GitHub.
+The deploy keeps its original failure result. Rerun the failed job once on a
+fresh runner and retain the image and kernel notice for the investigation.

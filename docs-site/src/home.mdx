@@ -5,7 +5,7 @@ template: splash
 editUrl: https://github.com/jonathanagustin/uds-k3d-takserver/edit/main/docs-site/src/home.mdx
 hero:
   title: TAK Server on UDS
-  tagline: TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.
+  tagline: Deploy TAK Server and CloudTAK on the Unified Defense Stack (UDS), with Keycloak sign-in and default-deny networking.
   actions:
     - text: Getting started
       link: /uds-k3d-takserver/getting-started/
@@ -31,7 +31,7 @@ import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <LegacyHomeHash />
 
-[Getting started](/uds-k3d-takserver/getting-started/) has the install, the demos, and the deploy steps.
+Start with [Getting started](/uds-k3d-takserver/getting-started/) to deploy a release or build a local test environment.
 
 ## Explore the documentation
 
@@ -39,12 +39,12 @@ import { CardGrid, LinkCard } from '@astrojs/starlight/components';
   <LinkCard
     title="Deploy"
     href="/uds-k3d-takserver/getting-started/#deploy-a-release"
-    description="Deploy a release onto a cluster that already runs UDS Core, or build the package and deploy it on k3d."
+    description="Deploy a release on a cluster with UDS Core. To test locally, build the package and deploy it on k3d."
   />
   <LinkCard
     title="Upgrade"
     href="/uds-k3d-takserver/getting-started/#upgrade-from-06"
-    description="What an existing install notices, including the move from PostgreSQL 15 to 18."
+    description="Check what changes when you upgrade, including the move from PostgreSQL 15 to 18."
   />
   <LinkCard
     title="Back up"
@@ -54,6 +54,6 @@ import { CardGrid, LinkCard } from '@astrojs/starlight/components';
   <LinkCard
     title="Reference"
     href="/uds-k3d-takserver/getting-started/#documentation"
-    description="Variables, hosts, and the guides for networking, sign-in, CloudTAK, and the rest."
+    description="Find package variables, hosts, and guides for networking, sign-in, and CloudTAK."
   />
 </CardGrid>

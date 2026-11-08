@@ -1,6 +1,6 @@
 # CloudTAK
 
-[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web UI, and connects it to the TAK Server in the `takserver` namespace. The TAK Server deployment does not change, apart from three Ingress rules in its `Package` CR.
+[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web UI, and connects it to the TAK Server in the `takserver` namespace. The component adds three Ingress rules to TAK Server's `Package` CR.
 
 ## What is deployed
 
@@ -13,7 +13,7 @@
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
-Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, Cursor on Target (CoT) from TAK, and the admin pages do.
+Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. This component does not deploy those services. Without S3, features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, Cursor on Target (CoT) from TAK, and the admin pages work.
 
 ## Image
 
@@ -98,9 +98,9 @@ CloudTAK 13.112.3 has `oidc::enabled`, `oidc::enforced`, `oidc::name`, and `oidc
 | `oidc::discovery` | `https://sso.<domain>/realms/uds/.well-known/openid-configuration` | The page shows a misconfiguration warning instead of the button without it |
 | `passkey::enabled` | `false` | Hides the passkey button |
 
-The route behind the button is `sso.mjs`, in a second container of the CloudTAK pod that listens only on `127.0.0.1:5002`.
+The `sso.mjs` script handles that route. It runs in a second container of the CloudTAK pod and listens only on `127.0.0.1:5002`.
 
-`start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). CloudTAK itself is not patched.
+`start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). The sign-in route does not patch CloudTAK's application code.
 
 `sso.mjs` imports CloudTAK's compiled model, user, and session modules from the image, so a CloudTAK upgrade that changes those modules needs a matching change here. The Renovate pull request for a new CloudTAK tag runs the sign-in test below.
 
@@ -220,7 +220,7 @@ It saves `cloudtak-01-keycloak.png`, `cloudtak-02-map.png`, `cloudtak-04-basemap
 
 ## License
 
-CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image changes only the start script and adds the sign-in, bootstrap, and basemap scripts and the nginx fragments, all in this repository. CloudTAK's own code is not modified. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
+CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image replaces the start script and adds the sign-in, bootstrap, and basemap scripts and nginx fragments. It also patches the bundled TAK client library and adds an error guard for connection resets. These changes are in this repository; CloudTAK's application source is unchanged. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
 
 ## Resources
 

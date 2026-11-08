@@ -1,7 +1,9 @@
 # Review rules for main
 
-This is a runbook for the repository owner. The settings described below have
-not been applied. Ruleset `25580922` is unchanged. The solo-maintainer policy
+This runbook explains how the repository owner can update the review rules.
+The proposed settings have not been applied. The settings update returned HTTP
+403 because the connection lacks permission to administer the repository.
+Ruleset `25580922` is unchanged. The solo-maintainer policy
 keeps merges possible with one collaborator. The independent-review policy
 requires a second person with write access. Neither policy adds collaborators
 or changes accounts.
@@ -36,7 +38,7 @@ jq '{name, target, enforcement, conditions, rules, bypass_actors: []}
     )' ruleset-25580922-backup.json > ruleset-25580922-solo.json
 ```
 
-Before sending it, confirm the saved pull-request rule has zero required
+Before applying the update, confirm the saved pull-request rule has zero required
 approvals, no required code-owner review, and no last-push approval. Confirm
 the only bypass being removed is the administrator role. If the read omits
 `bypass_actors`, stop: that connection cannot provide a complete backup.
@@ -51,7 +53,7 @@ gh api --method PUT \
   --input ruleset-25580922-solo.json
 ```
 
-GET the ruleset again and verify the empty bypass list, strict status checks,
+Read the ruleset again with GET and verify the empty bypass list, strict status checks,
 unchanged four checks, and the zero-approval pull-request rule. A `403`
 `Resource not accessible by integration` means the connection lacks settings
 write access; a successful GET alone does not establish that it can update.
@@ -106,7 +108,7 @@ Leave `require_extra_approval_for_unattributed_changes` false. That field is a C
 
 ## Who can approve
 
-GitHub's review docs say pull request authors cannot approve their own pull requests, and a GitHub Copilot review does not count toward required approvals. The approving review has to come from a different person with write access.
+GitHub's review docs say pull request authors cannot approve their own pull requests, and a GitHub Copilot review does not count toward required approvals. A different person with write access must submit the approving review.
 
 `require_last_push_approval` means the most recent reviewable push must be approved by someone other than the person who pushed it. The approval has to be submitted after that push. An earlier approval does not cover a later push. The same reviewer can approve again after the push.
 
@@ -232,7 +234,7 @@ gh api --method PUT \
   --input ruleset-25580922-restore.json
 ```
 
-If PUT returns 422, the error names the field to remove. Remove that one field from `ruleset-25580922-restore.json` and send it once more. GET the ruleset and compare `rules` and `bypass_actors` to the backup.
+If PUT returns 422 and names an unsupported field, remove only that field from `ruleset-25580922-restore.json` and send it once more. GET the ruleset and compare `rules` and `bypass_actors` to the backup.
 
 ## Reference copy from 2026-11-06
 

@@ -6,6 +6,10 @@ domain: "###ZARF_VAR_DOMAIN###"
 # Browser host on the tenant gateway: https://<host>.<domain>/
 host: map
 
+# Extra browser expose annotations (for example portal.uds.dev/*). Values
+# override the default title and icon.
+exposeAnnotations: {}
+
 # UDS Core uptime check on https://<host>.<domain>/login. Same switch as UDS
 # Core's Keycloak and Grafana charts.
 uptime:

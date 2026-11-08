@@ -32,6 +32,13 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 
 Each default is the placeholder of the matching variable, for example `global.domain: "###ZARF_VAR_DOMAIN###"`. Zarf replaces placeholders after Helm renders, so with no package value set the variable decides, exactly as before. `--set DOMAIN=`, a bundle's `uds-config.yaml`, and UDS CLI 0.40 bundles keep working unchanged. A package value only overrides its variable, for that key: `uds zarf package deploy --set-values global.domain=example.com`, or `--values`. The `images:` list and `certs.image` in `charts/takserver/values.yaml` read only `TAK_IMAGE_TAG`. `health.enabled` is the exception: it has no variable and defaults to `true`, so Helm sees a real value.
 
+A file passed to `--values` sets the same keys:
+
+```yaml title="values.yaml"
+global:
+  domain: example.com
+```
+
 | Package value | Defaults to | Overrides |
 | --- | --- | --- |
 | `global.domain` | `DOMAIN` | TAK, CloudTAK, and watcher hosts |
@@ -64,6 +71,32 @@ The overlay turns the chart's nginx ingress off. Instead, the UDS Package in `ch
 The CI runners have 4 CPU and about 15984Mi on both architectures. TAK, CloudTAK, and NATS memory limits sum to about 8992Mi, which fits that node. That counts the plugins limit of 512Mi that admission sets. CPU limits still sum above 4 because a 500m cap made JVM startup miss the rollout bound. Limit overcommit on the rest of the node is UDS core, which this overlay does not set.
 
 Named overlays are in [Profiles](profiles.md). The package default stays `values/common-values.yaml`.
+
+## Portal tiles and classification banners
+
+The browser expose entries use `uds.dev/title` for their Portal titles. CloudTAK
+also supplies its own map icon. Set `exposeAnnotations` on `uds-takserver-config`
+or `uds-cloudtak` to add `portal.uds.dev/*` annotations or override the title and
+icon. For example, a bundle override for the CloudTAK chart is:
+
+```yaml title="CloudTAK Portal annotation override"
+overrides:
+  cloudtak:
+    uds-cloudtak:
+      values:
+        - path: exposeAnnotations
+          value:
+            uds.dev/title: Operations map
+```
+
+Put this under the TAK package's `overrides` in your bundle. The TAK browser
+entry accepts the same map under component `takserver`, chart
+`uds-takserver-config`. These overrides apply to browser entries; the client
+ports and health endpoint keep their hidden annotations.
+
+UDS Core classification banners also work on these tenant-gateway browser
+hosts. Configure them in Core following the
+[classification banner guide](https://docs.defenseunicorns.com/core/how-to-guides/platform-features/enable-classification-banner/).
 
 ## Upstream chart values
 

@@ -55,8 +55,14 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 
 Throughput in the Pareto report is `messages_received / duration_s`. The
 latency axis is `ping_pong_ms_mean`, not a p95. Footprint is
-`kubelet.steady_rss_bytes`. Ready time is `warm_s` when it was measured and
-`cold_s` otherwise.
+`kubelet.steady_rss_bytes`. The readiness plot uses only warm rollout duration.
+Cold install age is copied into each config as a shared reference; it is shown
+in the evidence table and never ranks swept configs. Dominance is decided only
+among records with the same `git_sha`,
+`load.clients`, `load.duration_s`, and architecture. Architectures share a scale
+inside each matched cohort. Missing cohort metadata isolates a record. Missing
+or invalid axes are not plotted; the markdown labels negative startup timings
+invalid while preserving their original JSON values.
 
 `<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s, so Ready can lag the process by at most one period, about 8% of those restarts. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. If `jvm_to_log_s` is most of the start on a later run, that archive is the next change.
 
@@ -64,8 +70,9 @@ Run 39556568533 measured the old scale-down on validate-install. amd64 job 11907
 
 A config dominates another on one view when it is better or equal on both
 axes of that view and strictly better on one. The three views are footprint
-against throughput, footprint against mean latency, and footprint against
-ready time. arm64 and amd64 are separate series on one scale per view, so a
+against throughput, footprint against mean latency, and footprint against warm
+rollout duration. arm64 and amd64 are
+separate series on one scale per cohort and view, so a
 circle can be compared across architectures. Dominance is still decided
 inside one architecture. Dominated configs are marked in the job summary and
 drawn as open circles in the SVG.

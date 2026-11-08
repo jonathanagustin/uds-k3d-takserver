@@ -133,6 +133,6 @@ The same script writes every Falco event whose payload names `takserver`, `cloud
 
 ## Adding an exemption
 
-1. Keep the matcher as narrow as it can be. Never use `.*`.
+1. Keep the matcher as narrow as it can be. Use `.*` only when a narrower supported matcher cannot identify the workload. Limit it to one namespace and the required policies, and document why the wildcard is necessary and what would remove it (as for [Velero data movers](#velero-node-agent)).
 2. Name only the policies the workload triggers.
 3. Add a section above with the policy, matcher, reason, and what would remove it.

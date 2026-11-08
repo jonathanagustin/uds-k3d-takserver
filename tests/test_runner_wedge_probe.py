@@ -112,19 +112,53 @@ class RunnerWedgeProbeTests(unittest.TestCase):
     def test_cluster_runner_fallback_keeps_overrides_and_native_arm(self):
         test = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())["jobs"]
         full = yaml.safe_load((ROOT / ".github/workflows/full-core.yaml").read_text())["jobs"]
-        expected = "${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}"
+        bench = yaml.safe_load((ROOT / ".github/workflows/benchmark.yaml").read_text())["jobs"]
+        expected = "${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}"
         planner = next(step for step in test["check-flavor"]["steps"]
                        if "TEST_RUNNER" in step.get("env", {}))
         self.assertEqual(planner["env"]["TEST_RUNNER"], expected)
-        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"]):
+        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"], bench["benchmark"]):
             rows = job["strategy"]["matrix"]["include"]
             self.assertEqual([(row["arch"], row["runner"]) for row in rows],
-                             [("amd64", expected), ("arm64", "ubuntu-26.04-arm")])
+                             [("amd64", expected), ("arm64", "ubuntu-22.04-arm")])
             self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        # Explicit hosted22 override still receives disk/swap preparation.
+        for job in (test["validate-install"], full["validate-full-core"], bench["benchmark"]):
+            guarded = [step for step in job["steps"]
+                       if "TEST_RUNNER" in str(step.get("if", ""))]
+            self.assertTrue(guarded)
+            for step in guarded:
+                self.assertIn("vars.TEST_RUNNER == 'ubuntu-22.04'", step["if"])
+        self.assertEqual(test["check-flavor"]["runs-on"], "ubuntu-24.04")
         # Native image producers retain their existing 24.04 labels.
         for name in ("cloudtak-image", "postgis-image"):
             rows = test[name]["strategy"]["matrix"]["include"]
             self.assertEqual([row["runner"] for row in rows], ["ubuntu-24.04", "ubuntu-24.04-arm"])
+
+    def test_cluster_python_is_explicit_and_checked_before_work(self):
+        pin = "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0"
+        cases = (("test", ("validate-install", "validate-upgrade", "validate-upgrade-pg15")),
+                 ("full-core", ("validate-full-core",)), ("benchmark", ("benchmark",)))
+        for workflow, names in cases:
+            jobs = yaml.safe_load((ROOT / f".github/workflows/{workflow}.yaml").read_text())["jobs"]
+            for name in names:
+                with self.subTest(workflow=workflow, job=name):
+                    steps = jobs[name]["steps"]
+                    setups = [i for i, step in enumerate(steps) if step.get("uses") == pin]
+                    self.assertEqual(len(setups), 1)
+                    setup = setups[0]
+                    self.assertEqual(steps[setup]["with"]["python-version"], "3.12")
+                    self.assertIs(steps[setup]["with"]["check-latest"], False)
+                    checks = [i for i, step in enumerate(steps)
+                              if step.get("name") == "Verify test Python before cluster work"]
+                    self.assertEqual(checks, [setup + 1])
+                    self.assertIn("sys.version_info[:2] == (3, 12)", steps[checks[0]]["run"])
+                    for i, step in enumerate(steps):
+                        if "venv" in step.get("run", "") or "deploy" in step.get("run", ""):
+                            self.assertLess(checks[0], i)
+                    environment = next(i for i, step in enumerate(steps)
+                                       if step.get("name") == "Environment setup")
+                    self.assertLess(checks[0], environment)
 
     def test_both_workflows_probe_before_network_diagnostics(self):
         for workflow, job in (("test", "validate-install"), ("full-core", "validate-full-core")):

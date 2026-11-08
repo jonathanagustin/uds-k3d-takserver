@@ -22,9 +22,11 @@ paths:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
 
-# GitHub-hosted Ubuntu 26.04 labels. They are GA (actions/runner-images
+# GitHub-hosted native ARM 22 and Ubuntu 26 labels. ARM 22 is official;
+# Ubuntu 22 retires 2027-04-17 (actions/runner-images#14254). Ubuntu 26 is GA (actions/runner-images
 # #14747), but actionlint 1.7.12 does not list them yet.
 self-hosted-runner:
   labels:
+    - ubuntu-22.04-arm
     - ubuntu-26.04
     - ubuntu-26.04-arm

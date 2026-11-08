@@ -157,18 +157,21 @@ kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
 fresh runner and retain the image and kernel notice for the investigation.
 
-AMD64 k3d jobs temporarily default to `ubuntu-24.04` as an experimental
-mitigation for #300. The install, airgap, upgrade, PostgreSQL 15 upgrade, and
-Full Core jobs retain the `TEST_RUNNER` repository-variable override. ARM64
-continues on `ubuntu-26.04-arm`; image builds keep their existing runners.
-The metadata-only [label comparison](https://github.com/jonathanagustin/uds-takserver/actions/runs/42519108662)
-on November 8 observed `7.0.0-1017-azure` on Ubuntu 24.04 image
-`20261101.360.1` and `7.0.0-1019-azure` on Ubuntu 26.04 image
-`20261101.186.1`. Both route probes passed without a cluster. Earlier #300
-records include six passing jobs on `1017`, while recent `1019` jobs repeatedly
-showed routing stalls. This is a reason to compare images, not evidence that
-`1017` fixes the failure. The next cluster checks must validate this fallback;
-the original failing deploy logs remain unavailable for several stalled jobs.
+The cluster jobs temporarily compare `ubuntu-22.04` on AMD64 and
+`ubuntu-22.04-arm` on native ARM64 for [#300](https://github.com/jonathanagustin/uds-takserver/issues/300)
+and [#103](https://github.com/jonathanagustin/uds-takserver/issues/103).
+Test, Full Core and Benchmark retain the AMD64 `TEST_RUNNER` override;
+image builds and other workflow runners keep their existing labels.
+The metadata-only [AMD64 comparison](https://github.com/jonathanagustin/uds-takserver/actions/runs/42528864369)
+observed kernel `6.8.0-1070-azure` on Ubuntu 22 and `7.0.0-1017-azure`
+on Ubuntu 24; the [ARM64 probe](https://github.com/jonathanagustin/uds-takserver/actions/runs/42529079902)
+also observed `7.0.0-1017-azure` on Ubuntu 24. This is a temporary label
+comparison, not a kernel root-cause finding or proof of a universal fix.
+Ubuntu 22 is deprecated and [retires on 2027-04-17](https://github.com/actions/runner-images/issues/14254),
+so retain this comparison only while the supported-runner investigation continues.
+Cluster workflows select Python 3.12 explicitly before deployment and test virtual
+environments. The pinned QUIC dependencies require a newer interpreter than the
+Ubuntu 22 system Python 3.10; their package versions and assertions stay pinned.
 
 Lint, Unit tests, CodeQL, dependency review, image scanning, and PR title checks
 cancel superseded runs for the same pull request or branch. CodeQL schedules

@@ -27,7 +27,7 @@ spec:
     spec:
       domain:
         cpu: {cores: 2}
-        memory: {guest: 3Gi}
+        memory: {guest: 2Gi}
         firmware:
           kernelBoot:
             container:

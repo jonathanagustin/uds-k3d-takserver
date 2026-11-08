@@ -54,7 +54,9 @@ monitoring layer, leaves Grafana at zero replicas, and checks the authenticated
 default while its extra memory and CPU footprint is measured beside the VM, so
 a pull request run does not exercise it.
 `tests/test_atak_uptime.py` is a stand-in for the query API, not a Prometheus
-server. ATAK uptime native runs the same check against Prometheus and records
+server. It also renders kube-prometheus-stack 92.14.0, the chart in Core
+monitoring 1.16.0, and checks that `kubeStateMetrics.enabled: false` omits
+the kube-state-metrics Deployment while Prometheus remains. ATAK uptime native runs the same check against Prometheus and records
 a fresh success, a success still inside the lookback, and a broken status.
 That job does not deploy Core monitoring, Blackbox, or the ATAK device, so it
 does not prove the authenticated `/phone.html` probe.

@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: CM-2
+  uuid: 6c29faf2-092d-594d-83ec-d56a7a2b7d57
+  justification: Proposed partial evidence association. The common values overlay records the package baseline for
+    TAK images, services, databases, resource limits, and integration settings. Git review and deployment tests
+    track changes. Production secrets, tailored hardening, drift response, and a formally approved organizational
+    baseline are outside this package-level record.
+  status: planned
+  source_entries:
+    - location: values/common-values.yaml

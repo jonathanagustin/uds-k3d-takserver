@@ -1,0 +1,32 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Lula
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  mappings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: uv
+          cache: true
+
+      - name: Validate control mappings and marker pairs
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: |
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B .github/scripts/check-compliance.py
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_compliance_mappings tests.test_lula_crawl_preflight -v

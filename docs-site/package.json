@@ -8,9 +8,9 @@
     "node": ">=22.23.4"
   },
   "scripts": {
-    "sync": "node scripts/sync-docs.mjs",
-    "dev": "node scripts/sync-docs.mjs && astro dev",
-    "build": "node scripts/sync-docs.mjs && astro build && node --test scripts/how-to.test.mjs",
+    "sync": "node scripts/build-versions.mjs",
+    "dev": "node scripts/build-versions.mjs && astro dev",
+    "build": "node scripts/build-versions.mjs && astro build && node --test scripts/how-to.test.mjs scripts/versions.test.mjs",
     "preview": "astro preview",
     "test": "playwright test"
   },
@@ -21,7 +21,8 @@
     "mermaid": "^12.3.0",
     "starlight-github-alerts": "^0.5.0",
     "starlight-links-validator": "^0.27.0",
-    "starlight-llms-txt": "^0.12.0"
+    "starlight-llms-txt": "^0.12.0",
+    "starlight-sidebar-topics": "0.9.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0"

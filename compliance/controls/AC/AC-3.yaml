@@ -1,0 +1,23 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: AC-3
+title: Access Enforcement
+family: AC
+description: Package evidence notes for Access Enforcement. Consult the authoritative NIST control and the deployment
+  assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The TAK Keycloak client restricts browser sign-in to the configured admin group.
+  TAK separately uses certificate/file-user groups for data authorization. This covers package gates; organization-wide
+  account policy and all upstream endpoint authorization require assessment.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tests/sso-denied.spec.ts,
+  tests/api-smoke.sh. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/sso-denied.spec.ts
+    rel: evidence
+    text: tests/sso-denied.spec.ts
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/api-smoke.sh
+    rel: evidence
+    text: tests/api-smoke.sh

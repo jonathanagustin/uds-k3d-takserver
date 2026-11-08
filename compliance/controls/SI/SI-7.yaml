@@ -1,0 +1,24 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: SI-7
+title: Software, Firmware, and Information Integrity
+family: SI
+description: Package evidence notes for Software, Firmware, and Information Integrity. Consult the authoritative
+  NIST control and the deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The optional Cosign workflow can sign published TAK images. Release provenance
+  is generated and verified in the release workflow. Image signing is opt-in, and runtime enforcement or firmware
+  assurance is not established by these jobs. This mapping must not be read as mandatory signature verification
+  on every image pull.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: .github/workflows/release.yaml,
+  README.md. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/.github/workflows/release.yaml
+    rel: evidence
+    text: .github/workflows/release.yaml
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/README.md
+    rel: evidence
+    text: README.md

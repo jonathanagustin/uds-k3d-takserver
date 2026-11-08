@@ -517,7 +517,9 @@ jobs:
       - name: Check for the runner network wedge
         id: runner-wedge
         if: failure()
-        timeout-minutes: 1
+        # The script stops itself at 20 seconds and exits 0. This limit only
+        # covers that wrapper. A hang here is not the install failure.
+        timeout-minutes: 2
         run: ./.github/scripts/runner-wedge-probe.sh || true
 
       # The trim step deletes toolchains to keep disk headroom. This is the other

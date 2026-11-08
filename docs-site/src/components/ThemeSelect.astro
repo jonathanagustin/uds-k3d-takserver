@@ -1,0 +1,11 @@
+---
+// Copyright 2026 uds-k3d-takserver authors
+// SPDX-License-Identifier: GPL-3.0-only
+
+import Default from '@astrojs/starlight/components/ThemeSelect.astro';
+import VersionSelect from './VersionSelect.astro';
+---
+
+<div class="version-theme"><VersionSelect /><Default /></div>
+
+<style>.version-theme { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }</style>

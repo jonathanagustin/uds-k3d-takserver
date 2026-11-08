@@ -1,0 +1,11 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: AC-3
+  uuid: 58769fcc-b18d-5aee-b596-946a6be01157
+  justification: Proposed partial evidence association. The TAK Keycloak client restricts browser sign-in to the
+    configured admin group. TAK separately uses certificate/file-user groups for data authorization. This covers
+    package gates; organization-wide account policy and all upstream endpoint authorization require assessment.
+  status: planned
+  source_entries:
+    - location: charts/takserver/templates/uds-package.yaml

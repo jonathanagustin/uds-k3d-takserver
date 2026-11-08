@@ -66,6 +66,49 @@ class RunnerWedgeProbeTests(unittest.TestCase):
         self.assertIn("network-stalled=false", output)
         self.assertIn("Kernel hung-task lines", text)
 
+    def test_deadline_exits_zero_when_the_probe_does_not_return(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            scripts = {
+                "ip": "sleep 30",
+                "sudo": "sleep 30",
+                "dmesg": "sleep 30",
+                # Drop the budget flags and run the command. No kill.
+                "timeout": "shift 2\nexec \"$@\"",
+            }
+            for name, body in scripts.items():
+                path = directory / name
+                path.write_text("#!/usr/bin/env bash\n" + body + "\n")
+                path.chmod(0o755)
+            output = directory / "outputs"
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/runner-wedge-probe.sh")],
+                capture_output=True, text=True, timeout=8,
+                env={**os.environ, "PATH": f"{directory}:{os.environ['PATH']}",
+                     "GITHUB_OUTPUT": str(output), "WEDGE_PROBE_DEADLINE": "1"},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("did not finish within 1s", result.stdout)
+            self.assertIn("network-stalled=true", output.read_text())
+
+    def test_deadline_with_healthy_route_does_not_claim_a_routing_stall(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name, body in {"ip": "exit 0", "sudo": "sleep 30", "timeout": "shift 2\nexec \"$@\""}.items():
+                path = directory / name
+                path.write_text("#!/usr/bin/env bash\n" + body + "\n")
+                path.chmod(0o755)
+            output = directory / "outputs"
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/runner-wedge-probe.sh")],
+                capture_output=True, text=True, timeout=8,
+                env={**os.environ, "PATH": f"{directory}:{os.environ['PATH']}",
+                     "GITHUB_OUTPUT": str(output), "WEDGE_PROBE_DEADLINE": "1"},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("did not finish within 1s", result.stdout)
+            self.assertEqual(output.read_text().strip(), "network-stalled=false")
+
     def test_both_workflows_probe_before_network_diagnostics(self):
         for workflow, job in (("test", "validate-install"), ("full-core", "validate-full-core")):
             with self.subTest(workflow=workflow):

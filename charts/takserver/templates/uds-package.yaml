@@ -44,6 +44,8 @@ spec:
         uds.dev/pod-reload: "true"
       annotations:
         uds.dev/pod-reload-selector: "uds.dev/oidc-reload=takserver"
+  # @lulaStart 58769fcc-b18d-5aee-b596-946a6be01157
+  # @lulaStart 69b4fe63-5ea3-5eba-8054-8e16d71d0dbd
   {{- if .Values.sso.enabled }}
   sso:
     - name: TAK Server Login
@@ -92,6 +94,9 @@ spec:
             id.token.claim: "true"
             userinfo.token.claim: "false"
   {{- end }}
+  # @lulaEnd 69b4fe63-5ea3-5eba-8054-8e16d71d0dbd
+  # @lulaEnd 58769fcc-b18d-5aee-b596-946a6be01157
+  # @lulaStart 79a96dd2-7dec-5a42-b67e-282471df87e3
   network:
     # Ambient labels the namespace istio.io/dataplane-mode=ambient and does
     # not inject istio-proxy. There is no waypoint. Passthrough TLS on 8443,
@@ -395,3 +400,4 @@ spec:
       {{- with .Values.additionalNetworkAllow }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
+  # @lulaEnd 79a96dd2-7dec-5a42-b67e-282471df87e3

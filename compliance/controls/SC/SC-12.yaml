@@ -1,0 +1,28 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: SC-12
+title: Cryptographic Key Establishment and Management
+family: SC
+description: Package evidence notes for Cryptographic Key Establishment and Management. Consult the authoritative
+  NIST control and the deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The certificate-init Job invokes the image-provided publish-cert-configmap.sh
+  at deploy time, then issues the web/health certificates and separates CA/private-key material. The upstream publisher
+  is not vendored here; the mapping covers its local call site. Organizational key policy, backup custody, CA rotation,
+  and HSM use are outside this evidence.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tests/test_move_ca_key.py,
+  tests/test_issue_health_cert.py, tests/api-smoke.sh. Re-run deployment checks in the target environment and record
+  outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/test_move_ca_key.py
+    rel: evidence
+    text: tests/test_move_ca_key.py
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/test_issue_health_cert.py
+    rel: evidence
+    text: tests/test_issue_health_cert.py
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/api-smoke.sh
+    rel: evidence
+    text: tests/api-smoke.sh

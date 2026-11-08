@@ -4,6 +4,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const base = '/uds-k3d-takserver/';
+const port = process.env.DOCS_PREVIEW_PORT || '4321';
 
 export default defineConfig({
   testDir: './tests',
@@ -11,14 +12,14 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: `http://127.0.0.1:4321${base}`,
+    baseURL: `http://127.0.0.1:${port}${base}main/`,
     trace: 'retain-on-failure',
     ...devices['Desktop Chrome'],
   },
   webServer: {
     // Keep preview in the foreground even where Astro auto-backgrounds it.
-    command: 'npm run preview -- --host 127.0.0.1 --port 4321 --ignore-lock',
-    url: `http://127.0.0.1:4321${base}`,
+    command: `npm run preview -- --host 127.0.0.1 --port ${port} --ignore-lock`,
+    url: `http://127.0.0.1:${port}${base}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

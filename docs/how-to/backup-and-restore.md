@@ -1,12 +1,12 @@
 # Back up and restore TAK Server
 
-Create a Velero backup with fresh logical database dumps, then load those dumps
-after restoring the namespaces into a recovery environment.
+Back up fresh logical database dumps with Velero. Restore the namespaces into a
+recovery environment, then load the dumps.
 
 ## What you'll accomplish
 
-Recover the TAK and CloudTAK database contents and the existing TAK certificate
-authority (CA), so enrolled clients can reconnect with their certificates.
+Recover TAK and CloudTAK data and the existing TAK certificate authority (CA)
+so enrolled clients can reconnect with their certificates.
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ authority (CA), so enrolled clients can reconnect with their certificates.
   and access to its backup bucket from the recovery environment. Slim core does
   not include Velero.
 - `kubectl`, the UDS CLI, and a Velero CLI compatible with the installed server.
-- This repository checked out for `tests/db-dump-secret.sh`.
+- A checkout of this repository for `tests/db-dump-secret.sh`.
 - `backup.dump.enabled: true` on both application charts, as in
   [`bundle/full/uds-bundle.yaml`](../../bundle/full/uds-bundle.yaml).
 
@@ -70,7 +70,7 @@ UDS Core, Keycloak, or separately managed `TakClient` resources in `takclients`.
    require Completed PodVolumeBackups for the database `data` volumes.
 
 4. In a recovery environment with compatible UDS Core, storage, package images,
-   and access to the same bucket, select the backup by name. The application
+   and access to the same bucket, select the named backup. The application
    namespaces must be absent or prepared by your recovery plan. Restore it:
 
    ```bash title="Restore the application namespaces"
@@ -88,9 +88,9 @@ UDS Core, Keycloak, or separately managed `TakClient` resources in `takclients`.
    kubectl rollout status -n cloudtak statefulset/cloudtak-postgis --timeout=10m
    ```
 
-   Confirm the application pods have terminated before loading data. Scaling
-   requests their termination; it does not wait for their database connections
-   to close. Keep the database pods running.
+   Wait for application pods to terminate before loading data. Scaling requests
+   termination; it does not wait for database connections to close. Keep the
+   database pods running.
 
 5. If the volumes came back empty, recreate the recovery databases before
    loading the logical dumps: a restored application may have initialized

@@ -1,7 +1,7 @@
 # Upgrade from 0.6 to 0.7
 
-Prepare a 0.6 installation for the PostgreSQL and certificate migrations
-introduced in 0.7, and verify that existing data and client identities survive.
+Migrate PostgreSQL and certificates from 0.6 to 0.7. Verify that existing data
+and client identities survive.
 
 ## What you'll accomplish
 
@@ -35,14 +35,14 @@ certificate objects as described in [Backup](../data.md#backup).
    one bundle that orders Core first. The Pepr module uses the controller image
    supplied by Core. Use [the test bundle](../../bundle/uds-bundle.yaml) as an
    ordering reference and retain your deployment's configuration.
-2. Set the TAK package reference in your deployment bundle to the selected
+2. Set the TAK package reference in your bundle to the selected
    `0.7.<patch>-upstream` release, with its keyless verification block. Keep
    existing PVCs and storage classes. `FILESYSTEM_BACKUP` defaults to `false`
    and `POSTGRES_STORAGE_CLASS` defaults to empty; do not change the StatefulSet
    volume claim templates as part of this upgrade.
-3. Deploy the updated bundle using your normal signed bundle process. For an
-   installation where Core has already been upgraded and the passthrough
-   gateway is enabled, the package can also be deployed directly:
+3. Deploy the updated bundle through your normal signed bundle process. If Core
+   has already been upgraded and the passthrough gateway is enabled, you can
+   also deploy the package directly:
 
    ```bash title="Deploy the selected 0.7 package"
    VERSION=0.7.0 # Replace with the verified 0.7 patch selected for this upgrade.
@@ -54,7 +54,7 @@ certificate objects as described in [Backup](../data.md#backup).
    start; its startup probe allows ten minutes for that first start.
 4. Wait for the database and TAK rollouts. Do not delete a PVC or interrupt a
    running `pg_upgrade` to make the rollout faster. Read the database logs if a
-   rollout does not progress.
+   rollout stalls.
 
 ## Verification
 

@@ -77,7 +77,7 @@ if [[ -n "${hung}" ]]; then
 fi
 
 if [[ "${wedged}" -eq 1 ]]; then
-  echo "::warning::This runner matches the network wedge in issue #300 (kernel=$(uname -r) ImageVersion=${ImageVersion:-unknown}). The failure may be the runner, not the product. Rerun the failed job once and add this run to https://github.com/jonathanagustin/uds-k3d-takserver/issues/300."
+  echo "::warning::This runner matches the network wedge in issue #300 (kernel=$(uname -r) ImageVersion=${ImageVersion:-unknown}). The failure may be the runner, not the product. Rerun the failed job once and add this run to https://github.com/jonathanagustin/uds-takserver/issues/300."
 else
   echo "No sign of the #300 runner wedge."
 fi

@@ -22,7 +22,7 @@ release_dir="${DEMO_RELEASE_DIR:-/tmp/demo-release}"
 rm -rf "${release_dir}"
 mkdir -p "${release_dir}" demo/out/shots
 # The release workflow's keyless signing identity, as in demo/shell.sh.
-RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
+RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 RELEASE_ISSUER=https://token.actions.githubusercontent.com
 uds zarf package pull "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${DEMO_VERSION}-upstream" \
   --architecture amd64 --certificate-identity-regexp "${RELEASE_WORKFLOW}" --certificate-oidc-issuer "${RELEASE_ISSUER}" \

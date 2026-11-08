@@ -31,7 +31,7 @@ the node firewall rules; check its result before reusing the test cluster. See [
 
 The HTTP control checks direct network reachability before and after blocking.
 A passing control does not establish that the application suite passed. Full
-airgap validation is still in progress; see [issue #256](https://github.com/jonathanagustin/uds-k3d-takserver/issues/256).
+airgap validation is still in progress; see [issue #256](https://github.com/jonathanagustin/uds-takserver/issues/256).
 
 ## Package reuse
 
@@ -151,7 +151,7 @@ The wrapper signals the probe process group without waiting for stuck tasks.
 That timeout is not the install or upgrade
 failure; the failed deploy step above it is.
 
-This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-k3d-takserver/issues/300).
+This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-takserver/issues/300).
 It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a

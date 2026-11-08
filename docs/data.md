@@ -2,7 +2,7 @@
 
 Use this page to check database settings, choose a backup method, restore data, and find TAK logs.
 
-[![Demo clip: deploy the last signed release, upgrade it in place, and check that TAK's CA, keystore, a database row and its volume are unchanged](../docs-site/public/demo/demo-clip-upgrade.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-upgrade.mp4)
+[![Demo clip: deploy the last signed release, upgrade it in place, and check that TAK's CA, keystore, a database row and its volume are unchanged](../docs-site/public/demo/demo-clip-upgrade.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-upgrade.mp4)
 
 ## Postgres
 

@@ -2,7 +2,7 @@
 
 This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds. Neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
 
-The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
+The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
 
 | Container | CPU | Working set |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ The footprint below is the steady working set from `tests/usage.sh` at the end o
 
 Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup ran out of memory and was killed when UserManager started, so neither profile sets a messaging memory limit under 1536Mi.
 
-[![Demo clip: TAK's resource use after install, then Kubernetes replaces a deleted messaging pod and ATAK reconnects](../docs-site/public/demo/demo-clip-self-healing.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-self-healing.mp4)
+[![Demo clip: TAK's resource use after install, then Kubernetes replaces a deleted messaging pod and ATAK reconnects](../docs-site/public/demo/demo-clip-self-healing.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-self-healing.mp4)
 
 ## Default
 
@@ -41,7 +41,7 @@ TAK, CloudTAK, and NATS memory limits, counting the 512Mi plugins limit, sum to 
 
 `values/profiles/production.yaml` and `values/profiles/production-cloudtak.yaml`. Same single replica. More CPU and memory headroom than small. API and messaging memory limits are 2Gi because the messaging pod copies the API limit. Postgres stays at 512Mi so `shared_buffers` cannot fill a larger cgroup. The same sum, with the 512Mi plugins limit, is about 11040Mi and still fits the runner. CPU limits add up to more than 4 because startup has needed a whole core; that overcommit is on purpose.
 
-Messaging and API replicas are 1. A second pod overwrites CoreConfig with the cached copy ([#3](https://github.com/jonathanagustin/uds-k3d-takserver/issues/3)). The upstream example's replica counts are not used.
+Messaging and API replicas are 1. A second pod overwrites CoreConfig with the cached copy ([#3](https://github.com/jonathanagustin/uds-takserver/issues/3)). The upstream example's replica counts are not used.
 
 ## Apply
 

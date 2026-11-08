@@ -1,16 +1,25 @@
 # TAK Server on UDS
 
-[![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/latest)
-[![Test](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml)
-[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-k3d-takserver)
+<!-- github-only:start -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/tak-on-uds-dark.svg">
+    <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="600">
+  </picture>
+</p>
+<!-- github-only:end -->
+
+[![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-takserver/releases/latest)
+[![Test](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml)
+[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](docs-site/public/badges/license.svg)](LICENSE)
 
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
 </p>
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
 </p>
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
@@ -21,7 +30,7 @@ Local install and upgrade tests run on k3d. AKS, EKS and RKE2 have infrastructur
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
 <!-- github-only:start -->
-The same guides are published at <https://jonathanagustin.github.io/uds-k3d-takserver/>.
+The same guides are published at <https://jonathanagustin.github.io/uds-takserver/>.
 <!-- github-only:end -->
 
 ## Demo
@@ -46,7 +55,7 @@ https://github.com/user-attachments/assets/7d727d39-b4f1-4251-b440-57c7799c51d1
 
 </details>
 
-[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4)
+[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4)
 
 ### Operate and Trust
 
@@ -67,7 +76,7 @@ https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 
 </details>
 
-[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4)
+[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4)
 
 ## What you get
 
@@ -150,8 +159,8 @@ To work on the repository itself, [mise](https://mise.jdx.dev/) installs every p
 ## Quick start
 
 ```bash
-git clone --recurse-submodules --shallow-submodules https://github.com/jonathanagustin/uds-k3d-takserver
-cd uds-k3d-takserver
+git clone --recurse-submodules --shallow-submodules https://github.com/jonathanagustin/uds-takserver
+cd uds-takserver
 
 # Create the package, deploy k3d-core-slim-dev, deploy the test bundle,
 # create a Keycloak test user, and run the validation suite.
@@ -176,7 +185,7 @@ Package creation pulls the published images from GitHub Container Registry (GHCR
 
 Run `uds run --list` for the rest. `hk check` runs the pre-commit checks in [`hk.pkl`](hk.pkl). Run `hk install` once to use them as a git hook.
 
-[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-deploy.mp4)
+[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-deploy.mp4)
 
 ### Deploy a release
 
@@ -189,7 +198,7 @@ uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
-[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-airgap.mp4)
+[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-airgap.mp4)
 
 ![TAK pods with image references rewritten to the in-cluster Zarf registry](docs-site/public/demo/screens/zarf-registry-images.webp)
 
@@ -216,7 +225,7 @@ From v0.4.0 on, each release package is signed keylessly by `.github/workflows/r
 VERSION=0.9.1 # x-release-please-version
 uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" \
   --architecture amd64 \
-  --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
+  --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -227,7 +236,7 @@ In a UDS bundle, put the same check on the package entry, as `core-base` has in 
     repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
     ref: <version>-upstream # the VERSION you verified above, followed by -upstream
     keylessVerification:
-      certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/uds-k3d-takserver/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
+      certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
 ```
 

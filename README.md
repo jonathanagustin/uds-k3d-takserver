@@ -4,8 +4,13 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/tak-on-uds-dark.svg">
-    <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="600">
+    <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="560" height="140">
   </picture>
+</p>
+<p align="center">
+  <a href="https://jonathanagustin.github.io/uds-takserver/">Documentation</a> ·
+  <a href="https://jonathanagustin.github.io/uds-takserver/getting-started/">Getting started</a> ·
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest">Releases</a>
 </p>
 <!-- github-only:end -->
 
@@ -14,13 +19,6 @@
 [![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](docs-site/public/badges/license.svg)](LICENSE)
-
-<p align="center">
-  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
-</p>
-<p align="center">
-  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
-</p>
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
 

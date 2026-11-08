@@ -798,6 +798,7 @@ def run_load(clients, duration, password, tester):
         patched.write_text(bind_tester(tester.read_text(encoding="utf-8")), encoding="utf-8")
         env = os.environ.copy()
         env["TAK_TESTER_DURATION"] = str(duration)
+        env["BENCH_CUMULATIVE_STATS"] = "1"
         env["PYTHONPATH"] = str(tester.parent) + os.pathsep + env.get("PYTHONPATH", "")
         command = [
             sys.executable, "-u", str(patched),
@@ -870,6 +871,7 @@ def blank(arch, config, clients, duration):
         "load": {
             "clients": clients,
             "duration_s": duration,
+            "counter_source": "parent-cumulative-ramp-inclusive",
             "messages_sent": None,
             "messages_received": None,
             "connects": None,

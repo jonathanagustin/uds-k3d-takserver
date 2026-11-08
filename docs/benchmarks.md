@@ -24,6 +24,12 @@ With `clients=10,50`, baseline produces two points per architecture instead of
 fourteen across the seven enabled profiles. Installation and its tests still
 run on both architectures. Scheduled and labeled runs keep the full sweep.
 This option does not establish 50-client headroom or relax the gate on 200 clients.
+The 60-second window includes clients starting one second apart. Requested
+clients and observed connection events do not establish sustained concurrency.
+New records identify their cumulative parent-snapshot counters; older interval
+reports could omit late clients and final partial intervals. See the
+[counter provenance](../bench/SCHEMA.md#counter-window-and-provenance) before
+comparing results.
 
 ## What one run does
 

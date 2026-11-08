@@ -1,0 +1,24 @@
+def print_info_without_sending_to_cloud_watch_process(uid, arr, send_metrics_interval):
+
+    while True:
+        time.sleep(send_metrics_interval) 
+        try:
+            stats_for_uid = {
+                'messages_sent': arr[0],
+                'messages_received': arr[1],
+                'connect_event_count': arr[2],
+                'disconnect_event_count': arr[3],
+                'ping_count': arr[4],
+                'pong_count': arr[5],
+                'time_between_ping_pong': arr[6]
+            }
+
+            print(f"Info that would be sent to CloudWatch if it was enabled, uid: {uid}, stats: {stats_for_uid}")
+
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt")
+            break
+        finally:
+            # reset stats value after sending to cloud_watch
+            for i in range(len(arr)):
+                arr[i] = 0

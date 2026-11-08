@@ -5,6 +5,18 @@
 # Deploy the exact released package, seed state, then replace it with this PR.
 set -euo pipefail
 umask 077
+# The check annotation keeps the failing line when the job log blob is
+# missing. The command text stays in the job log only, so a secret on a
+# command line is not copied into the annotation.
+upgrade_failed() {
+  local rc="$1" line="$2"
+  local msg="upgrade.sh exited ${rc} at line ${line}"
+  echo "::error title=Upgrade script failed::${msg}"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf '%s\n' "${msg}" >> "${GITHUB_STEP_SUMMARY}"
+  fi
+}
+trap 'upgrade_failed "$?" "${LINENO}"' ERR
 
 baseline="${1:?Usage: upgrade.sh baseline.json}"
 work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/tak-upgrade.XXXXXX")"

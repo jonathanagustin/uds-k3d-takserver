@@ -182,7 +182,7 @@ public CA settings before the first mutation, for manual recovery if the
 process is forcibly killed before cleanup can finish.
 
 The same test is available through **Test** workflow dispatch with
-`trust_bundle=true`, on both install architectures. It changes cluster-wide
+`trust_bundle=true` (both native install jobs only; the separate airgap and upgrade jobs are intentionally skipped), on both install architectures. It changes cluster-wide
 trust configuration and can restart Core's Istio consumers too, so it is an
 opt-in acceptance run. The normal install and upgrade paths remain unchanged.
 

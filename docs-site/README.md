@@ -114,3 +114,5 @@ alert blocks so they remain visible in both the repository and the site.
 README may omit its own H1: the generated guide then uses the Getting started
 label, and its description comes from the first prose or text-bearing HTML
 paragraph. Fenced shell comments remain code, not page headings.
+
+Demo provenance and video downloads retry network timeouts, connection failures, HTTP 429, and HTTP 5xx responses at most three times. Each attempt has a 60-second deadline, with one- and two-second waits between attempts. Other HTTP errors, TLS validation errors, malformed provenance, and digest mismatches still fail without an unchecked fallback.

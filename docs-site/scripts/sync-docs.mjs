@@ -11,6 +11,7 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { download } from './download.mjs';
 import { howToSteps } from './how-to-ui.mjs';
 import { fromHtml } from 'hast-util-from-html';
 
@@ -247,9 +248,8 @@ function rewriteDestination(fromSrc, destination, byPath) {
 async function fetchDemoVideos() {
   // demo-videos.intoto.jsonl lists each video's sha256. A copy that does not
   // match is downloaded again, and a download that does not match fails.
-  const response = await fetch(`${demoRelease}/demo-videos.intoto.jsonl`);
-  if (!response.ok) throw new Error(`demo-videos.intoto.jsonl: HTTP ${response.status}`);
-  const envelope = JSON.parse((await response.text()).trim().split('\n')[0]);
+  const provenance = await download(`${demoRelease}/demo-videos.intoto.jsonl`);
+  const envelope = JSON.parse(provenance.toString('utf8').trim().split('\n')[0]);
   const statement = JSON.parse(Buffer.from(envelope.payload, 'base64').toString('utf8'));
   await mkdir(demoDir, { recursive: true });
   const names = [];
@@ -261,9 +261,7 @@ async function fetchDemoVideos() {
       names.push(subject.name);
       continue;
     }
-    const video = await fetch(`${demoRelease}/${subject.name}`);
-    if (!video.ok) throw new Error(`${subject.name}: HTTP ${video.status}`);
-    const bytes = Buffer.from(await video.arrayBuffer());
+    const bytes = await download(`${demoRelease}/${subject.name}`);
     if (sha(bytes) !== want) throw new Error(`${subject.name}: sha256 does not match the provenance`);
     await writeFile(file, bytes);
     names.push(subject.name);

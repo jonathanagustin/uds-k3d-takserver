@@ -10,7 +10,7 @@
   "scripts": {
     "sync": "node scripts/build-versions.mjs",
     "dev": "node scripts/build-versions.mjs && astro dev",
-    "build": "node scripts/build-versions.mjs && astro build && node --test scripts/how-to.test.mjs scripts/how-to-ui.test.mjs scripts/versions.test.mjs",
+    "build": "node scripts/build-versions.mjs && astro build && node --test scripts/download.test.mjs scripts/how-to.test.mjs scripts/how-to-ui.test.mjs scripts/versions.test.mjs",
     "preview": "astro preview",
     "test": "playwright test"
   },

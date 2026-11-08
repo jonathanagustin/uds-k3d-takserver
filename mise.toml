@@ -26,13 +26,13 @@ uv = "0.13.7"
 # Renovate's built-in mise manager updates java, so it has no # renovate: line.
 java = "temurin-17.0.21+9"
 # renovate: datasource=github-releases depName=anchore/syft versioning=semver
-syft = "1.56.0"
+syft = "1.57.0"
 # renovate: datasource=github-releases depName=anchore/grype versioning=semver
-grype = "0.121.1"
+grype = "0.121.2"
 # renovate: datasource=github-releases depName=opentofu/opentofu versioning=semver
-opentofu = "1.13.2"
+opentofu = "1.13.9"
 # renovate: datasource=npm depName=pnpm
-pnpm = "12.16.1"
+pnpm = "12.18.0"
 # renovate: datasource=pypi depName=codespell versioning=pep440
 "pypi:codespell" = { version = "2.4.3", depends = "uv" }
 # renovate: datasource=github-releases depName=google/go-containerregistry versioning=semver

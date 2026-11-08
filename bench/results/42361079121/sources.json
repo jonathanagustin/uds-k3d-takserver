@@ -1,0 +1,49 @@
+{
+  "run_id": 42361079121,
+  "run_url": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121",
+  "source_git_sha": "68b44db46326285f6533d1ff4dd59a410f20b6c1",
+  "reporter_git_sha": "a7e0068b9ef026e5b1a63b48f9dcfbcd89337abf",
+  "reporter_sha256": "86fc7b5ffdbf493e8e424287ce1112465c4329cb9f1cc9aa72db9a730d3c9cca",
+  "clients": 10,
+  "duration_s": 60,
+  "source_job_conclusions": {
+    "amd64": "failure",
+    "arm64": "failure"
+  },
+  "artifact_urls": {
+    "amd64": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121/artifacts/13571982706",
+    "arm64": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121/artifacts/13571567932"
+  },
+  "files": [
+    {
+      "path": "records/amd64/baseline.json",
+      "sha256": "8807d2db573824af67032dbcfa668da86c0c3f96fce2301a432cdb6adfeda6df",
+      "artifact_id": 13571982706
+    },
+    {
+      "path": "records/amd64/postgis-buffers.json",
+      "sha256": "490451bab3427c0bbd44be856a18e0d3ab86a5dbb4a456e13558d41cb32507d2",
+      "artifact_id": 13571982706
+    },
+    {
+      "path": "records/amd64/postgis-wal.json",
+      "sha256": "7638189ab9219e85925eafe34827c4180a0e46d497b24eaa73683b9bf926a8dc",
+      "artifact_id": 13571982706
+    },
+    {
+      "path": "records/arm64/baseline.json",
+      "sha256": "d60dc18546c893bf07987e20eee825dd9a10c18ac918001b8dcac6a5a58ae1ba",
+      "artifact_id": 13571567932
+    },
+    {
+      "path": "records/arm64/postgis-buffers.json",
+      "sha256": "845188b2c857f5d25ffb31b87c563b575b81a73062f0e504aa792be641e4c568",
+      "artifact_id": 13571567932
+    },
+    {
+      "path": "records/arm64/postgis-wal.json",
+      "sha256": "e84a73e7cf3f155be22a5a090786b9be7f9abf3e434b141cabe1335d3b549f4e",
+      "artifact_id": 13571567932
+    }
+  ]
+}

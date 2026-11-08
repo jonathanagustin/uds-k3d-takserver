@@ -6,7 +6,10 @@
 # /etc/nginx/nginx.conf, starts nginx as root, and runs `npm run prod` in a
 # loop. This renders the same nginx.conf into /tmp, drops the `user`
 # directive, moves the pid file, logs, and temp paths under /tmp, and runs
-# the API once so Kubernetes sees a crash and restarts the container.
+# the API once. NODE_OPTIONS carries --import for the 8089 handshake gap.
+# That flag is not visible on process.execArgv; the preload installs
+# because it was loaded. A reset is held only until the pool listens,
+# and a missing listener still crashes the process.
 set -euo pipefail
 
 mkdir -p /tmp/nginx
@@ -49,4 +52,5 @@ if [[ ! -e /proc/net/if_inet6 ]]; then
 fi
 nginx -e /dev/stderr -c /tmp/nginx/nginx.conf
 
+export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--import /home/etl/api/uds-tak-error-guard.mjs"
 exec node dist/index.js

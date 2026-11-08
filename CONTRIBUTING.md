@@ -41,9 +41,16 @@ Release Please builds the changelog and the release pull requests from the merge
 
 - **No secrets.** Never commit private keys, keystores, passwords, or enrolled certificates. Certificates are generated at deploy time ([ADR 2](adr/0002-generate-certificates-at-deploy-time.md)).
 - **Pinned dependencies.** Pin images and GitHub Actions by digest or full commit SHA, with the version in a comment. Renovate keeps them current.
-- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes. The [docs site](https://jonathanagustin.github.io/uds-k3d-takserver/) is built from those files by the Docs workflow. A new page under `docs/` also needs an entry in `docs-site/scripts/sync-docs.mjs` and the sidebar in `docs-site/astro.config.mjs`. Run `npm ci && npm run build` in `docs-site/` to check it: a broken internal link fails the build.
+- **Documentation.** Update the README, `docs/`, or an ADR in `adr/` when behavior, configuration, or a design decision changes. The [docs site](https://jonathanagustin.github.io/uds-k3d-takserver/) is built from those files by the Docs workflow. A new page under `docs/` also needs an entry in `docs-site/scripts/sync-docs.mjs` and the sidebar in `docs-site/astro.config.mjs`. Run `npm ci && npm run build` in `docs-site/` to check it: a broken internal link fails the build. `npm test` there runs the browser checks against that build. Install the browser once with `npx playwright install chromium`.
 
 ## Coding standards
+
+Task-oriented documentation belongs in `docs/how-to/`. Copy
+[`docs/how-to/_template.md`](docs/how-to/_template.md), name the new page for its
+task without a leading underscore, and keep the template's sections. These
+pages are discovered automatically by the docs sync and How-to sidebar; the
+template stays out of the published site. Existing reference pages keep their
+URLs when a how-to guide is added.
 
 - Shell scripts use strict mode (`set -euo pipefail`) and pass shellcheck.
 - YAML passes yamllint with [`.yamllint`](.yamllint).
@@ -64,6 +71,7 @@ Where tests live:
 | Deployment checks (pods, mesh, policy, gateways) | [`tasks/test.yaml`](tasks/test.yaml) | `uds run test-install` |
 | Marti API smoke tests | [`tests/api-smoke.sh`](tests/api-smoke.sh) | part of `uds run test-install` |
 | Browser and SSO tests (Playwright) | `tests/*.spec.ts` | part of `uds run test-install` |
+| Docs site browser tests | `docs-site/tests/*.spec.ts` | `cd docs-site && npm ci && npm run build && npx playwright install chromium && npm test` |
 | Upgrade tests | `tests/upgrade*.py`, `tests/upgrade.sh` | `uds run test-upgrade` |
 | Python and shell unit tests | `tests/test_*.py`, `tests/test_*.sh` | `python3 -B -m unittest discover -s tests -p 'test_*.py'`, and `bash tests/test_<name>.sh`. `test_package_values.py` needs the UDS CLI and `bash pepr/build.sh` first |
 | Full Core checks (monitoring, logging, Falco, Portal, backup and restore) | `test:full-core` in [`tasks/test.yaml`](tasks/test.yaml), `tests/backup-restore.sh` | `uds run test-full-core` |

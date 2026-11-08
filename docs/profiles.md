@@ -47,7 +47,7 @@ Messaging and API replicas are 1. A second pod overwrites CoreConfig with the ca
 
 Paths are relative to the bundle file. This replaces the test bundle's `test-values.yaml` entry when you want the profile instead of the CI sizes. Chart `uds-cloudtak` is CloudTAK.
 
-```yaml
+```yaml title="uds-bundle.yaml"
 overrides:
   takserver:
     takserver:
@@ -66,7 +66,7 @@ The `takserver-workload` capability in the Pepr module sets the plugins memory, 
 
 To change it, set the `PLUGINS_MEMORY_REQUEST` and `PLUGINS_MEMORY_LIMIT` variables, for example in a bundle's `uds-config.yaml`:
 
-```yaml
+```yaml title="uds-config.yaml"
 variables:
   takserver:
     PLUGINS_MEMORY_REQUEST: 400Mi

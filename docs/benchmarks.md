@@ -4,6 +4,12 @@ The Benchmark workflow measures how much CPU and memory TAK Server uses under a 
 
 ## When it runs
 
+The [retained ten-client snapshot](../bench/results/42361079121/README.md)
+contains matched baseline, Postgres buffers and Postgres WAL records from
+November 7, 2026, on both architectures, with source hashes and a corrected
+report. It records why those observations do not justify a tuning change,
+architecture default, or a 200-client load.
+
 [`.github/workflows/benchmark.yaml`](../.github/workflows/benchmark.yaml) runs:
 
 - daily at 09:41 UTC
@@ -43,7 +49,9 @@ The configs set memory, JVM flags, and Postgres settings only. CPU stays at what
 
 [`bench/SCHEMA.md`](../bench/SCHEMA.md) defines every field in a record and how it is collected. A field that could not be measured is `null`, with the reason in `errors`. It is never stored as zero.
 
-The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against ready time. A config is on the Pareto front for a view when no other config on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each plot, but dominance is decided inside one architecture. See [ADR 19](../adr/0019-compare-arches-on-one-scale.md).
+The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against warm rollout duration. The initial cold install age is copied into every config as a shared reference, so it stays in the evidence table and never ranks swept configs. Cold and warm readiness measurements do not compete. Each view is split into cohorts with the same source revision, client count and load duration. Records missing one of those fields are isolated, so an unknown workload cannot dominate another record. A config is on the Pareto front for a view when no other config in the same cohort and on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each cohort's plot, but dominance is decided inside one architecture. See [ADR 19](../adr/0019-compare-arches-on-one-scale.md).
+
+The markdown report includes the observed CPU, working set, throughput, latency, startup phases, Postgres counters and record caveats. Missing timings stay "not measured"; negative or non-finite timings are shown as invalid and never treated as durations. The source records are unchanged. A startup-phase row describes the pod present when that config was collected. A Postgres-only rollout can reuse an earlier TAK pod, so repeated rows are not independent cold and warm TAK startup measurements.
 
 A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config. Do not treat any config, or either [values profile](profiles.md), as a sizing result yet.
 

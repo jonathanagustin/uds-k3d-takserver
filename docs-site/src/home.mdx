@@ -22,11 +22,15 @@ import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components
 
 <LegacyHomeHash />
 
-Connect field clients through TAK Server and use CloudTAK as the browser map. This package integrates both applications with UDS Core.
+TAK Server on UDS brings TAK Server and CloudTAK into a UDS Core deployment. TAK Server connects field clients such as ATAK and WinTAK through certificate-based APIs, enrollment, and streaming. CloudTAK provides a browser map connected to the same server, with Keycloak sign-in for its users. The package integrates these applications with Core's identity services, gateways, and default-deny network policies, giving teams a repeatable starting point for running TAK alongside their other UDS applications.
 
-- **TAK Server:** API, enrollment, and streaming endpoints for certificate-based clients.
-- **CloudTAK:** A browser map with Keycloak sign-in.
-- **UDS integration:** Reuses Core's identity services, gateways, and default-deny network policies.
+Zarf packages the application charts, container images, and deployment configuration into versioned artifacts. This repository builds the TAK, CloudTAK, and PostGIS images for amd64 and arm64, publishes signed release packages with build provenance, and includes automated installation and upgrade checks on k3d. Deploy a published package onto an existing UDS Core cluster, or use the local test environment to develop and validate changes. The operating guides cover certificates, sign-in, network access, backup and restore, resource profiles, and the optional Android ATAK test device.
+
+- **Connect field clients:** Certificate-based API, enrollment, and streaming endpoints for TAK clients.
+- **Use a browser map:** CloudTAK with Keycloak sign-in and a connection to the same TAK Server.
+- **Reuse UDS Core:** Shared identity services, gateways, and explicit workload network rules.
+- **Verify releases:** Package signatures and build provenance that you can check before deployment.
+- **Test and operate:** Local install and upgrade checks, plus guides for backup, recovery, and client provisioning.
 
 ## Choose your starting point
 

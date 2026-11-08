@@ -20,6 +20,10 @@
 </p>
 <!-- github-only:end -->
 
+TAK Server on UDS brings [TAK Server](https://github.com/TAK-Product-Center/Server) and [CloudTAK](https://github.com/dfpc-coe/CloudTAK) into a [UDS Core](https://docs.defenseunicorns.com/core/) deployment. TAK Server connects field clients such as ATAK and WinTAK through certificate-based APIs, enrollment, and streaming. CloudTAK provides a browser map connected to the same server, with Keycloak sign-in for its users. The package integrates these applications with Core's identity services, gateways, and default-deny network policies, giving teams a repeatable starting point for running TAK alongside their other UDS applications.
+
+Zarf packages the application charts, container images, and deployment configuration into versioned artifacts. This repository builds the TAK, CloudTAK, and PostGIS images for amd64 and arm64, publishes signed release packages with build provenance, and includes automated installation and upgrade checks on k3d. Deploy a published package onto an existing UDS Core cluster, or use the local test environment to develop and validate changes. The operating guides cover certificates, sign-in, network access, backup and restore, resource profiles, and the optional Android ATAK test device.
+
 <details>
 <summary>Contents</summary>
 
@@ -44,8 +48,6 @@
 </details>
 
 ## Background
-
-[TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
 
 The repository is `uds-takserver`; the Zarf package remains `takserver`, and its Pepr module is `takserver-oidc`. Those component names and the existing GHCR namespace are retained for compatibility.
 

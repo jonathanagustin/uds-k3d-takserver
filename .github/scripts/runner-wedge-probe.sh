@@ -19,14 +19,19 @@ if [[ "${WEDGE_PROBE_INNER:-}" != 1 ]]; then
     echo "runner-wedge: deadline must be a positive integer" >&2
     exit 2
   fi
-  WEDGE_PROBE_INNER=1 "$0" &
+  # Descendants must not retain the Actions stdout/stderr pipes after the
+  # wrapper exits. Spool diagnostic output, already redacted by the inner probe.
+  probe_log="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/runner-wedge.XXXXXX")" || exit 0
+  setsid env WEDGE_PROBE_INNER=1 bash "$0" > "${probe_log}" 2>&1 &
   probe_pid=$!
   elapsed=0
   while kill -0 "${probe_pid}" 2>/dev/null; do
     if [[ "${elapsed}" -ge "${deadline}" ]]; then
-      kill -TERM "${probe_pid}" 2>/dev/null || true
+      kill -TERM -- "-${probe_pid}" 2>/dev/null || true
       sleep 1
-      kill -KILL "${probe_pid}" 2>/dev/null || true
+      kill -KILL -- "-${probe_pid}" 2>/dev/null || true
+      cat "${probe_log}"
+      rm -f "${probe_log}"
       echo "runner-wedge probe did not finish within ${deadline}s."
       if [[ -n "${GITHUB_OUTPUT:-}" ]] && ! grep -q '^network-stalled=' "${GITHUB_OUTPUT}" 2>/dev/null; then
         echo "network-stalled=true" >> "${GITHUB_OUTPUT}"
@@ -37,6 +42,8 @@ if [[ "${WEDGE_PROBE_INNER:-}" != 1 ]]; then
     elapsed=$((elapsed + 1))
   done
   wait "${probe_pid}" 2>/dev/null || true
+  cat "${probe_log}"
+  rm -f "${probe_log}"
   exit 0
 fi
 

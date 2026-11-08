@@ -11,7 +11,7 @@ metadata:
   # https://docs.defenseunicorns.com/core/concepts/configuration-and-packaging/package-metadata/
   annotations:
     dev.uds.title: TAK Server
-    dev.uds.tagline: Team Awareness Kit server with Keycloak SSO and a CloudTAK browser map
+    dev.uds.tagline: TAK Server with Keycloak SSO and CloudTAK maps
     dev.uds.categories: Command And Control, Situational Awareness
     dev.uds.keywords: TAK, TAK Server, CloudTAK, Cursor on Target, CoT, ATAK
     # base64 of assets/icon.svg. hk's icon check fails when they differ.

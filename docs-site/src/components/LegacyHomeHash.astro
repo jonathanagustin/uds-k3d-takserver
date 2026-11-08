@@ -1,0 +1,15 @@
+---
+// Copyright 2026 uds-k3d-takserver authors
+// SPDX-License-Identifier: GPL-3.0-only
+
+// The README used to be the home page. A link to /#quick-start still opens
+// that section, now on Getting started.
+---
+
+<script is:inline>
+	(function () {
+		var hash = location.hash;
+		if (hash.length < 2) return;
+		location.replace(new URL('getting-started/' + hash, location.href).href);
+	})();
+</script>

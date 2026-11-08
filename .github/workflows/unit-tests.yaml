@@ -81,12 +81,15 @@ jobs:
           python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate -v
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
+          bash tests/test_api_smoke_diag.sh
+          bash tests/test_node_agent_ready.sh
+          node --test tests/test_tak_error_guard.mjs
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top tests.test_node_airgap -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top tests.test_runner_wedge_probe tests.test_node_airgap -v
 
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.
@@ -97,10 +100,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Node, uv, and UDS CLI
+      - name: Install Node, uv, Helm, and UDS CLI
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
-          install_args: node uv aqua:defenseunicorns/uds-cli
+          install_args: node uv helm aqua:defenseunicorns/uds-cli
           cache: true
 
       - name: Build the Pepr chart
@@ -109,4 +112,4 @@ jobs:
       - name: Package values follow the variables
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_expose_annotations -v

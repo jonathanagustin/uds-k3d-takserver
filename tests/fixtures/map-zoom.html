@@ -3,28 +3,42 @@
 Copyright 2026 uds-k3d-takserver authors
 SPDX-License-Identifier: GPL-3.0-only
 -->
-<meta charset="utf-8">
-<title>map zoom fixture</title>
-<canvas id="map" class="maplibregl-canvas" width="10" height="10" style="width:10px;height:10px"></canvas>
-<script>
-  let zoom = 5;
-  let ready = false;
-  window.clicked = false;
-  const canvas = document.getElementById("map");
-  setTimeout(() => {
-    canvas.style.width = "800px";
-    canvas.style.height = "600px";
-    canvas.width = 800;
-    canvas.height = 600;
-    ready = true;
-  }, 600);
-  canvas.addEventListener("click", () => { window.clicked = true; });
-  window.addEventListener("wheel", (event) => {
-    const box = canvas.getBoundingClientRect();
-    const over = event.clientX >= box.left && event.clientX <= box.right
-      && event.clientY >= box.top && event.clientY <= box.bottom;
-    if (!ready || !window.clicked || !over || box.width <= 100) return;
-    if (event.deltaY < 0) zoom += 1;
-  }, { passive: true });
-  window.mapZoom = () => zoom;
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CloudTAK map zoom interaction</title>
+  <link rel="stylesheet" href="/node_modules/maplibre-gl/dist/maplibre-gl.css">
+  <style>
+    body { margin: 0; }
+    #shell { width: 100vw; height: 100vh; position: relative; }
+    #map { position: absolute; inset: 0; }
+    #loading { position: absolute; inset: 0; z-index: 5; background: #ffffff80; }
+    #zoom { display: none; position: absolute; left: 8px; top: 76px; z-index: 6; background: white; padding: 12px; cursor: pointer; }
+  </style>
+</head>
+<body>
+<div id="shell">
+  <div id="map"></div>
+  <div id="loading">Loading map and profile</div>
+  <div id="zoom" role="button" tabindex="0" title="Zoom In Button"><svg width="24" height="24" aria-hidden="true"><path d="M12 2v20M2 12h20" stroke="black"/></svg></div>
+</div>
+<script type="module">
+  // Same library version as CloudTAK submodule 745d8a9 app/package-lock.json.
+  import { Map, setWorkerUrl } from '/node_modules/maplibre-gl/dist/maplibre-gl.mjs';
+  setWorkerUrl('/node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
+  const map = new Map({
+    container: 'map', center: [-100, 40], zoom: 4, fadeDuration: 0,
+    style: { version: 8, sources: {
+      raster: { type: 'raster', tiles: [location.origin + '/uds-basemap/tiles/{z}/{x}/{y}'], tileSize: 256, minzoom: 0, maxzoom: 19 }
+    }, layers: [{ id: 'raster', type: 'raster', source: 'raster' }] }
+  });
+  // CloudTAK Map.vue renders this title/role and handler only after loading.
+  // The test uses the UI control; it never calls the map API itself.
+  document.getElementById('zoom').onclick = () => map.setZoom(map.getZoom() + 1);
+  map.once('load', () => setTimeout(() => {
+    document.getElementById('loading').remove();
+    document.getElementById('zoom').style.display = 'block';
+  }, 2000));
 </script>
+</body>
+</html>

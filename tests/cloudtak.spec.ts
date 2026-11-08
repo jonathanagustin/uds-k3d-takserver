@@ -161,10 +161,9 @@ test.describe("CloudTAK", () => {
       await page.waitForTimeout(3_000);
       await page.screenshot({ path: `${shots}/cloudtak-02-map.png` });
 
-      // Zoom in as a user would. The map asks for tiles at the new zoom.
-      // A gesture sent before the canvas has a real size does not move the
-      // map, so repeat it until a higher zoom tile arrives. The requirement
-      // is still a zoom past the tiles already on screen.
+      // Use CloudTAK's visible zoom control. It is rendered only after map
+      // and profile loading; a visible canvas alone can still be covered.
+      // Require real tiles above every zoom already observed.
       const before = Math.max(...tiles.map((t) => t.z));
       const canvas = page.locator("canvas.maplibregl-canvas");
       await expect

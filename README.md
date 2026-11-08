@@ -46,7 +46,6 @@ Zarf packages the application charts, container images, and deployment configura
 - [Documentation](#documentation)
 - [Known limitations](#known-limitations)
 - [Security](#security)
-- [Maintainer](#maintainer)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -488,10 +487,6 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 
 
 Report vulnerabilities through a private GitHub security advisory. See [SECURITY.md](SECURITY.md).
-
-## Maintainer
-
-[Jon Augustine](https://github.com/jonathanagustin) maintains this repository. Ask questions or report bugs in [GitHub issues](https://github.com/jonathanagustin/uds-takserver/issues).
 
 ## Contributing
 

@@ -93,7 +93,7 @@ SPDX-License-Identifier: GPL-3.0-only
   white-space: nowrap;
 }
 
-.site-title img { height: 2.5rem; width: 2.5rem; }
+.site-title img { height: 2.25rem; width: auto; max-width: 100%; }
 
 /* Version selection already lives in the header and mobile menu. Keep the
    topic middleware's channel-scoped sidebar without a duplicate version list. */
@@ -156,7 +156,7 @@ SPDX-License-Identifier: GPL-3.0-only
 
 @media (max-width: 49.99rem) {
   .site-title { font-size: 1rem; gap: .5rem; }
-  .site-title img { width: 2rem; height: 2rem; flex-shrink: 0; }
+  .site-title img { width: auto; height: 2rem; flex-shrink: 0; }
   .site-title span { text-overflow: ellipsis; }
   .hero { padding-block: 1rem 2rem; }
   .hero .tagline { font-size: 1.05rem; }

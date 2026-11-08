@@ -11,6 +11,7 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { howToSteps } from './how-to-ui.mjs';
 
 const { values: args } = parseArgs({ options: {
   'repo-root': { type: 'string' },
@@ -371,8 +372,9 @@ async function writePage(page, byPath, videos, headings) {
   const local = titleLinkLabels(dropGithubOnly(dropFirstHeading(body)), page.src, headings);
   let content = rewriteLinks(local, page.src, byPath);
   content = embedDemoVideos(content, videos);
-  const markdown = `${frontmatter(page, body)}${content}`;
-  const destination = path.join(outRoot, `${page.slug}.md`);
+  const steps = unreleased && page.src.startsWith('docs/how-to/') ? howToSteps(content) : null;
+  const markdown = `${frontmatter(page, body)}${steps ?? content}`;
+  const destination = path.join(outRoot, `${page.slug}.${steps ? 'mdx' : 'md'}`);
   await mkdir(path.dirname(destination), { recursive: true });
   await writeFile(destination, markdown.endsWith('\n') ? markdown : `${markdown}\n`);
 }

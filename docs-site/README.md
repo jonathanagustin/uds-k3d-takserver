@@ -32,7 +32,7 @@ When a source ref contains `src/home.mdx`, it provides that channel's splash pag
 An older release without this file receives a small navigation shell pointing to
 its own guides. README is published at Getting started. On an authored splash,
 a home URL hash such as `/#quick-start` opens that section on Getting started.
-The header logo is `assets/tak-mark.svg`; `public/favicon.svg` is the same mark.
+The header uses the light and dark `assets/tak-on-uds-*.svg` wordmarks. The favicon uses the smaller `assets/tak-mark.svg` beacon.
 `public/og.png` is the static social image.
 
 `starlight-llms-txt` writes `/llms.txt`, `/llms-full.txt`, and `/llms-small.txt` during the build.
@@ -89,3 +89,9 @@ lettering for dark surfaces; `assets/tak-on-uds-light.svg` has dark lettering.
 The shared beacon mark is `assets/tak-mark.svg`, also copied to the favicon.
 `src/components/Hero.astro` keeps the accessible page heading and renders the
 appropriate logo for the selected theme.
+
+Current how-to guides render their ordered procedures with Starlight's `Steps`
+component. The repository source stays plain Markdown; archived release guides
+keep their source presentation. The home page uses tabs for the two deployment
+starting points, while cards link to the main tasks. Keep warnings in GitHub
+alert blocks so they remain visible in both the repository and the site.

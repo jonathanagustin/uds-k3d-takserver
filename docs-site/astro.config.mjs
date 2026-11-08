@@ -99,10 +99,11 @@ export default defineConfig({
       title: 'TAK Server on UDS',
       description:
         'TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.',
-      // public/favicon.svg is the same mark, already served at /favicon.svg.
-      // This path is the repository icon, so the header does not keep a second copy.
+      // Use the canonical wordmark in the header; retain the beacon favicon.
       logo: {
-        src: '../assets/tak-mark.svg',
+        light: '../assets/tak-on-uds-light.svg',
+        dark: '../assets/tak-on-uds-dark.svg',
+        replacesTitle: true,
       },
       head: [
         {

@@ -5,7 +5,7 @@
 kind: ZarfPackageConfig
 metadata:
   name: takserver
-  description: TAK Server packaged for a local UDS cluster
+  description: TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.
   version: dev
   # Read by UDS Portal and the package catalog. See
   # https://docs.defenseunicorns.com/core/concepts/configuration-and-packaging/package-metadata/
@@ -15,7 +15,7 @@ metadata:
     dev.uds.categories: Command And Control, Situational Awareness
     dev.uds.keywords: TAK, TAK Server, CloudTAK, Cursor on Target, CoT, ATAK
     # base64 of assets/icon.svg. hk's icon check fails when they differ.
-    dev.uds.icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PHBhdGggZD0iTTEwMCAyMmMtMzEgMC01NiAyNS01NiA1NiAwIDQyIDU2IDEwMCA1NiAxMDBzNTYtNTggNTYtMTAwYzAtMzEtMjUtNTYtNTYtNTZ6IiBmaWxsPSIjMWY0ZTc5Ii8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iNzgiIHI9IjIwIiBmaWxsPSIjZmZmIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iNzgiIHI9IjkiIGZpbGw9IiMyZTlkNWIiLz48cGF0aCBkPSJNMTM3IDM0YTU4IDU4IDAgMCAxIDIwIDI2TTE0NiAxOGE3OCA3OCAwIDAgMSAyOCAzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMmU5ZDViIiBzdHJva2Utd2lkdGg9IjkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPgo=
+    dev.uds.icon: data:image/svg+xml;base64,PCEtLSBDb3B5cmlnaHQgMjAyNiB1ZHMtazNkLXRha3NlcnZlciBhdXRob3JzOyBTUERYLUxpY2Vuc2UtSWRlbnRpZmllcjogR1BMLTMuMC1vbmx5IC0tPgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjE3NiIgaGVpZ2h0PSIxNzYiIHZpZXdCb3g9IjAgMCAxNzYgMTc2IiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUiPgogIDx0aXRsZSBpZD0idGl0bGUiPlRBSyBsb2NhdGlvbiBiZWFjb248L3RpdGxlPgogIDxwYXRoIGZpbGw9IiM0ZjQ2ZTUiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTYyIDMyQzM0LjQgMzIgMTIgNTQuNCAxMiA4MmMwIDM1IDUwIDgyIDUwIDgyczUwLTQ3IDUwLTgyYzAtMjcuNi0yMi40LTUwLTUwLTUwWm0wIDI2YTI0IDI0IDAgMSAwIDAgNDggMjQgMjQgMCAwIDAgMC00OFoiLz4KICA8Y2lyY2xlIGN4PSI2MiIgY3k9IjgyIiByPSIxMiIgZmlsbD0iIzIyZDNlZSIvPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzIyZDNlZSIgc3Ryb2tlLXdpZHRoPSIxMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik0xMDIgMTFhNzEgNzEgMCAwIDEgNTQgNTQiLz4KICAgIDxwYXRoIGQ9Ik05NyAzNWE0NiA0NiAwIDAgMSAzNSAzNSIvPgogIDwvZz4KPC9zdmc+Cg==
 
 # Shipped in the package. Inspect with: uds zarf package inspect documentation
 documentation:

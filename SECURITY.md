@@ -7,7 +7,7 @@ This package has not reached v1.0.0. Only the latest revision on the default bra
 ## Reporting a vulnerability
 
 Report it privately through GitHub's private vulnerability reporting:
-<https://github.com/jonathanagustin/uds-k3d-takserver/security/advisories/new>
+<https://github.com/jonathanagustin/uds-takserver/security/advisories/new>
 
 Do not open a public issue for a vulnerability.
 

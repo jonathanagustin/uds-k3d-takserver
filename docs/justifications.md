@@ -11,7 +11,7 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 It prints the exempted-resource list and the security context of each TAK pod.
 
-[![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-policy.mp4)
+[![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-policy.mp4)
 
 ## Exemptions
 
@@ -65,7 +65,7 @@ Only the optional ATAK test device uses this. It is not part of the package: `at
 
 These are not exemptions. The policy engine mutates these settings or leaves them alone, so no `Exemption` object exists.
 
-[![Demo clip: the ambient mesh, a generated network policy that drops a pod, and the release signature and provenance](../docs-site/public/demo/demo-clip-secure.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-secure.mp4)
+[![Demo clip: the ambient mesh, a generated network policy that drops a pod, and the release signature and provenance](../docs-site/public/demo/demo-clip-secure.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-secure.mp4)
 
 ### Non-root user and writable root filesystem
 
@@ -211,5 +211,5 @@ enabled but unfilterable IPv6 stack.
 
 The local firewall test does not establish that the full application suite has
 passed without egress. That result comes from the airgap CI job; keep issue
-[#256](https://github.com/jonathanagustin/uds-k3d-takserver/issues/256) open until
+[#256](https://github.com/jonathanagustin/uds-takserver/issues/256) open until
 that job completes successfully.

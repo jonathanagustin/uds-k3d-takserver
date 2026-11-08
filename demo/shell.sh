@@ -11,5 +11,5 @@ export PS1='\[\e[38;2;129;140;248m\]uds-k3d-takserver\[\e[0m\] \[\e[38;2;203;213
 export KUBECTL_EXTERNAL_DIFF=""
 export TERM=xterm-256color
 # The release workflow's keyless signing identity (README, "Verify a release").
-export RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
+export RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 export RELEASE_ISSUER=https://token.actions.githubusercontent.com

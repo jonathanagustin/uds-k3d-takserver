@@ -98,7 +98,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    repository = os.environ.get("GITHUB_REPOSITORY", "jonathanagustin/uds-k3d-takserver")
+    repository = os.environ.get("GITHUB_REPOSITORY", "jonathanagustin/uds-takserver")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise RuntimeError("Invalid repository name")
     subprocess.run(["git", "fetch", "origin", "main", "--tags"], check=True)

@@ -92,6 +92,21 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  image-keys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cloudtak: ${{ steps.keys.outputs.cloudtak }}
+      postgis: ${{ steps.keys.outputs.postgis }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve immutable image keys
+        id: keys
+        run: |
+          echo "cloudtak=$(./.github/container-and-chart/cloudtak/build.sh --tag)" >> "$GITHUB_OUTPUT"
+          echo "postgis=$(./.github/container-and-chart/postgis/build.sh --tag)" >> "$GITHUB_OUTPUT"
+
   images:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -161,6 +176,13 @@ jobs:
   # those inputs exists yet. cloudtak-index joins them under <version>-<key>.
   # <version> itself moves only on main (see build.sh).
   cloudtak-image:
+    needs: image-keys
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-cloudtak-${{ needs.image-keys.outputs.cloudtak }}-${{ matrix.arch }}
+      queue: max
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -207,8 +229,14 @@ jobs:
   # pin-image-tags.sh points the package at <version>-<key>. Zarf pulls the
   # entry for the package architecture.
   cloudtak-index:
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-cloudtak-${{ needs.image-keys.outputs.cloudtak }}-index
+      queue: max
+      cancel-in-progress: false
     timeout-minutes: 15
-    needs: cloudtak-image
+    needs: [image-keys, cloudtak-image]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -245,6 +273,13 @@ jobs:
   # tree exists yet. postgis-index joins them under 18-3.6-<key>. 18-3.6, the
   # tag zarf.yaml and the charts name, moves only on main.
   postgis-image:
+    needs: image-keys
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-postgis-${{ needs.image-keys.outputs.postgis }}-${{ matrix.arch }}
+      queue: max
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -296,8 +331,14 @@ jobs:
           refs-file: ${{ runner.temp }}/pushed-refs.txt
 
   postgis-index:
+    # Shared by Test and the dedicated image workflow. Recheck the tag only
+    # after this key's previous producer has finished. FIFO retains waiters.
+    concurrency:
+      group: image-postgis-${{ needs.image-keys.outputs.postgis }}-index
+      queue: max
+      cancel-in-progress: false
     timeout-minutes: 15
-    needs: postgis-image
+    needs: [image-keys, postgis-image]
     runs-on: ubuntu-24.04
     permissions:
       contents: read

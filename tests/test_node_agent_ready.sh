@@ -48,6 +48,30 @@ expect_no "a sentence that only mentions a controller" \
 
 expect_no "empty log" ""
 
+# More than a pipe buffer after the early match must not SIGPIPE the log
+# producer. The real caller runs this pipeline with pipefail enabled.
+if python3 - <<'PY' | node_agent_controllers_started
+import signal
+import sys
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+sys.stdout.write("Starting Controller\n")
+sys.stdout.flush()
+for _ in range(2000):
+    sys.stdout.write("ordinary log line " * 100 + "\n")
+PY
+then
+  ok "early match drains a large log stream"
+else
+  bad "early match interrupted the log producer"
+fi
+
+# A matching line must not hide a real failure from kubectl.
+if bash -c 'printf "Starting Controller\n"; exit 42' | node_agent_controllers_started; then
+  bad "matching line masked the producer failure"
+else
+  ok "producer failure still fails the readiness pipeline"
+fi
+
 if ! grep -q 'node_agent_controllers_started' "${root}/tests/backup-restore.sh"; then
   bad "backup-restore.sh does not use node_agent_controllers_started"
 else

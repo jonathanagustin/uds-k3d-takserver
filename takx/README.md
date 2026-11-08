@@ -21,14 +21,16 @@ Caller-controlled paths and resource limits:
 | Variable | Default / meaning |
 |---|---|
 | `ATAK_SOURCE_DIR` | Existing initialized `upstream/atak-civ`; an alternate official checkout must match the lock |
-| `TAKX_BUILD_DIR` | `takx/.build/commoncommo`, isolated install/build prefix |
-| `TAKX_CACHE_DIR` | `takx/.cache/sources`, SHA256-addressed public source archives |
+| `TAKX_BUILD_DIR` | `$XDG_CACHE_HOME/uds-takserver/takx/build/<source-path-hash>/commoncommo`, isolated install/build prefix |
+| `TAKX_CACHE_DIR` | `$XDG_CACHE_HOME/uds-takserver/takx/sources`, SHA256-addressed public source archives |
 | `TAKX_JOBS` | `2`; only `1` or `2` accepted; dependency installs stay serial |
 | `TAKX_OFFLINE` | `false`; `true` disables archive downloads |
 
 Use `--verify-only` to check/materialize source inputs without compiling. Use `--smoke-only` to exercise an already built JAR/JNI pair without compiling native code or marking it as a completed build cache. Before compiling, a normal build records its input key in `build-inputs.json`. Only an interrupted prefix with that same key may resume. Success records all prefix runtime `.so`, `.a` and JAR hashes in `build-state.json`; unchanged invocations verify those outputs, skip native compilation, and still run the real smoke. A changed input/toolchain key, corrupt completed output or unknown nonempty prefix is refused: choose a fresh `TAKX_BUILD_DIR`. The script does not delete or adopt existing outputs.
 
-Source/output paths must not contain whitespace because the upstream Makefiles do not quote every path. Output/cache are ignored. A build may take several minutes and uses an isolated prefix; it does not replace system OpenSSL or other libraries. The native key covers the consumed ATAK/archive/version lock fields, build recipe and toolchain identity, not unused TAKX reference metadata or the separately rerun smoke assertions. The local cache is an optimization, not an official artifact signature or a reproducible-build attestation. For a fresh build, choose a new empty `TAKX_BUILD_DIR`; do not delete cache metadata to relabel existing objects.
+When `XDG_CACHE_HOME` is unset, its base defaults to `$HOME/.cache`. The build subdirectory uses the first 12 SHA256 characters of the canonical ATAK source-checkout path to separate checkouts/worktrees; the full build-input key still guards reuse. Defaults stay outside the repository because upstream archives extract private-key test fixtures. An explicit in-repository `TAKX_BUILD_DIR` can cause repository secret scans to flag those fixtures; prefer an external directory rather than allowing them through scans.
+
+Source/output paths must not contain whitespace because the upstream Makefiles do not quote every path. A build may take several minutes and uses an isolated prefix; it does not replace system OpenSSL or other libraries. The native key covers the consumed ATAK/archive/version lock fields, build recipe and toolchain identity, not unused TAKX reference metadata or the separately rerun smoke assertions. The local cache is an optimization, not an official artifact signature or a reproducible-build attestation. For a fresh build, choose a new empty `TAKX_BUILD_DIR`; do not delete cache metadata to relabel existing objects.
 
 ## What is built and tested
 

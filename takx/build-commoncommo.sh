@@ -6,8 +6,11 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source_dir="$(realpath "${ATAK_SOURCE_DIR:-${here}/../upstream/atak-civ}")"
-output="$(realpath -m "${TAKX_BUILD_DIR:-${here}/.build/commoncommo}")"
-cache="$(realpath -m "${TAKX_CACHE_DIR:-${here}/.cache/sources}")"
+cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/uds-takserver/takx"
+source_id="$(printf %s "${source_dir}" | sha256sum)"
+source_id="${source_id:0:12}"
+output="$(realpath -m "${TAKX_BUILD_DIR:-${cache_root}/build/${source_id}/commoncommo}")"
+cache="$(realpath -m "${TAKX_CACHE_DIR:-${cache_root}/sources}")"
 jobs="${TAKX_JOBS:-2}"
 mode="${1:-build}"
 if [[ "${mode}" != build && "${mode}" != --verify-only && "${mode}" != --smoke-only ]]; then

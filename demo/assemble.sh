@@ -119,7 +119,7 @@ build() {
 # (demo/deploy.sh, recorded by the workflow), the Package CR, SSO sign-in,
 # and the ATAK test device on the same server.
 deploy_video=(v1)
-card v1 "TAK Server on UDS: Deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
+card v1 "Deploy" "Upstream TAK, packaged with Zarf, deployed on UDS Core"
 if [[ -f "${out}/00-deploy-4.mp4" ]]; then
   for n in 1 2 3 4; do
     clip "d0${n}" "${out}/00-deploy-${n}.mp4" cast "${out}/00-deploy-${n}-events.json" 0
@@ -141,12 +141,12 @@ if [[ -f "${out}/08-atak.mp4" ]]; then
   clip t08 "${out}/08-atak.mp4" web "${out}/08-atak-events.json" "${web_trim}"
   deploy_video+=(c08 t08)
 fi
-card c99 "github.com/jonathanagustin/uds-k3d-takserver" "uds run test-install" last
+card c99 "Get started" "uds run test-install" last
 deploy_video+=(c99)
 
 # Video 2, Operate and trust.
 operate_video=(v2)
-card v2 "TAK Server on UDS: Operate and Trust" "air-gapped, policy-checked, verified, measured"
+card v2 "Operate and Trust" "air-gapped, policy-checked, verified, measured"
 card c2a "Air-Gapped Install" "images from the in-cluster Zarf registry, SBOMs in the package"
 clip t2a "${out}/02a-airgap.mp4" terminal demo/out/tapes/02a-airgap.tape
 card c2b "Policy at Work" "UDS admission policy on every pod, one narrow exemption"
@@ -181,7 +181,7 @@ if [[ -f "${out}/10-operate-4.mp4" ]]; then
   done
 fi
 card c98 "What This Does Not Prove" "Android VM phone · fixed TEST LOCATION · one-node k3d · no radio or degraded links"
-card c97 "github.com/jonathanagustin/uds-k3d-takserver" "open issues track the known gaps" last
+card c97 "Explore the project" "open issues track the known gaps" last
 operate_video+=(c98 c97)
 
 build demo "${deploy_video[@]}"

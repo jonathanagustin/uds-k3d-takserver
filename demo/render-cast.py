@@ -22,7 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
+LEGACY_PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
+PROMPT = LEGACY_PROMPT.replace("uds-k3d-takserver", "uds-takserver")
 IDLE = 2.0
 # Short outputs read better large: CAST_FONT_SIZE, CAST_COLS and CAST_ROWS
 # override the font size and the terminal size agg renders.
@@ -54,7 +55,7 @@ def main():
     lines = cast.read_text().splitlines()
     header = json.loads(lines[0])
     events = [json.loads(line) for line in lines[1:] if line.strip()]
-    starts = [i for i, e in enumerate(events) if e[1] == "o" and PROMPT in e[2]]
+    starts = [i for i, e in enumerate(events) if e[1] == "o" and any(prompt in e[2] for prompt in (PROMPT, LEGACY_PROMPT))]
     # The last prompt is the empty one deploy.sh prints when it is done.
     segments = list(zip(starts, starts[1:]))
     if len(segments) != len(captions):

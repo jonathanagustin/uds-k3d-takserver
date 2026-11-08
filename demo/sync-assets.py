@@ -96,7 +96,7 @@ def main():
     run_id = sys.argv[1]
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(
-            ["gh", "run", "download", run_id, "--repo", "jonathanagustin/uds-k3d-takserver",
+            ["gh", "run", "download", run_id, "--repo", "jonathanagustin/uds-takserver",
              "--name", "demo-video", "--dir", tmp],
             check=True,
         )

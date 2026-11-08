@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   sign:
+    timeout-minutes: 30
     if: ${{ inputs.sign }}
     runs-on: ubuntu-latest
     permissions:

@@ -44,7 +44,7 @@ export interface ConfigMapDoc {
 }
 
 export interface SecretDoc {
-  metadata?: { annotations?: Record<string, string> };
+  metadata?: { annotations?: Record<string, string>; labels?: Record<string, string> };
   data?: Record<string, string>;
 }
 
@@ -282,23 +282,26 @@ const live: TakClientCluster = {
 export const TAK_API_HOST = "takserver-api-service.takserver.svc";
 
 const tak: TakApi = {
-  request: (tls, method, path, body) =>
+  request: (tls, method, path, body, options) =>
     new Promise((resolve, reject) => {
-      const payload = body === undefined ? undefined : JSON.stringify(body);
+      const payload = body === undefined ? undefined : options ? String(body) : JSON.stringify(body);
       const req = httpsRequest(
         {
           host: TAK_API_HOST,
-          port: 8443,
+          port: options?.port ?? 8443,
+          auth: options?.auth,
           method,
           path,
           ca: tls.ca,
-          cert: tls.cert,
-          key: tls.key,
-          passphrase: tls.passphrase,
+          // Enrollment uses the file user's Basic identity, never the
+          // admin certificate's identity. Admin calls keep mutual TLS.
+          cert: options ? undefined : tls.cert,
+          key: options ? undefined : tls.key,
+          passphrase: options ? undefined : tls.passphrase,
           checkServerIdentity: () => undefined,
           timeout: 20000,
           headers: payload
-            ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) }
+            ? { "content-type": options?.contentType ?? "application/json", "accept": "application/json", "content-length": Buffer.byteLength(payload) }
             : {},
         },
         res => {

@@ -7,8 +7,10 @@
 # targets and the Pepr module target are up, and a JVM query returns data.
 # Slim has no monitoring API and this script exits 0.
 #
-# Then it scales takserver-messaging to 0, waits until Alertmanager reports
-# TAKMessagingTargetDown active, scales it back to 1, and waits for Ready.
+# Then it scales takserver-messaging and CloudTAK to 0, waits until
+# Alertmanager reports both down alerts, brings messaging back to Ready,
+# and only then brings CloudTAK back. CloudTAK exits on the 8089 reset
+# while messaging has no endpoints, so it cannot become Ready first.
 # Saves a Playwright screenshot of the dashboard when docker is available.
 set -euo pipefail
 
@@ -38,20 +40,63 @@ k get configmap takserver-loki-rules -n takserver >/dev/null
 work="$(mktemp -d)"
 pids=()
 messaging_scaled=0
+cloudtak_scaled=0
 restore_messaging() {
   if [[ "${messaging_scaled}" -ne 1 ]]; then
     return 0
   fi
-  k scale deploy/takserver-messaging -n takserver --replicas=1 || true
+  if ! k scale deploy/takserver-messaging -n takserver --replicas=1; then
+    echo "takserver-messaging scale to 1 failed" >&2
+    return 1
+  fi
+  if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
+    echo "takserver-messaging did not become Ready after scaling back to 1" >&2
+    k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
+    return 1
+  fi
   messaging_scaled=0
+  echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
+  return 0
+}
+restore_cloudtak() {
+  if [[ "${cloudtak_scaled}" -ne 1 ]]; then
+    return 0
+  fi
+  if ! k scale deploy/cloudtak -n cloudtak --replicas=1; then
+    echo "cloudtak scale to 1 failed" >&2
+    return 1
+  fi
+  if ! k rollout status deploy/cloudtak -n cloudtak --timeout=600s; then
+    echo "cloudtak did not become Ready after messaging was restored" >&2
+    k get pods -n cloudtak -l app=cloudtak -o wide >&2 || true
+    return 1
+  fi
+  cloudtak_scaled=0
+  echo "grafana-alerts: CloudTAK is Ready again"
+  return 0
 }
 cleanup() {
-  local pid
+  local status=$? pid messaging_rc cloudtak_rc
+  set +e
   restore_messaging
+  messaging_rc=$?
+  cloudtak_rc=0
+  if [[ "${messaging_rc}" -eq 0 ]]; then
+    restore_cloudtak
+    cloudtak_rc=$?
+  elif [[ "${cloudtak_scaled}" -eq 1 ]]; then
+    echo "cloudtak left scaled down because messaging is not Ready" >&2
+  fi
   for pid in "${pids[@]+"${pids[@]}"}"; do
     kill "${pid}" >/dev/null 2>&1 || true
   done
   rm -rf "${work}"
+  if [[ "${status}" -ne 0 ]]; then
+    exit "${status}"
+  fi
+  if [[ "${messaging_rc}" -ne 0 || "${cloudtak_rc}" -ne 0 ]]; then
+    exit 1
+  fi
 }
 trap cleanup EXIT
 
@@ -153,7 +198,15 @@ for _ in $(seq 1 18); do
     && grep -q 'TAKMessagingTargetDown' out/prometheus-tak-rules.json \
     && grep -q 'TAKJVMHeapHigh' out/prometheus-tak-rules.json \
     && grep -q 'TAKPodRestartLoop' out/prometheus-tak-rules.json \
-    && grep -q 'TAKDeploymentUnavailable' out/prometheus-tak-rules.json; then
+    && grep -q 'TAKDeploymentUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKTargetDown' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKDeploymentUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPostGISTargetDown' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPostGISUnavailable' out/prometheus-tak-rules.json \
+    && grep -q 'CloudTAKPodRestartLoop' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateExpiryWarning' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateExpiryCritical' out/prometheus-tak-rules.json \
+    && grep -q 'TAKCertificateReadFailed' out/prometheus-tak-rules.json; then
     rules_ok=1
     break
   fi
@@ -164,6 +217,32 @@ if [[ "${rules_ok}" -ne 1 ]]; then
   exit 1
 fi
 echo "Prometheus /api/v1/rules lists the TAK alerts"
+
+expiry_ok=0
+for _ in $(seq 1 18); do
+  code="$(curl -sS -G -o out/prometheus-certificates.json -w '%{http_code}' --max-time 20 \
+    "http://127.0.0.1:9091/api/v1/query" \
+    --data-urlencode 'query=tak_certificate_not_after_seconds{namespace="takserver"}' || true)"
+  if [[ "${code}" == "200" ]] && python3 - <<'PY'
+import json
+import math
+import sys
+result = json.load(open("out/prometheus-certificates.json")).get("data", {}).get("result", [])
+certificates = {row.get("metric", {}).get("certificate") for row in result
+                if math.isfinite(float(row["value"][1])) and float(row["value"][1]) > 0}
+sys.exit(0 if certificates == {"ca", "server"} else 1)
+PY
+  then
+    expiry_ok=1
+    break
+  fi
+  sleep 10
+done
+if [[ "${expiry_ok}" -ne 1 ]]; then
+  echo "TAK CA and server certificate expiry metrics were not scraped" >&2
+  exit 1
+fi
+echo "Prometheus scraped the TAK CA and passthrough server expiry timestamps"
 
 scrape_ok=0
 for _ in $(seq 1 30); do
@@ -299,6 +378,8 @@ fi
 
 messaging_scaled=1
 k scale deploy/takserver-messaging -n takserver --replicas=0
+cloudtak_scaled=1
+k scale deploy/cloudtak -n cloudtak --replicas=0
 echo "grafana-alerts: test scaled takserver-messaging to 0"
 
 fired=0
@@ -308,11 +389,9 @@ for _ in $(seq 1 40); do
   if [[ "${code}" == "200" ]] && python3 -c '
 import json, sys
 alerts = json.load(open("out/alertmanager-alerts.json"))
-ok = any(
-    item.get("labels", {}).get("alertname") == "TAKMessagingTargetDown"
-    and item.get("status", {}).get("state") == "active"
-    for item in alerts
-)
+active = {item.get("labels", {}).get("alertname") for item in alerts
+          if item.get("status", {}).get("state") == "active"}
+ok = {"TAKMessagingTargetDown", "CloudTAKTargetDown"}.issubset(active)
 sys.exit(0 if ok else 1)
 '; then
     fired=1
@@ -321,10 +400,17 @@ sys.exit(0 if ok else 1)
   sleep 15
 done
 if [[ "${fired}" -ne 1 ]]; then
-  echo "TAKMessagingTargetDown did not reach active in Alertmanager" >&2
+  echo "TAKMessagingTargetDown and CloudTAKTargetDown did not both reach active in Alertmanager" >&2
   exit 1
 fi
-echo "grafana-alerts: TAKMessagingTargetDown is firing in Alertmanager"
+echo "grafana-alerts: TAKMessagingTargetDown and CloudTAKTargetDown are firing in Alertmanager"
+if ! restore_messaging; then
+  exit 1
+fi
+if ! restore_cloudtak; then
+  exit 1
+fi
+echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"
 
 if command -v docker >/dev/null 2>&1; then
   mkdir -p tests/.playwright/screenshots
@@ -348,12 +434,5 @@ else
   exit 1
 fi
 
-restore_messaging
-# The next tests use messaging. Its startup probe allows 80 periods of 10s
-# after the dependency waits, so wait up to 15 minutes for Ready.
-if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
-  echo "takserver-messaging did not become Ready after scaling back to 1" >&2
-  k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
-  exit 1
-fi
-echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
+# Messaging was restored before CloudTAK so the 8089 connect does not
+# kill the API process. The next tests use that Ready deployment.

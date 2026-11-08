@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -22,6 +23,15 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = "c72fcf944a4f43bbb386d22371aa640f"
 TAK_APPS = ("takserver-api", "takserver-messaging", "takserver-config", "takserver-plugins")
 _cache = {}
+
+
+def render_failure(result):
+    """Keep a short diagnostic. The default CalledProcessError text omits stderr."""
+    text = f"{result.stderr or ''}\n{result.stdout or ''}"
+    text = re.sub(r"-----BEGIN [A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*-----", "[redacted]", text)
+    text = re.sub(r"[A-Za-z0-9+/]{80,}={0,2}", "[redacted]", text)
+    text = " ".join(text.split())
+    return f"package render failed ({result.returncode}): {text[:500] or 'no error text'}"
 
 
 def render(variables=(), values=()):
@@ -34,7 +44,10 @@ def render(variables=(), values=()):
         cmd += ["--deploy-set-variables", pair]
     for pair in values:
         cmd += ["--set-values", pair]
-    out = subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    result = subprocess.run(cmd, cwd=ROOT, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(render_failure(result))
+    out = result.stdout
     docs = [doc for doc in yaml.safe_load_all(out) if isinstance(doc, dict)]
     _cache[key] = (out, docs)
     return out, docs
@@ -221,6 +234,23 @@ class PackageValuesTests(unittest.TestCase):
         self.assertNotIn(("Deployment", "tak-health"), names)
         self.assertNotIn(("Service", "tak-health"), names)
         self.assertNotIn("Issued client certificate", str(find(docs, "Job", "takserver-cert-init")))
+
+
+class RenderFailureTests(unittest.TestCase):
+    def test_a_failed_render_reports_redacted_stderr(self):
+        secret = "-----BEGIN PRIVATE KEY-----\nSECRETKEYDATA\n-----END PRIVATE KEY-----"
+        result = subprocess.CompletedProcess(
+            args=["uds"], returncode=1,
+            stdout="", stderr=f"helm pull failed: HTTP 504 {secret}",
+        )
+        with mock.patch.object(subprocess, "run", return_value=result):
+            with self.assertRaises(AssertionError) as caught:
+                render(variables=["DOMAIN=failure.example"])
+        message = str(caught.exception)
+        self.assertIn("package render failed (1)", message)
+        self.assertIn("HTTP 504", message)
+        self.assertNotIn("SECRETKEYDATA", message)
+        self.assertNotIn("PRIVATE KEY", message)
 
 
 if __name__ == "__main__":

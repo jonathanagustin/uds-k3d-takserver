@@ -3,19 +3,43 @@
 
 import { expect, test } from '@playwright/test';
 
-test('the active guide remains visible while unrelated sections start collapsed', async ({ page }) => {
+test('the UDS-style groups keep the active reference visible and unrelated project pages collapsed', async ({ page }) => {
   await page.goto('configuration/');
   const sidebar = page.locator('.sidebar-content');
-  await expect(sidebar.getByRole('link', { name: 'TAK Server', exact: true })).toBeVisible();
-  const operations = sidebar.locator('details').filter({
-    has: page.locator('summary').filter({ hasText: /^Operations$/ }),
+  const labels = await sidebar.locator('ul.top-level > li > details > summary').allTextContents();
+  expect(labels.map((label) => label.trim())).toEqual([
+    'Getting started', 'Concepts', 'How-to guides', 'Reference', 'Project',
+  ]);
+  const reference = sidebar.locator('details').filter({
+    has: page.locator('summary').filter({ hasText: /^Reference$/ }),
   });
-  await expect.poll(() => operations.evaluate((element) => element.hasAttribute('open'))).toBe(false);
-  await operations.locator('summary').click();
-  await sidebar.getByRole('link', { name: 'CI workflows', exact: true }).click();
+  await expect.poll(() => reference.evaluate((element) => element.hasAttribute('open'))).toBe(true);
+  await expect(reference.getByRole('link', { name: 'TAK Server', exact: true })).toBeVisible();
+  const project = sidebar.locator('details').filter({
+    has: page.locator('summary').filter({ hasText: /^Project$/ }),
+  });
+  await expect.poll(() => project.evaluate((element) => element.hasAttribute('open'))).toBe(false);
+  await project.locator('summary').first().click();
+  await project.getByRole('link', { name: 'CI workflows', exact: true }).click();
   await expect(page).toHaveURL(/\/main\/ci\/$/);
-  await expect(sidebar.getByRole('link', { name: 'CI workflows', exact: true })).toBeVisible();
-  await expect.poll(() => operations.evaluate((element) => element.hasAttribute('open'))).toBe(true);
+  await expect(project.getByRole('link', { name: 'CI workflows', exact: true })).toBeVisible();
+  await expect.poll(() => project.evaluate((element) => element.hasAttribute('open'))).toBe(true);
+});
+
+test('concepts and installation retain their routes and expand their own navigation group', async ({ page }) => {
+  await page.goto('networking/');
+  const sidebar = page.locator('.sidebar-content');
+  const concepts = sidebar.locator('details').filter({
+    has: page.locator('summary').filter({ hasText: /^Concepts$/ }),
+  });
+  await expect.poll(() => concepts.evaluate((element) => element.hasAttribute('open'))).toBe(true);
+  await expect(concepts.getByRole('link', { name: 'Networking', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.goto('getting-started/');
+  const gettingStarted = sidebar.locator('details').filter({
+    has: page.locator('summary').filter({ hasText: /^Getting started$/ }),
+  });
+  await expect.poll(() => gettingStarted.evaluate((element) => element.hasAttribute('open'))).toBe(true);
+  await expect(gettingStarted.getByRole('link', { name: 'Install and deploy', exact: true })).toHaveAttribute('aria-current', 'page');
 });
 
 test('the search bar supports the keyboard shortcut and returns focus on Escape', async ({ page }) => {

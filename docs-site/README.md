@@ -2,6 +2,15 @@
 
 This directory publishes the guides that already live in the repository. It does not keep a second copy of them.
 
+Navigation follows the UDS documentation's learning, concepts, how-to and
+reference model, adapted to this single package. Core's broad Operations &
+Maintenance area becomes Project for package development, security reporting and
+architecture decisions; day-to-day operation stays in the existing how-to guides.
+These groups only
+organize existing pages: slugs, version topics, search isolation and historical
+routes remain unchanged. Groups without pages in a release are omitted, and the
+active group opens while unrelated groups stay collapsed.
+
 `npm run build` builds release documentation and the current checkout together.
 The site root contains the newest stable release. `/main/` contains unreleased
 documentation and displays a banner. Up to five release minors are retained,

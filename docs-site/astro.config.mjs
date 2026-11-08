@@ -12,13 +12,22 @@ import { readFileSync } from 'node:fs';
 
 const versions = JSON.parse(readFileSync(new URL('./src/generated/versions.json', import.meta.url), 'utf8'));
 
+// Follow UDS's learning/concepts/tasks/reference order, scoped to one package.
+// Version topics and page slugs remain independent of this navigation grouping.
 const sidebarTemplate = [
   {
-    label: 'Overview',
+    label: 'Getting started',
     items: [
       { label: 'Home', slug: 'index' },
-      { label: 'Getting started', slug: 'getting-started' },
-      { label: 'Contributing', slug: 'contributing' },
+      { label: 'Install and deploy', slug: 'getting-started' },
+    ],
+  },
+  {
+    label: 'Concepts',
+    items: [
+      { label: 'Networking', slug: 'networking' },
+      { label: 'Single sign-on', slug: 'sso' },
+      { label: 'Policy exemptions', slug: 'justifications' },
     ],
   },
   {
@@ -26,58 +35,42 @@ const sidebarTemplate = [
     items: [{ autogenerate: { directory: 'how-to' } }],
   },
   {
-    label: 'Architecture',
-    items: [
-      { label: 'Networking', slug: 'networking' },
-      { label: 'Single sign-on', slug: 'sso' },
-    ],
-  },
-  {
-    label: 'Packages',
+    label: 'Reference',
     items: [
       { label: 'TAK Server', slug: 'configuration' },
       { label: 'CloudTAK', slug: 'cloudtak' },
       { label: 'ATAK test device', slug: 'atak-device' },
+      { label: 'Data', slug: 'data' },
+      { label: 'Values profiles', slug: 'profiles' },
     ],
   },
   {
-    label: 'Operations',
+    label: 'Project',
     items: [
       { label: 'Building images', slug: 'building' },
-      { label: 'Data', slug: 'data' },
-      { label: 'Values profiles', slug: 'profiles' },
       { label: 'CI workflows', slug: 'ci' },
       { label: 'Review rules for main', slug: 'branch-protection' },
       { label: 'Benchmarks', slug: 'benchmarks' },
-    ],
-  },
-  {
-    label: 'Security',
-    items: [
+      { label: 'Contributing', slug: 'contributing' },
       { label: 'Reporting a vulnerability', slug: 'security' },
-      { label: 'Policy exemptions', slug: 'justifications' },
+      { label: 'Changelog', slug: 'changelog' },
+      { label: 'Architecture decisions', items: [{ autogenerate: { directory: 'adr' } }] },
     ],
-  },
-  {
-    label: 'Decisions',
-    items: [{ autogenerate: { directory: 'adr' } }],
-  },
-  {
-    label: 'Reference',
-    items: [{ label: 'Changelog', slug: 'changelog' }],
   },
 ];
 function versionItems(version) {
   const route = (slug) => version.prefix ? (slug === 'index' ? version.prefix : `${version.prefix}/${slug}`) : slug;
-  return sidebarTemplate.flatMap((group) => {
-    const items = group.items.flatMap((item) => {
-      if (item.slug) return version.pages.includes(item.slug) ? [{ ...item, slug: route(item.slug) }] : [];
-      const directory = item.autogenerate.directory;
-      return version.pages.some((page) => page.startsWith(`${directory}/`))
-        ? [{ autogenerate: { directory: route(directory) } }] : [];
-    });
-    return items.length ? [{ ...group, collapsed: true, items }] : [];
+  const versionEntries = (entries) => entries.flatMap((item) => {
+    if (item.slug) return version.pages.includes(item.slug) ? [{ ...item, slug: route(item.slug) }] : [];
+    if (item.items) {
+      const items = versionEntries(item.items);
+      return items.length ? [{ ...item, collapsed: true, items }] : [];
+    }
+    const directory = item.autogenerate.directory;
+    return version.pages.some((page) => page.startsWith(`${directory}/`))
+      ? [{ autogenerate: { directory: route(directory) } }] : [];
   });
+  return versionEntries(sidebarTemplate);
 }
 const topics = versions.map((version) => ({
   id: version.id, label: version.label,

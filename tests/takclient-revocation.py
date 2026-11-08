@@ -40,6 +40,41 @@ def event(uid):
             'endpoint="*:-1:stcp"/></detail></event>').encode()
 
 
+# Pinned TAK 5.7 exposes historical endpoints by default and caches the active
+# query for five seconds. Poll only its explicitly active view; revocation must
+# not erase disconnected client history.
+ACTIVE_ENDPOINT_PATH = "/Marti/api/clientEndPoints?showCurrentlyConnectedClients=true"
+
+
+def active_endpoints(admin_ctx, port, domain):
+    raw = socket.create_connection(("127.0.0.1", port), timeout=15)
+    with admin_ctx.wrap_socket(raw, server_hostname=f"takserver-api.{domain}") as api:
+        api.settimeout(5)
+        api.sendall((f"GET {ACTIVE_ENDPOINT_PATH} HTTP/1.1\r\nHost: takserver\r\n"
+                     "Accept: application/json\r\nConnection: close\r\n\r\n").encode())
+        response = http.client.HTTPResponse(api)
+        response.begin()
+        assert response.status == 200, "admin certificate no longer authenticates"
+        payload = json.loads(response.read())
+        assert isinstance(payload, dict) and isinstance(payload.get("data"), list), "invalid active endpoint response"
+        assert all(isinstance(row, dict) for row in payload["data"]), "invalid active endpoint row"
+        assert all(isinstance(row.get("uid"), str) and row["uid"] and
+                   (row.get("callsign") is None or isinstance(row["callsign"], str))
+                   for row in payload["data"]), "invalid active endpoint identity"
+        return payload["data"]
+
+
+def wait_for_revoked_endpoint(name, fetch, check_controls, *, clock=time.monotonic, sleep=time.sleep):
+    deadline = clock() + 30
+    while True:
+        check_controls()
+        rows = fetch()  # Authentication, transport and malformed responses fail immediately.
+        if not any(row.get("callsign") == name or row.get("uid") == name for row in rows):
+            return
+        assert clock() < deadline, "revoked callsign remains in active clientEndPoints after 30 seconds"
+        sleep(min(1, max(0, deadline - clock())))
+
+
 def main():
     work, port, name, domain, admin_dir = sys.argv[1:]
     root, port = Path(work), int(port)
@@ -132,24 +167,15 @@ def main():
             rejected = True
         assert rejected, "revoked certificate reconnected and stayed authenticated"
 
-        raw = socket.create_connection(("127.0.0.1", port), timeout=15)
-        with admin_ctx.wrap_socket(raw, server_hostname=f"takserver-api.{domain}") as api:
-            api.sendall(b"GET /Marti/api/clientEndPoints HTTP/1.1\r\nHost: takserver\r\nAccept: application/json\r\nConnection: close\r\n\r\n")
-            response = http.client.HTTPResponse(api)
-            response.begin()
-            assert response.status == 200, "admin certificate no longer authenticates"
-            def names(value):
-                if isinstance(value, dict):
-                    return any(names(item) for item in value.values())
-                if isinstance(value, list):
-                    return any(names(item) for item in value)
-                return value == name
-            assert not names(json.loads(response.read())), "revoked callsign remains in clientEndPoints"
-        for stream in (survivor, admin):
-            assert read_available(stream), "an unrevoked client disconnected after revoke"
+        def check_controls():
+            for stream in (survivor, admin):
+                assert read_available(stream), "an unrevoked client disconnected after revoke"
+                stream.sendall(event(control if stream is survivor else "takclient-admin-control"))
+
+        wait_for_revoked_endpoint(name, lambda: active_endpoints(admin_ctx, port, domain), check_controls)
         cloudtak()
         assert snapshot() == before, "API or messaging pod UID/start time/restart count changed"
-        print("PASS reconnect rejected, callsign removed, admin/CloudTAK work, and TAK did not restart")
+        print("PASS reconnect rejected, active callsign removed, admin/CloudTAK work, and TAK did not restart")
     finally:
         for stream in sockets:
             stream.close()

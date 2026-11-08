@@ -181,6 +181,16 @@ else
   bad "demo concurrency changed"
 fi
 
+# Reusable Docs inherits its caller's workflow name. Publication must share a
+# caller-independent group while PR previews keep their ref and cancellation.
+require_expr "${wf}/docs.yaml" 'group: docs-${{ github.event_name == '"'"'pull_request'"'"' && github.ref || '"'"'publish'"'"' }}' "Docs publication group is shared with reusable callers"
+require_expr "${wf}/docs.yaml" 'cancel-in-progress: ${{ github.event_name == '"'"'pull_request'"'"' }}' "Docs only cancels PR previews"
+require_expr "${wf}/release-please.yaml" "needs: [release-please, publish]" "Docs waits for package publication"
+require_expr "${wf}/release-please.yaml" "if: needs.release-please.outputs.release-created == 'true' && needs.publish.result == 'success'" "Docs only follows a successfully published release"
+require_expr "${wf}/release-please.yaml" "uses: ./.github/workflows/docs.yaml" "Release Please invokes Docs once"
+require_expr "${wf}/release-please.yaml" 'release_tag: ${{ needs.release-please.outputs.tag }}' "Docs receives the published tag"
+require_expr "${wf}/docs.yaml" 'git merge-base --is-ancestor "refs/tags/${RELEASE_TAG}" HEAD' "Docs verifies the released source is in main"
+
 if ((fails > 0)); then
   echo "${fails} case(s) failed"
   exit 1

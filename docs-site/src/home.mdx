@@ -27,7 +27,7 @@ sidebar:
   The component import is relative to that copy.
 */}
 import LegacyHomeHash from '../../components/LegacyHomeHash.astro';
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 <LegacyHomeHash />
 
@@ -38,6 +38,21 @@ Use this package to run TAK Server and CloudTAK on UDS Core. TAK Server connects
 - **UDS integration:** Reuses Core's identity services, gateways, and default-deny network policies.
 
 Start with [Getting started](/uds-takserver/getting-started/) to deploy a release or build a local test environment.
+
+## Choose your starting point
+
+<Tabs>
+  <TabItem label="Existing UDS Core cluster">
+
+Deploy the released package onto a cluster that already runs UDS Core with the passthrough gateway. Follow [Deploy a release](/uds-takserver/getting-started/#deploy-a-release), including signature verification.
+
+  </TabItem>
+  <TabItem label="Local test environment">
+
+Use Docker and k3d to create a test cluster, deploy the package, and run its checks. Follow the [Quick start](/uds-takserver/getting-started/#quick-start) after installing the prerequisites.
+
+  </TabItem>
+</Tabs>
 
 ## Explore the documentation
 

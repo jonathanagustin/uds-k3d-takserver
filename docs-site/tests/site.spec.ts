@@ -39,7 +39,7 @@ test('home page links the four tasks and the theme toggle changes the document',
 test('an old home-page anchor opens that section on Getting started', async ({ page }) => {
   await page.goto('#quick-start');
   await expect(page).toHaveURL(/\/getting-started\/#quick-start$/);
-  await expect(page.getByRole('heading', { level: 2, name: 'Quick start' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Quick start' })).toBeVisible();
 });
 
 test('an unknown page is a 404 with a link home', async ({ page }) => {
@@ -112,4 +112,21 @@ test('llms.txt lists the guides', async ({ page }) => {
   const fullBody = await (await page.request.get('/uds-takserver/llms-full.txt')).text();
   expect(fullBody).toContain('Quick start');
   expect(fullBody).toContain('Deploy a release');
+});
+
+test('deployment choices support keyboard selection and link to the current channel', async ({ page }) => {
+  await page.goto('');
+  const cluster = page.getByRole('tab', { name: 'Existing UDS Core cluster', exact: true });
+  const local = page.getByRole('tab', { name: 'Local test environment', exact: true });
+  await cluster.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(local).toBeFocused();
+  await expect(local).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Quick start', exact: true }))
+    .toHaveAttribute('href', /\/main\/getting-started\/#quick-start$/);
+  await page.keyboard.press('ArrowLeft');
+  await expect(cluster).toBeFocused();
+  await expect(cluster).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel').getByRole('link', { name: 'Deploy a release', exact: true }))
+    .toHaveAttribute('href', /\/main\/getting-started\/#deploy-a-release$/);
 });

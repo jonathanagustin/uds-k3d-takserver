@@ -80,7 +80,8 @@ const version = versionForPath(Astro.url.pathname, versions);
     --pagefind-ui-border: var(--sl-color-gray-5);
     --pagefind-ui-tag: var(--sl-color-bg-nav);
     --pagefind-ui-font: var(--sl-font);
-    --pagefind-ui-border-radius: .35rem;
+    --pagefind-ui-border-width: 1px;
+    --pagefind-ui-border-radius: .5rem;
   }
   kbd { margin-inline-start: auto; font: inherit; font-size: .75rem; white-space: nowrap;
     background: var(--sl-color-bg-nav); border: 1px solid var(--sl-color-gray-5); border-radius: .25rem; padding: .1rem .3rem; }
@@ -96,12 +97,30 @@ const version = versionForPath(Astro.url.pathname, versions);
   dialog { position: fixed; inset: 0; margin: 0; width: 100%; max-width: 100%;
     height: 100%; height: 100dvh; max-height: 100%; max-height: 100dvh;
     border: 1px solid var(--sl-color-gray-5); border-radius: 0; padding: 1rem;
-    color: var(--sl-color-text); background: var(--sl-color-bg); overflow: hidden; }
+    color: var(--sl-color-text); background: var(--sl-color-bg-nav); overflow: hidden; }
   dialog[open] { display: flex; flex-direction: column; gap: 1rem; }
-  dialog::backdrop { background: #0008; }
+  dialog::backdrop { background: var(--sl-color-backdrop-overlay, #0008);
+    -webkit-backdrop-filter: blur(.25rem); backdrop-filter: blur(.25rem); }
   .search-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-shrink: 0; }
   .search-heading button { flex-shrink: 0; }
-  .search-results { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .search-results { min-height: 0; overflow: auto; overscroll-behavior: contain;
+    padding: .25rem; margin: -.25rem; }
+  /* Match Starlight/UDS: native contrast-aware input focus, an accent
+     border, and thin focus outlines on the generated controls. */
+  :global(version-search .pagefind-ui__search-input) {
+    color: var(--sl-color-white); font-weight: 400;
+  }
+  :global(version-search .pagefind-ui__search-input:focus) {
+    border-color: var(--sl-color-accent); outline: revert; outline-offset: 0;
+  }
+  :global(version-search .pagefind-ui__search-clear:focus-visible),
+  :global(version-search .pagefind-ui__button:focus-visible) {
+    outline: 1px solid var(--sl-color-accent); outline-offset: 0;
+  }
+  :global(version-search .pagefind-ui__result-title:focus-within),
+  :global(version-search .pagefind-ui__result-nested:focus-within) {
+    outline: 1px solid var(--sl-color-accent-high); background: var(--sl-color-accent-low);
+  }
   @media (min-width: 50rem) {
     dialog { margin: 4rem auto auto; width: 90%; max-width: 40rem;
       height: max-content; max-height: calc(100vh - 8rem); max-height: calc(100dvh - 8rem);

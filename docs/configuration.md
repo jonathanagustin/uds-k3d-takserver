@@ -1,6 +1,6 @@
 # Configuration
 
-This page covers how the package configures the upstream TAK Server chart: the Zarf variables, the values overlay and why each value differs from the upstream example, sign-in, certificates, monitoring, logging, pod security, and startup order.
+Use this page to configure the upstream TAK Server chart with Zarf variables and the values overlay. It explains differences from the upstream example, plus sign-in, certificates, monitoring, logging, pod security, and startup order.
 
 The package deploys the public TAK Server chart from [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server) tag `5.7-RELEASE-14`, path `src/takserver-cluster/deployments/helm`. The chart is not copied into this repository. `common/zarf.yaml` points Zarf at that git URL. The chart version in that tag is `4.5.0`. It has no `values.yaml`. Its example values files are `developer-values.yaml` and `production-values.yaml`.
 

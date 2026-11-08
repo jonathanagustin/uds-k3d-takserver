@@ -2,6 +2,7 @@
 // Copyright 2026 uds-k3d-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
+import { Icon } from '@astrojs/starlight/components';
 import versions from '../generated/versions.json';
 import { versionForPath } from '../lib/versions.mjs';
 
@@ -9,7 +10,9 @@ const version = versionForPath(Astro.url.pathname, versions);
 ---
 
 <version-search data-version={version.id} data-label={version.label}>
-  <button type="button" data-open-search aria-label="Search" aria-keyshortcuts="Control+K">Search</button>
+  <button type="button" data-open-search aria-label="Search" aria-keyshortcuts="Control+K Meta+K">
+    <Icon name="magnifier" size="1rem" /><span>Search documentation</span><kbd aria-hidden="true">Ctrl K</kbd>
+  </button>
   <dialog aria-label={`Search ${version.label} documentation`}>
     <div class="search-heading"><strong>Search {version.label}</strong><button type="button" data-close-search>Close</button></div>
     <div class="search-results"></div>
@@ -60,6 +63,27 @@ const version = versionForPath(Astro.url.pathname, versions);
 <style>
   button { color: var(--sl-color-text); background: var(--sl-color-bg-nav);
     border: 1px solid var(--sl-color-gray-5); border-radius: .35rem; padding: .4rem .7rem; cursor: pointer; font: inherit; }
+  [data-open-search] { display: flex; align-items: center; gap: .65rem; width: min(25rem, 100%);
+    min-height: 2.5rem; background: var(--sl-color-bg); color: var(--sl-color-gray-2); border-radius: .5rem;
+    padding-inline: .8rem; font-size: .875rem; text-align: start; }
+  version-search { display: block; width: min(25rem, 100%);
+    --pagefind-ui-primary: var(--sl-color-text-accent);
+    --pagefind-ui-text: var(--sl-color-text);
+    --pagefind-ui-background: var(--sl-color-bg);
+    --pagefind-ui-border: var(--sl-color-gray-5);
+    --pagefind-ui-tag: var(--sl-color-bg-nav);
+    --pagefind-ui-font: var(--sl-font);
+    --pagefind-ui-border-radius: .35rem;
+  }
+  kbd { margin-inline-start: auto; font: inherit; font-size: .75rem; white-space: nowrap;
+    background: var(--sl-color-bg-nav); border: 1px solid var(--sl-color-gray-5); border-radius: .25rem; padding: .1rem .3rem; }
+  [data-open-search]:hover { border-color: var(--sl-color-gray-3); }
+  button:focus-visible { outline: 2px solid var(--sl-color-text-accent); outline-offset: 3px; }
+  @media (max-width: 49.99rem) {
+    version-search { width: auto; }
+    [data-open-search] { width: 2.5rem; justify-content: center; padding: .5rem; }
+    [data-open-search] span, kbd { display: none; }
+  }
   dialog { width: min(42rem, calc(100vw - 2rem)); max-height: 80vh; border: 1px solid var(--sl-color-gray-5);
     border-radius: .5rem; padding: 1rem; color: var(--sl-color-text); background: var(--sl-color-bg); }
   dialog::backdrop { background: #0008; }

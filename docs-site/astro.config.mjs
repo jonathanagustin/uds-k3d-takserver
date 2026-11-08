@@ -76,7 +76,7 @@ function versionItems(version) {
       return version.pages.some((page) => page.startsWith(`${directory}/`))
         ? [{ autogenerate: { directory: route(directory) } }] : [];
     });
-    return items.length ? [{ ...group, items }] : [];
+    return items.length ? [{ ...group, collapsed: true, items }] : [];
   });
 }
 const topics = versions.map((version) => ({

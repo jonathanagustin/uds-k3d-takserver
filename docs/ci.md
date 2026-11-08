@@ -20,7 +20,18 @@ Docs, device, benchmark, demo, unit-test-only, and repository metadata changes s
 
 A pull request whose files are all on that ignore list skips Test and Package. One relevant file still runs them, on amd64 and arm64. Full Core decides in its own `changes` job and skips the deploy when the diff does not need it. The checks that `main` requires still report on every pull request: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`. Those workflows have no path filter. Lint, unit tests, and the PR title check run on every pull request too.
 
-Stricter review on `main` (one human approval, admins included, an up-to-date branch) is written in [Review rules for main](branch-protection.md). Those settings are not on.
+[Review rules for main](branch-protection.md) describes the solo-maintainer policy and the optional independent-review policy. The proposed administrator-bypass and up-to-date-branch changes have not been applied. Required approvals on `main` remain at zero while the repository has one collaborator.
+
+## Airgap install check
+
+Test includes an amd64 airgap install variant. It prepares the package and
+bundle, blocks external egress inside the k3d nodes, then deploys the applications
+and runs the core tests. The runner keeps its network access. Cleanup attempts to restore
+the node firewall rules; check its result before reusing the test cluster. See [Airgap test boundaries](justifications.md).
+
+The HTTP control checks direct network reachability before and after blocking.
+A passing control does not establish that the application suite passed. Full
+airgap validation is still in progress; see [issue #256](https://github.com/jonathanagustin/uds-k3d-takserver/issues/256).
 
 ## Package reuse
 
@@ -165,8 +176,8 @@ these limits do not suppress errors or automatically retry failed work.
 
 The shared lint workflow receives only its automatic GitHub token. Container
 image jobs keep package publication and attestation permissions, but Actions API
-access is read-only. Scorecard uses a local reusable adapter that accepts only the optional
-`SCORECARD_READ_TOKEN`. Its upstream call inherits that restricted context, rather
+access is read-only. Scorecard uses a local reusable adapter that accepts only
+the optional `SCORECARD_READ_TOKEN`. Its upstream call inherits that restricted context, rather
 than all repository secrets. The pinned analysis still supplies SARIF artifacts,
 code-scanning uploads and badge publication. The adapter retains the upstream
 permission contract; it does not change the token fallback when the named secret

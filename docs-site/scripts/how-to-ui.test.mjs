@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { howToSteps } from './how-to-ui.mjs';
 
-const guides = ['backup-and-restore', 'check-uptime-and-portal', 'connect-atak-test-device', 'upgrade-from-0-6'];
+const guides = ['backup-and-restore', 'check-uptime-and-portal', 'connect-atak-test-device', 'connect-takx-desktop', 'upgrade-from-0-6'];
 
 test('current guides gain Steps without changing commands or warning callouts', () => {
   for (const guide of guides) {

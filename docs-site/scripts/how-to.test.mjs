@@ -13,10 +13,11 @@ const guides = [
   'backup-and-restore',
   'check-uptime-and-portal',
   'connect-atak-test-device',
+  'connect-takx-desktop',
   'upgrade-from-0-6',
 ];
 
-test('the four operational guides are published and use the how-to sections', () => {
+test('the operational guides are published and use the how-to sections', () => {
   for (const slug of guides) {
     const output = path.join(siteRoot, 'dist/main/how-to', slug, 'index.html');
     assert.ok(existsSync(output), `missing guide route: ${slug}`);

@@ -46,7 +46,6 @@ Zarf packages the application charts, container images, and deployment configura
 - [Documentation](#documentation)
 - [Known limitations](#known-limitations)
 - [Security](#security)
-- [Maintainer](#maintainer)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -461,6 +460,7 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 | [Single sign-on](docs/sso.md) | Keycloak client, group mapping, and certificate enrollment |
 | [Networking](docs/networking.md) | Gateway exposure, standard TAK ports, and the NetworkPolicy allow list |
 | [CloudTAK](docs/cloudtak.md) | The browser map client: image, sign-in, TAK connection, rules, and limits |
+| [TAKX desktop setup](docs/how-to/connect-takx-desktop.md) | Dedicated client provisioning and a manual compatibility checklist; interoperability is not yet verified |
 | [ATAK test device](docs/atak-device.md) | ATAK-CIV in a KubeVirt VM, its certificate, and its test location |
 | [Building the images](docs/building.md) | Image builds, platforms, pins, input-keyed tags, and the build cache |
 | [Data](docs/data.md) | PostgreSQL, backup and restore, and how to find TAK logs |
@@ -487,10 +487,6 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 
 
 Report vulnerabilities through a private GitHub security advisory. See [SECURITY.md](SECURITY.md).
-
-## Maintainer
-
-[Jon Augustine](https://github.com/jonathanagustin) maintains this repository. Ask questions or report bugs in [GitHub issues](https://github.com/jonathanagustin/uds-takserver/issues).
 
 ## Contributing
 

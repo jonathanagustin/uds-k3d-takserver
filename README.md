@@ -1,5 +1,14 @@
 # TAK Server on UDS
 
+<!-- github-only:start -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/tak-on-uds-dark.svg">
+    <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="600">
+  </picture>
+</p>
+<!-- github-only:end -->
+
 [![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-takserver/releases/latest)
 [![Test](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml)
 [![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver)

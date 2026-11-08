@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "arch": "arm64",
+  "config": "baseline",
+  "git_sha": "68b44db46326285f6533d1ff4dd59a410f20b6c1",
+  "recorded_at": "2026-11-07T10:23:17.895927+00:00",
+  "footprint": {
+    "cpu_requests_m": 560,
+    "memory_requests_bytes": 4966055936,
+    "cpu_limits_m": 8000,
+    "memory_limits_bytes": 9596567552
+  },
+  "kubelet": {
+    "peak_rss_bytes": 3900641280,
+    "steady_rss_bytes": 3900641280,
+    "peak_cpu_nanocores": 869269518,
+    "steady_cpu_nanocores": 752801258
+  },
+  "images": {
+    "sum_bytes": 3633056253,
+    "unique_bytes": 1358514042
+  },
+  "package_bytes": 1354954853,
+  "time_to_ready": {
+    "cold_s": null,
+    "warm_s": null
+  },
+  "start_phases": {
+    "takserver-messaging": {
+      "image_pull_s": 0.0,
+      "inits": [
+        {
+          "name": "wait-deps",
+          "seconds": 32.0
+        },
+        {
+          "name": "import-trust",
+          "seconds": 40.0
+        },
+        {
+          "name": "render-oidc",
+          "seconds": 0.0
+        }
+      ],
+      "jvm_to_log_s": 41.658,
+      "log_to_ready_s": 4.342
+    },
+    "takserver-api": {
+      "image_pull_s": 0.0,
+      "inits": [
+        {
+          "name": "wait-deps",
+          "seconds": 32.0
+        },
+        {
+          "name": "import-trust",
+          "seconds": 40.0
+        },
+        {
+          "name": "render-oidc",
+          "seconds": 0.0
+        }
+      ],
+      "jvm_to_log_s": 50.523,
+      "log_to_ready_s": 4.477
+    }
+  },
+  "startup": {
+    "max_generation": 5,
+    "max_restart_count": 0
+  },
+  "load": {
+    "clients": 10,
+    "duration_s": 60,
+    "messages_sent": 503,
+    "messages_received": 1214,
+    "connects": 10,
+    "disconnects": 0,
+    "pong_count": 419,
+    "ping_pong_ms_sum": 3562,
+    "ping_pong_ms_mean": 8.501193317422434,
+    "p95_ms": null
+  },
+  "ci": {
+    "wall_clock_s": null
+  },
+  "postgres": {
+    "datname": "cot",
+    "blks_hit": 3435,
+    "blks_read": 0,
+    "hit_ratio": 1.0,
+    "temp_files": 0,
+    "temp_bytes": 0,
+    "checkpoints_timed": 0,
+    "checkpoints_req": 0,
+    "checkpoint_write_ms": 0,
+    "checkpoint_sync_ms": 0,
+    "buffers_backend": 136,
+    "peak_rss_bytes": 75874304,
+    "steady_rss_bytes": 75198464,
+    "settings": {
+      "shared_buffers": "128MB",
+      "work_mem": "4MB",
+      "effective_cache_size": "4GB",
+      "max_wal_size": "1GB",
+      "checkpoint_timeout": "5min"
+    }
+  },
+  "errors": [
+    "cloudtak-8477c757bc-nz52m restarted, so this is not a cold start"
+  ]
+}

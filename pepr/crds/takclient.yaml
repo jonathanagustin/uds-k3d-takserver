@@ -38,7 +38,8 @@ spec:
                   description: TAK groups the client is in, for example Operators.
                 validityDays:
                   type: number
-                  description: Certificate lifetime in days. Default 30, maximum 365.
+                  description: Deprecated, retained for existing resources. TAKServerCAConfig sets
+                    the certificate lifetime globally (30 days by default).
               required:
                 - callsign
                 - groups

@@ -7,6 +7,10 @@
 
 domain: "###ZARF_VAR_DOMAIN###"
 
+# Extra annotations for the browser expose entry (for example portal.uds.dev/*).
+# Values override the default title. Client ports stay hidden from Portal.
+exposeAnnotations: {}
+
 api:
   service: takserver-api-service
   selector:

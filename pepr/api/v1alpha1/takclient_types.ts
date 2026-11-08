@@ -20,7 +20,7 @@ export interface TakClientSpec {
   groups: string[];
 
   /**
-   * Certificate lifetime in days. Default 30, maximum 365.
+   * Deprecated, retained for existing resources. TAKServerCAConfig sets the certificate lifetime globally (30 days by default).
    */
   validityDays?: number;
 }

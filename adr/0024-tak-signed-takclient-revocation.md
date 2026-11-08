@@ -145,3 +145,8 @@ private state. Finalization removes the entry only after successful revoke and
 client Secret cleanup. If revoke fails, both the credential and finalizer stay.
 The containing private Secret may remain empty and is included in the TAK
 namespace backup.
+
+Enrollment validates both certificate date bounds against one fresh clock sample
+after the response arrives. Reusing reconcile start time could reject a newly
+valid certificate or accept one that expired in flight; advancing-clock tests
+cover both cases ([issue 350](https://github.com/jonathanagustin/uds-k3d-takserver/issues/350)).

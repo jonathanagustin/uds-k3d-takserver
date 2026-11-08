@@ -46,7 +46,7 @@ test("TAK enroll uses a signed CSR, Basic auth and the returned certificate life
     assert.deepEqual(options, { port: 8446, auth: "client.one:secret", contentType: "text/plain" });
     return { status: 200, body: JSON.stringify({ signedCert: signed(body as string) }) };
   };
-  const issued = await enroll({ request }, tls, ca, "client.one", "secret", NOW);
+  const issued = await enroll({ request }, tls, ca, "client.one", "secret", () => NOW);
   assert.equal(issued.serial, "02");
   assert.equal(issued.notBefore.toISOString(), "2026-11-07T11:59:00.000Z");
   assert.equal(issued.notAfter.toISOString(), "2026-11-08T12:00:00.000Z");
@@ -54,7 +54,7 @@ test("TAK enroll uses a signed CSR, Basic auth and the returned certificate life
   assert.equal(issued.keyPem.includes("PRIVATE KEY"), true);
   const raw: TakApi = { request: async (_tls, _method, _path, body) => ({ status: 200,
     body: JSON.stringify({ signedCert: signed(body as string).replace(/-----[^-]+-----|\s/g, "") }) }) };
-  assert.equal((await enroll(raw, tls, ca, "client.one", "secret", NOW)).serial, "02");
+  assert.equal((await enroll(raw, tls, ca, "client.one", "secret", () => NOW)).serial, "02");
 });
 
 test("TAK enrollment rejects failures, OAuth tokens and malformed response bodies without echoing them", async () => {
@@ -66,7 +66,7 @@ test("TAK enrollment rejects failures, OAuth tokens and malformed response bodie
     { status: 200, body: '{"data":{"token":"secret"}}' },
     { status: 200, body: "{}" },
   ]) {
-    await assert.rejects(enroll({ request: async () => response }, tls, ca, "client.one", "secret", NOW),
+    await assert.rejects(enroll({ request: async () => response }, tls, ca, "client.one", "secret", () => NOW),
       (error: Error) => !error.message.includes("private-body") && !error.message.includes("secret"));
   }
 });
@@ -86,12 +86,52 @@ test("TAK enrollment validates key, issuer, identity, lifetime and client usage"
   for (const change of changes) {
     const tak: TakApi = { request: async (_tls, _method, _path, body) => ({ status: 200,
       body: JSON.stringify({ signedCert: signed(body as string, change) }) }) };
-    await assert.rejects(enroll(tak, tls, ca, "client.one", "secret", NOW));
+    await assert.rejects(enroll(tak, tls, ca, "client.one", "secret", () => NOW));
   }
   const wrongCa = { ...ca, pem: signed(clientCsr("wrong-ca").csrPem) };
   const tak: TakApi = { request: async (_tls, _method, _path, body) => ({ status: 200,
     body: JSON.stringify({ signedCert: signed(body as string) }) }) };
-  await assert.rejects(enroll(tak, tls, wrongCa, "client.one", "secret", NOW));
+  await assert.rejects(enroll(tak, tls, wrongCa, "client.one", "secret", () => NOW));
+});
+
+test("TAK enrollment checks notBefore at receipt time after a delayed signing response", async () => {
+  let clock = NOW;
+  let samples = 0;
+  const tak: TakApi = { request: async (_tls, _method, _path, body) => {
+    assert.equal(samples, 0, "validity must not sample the clock before the response");
+    const signedCert = signed(body as string, leaf => {
+      leaf.validity.notBefore = new Date(NOW.getTime() + 30000);
+      leaf.validity.notAfter = new Date(NOW.getTime() + 180000);
+    });
+    clock = new Date(NOW.getTime() + 120000);
+    return { status: 200, body: JSON.stringify({ signedCert }) };
+  } };
+  const issued = await enroll(tak, tls, ca, "client.one", "secret", () => {
+    samples++;
+    return clock;
+  });
+  assert.equal(samples, 1, "both bounds must use one receipt-time sample");
+  assert.ok(issued.notBefore <= clock);
+  assert.ok(issued.notAfter > clock);
+});
+
+test("TAK enrollment checks notAfter at receipt time after a delayed signing response", async () => {
+  let clock = NOW;
+  let samples = 0;
+  const tak: TakApi = { request: async (_tls, _method, _path, body) => {
+    assert.equal(samples, 0, "validity must not sample the clock before the response");
+    const signedCert = signed(body as string, leaf => {
+      leaf.validity.notAfter = new Date(NOW.getTime() + 60000);
+    });
+    clock = new Date(NOW.getTime() + 120000);
+    return { status: 200, body: JSON.stringify({ signedCert }) };
+  } };
+  await assert.rejects(enroll(tak, tls, ca, "client.one", "secret", () => {
+    samples++;
+    return clock;
+  }), /invalid subject, usage or validity/);
+  assert.equal(samples, 1, "both bounds must use one receipt-time sample");
+  assert.equal(clock.getTime(), NOW.getTime() + 120000);
 });
 
 test("certadmin revocation validates the lookup and never treats errors as success", async () => {

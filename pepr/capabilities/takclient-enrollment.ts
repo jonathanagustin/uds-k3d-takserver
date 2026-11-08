@@ -30,7 +30,7 @@ export function clientCsr(callsign: string): { keyPem: string; csrPem: string } 
 }
 
 export async function enroll(
-  tak: TakApi, tls: TakTls, ca: Ca, callsign: string, password: string, now: Date,
+  tak: TakApi, tls: TakTls, ca: Ca, callsign: string, password: string, now: () => Date,
 ): Promise<Issued> {
   const { keyPem, csrPem } = clientCsr(callsign);
   const response = await tak.request(tls, "POST", `/Marti/api/tls/signClient/v2?clientUid=${encodeURIComponent(callsign)}&version=1`, csrPem,
@@ -47,8 +47,11 @@ export async function enroll(
     throw new Error("TAK enrollment certificate does not match the requested key and CA");
   }
   const leaf = forge.pki.certificateFromPem(certPem);
+  // Signing and HTTP can advance the clock beyond reconcile start. Sample
+  // once after the response so both validity bounds use receipt-time state.
+  const receivedAt = now();
   if (leaf.subject.getField("CN")?.value !== callsign || cert.ca ||
-      !cert.keyUsage?.includes("1.3.6.1.5.5.7.3.2") || leaf.validity.notAfter <= now || leaf.validity.notBefore > now) {
+      !cert.keyUsage?.includes("1.3.6.1.5.5.7.3.2") || leaf.validity.notAfter <= receivedAt || leaf.validity.notBefore > receivedAt) {
     throw new Error("TAK enrollment certificate has invalid subject, usage or validity");
   }
   return {

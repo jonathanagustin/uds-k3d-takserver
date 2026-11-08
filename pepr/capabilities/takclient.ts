@@ -494,7 +494,7 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
         if (old[CALLSIGN]) await unregister(deps.tak, admin, old[CALLSIGN]);
       }
       await register(deps.tak, admin, callsign, spec.groups!, userPassword);
-      const issued = await enroll(deps.tak, admin, ca, callsign, userPassword, now);
+      const issued = await enroll(deps.tak, admin, ca, callsign, userPassword, deps.now);
       const password = randomBytes(16).toString("hex");
       notAfter = issued.notAfter.toISOString();
       const annotations = { [SERIAL]: issued.serial, [NOT_BEFORE]: issued.notBefore.toISOString(), [NOT_AFTER]: notAfter,

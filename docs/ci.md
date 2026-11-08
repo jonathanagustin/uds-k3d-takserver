@@ -2,7 +2,7 @@
 
 Every check in this repository runs as a GitHub Actions workflow in [`.github/workflows/`](../.github/workflows/). This page lists each workflow, what starts it, and what it checks. Times are in UTC.
 
-Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore changes to Markdown files, images, `docs/`, `adr/`, and a few repository settings files. The Docs workflow builds the docs site instead.
+Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds the docs site. Full Core decides in its own `changes` job.
 
 ## Pull request checks
 
@@ -10,15 +10,15 @@ Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore
 | --- | --- | --- | --- |
 | Lint | `lint.yaml` | every pull request, and pushes to `main` | Runs `hk check` (the checks in [`hk.pkl`](../hk.pkl)) and the shared uds-common lint workflow |
 | PR Title Check | `commitlint.yaml` | every pull request | Checks that the title follows Conventional Commits, with the shared uds-common commitlint workflow |
-| Test | `test.yaml` | pull requests that change more than docs, and pushes to `main` | Builds the CloudTAK and PostGIS images when their inputs changed, waits for the six TAK images, then runs the install test and the upgrade test from the last release, each on amd64 and arm64. On pushes to `main`, and on pull requests with the `upgrade-pg15` label, it also runs the upgrade from release 0.6.0 (PostgreSQL 15) on both architectures. `verify-test` reports the result |
+| Test | `test.yaml` | pull requests and pushes to `main` that change a relevant path ([`runtime-paths.sh`](../.github/scripts/runtime-paths.sh)) | Builds the CloudTAK and PostGIS images when their inputs changed, waits for the six TAK images, then runs the install test and the upgrade test from the last release, each on amd64 and arm64. On pushes to `main`, and on pull requests with the `upgrade-pg15` label, it also runs the upgrade from release 0.6.0 (PostgreSQL 15) on both architectures. `verify-test` reports the result. A superseded run skips `verify-test` instead of failing it |
 | Unit tests | `unit-tests.yaml` | every pull request, and pushes to `main` | Pepr module tests and the Python upgrade helper tests, with coverage in the job summary. Also the Loki query helper, CoreConfig cache listener, profile, benchmark harness, and Full Core summary tests, and the package values render. See [Coverage](../CONTRIBUTING.md#coverage) |
-| Package | `package.yaml` | pull requests that change more than docs, pushes to `main`, and by hand | Waits for the images, then creates the dev package on amd64 and arm64, checks its architecture, and publishes it as `ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<arch>-<key>`. See [Package reuse](#package-reuse) |
+| Package | `package.yaml` | the same relevant paths as Test, pushes of those paths to `main`, and by hand | Waits for the images, then creates the dev package on amd64 and arm64, checks its architecture, and publishes it as `ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<arch>-<key>`. See [Package reuse](#package-reuse) |
 | Scan | `scan.yaml` | pull requests that change the package, charts, values, bundle, image builds, or submodules | Compares image scans with `uds-pk scan compare` and posts the result as a pull request comment |
 | CodeQL | `codeql.yaml` | every pull request, pushes to `main`, and Mondays at 06:00 | CodeQL code scanning |
 | Dependency Review | `dependency-review.yaml` | every pull request | GitHub dependency review of the changed dependencies |
 | Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site and runs its browser tests. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
 
-"Docs" in the triggers above means Markdown files, images, `docs/`, `adr/`, `docs-site/`, and the Docs workflow file. A docs-only pull request skips Test and Package. Full Core decides in its own `changes` job and skips too. The checks that `main` requires still report on it: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`.
+A pull request whose files are all on that ignore list skips Test and Package. One relevant file still runs them, on amd64 and arm64. Full Core decides in its own `changes` job and skips the deploy when the diff does not need it. The checks that `main` requires still report on every pull request: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`. Those workflows have no path filter. Lint, unit tests, and the PR title check run on every pull request too.
 
 Stricter review on `main` (one human approval, admins included, an up-to-date branch) is written in [Review rules for main](branch-protection.md). Those settings are not on.
 
@@ -64,13 +64,23 @@ To force a rebuild of every keyed image, change `KEY_SALT` in `device-images.sh`
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Full Core | `full-core.yaml` | daily at 07:17, pushes to `main`, by hand, pull requests labeled `full-core`, and pull requests that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
-| Benchmark | `benchmark.yaml` | daily at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. See [Benchmarks](benchmarks.md) |
+| Full Core | `full-core.yaml` | daily at 07:17, by hand, pull requests labeled `full-core`, and pull requests or pushes to `main` that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. A cancelled validation skips that job instead of failing it. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
+| Benchmark | `benchmark.yaml` | Mondays at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. Adding a different label does not start it and does not cancel a run already going. See [Benchmarks](benchmarks.md) |
 | Scorecard | `scorecard.yaml` | Saturdays at 01:30, pushes to `main`, branch protection changes, and by hand | OpenSSF Scorecard, through the shared uds-common workflow |
 | Mirror the UDS Core checkpoint | `mirror-checkpoint.yaml` | changes to the checkpoint versions, and by hand | Copies each `k3d-core-slim-dev` version that CI deploys into this repository's GHCR, with the same digest |
 | Demo Video | `demo.yaml` | pull requests that change the demo scripts, and by hand | Records the demo videos. Only a manual run from `main` publishes and signs them. See [Demo videos](../CONTRIBUTING.md#demo-videos) |
 
-A pull request without the `benchmark` label skips Benchmark. Full Core also runs without its label when the path filter matches. Adding the label, or pushing to a pull request that already has it, runs the job.
+A pull request without the `benchmark` label skips Benchmark. Adding that label, or pushing to a pull request that already has it, runs the job. Adding any other label does not. Full Core also runs without its label when the path filter matches. Adding the `full-core` label, or pushing to a pull request that already has it, runs that job. A push to `main` still runs Full Core when the pushed commits change a Full Core path.
+
+## Concurrency
+
+Test, Package, Benchmark, the image workflows, and the ATAK workflows each use one concurrency group per workflow and ref. A newer pull request push cancels only that pull request's older run. A newer push to `main` cancels only that workflow's older push. Two pull requests do not cancel each other, and a pull request does not cancel `main`.
+
+A schedule and a `workflow_dispatch` each get a group of their own, so they are not cancelled and they do not wait behind a push. Benchmark's weekly run uses that same isolation. A pull request label other than `benchmark` also gets its own run id, so it does not cancel a benchmark validation. Release keeps `cancel-in-progress: false` and groups by tag. Demo Video is unchanged. A finished run is kept.
+
+On `main`, the previous setting left the running validation in place (`cancel-in-progress` false) and queued the newest push behind it. One pending run was allowed, so an older hung run held every later push until the job timeout. Cancelling the superseded push drops that run. The nightly Full Core and a manual benchmark stay in their own groups, so a push does not cancel them.
+
+Full Core puts that group on `validate-full-core`, per architecture, and only when the path check said to run. A docs push still reports the `full-core` check, and it does not cancel a validation that is already in progress. `verify-test` and `full-core` skip themselves when the run was cancelled, so the cancelled run does not leave a failed aggregate on the new head.
 
 ## Releases
 
@@ -113,3 +123,20 @@ It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
 fresh runner and retain the image and kernel notice for the investigation.
+
+## Limits on supporting jobs
+
+Build, index, scan, and reporting jobs have explicit job timeouts rather than
+GitHub's six-hour default. Fast aggregate checks stop within five minutes;
+manifest/index jobs within fifteen; lint within twenty; CodeQL and docs builds
+within thirty; image scan comparison within sixty. OpenTofu scaffold validation
+and Release Please stop within fifteen minutes. Existing cluster, image-build,
+and release-publishing limits are unchanged. A timeout remains a failed check;
+these limits do not suppress errors or automatically retry failed work.
+
+The shared lint workflow receives only its automatic GitHub token. Container
+image jobs keep package publication and attestation permissions, but Actions API
+access is read-only. Scorecard retains inherited secrets because its pinned
+reusable workflow references `SCORECARD_READ_TOKEN` without declaring it in
+`workflow_call.secrets`; explicitly passing that secret requires an upstream
+interface change or a separately reviewed local workflow.

@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   test-aks:
+    timeout-minutes: 15
     if: ${{ inputs.enabled }}
     runs-on: ubuntu-latest
     steps:

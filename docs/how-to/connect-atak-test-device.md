@@ -1,7 +1,7 @@
 # Connect the ATAK test device
 
-Deploy the optional Android test device and run the provisioning driver against
-the existing TAK Server, then inspect its connection and test location.
+Deploy the optional Android test device and provision it against the existing
+TAK Server with the driver. Check its connection and test location.
 
 ## What you'll accomplish
 
@@ -26,8 +26,8 @@ APK, and exposes unauthenticated adb only to its viewer and driver through
 network policy. Do not expose adb outside the cluster. The phone viewer is
 behind Keycloak and requires `/UDS Core/Admin`.
 
-The package alone boots the VM and viewer; the driver installs the APK and
-imports the certificate data package. The automated driver below targets the
+The package boots the VM and viewer. The driver installs the APK and imports
+the certificate data package. The automated driver below targets the
 repository's k3d test cluster. For a real phone, follow
 [Provisioning device certificates](../atak-device.md#provisioning-device-certificates).
 
@@ -42,8 +42,7 @@ repository's k3d test cluster. For a real phone, follow
    docker pull "ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:${ATAK_TAG}"
    ```
 
-2. On the k3d test cluster, run the same provisioning and connection check as
-   the ATAK e2e workflow:
+2. On the k3d test cluster, run the ATAK e2e provisioning and connection check:
 
    ```bash title="Provision and check the test device"
    DOMAIN=uds.dev bash atak/ci/e2e.sh

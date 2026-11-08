@@ -1,12 +1,12 @@
 # Check uptime probes and Portal tiles
 
-Inspect the UDS probes and Portal entries for TAK and CloudTAK, and distinguish
-browser availability from TAK client-port health.
+Inspect TAK and CloudTAK probes and Portal entries. Check browser availability
+separately from TAK client-port health.
 
 ## What you'll accomplish
 
-Confirm that Core generated the expected probes, that Prometheus reports their
-targets as up, and that Portal shows the browser tiles to the intended users.
+Confirm Core generated the expected probes, Prometheus reports their targets
+as up, and Portal shows browser tiles to the intended users.
 
 ## Prerequisites
 
@@ -17,9 +17,8 @@ targets as up, and that Portal shows the browser tiles to the intended users.
 
 ## Before you begin
 
-Use your deployment's domain in place of `<domain>`. The browser paths are
-`/login`, because each application serves that page without relying on a
-redirect to Keycloak. A passing browser probe does not prove a TAK client can
+Use your deployment's domain in place of `<domain>`. The browser probes use
+`/login`, which each application serves without a redirect to Keycloak. A passing browser probe does not prove a TAK client can
 stream data; `tak-health` checks those ports separately.
 
 ## Steps
@@ -37,7 +36,7 @@ stream data; `tak-health` checks those ports separately.
    `uds-tak-health-admin-uptime` covers `/stream`, `/api`, and `/enroll`.
 2. In Grafana, open **UDS / Monitoring / Probe Uptime**. Check all five targets:
    TAK `/login`, CloudTAK `/login`, and the three `tak-health` paths. In Explore,
-   query a target directly:
+   query a target:
 
    ```text title="Check the TAK browser target"
    probe_success{instance="https://takserver.<domain>/login"}
@@ -55,7 +54,7 @@ stream data; `tak-health` checks those ports separately.
    Sign in separately as a member of `/CloudTAK/Users` who is not an admin;
    expect **CloudTAK** only. A user in neither group should see neither tile.
    The passthrough client ports and `tak-health` endpoint are intentionally
-   hidden; their absence is expected.
+   hidden.
 4. If the optional ATAK package is installed, inspect
    `uds-atak-tenant-uptime` in namespace `atak` for
    `https://atak.<domain>/phone.html`. Authservice protects that page; Core
@@ -64,8 +63,8 @@ stream data; `tak-health` checks those ports separately.
 
 ## Verification
 
-All enabled targets should have a current `probe_success` of `1`, and Portal
-should show the tiles described above for each user. Core alerts after a target
+All enabled targets should have a current `probe_success` of `1`. Portal
+should show the tiles listed above for each user. Core alerts after a target
 has failed for five minutes. Its TLS expiry alerts concern the gateway
 certificates, not the deploy-time TAK CA or passthrough certificates.
 

@@ -3,11 +3,6 @@ Copyright 2026 uds-k3d-takserver authors
 SPDX-License-Identifier: GPL-3.0-only
 */
 
-:root {
-  --sl-content-width: 48rem;
-  --sl-nav-height: 3.5rem;
-}
-
 /* The guides use wide tables. Let the page scroll them instead of overflowing. */
 .sl-markdown-content table {
   display: block;
@@ -37,4 +32,146 @@ SPDX-License-Identifier: GPL-3.0-only
   aspect-ratio: 16 / 9;
   background: #000;
   border-radius: 0.25rem;
+}
+
+/* Share UDS's slate and indigo documentation palette while keeping TAK's mark. */
+:root {
+  --sl-content-width: 50rem;
+  --sl-nav-height: 4rem;
+  --sl-color-bg: #111827;
+  --sl-color-bg-nav: #1f2937;
+  --sl-color-bg-sidebar: #1f2937;
+  --sl-color-bg-inline-code: #1f2937;
+  --sl-color-text: #f9fafb;
+  --sl-color-text-accent: #c7d2fe;
+  --sl-color-text-invert: #111827;
+  --sl-color-white: #fff;
+  --sl-color-gray-1: #e5e7eb;
+  --sl-color-gray-2: #d1d5db;
+  --sl-color-gray-3: #9ca3af;
+  --sl-color-gray-4: #4b5563;
+  --sl-color-gray-5: #374151;
+  --sl-color-gray-6: #1f2937;
+  --sl-color-gray-7: #182133;
+  --sl-color-black: #111827;
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #c7d2fe;
+  --sl-color-hairline: #374151;
+  --sl-color-hairline-light: #374151;
+}
+
+:root[data-theme='light'] {
+  --sl-color-bg: #fff;
+  --sl-color-bg-nav: #f3f4f6;
+  --sl-color-bg-sidebar: #f3f4f6;
+  --sl-color-bg-inline-code: #e5e7eb;
+  --sl-color-text: #111827;
+  --sl-color-text-accent: #4f46e5;
+  --sl-color-text-invert: #fff;
+  --sl-color-white: #111827;
+  --sl-color-gray-1: #1f2937;
+  --sl-color-gray-2: #374151;
+  --sl-color-gray-3: #6b7280;
+  --sl-color-gray-4: #9ca3af;
+  --sl-color-gray-5: #d1d5db;
+  --sl-color-gray-6: #e5e7eb;
+  --sl-color-gray-7: #f3f4f6;
+  --sl-color-black: #fff;
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #312e81;
+  --sl-color-hairline: #e5e7eb;
+  --sl-color-hairline-light: #d1d5db;
+}
+
+.site-title {
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -.025em;
+  color: var(--sl-color-white);
+  white-space: nowrap;
+}
+
+.site-title img { height: 2.5rem; width: 2.5rem; }
+
+/* Version selection already lives in the header and mobile menu. Keep the
+   topic middleware's channel-scoped sidebar without a duplicate version list. */
+.starlight-sidebar-topics { display: none; }
+
+.sidebar-content summary {
+  border-radius: .25rem;
+  padding-block: .45rem;
+}
+
+.sidebar-content summary:hover,
+.sidebar-content a:not([aria-current='page']):hover {
+  background: color-mix(in srgb, var(--sl-color-gray-3) 10%, transparent);
+}
+
+.sidebar-content .top-level > li + li { margin-top: .35rem; }
+.sidebar-content a { padding-block: .4rem; }
+.sidebar-content [aria-current='page'] { border-radius: .25rem; }
+
+.sl-markdown-content h2 { margin-top: 2.5rem; }
+.sl-markdown-content :not(pre) > code { border-radius: .25rem; }
+
+/* The same centered identity works for current and historical channel shells. */
+.hero {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  padding-block: 2rem 2.5rem;
+  gap: 1.5rem;
+}
+
+.hero::before {
+  content: '';
+  display: block;
+  width: 7rem;
+  height: 7rem;
+  background: url('../../../assets/icon.svg') center / contain no-repeat;
+  flex-shrink: 0;
+}
+
+.hero .stack,
+.hero .copy { align-items: center; }
+.hero .copy { gap: 1.25rem; text-align: center; }
+.hero h1 { max-width: 44rem; font-size: clamp(2.25rem, 5vw, 3.75rem); letter-spacing: -.045em; line-height: 1.1; }
+.hero .tagline { max-width: 42rem; font-size: 1.2rem; line-height: 1.65; color: var(--sl-color-gray-2); }
+.hero .actions { justify-content: center; gap: 1rem; }
+.hero .sl-link-button { border-radius: .4rem; }
+
+.sl-link-card {
+  border-radius: .75rem;
+  padding: 1.65rem;
+  box-shadow: none;
+  min-height: 10rem;
+  align-items: start;
+}
+
+.sl-link-card .stack { gap: .75rem; }
+.sl-link-card .title { font-size: 1.25rem; }
+.sl-link-card .description { color: var(--sl-color-gray-2); line-height: 1.65; }
+.sl-link-card .icon { margin-top: .2rem; color: var(--sl-color-text-accent); }
+.sl-link-card:hover { border-color: var(--sl-color-accent); background: var(--sl-color-bg-nav); }
+.sl-link-card:focus-within { outline: 2px solid var(--sl-color-text-accent); outline-offset: 3px; }
+
+.expressive-code {
+  --ec-brdCol: var(--sl-color-gray-5);
+  --ec-brdRad: .5rem;
+}
+
+@media (max-width: 49.99rem) {
+  .site-title { font-size: 1rem; gap: .5rem; }
+  .site-title img { width: 2rem; height: 2rem; flex-shrink: 0; }
+  .site-title span { text-overflow: ellipsis; }
+  .hero { padding-block: 1rem 2rem; }
+  .hero::before { width: 5rem; height: 5rem; }
+  .hero .tagline { font-size: 1.05rem; }
+  .sl-link-card { min-height: 0; padding: 1.25rem; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sl-link-card { transition: border-color .15s ease, background-color .15s ease; }
 }

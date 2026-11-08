@@ -475,14 +475,20 @@ sidebar:
 ---
 
 import LegacyHomeHash from '${legacyImport}';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <LegacyHomeHash />
 
 [Getting started](${siteHref('getting-started', '')}) contains the deployment instructions for ${sourceRef}.
 
-- [Configuration](${siteHref('configuration', '')})
-- [Networking](${siteHref('networking', '')})
-- [Data and backups](${siteHref('data', '')})
+## Explore the documentation
+
+<CardGrid>
+  <LinkCard title="Deploy" href="${siteHref('getting-started', '')}" description="Installation and deployment instructions for ${sourceRef}." />
+  <LinkCard title="Configure" href="${siteHref('configuration', '')}" description="Package variables, hosts, and configuration for this release." />
+  <LinkCard title="Networking" href="${siteHref('networking', '')}" description="Understand ingress, service access, and network policy." />
+  <LinkCard title="Back up" href="${siteHref('data', '')}" description="Database and volume backup procedures for this release." />
+</CardGrid>
 `;
 }
 if (unreleased) home = home.replace('---\n', `---\nbanner:\n  content: ${quote('You are reading unreleased main documentation. Use the version selector for a released package.')}\n`);

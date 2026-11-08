@@ -123,6 +123,27 @@ class TrustBundleLiveTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "takserver/takserver-api, takserver/takserver-messaging, cloudtak/cloudtak still has its pre-rotation pod UID"):
                 trial.ensure_signing_ca()
 
+    def test_signing_ca_bootstrap_tracks_existing_bundles_per_namespace(self):
+        kube = FakeKubectl(existing=False)
+        kube.current["spec"]["caBundle"]["includePublicCerts"] = False
+
+        def bundle(namespace):
+            value = live.certs_value(kube.current)
+            content = "" if value is live.MISSING else base64.b64decode(value).decode()
+            return content + (pem("public-root") if namespace == "takserver" else "")
+
+        kube.bundle = bundle
+        kube.signing_status = lambda _domain: "NEED_CA " + base64.b64encode(pem("signer").encode()).decode()
+        kube.pods = lambda: {f"{ns}/{name}": {f"{name}-{kube.generation}" if ns == "takserver" else "unchanged-first-bundle"}
+                            for ns, name in live.WORKLOADS}
+        trial = live.Trial(kube, "uds.dev")
+        with patch.object(live, "wait_for", side_effect=lambda check, *_args, **_kwargs: check()):
+            trial.ensure_signing_ca()
+            # Bootstrap permits the first CloudTAK observation, but a later
+            # actual rotation still requires its replacement rather than skip it.
+            with self.assertRaisesRegex(ValueError, "cloudtak/cloudtak still has its pre-rotation pod UID"):
+                trial.phase(pem("trial"))
+
     def test_restore_reports_absent_and_leftover_namespace_bundles(self):
         self.assertFalse(live.automatic_reload_expected(False))
         self.assertTrue(live.automatic_reload_expected(True))

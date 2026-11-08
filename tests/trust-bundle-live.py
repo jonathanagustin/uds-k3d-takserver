@@ -206,13 +206,17 @@ class Trial:
             raise RuntimeError("refusing a private key from the gateway handshake")
         self.signer_pem = pem_text
         fingerprint = next(iter(fingerprints(pem_text)))
-        already_present = any(self.kube.bundle(namespace) for namespace in ("takserver", "cloudtak"))
-        before = self.kube.pods()
+        present = {namespace for namespace in ("takserver", "cloudtak")
+                   if automatic_reload_expected(bool(self.kube.bundle(namespace)))}
+        # Core's first-observation rule applies separately to each namespace.
+        # An existing TAK bundle must not imply a first CloudTAK bundle reload.
+        before = {name: uids for name, uids in self.kube.pods().items()
+                  if name.split("/", 1)[0] in present}
         self.set_certs(append_ca(self.saved, pem_text))
         wait_for(lambda: self.bundles_match(fingerprint), "signing CA propagation", 180)
-        if automatic_reload_expected(already_present):
-            after = wait_for(lambda: self.replaced_pods(before), "reload after updating the existing SSO signing CA bundle")
-            print(f"updated SSO signing CA {fingerprint} and reloaded {', '.join(sorted(after))}", flush=True)
+        if before:
+            wait_for(lambda: self.replaced_pods(before), "reload after updating the existing SSO signing CA bundle")
+            print(f"updated SSO signing CA {fingerprint} and reloaded {', '.join(sorted(before))}", flush=True)
         else:
             print(f"installed SSO signing CA {fingerprint}; namespace bundle was created and Core does not reload on first observation", flush=True)
 
@@ -290,8 +294,11 @@ class Trial:
                         raise ValueError(f"{namespace} has not restored custom trust and removed trial roots")
                 elif found != saved:
                     state = "absent" if not found else f"{len(found)} certificate(s) still present"
+                    added = ",".join(sorted(found - saved)[:3]) or "none"
+                    removed = ",".join(sorted(saved - found)[:3]) or "none"
                     raise ValueError(
-                        f"original CA bundles have not returned: {namespace} is {state}")
+                        f"original CA bundles have not returned: {namespace} is {state}; "
+                        f"extra fingerprints={added}; missing fingerprints={removed}")
 
         wait_for(restored_bundles, "restore namespace trust without replacing concurrent CA settings", 180)
         # Empty original bundles are deleted by Core. Restart explicitly in

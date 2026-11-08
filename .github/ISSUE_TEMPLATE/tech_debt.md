@@ -10,6 +10,6 @@ assignees: ''
 
 ### Links to the relevant code
 
-<!-- For example https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/zarf.yaml#L1 -->
+<!-- For example https://github.com/jonathanagustin/uds-takserver/blob/main/zarf.yaml#L1 -->
 
 ### Additional context

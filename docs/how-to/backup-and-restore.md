@@ -114,13 +114,16 @@ UDS Core, Keycloak, or separately managed `TakClient` resources in `takclients`.
    The helper reads `dump.sql.gz` and also accepts the older `dump.sql` key.
    If a pipeline fails, leave writers stopped and inspect the error.
 
-6. Restore the recorded replica counts. For the default single-replica install:
+6. Restore the recorded replica counts. Wait for each TAK component before
+   starting the next, then start CloudTAK after TAK is ready. For the default
+   single-replica install:
 
    ```bash title="Resume the application"
-   kubectl scale -n takserver deployment/takserver-api deployment/takserver-messaging deployment/takserver-plugins deployment/takserver-config --replicas=1
+   for name in takserver-config takserver-messaging takserver-api takserver-plugins; do
+     kubectl scale -n takserver "deployment/${name}" --replicas=1
+     kubectl rollout status -n takserver "deployment/${name}" --timeout=15m
+   done
    kubectl scale -n cloudtak deployment/cloudtak --replicas=1
-   kubectl rollout status -n takserver deployment/takserver-api --timeout=15m
-   kubectl rollout status -n takserver deployment/takserver-messaging --timeout=15m
    kubectl rollout status -n cloudtak deployment/cloudtak --timeout=10m
    ```
 

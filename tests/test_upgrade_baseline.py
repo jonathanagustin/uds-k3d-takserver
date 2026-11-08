@@ -4,6 +4,7 @@
 """Offline contracts for release selection and the first-release bootstrap."""
 
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -128,11 +129,18 @@ class BaselineTests(unittest.TestCase):
                 "GITHUB_STEP_SUMMARY": str(root / "summary"),
             }), patch.object(baseline, "releases", return_value=[]), patch(
                 "sys.argv", ["upgrade-baseline.py", "--output", str(root / "baseline.json")],
-            ):
+            ), patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                # ::notice:: is a workflow command. The contract test must
+                # capture it, or a passing run records "upgrade test not run"
+                # on a job whose upgrade step still executes.
                 baseline.main()
             self.assertEqual((root / "baseline.json").read_text(), "null\n")
             self.assertEqual((root / "output").read_text(), "available=false\n")
             self.assertEqual((root / "summary").read_text(), "no released baseline yet; upgrade test not run\n")
+            self.assertEqual(
+                stdout.getvalue(),
+                "::notice::no released baseline yet; upgrade test not run\n",
+            )
 
 
 if __name__ == "__main__":

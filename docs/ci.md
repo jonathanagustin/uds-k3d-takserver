@@ -20,7 +20,18 @@ Docs, device, benchmark, demo, unit-test-only, and repository metadata changes s
 
 A pull request whose files are all on that ignore list skips Test and Package. One relevant file still runs them, on amd64 and arm64. Full Core decides in its own `changes` job and skips the deploy when the diff does not need it. The checks that `main` requires still report on every pull request: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`. Those workflows have no path filter. Lint, unit tests, and the PR title check run on every pull request too.
 
-Stricter review on `main` (one human approval, admins included, an up-to-date branch) is written in [Review rules for main](branch-protection.md). Those settings are not on.
+[Review rules for main](branch-protection.md) describes the solo-maintainer policy and the optional independent-review policy. The proposed administrator-bypass and up-to-date-branch changes have not been applied. Required approvals on `main` remain at zero while the repository has one collaborator.
+
+## Airgap install check
+
+Test includes an amd64 airgap install variant. It prepares the package and
+bundle, blocks external egress inside the k3d nodes, then deploys the applications
+and runs the core tests. The runner keeps its network access. Cleanup attempts to restore
+the node firewall rules; check its result before reusing the test cluster. See [Airgap test boundaries](justifications.md).
+
+The HTTP control checks direct network reachability before and after blocking.
+A passing control does not establish that the application suite passed. Full
+airgap validation is still in progress; see [issue #256](https://github.com/jonathanagustin/uds-takserver/issues/256).
 
 ## Package reuse
 
@@ -140,7 +151,7 @@ The wrapper signals the probe process group without waiting for stuck tasks.
 That timeout is not the install or upgrade
 failure; the failed deploy step above it is.
 
-This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-k3d-takserver/issues/300).
+This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-takserver/issues/300).
 It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
@@ -165,7 +176,34 @@ these limits do not suppress errors or automatically retry failed work.
 
 The shared lint workflow receives only its automatic GitHub token. Container
 image jobs keep package publication and attestation permissions, but Actions API
-access is read-only. Scorecard retains inherited secrets because its pinned
-reusable workflow references `SCORECARD_READ_TOKEN` without declaring it in
-`workflow_call.secrets`; explicitly passing that secret requires an upstream
-interface change or a separately reviewed local workflow.
+access is read-only. Scorecard uses a local reusable adapter that accepts only
+the optional `SCORECARD_READ_TOKEN`. Its upstream call inherits that restricted context, rather
+than all repository secrets. The pinned analysis still supplies SARIF artifacts,
+code-scanning uploads and badge publication. The adapter retains the upstream
+permission contract; it does not change the token fallback when the named secret
+is unset. Neither reusable layer attaches an environment with additional secrets.
+
+## Image producer queues
+
+Test and the dedicated CloudTAK/PostGIS workflows resolve the same immutable
+input tags before scheduling native architecture builds. Their build jobs share
+one concurrency group per image key and architecture; index writers have a
+separate group per image key. A queued job rechecks the published input label
+before compiling. PostGIS smoke checks and attestations remain inside the build
+job; publication and index validation retain their existing failure behavior.
+Manual force rebuilds still rebuild explicitly, under the same queue.
+
+These jobs use GitHub's [`queue: max` concurrency policy](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+with cancellation disabled inside the shared group. Unlike the default single
+pending slot, this preserves up to 100 FIFO waiters; GitHub cancels overflow
+rather than growing an unlimited queue. A failed producer releases its slot,
+and the next producer can build the missing tag. Existing workflow/job limits
+still bound execution; package/index consumers retain their bounded waits.
+Different input keys and architectures do not share a global pending queue.
+Fork token permissions and fallback behavior are unchanged.
+
+Local tests validate the workflow queue contracts and run the real PostGIS build
+script against a registry fixture to check reuse after serialization and retry
+after a failed producer. They do not emulate the hosted Actions scheduler or
+prove a cold native compilation on GitHub. Issue #353 stays open pending that
+live evidence; no cold builds were dispatched solely to demonstrate savings.

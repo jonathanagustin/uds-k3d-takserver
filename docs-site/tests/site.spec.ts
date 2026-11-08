@@ -14,19 +14,19 @@ test('home page links the four tasks and the theme toggle changes the document',
   await expect(page.getByRole('heading', { level: 1, name: 'TAK Server on UDS' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Deploy', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/main/getting-started/#deploy-a-release',
+    '/uds-takserver/main/getting-started/#deploy-a-release',
   );
   await expect(page.getByRole('link', { name: 'Upgrade', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/main/getting-started/#upgrade-from-06',
+    '/uds-takserver/main/getting-started/#upgrade-from-06',
   );
   await expect(page.getByRole('link', { name: 'Back up', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/main/data/#backup',
+    '/uds-takserver/main/data/#backup',
   );
   await expect(page.getByRole('link', { name: 'Reference', exact: true })).toHaveAttribute(
     'href',
-    '/uds-k3d-takserver/main/getting-started/#documentation',
+    '/uds-takserver/main/getting-started/#documentation',
   );
 
   const theme = page.getByLabel('Select theme').first();
@@ -48,7 +48,7 @@ test('an unknown page is a 404 with a link home', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
   await expect(page.getByText('will not be included in production')).toHaveCount(0);
   const home = page.getByRole('link', { name: 'home page', exact: true });
-  await expect(home).toHaveAttribute('href', '/uds-k3d-takserver/');
+  await expect(home).toHaveAttribute('href', '/uds-takserver/');
   await home.click();
   await expect(page.getByRole('heading', { level: 1, name: 'TAK Server on UDS' })).toBeVisible();
 });
@@ -100,16 +100,16 @@ test('YAML examples show the file title', async ({ page }) => {
 });
 
 test('llms.txt lists the guides', async ({ page }) => {
-  const listing = await page.request.get('/uds-k3d-takserver/llms.txt');
+  const listing = await page.request.get('/uds-takserver/llms.txt');
   expect(listing.status()).toBe(200);
   const text = await listing.text();
   expect(text).toContain('# TAK Server on UDS');
   expect(text).toContain('llms-full.txt');
 
-  const full = await head(page, '/uds-k3d-takserver/llms-full.txt');
+  const full = await head(page, '/uds-takserver/llms-full.txt');
   expect(full.status()).toBe(200);
   expect(full.headers()['content-type'] ?? '').toContain('text/plain');
-  const fullBody = await (await page.request.get('/uds-k3d-takserver/llms-full.txt')).text();
+  const fullBody = await (await page.request.get('/uds-takserver/llms-full.txt')).text();
   expect(fullBody).toContain('Quick start');
   expect(fullBody).toContain('Deploy a release');
 });

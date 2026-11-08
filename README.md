@@ -1,27 +1,36 @@
 # TAK Server on UDS
 
-[![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/latest)
-[![Test](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml)
-[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-k3d-takserver)
+<!-- github-only:start -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/tak-on-uds-dark.svg">
+    <img src="assets/tak-on-uds-light.svg" alt="TAK Server on UDS" width="600">
+  </picture>
+</p>
+<!-- github-only:end -->
+
+[![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-takserver/releases/latest)
+[![Test](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml)
+[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
 [![License: GPL-3.0-only](docs-site/public/badges/license.svg)](LICENSE)
 
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4"><img src="docs-site/public/demo/atak-device.webp" alt="atak.uds.dev: the ATAK test device, connected to TAK over mutual TLS on 8089" width="90%"></a>
 </p>
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4"><img src="docs-site/public/demo/cloudtak-map.webp" alt="map.uds.dev: the same ATAK device's marker on the CloudTAK map" width="90%"></a>
 </p>
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
 
-It runs locally on k3d, or on AKS, EKS and RKE2. The test cluster is `k3d-core-slim-dev` (UDS Core 1.16.0), on amd64 and arm64.
+Local install and upgrade tests run on k3d. AKS, EKS and RKE2 have infrastructure scaffolds; their manual workflows validate the scaffolds without deploying clusters. The test cluster is `k3d-core-slim-dev` (UDS Core 1.16.0), on amd64 and arm64.
 
 > [!NOTE]
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
 <!-- github-only:start -->
-The same guides are published at <https://jonathanagustin.github.io/uds-k3d-takserver/>.
+The same guides are published at <https://jonathanagustin.github.io/uds-takserver/>.
 <!-- github-only:end -->
 
 ## Demo
@@ -46,7 +55,7 @@ https://github.com/user-attachments/assets/7d727d39-b4f1-4251-b440-57c7799c51d1
 
 </details>
 
-[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-deploy.mp4)
+[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4)
 
 ### Operate and Trust
 
@@ -67,11 +76,11 @@ https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 
 </details>
 
-[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-operate-and-trust.mp4)
+[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4)
 
 ## What you get
 
-- **Upstream chart, not a fork.** Zarf pulls the public TAK Server chart at package time. A small config chart in `charts/takserver/` adds the UDS `Package` and the ConfigMaps the upstream chart mounts.
+- **Upstream TAK chart.** Zarf pulls the public TAK Server chart when it creates the package. A small config chart in `charts/takserver/` adds the UDS `Package` and the ConfigMaps the upstream chart mounts.
 - **Keycloak single sign-on.** The UDS operator registers the Keycloak client, and TAK's own OpenID Connect client handles browser sign-in. Keycloak groups map to TAK roles and groups. See [docs/sso.md](docs/sso.md).
 - **Certificates made at deploy time.** A pre-install Job runs TAK's `generateClusterCerts.sh`. No keys or keystores are in git or in any image. See [ADR 2](adr/0002-generate-certificates-at-deploy-time.md).
 - **UDS networking.** The browser UI goes through the tenant gateway. Certificate traffic (API, enrollment, streaming) goes through the passthrough gateway, including the standard TAK ports 8446 and 8089. NetworkPolicies are default-deny, with explicit per-workload rules. See [docs/networking.md](docs/networking.md).
@@ -89,11 +98,11 @@ You need `python3` only to run `uds run test-install`, which runs the checks und
 
 The [UDS local demo requirements](https://docs.defenseunicorns.com/core/getting-started/local-demo/basic-requirements/) call for at least 4 CPU, 10 GiB of memory, and 40 GiB of disk for Docker.
 
-The versions below match what this repository pins and tests with: k3d v5.9.0, UDS CLI v0.40.0 (`mise.toml`), and kubectl v1.37.1 for the k3s v1.37.1 cluster that `k3d-core-slim-dev` creates.
+The versions below match what this repository pins and tests with: k3d v5.9.0, UDS CLI v0.41.0 (`mise.toml`), and kubectl v1.37.1 for the k3s v1.37.1 cluster that `k3d-core-slim-dev` creates.
 
 ### Install with curl (Linux and macOS)
 
-Each block downloads one pinned release for your OS and CPU, checks it against the published SHA-256 checksum, and installs it to `/usr/local/bin`. Run the first block once in the shell you use for the others:
+Each block downloads one pinned release for your OS and CPU, verifies its published SHA-256 checksum, and installs it to `/usr/local/bin`. Run the first block once in the shell you use for the others:
 
 ```bash
 OS="$(uname -s)"                                   # Linux or Darwin
@@ -106,7 +115,7 @@ cd "$(mktemp -d)"
 UDS CLI:
 
 ```bash
-UDS_VERSION=v0.40.0
+UDS_VERSION=v0.41.0
 f="uds-cli_${UDS_VERSION}_${OS}_${ARCH}"
 curl -fsSLO "https://github.com/defenseunicorns/uds-cli/releases/download/${UDS_VERSION}/${f}" &&
   curl -fsSL "https://github.com/defenseunicorns/uds-cli/releases/download/${UDS_VERSION}/checksums.txt" | grep " ${f}\$" | sha &&
@@ -138,7 +147,7 @@ Then check them with `uds version`, `k3d version`, and `kubectl version --client
 
 | Tool | Homebrew (macOS and Linux) | apt / dnf |
 | --- | --- | --- |
-| UDS CLI | `brew tap defenseunicorns/tap && brew install uds` | No repository. Each [release](https://github.com/defenseunicorns/uds-cli/releases/tag/v0.40.0) has `.deb` and `.rpm` files for `apt install ./<file>.deb` or `dnf install ./<file>.rpm` |
+| UDS CLI | `brew tap defenseunicorns/tap && brew install uds` | No repository. Each [release](https://github.com/defenseunicorns/uds-cli/releases/tag/v0.41.0) has `.deb` and `.rpm` files for `apt install ./<file>.deb` or `dnf install ./<file>.rpm` |
 | k3d | `brew install k3d` | None |
 | kubectl | `brew install kubernetes-cli` | The official [pkgs.k8s.io repository](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/#install-using-native-package-management) (`core:/stable:/v1.37`) |
 | Docker | [Docker Desktop](https://docs.docker.com/desktop/) | Docker's official repositories for [Ubuntu](https://docs.docker.com/engine/install/ubuntu/), [Debian](https://docs.docker.com/engine/install/debian/), and [Fedora](https://docs.docker.com/engine/install/fedora/) |
@@ -150,8 +159,8 @@ To work on the repository itself, [mise](https://mise.jdx.dev/) installs every p
 ## Quick start
 
 ```bash
-git clone --recurse-submodules --shallow-submodules https://github.com/jonathanagustin/uds-k3d-takserver
-cd uds-k3d-takserver
+git clone --recurse-submodules --shallow-submodules https://github.com/jonathanagustin/uds-takserver
+cd uds-takserver
 
 # Create the package, deploy k3d-core-slim-dev, deploy the test bundle,
 # create a Keycloak test user, and run the validation suite.
@@ -160,7 +169,7 @@ uds run test-install
 
 Then open `https://takserver.uds.dev/` for TAK Server and `https://map.uds.dev/` for CloudTAK, and sign in through Keycloak.
 
-Creating the package pulls the published images from GitHub Container Registry (GHCR) and Docker Hub, so you do not need to build them first. `build.sh` also checks out the TAK source submodule if you cloned without it.
+Package creation pulls the published images from GitHub Container Registry (GHCR) and Docker Hub. You do not need to build them first. `build.sh` also checks out the TAK source submodule if you cloned without it.
 
 | Task | What it does |
 | --- | --- |
@@ -176,7 +185,7 @@ Creating the package pulls the published images from GitHub Container Registry (
 
 Run `uds run --list` for the rest. `hk check` runs the pre-commit checks in [`hk.pkl`](hk.pkl). Run `hk install` once to use them as a git hook.
 
-[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-deploy.mp4)
+[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-deploy.mp4)
 
 ### Deploy a release
 
@@ -189,7 +198,7 @@ uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
-[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-airgap.mp4)
+[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-airgap.mp4)
 
 ![TAK pods with image references rewritten to the in-cluster Zarf registry](docs-site/public/demo/screens/zarf-registry-images.webp)
 
@@ -198,7 +207,7 @@ Pass `--architecture amd64` or `--architecture arm64` when the cluster differs f
 Follow [Upgrade from 0.6 to 0.7](docs/how-to/upgrade-from-0-6.md) for the
 preparation, deployment, verification, and rollback procedure.
 
-0.7 changes a few things an existing install notices on its first deploy:
+The first deploy of 0.7 changes the following on an existing install:
 
 - **UDS Core 1.16.0.** The test bundle moved `core-base` from 1.15.2 to 1.16.0. The `takserver-oidc` module is built with Pepr 2.0.7, the version Core 1.16.0 runs. The package does not carry the Pepr controller image. It uses the one UDS Core put in the Zarf registry. Upgrade Core first, or deploy both from one bundle as `bundle/uds-bundle.yaml` does.
 - **PostgreSQL 15 to 18.** Each TAK and CloudTAK database moves to PostgreSQL 18 in place when its pod first starts. Snapshot the volumes or take a `pg_dumpall` first. Rollback is that snapshot. See [Upgrading from PostgreSQL 15](docs/data.md#upgrading-from-postgresql-15).
@@ -216,7 +225,7 @@ From v0.4.0 on, each release package is signed keylessly by `.github/workflows/r
 VERSION=0.9.1 # x-release-please-version
 uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" \
   --architecture amd64 \
-  --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
+  --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -227,7 +236,7 @@ In a UDS bundle, put the same check on the package entry, as `core-base` has in 
     repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
     ref: <version>-upstream # the VERSION you verified above, followed by -upstream
     keylessVerification:
-      certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/uds-k3d-takserver/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
+      certificateIdentityRegexp: "^https://github\\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\\.github/workflows/release\\.yaml@refs/(tags/v[0-9]+\\.[0-9]+\\.[0-9]+|heads/main)$"
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
 ```
 
@@ -378,7 +387,9 @@ The ATAK test device is amd64 only and needs KVM on the node.
 - Playwright tests sign in through Keycloak, check the admin role and mapped groups, enroll a client certificate on 8446, and open the admin UI with a client certificate.
 - The CloudTAK tests go from `map.<domain>` to the Keycloak login and back as that user, and require a live TAK connection with that user's certificate.
 
-In GitHub Actions, the Test workflow runs the install test on amd64 and arm64. It runs the upgrade test from the last release on both architectures too. Full Core deploys the full UDS Core layers and checks monitoring, logging, Falco, Portal, and a Velero backup and restore. It runs nightly, on `main`, and on pull requests that touch those areas or carry the `full-core` label. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects. The EKS, RKE2, and AKS workflows are manual, use the OpenTofu scaffolds in `.github/test-infra/`, and need cloud credentials. [CI workflows](docs/ci.md) lists every workflow and when it runs.
+In GitHub Actions, the Test workflow runs the install test on amd64 and arm64. It runs the upgrade test from the last release on both architectures too. Full Core deploys the full UDS Core layers and checks monitoring, logging, Falco, Portal, and a Velero backup and restore. It runs nightly, on relevant pushes to `main`, and on pull requests that touch those areas or carry the `full-core` label. The ATAK e2e workflow deploys the KubeVirt device and checks that it connects.
+
+The EKS, RKE2, and AKS workflows are manual. They initialize and validate the OpenTofu scaffolds in `.github/test-infra/` without creating cloud resources. Cloud credentials are not configured. [CI workflows](docs/ci.md) lists every workflow and when it runs.
 
 ## Repository layout
 

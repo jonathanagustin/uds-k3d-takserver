@@ -57,8 +57,9 @@ done
 # zarf.yaml and tasks.yaml each have one default of the plain TAK tag.
 replace zarf.yaml "default: ${tak_version}" "default: ${tak_tag}"
 replace tasks.yaml "default: ${tak_version}" "default: ${tak_tag}"
-replace bundle/uds-config.yaml "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
-replace bundle/full/uds-config.yaml "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
+for config in bundle/uds-config.yaml bundle/full/uds-config.yaml bundle/airgap-config.yaml; do
+  replace "${config}" "TAK_IMAGE_TAG: ${tak_version}" "TAK_IMAGE_TAG: ${tak_tag}"
+done
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {

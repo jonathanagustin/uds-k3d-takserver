@@ -1,8 +1,8 @@
 # Data
 
-This page covers TAK's PostgreSQL database, what a backup contains, how to restore it, and how to find TAK logs.
+Use this page to check database settings, choose a backup method, restore data, and find TAK logs.
 
-[![Demo clip: deploy the last signed release, upgrade it in place, and check that TAK's CA, keystore, a database row and its volume are unchanged](../docs-site/public/demo/demo-clip-upgrade.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-upgrade.mp4)
+[![Demo clip: deploy the last signed release, upgrade it in place, and check that TAK's CA, keystore, a database row and its volume are unchanged](../docs-site/public/demo/demo-clip-upgrade.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-upgrade.mp4)
 
 ## Postgres
 
@@ -25,7 +25,7 @@ Those defaults are what the package ships. The nightly benchmark has measured th
 
 `bench/configs/postgis-buffers.yaml` and `bench/configs/postgis-wal.yaml` apply those five parameters with `ALTER SYSTEM` and restart `takserver-postgresql`. `shared_buffers` is 128MB or 64MB, both under the 512Mi limit. `effective_cache_size` is a planner hint, not memory the server allocates. The sweep does not set `fsync=off`. A setting is copied into the package only after a harness report puts it on the front. The key for that is `postgresql.primary.extendedConfiguration`, which Bitnami appends under `conf.d`. On run 40174810574, at the chart defaults, the steady working set was 57Mi on amd64 and 59Mi on arm64.
 
-The password is not a production secret. Replace it, and the matching JDBC password, before a shared cluster.
+The example password is public. Replace it and the matching JDBC password before deploying to a shared cluster.
 
 CloudTAK's database is the same image. Its data directory is `/var/lib/postgresql/data/pgdata` on the `data-cloudtak-postgis-0` volume. See [CloudTAK](cloudtak.md).
 
@@ -33,9 +33,9 @@ CloudTAK's database is the same image. Its data directory is `/var/lib/postgresq
 
 `18-3.6` is PostgreSQL 18 and PostGIS 3.6.4. Tag `15-3.4` stays in the registry. A deployment that has not moved keeps running that tag. A new install of `18-3.6` creates an empty cluster and loads PostGIS from the image's init script.
 
-An existing volume is a PostgreSQL 15 cluster. On the first start, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The PersistentVolumeClaim (PVC) is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
+When an existing volume contains a PostgreSQL 15 cluster, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The PersistentVolumeClaim (PVC) is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
 
-`pg_upgrade --link` shares the table files with the new cluster and the entrypoint deletes the old directory after the new server has started. That directory is not something you can point PostgreSQL 15 at afterwards.
+`pg_upgrade --link` shares the table files with the new cluster and the entrypoint deletes the old directory after the new server has started. You cannot use that directory to run PostgreSQL 15 afterwards.
 
 Before you roll the new image out:
 
@@ -43,7 +43,7 @@ Before you roll the new image out:
 2. Deploy `18-3.6`.
 3. Confirm `SHOW server_version_num` is 18 and `SELECT extversion FROM pg_extension WHERE extname = 'postgis'` is 3.6.
 
-Rollback is the snapshot. Restore the volume, set the image tag back to `15-3.4`, and start.
+To roll back, restore the volume snapshot, set the image tag back to `15-3.4`, and start.
 
 > [!WARNING]
 > Do not point `15-3.4` at a data directory PostgreSQL 18 has already written.
@@ -79,7 +79,7 @@ variables:
     CLOUDTAK_STORAGE_CLASS: local-path-local
 ```
 
-The gzipped logical dumps are the backup that works on every storage class. Keep them even with file-system backup on.
+Gzipped logical dumps work on every storage class. Keep them when file-system backup is enabled too.
 
 What a namespace backup contains:
 
@@ -102,10 +102,14 @@ Without `takserver-certs`, `takserver-ca-key`, and `takserver-keystore`, enrolle
 
 Restore, after Velero has put the namespaces back:
 
-1. Scale the TAK API, messaging, plugins, and config Deployments to 0, and scale CloudTAK to 0, so they do not write during the load.
+1. Record the current replica counts. Scale the TAK API, messaging, plugins, and config Deployments to 0, and scale CloudTAK to 0, so they do not write during the load. Wait until their pods have stopped; scaling alone does not wait for database connections to close.
 2. Wait until `takserver-postgresql` and `cloudtak-postgis` are Ready.
-3. Load `tak-db-dump` into database `cot` and `cloudtak-db-dump` into database `cloudtak`. The volumes came back empty. `tests/db-dump-secret.sh <namespace> <secret>` prints the SQL: it reads key `dump.sql.gz` and gunzips it, and falls back to key `dump.sql` for a Secret written before the dumps were gzipped, so an older backup restores the same way. For example, `tests/db-dump-secret.sh takserver tak-db-dump | kubectl exec -i -n takserver takserver-postgresql-0 -- psql -U postgres -d cot`.
-4. Scale the Deployments to 1. Enrolled client certificates still chain, because the cert ConfigMap and Secrets came back with the namespace.
+3. If you need the logical dumps, load `tak-db-dump` into a fresh recovery database `cot` and `cloudtak-db-dump` into a fresh recovery database `cloudtak`. Do not load them over data recovered from a volume backup. Follow [the recovery procedure](how-to/backup-and-restore.md#steps) to prepare the databases.
+
+   `tests/db-dump-secret.sh <namespace> <secret>` prints the SQL: it reads key `dump.sql.gz` and gunzips it, and falls back to key `dump.sql` for a Secret written before the dumps were gzipped, so an older backup restores the same way.
+
+   In Bash, enable `set -o pipefail` before running the pipeline. For example, `tests/db-dump-secret.sh takserver tak-db-dump | kubectl exec -i -n takserver takserver-postgresql-0 -- psql -U postgres -d cot -v ON_ERROR_STOP=1`.
+4. Restore the recorded replica counts (1 for the default install). Start config, messaging, API, and plugins in that order, waiting for each rollout. Start CloudTAK after TAK is ready. Enrolled client certificates still chain, because the cert ConfigMap and Secrets came back with the namespace.
 
 `tests/backup-restore.sh` does this at the end of the full-core job, loading the dumps from the restored Secrets with `tests/db-dump-secret.sh`. It writes table `uds_restore_marker` in both databases, requires Backup `Completed` and Restore `Completed`, reads the marker back, and runs `tests/api-smoke.sh` with the client certificate copied out before the namespaces were deleted. On that deploy the node-agent has to log `Starting controllers`, and the Backup has to include a Completed PodVolumeBackup of the `takserver` volume `data` (`REQUIRE_FS_BACKUP=true`). Run by hand on a hostPath volume, the script skips that check with a message and still checks the logical dump.
 

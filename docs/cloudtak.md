@@ -1,6 +1,6 @@
 # CloudTAK
 
-[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web UI, and connects it to the TAK Server in the `takserver` namespace. The TAK Server deployment does not change, apart from three Ingress rules in its `Package` CR.
+[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web UI, and connects it to the TAK Server in the `takserver` namespace. The component adds three Ingress rules to TAK Server's `Package` CR.
 
 ## What is deployed
 
@@ -13,7 +13,7 @@
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
-Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. None of those are deployed. Without S3, CloudTAK features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, Cursor on Target (CoT) from TAK, and the admin pages do.
+Upstream CloudTAK's compose file also runs a tile server, an events worker, a media server, a retention job, and an S3 store. This component does not deploy those services. Without S3, features that store files (imports, attachments, uploaded basemaps, data packages) do not work. The map, Cursor on Target (CoT) from TAK, and the admin pages work.
 
 ## Image
 
@@ -83,7 +83,7 @@ variables:
 
 `bundle/uds-bundle.yaml` and `bundle/full/uds-bundle.yaml` show the override (`cloudtak` component, `uds-cloudtak` chart, path `sso.groups`). A bundle of your own needs the same `overrides` entry. Group paths are case-sensitive.
 
-[![Demo clip: a member of /CloudTAK/Users signs in to CloudTAK and is refused at the TAK web UI](../docs-site/public/demo/demo-clip-cloudtak-user.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4)
+[![Demo clip: a member of /CloudTAK/Users signs in to CloudTAK and is refused at the TAK web UI](../docs-site/public/demo/demo-clip-cloudtak-user.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4)
 
 ![Keycloak refuses a /CloudTAK/Users member at the TAK Server web UI](../docs-site/public/demo/screens/tak-admin-refused.webp)
 
@@ -98,9 +98,9 @@ CloudTAK 13.112.3 has `oidc::enabled`, `oidc::enforced`, `oidc::name`, and `oidc
 | `oidc::discovery` | `https://sso.<domain>/realms/uds/.well-known/openid-configuration` | The page shows a misconfiguration warning instead of the button without it |
 | `passkey::enabled` | `false` | Hides the passkey button |
 
-The route behind the button is `sso.mjs`, in a second container of the CloudTAK pod that listens only on `127.0.0.1:5002`.
+The `sso.mjs` script handles that route. It runs in a second container of the CloudTAK pod and listens only on `127.0.0.1:5002`.
 
-`start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). CloudTAK itself is not patched.
+`start.sh` adds a `location ^~ /api/login/oidc` block for it in front of CloudTAK's `location ~ ^/api` (a `^~` prefix match is chosen before regular expressions). The sign-in route does not patch CloudTAK's application code.
 
 `sso.mjs` imports CloudTAK's compiled model, user, and session modules from the image, so a CloudTAK upgrade that changes those modules needs a matching change here. The Renovate pull request for a new CloudTAK tag runs the sign-in test below.
 
@@ -203,7 +203,7 @@ script with two local CAs.
 
 `webtak` is 8447, the connector the tenant gateway uses, rather than 8446. 8447 has a certificate whose SANs are the `takserver-web` Service names, so CloudTAK verifies it against the deploy-time CA (`NODE_EXTRA_CA_CERTS`). TAK's generated 8443 and 8089 server certificate names no in-cluster host. CloudTAK's TAK library does not verify the server certificate on its certificate-authenticated connections, as upstream ships it. The bootstrap container checks the 8443 chain against the CA and skips only the host name.
 
-[![Demo clip: the ATAK device's marker shows in CloudTAK, then a marker and a chat message sent from CloudTAK arrive on the device](../docs-site/public/demo/demo-clip-sync.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-sync.mp4)
+[![Demo clip: the ATAK device's marker shows in CloudTAK, then a marker and a chat message sent from CloudTAK arrive on the device](../docs-site/public/demo/demo-clip-sync.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sync.mp4)
 
 ![The TEST MARKER placed in CloudTAK, shown in ATAK on the test device](../docs-site/public/demo/screens/atak-test-marker.webp)
 
@@ -229,7 +229,7 @@ The namespace has no waypoint of its own: it is ambient and Authservice is not e
 New users get OpenStreetMap as their default basemap. CloudTAK fetches the basemap's tiles through nginx in its own container, which proxies and caches them from the tile host. See [ADR 11](../adr/0011-cloudtak-default-basemap-through-a-tile-proxy.md) for why it is not CloudTAK's own tile route.
 
 - The browser asks for `https://map.<domain>/uds-basemap/tiles/{z}/{x}/{y}?token=<session>`. nginx checks the token with CloudTAK, so only signed-in users get tiles. Zoom levels outside `minzoom`..`maxzoom` get 404, and a session that asks for more than 20 tiles a second after a burst of 200 gets 429.
-- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.112.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
+- nginx sends the tile host only Host, Accept, the browser's Referer, and a User-Agent such as `CloudTAK/13.112.3 (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-takserver; contact: <basemap.contact>)`. It verifies the host's TLS certificate.
 - Tiles are cached in the pod's `/tmp` (`cacheSize`, default 256m), for as long as the tile host's cache headers allow, or 7 days when it sends none. Responses carry `X-Cache-Status`.
 - The bootstrap container creates the server basemap record "OpenStreetMap" with the attribution "© OpenStreetMap contributors", and sets it as CloudTAK's default basemap (`map::basemap`). It updates the record when the settings change. Users who signed in before keep their basemap and can choose this one in the basemap menu.
 - The Package allows egress to the tile host on its port only, from the `cloudtak` service account (see [Network rules](#network-rules)).
@@ -283,7 +283,7 @@ It saves `cloudtak-01-keycloak.png`, `cloudtak-02-map.png`, `cloudtak-04-basemap
 
 ## License
 
-CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image changes only the start script and adds the sign-in, bootstrap, and basemap scripts and the nginx fragments, all in this repository. CloudTAK's own code is not modified. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
+CloudTAK is licensed under AGPL-3.0. This repository does not include its source: `upstream/cloudtak` is a submodule that points at the upstream repository, and the image's `org.opencontainers.image.source` and `org.opencontainers.image.revision` labels name the build. AGPL section 13 requires that users who interact with a modified CloudTAK over a network can get its source. The image replaces the start script and adds the sign-in, bootstrap, and basemap scripts and nginx fragments. It also patches the bundled TAK client library and adds an error guard for connection resets. These changes are in this repository; CloudTAK's application source is unchanged. Whoever runs a modified CloudTAK for others has to offer that source. The rest of this repository stays GPL-3.0-only.
 
 ## Resources
 

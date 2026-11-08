@@ -3,7 +3,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-const base = '/uds-k3d-takserver/';
+const base = '/uds-takserver/';
 const port = process.env.DOCS_PREVIEW_PORT || '4321';
 
 export default defineConfig({

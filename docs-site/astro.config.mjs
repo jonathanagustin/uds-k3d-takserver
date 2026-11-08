@@ -76,20 +76,20 @@ function versionItems(version) {
       return version.pages.some((page) => page.startsWith(`${directory}/`))
         ? [{ autogenerate: { directory: route(directory) } }] : [];
     });
-    return items.length ? [{ ...group, items }] : [];
+    return items.length ? [{ ...group, collapsed: true, items }] : [];
   });
 }
 const topics = versions.map((version) => ({
   id: version.id, label: version.label,
-  link: `/uds-k3d-takserver/${version.prefix ? version.prefix + '/' : ''}`,
+  link: `/uds-takserver/${version.prefix ? version.prefix + '/' : ''}`,
   items: versionItems(version),
 }));
 
-// Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
+// Project site: https://jonathanagustin.github.io/uds-takserver/
 // `site` is the origin. `base` is the repository path GitHub Pages serves.
 export default defineConfig({
   site: 'https://jonathanagustin.github.io',
-  base: '/uds-k3d-takserver',
+  base: '/uds-takserver',
   trailingSlash: 'always',
   integrations: [
     // Renders the ```mermaid blocks in the README and the guides. It has to
@@ -102,14 +102,14 @@ export default defineConfig({
       // public/favicon.svg is the same mark, already served at /favicon.svg.
       // This path is the repository icon, so the header does not keep a second copy.
       logo: {
-        src: '../assets/icon.svg',
+        src: '../assets/tak-mark.svg',
       },
       head: [
         {
           tag: 'meta',
           attrs: {
             property: 'og:image',
-            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+            content: 'https://jonathanagustin.github.io/uds-takserver/og.png',
           },
         },
         {
@@ -135,7 +135,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'twitter:image',
-            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+            content: 'https://jonathanagustin.github.io/uds-takserver/og.png',
           },
         },
       ],
@@ -143,15 +143,16 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/jonathanagustin/uds-k3d-takserver',
+          href: 'https://github.com/jonathanagustin/uds-takserver',
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/jonathanagustin/uds-k3d-takserver/edit/main/',
+        baseUrl: 'https://github.com/jonathanagustin/uds-takserver/edit/main/',
       },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
       components: {
+        Hero: './src/components/Hero.astro',
         DraftContentNotice: './src/components/DraftContentNotice.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
         MarkdownContent: './src/components/MarkdownContent.astro',

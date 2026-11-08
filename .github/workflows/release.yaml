@@ -134,7 +134,7 @@ jobs:
           # The published package has to verify against this workflow's
           # identity. A release run has a tag ref and a re-run has a branch ref.
           uds zarf package verify "${reference}" --architecture "${ARCH}" \
-            --certificate-identity-regexp '^https://github\.com/jonathanagustin/uds-k3d-takserver/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
+            --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
           echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"

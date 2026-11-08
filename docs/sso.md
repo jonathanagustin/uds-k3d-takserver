@@ -24,7 +24,7 @@ The sign-in routes: `GET /login/auth` redirects the browser to Keycloak. `GET /l
 
 The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates browser TLS and opens a new TLS connection to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
 
-[![Demo clip: sign in to the TAK web UI through UDS Keycloak](../docs-site/public/demo/demo-clip-sso.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-sso.mp4)
+[![Demo clip: sign in to the TAK web UI through UDS Keycloak](../docs-site/public/demo/demo-clip-sso.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sso.mp4)
 
 ![TAK Server metrics dashboard after a Keycloak sign-in](../docs-site/public/demo/screens/tak-dashboard.webp)
 

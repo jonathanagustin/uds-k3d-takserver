@@ -32,7 +32,7 @@ When a source ref contains `src/home.mdx`, it provides that channel's splash pag
 An older release without this file receives a small navigation shell pointing to
 its own guides. README is published at Getting started. On an authored splash,
 a home URL hash such as `/#quick-start` opens that section on Getting started.
-The header logo is `assets/icon.svg`; `public/favicon.svg` is the same mark.
+The header logo is `assets/tak-mark.svg`; `public/favicon.svg` is the same mark.
 `public/og.png` is the static social image.
 
 `starlight-llms-txt` writes `/llms.txt`, `/llms-full.txt`, and `/llms-small.txt` during the build.
@@ -45,12 +45,6 @@ feature does not accidentally inherit it. Video checks send `HEAD`, inspect the
 status/type/length, and do not download the file. Install Chromium once with
 `npx playwright install chromium`. `DOCS_PREVIEW_PORT` can select another local
 port when multiple worktrees are being tested.
-
-`src/home.mdx` is copied to the site home. It is a short page of cards. The README is published at Getting started, not at the home URL. A hash on the home URL, such as `/#quick-start`, opens that section on Getting started. The header logo is `assets/icon.svg`. `public/favicon.svg` is the same mark and was already served as the favicon. `public/og.png` is the static social image.
-
-`starlight-llms-txt` writes `/llms.txt`, `/llms-full.txt`, and `/llms-small.txt` during the build.
-
-`npm test` runs the Playwright checks against `npm run preview`. Run the build first. The checks cover the theme toggle, the 404 page, Mermaid labels, code block titles, `llms.txt`, and the demo players. A video check sends `HEAD` and reads the status, content type, and content length. It does not download the file. The build still copies the videos from the `demo` release, as below. Install the browser once with `npx playwright install chromium`.
 
 Text between `<!-- github-only:start -->` and `<!-- github-only:end -->` stays on GitHub and is left off the site. The README uses it for the line that points readers to this site. A link whose text is a file path, like `[docs/sso.md](docs/sso.md)`, shows the page title on the site instead, such as `Single sign-on`.
 
@@ -68,4 +62,30 @@ npm test
 npm run dev
 ```
 
-The published site is <https://jonathanagustin.github.io/uds-k3d-takserver/>.
+The published site is <https://jonathanagustin.github.io/uds-takserver/>.
+
+## Appearance
+
+The site follows the slate and indigo visual language of
+[UDS documentation](https://uds.defenseunicorns.com/), using the existing Starlight
+components rather than another theme dependency. TAK keeps its own name and mark.
+The palette, content width, centered landing layout, and cards live in
+`src/styles/custom.css`; search retains the selected version's Pagefind filter.
+
+Sidebar sections start collapsed except for the active guide's ancestors. The
+header version selector and its mobile-menu counterpart remain the channel
+controls. Historical releases get a shared navigation shell whose links still
+point to that release's source-backed guides. Browser checks cover active-page
+navigation, keyboard search, and narrow screens in addition to version routing.
+
+Search opens as an upper-centered modal on desktop and fills the viewport on
+mobile, matching UDS/Starlight. Results scroll inside the panel so the Close
+button remains available. Escape and desktop backdrop clicks dismiss it; clicks
+inside the panel do not. Browser checks cover placement and short viewports.
+
+The landing page uses a native SVG wordmark with outlined lettering, so it does
+not depend on fonts or raster images. `assets/tak-on-uds-dark.svg` has light
+lettering for dark surfaces; `assets/tak-on-uds-light.svg` has dark lettering.
+The shared beacon mark is `assets/tak-mark.svg`, also copied to the favicon.
+`src/components/Hero.astro` keeps the accessible page heading and renders the
+appropriate logo for the selected theme.

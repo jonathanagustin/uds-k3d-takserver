@@ -17,9 +17,9 @@ assessment_procedures: 'Review the marked source against the deployed version. R
 test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
   live assessment or independent approval.
 links:
-  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tasks/test.yaml
+  - href: https://github.com/jonathanagustin/uds-takserver/blob/main/tasks/test.yaml
     rel: evidence
     text: tasks/test.yaml
-  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/pepr/capabilities/takclient.test.ts
+  - href: https://github.com/jonathanagustin/uds-takserver/blob/main/pepr/capabilities/takclient.test.ts
     rel: evidence
     text: pepr/capabilities/takclient.test.ts

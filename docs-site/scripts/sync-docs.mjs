@@ -28,17 +28,18 @@ const outRoot = path.resolve(args['output-root'] || path.resolve(import.meta.dir
 const sourceRef = args['source-ref'];
 const gitRef = args['git-ref'];
 const unreleased = args['version-id'] === 'main';
-const repoUrl = 'https://github.com/jonathanagustin/uds-k3d-takserver';
+const repoUrl = 'https://github.com/jonathanagustin/uds-takserver';
 // Root-relative, including the Pages base. The link checker rejects relative
 // links, and it looks these paths up against the built routes.
-const assetBase = '/uds-k3d-takserver';
+const assetBase = '/uds-takserver';
 const siteBase = `${assetBase}${args['url-prefix'] ? '/' + args['url-prefix'] : ''}`;
 // The demo videos are assets on the fixed `demo` release. GitHub serves a
 // release download as application/octet-stream, and the user-attachments
 // players in the README only work on github.com, so the build copies the
 // videos into public/demo/ and Pages serves them as video/mp4. The posters
 // in public/demo/ are committed. The copies are gitignored.
-const demoRelease = `${repoUrl}/releases/download/demo`;
+// Preserve the published demo source and its historical provenance.
+const demoRelease = 'https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo';
 const demoDir = path.resolve(import.meta.dirname, '../public/demo');
 
 const pages = [
@@ -308,9 +309,9 @@ function titleLinkLabels(markdown, fromSrc, headings) {
 // swaps it for the shields.io workflow-status badge, which sets CORP to
 // cross-origin. Keep both URLs in sync when either changes.
 const githubTestBadge =
-  'https://github.com/jonathanagustin/uds-k3d-takserver/actions/workflows/test.yaml/badge.svg?branch=main';
+  'https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main';
 const siteTestBadge =
-  'https://img.shields.io/github/actions/workflow/status/jonathanagustin/uds-k3d-takserver/test.yaml?branch=main&label=Test';
+  'https://img.shields.io/github/actions/workflow/status/jonathanagustin/uds-takserver/test.yaml?branch=main&label=Test';
 
 function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
@@ -329,6 +330,7 @@ function rewriteLinks(markdown, fromSrc, byPath) {
       });
     if (fromSrc === 'README.md') {
       next = next.split(githubTestBadge).join(siteTestBadge);
+      next = next.split(githubTestBadge.replace('/uds-takserver/', '/uds-k3d-takserver/')).join(siteTestBadge);
     }
     return next;
   });
@@ -452,7 +454,8 @@ const legacyImport = componentPath.startsWith('.') ? componentPath : `./${compon
 let home;
 if (existsSync(homePath)) {
   home = await readFile(homePath, 'utf8');
-  home = home.replaceAll('/uds-k3d-takserver/', `${siteBase}/`);
+  home = home.replace(/(^|[\s"'(=])\/uds-(?:k3d-)?takserver\//g, `$1${siteBase}/`);
+  home = home.replaceAll('https://github.com/jonathanagustin/uds-k3d-takserver/', `${repoUrl}/`);
   home = home.replace('../../components/LegacyHomeHash.astro', legacyImport);
   if (!unreleased) home = home.replace(`${repoUrl}/edit/main/`, `${repoUrl}/blob/${sourceRef}/`);
 } else {
@@ -475,14 +478,20 @@ sidebar:
 ---
 
 import LegacyHomeHash from '${legacyImport}';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <LegacyHomeHash />
 
 [Getting started](${siteHref('getting-started', '')}) contains the deployment instructions for ${sourceRef}.
 
-- [Configuration](${siteHref('configuration', '')})
-- [Networking](${siteHref('networking', '')})
-- [Data and backups](${siteHref('data', '')})
+## Explore the documentation
+
+<CardGrid>
+  <LinkCard title="Deploy" href="${siteHref('getting-started', '')}" description="Installation and deployment instructions for ${sourceRef}." />
+  <LinkCard title="Configure" href="${siteHref('configuration', '')}" description="Package variables, hosts, and configuration for this release." />
+  <LinkCard title="Networking" href="${siteHref('networking', '')}" description="Understand ingress, service access, and network policy." />
+  <LinkCard title="Back up" href="${siteHref('data', '')}" description="Database and volume backup procedures for this release." />
+</CardGrid>
 `;
 }
 if (unreleased) home = home.replace('---\n', `---\nbanner:\n  content: ${quote('You are reading unreleased main documentation. Use the version selector for a released package.')}\n`);

@@ -11,7 +11,7 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 
 It prints the exempted-resource list and the security context of each TAK pod.
 
-[![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-policy.mp4)
+[![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-policy.mp4)
 
 ## Exemptions
 
@@ -65,7 +65,7 @@ Only the optional ATAK test device uses this. It is not part of the package: `at
 
 These are not exemptions. The policy engine mutates these settings or leaves them alone, so no `Exemption` object exists.
 
-[![Demo clip: the ambient mesh, a generated network policy that drops a pod, and the release signature and provenance](../docs-site/public/demo/demo-clip-secure.jpg)](https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo/demo-clip-secure.mp4)
+[![Demo clip: the ambient mesh, a generated network policy that drops a pod, and the release signature and provenance](../docs-site/public/demo/demo-clip-secure.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-secure.mp4)
 
 ### Non-root user and writable root filesystem
 
@@ -141,7 +141,10 @@ The same script writes every Falco event whose payload names `takserver`, `cloud
 
 The Test workflow adds `validate-install (amd64, airgap)`. It retrieves the slim
 checkpoint and creates the package and test bundle first. Before it deploys TAK
-or CloudTAK, `.github/scripts/node-airgap.py` installs a dedicated filter chain
+or CloudTAK, CI pins the airgap bundle's TAK image tag to the same immutable
+input tag included in the package. This keeps certificate setup and the other
+TAK pods from requesting an unpackaged mutable tag. Then
+`.github/scripts/node-airgap.py` installs a dedicated filter chain
 inside each k3d server and agent container's network namespace. Both node-origin
 `OUTPUT` and pod-forwarded `FORWARD` traffic are covered. The host firewall,
 Docker daemon, and other containers are unchanged. The guard rejects host and
@@ -179,7 +182,9 @@ The trusted runner and Docker bridge services stay reachable from the nodes.
 
 An EXIT/signal trap restores the dedicated chains, and an `always()` workflow
 step retries restoration after a step timeout or cancellation. Restoration
-removes only this test's chain and jumps. A killed or unreachable runner may
+removes only this test's chain and jumps. All firewall listings use numeric
+addresses so cleanup does not wait for reverse DNS while DNS egress is blocked.
+A killed or unreachable runner may
 prevent cleanup; GitHub then destroys that job's ephemeral cluster.
 
 Run it on Linux with Docker and a fresh test cluster using `uds run test-airgap`.
@@ -191,14 +196,16 @@ networks, a still-reachable host connection, packet counters, and restoration:
 ```bash title="Check firewall isolation with local Docker traffic"
 docker build --secret id=ca,src=/etc/ssl/certs/ca-certificates.crt \
   -t tak-airgap-firewall-test tests/fixtures/airgap
-AIRGAP_FIREWALL_INTEGRATION=1 AIRGAP_WGET_INTEGRATION=1 \
+AIRGAP_FIREWALL_INTEGRATION=1 AIRGAP_WGET_INTEGRATION=1 AIRGAP_CLEANUP_INTEGRATION=1 \
   python3 -B -m unittest tests.test_node_airgap -v
 ```
 
 `AIRGAP_WGET_INTEGRATION=1` also runs actual BusyBox wget against an isolated
 local HTTP redirect fixture, with an unreachable TLS target and deliberately
 invalid proxy settings. It tests transport classification without public egress
-or firewall changes.
+or firewall changes. `AIRGAP_CLEANUP_INTEGRATION=1` runs a private-container
+DNS blackhole fixture: the old named listing times out, while numeric listing
+and the real restore routine finish and remove the dedicated chain.
 
 Set `AIRGAP_FIREWALL_IPV6=1` as well to exercise IPv6 Docker networks on a
 host with IPv6 packet filtering. The managed development environment supports
@@ -208,5 +215,5 @@ enabled but unfilterable IPv6 stack.
 
 The local firewall test does not establish that the full application suite has
 passed without egress. That result comes from the airgap CI job; keep issue
-[#256](https://github.com/jonathanagustin/uds-k3d-takserver/issues/256) open until
+[#256](https://github.com/jonathanagustin/uds-takserver/issues/256) open until
 that job completes successfully.

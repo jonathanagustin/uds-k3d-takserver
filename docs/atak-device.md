@@ -9,7 +9,7 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 ## Requirements
 
 - amd64 nodes with `/dev/kvm`. The VM image is Android-x86 and the APK is built for `x86_64` only. There is no arm64 build (see [Supported architectures](../README.md#supported-architectures)).
-- About 3 GiB of memory and 2 vCPU for the VM, plus KubeVirt.
+- A 2Gi guest and 2 vCPU for the VM, plus KubeVirt. 2Gi is the configured guest in `atak/deploy/device.yaml`. It is the size this trial asks the scheduler for, together with KubeVirt's launcher overhead. A successful boot at 2Gi would not make it a measured minimum.
 - The standard TAK streaming port 8089 on the passthrough gateway (`standardPorts` in `charts/takserver/values.yaml`, [ADR 12](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)) and the in-cluster DNS rewrite, so the device can reach `takserver-stream.<domain>` the way a phone would.
 
 ## Images
@@ -57,10 +57,19 @@ because the check queries Prometheus directly.
 This option remains off by default. The deploy step records allocated node
 resources and host memory. The manual run on `9aebc946` requested 10850Mi
 after Core monitoring and left the 3348Mi virt-launcher Pending, so the
-authenticated probe never ran. The opt-in bundle therefore keeps Prometheus
-and Blackbox, turns Grafana, Alertmanager, node-exporter, and kube-state-metrics
-off, and sets the Prometheus memory request to 256Mi. That is a CI footprint,
-not a change to the ATAK package's runtime requirements.
+authenticated probe never ran. That launcher request was the 3Gi guest plus
+KubeVirt overhead. The opt-in bundle keeps Prometheus and Blackbox. Grafana
+has zero replicas. Alertmanager and the node exporter are off, and
+`kubeStateMetrics.enabled` is false so kube-state-metrics is left out.
+Prometheus requests 256Mi. Those monitoring cuts apply only to this CI bundle.
+
+The device guest is 2Gi in the package and in `atak/ci/vm-smoke.sh`. CPU
+stays at 2 cores, the `video=720x1280` framebuffer argument stays, and the
+manifest does not set a memory request below the guest or
+`overcommitGuestOverhead`. 2Gi is that configured guest. This page does not
+treat it as a measured minimum, and it does not say the launcher will
+schedule until an opt-in run shows the pod placed, Android booted, and the
+authenticated probe fresh.
 
 After the device and viewer SSO checks pass, `atak/ci/uptime-probe.py` requires:
 

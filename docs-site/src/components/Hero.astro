@@ -1,0 +1,51 @@
+---
+// Copyright 2026 uds-k3d-takserver authors
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { LinkButton } from '@astrojs/starlight/components';
+import DraftContentNotice from './DraftContentNotice.astro';
+import darkWordmark from '../../../assets/tak-on-uds-dark.svg';
+import lightWordmark from '../../../assets/tak-on-uds-light.svg';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+---
+
+<div class="hero">
+  <div class="sl-flex stack">
+    <div class="sl-flex copy">
+      <h1 id="_top" data-page-title>
+        <span class="sr-only" set:html={title} />
+        <span class="project-wordmark" aria-hidden="true">
+          <img class="wordmark-dark" src={darkWordmark.src} width={darkWordmark.width} height={darkWordmark.height} alt="" fetchpriority="high" />
+          <img class="wordmark-light" src={lightWordmark.src} width={lightWordmark.width} height={lightWordmark.height} alt="" />
+        </span>
+      </h1>
+      {data.draft && <DraftContentNotice />}
+      {tagline && <div class="tagline" set:html={tagline} />}
+    </div>
+    {actions.length > 0 && (
+      <div class="sl-flex actions">
+        {actions.map((action) => (
+          <LinkButton href={action.link} variant={action.variant} icon={action.icon?.name} {...(action.attrs || {})}>
+            {action.text}
+            {action.icon?.html && <Fragment set:html={action.icon.html} />}
+          </LinkButton>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
+
+<style>
+  .stack, .copy { flex-direction: column; width: 100%; align-items: center; }
+  .stack { gap: 2rem; }
+  .copy { gap: 1.5rem; }
+  h1 { width: min(100%, 36rem); margin: 0; }
+  .project-wordmark { display: block; }
+  .project-wordmark img { display: block; width: 100%; height: auto; }
+  .project-wordmark .wordmark-light { display: none; }
+  :global(:root[data-theme='light']) .wordmark-dark { display: none; }
+  :global(:root[data-theme='light']) .project-wordmark .wordmark-light { display: block; }
+  .actions { flex-wrap: wrap; align-items: center; }
+</style>

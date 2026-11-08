@@ -35,6 +35,22 @@ class AirgapContracts(unittest.TestCase):
                 AIRGAP.probe([{"name": "k3d-node"}], "http://1.1.1.1/cdn-cgi/trace", blocked=False)
         self.assertEqual(command.call_args.args[:3], ("exec", "k3d-node", "wget"))
 
+    def test_http_responses_prove_egress_even_when_transfer_fails(self):
+        for status in ["HTTP/1.1 301 Moved Permanently", "HTTP/2 403 Forbidden", "HTTP/1.0 500 Server Error"]:
+            response = subprocess.CompletedProcess([], 1, "", f"  {status}\nwget: TLS error")
+            with self.subTest(status=status), patch.object(AIRGAP, "docker", return_value=response) as command:
+                AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=False)
+                with self.assertRaisesRegex(RuntimeError, "unexpectedly succeeded"):
+                    AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=True)
+                self.assertIn("-S", command.call_args.args)
+                self.assertEqual(command.call_args.args[3:5], ("-Y", "off"))
+
+    def test_diagnostic_text_without_a_status_line_is_not_a_response(self):
+        result = subprocess.CompletedProcess([], 1, "", "wget: HTTP/1.1 TLS failed")
+        with patch.object(AIRGAP, "docker", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=False)
+
     def test_a_denied_control_is_not_reported_as_a_precontrol_failure(self):
         failed = subprocess.CompletedProcess([], 1, "", "wget: connection refused")
         with patch.object(AIRGAP, "docker", return_value=failed):
@@ -97,6 +113,52 @@ class AirgapContracts(unittest.TestCase):
         config = yaml.safe_load((ROOT / "bundle/airgap-config.yaml").read_text())
         self.assertIs(config["variables"]["takserver"]["CLOUDTAK_BASEMAP_ENABLED"], False)
         self.assertIn('-e AIRGAP_TEST="${AIRGAP_TEST:-false}"', (ROOT / "tasks/test.yaml").read_text())
+
+
+@unittest.skipUnless(os.environ.get("AIRGAP_WGET_INTEGRATION") == "1", "set AIRGAP_WGET_INTEGRATION=1 for real BusyBox wget")
+class AirgapWgetIntegration(unittest.TestCase):
+    def test_redirect_proves_reachability_but_initial_refusal_does_not(self):
+        # Isolated loopback traffic only: no public endpoint or firewall mutation.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cgi-bin").mkdir()
+            redirect = root / "cgi-bin/redirect"
+            redirect.write_text('#!/bin/sh\nprintf "Status: 301 Moved Permanently\\r\\nLocation: https://127.0.0.1:1/\\r\\n\\r\\n"\n')
+            redirect.chmod(0o755)
+            name = f"airgap-wget-{uuid.uuid4().hex[:10]}"
+            docker = AIRGAP.docker
+            try:
+                docker("run", "-d", "--network", "none", "--name", name,
+                       "--mount", f"type=bind,src={root},dst=/www,readonly",
+                       os.environ.get("AIRGAP_FIREWALL_IMAGE", "tak-airgap-firewall-test:latest"),
+                       "httpd", "-f", "-p", "8080", "-h", "/www")
+                results = []
+
+                def actual_wget(*args, **kwargs):
+                    # Map the public literal to the isolated fixture; preserve
+                    # the production wget arguments and all classification.
+                    fixture_url = "http://127.0.0.1:8080/cgi-bin/redirect" if redirect.exists() else "http://127.0.0.1:1/"
+                    result = docker("exec", "-e", "http_proxy=http://127.0.0.1:1",
+                                    "-e", "https_proxy=http://127.0.0.1:1",
+                                    name, *args[2:-1], fixture_url, **kwargs)
+                    results.append(result)
+                    return result
+
+                with patch.object(AIRGAP, "docker", side_effect=actual_wget):
+                    AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=False)
+                    self.assertNotEqual(results[-1].returncode, 0)
+                    self.assertIn("HTTP/1.1 301", results[-1].stderr)
+                    self.assertIn("Connection refused", results[-1].stderr)
+                    # A redirect cannot count as successful isolation.
+                    with self.assertRaisesRegex(RuntimeError, "unexpectedly succeeded"):
+                        AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=True)
+                    redirect.unlink()
+                    with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                        AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=False)
+                    self.assertNotIn("HTTP/", results[-1].stderr)
+                    AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=True)
+            finally:
+                docker("rm", "-f", name, check=False)
 
 
 @unittest.skipUnless(os.environ.get("AIRGAP_FIREWALL_INTEGRATION") == "1", "set AIRGAP_FIREWALL_INTEGRATION=1 for real Docker traffic")

@@ -54,9 +54,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     permissions:
@@ -91,7 +91,7 @@ jobs:
           version: v0.41.0
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-22.04' || vars.TEST_RUNNER == 'ubuntu-24.04' || runner.arch == 'ARM64'
         run: ./.github/scripts/trim-runner.sh
         env:
           TRIM_SKIP_ABOVE_GB: "60"

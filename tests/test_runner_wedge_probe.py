@@ -112,15 +112,24 @@ class RunnerWedgeProbeTests(unittest.TestCase):
     def test_cluster_runner_fallback_keeps_overrides_and_native_arm(self):
         test = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())["jobs"]
         full = yaml.safe_load((ROOT / ".github/workflows/full-core.yaml").read_text())["jobs"]
-        expected = "${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}"
+        bench = yaml.safe_load((ROOT / ".github/workflows/benchmark.yaml").read_text())["jobs"]
+        expected = "${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}"
         planner = next(step for step in test["check-flavor"]["steps"]
                        if "TEST_RUNNER" in step.get("env", {}))
         self.assertEqual(planner["env"]["TEST_RUNNER"], expected)
-        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"]):
+        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"], bench["benchmark"]):
             rows = job["strategy"]["matrix"]["include"]
             self.assertEqual([(row["arch"], row["runner"]) for row in rows],
-                             [("amd64", expected), ("arm64", "ubuntu-26.04-arm")])
+                             [("amd64", expected), ("arm64", "ubuntu-22.04-arm")])
             self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        # Explicit hosted22 override still receives disk/swap preparation.
+        for job in (test["validate-install"], full["validate-full-core"], bench["benchmark"]):
+            guarded = [step for step in job["steps"]
+                       if "TEST_RUNNER" in str(step.get("if", ""))]
+            self.assertTrue(guarded)
+            for step in guarded:
+                self.assertIn("vars.TEST_RUNNER == 'ubuntu-22.04'", step["if"])
+        self.assertEqual(test["check-flavor"]["runs-on"], "ubuntu-24.04")
         # Native image producers retain their existing 24.04 labels.
         for name in ("cloudtak-image", "postgis-image"):
             rows = test[name]["strategy"]["matrix"]["include"]

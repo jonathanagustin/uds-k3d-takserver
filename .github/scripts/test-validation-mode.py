@@ -15,7 +15,7 @@ def trust_only(event, requested):
 
 def install_matrix(event, requested, amd64_runner):
     include = [{"arch": "amd64", "runner": amd64_runner},
-               {"arch": "arm64", "runner": "ubuntu-26.04-arm"}]
+               {"arch": "arm64", "runner": "ubuntu-22.04-arm"}]
     if not trust_only(event, requested):
         include.append({"arch": "amd64", "runner": amd64_runner, "airgap": True})
     return {"include": include}
@@ -35,7 +35,7 @@ def verify(event, requested, install, upgrade, pg15):
 def main():
     event, requested = os.environ["EVENT_NAME"], os.environ.get("TRUST_BUNDLE", "false")
     if sys.argv[1:] == ["plan"]:
-        matrix = install_matrix(event, requested, os.environ.get("TEST_RUNNER") or "ubuntu-24.04")
+        matrix = install_matrix(event, requested, os.environ.get("TEST_RUNNER") or "ubuntu-22.04")
         output = "install-matrix=" + json.dumps(matrix, separators=(",", ":")) + "\n"
         if path := os.environ.get("GITHUB_OUTPUT"):
             with open(path, "a", encoding="utf-8") as stream:

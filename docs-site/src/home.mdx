@@ -5,16 +5,7 @@ template: splash
 editUrl: https://github.com/jonathanagustin/uds-takserver/edit/main/docs-site/src/home.mdx
 hero:
   title: TAK Server on UDS
-  tagline: Deploy TAK Server and CloudTAK on the Unified Defense Stack (UDS), with Keycloak sign-in and default-deny networking.
-  actions:
-    - text: Getting started
-      link: /uds-takserver/getting-started/
-      icon: right-arrow
-      variant: primary
-    - text: GitHub
-      link: https://github.com/jonathanagustin/uds-takserver
-      icon: external
-      variant: minimal
+  tagline: TAK Server and CloudTAK, packaged for UDS Core.
 prev: false
 next: false
 sidebar:
@@ -31,13 +22,11 @@ import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components
 
 <LegacyHomeHash />
 
-Use this package to run TAK Server and CloudTAK on UDS Core. TAK Server connects field clients; CloudTAK provides the browser map.
+Connect field clients through TAK Server and use CloudTAK as the browser map. This package integrates both applications with UDS Core.
 
 - **TAK Server:** API, enrollment, and streaming endpoints for certificate-based clients.
 - **CloudTAK:** A browser map with Keycloak sign-in.
 - **UDS integration:** Reuses Core's identity services, gateways, and default-deny network policies.
-
-Start with [Getting started](/uds-takserver/getting-started/) to deploy a release or build a local test environment.
 
 ## Choose your starting point
 

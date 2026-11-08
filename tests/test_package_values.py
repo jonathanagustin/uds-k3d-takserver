@@ -16,7 +16,6 @@ import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
-from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 
@@ -26,79 +25,43 @@ TAK_APPS = ("takserver-api", "takserver-messaging", "takserver-config", "takserv
 _cache = {}
 
 
-_DOWNLOAD_URL = re.compile(r"(?:could not download|failed to fetch)\s+(https://[^\s]+)", re.IGNORECASE)
-_STATUS_NEAR = re.compile(
-    r"HTTP\s+(\d{3})\b|:\s*(\d{3})\s+Gateway\b|(\d{3})\s+Gateway\s+Time-?out\b",
+_STATUS = re.compile(
+    r"\bHTTP\s+(\d{3})\b|:\s*(\d{3})\s+Gateway\b|\b(\d{3})\s+Gateway\s+Time-?out\b",
     re.IGNORECASE,
 )
-_STATUS_ANY = re.compile(r"\bHTTP\s+(\d{3})\b|\b(\d{3})\s+Gateway\s+Time-?out\b", re.IGNORECASE)
-_SAFE_SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
-_BUILD_DEPS = "unable to build dependencies"
+_DEPENDENCY_NEEDLES = (
+    "unable to build dependencies",
+    "could not download",
+    "failed to fetch",
+)
 
 
-def _status_code(match):
+def _http_status(stderr):
+    match = _STATUS.search(stderr)
+    if not match:
+        return None
     return next(group for group in match.groups() if group)
 
 
-def _public_download_url(raw):
-    """Host and path of one https download. Userinfo, query, and fragment stay out."""
-    raw = raw.split("-----", 1)[0].rstrip(".,;:")
-    try:
-        parts = urlsplit(raw)
-    except ValueError:
-        return None
-    if parts.scheme != "https" or not parts.hostname:
-        return None
-    segments = [segment for segment in parts.path.split("/") if segment]
-    if not segments or len(segments) > 8:
-        return None
-    if any(_SAFE_SEGMENT.fullmatch(segment) is None for segment in segments):
-        return None
-    host = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
-    if parts.port:
-        host = f"{host}:{parts.port}"
-    return urlunsplit(("https", host, "/" + "/".join(segments), "", ""))
-
-
 def render_failure(result):
-    """Exit status plus a dependency URL and HTTP status, when stderr has them.
+    """Fixed category and numeric status. No child URL or other child text.
 
-    Rendered manifests and every other child byte stay out of the message.
+    The message is one of a few constant phrases plus a process exit in
+    0..255 and one HTTP status. Child host, path, and stream text are not
+    copied, so a long or hostile download line cannot grow or leak into it.
     """
     stderr = result.stderr if isinstance(result.stderr, str) else ""
-    code = result.returncode if isinstance(result.returncode, int) else "unknown"
+    if isinstance(result.returncode, int) and 0 <= result.returncode <= 255:
+        code = str(result.returncode)
+    else:
+        code = "unknown"
     facts = []
-    if _BUILD_DEPS in stderr:
-        facts.append(_BUILD_DEPS)
-    seen = {}
-    order = []
-    for match in _DOWNLOAD_URL.finditer(stderr):
-        url = _public_download_url(match.group(1))
-        if url is None:
-            continue
-        status_match = _STATUS_NEAR.search(stderr[match.end():match.end() + 160])
-        status = _status_code(status_match) if status_match else None
-        if url not in seen:
-            order.append(url)
-            seen[url] = status
-        elif status and not seen[url]:
-            seen[url] = status
-    if order and any(seen[url] is None for url in order):
-        statuses = {_status_code(item) for item in _STATUS_ANY.finditer(stderr)}
-        if len(statuses) == 1:
-            only = statuses.pop()
-            for url in order:
-                seen[url] = seen[url] or only
-    for url in order:
-        item = f"could not download {url}"
-        if seen[url]:
-            item += f": HTTP {seen[url]}"
-        facts.append(item)
-    if not order:
-        status_match = _STATUS_ANY.search(stderr)
-        if status_match:
-            facts.append(f"HTTP {_status_code(status_match)}")
-    detail = "; ".join(facts) if facts else "no allowlisted diagnostic"
+    if any(needle in stderr for needle in _DEPENDENCY_NEEDLES):
+        facts.append("dependency download")
+    status = _http_status(stderr)
+    if status:
+        facts.append(f"HTTP {status}")
+    detail = "; ".join(facts) if facts else "unclassified"
     return f"package render failed ({code}): {detail}"
 
 
@@ -309,25 +272,25 @@ _DEPENDENCY_FAILURE = (
     "unable to build dependencies for the chart: "
     f"could not download {_NATS_CHART}: failed to fetch {_NATS_CHART} : 504 Gateway Time-out"
 )
-_DEPENDENCY_DIAGNOSTIC = (
-    "package render failed (1): unable to build dependencies; "
-    f"could not download {_NATS_CHART}: HTTP 504"
-)
+_DEPENDENCY_DIAGNOSTIC = "package render failed (1): dependency download; HTTP 504"
 
 
 class RenderFailureTests(unittest.TestCase):
-    def _message(self, stderr, stdout="", variable="DOMAIN=failure.example"):
+    def _message(self, stderr, stdout="", variable="DOMAIN=failure.example", returncode=1):
         result = subprocess.CompletedProcess(
-            args=["uds"], returncode=1, stdout=stdout, stderr=stderr,
+            args=["uds"], returncode=returncode, stdout=stdout, stderr=stderr,
         )
         with mock.patch.object(subprocess, "run", return_value=result):
             with self.assertRaises(AssertionError) as caught:
                 render(variables=[variable])
         return str(caught.exception)
 
-    def test_dependency_failure_reports_the_url_and_status(self):
+    def test_dependency_failure_reports_category_and_status(self):
         message = self._message(_DEPENDENCY_FAILURE, variable="DOMAIN=dependency.example")
         self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn(_NATS_CHART, message)
+        self.assertNotIn("https://", message)
+        self.assertLessEqual(len(message), 80)
 
     def test_failed_render_omits_short_credentials(self):
         dirty = (
@@ -378,6 +341,54 @@ class RenderFailureTests(unittest.TestCase):
         self.assertEqual(message, "package render failed (1): HTTP 504")
         self.assertNotIn("SECRETKEYDATA", message)
         self.assertNotIn("PRIVATE KEY", message)
+
+    def test_adversarial_urls_do_not_leak_or_expand(self):
+        long_segment = "A" * 20000
+        lines = [
+            "failed to fetch https://short-sensitive-token.example/archive.tgz"
+            " : 504 Gateway Time-out",
+            "failed to fetch https://github.com/private/repository/short-sensitive-token"
+            " : HTTP 401",
+            "could not download https://github.com/QUJDREVGR0g/archive.tgz",
+            f"could not download https://github.com/{long_segment}/archive.tgz",
+            "failed to fetch https://short-sensitive-token.example:99999/archive.tgz"
+            " : 504 Gateway Time-out",
+        ]
+        lines.extend(
+            f"could not download https://host{i}.example/secret-path-{i}-token : HTTP 401"
+            for i in range(300)
+        )
+        message = self._message("\n".join(lines), variable="DOMAIN=adversarial.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("https://", message)
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("QUJDREVGR0g", message)
+        self.assertNotIn(long_segment[:80], message)
+        self.assertNotIn("secret-path-", message)
+        self.assertNotIn("401", message)
+        self.assertLessEqual(len(message), 80)
+
+    def test_stdout_cannot_supply_category_or_status(self):
+        stdout = "could not download https://stdout-only-secret.example/token : HTTP 504"
+        message = self._message("", stdout=stdout, variable="DOMAIN=stdout-status.example")
+        self.assertEqual(message, "package render failed (1): unclassified")
+        self.assertNotIn("stdout-only-secret", message)
+        self.assertNotIn("504", message)
+
+    def test_unrecognized_child_output_stays_out(self):
+        stderr = "password: 504\nshort-sensitive-token\n" * 1000
+        message = self._message(stderr, variable="DOMAIN=unclassified.example")
+        self.assertEqual(message, "package render failed (1): unclassified")
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("504", message)
+        self.assertLessEqual(len(message), 80)
+
+    def test_exit_code_outside_a_byte_is_not_copied(self):
+        message = self._message(
+            _DEPENDENCY_FAILURE, variable="DOMAIN=exit.example", returncode=10 ** 18,
+        )
+        self.assertEqual(message, "package render failed (unknown): dependency download; HTTP 504")
+        self.assertNotIn("1000000000000000000", message)
 
 
 if __name__ == "__main__":

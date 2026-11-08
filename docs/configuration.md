@@ -155,7 +155,7 @@ The upstream chart has no values for init containers, probes, or the extra objec
 | `takserver-coredns` | Adds CoreDNS rewrites so `DOMAIN` hosts reach the right Istio gateway inside the cluster. It runs only when `IN_CLUSTER_DNS` is true and `kube-system/coredns-custom` exists. See [Networking](networking.md#in-cluster-dns) |
 | `takserver-gateway-ca` | Copies the TAK CA certificate to the tenant gateway's namespace, where the gateway DestinationRule points. The gateway uses it to verify TAK's certificate on 8447. See [Networking](networking.md#tenant-gateway-to-8447) |
 | `takserver-cloudtak-admin` | Copies the TAK CA, the admin certificate and key, and the keystore password to the `cloudtak` namespace. CloudTAK uses them to connect to TAK. See [CloudTAK](cloudtak.md#tak-connection) |
-| `takserver-takclient` | Turns each `TakClient` in namespace `takclients` into a client certificate signed by the TAK CA, a TAK file user with the listed groups, and a Secret with the certificate, the key, and an ATAK data package. Deleting a `TakClient` adds its serial to the certificate revocation list (CRL) in Secret `takserver-crl`. See [ADR 22](../adr/0022-takclient-operator.md) and [the device docs](atak-device.md#provisioning-device-certificates) |
+| `takserver-takclient` | Asks TAK to sign each `TakClient` certificate through Basic enrollment, registers a file user with its groups, and writes a device Secret containing the certificate, key and ATAK data package. The reusable enrollment password stays in watcher-only `takserver/takclient-enrollment`. Deleting the resource revokes TAK's certificate-table row and disconnects its stream without requesting a restart. See [ADR 24](../adr/0024-tak-signed-takclient-revocation.md) and [the device docs](atak-device.md#provisioning-device-certificates) |
 
 The webhook covers only namespace `takserver`. It matches the four TAK pods by their `app` label. It matches the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet by name, through a `matchConditions` rule, because the upstream chart puts no `app` label on those objects. It fails closed, so while the module is down, Kubernetes refuses to create those pods and to create or update those objects. Other objects are not affected. `pepr/scripts/webhook-scope.ts` writes that scope.
 
@@ -189,7 +189,7 @@ No private key, keystore, certificate signing request (CSR), or certificate revo
 
 A fresh install stores a random keystore password in Secret `takserver-keystore` and renders it into CoreConfig at pod start. The password is not in the ConfigMap, the image, or git. An upgrade that already has ConfigMap `cert-migration` and no Secret keeps `atakatak`, because that is the password those certificates were generated with. `ca-do-not-share.key` is stored in Secret `takserver-ca-key` and is not copied into `takserver-certs`. The same Job removes private keys and keystores from the ConfigMap, including on an upgrade that still has them there. CloudTAK copies `admin.key` from `takserver-certs`.
 
-CoreConfig names a CRL, `certs/crl/ca.crl`, in `<security><tls>`. The `takserver-oidc` module writes it to Secret `takserver-crl`, signed by the TAK CA, and mounts that Secret into every TAK pod. A TAK pod waits for the Secret before it starts, and TAK reads the file only at startup. The Secret has the `uds.dev/pod-reload` label, so UDS Core restarts the TAK pods when a deleted `TakClient` adds a serial. See [ADR 22](../adr/0022-takclient-operator.md).
+CoreConfig names a CRL, `certs/crl/ca.crl`, in `<security><tls>`. The `takserver-oidc` module writes it to Secret `takserver-crl`, signed by the TAK CA, and mounts that Secret into every TAK pod. A TAK pod waits for the Secret before it starts, and TAK reads the file only at startup. New TakClient certificates use TAK's certificate-table revocation with `x509checkRevocation="true"`; the CRL is a backstop. Legacy locally signed certificates retain the CRL reload fallback during their one-time migration. A periodic refresh before the cached CRL expires also requests a maintenance reload. See [ADR 24](../adr/0024-tak-signed-takclient-revocation.md).
 
 OpenSSF Best Practices: `crypto_weaknesses` is answered by the random per-deploy password in Secret `takserver-keystore`, with the legacy password kept only so an existing install can still open its certificates. `no_leaked_credentials` is answered by keeping that password, the CA private key, and the other private keys and keystores in Secrets. ConfigMap `cert-migration` keeps certificates and truststores. The bestpractices.dev form itself is not in this repository.
 
@@ -211,7 +211,28 @@ The API and messaging images load the Prometheus JMX (Java Management Extensions
 
 ## Monitoring
 
-When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
+When the cluster has the `monitoring.coreos.com/v1` API, the config chart adds the dashboard, the Prometheus rules, the Loki rules, and PodMonitor `takserver-oidc`. The Package CR adds PodMonitors for the API and messaging pods and, when health checks are enabled, `tak-health`. Slim does not have that API, so none of those objects are rendered and the Package has no `monitor` block.
+
+The CloudTAK chart adds alerts for its Deployment and its PostGIS StatefulSet:
+scaling either to zero fires after two minutes, and one desired replica with no
+available or ready pod fires after ten minutes. A container that restarts more
+than three times in fifteen minutes raises a warning after five minutes.
+
+`tak-health` exposes `tak_certificate_not_after_seconds` and
+`tak_certificate_read_success` on `/metrics`. It reads only the public
+`ca.pem` and `takserver.pem` files projected from `cert-migration`, and receives
+no server private key or extra Kubernetes API permission. The latter PEM's
+first certificate is the generated server leaf used by the passthrough
+connectors on 8443, 8446 and 8089. The alerts fire after five minutes below
+30 days (warning) and 7 days (critical), including already expired certificates.
+A malformed or missing file raises `TAKCertificateReadFailed` instead of
+silently retaining an old expiry timestamp. Projected certificate updates are
+read on each scrape.
+
+These metrics describe the generated certificate files. A custom connector
+keystore must be monitored separately if it uses another certificate. The
+tenant gateway's certificate still uses Core's `UDSProbeTLSExpiry*` alerts.
+Setting `health.enabled=false` removes the expiry exporter and its alerts.
 
 ConfigMap `takserver-dashboard` is labeled `grafana_dashboard: "1"` with annotation `grafana_folder: takserver`. The full bundle tells Grafana's sidecar to use that annotation. The dashboard is "TAK Server". JVM heap, GC, and HTTP rate read the TAK API and messaging scrape. Postgres ready, pod restarts, messaging replicas, and container memory read kube-state-metrics and cAdvisor, which the full bundle already scrapes.
 

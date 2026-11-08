@@ -6,57 +6,86 @@ name: Package
 on:
   workflow_dispatch:
   # main publishes the package for its inputs too, for the Full Core and
-  # Benchmark runs on main.
+  # Benchmark runs on main. The ignore list matches Test
+  # (.github/scripts/runtime-paths.sh). A manual run is not filtered.
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
+    paths-ignore: &ci-ignore
       - "docs/**"
       - "adr/**"
       - "docs-site/**"
+      - "assets/**"
+      - "atak/**"
+      - "bench/**"
+      - "demo/**"
+      - "upstream/atak-civ"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/pull_request_template.md"
+      - ".github/test-infra/**"
+      - ".github/actionlint.yaml"
       - ".github/workflows/docs.yaml"
+      - ".github/workflows/lint.yaml"
+      - ".github/workflows/commitlint.yaml"
+      - ".github/workflows/codeql.yaml"
+      - ".github/workflows/dependency-review.yaml"
+      - ".github/workflows/scorecard.yaml"
+      - ".github/workflows/release-please.yaml"
+      - ".github/workflows/release.yaml"
+      - ".github/workflows/cosign.yaml"
+      - ".github/workflows/demo.yaml"
+      - ".github/workflows/benchmark.yaml"
+      - ".github/workflows/full-core.yaml"
+      - ".github/workflows/unit-tests.yaml"
+      - ".github/workflows/atak.yaml"
+      - ".github/workflows/atak-vm.yaml"
+      - ".github/workflows/atak-e2e.yaml"
+      - ".github/workflows/mirror-checkpoint.yaml"
+      - ".github/workflows/test-aks.yaml"
+      - ".github/workflows/test-eks.yaml"
+      - ".github/workflows/test-rke2.yaml"
+      - ".github/workflows/scan.yaml"
+      - ".github/scripts/full-core-paths.sh"
+      - ".github/scripts/runtime-paths.sh"
+      - ".github/scripts/ci-concurrency.sh"
       - ".gitignore"
+      - ".gitleaks.toml"
+      - ".hadolint.yaml"
+      - ".yamllint"
+      - ".license_config.yaml"
+      - ".codespellrc"
+      - ".adr-dir"
       - "LICENSE"
+      - "CODEOWNERS"
+      - "README.md"
+      - "SECURITY.md"
+      - "CONTRIBUTING.md"
+      - "CHANGELOG.md"
       - "renovate.json"
       - ".release-please-manifest.json"
       - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
+      - "commitlint.config.js"
+      - "hk.pkl"
+      - "tests/demo/**"
+      - "tests/test_*"
+      - "tests/playwright.demo.config.ts"
+      - "pepr/capabilities/*.test.ts"
+      - "pepr/scripts/coverage-summary.mjs"
   pull_request:
-    # Doc-only changes do not alter the package inputs. The Test workflow
-    # uses the same list and already skips the cluster jobs.
-    paths-ignore:
-      - "**.md"
-      - "**.jpg"
-      - "**.png"
-      - "**.gif"
-      - "**.svg"
-      - "docs/**"
-      - "adr/**"
-      - "docs-site/**"
-      - ".github/workflows/docs.yaml"
-      - ".gitignore"
-      - "LICENSE"
-      - "renovate.json"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "CODEOWNERS"
-      - "SECURITY.md"
+    paths-ignore: *ci-ignore
 
 permissions:
   actions: read
   contents: read
   packages: read
 
-# A newer push replaces the one before it. The old run would otherwise wait
-# on images the newer push has already overwritten, and fail an hour later.
+# A newer pull request push or main push cancels the older run of this
+# workflow on that ref. The old run would otherwise wait on images the newer
+# push has already overwritten. Schedule and workflow_dispatch each get their
+# own run id: they are not cancelled, and they do not wait behind a push.
+# Release and Demo Video are not in this group. A finished run is kept.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   # Zarf packages are per architecture. Each runner creates the package for
@@ -67,9 +96,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
     name: package (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
@@ -80,6 +109,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Record the runner image
+        run: echo "::notice::runner arch=$(uname -m) kernel=$(uname -r) ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
 
       - name: Free disk
         run: ./.github/scripts/free-runner-disk.sh

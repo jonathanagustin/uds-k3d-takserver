@@ -925,6 +925,7 @@ tasks:
             -e TAK_CLIENT_KEY_PASSPHRASE="${key_pass}" \
             -e SKIP_SSO_SETUP="${skip_sso}" \
             -e CLOUDTAK_URL="${cloudtak_url}" \
+            -e AIRGAP_TEST="${AIRGAP_TEST:-false}" \
             -v "${cert_dir}:/certs:ro" \
             -e KEYCLOAK_USER="${KEYCLOAK_USER:-doug}" \
             -e KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}" \

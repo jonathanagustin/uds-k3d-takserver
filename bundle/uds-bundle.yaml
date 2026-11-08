@@ -126,6 +126,9 @@ packages:
       cloudtak:
         uds-cloudtak:
           variables:
+            - name: CLOUDTAK_BASEMAP_ENABLED
+              description: Enable the external basemap; false for the airgap test
+              path: basemap.enabled
             # Keycloak groups that may sign in to CloudTAK. Unset keeps the
             # chart default, /UDS Core/Admin and /CloudTAK/Users.
             - name: CLOUDTAK_SSO_GROUPS

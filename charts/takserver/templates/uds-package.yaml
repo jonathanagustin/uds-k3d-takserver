@@ -18,6 +18,15 @@ spec:
       portName: metrics
       targetPort: 9100
       path: /metrics
+    {{- if include "takserver.healthEnabled" . }}
+    - description: tak-certificates
+      kind: PodMonitor
+      selector:
+        app: tak-health
+      portName: http
+      targetPort: {{ .Values.health.port }}
+      path: /metrics
+    {{- end }}
     - description: tak-messaging
       kind: PodMonitor
       selector:
@@ -366,16 +375,18 @@ spec:
       {{- end }}
 
       # The takserver-oidc watcher registers TakClient callsigns as TAK file
-      # users through the admin API (ADR 22).
+      # users and enrolls their certificates (ADR 24).
+      {{- range $port := list 8443 8446 }}
       - direction: Ingress
         selector:
-          {{- toYaml .Values.api.selector | nindent 10 }}
+          {{- toYaml $.Values.api.selector | nindent 10 }}
         remoteNamespace: pepr-system
         remoteSelector:
           app: pepr-c72fcf944a4f43bbb386d22371aa640f-watcher
         remoteServiceAccount: pepr-c72fcf944a4f43bbb386d22371aa640f-watcher
-        port: 8443
-        description: "Ingress 8443 to TAK API from the TakClient watcher"
+        port: {{ $port }}
+        description: "Ingress {{ $port }} to TAK API from the TakClient watcher"
+      {{- end }}
 
       {{- with .Values.additionalNetworkAllow }}
       {{- toYaml . | nindent 6 }}

@@ -7,5 +7,7 @@
 # builds logged "Starting controllers". Other startup lines, including
 # "Starting workers" and "Starting EventSource", do not count.
 node_agent_controllers_started() {
-  grep -F -e "Starting Controller" -e "Starting controllers" -q
+  # Drain the finite log stream. grep -q closes stdin at the first match,
+  # which can SIGPIPE kubectl and reject a healthy agent under pipefail.
+  grep -aF -e "Starting Controller" -e "Starting controllers" >/dev/null
 }

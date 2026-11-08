@@ -1,0 +1,12 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+- control_id: SC-23
+  uuid: 12d1f817-a19b-5b3c-b021-aa47cc1071f5
+  justification: Proposed partial evidence association. TakClient issuance binds a unique certificate serial and
+    callsign to a client-authentication certificate signed by the TAK CA. TAK maps that identity to its file user/groups.
+    Browser session lifecycle, every upstream session boundary, and revocation timing require separate assessment;
+    TAK-signed clients use certificate-table revocation without rolling TAK, while legacy clients retain a CRL reload fallback.
+  status: planned
+  source_entries:
+    - location: pepr/capabilities/takclient-pki.ts

@@ -1,0 +1,116 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: TAK package control evidence (draft)
+version: 0.1.0
+description: Proposed package evidence for selected NIST SP 800-53 Rev. 5 base controls. This is not an authoritative
+  catalog, assessment, authorization, or certification.
+source: https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final
+families:
+  - id: AC
+    name: Access Control
+  - id: IA
+    name: Identification and Authentication
+  - id: SC
+    name: System and Communications Protection
+  - id: AU
+    name: Audit and Accountability
+  - id: CM
+    name: Configuration Management
+  - id: SI
+    name: System and Information Integrity
+fieldSchema:
+  fields:
+    id:
+      type: string
+      ui_type: short_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: true
+      editable: true
+      display_order: 0
+      category: core
+      tab: overview
+    title:
+      type: string
+      ui_type: short_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: true
+      editable: true
+      display_order: 1
+      category: core
+      tab: overview
+    family:
+      type: string
+      ui_type: short_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: true
+      editable: true
+      display_order: 2
+      category: core
+      tab: overview
+    description:
+      type: string
+      ui_type: textarea
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: false
+      editable: true
+      display_order: 3
+      category: content
+      tab: overview
+    implementation_status:
+      type: string
+      ui_type: select
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: true
+      editable: true
+      display_order: 4
+      category: compliance
+      tab: implementation
+      options:
+        - Partially Implemented
+        - Planned
+        - Implemented
+    control_implementation_narrative:
+      type: string
+      ui_type: long_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: false
+      editable: true
+      display_order: 5
+      category: compliance
+      tab: implementation
+    assessment_procedures:
+      type: string
+      ui_type: long_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: false
+      editable: true
+      display_order: 6
+      category: compliance
+      tab: implementation
+    test_results:
+      type: string
+      ui_type: long_text
+      is_array: false
+      required: true
+      visible: true
+      show_in_table: false
+      editable: true
+      display_order: 7
+      category: compliance
+      tab: implementation
+  total_controls: 14

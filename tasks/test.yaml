@@ -657,6 +657,7 @@ tasks:
             TAK_NAMESPACE=cloudtak python3 ./tests/flows.py --check
           fi
 
+  # @lulaStart b1f7cb05-0c51-51e0-a1ed-7c7633245bd6
   - name: logs
     description: Confirm TAK writes stdout logs, and query Loki when core-logging is installed
     actions:
@@ -716,6 +717,7 @@ tasks:
             --pause 5
           echo "Loki returned CloudTAK logs"
 
+  # @lulaEnd b1f7cb05-0c51-51e0-a1ed-7c7633245bd6
   - name: gateway
     description: Wait for the passthrough gateway selected by the test bundle
     actions:

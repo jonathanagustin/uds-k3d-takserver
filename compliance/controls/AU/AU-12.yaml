@@ -1,0 +1,23 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+id: AU-12
+title: Audit Record Generation
+family: AU
+description: Package evidence notes for Audit Record Generation. Consult the authoritative NIST control and the
+  deployment assessment for full requirements.
+implementation_status: Partially Implemented
+control_implementation_narrative: The Loki helper queries the deployment log stream and requires the selected application
+  messages. It is verification evidence for record generation/collection, not an implementation of audit integrity,
+  retention, time synchronization, or the organizational logging policy. Those controls depend on Core and operations.
+assessment_procedures: 'Review the marked source against the deployed version. Relevant automated checks: tests/test_query_loki.sh,
+  tests/loki-client.sh. Re-run deployment checks in the target environment and record outcomes before assessment.'
+test_results: Not assessed. Linked tests are existing evidence procedures; this control set does not claim a fresh
+  live assessment or independent approval.
+links:
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/test_query_loki.sh
+    rel: evidence
+    text: tests/test_query_loki.sh
+  - href: https://github.com/jonathanagustin/uds-k3d-takserver/blob/main/tests/loki-client.sh
+    rel: evidence
+    text: tests/loki-client.sh

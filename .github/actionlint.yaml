@@ -4,6 +4,9 @@
 # GitHub added these permission scopes before actionlint knew about them.
 # The shared Scorecard workflow requests them through `permissions: read-all`.
 paths:
+  .github/workflows/scorecard-analysis.yaml:
+    ignore:
+      - 'unknown permission scope "(code-quality|drives|vulnerability-alerts)"'
   .github/workflows/scorecard.yaml:
     ignore:
       - 'unknown permission scope "(code-quality|drives|vulnerability-alerts)"'

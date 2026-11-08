@@ -1,0 +1,44 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Scorecard analysis adapter
+
+on:
+  workflow_call:
+    secrets:
+      SCORECARD_READ_TOKEN:
+        description: Optional token for Scorecard repository inspection
+        required: false
+
+# The pinned upstream workflow declares read-all. Preserve that permission
+# contract plus SARIF upload and badge publication without widening the caller.
+permissions:
+  actions: read
+  artifact-metadata: read
+  attestations: read
+  checks: read
+  code-quality: read
+  contents: read
+  deployments: read
+  discussions: read
+  drives: read
+  issues: read
+  models: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  statuses: read
+  vulnerability-alerts: read
+  # Upload results to code scanning.
+  security-events: write
+  # Publish results for the Scorecard badge.
+  id-token: write
+
+jobs:
+  analyze:
+    uses: defenseunicorns/uds-common/.github/workflows/callable-scorecard.yaml@9cb4ebfd9f9a5efd1dbc454bf3aae843d0b57b9f # v1.32.2
+    # Only the explicitly received SCORECARD_READ_TOKEN and automatic GitHub
+    # token are available here. The upstream interface does not declare its
+    # token, so inherit forwards this restricted context across the final hop.
+    secrets: inherit

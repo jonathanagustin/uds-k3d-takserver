@@ -144,6 +144,18 @@ def load_config(path):
     return body
 
 
+def selected_configs(paths):
+    profile = os.environ.get("BENCH_PROFILE", "all")
+    if profile not in ("all", "baseline"):
+        raise ValueError("BENCH_PROFILE must be all or baseline")
+    configs = [load_config(path) for path in paths]
+    if profile == "baseline":
+        configs = [config for config in configs if config["name"] == "baseline"]
+        if len(configs) != 1 or configs[0].get("skip"):
+            raise ValueError("baseline profile requires exactly one enabled baseline config")
+    return configs
+
+
 def selected_clients(config):
     raw = os.environ.get("BENCH_CLIENTS", "10")
     if raw == "all":
@@ -1019,17 +1031,20 @@ def main(argv):
     config_dir = ROOT / "bench" / "configs"
     out_dir = ROOT / "bench" / "out"
     tester = Path(os.environ.get("TAK_LOAD_TESTER", ROOT / "upstream" / "takserver" / "src" / "testing" / "load_test" / "tak_tester.py"))
+    try:
+        configs = selected_configs(sorted(config_dir.glob("*.yaml")))
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    if not configs:
+        print("no bench configs", file=sys.stderr)
+        return 2
     if not shutil.which("kubectl") and not shutil.which("uds"):
         print("kubectl is not available, so no benchmark record was written", file=sys.stderr)
         return 2
     cold, cold_errors = ready_age()
     failed = False
-    configs = sorted(config_dir.glob("*.yaml"))
-    if not configs:
-        print("no bench configs", file=sys.stderr)
-        return 2
-    for path in configs:
-        original = load_config(path)
+    for original in configs:
         if original.get("skip"):
             reason = original.get("reason") or "skipped"
             print(f"skip {original['name']}: {reason}")

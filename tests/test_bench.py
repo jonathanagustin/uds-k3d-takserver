@@ -15,6 +15,7 @@ import textwrap
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 def load(name, relative):
@@ -31,6 +32,48 @@ phases = load("bench_phases", "bench/phases.py")
 runner = load("bench_run", "bench/run.py")
 startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
+
+
+class ProfileSelectionTests(unittest.TestCase):
+    def paths(self):
+        return sorted((runner.ROOT / "bench" / "configs").glob("*.yaml"))
+
+    def test_default_all_preserves_every_config_including_explicit_skip(self):
+        with patch.dict(os.environ, {}, clear=True):
+            configs = runner.selected_configs(self.paths())
+        self.assertEqual([config["name"] for config in configs],
+                         [runner.load_config(path)["name"] for path in self.paths()])
+        self.assertTrue(next(config for config in configs if config["name"] == "gc-serial")["skip"])
+
+    def test_baseline_only_preserves_requested_client_counts_and_config(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline", "BENCH_CLIENTS": "10,50"}):
+            configs = runner.selected_configs(self.paths())
+            self.assertEqual(configs, [runner.load_config(runner.ROOT / "bench/configs/baseline.yaml")])
+            self.assertEqual(runner.selected_clients(configs[0]), [10, 50])
+        self.assertFalse(configs[0]["restart"])
+
+    def test_main_runs_only_selected_baseline_points(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline", "BENCH_CLIENTS": "10,50"}), \
+                patch.object(runner.shutil, "which", return_value="fixture-kubectl"), \
+                patch.object(runner, "ready_age", return_value=(12, [])), \
+                patch.object(runner, "snapshot", return_value={}) as snapshot, \
+                patch.object(runner, "restore") as restore, \
+                patch.object(runner, "one", return_value={"errors": []}) as one:
+            self.assertEqual(runner.main([]), 0)
+        self.assertEqual([(call.args[0]["name"], call.args[1]) for call in one.call_args_list],
+                         [("baseline", 10), ("baseline-c50", 50)])
+        snapshot.assert_called_once()
+        restore.assert_called_once()
+
+    def test_invalid_selector_exits_before_cluster_queries(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "unknown"}), patch.object(runner, "ready_age") as query:
+            self.assertEqual(runner.main([]), 2)
+        query.assert_not_called()
+
+    def test_baseline_cannot_silently_run_nothing(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline"}):
+            with self.assertRaisesRegex(ValueError, "exactly one enabled baseline"):
+                runner.selected_configs([])
 
 
 def record(config, arch, rss, received, duration, mean, ready):

@@ -106,7 +106,7 @@ spec:
         host: {{ .Values.api.web.host | quote }}
         port: {{ .Values.api.web.port }}
         annotations:
-          uds.dev/title: "TAK Server"
+          {{- toYaml (mergeOverwrite (dict "uds.dev/title" "TAK Server") .Values.exposeAnnotations) | nindent 10 }}
         # The operator turns each path into a Blackbox probe of
         # https://<host>.<domain><path>. TAK's own controller serves /login
         # with 200 and no redirect, so a pass means TAK answered, not

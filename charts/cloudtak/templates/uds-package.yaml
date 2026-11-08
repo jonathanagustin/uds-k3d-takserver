@@ -77,7 +77,8 @@ spec:
         host: {{ .Values.host | quote }}
         port: 5000
         annotations:
-          uds.dev/title: "CloudTAK"
+          {{- $icon := printf "data:image/svg+xml;base64,%s" (.Files.Get "files/icon.svg" | b64enc) }}
+          {{- toYaml (mergeOverwrite (dict "uds.dev/title" "CloudTAK" "uds.dev/icon" $icon) .Values.exposeAnnotations) | nindent 10 }}
         # The operator turns this path into a Blackbox probe. CloudTAK serves
         # its login page with 200 and no redirect, without a session.
         {{- if .Values.uptime.enabled }}

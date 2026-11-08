@@ -84,12 +84,15 @@ jobs:
           python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate -v
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
+          bash tests/test_api_smoke_diag.sh
+          bash tests/test_node_agent_ready.sh
+          node --test tests/test_tak_error_guard.mjs
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_full_core_top tests.test_runner_wedge_probe -v
 
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.
@@ -112,4 +115,4 @@ jobs:
       - name: Package values follow the variables
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations -v

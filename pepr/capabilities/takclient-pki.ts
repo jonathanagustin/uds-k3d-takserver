@@ -23,6 +23,7 @@ export interface Issued {
   keyPem: string;
   serial: string;
   fingerprint: string;
+  notBefore: Date;
   notAfter: Date;
 }
 
@@ -82,7 +83,14 @@ export function issue(ca: Ca, callsign: string, days: number, now: Date, serial 
   ]);
   cert.sign(ca.key, forge.md.sha256.create());
   const certPem = pki.certificateToPem(cert);
-  return { certPem, keyPem, serial, fingerprint: fingerprint(certPem), notAfter: cert.validity.notAfter };
+  return {
+    certPem,
+    keyPem,
+    serial,
+    fingerprint: fingerprint(certPem),
+    notBefore: cert.validity.notBefore,
+    notAfter: cert.validity.notAfter,
+  };
 }
 
 // ATAK on Android 9 reads PKCS#12 with SHA-1 and 3DES only, as atak/ci/e2e.sh

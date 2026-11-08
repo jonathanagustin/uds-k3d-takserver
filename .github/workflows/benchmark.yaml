@@ -25,8 +25,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: benchmark-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'benchmark' && github.run_id || 'validation' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A newer pull request push or main push cancels the older run of this
+  # workflow on that ref. Schedule and workflow_dispatch each get their own
+  # run id: they are not cancelled, and they do not wait behind a push.
+  # Release and Demo Video are not in this group. A finished run is kept.
+  # A labeled event for any other label gets its own run id, so it does not
+  # cancel a benchmark validation already running on this pull request.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event.action == 'labeled' && github.event.label.name != 'benchmark')) && github.run_id || 'gate' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   benchmark:
@@ -34,8 +40,7 @@ jobs:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark') &&
-      (github.event.action != 'labeled' || github.event.label.name == 'benchmark'))
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark') && (github.event.action != 'labeled' || github.event.label.name == 'benchmark'))
     strategy:
       fail-fast: false
       matrix:

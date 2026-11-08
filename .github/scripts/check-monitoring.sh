@@ -46,4 +46,30 @@ if ! grep -A 2 'alert: TAKDeploymentUnavailable' <<< "${rendered}" | grep -q 'fo
   fail "TAKDeploymentUnavailable for is not 10m"
 fi
 
+for alert in TAKCertificateExpiryWarning TAKCertificateExpiryCritical TAKCertificateReadFailed; do
+  if ! grep -q "alert: ${alert}" <<< "${rendered}"; then
+    fail "${alert} is missing"
+  fi
+done
+if ! grep -q 'description: tak-certificates' <<< "${rendered}"; then
+  fail "certificate expiry metrics have no Package monitor"
+fi
+disabled="$(helm template takserver charts/takserver --namespace takserver --api-versions monitoring.coreos.com/v1 --set health.enabled=false)"
+if grep -q 'alert: TAKCertificate\|description: tak-certificates' <<< "${disabled}"; then
+  fail "certificate expiry monitoring is rendered with health disabled"
+fi
+cloudtak="$(helm template cloudtak charts/cloudtak --namespace cloudtak --api-versions monitoring.coreos.com/v1)"
+for alert in CloudTAKTargetDown CloudTAKDeploymentUnavailable CloudTAKPostGISTargetDown CloudTAKPostGISUnavailable CloudTAKPodRestartLoop; do
+  if ! grep -q "alert: ${alert}" <<< "${cloudtak}"; then
+    fail "${alert} is missing"
+  fi
+done
+if ! grep -q 'kube_statefulset_status_replicas_ready' <<< "${cloudtak}"; then
+  fail "CloudTAK PostGIS availability does not use StatefulSet metrics"
+fi
+slim="$(helm template cloudtak charts/cloudtak --namespace cloudtak)"
+if grep -q 'kind: PrometheusRule' <<< "${slim}"; then
+  fail "CloudTAK alerts rendered without the monitoring API"
+fi
+
 echo "monitoring: target-down uses kube-state-metrics and there is no ServiceMonitor"

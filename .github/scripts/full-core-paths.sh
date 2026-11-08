@@ -7,9 +7,13 @@
 #
 #   EVENT    github.event_name
 #   LABELED  "true" when the pull request has the full-core label
-#   BASE     pull request base sha
-#   HEAD     pull request head sha
+#   BASE     pull request base sha, or github.event.before on a push
+#   HEAD     pull request head sha, or github.sha on a push
 #   CHANGED  newline-separated paths, instead of git diff (for tests)
+#
+# schedule and workflow_dispatch always run. A pull request with the label
+# always runs. A push uses the commits just pushed (two-dot), not the whole
+# history. A push with no previous sha runs, so a new branch is not skipped.
 set -euo pipefail
 
 out="${GITHUB_OUTPUT:-/dev/stdout}"
@@ -20,17 +24,32 @@ decide() {
   exit 0
 }
 
-if [[ "${EVENT:-}" != "pull_request" ]]; then
-  decide true "${EVENT:-unknown} event"
-fi
-if [[ "${LABELED:-false}" == "true" ]]; then
-  decide true "full-core label"
-fi
+case "${EVENT:-}" in
+  schedule | workflow_dispatch)
+    decide true "${EVENT} event"
+    ;;
+  pull_request)
+    if [[ "${LABELED:-false}" == "true" ]]; then
+      decide true "full-core label"
+    fi
+    ;;
+  push) ;;
+  *)
+    decide true "${EVENT:-unknown} event"
+    ;;
+esac
 
 if [[ -n "${CHANGED+x}" ]]; then
   changed="${CHANGED}"
 else
-  changed="$(git diff --name-only "${BASE:?}...${HEAD:?}")"
+  if [[ "${EVENT}" == "push" ]]; then
+    if [[ -z "${BASE:-}" || "${BASE}" =~ ^0+$ ]]; then
+      decide true "push has no previous commit"
+    fi
+    changed="$(git diff --name-only "${BASE}" "${HEAD:?}")"
+  else
+    changed="$(git diff --name-only "${BASE:?}...${HEAD:?}")"
+  fi
 fi
 
 # Backup, monitoring, UDS Core integration, the bundles, and the files this
@@ -39,7 +58,7 @@ fi
 pattern='^('
 pattern+='bundle/'
 pattern+='|\.github/workflows/full-core\.yaml'
-pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|redact-logs|redact-then-filter|checked-pipe|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
+pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|runner-wedge-probe|redact-logs|redact-then-filter|checked-pipe|node-agent-ready|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
 pattern+='|tasks\.yaml'
 pattern+='|tasks/test\.yaml'
 pattern+='|tests/(backup-restore|db-dump-secret|local-path-local|grafana-alerts|falco-events|portal|uptime-probes|loki-client|exemptions)[^/]*'

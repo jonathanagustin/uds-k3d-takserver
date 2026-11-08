@@ -20,13 +20,19 @@ import {
 } from '../.github/container-and-chart/cloudtak/sso-fetch.mjs';
 
 test('a fetch failure keeps the cause code and drops secrets', () => {
-    const cause = new Error('unable to verify the first certificate -----BEGIN CERTIFICATE-----\nSECRETPEM\n-----END CERTIFICATE----- https://sso.example/realms/uds/.well-known/openid-configuration?code=SECRETTOKEN Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.signaturevalue');
+    const cause = new Error(
+        'unable to verify the first certificate '
+        + 'https://sso.example/realms/uds/.well-known/openid-configuration?code=SECRETTOKEN '
+        + 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.signaturevalue '
+        + '-----BEGIN CERTIFICATE-----\nSECRETPEM\n-----END CERTIFICATE----- TAILSECRET',
+    );
     cause.code = 'UNABLE_TO_VERIFY_LEAF_SIGNATURE';
     const error = new TypeError('fetch failed');
     error.cause = cause;
     const text = boundedCause(error);
     assert.match(text, /TypeError: UNABLE_TO_VERIFY_LEAF_SIGNATURE/);
     assert.equal(text.includes('SECRETPEM'), false);
+    assert.equal(text.includes('TAILSECRET'), false);
     assert.equal(text.includes('SECRETTOKEN'), false);
     assert.equal(text.includes('eyJ'), false);
     assert.equal(text.includes('BEGIN'), false);
@@ -48,15 +54,15 @@ test('a plain failure reason stays bounded', () => {
     assert.equal(text.startsWith('preface'), true);
 });
 
-test('complete pem blocks are redacted and surrounding text remains', () => {
+test('text before the first pem marker remains and nothing after it does', () => {
     const text = sanitizeDiagnostic(
-        '-----BEGIN CERTIFICATE-----\nONESECRET\n-----END CERTIFICATE----- kept '
+        'preface -----BEGIN CERTIFICATE-----\nONESECRET\n-----END CERTIFICATE----- kept '
         + '-----BEGIN PRIVATE KEY-----\nTWOSECRET\n-----END PRIVATE KEY-----',
     );
+    assert.equal(text, 'preface [redacted]');
     assert.equal(text.includes('ONESECRET'), false);
     assert.equal(text.includes('TWOSECRET'), false);
-    assert.equal(text.includes('BEGIN'), false);
-    assert.equal(text.includes('kept'), true);
+    assert.equal(text.includes('kept'), false);
 });
 
 test('an unclosed pem block redacts every later fragment', () => {
@@ -73,20 +79,44 @@ test('an unclosed pem block redacts every later fragment', () => {
     assert.equal(bounded.length <= 240, true);
 });
 
+test('malformed and nested pem markers redact the rest', () => {
+    const overlong = sanitizeDiagnostic(`preface -----BEGIN ${'A'.repeat(65)}-----\nSHORTKEYFRAGMENT`);
+    assert.equal(overlong, 'preface [redacted]');
+    const lowercase = sanitizeDiagnostic('preface -----BEGIN private key-----\nSHORTKEYFRAGMENT');
+    assert.equal(lowercase, 'preface [redacted]');
+    const truncated = sanitizeDiagnostic('preface -----BEGIN PRIVATE KEY\nSHORTKEYFRAGMENT');
+    assert.equal(truncated, 'preface [redacted]');
+    const nested = sanitizeDiagnostic(
+        'preface\n-----BEGIN PRIVATE KEY-----\nOUTERSECRET\n'
+        + '-----BEGIN CERTIFICATE-----\nINNERSECRET\n-----END CERTIFICATE-----\n'
+        + 'TAILSECRET\n-----END PRIVATE KEY-----',
+    );
+    assert.equal(nested, 'preface [redacted]');
+    assert.equal(nested.includes('TAILSECRET'), false);
+    assert.equal(nested.includes('INNERSECRET'), false);
+    const mismatched = sanitizeDiagnostic(
+        'preface -----BEGIN PRIVATE KEY-----\nOUTERSECRET\n-----END CERTIFICATE-----\nTAILSECRET',
+    );
+    assert.equal(mismatched, 'preface [redacted]');
+    assert.equal(mismatched.includes('TAILSECRET'), false);
+});
+
 test('long and repeated pem input stays redacted without a slow scan', () => {
     const body = `${'A'.repeat(200000)}SECRETLONG`;
     const longBlock = sanitizeDiagnostic(
-        `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\nkept-tail`,
+        `preface -----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\nkept-tail`,
     );
+    assert.equal(longBlock, 'preface [redacted]');
     assert.equal(longBlock.includes('SECRETLONG'), false);
-    assert.equal(longBlock.includes('kept-tail'), true);
-    const attack = `${'-----BEGIN -----'.repeat(20000)}SHORTKEYFRAGMENT`;
+    assert.equal(longBlock.includes('kept-tail'), false);
+    const attack = `preface ${'-----BEGIN -----'.repeat(20000)}SHORTKEYFRAGMENT`;
     const started = performance.now();
     const repeated = sanitizeDiagnostic(attack);
     const elapsed = performance.now() - started;
+    assert.equal(repeated, 'preface [redacted]');
     assert.equal(repeated.includes('SHORTKEYFRAGMENT'), false);
-    assert.equal(repeated.includes('BEGIN'), false);
     assert.equal(elapsed < 1000, true);
+    assert.equal(repeated.length <= 'preface [redacted]'.length, true);
 });
 
 function lookupLocal(_hostname, options, callback) {

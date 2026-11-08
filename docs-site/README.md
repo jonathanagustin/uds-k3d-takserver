@@ -12,8 +12,12 @@ routes remain unchanged. Groups without pages in a release are omitted, and the
 active group opens while unrelated groups stay collapsed.
 
 `npm run build` builds release documentation and the current checkout together.
-The site root contains the newest stable release. `/main/` contains unreleased
-documentation and displays a banner. Up to five release minors are retained,
+The site root uses the current authored project landing, with its guide links
+and version/search context pointing to the newest stable release. Only that
+landing is shared: every released guide still comes from its tag, and archived
+version homes retain their own source or fallback shell. The root landing edits
+`main/docs-site/src/home.mdx`; released guides link to their tag.
+`/main/` contains unreleased documentation and displays a banner. Up to five release minors are retained,
 using only the newest patch per minor from v0.7 onward; older minors use paths
 such as `/v0-8/`. Pre-release and non-version tags are excluded.
 
@@ -21,7 +25,8 @@ such as `/v0-8/`. Pre-release and non-version tags are excluded.
 tags, runs the current `scripts/sync-docs.mjs` against each source tree, and removes
 the worktrees afterward. Fetch all tags before building (`git fetch --tags`).
 The sync script accepts `--repo-root`, `--output-root`, `--url-prefix`, `--git-ref`,
-and `--source-ref`. It copies README, the existing `docs/` reference pages,
+and `--source-ref`. The optional `--landing-source` selects the current authored
+home for the latest root only. It copies README, the existing `docs/` reference pages,
 `docs/how-to/` when present, `adr/`, and the repository policy/changelog files.
 Only files present in that version are included. Generated content and version
 metadata are gitignored. A broken internal link fails the build.
@@ -37,9 +42,10 @@ The Docs workflow builds on main pushes and published releases. Release events
 use the main renderer and fetch all tags, so publishing a release moves the
 latest documentation to the root without copying snapshots into the repository.
 
-When a source ref contains `src/home.mdx`, it provides that channel's splash page.
-An older release without this file receives a small navigation shell pointing to
-its own guides. README is published at Getting started. On an authored splash,
+Archived releases use `src/home.mdx` from their source ref when present; older
+ones without this file receive a small navigation shell pointing to their own
+guides. The latest root uses the current project landing described above. README
+is published at Getting started. On an authored splash,
 a home URL hash such as `/#quick-start` opens that section on Getting started.
 The header uses the light and dark `assets/tak-on-uds-*.svg` wordmarks. The favicon uses the smaller `assets/tak-mark.svg` beacon.
 `public/og.png` is the static social image.
@@ -104,3 +110,7 @@ component. The repository source stays plain Markdown; archived release guides
 keep their source presentation. The home page uses tabs for the two deployment
 starting points, while cards link to the main tasks. Keep warnings in GitHub
 alert blocks so they remain visible in both the repository and the site.
+
+README may omit its own H1: the generated guide then uses the Getting started
+label, and its description comes from the first prose or text-bearing HTML
+paragraph. Fenced shell comments remain code, not page headings.

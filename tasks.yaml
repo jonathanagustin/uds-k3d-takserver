@@ -203,6 +203,11 @@ tasks:
       - task: test:all
       - task: test:full-core
 
+  - name: test-airgap
+    description: Install and test with external egress denied in the k3d nodes
+    actions:
+      - cmd: ./.github/scripts/test-airgap.sh
+
   - name: test-upgrade
     description: Upgrade a cluster from the latest published package to this branch
     actions:

@@ -18,7 +18,7 @@ The slim checkpoint includes `uds-k3d-dev`, which installs MinIO in `uds-dev-sta
 
 ## Decision
 
-- Slim stays the per-PR gate ([ADR 0005](0005-slim-core-boundaries.md)). Full core runs in `.github/workflows/full-core.yaml`, on pushes to main, on a nightly schedule, on `workflow_dispatch`, and on pull requests labeled `full-core`. It is not a job in `test.yaml`, because a schedule on that workflow would rerun `validate-install`.
+- Slim stays the per-PR gate ([ADR 0005](0005-slim-core-boundaries.md)). Full core runs in `.github/workflows/full-core.yaml`, on a nightly schedule, on `workflow_dispatch`, and on pull requests labeled `full-core` or changing its integration paths. It is not a job in `test.yaml`, because a schedule on that workflow would rerun `validate-install`.
 - The bundle is `bundle/full/uds-bundle.yaml`. It upgrades `core-base` the same way the slim bundle does, then deploys `core-metrics-server`, `core-logging`, `core-runtime-security`, `core-backup-restore`, `core-monitoring`, and `core-portal` at `1.15.2-upstream`, with the same keyless identity as `core-base`, then `takserver` with `cloudtak`.
 - `uds run test-full-core` deploys the cached slim checkpoint with `SLIM_CORE_VERSION=1.15.2`, then the full bundle, then `test:all`, then `test:full-core`. The checkpoint script's default is unchanged.
 - The job uses the same runner labels as `validate-install`, runs `trim-runner.sh`, and makes `/swapfile` 8G (`SWAP_GB`). The runner image already has a 3G `/swapfile`, which the script resizes instead of keeping. It does not invent a runner label.
@@ -31,3 +31,10 @@ The slim checkpoint includes `uds-k3d-dev`, which installs MinIO in `uds-dev-sta
 - The Test workflow does not keep a Zarf Actions cache. Full core does not restore one.
 - `validate-install` is not on the nightly schedule, so its per-PR runtime is unchanged.
 - A pull request without the `full-core` label skips the job. Adding the label, or pushing to a pull request that already has it, runs the job.
+
+## Actions usage update
+
+Full Core no longer repeats on every merge to `main`. Relevant PR checks and the
+daily two-architecture run remain. Immediate post-merge verification requires a
+manual run; otherwise the next daily run covers the integrated branch. This avoids
+repeating the expensive matrix for documentation merges and already-tested PRs.

@@ -5,7 +5,7 @@ name: Test
 
 on:
   pull_request:
-    types: [milestoned, opened, reopened, synchronize]
+    types: [opened, reopened, synchronize]
     # Doc-only changes skip this workflow. Changes under
     # .github/container-and-chart run it, so a rebuilt image is deployed and
     # tested before it merges.
@@ -55,10 +55,10 @@ permissions:
   id-token: write
 
 concurrency:
-  group: test-${{ github.ref }}
-  # A pull request push replaces the run before it. A main run is left
-  # alone so two merges do not cancel each other.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: test-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  # Validate the newest branch state rather than queueing obsolete merges.
+  # Manual trials have their own group and are never replaced automatically.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   images:

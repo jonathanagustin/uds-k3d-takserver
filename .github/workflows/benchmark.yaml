@@ -1,7 +1,7 @@
 # Copyright 2026 uds-k3d-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Nightly footprint, load, and ready-time sweep. It is not part of the per-PR
+# Weekly footprint, load, and ready-time sweep. It is not part of the per-PR
 # Test workflow. The client count defaults to 10. The configs also list 50
 # and 200; a manual run can pass clients=10,50,200. See bench/SCHEMA.md.
 name: Benchmark
@@ -15,7 +15,7 @@ on:
         required: false
         type: string
   schedule:
-    - cron: "41 9 * * *"
+    - cron: "41 9 * * 1"
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
@@ -25,7 +25,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: benchmark-${{ github.ref }}
+  group: benchmark-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'benchmark' && github.run_id || 'validation' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -34,7 +34,8 @@ jobs:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark'))
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'benchmark'))
     strategy:
       fail-fast: false
       matrix:

@@ -22,6 +22,29 @@ Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore
 
 Stricter review on `main` (one human approval, admins included, an up-to-date branch) is written in [Review rules for main](branch-protection.md). Those settings are not on.
 
+## Keeping Actions usage bounded
+
+Validation workflows cancel superseded runs on the same PR or branch. Test also
+replaces an older automatic `main` run; manual Test trials use separate groups.
+Package publishing, releases, and Pages deployment keep their existing completion
+rules. Batch related commits locally before pushing and avoid repeated PR body
+edits; milestone changes no longer relaunch Test, Lint, or Unit tests. Title
+validation still runs on edits so a skipped result cannot replace a failed check.
+
+Full Core still tests both architectures for relevant PR paths or the `full-core`
+label, runs daily on the latest `main`, and supports manual runs. It no longer
+repeats after every merge. This trades immediate post-merge Full Core results for
+the next daily run; use a manual run when immediate integration proof is needed.
+Benchmark keeps both architectures but runs weekly rather than daily: two scheduled
+architecture jobs instead of fourteen per week (about 86% fewer scheduled benchmark
+jobs, before retries). The `benchmark` label and manual input remain available.
+Adding unrelated labels does not restart Benchmark. Full Core retains its
+existing label handling so its required aggregate check always reports a result.
+
+These are invocation savings, not measured billing savings. Actual Actions usage
+depends on job duration, retries, runner rates, and the repository's plan. Review
+Actions usage after a week before reducing test coverage or adding more caches.
+
 ## Package reuse
 
 The dev package is created once per architecture and set of inputs. `.github/scripts/dev-package.sh key` hashes the working tree after `pin-image-tags.sh` (so the image tags count) of every tracked file that can reach the package, plus the UDS CLI version, the create variables and the architecture. The Package workflow publishes it under that key; the tag is written once and never overwritten. Test, Full Core and Benchmark deploy the slim checkpoint first, then `create-dev-package` pulls the published package, waiting up to 10 to 15 minutes for the Package workflow (stopping once that run finishes without the tag), and creates it locally only when no package appears. Fork pull requests cannot publish, so they create in-job as before. `DEV_PACKAGE_REUSE=false` or `KEY_SALT` forces a create.
@@ -64,8 +87,8 @@ To force a rebuild of every keyed image, change `KEY_SALT` in `device-images.sh`
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Full Core | `full-core.yaml` | daily at 07:17, pushes to `main`, by hand, pull requests labeled `full-core`, and pull requests that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
-| Benchmark | `benchmark.yaml` | daily at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. See [Benchmarks](benchmarks.md) |
+| Full Core | `full-core.yaml` | daily at 07:17, by hand, pull requests labeled `full-core`, and pull requests that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
+| Benchmark | `benchmark.yaml` | Mondays at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. See [Benchmarks](benchmarks.md) |
 | Scorecard | `scorecard.yaml` | Saturdays at 01:30, pushes to `main`, branch protection changes, and by hand | OpenSSF Scorecard, through the shared uds-common workflow |
 | Mirror the UDS Core checkpoint | `mirror-checkpoint.yaml` | changes to the checkpoint versions, and by hand | Copies each `k3d-core-slim-dev` version that CI deploys into this repository's GHCR, with the same digest |
 | Demo Video | `demo.yaml` | pull requests that change the demo scripts, and by hand | Records the demo videos. Only a manual run from `main` publishes and signs them. See [Demo videos](../CONTRIBUTING.md#demo-videos) |

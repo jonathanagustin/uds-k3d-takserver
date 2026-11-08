@@ -16,8 +16,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 7 * * *"
-  push:
-    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
@@ -31,8 +29,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Decides whether a pull request needs Full Core. Pushes to main, the
-  # nightly run and manual runs always do; so does a pull request with the
+  # Decides whether a pull request needs Full Core. The nightly run and
+  # manual runs always do; so does a pull request with the
   # full-core label. Otherwise only changes to backup, monitoring, UDS Core
   # integration, the bundles, or this workflow and its tests run it. This is
   # a job, not workflow-level paths, so the "full-core" check below always

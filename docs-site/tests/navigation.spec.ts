@@ -34,7 +34,8 @@ test('concepts and installation retain their routes and expand their own navigat
   });
   await expect.poll(() => concepts.evaluate((element) => element.hasAttribute('open'))).toBe(true);
   await expect(concepts.getByRole('link', { name: 'Networking', exact: true })).toHaveAttribute('aria-current', 'page');
-  await page.goto('getting-started/');
+  // Navigation assertions do not depend on third-party README badge images.
+  await page.goto('getting-started/', { waitUntil: 'domcontentloaded' });
   const gettingStarted = sidebar.locator('details').filter({
     has: page.locator('summary').filter({ hasText: /^Getting started$/ }),
   });

@@ -35,7 +35,7 @@ def verify(event, requested, install, upgrade, pg15):
 def main():
     event, requested = os.environ["EVENT_NAME"], os.environ.get("TRUST_BUNDLE", "false")
     if sys.argv[1:] == ["plan"]:
-        matrix = install_matrix(event, requested, os.environ.get("TEST_RUNNER") or "ubuntu-26.04")
+        matrix = install_matrix(event, requested, os.environ.get("TEST_RUNNER") or "ubuntu-24.04")
         output = "install-matrix=" + json.dumps(matrix, separators=(",", ":")) + "\n"
         if path := os.environ.get("GITHUB_OUTPUT"):
             with open(path, "a", encoding="utf-8") as stream:

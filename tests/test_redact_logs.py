@@ -3,8 +3,10 @@
 
 """Rendered TAK config must not survive the log redactor."""
 
+import base64
 import gzip
 import importlib.util
+import json
 import os
 import stat
 import subprocess
@@ -25,6 +27,29 @@ KEYSTORE = "keystore-sentinel-value"
 TRUST = "trust-sentinel-value"
 DB = "db-sentinel-value"
 FORM = "form-sentinel-value"
+PRIVATE_PARTS = ("synthetic-private-material-a", "synthetic-private-material-b")
+PRIVATE_PEM = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(PRIVATE_PARTS) + "\n-----END PRIVATE KEY-----"
+PRIVATE_B64 = base64.b64encode(PRIVATE_PEM.encode()).decode()
+PUBLIC_PEM = "-----BEGIN CERTIFICATE-----\npublic-certificate-sentinel\n-----END CERTIFICATE-----"
+PUBLIC_B64 = base64.b64encode(PUBLIC_PEM.encode()).decode()
+
+
+def tls_key_log():
+    return "\n".join((
+        f"TENANT_TLS_KEY={PRIVATE_B64}",
+        f'ADMIN_TLS_KEY="{PRIVATE_B64}"',
+        f"TENANT_TLS_KEY: {PRIVATE_B64}",
+        f"tls.key: '{PRIVATE_B64}'",
+        json.dumps({"data": {"tls.key": PRIVATE_B64, "tls.crt": PUBLIC_B64}}),
+        json.dumps(json.dumps({"tls.key": PRIVATE_B64})),
+        "ADMIN_TLS_KEY: |\n  " + PRIVATE_B64,
+        PRIVATE_PEM,
+        json.dumps({"key": PRIVATE_PEM}),
+        # Helm's generic value field has no key-specific name to match.
+        json.dumps({"path": "tls.key", "value": PRIVATE_B64}),
+        f"TENANT_TLS_CERT: {PUBLIC_B64}",
+        PUBLIC_PEM,
+    )) + "\n"
 
 
 def rendered_coreconfig():
@@ -55,6 +80,63 @@ client_secret={FORM}&grant_type=authorization_code
 
 
 class RedactLogsTests(unittest.TestCase):
+    def assert_no_private_material(self, text):
+        self.assertFalse(any(value in text for value in (*PRIVATE_PARTS, PRIVATE_B64)),
+                         "private material survived redaction")
+
+    def test_tls_keys_are_removed_without_masking_public_certificates(self):
+        text, count = redact.redact_text(tls_key_log())
+        self.assertGreater(count, 0)
+        self.assert_no_private_material(text)
+        self.assertIn(PUBLIC_PEM, text)
+        self.assertIn(PUBLIC_B64, text)
+        twice, second_count = redact.redact_text(text)
+        self.assertEqual(twice, text)
+        self.assertEqual(second_count, 0)
+
+    def test_tls_named_scalars_are_masked_even_without_pem_encoding(self):
+        value = "synthetic-opaque-private-key"
+        for raw in (f"TENANT_TLS_KEY={value}", f"ADMIN_TLS_KEY: {value}",
+                    f"tls.key: '{value}'", json.dumps({"data": {"tls.key": value}}),
+                    json.dumps(json.dumps({"tls.key": value}))):
+            cleaned, _ = redact.redact_text(raw)
+            self.assertFalse(value in cleaned, "named private-key scalar survived")
+
+    def test_raw_escaped_and_incomplete_pem_blocks_do_not_leave_key_fragments(self):
+        for kind in ("PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY", "OPENSSH PRIVATE KEY", "ENCRYPTED PRIVATE KEY"):
+            pem = PRIVATE_PEM.replace("PRIVATE KEY", kind)
+            for raw in (pem, json.dumps({"key": pem}), pem.split("-----END")[0]):
+                cleaned, _ = redact.redact_text(raw)
+                self.assert_no_private_material(cleaned)
+
+    def test_staged_artifact_and_printed_logs_remove_tls_key_canaries(self):
+        scripts = Path(__file__).resolve().parents[1] / ".github/scripts"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw = root / "fixture.log"
+            raw.write_text(tls_key_log())
+            staged = root / "sanitized"
+            result = subprocess.run(["bash", str(scripts / "stage-sanitized-logs.sh"), str(staged), str(raw)],
+                                    text=True, capture_output=True, timeout=15)
+            self.assertEqual(result.returncode, 0, "TLS artifact staging failed")
+            subprocess.run(["bash", str(scripts / "stage-sanitized-logs.sh"), "--check", str(staged)], check=True)
+            files = list((staged / "payload").rglob("*.log"))
+            self.assertEqual(len(files), 1)
+            payload = files[0].read_text()
+            self.assert_no_private_material(payload)
+            self.assertIn(PUBLIC_PEM, payload)
+            self.assertIn(PUBLIC_B64, payload)
+            # Both the normal artifact print and late/raw log print must redact.
+            for source in (staged / "payload", raw):
+                printed = subprocess.run(["bash", str(scripts / "print-logs.sh"), str(source)],
+                                         text=True, capture_output=True, timeout=15)
+                self.assertEqual(printed.returncode, 0)
+                self.assert_no_private_material(printed.stdout)
+            filtered = subprocess.run(["bash", str(scripts / "redact-then-filter.sh"), "--tail", "2"],
+                                      input=PRIVATE_PEM, text=True, capture_output=True, timeout=15)
+            self.assertEqual(filtered.returncode, 0)
+            self.assert_no_private_material(filtered.stdout)
+
     def test_xml_secret_forms_are_removed_and_the_rest_stays(self):
         text, count = redact.redact_text(rendered_coreconfig())
         self.assertGreaterEqual(count, 7)

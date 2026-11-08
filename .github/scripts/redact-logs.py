@@ -21,6 +21,8 @@ exits non-zero. It does not follow a symlink and does not leave the original
 bytes in place. Stdout modes print the omission and exit non-zero.
 """
 
+import base64
+import binascii
 import os
 import re
 import stat
@@ -35,9 +37,30 @@ VALUE = r"(?!\[REDACTED\])[^\s\"'\\,]+"
 # clientId is not in this list.
 NAMES = (
     r"secret|keystorePass|truststorePass|password|client_secret|"
-    r"TAK_OIDC_CLIENT_SECRET|OIDC_CLIENT_SECRET|TAK_KEYSTORE_PASS|CAPASS"
+    r"TAK_OIDC_CLIENT_SECRET|OIDC_CLIENT_SECRET|TAK_KEYSTORE_PASS|CAPASS|"
+    r"TENANT_TLS_KEY|ADMIN_TLS_KEY|TLS_KEY|tls\.key"
 )
 NOT_MASK = r"(?!\[REDACTED\])"
+TLS_FIELDS = r"TENANT_TLS_KEY|ADMIN_TLS_KEY|TLS_KEY|tls\.key"
+# Match PEM across physical or escaped newlines before any tail/filter runs.
+# An incomplete private-key block consumes the remaining stream fail-closed.
+PRIVATE_KEY_START = re.compile(rb"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----")
+PRIVATE_KEY = re.compile(
+    r"-----BEGIN (?P<kind>(?:[A-Z0-9]+ )?PRIVATE KEY)-----[\s\S]*?"
+    r"(?:-----END (?P=kind)-----|\Z)"
+)
+ENCODED_PEM = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{80,}={0,2}(?![A-Za-z0-9+/=])")
+TLS_BLOCK = re.compile(
+    rf"(?m)^(?P<indent>[ \t]*)(?P<field>{TLS_FIELDS}):[ \t]*[|>][+-]?[0-9]?[ \t]*\n"
+    r"(?P<body>(?:(?P=indent)[ \t]+[^\n]*(?:\n|$))+)"
+)
+TLS_PATTERNS = (
+    # YAML/JSON field scalars, including escaped JSON embedded in log strings.
+    re.compile(rf'(\b(?:{TLS_FIELDS})\b\\+"\s*:\s*\\+"){NOT_MASK}(?:(?!\\+")[\s\S])*(\\+")', re.IGNORECASE),
+    re.compile(rf'(\b(?:{TLS_FIELDS})\b"?\s*:\s*"){NOT_MASK}(?:\\.|[^"\\])*(")', re.IGNORECASE),
+    re.compile(rf"(\b(?:{TLS_FIELDS})\b'?\s*:\s*'){NOT_MASK}[^']*(')", re.IGNORECASE),
+    re.compile(rf"(\b(?:{TLS_FIELDS})\b\s*:\s*){NOT_MASK}(?![\"'\\])[^\s,}}]+", re.IGNORECASE),
+)
 PATTERNS = (
     # keytool -storepass X, -deststorepass X, -srckeypass X; openssl -key X,
     # -password X, -passin X, -passout X. An openssl "pass:" prefix is kept.
@@ -106,8 +129,25 @@ def _mask(match):
 
 def redact_text(text):
     """Return (text, count) with password and config-secret values replaced by MASK."""
-    total = 0
-    for pattern in PATTERNS:
+    text, total = PRIVATE_KEY.subn(MASK, text)
+
+    def encoded_private_key(match):
+        nonlocal total
+        try:
+            decoded = base64.b64decode(match.group(), validate=True)
+        except (ValueError, binascii.Error):
+            return match.group()
+        if PRIVATE_KEY_START.search(decoded):
+            total += 1
+            return MASK
+        return match.group()
+
+    # Helm may log a key under a generic values/path field. Recognize the
+    # encoded PEM itself without suppressing public certificate material.
+    text = ENCODED_PEM.sub(encoded_private_key, text)
+    text, blocks = TLS_BLOCK.subn(lambda match: match["indent"] + match["field"] + ": " + MASK + "\n", text)
+    total += blocks
+    for pattern in (*TLS_PATTERNS, *PATTERNS):
         text, count = pattern.subn(_mask, text)
         total += count
     return text, total

@@ -112,7 +112,7 @@ Full Core puts that group on `validate-full-core`, per architecture, and only wh
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. When a release is created, it calls the Release workflow |
+| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. When a release is created, it calls the Release workflow, then rebuilds Docs after successful package publication and provenance |
 | Release | `release.yaml` | a published release, a call from Release Please, and by hand with an existing tag | Builds the released package with its SBOM on amd64 and arm64, signs it keylessly, publishes it, and attests its build provenance. See [Verify a release](../README.md#verify-a-release) |
 
 ## Other clusters
@@ -204,6 +204,24 @@ Fork token permissions and fallback behavior are unchanged.
 
 Local tests validate the workflow queue contracts and run the real PostGIS build
 script against a registry fixture to check reuse after serialization and retry
-after a failed producer. They do not emulate the hosted Actions scheduler or
-prove a cold native compilation on GitHub. Issue #353 stays open pending that
-live evidence; no cold builds were dispatched solely to demonstrate savings.
+after a failed producer. Existing hosted runs also verify serialized publication,
+post-admission reuse and failed-producer takeover; [issue #353](https://github.com/jonathanagustin/uds-takserver/issues/353)
+records that evidence. This does not quantify minute savings or promise that
+failed compilation is never repeated. No cold builds were dispatched solely to
+demonstrate savings.
+
+## Documentation after release publication
+
+Release Please creates releases with `GITHUB_TOKEN`, which does not start the
+separate `release: published` Docs trigger. It calls the existing Docs workflow
+once after the Release workflow succeeds, with the published tag as an input.
+The call checks out the current main renderer, fetches all tags, and verifies
+that the published tag exists in main before building. The latest guides can
+therefore advance without depending on the earlier, concurrent main-push build.
+
+Main, direct release events and reusable calls share one workflow publication
+group, so an older running build cannot deploy after a newer release build.
+Pull request previews retain their separate ref groups and cancellation policy.
+Docs errors surface in the Release Please workflow's `docs` job; they do not
+silently count as a successful dispatch. Only that job requests Pages and OIDC
+permissions for documentation; it cannot publish packages or modify releases.

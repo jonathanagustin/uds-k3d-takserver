@@ -43,3 +43,16 @@ jobs:
     uses: ./.github/workflows/release.yaml
     with:
       tag: ${{ needs.release-please.outputs.tag }}
+
+  # GITHUB_TOKEN-created releases do not emit a new release workflow run.
+  # Wait for package publication/provenance, then rebuild with the new tag.
+  docs:
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.release-created == 'true' && needs.publish.result == 'success'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yaml
+    with:
+      release_tag: ${{ needs.release-please.outputs.tag }}

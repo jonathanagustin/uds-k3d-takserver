@@ -25,8 +25,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: benchmark-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A newer pull request push or main push cancels the older run of this
+  # workflow on that ref. Schedule and workflow_dispatch each get their own
+  # run id: they are not cancelled, and they do not wait behind a push.
+  # Release and Demo Video are not in this group. A finished run is kept.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   benchmark:

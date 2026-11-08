@@ -26,17 +26,14 @@ permissions:
   packages: read
   id-token: write
 
-concurrency:
-  group: full-core-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  # Decides whether a pull request needs Full Core. Pushes to main, the
-  # nightly run and manual runs always do; so does a pull request with the
-  # full-core label. Otherwise only changes to backup, monitoring, UDS Core
-  # integration, the bundles, or this workflow and its tests run it. This is
-  # a job, not workflow-level paths, so the "full-core" check below always
-  # reports and can be required.
+  # Decides whether this event needs Full Core. The nightly run, a manual
+  # run, and a pull request with the full-core label always do. A push to
+  # main does only when the pushed commits change a Full Core path, same as
+  # a pull request. This is a job, not workflow-level paths, so the
+  # "full-core" check below always reports and can be required. Concurrency
+  # is on the validate job, so a docs push does not cancel a validation that
+  # is already running and does not wait behind it.
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -45,13 +42,13 @@ jobs:
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
-      # Always check out: the decision script lives in the repository. Only a
-      # pull request needs the full history, for the diff against its base. The
-      # depths are strings: a bare 0 is falsy, so "&& 0 || 1" always gives 1.
+      # Always check out: the decision script lives in the repository. A pull
+      # request diffs its base, and a main push diffs github.event.before.
+      # The depths are strings: a bare 0 is falsy, so "&& 0 || 1" always gives 1.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          fetch-depth: ${{ (github.event_name == 'pull_request' || github.event_name == 'push') && '0' || '1' }}
           persist-credentials: false
 
       - name: Decide
@@ -59,14 +56,21 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'full-core') }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: ./.github/scripts/full-core-paths.sh
 
   validate-full-core:
     name: validate-full-core (${{ matrix.arch }})
     needs: [changes]
     if: needs.changes.outputs.run == 'true'
+    # Only a run that is going to validate cancels the previous validation
+    # of this architecture. amd64 and arm64 do not cancel each other. A
+    # nightly run and a manual run use their own group and are not cancelled.
+    # A skipped decision does not take this group.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ matrix.arch }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
+      cancel-in-progress: ${{ needs.changes.outputs.run == 'true' && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     strategy:
       fail-fast: false
       matrix:
@@ -320,10 +324,12 @@ jobs:
           if-no-files-found: ignore
 
   # The one check to require: success when Full Core passed or was not needed.
+  # A cancelled validation skips this job. always() would run and fail it,
+  # and that failure is what a superseded head leaves behind.
   full-core:
     runs-on: ubuntu-24.04
     needs: [changes, validate-full-core]
-    if: always()
+    if: ${{ always() && !cancelled() && needs.changes.result != 'cancelled' && needs.validate-full-core.result != 'cancelled' }}
     timeout-minutes: 5
     permissions: {}
     steps:

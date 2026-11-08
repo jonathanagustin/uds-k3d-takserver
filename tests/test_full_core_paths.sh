@@ -23,9 +23,15 @@ check() {
   fi
 }
 
-check true push false ""
-check true schedule false ""
-check true workflow_dispatch false ""
+check false push false ""
+check false push false "docs/ci.md"
+check false push false "charts/takserver/templates/prereqs.yaml"
+check true push false "charts/takserver/templates/monitoring.yaml"
+check true push false "bundle/full/uds-config.yaml"
+check true push false ".github/scripts/node-agent-ready.sh"
+check false push false "bundle/uds-config.yaml"
+check true schedule false "docs/ci.md"
+check true workflow_dispatch false "docs/ci.md"
 check true pull_request true "docs/data.md"
 check false pull_request false "docs/data.md"
 check false pull_request false "charts/takserver/templates/prereqs.yaml"
@@ -53,6 +59,17 @@ check false pull_request false "pepr/capabilities/workload.test.ts"
 check true pull_request false $'pepr/capabilities/workload.test.ts\npepr/capabilities/workload.ts'
 check true pull_request false $'bundle/uds-config.yaml\nbundle/full/uds-config.yaml'
 check true pull_request false "bundle/test-values.yaml"
+
+out="$(mktemp)"
+EVENT=push BASE=0000000000000000000000000000000000000000 HEAD=abc GITHUB_OUTPUT="${out}" "${script}" 2>/dev/null
+got="$(sed -n 's/^run=//p' "${out}")"
+rm -f "${out}"
+if [[ "${got}" == true ]]; then
+  echo "ok: push with no previous commit -> true"
+else
+  echo "not ok: push with no previous commit -> ${got}, want true"
+  fails=$((fails + 1))
+fi
 
 if (( fails > 0 )); then
   echo "${fails} case(s) failed"

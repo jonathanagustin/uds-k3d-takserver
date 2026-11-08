@@ -89,6 +89,7 @@ jobs:
   # points zarf.yaml at the tags keyed by this commit's inputs, which the
   # images job above waited for.
   scan-and-compare:
+    timeout-minutes: 60
     needs: images
     runs-on: ubuntu-latest
     permissions:

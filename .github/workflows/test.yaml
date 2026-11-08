@@ -176,6 +176,7 @@ jobs:
   # pin-image-tags.sh points the package at <version>-<key>. Zarf pulls the
   # entry for the package architecture.
   cloudtak-index:
+    timeout-minutes: 15
     needs: cloudtak-image
     runs-on: ubuntu-24.04
     permissions:
@@ -264,6 +265,7 @@ jobs:
           refs-file: ${{ runner.temp }}/pushed-refs.txt
 
   postgis-index:
+    timeout-minutes: 15
     needs: postgis-image
     runs-on: ubuntu-24.04
     permissions:
@@ -297,6 +299,7 @@ jobs:
           include-platforms: "false"
 
   check-flavor:
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -628,6 +631,7 @@ jobs:
     steps: *validate-steps
 
   verify-test:
+    timeout-minutes: 5
     runs-on: ubuntu-24.04
     needs: [validate-install, validate-upgrade, validate-upgrade-pg15]
     if: always()

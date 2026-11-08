@@ -1,5 +1,13 @@
 # TAK Server on UDS
 
+<p align="center">
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="docs-site/public/badges/release.svg" alt="Release"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml"><img src="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main" alt="Test"></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver"><img src="docs-site/public/badges/openssf-scorecard.svg" alt="OpenSSF Scorecard"></a>
+  <a href="https://www.bestpractices.dev/projects/15775"><img src="https://www.bestpractices.dev/projects/15775/badge" alt="OpenSSF Best Practices"></a>
+  <a href="LICENSE"><img src="docs-site/public/badges/license.svg" alt="License: GPL-3.0-only"></a>
+</p>
+
 <!-- github-only:start -->
 <p align="center">
   <picture>
@@ -13,12 +21,6 @@
   <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest">Releases</a>
 </p>
 <!-- github-only:end -->
-
-[![Release](docs-site/public/badges/release.svg)](https://github.com/jonathanagustin/uds-takserver/releases/latest)
-[![Test](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml)
-[![OpenSSF Scorecard](docs-site/public/badges/openssf-scorecard.svg)](https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15775/badge)](https://www.bestpractices.dev/projects/15775)
-[![License: GPL-3.0-only](docs-site/public/badges/license.svg)](LICENSE)
 
 [TAK Server](https://github.com/TAK-Product-Center/Server), the open-source Team Awareness Kit server, packaged for [UDS Core](https://docs.defenseunicorns.com/core/). It deploys the upstream TAK Server Helm chart (`5.7-RELEASE-14`), and adds Keycloak sign-in, the browser map client [CloudTAK](https://github.com/dfpc-coe/CloudTAK), and default-deny networking.
 

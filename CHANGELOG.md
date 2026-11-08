@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.10.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.9.1...v0.10.0) (2026-11-08)
+
+
+### Features
+
+* **bench:** retain bounded per-container capacity evidence ([#346](https://github.com/jonathanagustin/uds-takserver/issues/346)) ([8aacc1e](https://github.com/jonathanagustin/uds-takserver/commit/8aacc1e2d6f66c78b0602f7ce1bbc0c04b4ac01d))
+* **compliance:** add foundational mappings and a manual crawl ([#349](https://github.com/jonathanagustin/uds-takserver/issues/349)) ([6566d75](https://github.com/jonathanagustin/uds-takserver/commit/6566d7534075117208c8c45b0a21712ba34d15c5))
+* **docs:** publish versioned release and main documentation ([#348](https://github.com/jonathanagustin/uds-takserver/issues/348)) ([9cd5c2a](https://github.com/jonathanagustin/uds-takserver/commit/9cd5c2a944208248262150811dd9f48c12167493))
+* **monitoring:** alert on CloudTAK health and TAK certificate expiry ([#329](https://github.com/jonathanagustin/uds-takserver/issues/329)) ([d69317e](https://github.com/jonathanagustin/uds-takserver/commit/d69317e8b02f02fe6e24041a8e1a786893b2b4b8))
+* **portal:** customize browser tiles and add CloudTAK icon ([a8c1fcc](https://github.com/jonathanagustin/uds-takserver/commit/a8c1fcc9fffc9c139f66bda261bf50179f2c9ce8))
+* **takclient:** revoke TAK-enrolled certificates without restarting pods ([953012a](https://github.com/jonathanagustin/uds-takserver/commit/953012af00e0ac4eec6098212e05a6a7f8ee904c))
+* **takx:** add opt-in public CommonCommo build foundation ([#380](https://github.com/jonathanagustin/uds-takserver/issues/380)) ([0275ed7](https://github.com/jonathanagustin/uds-takserver/commit/0275ed7089874085bafba52b8a5d40560e32d89b))
+
+
+### Bug Fixes
+
+* **airgap:** avoid DNS lookups during firewall cleanup ([#365](https://github.com/jonathanagustin/uds-takserver/issues/365)) ([f8af744](https://github.com/jonathanagustin/uds-takserver/commit/f8af7442d67fe5b09e66ebad3dd89a911c417a9b))
+* **airgap:** pin bundle images to the packaged TAK tag ([#361](https://github.com/jonathanagustin/uds-takserver/issues/361)) ([2accfc8](https://github.com/jonathanagustin/uds-takserver/commit/2accfc8074c4927fc38ac27a0541989f8c85580f))
+* **airgap:** test direct transport reachability before isolation ([#360](https://github.com/jonathanagustin/uds-takserver/issues/360)) ([782a86d](https://github.com/jonathanagustin/uds-takserver/commit/782a86d53e71d3662ae72aea4de1257f7dda7dd6))
+* **atak:** set the device guest to 2Gi ([#357](https://github.com/jonathanagustin/uds-takserver/issues/357)) ([b6b9bfe](https://github.com/jonathanagustin/uds-takserver/commit/b6b9bfe0e237d8e5d44e8978c71b458ae14a2343))
+* **backup:** drain node-agent logs before reporting readiness ([#340](https://github.com/jonathanagustin/uds-takserver/issues/340)) ([159560a](https://github.com/jonathanagustin/uds-takserver/commit/159560aebc6d24750f356eb3ae183b15c4c9e18b))
+* **bench:** compare matched workloads and retain measured evidence ([4f3384c](https://github.com/jonathanagustin/uds-takserver/commit/4f3384ca9dca477c84b1509e9570c3eacf7a5ca9))
+* bound restore smoke and handle CloudTAK handshake resets ([54c42ba](https://github.com/jonathanagustin/uds-takserver/commit/54c42ba76c36114db5625cdcbc2961b3dd013b09))
+* **ci:** refresh docs after release publication ([#379](https://github.com/jonathanagustin/uds-takserver/issues/379)) ([27f3880](https://github.com/jonathanagustin/uds-takserver/commit/27f3880c696f90528f19702104118de9d9f4147b))
+* **docs:** recover transient downloads and avoid badge waits ([#378](https://github.com/jonathanagustin/uds-takserver/issues/378)) ([f32ee28](https://github.com/jonathanagustin/uds-takserver/commit/f32ee28c60474ce8da4105afa88114ec8b1f44bf))
+* **docs:** restore README badges that GitHub camo could not fetch ([#311](https://github.com/jonathanagustin/uds-takserver/issues/311)) ([eb65d72](https://github.com/jonathanagustin/uds-takserver/commit/eb65d723c1135edbc98460a586dcdfa26ebac57b))
+* **docs:** serve Release and License badges from the repo ([#314](https://github.com/jonathanagustin/uds-takserver/issues/314)) ([68b44db](https://github.com/jonathanagustin/uds-takserver/commit/68b44db46326285f6533d1ff4dd59a410f20b6c1))
+* **docs:** serve the OpenSSF Scorecard badge from the repo ([#313](https://github.com/jonathanagustin/uds-takserver/issues/313)) ([703c9ad](https://github.com/jonathanagustin/uds-takserver/commit/703c9ad62546e9a77e6d7d24d83cbe15f35affe5))
+* draw the architecture diagrams with plain SVG text ([#317](https://github.com/jonathanagustin/uds-takserver/issues/317)) ([cb4bd85](https://github.com/jonathanagustin/uds-takserver/commit/cb4bd8577795a541f7f2b16fba6a9eca2729f59b))
+* pin CloudTAK build tooling and document human review rules ([815d013](https://github.com/jonathanagustin/uds-takserver/commit/815d0132e00a3bff0318773749fe54cb56eddf7d))
+* skip diagnostic artifact uploads after failed tests ([2b594e8](https://github.com/jonathanagustin/uds-takserver/commit/2b594e8f040c16876060c3bd2a51b0b41bb557fb))
+* stop CI diagnostics from printing rendered TAK config ([#316](https://github.com/jonathanagustin/uds-takserver/issues/316)) ([37efa68](https://github.com/jonathanagustin/uds-takserver/commit/37efa684f3bf17628d0a039a9c4f9d751d0696aa))
+* **trust:** load the UDS CA bundle in CloudTAK and reload consumers ([#323](https://github.com/jonathanagustin/uds-takserver/issues/323)) ([fd3b725](https://github.com/jonathanagustin/uds-takserver/commit/fd3b7258a1beba3c21109bff61140a2a9d4f23b4))
+
+
+### Miscellaneous
+
+* migrate repository links and branding to uds-takserver ([#364](https://github.com/jonathanagustin/uds-takserver/issues/364)) ([ef2d1f8](https://github.com/jonathanagustin/uds-takserver/commit/ef2d1f8ba47568dc7d9137ee8d2a72d0e36dfef3))
+* **renovate:** use the recommended preset name ([f24ff48](https://github.com/jonathanagustin/uds-takserver/commit/f24ff48fe3cabccb6e28fbd0197cf1bbb59c5989))
+* update tooling patch versions ([#337](https://github.com/jonathanagustin/uds-takserver/issues/337)) ([0989ff3](https://github.com/jonathanagustin/uds-takserver/commit/0989ff3128364708782d22747156d8d73110fdaf))
+
+
+### Documentation
+
+* add TAKX setup guide and remove personal attribution ([#377](https://github.com/jonathanagustin/uds-takserver/issues/377)) ([3e41075](https://github.com/jonathanagustin/uds-takserver/commit/3e4107511cfe6fb13892a3feb029971662dc374e))
+* add task-focused operational how-to guides ([c6f5ce5](https://github.com/jonathanagustin/uds-takserver/commit/c6f5ce58b4298b521781467d9a716fd160312d9b))
+* align the landing page and navigation with UDS ([#369](https://github.com/jonathanagustin/uds-takserver/issues/369)) ([88917e9](https://github.com/jonathanagustin/uds-takserver/commit/88917e9a2292ed971038c207dcafc4a4e66f7a98))
+* clarify ambient egress service account scope ([#381](https://github.com/jonathanagustin/uds-takserver/issues/381)) ([38ebd5c](https://github.com/jonathanagustin/uds-takserver/commit/38ebd5cc7c337242f19a5f257b19cda049416480))
+* define branch protection for a solo maintainer ([14a7ff8](https://github.com/jonathanagustin/uds-takserver/commit/14a7ff8d2b8624fd0f41e4fc09938724dae946b6))
+* document Velero chart ownership migration constraints ([#325](https://github.com/jonathanagustin/uds-takserver/issues/325)) ([c30fc6e](https://github.com/jonathanagustin/uds-takserver/commit/c30fc6e9a9adf710b7ab3a8588b84a9ef4a4fb4c))
+* improve navigation and add browser coverage ([2e54695](https://github.com/jonathanagustin/uds-takserver/commit/2e54695560b7479934ab5a4f20d4b4eaf29de75c))
+* match UDS styling and clarify operator guides ([#362](https://github.com/jonathanagustin/uds-takserver/issues/362)) ([61864a0](https://github.com/jonathanagustin/uds-takserver/commit/61864a056a4b3d691686e70f37c8aacd1f2fc518))
+* record successful node-isolated airgap validation ([#371](https://github.com/jonathanagustin/uds-takserver/issues/371)) ([2ec9b30](https://github.com/jonathanagustin/uds-takserver/commit/2ec9b30c669527f5e5d2ad2281592ec97e0b7baa))
+* refine landing page branding and search positioning ([#363](https://github.com/jonathanagustin/uds-takserver/issues/363)) ([9d00988](https://github.com/jonathanagustin/uds-takserver/commit/9d00988da94b28edd51b2e1d1586ea5f2ce39907))
+* restore all status badges above the wordmark ([#370](https://github.com/jonathanagustin/uds-takserver/issues/370)) ([7fe7576](https://github.com/jonathanagustin/uds-takserver/commit/7fe7576ef28005f8bdd3fa76406c0d48d51415b3))
+* simplify the README header ([#366](https://github.com/jonathanagustin/uds-takserver/issues/366)) ([bfe06dc](https://github.com/jonathanagustin/uds-takserver/commit/bfe06dc6460b0707ee5681238d005395871685dc))
+* streamline guides and use native Starlight components ([#368](https://github.com/jonathanagustin/uds-takserver/issues/368)) ([3cf5084](https://github.com/jonathanagustin/uds-takserver/commit/3cf5084f81d54641fab7d55b938d0c5dd733e017))
+
 ## [0.9.1](https://github.com/jonathanagustin/uds-k3d-takserver/compare/v0.9.0...v0.9.1) (2026-11-05)
 
 

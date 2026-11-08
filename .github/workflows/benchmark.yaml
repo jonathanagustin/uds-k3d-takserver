@@ -188,6 +188,7 @@ jobs:
           retention-days: 14
 
   summary:
+    timeout-minutes: 10
     name: benchmark-summary
     needs: [benchmark]
     # When one arch fails, the other arch's records still make a front.

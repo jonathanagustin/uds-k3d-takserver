@@ -123,3 +123,20 @@ It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
 fresh runner and retain the image and kernel notice for the investigation.
+
+## Limits on supporting jobs
+
+Build, index, scan, and reporting jobs have explicit job timeouts rather than
+GitHub's six-hour default. Fast aggregate checks stop within five minutes;
+manifest/index jobs within fifteen; lint within twenty; CodeQL and docs builds
+within thirty; image scan comparison within sixty. OpenTofu scaffold validation
+and Release Please stop within fifteen minutes. Existing cluster, image-build,
+and release-publishing limits are unchanged. A timeout remains a failed check;
+these limits do not suppress errors or automatically retry failed work.
+
+The shared lint workflow receives only its automatic GitHub token. Container
+image jobs keep package publication and attestation permissions, but Actions API
+access is read-only. Scorecard retains inherited secrets because its pinned
+reusable workflow references `SCORECARD_READ_TOKEN` without declaring it in
+`workflow_call.secrets`; explicitly passing that secret requires an upstream
+interface change or a separately reviewed local workflow.

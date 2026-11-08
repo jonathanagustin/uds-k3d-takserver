@@ -482,35 +482,37 @@ jobs:
         # limit so the log and dump steps below still run.
         timeout-minutes: 55
 
+      # Probe before any diagnostics that call Docker or Kubernetes. A routing
+      # timeout skips those calls; local sanitized logs are still printed.
+      - name: Check for the runner network wedge
+        id: runner-wedge
+        if: failure()
+        timeout-minutes: 1
+        run: ./.github/scripts/runner-wedge-probe.sh || true
+
       # The trim step deletes toolchains to keep disk headroom. This is the other
       # half of that number: how much of the disk the test used by its end.
       # A wedged Docker daemon after a failed cluster start can make
       # "docker system df" hang, so bound it.
       - name: Disk use after the test
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 2
         shell: bash
         run: |
           df -h /
           sudo timeout 60 docker system df || true
 
-      # Diagnostic only: names the hosted-runner network wedge (#300) so it is
-      # not read as a product failure. It never changes the job result.
-      - name: Check for the runner network wedge
-        if: failure()
-        timeout-minutes: 1
-        run: ./.github/scripts/runner-wedge-probe.sh || true
-
       - name: Debug Output
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always()) && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:debug-output
         timeout-minutes: 3
         shell: bash
 
       # debug-output has events but no container logs. A CloudTAK container
       # that restarts during the chart install shows up here.
+
       - name: CloudTAK pod details
-        if: failure()
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 3
         shell: bash
         run: |
@@ -532,13 +534,13 @@ jobs:
           done
 
       - name: Node memory
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (failure())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (failure()) && steps.runner-wedge.outputs.network-stalled != 'true'
         run: ./.github/scripts/dump-memory.sh
         # A dead API server can hang kubectl; later always() steps still run.
         timeout-minutes: 5
 
       - name: Save logs
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always())
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (always()) && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:save-logs
         shell: bash
         timeout-minutes: 2

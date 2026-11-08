@@ -6,6 +6,7 @@ import { defineConfig } from 'astro/config';
 import mermaid from 'astro-mermaid';
 import starlightGitHubAlerts from 'starlight-github-alerts';
 import starlightLinksValidator from 'starlight-links-validator';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 // Project site: https://jonathanagustin.github.io/uds-k3d-takserver/
 // `site` is the origin. `base` is the repository path GitHub Pages serves.
@@ -21,6 +22,46 @@ export default defineConfig({
       title: 'TAK Server on UDS',
       description:
         'TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.',
+      // public/favicon.svg is the same mark, already served at /favicon.svg.
+      // This path is the repository icon, so the header does not keep a second copy.
+      logo: {
+        src: '../assets/icon.svg',
+      },
+      head: [
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image',
+            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:width', content: '1200' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:height', content: '630' },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image:alt',
+            content: 'TAK Server on UDS',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:card', content: 'summary_large_image' },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:image',
+            content: 'https://jonathanagustin.github.io/uds-k3d-takserver/og.png',
+          },
+        },
+      ],
       social: [
         {
           icon: 'github',
@@ -33,17 +74,27 @@ export default defineConfig({
       },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
+      components: {
+        DraftContentNotice: './src/components/DraftContentNotice.astro',
+      },
       // Shiki has no LogQL grammar. Show those blocks as plain text without a
       // build warning.
       expressiveCode: { shiki: { langAlias: { logql: 'txt' } } },
       // Renders GitHub alert syntax (> [!NOTE], > [!WARNING]) as callouts, so
       // the same markdown works on GitHub and on the site.
-      plugins: [starlightGitHubAlerts(), starlightLinksValidator()],
+      plugins: [
+        starlightGitHubAlerts(),
+        starlightLinksValidator(),
+        starlightLlmsTxt({
+          promote: ['index*', 'getting-started*'],
+        }),
+      ],
       sidebar: [
         {
           label: 'Overview',
           items: [
-            { label: 'Getting started', slug: 'index' },
+            { label: 'Home', slug: 'index' },
+            { label: 'Getting started', slug: 'getting-started' },
             { label: 'Contributing', slug: 'contributing' },
           ],
         },

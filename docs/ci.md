@@ -16,7 +16,7 @@ Docs, device, benchmark, demo, unit-test-only, and repository metadata changes s
 | Scan | `scan.yaml` | pull requests that change the package, charts, values, bundle, image builds, or submodules | Compares image scans with `uds-pk scan compare` and posts the result as a pull request comment |
 | CodeQL | `codeql.yaml` | every pull request, pushes to `main`, and Mondays at 06:00 | CodeQL code scanning |
 | Dependency Review | `dependency-review.yaml` | every pull request | GitHub dependency review of the changed dependencies |
-| Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
+| Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site and runs its browser tests. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
 
 A pull request whose files are all on that ignore list skips Test and Package. One relevant file still runs them, on amd64 and arm64. Full Core decides in its own `changes` job and skips the deploy when the diff does not need it. The checks that `main` requires still report on every pull request: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`. Those workflows have no path filter. Lint, unit tests, and the PR title check run on every pull request too.
 
@@ -107,3 +107,19 @@ After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and n
 ## Logs when an upload hangs
 
 `actions/upload-artifact` has hung past its step timeout in the install, upgrade and Full Core jobs. Before the uploads, `.github/scripts/print-logs.sh` prints the last 300 lines of each log the job uploads (at most 60 files) in collapsed groups, so the job log keeps them. Upload steps time out after 5 minutes, and the job timeout stops a hang the step timeout misses.
+
+### Hosted-runner routing stalls
+
+After a failed install, upgrade, or Full Core deploy,
+`.github/scripts/runner-wedge-probe.sh` checks `ip -4 route` before Docker,
+Kubernetes, and Falco diagnostics. Routing has a five-second budget and a
+one-second kill grace; the kernel-log probe has a ten-second budget and the
+same grace. If routing times out, those network diagnostics are skipped.
+Local log sanitizing and printing still run. A missing command or permission
+is reported as inconclusive and does not suppress diagnostics.
+
+This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-k3d-takserver/issues/300).
+It does not repair the kernel, interrupt a process stuck in uninterruptible
+kernel sleep, or guarantee that the runner can finish reporting to GitHub.
+The deploy keeps its original failure result. Rerun the failed job once on a
+fresh runner and retain the image and kernel notice for the investigation.

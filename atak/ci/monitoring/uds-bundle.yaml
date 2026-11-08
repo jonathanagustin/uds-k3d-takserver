@@ -25,3 +25,22 @@ packages:
           values:
             - path: replicas
               value: 0
+      # Run 42424190273 requested 10850Mi after this bundle and the 3348Mi
+      # virt-launcher stayed Pending (Insufficient memory). The viewer check
+      # needs Prometheus and Blackbox, not Alertmanager, node-exporter, or
+      # kube-state-metrics.
+      kube-prometheus-stack:
+        kube-prometheus-stack:
+          values:
+            - path: alertmanager.enabled
+              value: false
+            - path: kube-state-metrics.enabled
+              value: false
+            - path: nodeExporter.enabled
+              value: false
+            - path: prometheus-node-exporter.enabled
+              value: false
+            - path: prometheus.prometheusSpec.resources.requests.memory
+              value: 256Mi
+            - path: prometheus.prometheusSpec.resources.limits.memory
+              value: 1Gi

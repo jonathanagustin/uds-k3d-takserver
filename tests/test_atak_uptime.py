@@ -263,5 +263,21 @@ class AtakUptimeTests(unittest.TestCase):
                 uptime.validate_metric("probe_success", "1", response, fresh, TARGET)
 
 
+class MonitoringBundleTests(unittest.TestCase):
+    def test_opt_in_bundle_drops_unused_monitoring_weight(self):
+        text = (ROOT / "atak/ci/monitoring/uds-bundle.yaml").read_text()
+        for path in (
+            "alertmanager.enabled",
+            "kube-state-metrics.enabled",
+            "nodeExporter.enabled",
+            "prometheus-node-exporter.enabled",
+            "prometheus.prometheusSpec.resources.requests.memory",
+        ):
+            self.assertIn(path, text)
+        self.assertIn("256Mi", text)
+        self.assertIn("value: false", text)
+        self.assertIn("value: 0", text)
+
+
 if __name__ == "__main__":
     unittest.main()

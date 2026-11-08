@@ -51,12 +51,13 @@ and tests the ATAK device. It installs only Core monitoring, without the
 logging, runtime-security, backup, or Portal layers. Grafana has zero replicas
 because the check queries Prometheus directly.
 
-This option remains off by default until its extra footprint has been measured
-on the KVM runner. The deploy step records allocated node resources and host
-memory. Prometheus, its controller, Blackbox Exporter, and Alertmanager retain
-Core's resource settings; a successful test requires them to fit beside TAK and
-the 3 GiB, two-vCPU Android VM. This is a CI option, not a change to the ATAK
-package's runtime requirements.
+This option remains off by default. The deploy step records allocated node
+resources and host memory. The manual run on `9aebc946` requested 10850Mi
+after Core monitoring and left the 3348Mi virt-launcher Pending, so the
+authenticated probe never ran. The opt-in bundle therefore keeps Prometheus
+and Blackbox, turns Grafana, Alertmanager, node-exporter, and kube-state-metrics
+off, and sets the Prometheus memory request to 256Mi. That is a CI footprint,
+not a change to the ATAK package's runtime requirements.
 
 After the device and viewer SSO checks pass, `atak/ci/uptime-probe.py` requires:
 

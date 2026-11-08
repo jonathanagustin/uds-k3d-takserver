@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.request import ProxyHandler, build_opener
@@ -27,6 +28,58 @@ SPEC.loader.exec_module(AIRGAP)
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_unreachable_precontrol_fails_closed_and_reports_wget(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out\n")
+        with patch.object(AIRGAP, "docker", return_value=failed) as command:
+            with self.assertRaisesRegex(RuntimeError, r"k3d-node: external control unexpectedly failed \(exit 1: wget: download timed out\)"):
+                AIRGAP.probe([{"name": "k3d-node"}], "http://1.1.1.1/cdn-cgi/trace", blocked=False)
+        self.assertEqual(command.call_args.args[:3], ("exec", "k3d-node", "wget"))
+
+    def test_http_responses_prove_egress_even_when_transfer_fails(self):
+        for status in ["HTTP/1.1 301 Moved Permanently", "HTTP/2 403 Forbidden", "HTTP/1.0 500 Server Error"]:
+            response = subprocess.CompletedProcess([], 1, "", f"  {status}\nwget: TLS error")
+            with self.subTest(status=status), patch.object(AIRGAP, "docker", return_value=response) as command:
+                AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=False)
+                with self.assertRaisesRegex(RuntimeError, "unexpectedly succeeded"):
+                    AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=True)
+                self.assertIn("-S", command.call_args.args)
+                self.assertEqual(command.call_args.args[3:5], ("-Y", "off"))
+
+    def test_diagnostic_text_without_a_status_line_is_not_a_response(self):
+        result = subprocess.CompletedProcess([], 1, "", "wget: HTTP/1.1 TLS failed")
+        with patch.object(AIRGAP, "docker", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                AIRGAP.probe([{"name": "node"}], "http://1.1.1.1/", blocked=False)
+
+    def test_a_denied_control_is_not_reported_as_a_precontrol_failure(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: connection refused")
+        with patch.object(AIRGAP, "docker", return_value=failed):
+            AIRGAP.probe([{"name": "k3d-node"}], "http://1.1.1.1/", blocked=True)
+
+    def test_wget_diagnostics_are_bounded(self):
+        failed = subprocess.CompletedProcess([], 4, "body", "x" * 500)
+        with patch.object(AIRGAP, "docker", return_value=failed):
+            with self.assertRaises(RuntimeError) as raised:
+                AIRGAP.probe([{"name": "n"}], "http://8.8.8.8/", blocked=False)
+        message = str(raised.exception)
+        self.assertLess(len(message), 280)
+        self.assertIn("...", message)
+        self.assertNotIn("body", message)
+
+    def test_precontrol_failure_does_not_install_the_firewall(self):
+        failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out")
+        nodes = [{"name": "k3d-uds-server-0", "tools": ["iptables"], "networks": {"4": [], "6": []}}]
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            with patch.object(AIRGAP, "discover", return_value=nodes), \
+                    patch.object(AIRGAP, "docker", return_value=failed), \
+                    patch.object(AIRGAP, "block_node") as block, \
+                    patch("sys.argv", ["node-airgap.py", "block", "--state", str(state)]):
+                with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                    AIRGAP.main()
+            block.assert_not_called()
+            self.assertFalse(state.exists())
+
     def test_external_control_requires_a_public_ip_literal(self):
         for url in ("http://localhost", "http://127.0.0.1", "http://172.18.0.1", "http://example.com"):
             with self.subTest(url=url), self.assertRaises(ValueError):
@@ -60,6 +113,52 @@ class AirgapContracts(unittest.TestCase):
         config = yaml.safe_load((ROOT / "bundle/airgap-config.yaml").read_text())
         self.assertIs(config["variables"]["takserver"]["CLOUDTAK_BASEMAP_ENABLED"], False)
         self.assertIn('-e AIRGAP_TEST="${AIRGAP_TEST:-false}"', (ROOT / "tasks/test.yaml").read_text())
+
+
+@unittest.skipUnless(os.environ.get("AIRGAP_WGET_INTEGRATION") == "1", "set AIRGAP_WGET_INTEGRATION=1 for real BusyBox wget")
+class AirgapWgetIntegration(unittest.TestCase):
+    def test_redirect_proves_reachability_but_initial_refusal_does_not(self):
+        # Isolated loopback traffic only: no public endpoint or firewall mutation.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cgi-bin").mkdir()
+            redirect = root / "cgi-bin/redirect"
+            redirect.write_text('#!/bin/sh\nprintf "Status: 301 Moved Permanently\\r\\nLocation: https://127.0.0.1:1/\\r\\n\\r\\n"\n')
+            redirect.chmod(0o755)
+            name = f"airgap-wget-{uuid.uuid4().hex[:10]}"
+            docker = AIRGAP.docker
+            try:
+                docker("run", "-d", "--network", "none", "--name", name,
+                       "--mount", f"type=bind,src={root},dst=/www,readonly",
+                       os.environ.get("AIRGAP_FIREWALL_IMAGE", "tak-airgap-firewall-test:latest"),
+                       "httpd", "-f", "-p", "8080", "-h", "/www")
+                results = []
+
+                def actual_wget(*args, **kwargs):
+                    # Map the public literal to the isolated fixture; preserve
+                    # the production wget arguments and all classification.
+                    fixture_url = "http://127.0.0.1:8080/cgi-bin/redirect" if redirect.exists() else "http://127.0.0.1:1/"
+                    result = docker("exec", "-e", "http_proxy=http://127.0.0.1:1",
+                                    "-e", "https_proxy=http://127.0.0.1:1",
+                                    name, *args[2:-1], fixture_url, **kwargs)
+                    results.append(result)
+                    return result
+
+                with patch.object(AIRGAP, "docker", side_effect=actual_wget):
+                    AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=False)
+                    self.assertNotEqual(results[-1].returncode, 0)
+                    self.assertIn("HTTP/1.1 301", results[-1].stderr)
+                    self.assertIn("Connection refused", results[-1].stderr)
+                    # A redirect cannot count as successful isolation.
+                    with self.assertRaisesRegex(RuntimeError, "unexpectedly succeeded"):
+                        AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=True)
+                    redirect.unlink()
+                    with self.assertRaisesRegex(RuntimeError, "unexpectedly failed"):
+                        AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=False)
+                    self.assertNotIn("HTTP/", results[-1].stderr)
+                    AIRGAP.probe([{"name": name}], "http://1.1.1.1/", blocked=True)
+            finally:
+                docker("rm", "-f", name, check=False)
 
 
 @unittest.skipUnless(os.environ.get("AIRGAP_FIREWALL_INTEGRATION") == "1", "set AIRGAP_FIREWALL_INTEGRATION=1 for real Docker traffic")

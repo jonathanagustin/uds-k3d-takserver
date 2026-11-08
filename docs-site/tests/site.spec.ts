@@ -12,7 +12,7 @@ async function head(page: Page, path: string): Promise<APIResponse> {
 test('home page links the four tasks and the theme toggle changes the document', async ({ page }) => {
   await page.goto('');
   await expect(page.getByRole('heading', { level: 1, name: 'TAK Server on UDS' })).toBeVisible();
-  await expect(page.locator('.hero .tagline')).toHaveText('TAK Server and CloudTAK, packaged for UDS Core.');
+  await expect(page.locator('.hero .tagline')).toHaveText('All-in-one solution for packaging, deploying, and operating TAK Server.');
   await expect(page.locator('.hero .actions')).toHaveCount(0);
   await expect(page.locator('.hero .project-wordmark')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Deploy', exact: true })).toHaveAttribute(

@@ -6,6 +6,7 @@
     "test": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.1"
+    "@playwright/test": "1.64.1",
+    "maplibre-gl": "npm:@tak-ps/maplibre-gl@6.15.0"
   }
 }

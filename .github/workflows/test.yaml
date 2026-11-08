@@ -4,6 +4,12 @@
 name: Test
 
 on:
+  workflow_dispatch:
+    inputs:
+      trust_bundle:
+        description: Install private gateway PKI and verify live CA rotation and SSO
+        type: boolean
+        default: false
   pull_request:
     types: [opened, reopened, synchronize]
     # Anything not listed is relevant and starts the install and upgrade
@@ -379,11 +385,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Plan install acceptance mode
+        id: validation-mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TRUST_BUNDLE: ${{ inputs.trust_bundle && 'true' || 'false' }}
+          # Experimental AMD image fallback for #300; keep the override.
+          TEST_RUNNER: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+        run: python3 .github/scripts/test-validation-mode.py plan
+
       - name: test-flavor
         uses: defenseunicorns/uds-common/.github/actions/test-flavor@9cb4ebfd9f9a5efd1dbc454bf3aae843d0b57b9f # v1.32.2
         id: test-flavor
     outputs:
       upgrade-flavors: ${{ steps.test-flavor.outputs.upgrade-flavors }}
+      install-matrix: ${{ steps.validation-mode.outputs.install-matrix }}
 
   # Install and upgrade do not need each other, so they run at the same time.
   # Upgrade must resolve a released baseline; the first-release bootstrap is reported explicitly.
@@ -395,20 +411,14 @@ jobs:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
-          - arch: arm64
-            runner: ubuntu-26.04-arm
-          - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
-            airgap: true
+      # A trust-only manual trial needs both native installs, not another
+      # airgap acceptance. All ordinary events retain the three-entry matrix.
+      matrix: ${{ fromJSON(needs.check-flavor.outputs.install-matrix) }}
     name: validate-install (${{ matrix.arch }}${{ matrix.airgap && ', airgap' || '' }})
     runs-on: ${{ matrix.runner }}
     # A healthy install finishes in about 20 minutes. This job limit is what
     # stops a step whose own timeout does not, such as actions/upload-artifact.
-    timeout-minutes: 60
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.trust_bundle && 120 || 60 }}
     permissions:
       actions: read
       contents: read
@@ -464,7 +474,7 @@ jobs:
       # them (run 39686333898) Android alone took 136s of the 244s amd64
       # trim, so this starts while Compose and the UDS CLI install.
       - name: Start trimming the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh start
         env:
           TRIM_SKIP_ABOVE_GB: "60"
@@ -483,7 +493,7 @@ jobs:
           version: v0.41.0
 
       - name: Trim the runner
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04' || vars.TEST_RUNNER == 'ubuntu-26.04' || runner.arch == 'ARM64')
         run: ./.github/scripts/trim-runner.sh finish
         env:
           # The test uses about 30 GB (see "Disk use after the test"), so a
@@ -516,8 +526,25 @@ jobs:
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: ./.github/scripts/pin-image-tags.sh
 
+      - name: Prepare private gateway baseline
+        id: trust-fixture
+        if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
+        timeout-minutes: 2
+        run: uds zarf tools yq -o=json '.' bundle/uds-config.yaml | python3 tests/prepare-trust-fixture.py prepare --parent "${RUNNER_TEMP}"
+
+      - name: Install with the private gateway CA
+        if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
+        timeout-minutes: 40
+        env:
+          PRIVATE_CONFIG: ${{ steps.trust-fixture.outputs.config }}
+          SSL_CERT_FILE: ${{ steps.trust-fixture.outputs.host-ca }}
+          CURL_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          REQUESTS_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          NODE_EXTRA_CA_CERTS: ${{ steps.trust-fixture.outputs.ca }}
+        run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TEST_BUNDLE_CONFIG="${PRIVATE_CONFIG}" --no-progress
+
       - name: Test
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true'
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle)
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
         # A normal install test takes about 20 minutes. This fires before the
@@ -535,6 +562,16 @@ jobs:
         if: always() && env.AIRGAP_TEST == 'true'
         run: python3 .github/scripts/node-airgap.py restore --state "${RUNNER_TEMP}/tak-airgap-state.json"
         timeout-minutes: 2
+
+      - name: Verify CA bundle rotation and live SSO
+        if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
+        timeout-minutes: 65
+        env:
+          SSL_CERT_FILE: ${{ steps.trust-fixture.outputs.host-ca }}
+          CURL_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          REQUESTS_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          NODE_EXTRA_CA_CERTS: ${{ steps.trust-fixture.outputs.ca }}
+        run: python3 -B tests/trust-bundle-live.py --ui
 
       - name: Upgrade from the released package and check retained state
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'upgrade')
@@ -652,16 +689,24 @@ jobs:
           path: ${{ steps.sanitize.outputs.dir }}/payload/tmp
           if-no-files-found: ignore
 
+      - name: Remove private gateway fixture files
+        if: always() && steps.trust-fixture.outputs.directory != ''
+        timeout-minutes: 1
+        env:
+          PRIVATE_FIXTURE: ${{ steps.trust-fixture.outputs.directory }}
+        run: python3 tests/prepare-trust-fixture.py cleanup --parent "${RUNNER_TEMP}" --directory "${PRIVATE_FIXTURE}"
+
   validate-upgrade:
     needs: [images, cloudtak-index, postgis-index]
-    # Run baseline discovery even when image preparation fails, never a silent skip.
-    if: ${{ !cancelled() }}
+    # Preserve baseline discovery after image-prep failures for normal runs.
+    # Only the explicit trust-only manual trial intentionally omits upgrades.
+    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
           - arch: arm64
             runner: ubuntu-26.04-arm
     name: validate-upgrade (${{ matrix.arch }})
@@ -699,7 +744,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-26.04' }}
+            runner: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
           - arch: arm64
             runner: ubuntu-26.04-arm
     name: validate-upgrade-pg15 (${{ matrix.arch }})
@@ -731,27 +776,16 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout validation helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Check validate result
-        run: |
-          echo "install result: ${{ needs.validate-install.result }}"
-          echo "upgrade result: ${{ needs.validate-upgrade.result }}"
-
-          if [ "${{ needs.validate-install.result }}" != "success" ]; then
-            echo "Install failed."
-            exit 1
-          fi
-
-          if [ "${{ needs.validate-upgrade.result }}" != "success" ]; then
-            echo "Upgrade failed."
-            exit 1
-          fi
-
-          # Skipped unless this is a push to main or the PR has upgrade-pg15.
-          pg15="${{ needs.validate-upgrade-pg15.result }}"
-          echo "upgrade from PostgreSQL 15 result: ${pg15}"
-          if [ "${pg15}" != "success" ] && [ "${pg15}" != "skipped" ]; then
-            echo "Upgrade from PostgreSQL 15 failed."
-            exit 1
-          fi
-
-          echo "All tests passed successfully!"
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TRUST_BUNDLE: ${{ inputs.trust_bundle && 'true' || 'false' }}
+          INSTALL_RESULT: ${{ needs.validate-install.result }}
+          UPGRADE_RESULT: ${{ needs.validate-upgrade.result }}
+          PG15_RESULT: ${{ needs.validate-upgrade-pg15.result }}
+        run: python3 .github/scripts/test-validation-mode.py verify

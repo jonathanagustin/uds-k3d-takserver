@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -22,6 +23,46 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = "c72fcf944a4f43bbb386d22371aa640f"
 TAK_APPS = ("takserver-api", "takserver-messaging", "takserver-config", "takserver-plugins")
 _cache = {}
+
+
+_STATUS = re.compile(
+    r"\bHTTP\s+(\d{3})\b|:\s*(\d{3})\s+Gateway\b|\b(\d{3})\s+Gateway\s+Time-?out\b",
+    re.IGNORECASE,
+)
+_DEPENDENCY_NEEDLES = (
+    "unable to build dependencies",
+    "could not download",
+    "failed to fetch",
+)
+
+
+def _http_status(stderr):
+    match = _STATUS.search(stderr)
+    if not match:
+        return None
+    return next(group for group in match.groups() if group)
+
+
+def render_failure(result):
+    """Fixed category and numeric status. No child URL or other child text.
+
+    The message is one of a few constant phrases plus a process exit in
+    0..255 and one HTTP status. Child host, path, and stream text are not
+    copied, so a long or hostile download line cannot grow or leak into it.
+    """
+    stderr = result.stderr if isinstance(result.stderr, str) else ""
+    if isinstance(result.returncode, int) and 0 <= result.returncode <= 255:
+        code = str(result.returncode)
+    else:
+        code = "unknown"
+    facts = []
+    if any(needle in stderr for needle in _DEPENDENCY_NEEDLES):
+        facts.append("dependency download")
+    status = _http_status(stderr)
+    if status:
+        facts.append(f"HTTP {status}")
+    detail = "; ".join(facts) if facts else "unclassified"
+    return f"package render failed ({code}): {detail}"
 
 
 def render(variables=(), values=()):
@@ -34,7 +75,10 @@ def render(variables=(), values=()):
         cmd += ["--deploy-set-variables", pair]
     for pair in values:
         cmd += ["--set-values", pair]
-    out = subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    result = subprocess.run(cmd, cwd=ROOT, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(render_failure(result))
+    out = result.stdout
     docs = [doc for doc in yaml.safe_load_all(out) if isinstance(doc, dict)]
     _cache[key] = (out, docs)
     return out, docs
@@ -221,6 +265,130 @@ class PackageValuesTests(unittest.TestCase):
         self.assertNotIn(("Deployment", "tak-health"), names)
         self.assertNotIn(("Service", "tak-health"), names)
         self.assertNotIn("Issued client certificate", str(find(docs, "Job", "takserver-cert-init")))
+
+
+_NATS_CHART = "https://github.com/nats-io/k8s/releases/download/nats-1.0.1/nats-1.0.1.tgz"
+_DEPENDENCY_FAILURE = (
+    "unable to build dependencies for the chart: "
+    f"could not download {_NATS_CHART}: failed to fetch {_NATS_CHART} : 504 Gateway Time-out"
+)
+_DEPENDENCY_DIAGNOSTIC = "package render failed (1): dependency download; HTTP 504"
+
+
+class RenderFailureTests(unittest.TestCase):
+    def _message(self, stderr, stdout="", variable="DOMAIN=failure.example", returncode=1):
+        result = subprocess.CompletedProcess(
+            args=["uds"], returncode=returncode, stdout=stdout, stderr=stderr,
+        )
+        with mock.patch.object(subprocess, "run", return_value=result):
+            with self.assertRaises(AssertionError) as caught:
+                render(variables=[variable])
+        return str(caught.exception)
+
+    def test_dependency_failure_reports_category_and_status(self):
+        message = self._message(_DEPENDENCY_FAILURE, variable="DOMAIN=dependency.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn(_NATS_CHART, message)
+        self.assertNotIn("https://", message)
+        self.assertLessEqual(len(message), 80)
+
+    def test_failed_render_omits_short_credentials(self):
+        dirty = (
+            "https://ci-user:hunter2@github.com/nats-io/k8s/releases/download/"
+            "nats-1.0.1/nats-1.0.1.tgz?access_token=short-sensitive-token"
+        )
+        stderr = (
+            "Authorization: Bearer short-sensitive-token\n"
+            "unable to build dependencies for the chart: "
+            f"could not download {dirty}: failed to fetch {dirty} : 504 Gateway Time-out"
+        )
+        message = self._message(stderr, variable="DOMAIN=credential.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("hunter2", message)
+        self.assertNotIn("ci-user", message)
+        self.assertNotIn("access_token", message)
+        self.assertNotIn("Bearer", message)
+
+    def test_failed_render_omits_secret_yaml(self):
+        secret = "apiVersion: v1\nkind: Secret\ndata:\n  password: c2VjcmV0\n"
+        message = self._message(secret + _DEPENDENCY_FAILURE, stdout=secret, variable="DOMAIN=secret.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("c2VjcmV0", message)
+        self.assertNotIn("kind: Secret", message)
+        self.assertNotIn("password", message)
+
+    def test_failed_render_omits_incomplete_pem(self):
+        pem = "-----BEGIN PRIVATE KEY-----\nSHORTKEYFRAGMENT"
+        message = self._message(pem + "\n" + _DEPENDENCY_FAILURE, variable="DOMAIN=pem.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("SHORTKEYFRAGMENT", message)
+        self.assertNotIn("BEGIN PRIVATE KEY", message)
+
+    def test_failed_render_omits_stdout(self):
+        stdout = "UNIQUE_STDOUT_MARKER\nkind: Secret\ndata:\n  token: stdout-only-secret\n"
+        message = self._message(_DEPENDENCY_FAILURE, stdout=stdout, variable="DOMAIN=stdout.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("UNIQUE_STDOUT_MARKER", message)
+        self.assertNotIn("stdout-only-secret", message)
+
+    def test_http_status_survives_a_complete_pem_without_copying_it(self):
+        stderr = (
+            "helm pull failed: HTTP 504\n"
+            "-----BEGIN PRIVATE KEY-----\nSECRETKEYDATA\n-----END PRIVATE KEY-----\n"
+        )
+        message = self._message(stderr, variable="DOMAIN=status.example")
+        self.assertEqual(message, "package render failed (1): HTTP 504")
+        self.assertNotIn("SECRETKEYDATA", message)
+        self.assertNotIn("PRIVATE KEY", message)
+
+    def test_adversarial_urls_do_not_leak_or_expand(self):
+        long_segment = "A" * 20000
+        lines = [
+            "failed to fetch https://short-sensitive-token.example/archive.tgz"
+            " : 504 Gateway Time-out",
+            "failed to fetch https://github.com/private/repository/short-sensitive-token"
+            " : HTTP 401",
+            "could not download https://github.com/QUJDREVGR0g/archive.tgz",
+            f"could not download https://github.com/{long_segment}/archive.tgz",
+            "failed to fetch https://short-sensitive-token.example:99999/archive.tgz"
+            " : 504 Gateway Time-out",
+        ]
+        lines.extend(
+            f"could not download https://host{i}.example/secret-path-{i}-token : HTTP 401"
+            for i in range(300)
+        )
+        message = self._message("\n".join(lines), variable="DOMAIN=adversarial.example")
+        self.assertEqual(message, _DEPENDENCY_DIAGNOSTIC)
+        self.assertNotIn("https://", message)
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("QUJDREVGR0g", message)
+        self.assertNotIn(long_segment[:80], message)
+        self.assertNotIn("secret-path-", message)
+        self.assertNotIn("401", message)
+        self.assertLessEqual(len(message), 80)
+
+    def test_stdout_cannot_supply_category_or_status(self):
+        stdout = "could not download https://stdout-only-secret.example/token : HTTP 504"
+        message = self._message("", stdout=stdout, variable="DOMAIN=stdout-status.example")
+        self.assertEqual(message, "package render failed (1): unclassified")
+        self.assertNotIn("stdout-only-secret", message)
+        self.assertNotIn("504", message)
+
+    def test_unrecognized_child_output_stays_out(self):
+        stderr = "password: 504\nshort-sensitive-token\n" * 1000
+        message = self._message(stderr, variable="DOMAIN=unclassified.example")
+        self.assertEqual(message, "package render failed (1): unclassified")
+        self.assertNotIn("short-sensitive-token", message)
+        self.assertNotIn("504", message)
+        self.assertLessEqual(len(message), 80)
+
+    def test_exit_code_outside_a_byte_is_not_copied(self):
+        message = self._message(
+            _DEPENDENCY_FAILURE, variable="DOMAIN=exit.example", returncode=10 ** 18,
+        )
+        self.assertEqual(message, "package render failed (unknown): dependency download; HTTP 504")
+        self.assertNotIn("1000000000000000000", message)
 
 
 if __name__ == "__main__":

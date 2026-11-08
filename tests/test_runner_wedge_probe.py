@@ -109,6 +109,23 @@ class RunnerWedgeProbeTests(unittest.TestCase):
             self.assertIn("did not finish within 1s", result.stdout)
             self.assertEqual(output.read_text().strip(), "network-stalled=false")
 
+    def test_cluster_runner_fallback_keeps_overrides_and_native_arm(self):
+        test = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())["jobs"]
+        full = yaml.safe_load((ROOT / ".github/workflows/full-core.yaml").read_text())["jobs"]
+        expected = "${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}"
+        planner = next(step for step in test["check-flavor"]["steps"]
+                       if "TEST_RUNNER" in step.get("env", {}))
+        self.assertEqual(planner["env"]["TEST_RUNNER"], expected)
+        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"]):
+            rows = job["strategy"]["matrix"]["include"]
+            self.assertEqual([(row["arch"], row["runner"]) for row in rows],
+                             [("amd64", expected), ("arm64", "ubuntu-26.04-arm")])
+            self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        # Native image producers retain their existing 24.04 labels.
+        for name in ("cloudtak-image", "postgis-image"):
+            rows = test[name]["strategy"]["matrix"]["include"]
+            self.assertEqual([row["runner"] for row in rows], ["ubuntu-24.04", "ubuntu-24.04-arm"])
+
     def test_both_workflows_probe_before_network_diagnostics(self):
         for workflow, job in (("test", "validate-install"), ("full-core", "validate-full-core")):
             with self.subTest(workflow=workflow):

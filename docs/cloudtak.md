@@ -130,6 +130,88 @@ The `bootstrap` container runs [`bootstrap.mjs`](../.github/container-and-chart/
 
 The admin certificate is mounted only in the bootstrap container. The CloudTAK container gets only `ca.pem`. CloudTAK still stores the admin certificate and key in its database, because its admin connection (connection 0) uses them. Treat that database as holding a TAK admin credential.
 
+## Trust bundle
+
+CloudTAK's API and SSO containers use `NODE_EXTRA_CA_CERTS` with one PEM file
+containing the deploy-time TAK CA and UDS Core's `uds-trust-bundle`. This lets
+Keycloak discovery and token exchange verify a private gateway CA supplied
+through Core's `CA_BUNDLE_CERTS`. Node's built-in public roots still apply.
+The init container assembles the file; the Node containers mount it read-only.
+An absent or empty Core bundle keeps the TAK CA alone, as on slim core.
+
+The operator labels the bundle ConfigMap for pod reload, restricted to
+`app=cloudtak` in the CloudTAK namespace. A bundle change restarts CloudTAK
+so Node reads the new file at startup. TAK's bundle uses the existing
+`uds.dev/oidc-reload=takserver` selector so its API and messaging init containers
+also rebuild their JVM trust stores when the bundle changes.
+
+### Run the CA rotation acceptance test
+
+On a disposable test cluster with this package deployed and a private-CA tenant gateway, run:
+
+```bash title="Verify live CA propagation and SSO reloads"
+python3 -B tests/trust-bundle-live.py --ui
+```
+
+The script appends a temporary CA to the saved custom roots in ClusterConfig
+`uds-cluster-config`, waits for both namespace bundles and new API, messaging,
+and CloudTAK pod UIDs, and checks Keycloak from the SSO container. Node must
+reject the live gateway certificate when using only public roots, accept it
+when trusting only the bundled anchor of its verified chain, and reject it
+when trusting only the unrelated trial CA. For an intermediate chain, the
+anchor is its root CA, not an intermediate treated as a standalone root. If
+the server sends that root and it is absent from the bundle, the script installs
+it and waits until both namespace bundles contain it. If a required private
+root is neither configured nor sent by the gateway, configure it before running
+the trial; the test does not weaken TLS verification to accept an incomplete chain. Core does not restart pods the first time
+it creates `uds-trust-bundle`; the following trial-CA change is the reload. It then rotates to a second trial CA and repeats
+the checks. The first Node error is kept, bounded to 300 characters, with no
+certificate body. `--ui` also reruns the existing browser suite after each
+rotation, requiring Keycloak setup rather than allowing SSO tests to skip. The
+browser suite currently uses the development `uds.dev` domain; without `--ui`,
+set `DOMAIN` for another test domain.
+
+Existing custom roots and the include-public/DoD settings are preserved. On
+exit, the script restores the saved custom CA setting and waits for the
+generated bundles. If an administrator changed public/DoD settings during the
+trial, cleanup preserves those new settings and roots while requiring the saved
+custom roots to return and all trial-only roots to disappear. With unchanged
+settings, it requires the original complete bundle. Core can retain its last
+namespace bundle when all global roots are removed. After Core reconciles the
+restored generation, cleanup removes only fingerprints introduced by this trial,
+using UID, resource-version and old-data tests on the Core-owned ConfigMap. It
+preserves every other certificate and all metadata, and excludes roots now
+legitimately enabled by concurrent public/DoD settings. It never deletes an
+arbitrary ConfigMap. It then explicitly restarts the consumers to clear cached
+trust and fails if temporary roots return. A concurrent custom-CA edit is never
+overwritten. Temporary private keys stay in a private directory
+and are deleted. `out/trust-bundle-live.json` records CA fingerprints, pod UIDs,
+and cleanup success. `out/trust-bundle-original-ca.json` saves the original
+public CA settings before the first mutation, for manual recovery if the
+process is forcibly killed before cleanup can finish.
+
+The same test is available through **Test** workflow dispatch with
+`trust_bundle=true` on both native install architectures; airgap and upgrade
+jobs are intentionally skipped. This mode generates a one-day private gateway
+CA and wildcard tenant certificate, then supplies Core's supported
+`TENANT_TLS_CERT`, `TENANT_TLS_KEY` and `CA_BUNDLE_CERTS` variables during the
+baseline bundle deployment, before TAK and CloudTAK start. The initial SSO
+checks therefore require the private CA. Normal installs retain their packaged
+gateway certificate. The generated configuration preserves pinned image tags,
+stays in a private runner directory outside log artifacts, and is removed at
+job exit. Private keys are masked and redacted from staged logs. The runner's
+host trust file retains public roots and adds the fixture CA. It changes cluster-wide
+trust configuration and can restart Core's Istio consumers too, so it is an
+opt-in acceptance run. The normal install and upgrade paths remain unchanged.
+
+This test proves the live gateway certificate chains to a CA in the combined
+trust file, that public roots alone do not accept it, and that an unrelated
+trial CA does not accept it. It also proves both TAK workloads and CloudTAK
+restart when that bundle changes. The rotation script leaves the gateway
+certificate unchanged; the opt-in workflow prepares its private certificate
+before the baseline deployment. The separate `test_trust_bundle.py` HTTPS test proves the merge
+script with two local CAs.
+
 ## TAK connection
 
 | CloudTAK setting | Value | Used for |

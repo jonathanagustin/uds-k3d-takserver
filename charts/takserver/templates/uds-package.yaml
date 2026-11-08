@@ -40,6 +40,10 @@ spec:
     configMap:
       name: uds-trust-bundle
       key: ca-bundle.pem
+      labels:
+        uds.dev/pod-reload: "true"
+      annotations:
+        uds.dev/pod-reload-selector: "uds.dev/oidc-reload=takserver"
   # @lulaStart 58769fcc-b18d-5aee-b596-946a6be01157
   # @lulaStart 69b4fe63-5ea3-5eba-8054-8e16d71d0dbd
   {{- if .Values.sso.enabled }}

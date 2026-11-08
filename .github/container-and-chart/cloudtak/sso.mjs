@@ -22,6 +22,8 @@
 // the map.
 import http from 'node:http';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import { boundedCause, issuerRequest, issuerTrust, LIVE_BUNDLE_FILE, readOptional, TAK_CA_FILE } from './sso-fetch.mjs';
 import { Pool } from '@openaddresses/batch-generic';
 import { TAKAPI, APIAuthToken } from '@tak-ps/node-tak';
 import Models from './dist/common/models.js';
@@ -66,11 +68,20 @@ const config = {
 const users = new UserControl(config);
 
 let discovery;
+function issuerCa() {
+    // The combined init file can still contain a Core CA after Core deletes
+    // it. The mounted TAK CA and the live bundle are the authorities instead.
+    return issuerTrust({
+        takCa: readOptional(TAK_CA_FILE, fs.readFileSync) || '',
+        liveBundle: readOptional(LIVE_BUNDLE_FILE, fs.readFileSync),
+    });
+}
+
 async function oidc() {
     if (discovery) return discovery;
-    const res = await fetch(`${ISSUER}/.well-known/openid-configuration`);
-    if (!res.ok) throw new Error(`discovery returned ${res.status}`);
-    const doc = await res.json();
+    const res = await issuerRequest(`${ISSUER}/.well-known/openid-configuration`, { method: 'GET' }, issuerCa());
+    if (res.status !== 200) throw new Error(`discovery returned ${res.status}`);
+    const doc = JSON.parse(res.text);
     if (doc.issuer !== ISSUER) throw new Error(`discovery issuer ${doc.issuer} is not ${ISSUER}`);
     discovery = doc;
     return doc;
@@ -128,7 +139,7 @@ function send(res, status, headers, body = '') {
 }
 
 function fail(res, reason) {
-    log(`sign-in failed: ${reason}`);
+    log(`sign-in failed: ${boundedCause(reason)}`);
     // sso=off keeps the auto-redirect script from looping. The login page
     // still shows the Keycloak button.
     send(res, 302, {
@@ -169,7 +180,7 @@ async function callback(req, res, url) {
     if (!code) return fail(res, 'no authorization code');
 
     const doc = await oidc();
-    const tokenRes = await fetch(doc.token_endpoint, {
+    const tokenRes = await issuerRequest(doc.token_endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
         body: new URLSearchParams({
@@ -179,10 +190,10 @@ async function callback(req, res, url) {
             client_id: CLIENT_ID,
             client_secret: CLIENT_SECRET,
             code_verifier: saved.verifier,
-        }),
-    });
-    if (!tokenRes.ok) return fail(res, `token endpoint returned ${tokenRes.status}`);
-    const tokens = await tokenRes.json();
+        }).toString(),
+    }, issuerCa());
+    if (tokenRes.status !== 200) return fail(res, `token endpoint returned ${tokenRes.status}`);
+    const tokens = JSON.parse(tokenRes.text);
 
     // The ID token came straight from the token endpoint over a verified
     // TLS connection, so its claims are checked rather than its signature
@@ -347,7 +358,7 @@ const server = http.createServer(async (req, res) => {
             return send(res, 404, { 'Content-Type': 'text/plain' }, 'not found\n');
         }
     } catch (err) {
-        return fail(res, err && err.stack ? err.stack : String(err));
+        return fail(res, err);
     }
 });
 

@@ -7,6 +7,14 @@ metadata:
   name: cloudtak
   namespace: {{ .Release.Namespace }}
 spec:
+  caBundle:
+    configMap:
+      name: uds-trust-bundle
+      key: ca-bundle.pem
+      labels:
+        uds.dev/pod-reload: "true"
+      annotations:
+        uds.dev/pod-reload-selector: "app=cloudtak"
   sso:
     # Keycloak client for CloudTAK's "Sign in with UDS SSO" flow. sso.mjs in
     # the CloudTAK pod runs the code flow and enrols a TAK certificate for

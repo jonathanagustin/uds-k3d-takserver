@@ -73,6 +73,12 @@ jobs:
       - name: Full Core path filter
         run: bash tests/test_full_core_paths.sh
 
+      - name: Runtime path filter
+        run: bash tests/test_runtime_paths.sh
+
+      - name: CI concurrency groups
+        run: bash tests/test_ci_concurrency.sh
+
       - name: Dump Secret restore helper
         run: bash tests/test_db_dump_secret.sh
 

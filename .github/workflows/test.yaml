@@ -29,6 +29,7 @@ on:
       - ".github/workflows/codeql.yaml"
       - ".github/workflows/dependency-review.yaml"
       - ".github/workflows/scorecard.yaml"
+      - ".github/workflows/scorecard-analysis.yaml"
       - ".github/workflows/release-please.yaml"
       - ".github/workflows/release.yaml"
       - ".github/workflows/cosign.yaml"

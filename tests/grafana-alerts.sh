@@ -45,19 +45,58 @@ restore_messaging() {
   if [[ "${messaging_scaled}" -ne 1 ]]; then
     return 0
   fi
-  k scale deploy/takserver-messaging -n takserver --replicas=1 || true
+  if ! k scale deploy/takserver-messaging -n takserver --replicas=1; then
+    echo "takserver-messaging scale to 1 failed" >&2
+    return 1
+  fi
+  if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
+    echo "takserver-messaging did not become Ready after scaling back to 1" >&2
+    k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
+    return 1
+  fi
   messaging_scaled=0
+  echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
+  return 0
+}
+restore_cloudtak() {
+  if [[ "${cloudtak_scaled}" -ne 1 ]]; then
+    return 0
+  fi
+  if ! k scale deploy/cloudtak -n cloudtak --replicas=1; then
+    echo "cloudtak scale to 1 failed" >&2
+    return 1
+  fi
+  if ! k rollout status deploy/cloudtak -n cloudtak --timeout=600s; then
+    echo "cloudtak did not become Ready after messaging was restored" >&2
+    k get pods -n cloudtak -l app=cloudtak -o wide >&2 || true
+    return 1
+  fi
+  cloudtak_scaled=0
+  echo "grafana-alerts: CloudTAK is Ready again"
+  return 0
 }
 cleanup() {
-  local pid
+  local status=$? pid messaging_rc cloudtak_rc
+  set +e
   restore_messaging
-  if [[ "${cloudtak_scaled}" -eq 1 ]]; then
-    k scale deploy/cloudtak -n cloudtak --replicas=1 || true
+  messaging_rc=$?
+  cloudtak_rc=0
+  if [[ "${messaging_rc}" -eq 0 ]]; then
+    restore_cloudtak
+    cloudtak_rc=$?
+  elif [[ "${cloudtak_scaled}" -eq 1 ]]; then
+    echo "cloudtak left scaled down because messaging is not Ready" >&2
   fi
   for pid in "${pids[@]+"${pids[@]}"}"; do
     kill "${pid}" >/dev/null 2>&1 || true
   done
   rm -rf "${work}"
+  if [[ "${status}" -ne 0 ]]; then
+    exit "${status}"
+  fi
+  if [[ "${messaging_rc}" -ne 0 || "${cloudtak_rc}" -ne 0 ]]; then
+    exit 1
+  fi
 }
 trap cleanup EXIT
 
@@ -365,18 +404,10 @@ if [[ "${fired}" -ne 1 ]]; then
   exit 1
 fi
 echo "grafana-alerts: TAKMessagingTargetDown and CloudTAKTargetDown are firing in Alertmanager"
-restore_messaging
-if ! k rollout status deploy/takserver-messaging -n takserver --timeout=900s; then
-  echo "takserver-messaging did not become Ready after scaling back to 1" >&2
-  k get pods -n takserver -l app=takserver-messaging -o wide >&2 || true
+if ! restore_messaging; then
   exit 1
 fi
-echo "grafana-alerts: takserver-messaging scaled back to 1 and is Ready"
-k scale deploy/cloudtak -n cloudtak --replicas=1
-cloudtak_scaled=0
-if ! k rollout status deploy/cloudtak -n cloudtak --timeout=600s; then
-  echo "cloudtak did not become Ready after messaging was restored" >&2
-  k get pods -n cloudtak -l app=cloudtak -o wide >&2 || true
+if ! restore_cloudtak; then
   exit 1
 fi
 echo "grafana-alerts: CloudTAKTargetDown fired and CloudTAK is Ready again"

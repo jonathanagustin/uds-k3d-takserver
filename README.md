@@ -195,6 +195,9 @@ Pass `--architecture amd64` or `--architecture arm64` when the cluster differs f
 
 ### Upgrade from 0.6
 
+Follow [Upgrade from 0.6 to 0.7](docs/how-to/upgrade-from-0-6.md) for the
+preparation, deployment, verification, and rollback procedure.
+
 0.7 changes a few things an existing install notices on its first deploy:
 
 - **UDS Core 1.16.0.** The test bundle moved `core-base` from 1.15.2 to 1.16.0. The `takserver-oidc` module is built with Pepr 2.0.7, the version Core 1.16.0 runs. The package does not carry the Pepr controller image. It uses the one UDS Core put in the Zarf registry. Upgrade Core first, or deploy both from one bundle as `bundle/uds-bundle.yaml` does.
@@ -219,7 +222,7 @@ uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
 
 In a UDS bundle, put the same check on the package entry, as `core-base` has in [bundle/uds-bundle.yaml](bundle/uds-bundle.yaml):
 
-```yaml
+```yaml title="uds-bundle.yaml"
   - name: takserver
     repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver
     ref: <version>-upstream # the VERSION you verified above, followed by -upstream

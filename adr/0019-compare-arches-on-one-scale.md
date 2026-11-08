@@ -25,3 +25,21 @@ There is no completed nightly load artifact to cite. RSS, throughput, and latenc
 - The next completed Benchmark artifact can be compared on the plot without another change to the scaler.
 - Job-time differences are not a reason to drop an architecture from the matrix.
 - [ADR 10](0010-amd64-and-arm64.md) is unchanged.
+
+## Amendment: matched workload cohorts
+
+Date: 2026-11-07. [Issue 333](https://github.com/jonathanagustin/uds-k3d-takserver/issues/333).
+
+When a sweep selects several client counts, points at different offered loads
+must not dominate each other. The report now groups records by source revision,
+client count and load duration before calculating each architecture's front.
+Both architectures still share one scale within that cohort. Records missing
+comparison metadata are isolated rather than silently ranked together.
+
+The readiness plot now uses warm rollout duration only. Cold install age is
+copied into every config as a shared reference, so it remains in the evidence
+table rather than ranking swept configs. The previous fallback from a missing
+warm time to a cold time compared different operations. The markdown retains the observed startup phases and collection
+caveats, labels invalid durations, and explains that a Postgres-only rollout
+can reuse an earlier TAK pod. No source measurement is rewritten, and this
+reporting correction makes no architecture or tuning recommendation.

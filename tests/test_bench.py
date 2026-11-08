@@ -38,8 +38,10 @@ def record(config, arch, rss, received, duration, mean, ready):
         "schema": 1,
         "arch": arch,
         "config": config,
+        "git_sha": "fixture-revision",
         "kubelet": {"steady_rss_bytes": rss},
         "load": {
+            "clients": 10,
             "messages_received": received,
             "duration_s": duration,
             "ping_pong_ms_mean": mean,
@@ -50,6 +52,64 @@ def record(config, arch, rss, received, duration, mean, ready):
 
 
 class BenchReportTests(unittest.TestCase):
+    def test_different_loads_durations_and_revisions_do_not_dominate_each_other(self):
+        for dimension in ("clients", "duration_s", "git_sha"):
+            with self.subTest(dimension=dimension):
+                slow = record("slow", "amd64", 20, 20, 60, 10, 20)
+                fast = record("fast", "amd64", 10, 200, 60, 1, 10)
+                if dimension == "git_sha":
+                    fast["git_sha"] = "another-revision"
+                else:
+                    fast["load"][dimension] = 50 if dimension == "clients" else 120
+                groups = report.cohorts([slow, fast])
+                self.assertEqual([len(rows) for _label, rows in groups], [1, 1])
+                text = report.markdown([slow, fast])
+                self.assertIn("Front: slow", text)
+                self.assertIn("Front: fast", text)
+                self.assertNotIn("Dominated: slow", text)
+                self.assertEqual(report.svg([slow, fast]).count("footprint vs throughput"), 2)
+
+    def test_records_without_comparison_metadata_are_isolated(self):
+        slow = record("slow", "amd64", 20, 20, 60, 10, 20)
+        fast = record("fast", "amd64", 10, 200, 60, 1, 10)
+        del slow["load"]["clients"]
+        del fast["load"]["clients"]
+        text = report.markdown([slow, fast])
+        self.assertEqual(text.count("incomplete comparison metadata"), 2)
+        self.assertNotIn("Dominated: slow", text)
+
+    def test_cold_install_reference_is_not_ranked_against_warm_rollouts(self):
+        cold = record("cold", "amd64", 20, 20, 60, 10, 120)
+        warm = record("warm", "amd64", 10, 20, 60, 10, 120)
+        warm["time_to_ready"]["warm_s"] = 12
+        text = report.markdown([cold, warm])
+        warm_view = text.split("#### footprint vs warm rollout time", 1)[1].split("###", 1)[0]
+        self.assertIn("Front: warm", warm_view)
+        self.assertNotIn("Front: cold", warm_view)
+        self.assertIn("Cold install reference (s)", text)
+        self.assertNotIn("footprint vs cold", text)
+        self.assertNotIn("footprint vs cold", report.svg([cold, warm]))
+
+    def test_startup_table_marks_invalid_and_missing_timings_without_rewriting_data(self):
+        sample = record("baseline", "amd64", 20, 20, 60, 10, -1)
+        sample["start_phases"] = {
+            "takserver-messaging": {
+                "image_pull_s": -61,
+                "inits": [{"name": "wait-deps", "seconds": 22}],
+                "jvm_to_log_s": 34.849,
+                "log_to_ready_s": None,
+            },
+        }
+        before = json.dumps(sample, sort_keys=True)
+        text = report.markdown([sample])
+        self.assertIn("invalid (-61)", text)
+        self.assertIn("invalid (-1)", text)
+        self.assertIn("wait-deps: 22.000", text)
+        self.assertIn("34.849", text)
+        self.assertIn("not measured", text)
+        self.assertIsNone(report.point(sample)["cold_ready_s"])
+        self.assertEqual(json.dumps(sample, sort_keys=True), before)
+
     def test_a_worse_config_is_dominated_on_footprint_and_throughput(self):
         points = [
             {"config": "low", "arch": "amd64", "footprint_bytes": 10, "throughput": 5, "latency_ms": 20, "ready_s": 30, "errors": []},
@@ -616,6 +676,86 @@ class RestoreTests(unittest.TestCase):
         })
         with self.assertRaises(RuntimeError):
             runner.snapshot(self.CONFIG, run)
+
+
+class RestartEvidenceTests(unittest.TestCase):
+    def test_a_restart_still_fails_and_records_the_exit(self):
+        text = runner.format_restart(
+            "cloudtak-abc",
+            [{
+                "name": "cloudtak",
+                "restartCount": 2,
+                "lastState": {"terminated": {"reason": "Error", "exitCode": 1, "signal": 0}},
+                "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+            }],
+            {"cloudtak": "previous=Error: listen failed"},
+        )
+        self.assertIn("cloudtak-abc restarted, so this is not a cold start", text)
+        self.assertIn("previous reason=Error exit=1 signal=0", text)
+        self.assertIn("waiting=CrashLoopBackOff", text)
+        self.assertIn("listen failed", text)
+
+    def test_ready_age_redacts_the_previous_log_and_still_fails(self):
+        pod = {
+            "metadata": {"name": "cloudtak-abc"},
+            "status": {"containerStatuses": [{
+                "name": "cloudtak",
+                "restartCount": 1,
+                "lastState": {"terminated": {"reason": "Error", "exitCode": 137, "signal": 9}},
+                "state": {"waiting": {"reason": "CrashLoopBackOff"}},
+            }]},
+        }
+
+        class Result:
+            def __init__(self, stdout, returncode=0):
+                self.stdout = stdout
+                self.stderr = ""
+                self.returncode = returncode
+
+        def fake_kubectl(*args, check=True, timeout=None):
+            if args[:2] == ("get", "pods") and args[3] == "takserver":
+                return Result(json.dumps({"items": []}))
+            if args[:2] == ("get", "pods") and args[3] == "cloudtak":
+                return Result(json.dumps({"items": [pod]}))
+            if args[0] == "logs":
+                return Result('secret="restart-sentinel-value"\nError: listen failed\n')
+            return Result("", returncode=1)
+
+        original = runner.kubectl
+        runner.kubectl = fake_kubectl
+        try:
+            age, errors = runner.ready_age()
+        finally:
+            runner.kubectl = original
+        self.assertIsNone(age)
+        joined = " ".join(errors)
+        self.assertIn("restarted, so this is not a cold start", joined)
+        self.assertIn("exit=137", joined)
+        self.assertIn("signal=9", joined)
+        self.assertNotIn("restart-sentinel-value", joined)
+        self.assertIn("[REDACTED]", joined)
+        self.assertIn("listen failed", joined)
+
+    def test_log_timeout_discards_the_partial_stream(self):
+        def expired(*_args, **_kwargs):
+            raise subprocess.TimeoutExpired(
+                cmd="kubectl",
+                timeout=30,
+                output='secret="timeout-sentinel-value"\n'.encode("utf-8"),
+            )
+
+        original_run = runner.subprocess.run
+        original_cmd = runner.kubectl_cmd
+        runner.subprocess.run = expired
+        runner.kubectl_cmd = lambda: ["kubectl"]
+        try:
+            text = runner._container_excerpt("cloudtak", "cloudtak-abc", "cloudtak")
+        finally:
+            runner.subprocess.run = original_run
+            runner.kubectl_cmd = original_cmd
+        self.assertIn("previous=timed out", text)
+        self.assertIn("current=timed out", text)
+        self.assertNotIn("timeout-sentinel-value", text)
 
 
 if __name__ == "__main__":

@@ -148,6 +148,7 @@ test("the chart moves watched objects into namespaced Roles", () => {
     "takclients",
     "takserver-ca-key",
     "takserver-crl",
+    "takclient-enrollment",
   ]) {
     assert.equal(text.includes(name), true, name);
   }
@@ -208,6 +209,10 @@ test("the chart moves watched objects into namespaced Roles", () => {
   const caKey = (takserverWatcher.rules ?? []).filter((rule: ManifestRule) => (rule.resourceNames ?? []).includes("takserver-ca-key"));
   assert.equal(caKey.length, 1);
   assert.deepEqual(caKey[0].verbs, ["get", "list", "watch"]);
+  const enrollment = (takserverWatcher.rules ?? []).filter((rule: ManifestRule) =>
+    (rule.resourceNames ?? []).includes("takclient-enrollment"));
+  assert.equal(enrollment.length, 1);
+  assert.deepEqual(enrollment[0].verbs, ["get", "patch"]);
   const clients = roles.find(
     role => role.kind === "Role" && role.metadata.namespace === "takclients" && role.metadata.name === WATCHER_SA,
   );

@@ -182,7 +182,9 @@ The trusted runner and Docker bridge services stay reachable from the nodes.
 
 An EXIT/signal trap restores the dedicated chains, and an `always()` workflow
 step retries restoration after a step timeout or cancellation. Restoration
-removes only this test's chain and jumps. A killed or unreachable runner may
+removes only this test's chain and jumps. All firewall listings use numeric
+addresses so cleanup does not wait for reverse DNS while DNS egress is blocked.
+A killed or unreachable runner may
 prevent cleanup; GitHub then destroys that job's ephemeral cluster.
 
 Run it on Linux with Docker and a fresh test cluster using `uds run test-airgap`.
@@ -194,14 +196,16 @@ networks, a still-reachable host connection, packet counters, and restoration:
 ```bash title="Check firewall isolation with local Docker traffic"
 docker build --secret id=ca,src=/etc/ssl/certs/ca-certificates.crt \
   -t tak-airgap-firewall-test tests/fixtures/airgap
-AIRGAP_FIREWALL_INTEGRATION=1 AIRGAP_WGET_INTEGRATION=1 \
+AIRGAP_FIREWALL_INTEGRATION=1 AIRGAP_WGET_INTEGRATION=1 AIRGAP_CLEANUP_INTEGRATION=1 \
   python3 -B -m unittest tests.test_node_airgap -v
 ```
 
 `AIRGAP_WGET_INTEGRATION=1` also runs actual BusyBox wget against an isolated
 local HTTP redirect fixture, with an unreachable TLS target and deliberately
 invalid proxy settings. It tests transport classification without public egress
-or firewall changes.
+or firewall changes. `AIRGAP_CLEANUP_INTEGRATION=1` runs a private-container
+DNS blackhole fixture: the old named listing times out, while numeric listing
+and the real restore routine finish and remove the dedicated chain.
 
 Set `AIRGAP_FIREWALL_IPV6=1` as well to exercise IPv6 Docker networks on a
 host with IPv6 packet filtering. The managed development environment supports

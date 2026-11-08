@@ -10,6 +10,11 @@ permissions:
   contents: read
   pull-requests: write
 
+# Keep only the latest validation for each pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dependency-review:
     timeout-minutes: 15

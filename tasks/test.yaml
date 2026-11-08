@@ -533,9 +533,11 @@ tasks:
           fi
 
           # A pod that is not the CloudTAK ServiceAccount must not reach the
-          # tile host. The image is already on the node. The pod uses the
-          # same security context as the CloudTAK container so policy
-          # admits it, and it exits when the fetch finishes.
+          # tile host. Use CloudTAK's app label so the NetworkPolicy admits
+          # the same traffic: only the ServiceAccount identity should deny
+          # it at the egress waypoint. A failing readiness probe keeps this
+          # temporary pod out of the CloudTAK Service's ready endpoints.
+          # The image is already on the node, and the pod exits after fetch.
           deny_other_sa() {
             local host="$1" image code
             image="$(k get deploy cloudtak -n cloudtak -o jsonpath='{.spec.template.spec.containers[?(@.name=="cloudtak")].image}')"
@@ -552,7 +554,7 @@ tasks:
           json.dump({
             "apiVersion": "v1",
             "kind": "Pod",
-            "metadata": {"name": "basemap-denied", "namespace": "cloudtak", "labels": {"app": "basemap-denied"}},
+            "metadata": {"name": "basemap-denied", "namespace": "cloudtak", "labels": {"app": "cloudtak"}},
             "spec": {
               "serviceAccountName": "basemap-denied",
               "automountServiceAccountToken": False,
@@ -570,6 +572,10 @@ tasks:
                 "imagePullPolicy": "IfNotPresent",
                 "command": ["node", "-e", "fetch(\"https://\" + process.env.HOST + \"/\", {signal: AbortSignal.timeout(8000)}).then(r => { console.log(r.status); process.exit(0); }).catch(e => { console.error(String(e)); process.exit(1); })"],
                 "env": [{"name": "HOST", "value": os.environ["HOST"]}],
+                "readinessProbe": {
+                  "exec": {"command": ["node", "-e", "process.exit(1)"]},
+                  "periodSeconds": 1,
+                },
                 "securityContext": {
                   "allowPrivilegeEscalation": False,
                   "readOnlyRootFilesystem": True,

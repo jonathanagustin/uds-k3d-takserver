@@ -5,11 +5,16 @@ name: PR Title Check
 
 on:
   pull_request:
-    types: [milestoned, opened, edited, synchronize]
+    types: [opened, reopened, edited, synchronize]
 
 permissions:
   contents: read
   pull-requests: read
+
+# Keep only the latest validation for each pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

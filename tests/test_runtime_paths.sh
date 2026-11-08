@@ -52,7 +52,6 @@ check_match "SECURITY.md" ignore
 check_match "CONTRIBUTING.md" ignore
 check_match "renovate.json" ignore
 check_match "hk.pkl" ignore
-check_match "mise.toml" ignore
 check_match "commitlint.config.js" ignore
 check_match ".github/workflows/lint.yaml" ignore
 check_match ".github/workflows/codeql.yaml" ignore
@@ -110,6 +109,7 @@ check_match ".github/actions/attest-images/action.yaml" relevant
 check_match ".gitmodules" relevant
 check_match "upstream/takserver" relevant
 check_match "upstream/cloudtak" relevant
+check_match "mise.toml" relevant
 
 check_decide false "docs/ci.md"
 check_decide false $'README.md\nhk.pkl\n.github/workflows/lint.yaml'
@@ -119,7 +119,19 @@ check_decide true "charts/takserver/templates/prereqs.yaml"
 check_decide true "pepr/capabilities/workload.ts"
 check_decide true ".github/container-and-chart/cloudtak/Dockerfile"
 check_decide true ".gitmodules"
+check_decide true "mise.toml"
 check_decide true $'docs/ci.md\ncharts/takserver/templates/prereqs.yaml'
+
+# The linter pins and the install toolchain share one file. A pin-only
+# change has to start Test and Package for as long as these tools are there.
+mise_file="${root}/mise.toml"
+for pin in 'node =' 'k3d =' 'helm =' 'pnpm =' 'aqua:defenseunicorns/uds-cli'; do
+  if grep -q -F -- "${pin}" "${mise_file}"; then
+    ok "mise.toml pins ${pin}"
+  else
+    bad "mise.toml no longer pins ${pin}"
+  fi
+done
 check_decide true $'pepr/capabilities/workload.test.ts\npepr/capabilities/workload.ts'
 check_decide false ""
 

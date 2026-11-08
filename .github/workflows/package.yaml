@@ -65,7 +65,6 @@ on:
       - "release-please-config.json"
       - "commitlint.config.js"
       - "hk.pkl"
-      - "mise.toml"
       - "tests/demo/**"
       - "tests/test_*"
       - "tests/playwright.demo.config.ts"

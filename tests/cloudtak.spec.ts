@@ -4,7 +4,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { zoomMap } from "./map-zoom.mjs";
+import { dismissMapPermissions, zoomMap } from "./map-zoom.mjs";
 
 // CloudTAK on map.<domain> with Keycloak sign-in. Opening the map sends the
 // browser to the UDS Keycloak login, and the Keycloak user comes back to the
@@ -65,27 +65,10 @@ test.describe("CloudTAK", () => {
     if (firstRun) {
       await page.getByPlaceholder("Enter your callsign").fill(keycloakUser);
       await page.getByRole("button", { name: "Get Started" }).click();
-      // The permission step may follow. Skip it until no step is left.
-      const steps = [
-        welcome,
-        page.getByRole("button", { name: "Not now" }),
-        page.getByRole("button", { name: "Skip for now" }),
-      ];
-      await expect
-        .poll(
-          async () => {
-            for (const skip of steps.slice(1)) {
-              if (await skip.isVisible().catch(() => false)) await skip.click().catch(() => {});
-            }
-            for (const step of steps) {
-              if (await step.isVisible().catch(() => false)) return false;
-            }
-            return true;
-          },
-          { timeout: 30_000, intervals: [1_000] },
-        )
-        .toBe(true);
     }
+    // This browser is fresh on every run. Returning users can still get the
+    // permission dialog even though their server-side callsign is configured.
+    await dismissMapPermissions(page);
     console.log(`first-run dialog: ${firstRun ? "answered" : "not shown"}`);
     expect(new URL(page.url()).origin).toBe(new URL(cloudtakUrl).origin);
     expect(new URL(page.url()).pathname).not.toMatch(/^\/login/);

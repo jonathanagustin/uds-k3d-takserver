@@ -13,6 +13,7 @@ SPDX-License-Identifier: GPL-3.0-only
     #shell { width: 100vw; height: 100vh; position: relative; }
     #map { position: absolute; inset: 0; }
     #loading { position: absolute; inset: 0; z-index: 5; background: #ffffff80; }
+    #permissions { display: none; position: absolute; inset: 0; z-index: 10; background: #ffffffee; }
     #zoom { display: none; position: absolute; left: 8px; top: 76px; z-index: 6; background: white; padding: 12px; cursor: pointer; }
   </style>
 </head>
@@ -21,6 +22,10 @@ SPDX-License-Identifier: GPL-3.0-only
   <div id="map"></div>
   <div id="loading">Loading map and profile</div>
   <div id="zoom" role="button" tabindex="0" title="Zoom In Button"><svg width="24" height="24" aria-hidden="true"><path d="M12 2v20M2 12h20" stroke="black"/></svg></div>
+  <div id="permissions" role="dialog" aria-modal="true" class="modal modal-blur show fade">
+    <span id="permission-title">Permissions</span><p>CloudTAK needs permissions to keep your team informed.</p>
+    <button id="skip-permissions">Skip for now</button>
+  </div>
 </div>
 <script type="module">
   // Same library version as CloudTAK submodule 745d8a9 app/package-lock.json.
@@ -35,9 +40,26 @@ SPDX-License-Identifier: GPL-3.0-only
   // CloudTAK Map.vue renders this title/role and handler only after loading.
   // The test uses the UI control; it never calls the map API itself.
   document.getElementById('zoom').onclick = () => map.setZoom(map.getZoom() + 1);
+  document.getElementById('skip-permissions').onclick = () => {
+    if (document.getElementById('permission-title').textContent === 'Location access') {
+      document.getElementById('permission-title').textContent = 'Permissions';
+      document.getElementById('skip-permissions').textContent = 'Skip for now';
+    } else {
+      localStorage.setItem('cloudtak-permissions-dismissed', 'true');
+      document.getElementById('permissions').remove();
+    }
+  };
   map.once('load', () => setTimeout(() => {
     document.getElementById('loading').remove();
     document.getElementById('zoom').style.display = 'block';
+    const params = new URL(location.href).searchParams;
+    if (params.has('disclosure')) {
+      document.getElementById('permission-title').textContent = 'Location access';
+      document.getElementById('skip-permissions').textContent = 'Not now';
+    }
+    if (params.has('unknown')) document.getElementById('permission-title').textContent = 'Unexpected warning';
+    if (params.has('permissions') || params.has('unknown') || params.has('disclosure')) document.getElementById('permissions').style.display = 'block';
+    else document.getElementById('permissions').remove();
   }, 2000));
 </script>
 </body>

@@ -1,0 +1,49 @@
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cloudtak
+spec:
+  groups:
+    - name: cloudtak.rules
+      rules:
+        - alert: CloudTAKTargetDown
+          expr: kube_deployment_spec_replicas{namespace={{ .Release.Namespace | quote }}, deployment="cloudtak"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: CloudTAK has been scaled to 0
+        - alert: CloudTAKDeploymentUnavailable
+          expr: kube_deployment_spec_replicas{namespace={{ .Release.Namespace | quote }}, deployment="cloudtak"} == 1 and kube_deployment_status_replicas_available{namespace={{ .Release.Namespace | quote }}, deployment="cloudtak"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: CloudTAK has spec replicas 1 and no available pods
+        # PostGIS is a StatefulSet, not a Deployment.
+        - alert: CloudTAKPostGISTargetDown
+          expr: kube_statefulset_replicas{namespace={{ .Release.Namespace | quote }}, statefulset="cloudtak-postgis"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: CloudTAK PostGIS has been scaled to 0
+        - alert: CloudTAKPostGISUnavailable
+          expr: kube_statefulset_replicas{namespace={{ .Release.Namespace | quote }}, statefulset="cloudtak-postgis"} == 1 and kube_statefulset_status_replicas_ready{namespace={{ .Release.Namespace | quote }}, statefulset="cloudtak-postgis"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: CloudTAK PostGIS has spec replicas 1 and no ready pods
+        - alert: CloudTAKPodRestartLoop
+          expr: increase(kube_pod_container_status_restarts_total{namespace={{ .Release.Namespace | quote }}, pod=~"cloudtak-.*"}[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: A CloudTAK or PostGIS container restarted more than 3 times in 15 minutes
+{{- end }}

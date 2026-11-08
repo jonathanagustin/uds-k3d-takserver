@@ -75,7 +75,7 @@ steps {
   }
   ["monitoring"] {
     check = "bash .github/scripts/check-monitoring.sh"
-    glob = List("charts/takserver/templates/monitoring.yaml", "charts/takserver/dashboards/**", ".github/scripts/check-monitoring.sh")
+    glob = List("charts/takserver/templates/monitoring.yaml", "charts/cloudtak/templates/monitoring.yaml", "charts/takserver/templates/uds-package.yaml", "charts/takserver/templates/health.yaml", "charts/takserver/dashboards/**", ".github/scripts/check-monitoring.sh")
   }
   ["exemptions"] {
     check = "bash .github/scripts/check-exemptions.sh"

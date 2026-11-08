@@ -18,6 +18,15 @@ spec:
       portName: metrics
       targetPort: 9100
       path: /metrics
+    {{- if include "takserver.healthEnabled" . }}
+    - description: tak-certificates
+      kind: PodMonitor
+      selector:
+        app: tak-health
+      portName: http
+      targetPort: {{ .Values.health.port }}
+      path: /metrics
+    {{- end }}
     - description: tak-messaging
       kind: PodMonitor
       selector:

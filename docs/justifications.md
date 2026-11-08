@@ -213,7 +213,33 @@ the IPv4 test but cannot create an IPv6 Docker network because its kernel lacks
 the IPv6 filter table. The production guard still refuses to proceed with an
 enabled but unfilterable IPv6 stack.
 
-The local firewall test does not establish that the full application suite has
-passed without egress. That result comes from the airgap CI job; keep issue
-[#256](https://github.com/jonathanagustin/uds-takserver/issues/256) open until
-that job completes successfully.
+### Recorded application validation
+
+Main revision `3cf5084f81d54641fab7d55b938d0c5dd733e017` passed
+[Test run 42450853308](https://github.com/jonathanagustin/uds-takserver/actions/runs/42450853308),
+including [the complete amd64 airgap job](https://github.com/jonathanagustin/uds-takserver/actions/runs/42450853308/job/128640860481)
+on November 8, 2026. The job ran `uds run test-airgap` with the airgap bundle's
+external basemap disabled. Its log records:
+
+- At 05:39:12 UTC, the node's external IP control was reachable before
+  isolation and denied after isolation.
+- Installation and `test:all` completed under the guard, including the SSO
+  browser workflows and TAKClient tests. At 05:52:55 UTC, the live revocation
+  checks passed: the revoked stream closed, reconnect was rejected, and the
+  unrevoked client, administrator and CloudTAK continued working without a TAK
+  restart.
+- At 05:52:56 UTC, the external IP control remained denied. The IPv4 catch-all
+  reject rule recorded two packets and 120 bytes. The log also retained the
+  IPv6 filter chain with its catch-all reject rule; that rule recorded zero
+  packets, so this does not demonstrate an external IPv6 connection attempt.
+- At 05:52:57 UTC, cleanup reported restored node egress with the host firewall
+  unchanged. The separate always-run restoration step succeeded and found no
+  active state. The entire job, including cleanup and log staging, passed at
+  05:53:15 UTC.
+
+This completes the recorded node/workload egress installation and core-flow
+validation requested by [issue 256](https://github.com/jonathanagustin/uds-takserver/issues/256).
+It does not establish an offline workstation, offline UDS Core bootstrap, or
+cloud-provider installation. The runner and trusted Docker bridge remained
+reachable as described above. Local firewall fixtures remain complementary
+checks, rather than substitutes for this application result.

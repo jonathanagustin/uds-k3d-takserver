@@ -129,11 +129,8 @@ if grep -F -q 'push:' "${wf}/full-core.yaml" && grep -F -q 'branches: [main]' "$
 else
   bad "full-core lost main push validation"
 fi
-if grep -F -q 'cancel-in-progress:' "${wf}/codeql.yaml"; then
-  bad "codeql cancels in progress"
-else
-  ok "codeql is not in a cancelling group"
-fi
+require_expr "${wf}/codeql.yaml" '${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}' "codeql separates scheduled scans from push validation"
+require_expr "${wf}/codeql.yaml" "${gate_cancel}" "codeql cancels only superseded PR and push validation"
 
 require_expr "${wf}/full-core.yaml" "${full_group}" "full-core validate group"
 require_expr "${wf}/full-core.yaml" "${full_cancel}" "full-core validate cancel"

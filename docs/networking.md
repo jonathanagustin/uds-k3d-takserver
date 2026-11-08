@@ -38,7 +38,7 @@ The Package `expose` entries also tell UDS Core what to monitor and what to show
 | `tak-api-https`, `tak-api-cert`, `tak-messaging-streaming` (passthrough) | none (`uds.dev/visible: "false"`) | none directly. `tak-health` checks them. See [Client-port health](#client-port-health) |
 | `tak-health` (`tak-health.admin.<domain>`, admin), only when `health.enabled` | none (`uds.dev/visible: "false"`) | `/stream`, `/api`, and `/enroll`. Each answers 200 when its TAK port passed its last check |
 | `cloudtak-map` (`map.<domain>`, tenant) | "CloudTAK" (`uds.dev/title`) | `/login`, which answers 200 without a session |
-| ATAK viewer (`atak.<domain>`, tenant, optional package) | no `uds.dev/title` set | `/phone.html`, through Authservice. The full-core job does not deploy this package, so it does not check this probe. See [ATAK test device](atak-device.md) |
+| ATAK viewer (`atak.<domain>`, tenant, optional package) | no `uds.dev/title` set | `/phone.html`, through Authservice. The opt-in `uptime_probe` ATAK e2e run checks this probe. See [ATAK test device](atak-device.md#check-the-viewer-uptime-probe) |
 
 The package metadata that Portal and the package catalog read (title, tagline, categories, keywords, and icon) is in the `metadata.annotations` block of `zarf.yaml`. The icon is the base64 of `assets/icon.svg`, and hk's `icon` check fails when they differ.
 

@@ -12,7 +12,7 @@
 </p>
 <!-- github-only:end -->
 
-<p align="center">TAK Server and CloudTAK on UDS Core, packaged with Zarf for Kubernetes.</p>
+<p align="center">An all-in-one solution for deploying, securing, and operating TAK Server.</p>
 
 <!-- github-only:start -->
 <p align="center">
@@ -20,7 +20,7 @@
 </p>
 <!-- github-only:end -->
 
-Deploying [TAK Server](https://github.com/TAK-Product-Center/Server) and [CloudTAK](https://github.com/dfpc-coe/CloudTAK) together requires coordinating certificates, sign-in, networking, and updates. TAK Server on UDS packages those integrations for [UDS Core](https://docs.defenseunicorns.com/core/). TAK Server connects field clients such as ATAK and WinTAK through certificate-based APIs, enrollment, and streaming. CloudTAK provides a browser map connected to the same server, with Keycloak sign-in for its users. The package integrates these applications with Core's identity services, gateways, and default-deny network policies, giving teams a repeatable starting point for running TAK alongside their other UDS applications.
+TAK Server on UDS brings applications, identity, networking, security, and operations together in one integrated environment. [TAK Server](https://github.com/TAK-Product-Center/Server) connects field clients such as ATAK and WinTAK through certificate-based APIs, enrollment, and streaming. [CloudTAK](https://github.com/dfpc-coe/CloudTAK) provides a browser map connected to the same server, with Keycloak sign-in for its users. The package integrates these applications with [UDS Core](https://docs.defenseunicorns.com/core/)'s identity services, gateways, and default-deny network policies, giving teams a repeatable starting point for running TAK alongside their other UDS applications.
 
 Zarf packages the application charts, container images, and deployment configuration into versioned artifacts. This repository builds the TAK, CloudTAK, and PostGIS images for amd64 and arm64, publishes signed release packages with build provenance, and includes automated installation and upgrade checks on k3d. Deploy a published package onto an existing UDS Core cluster, or use the local test environment to develop and validate changes. The operating guides cover certificates, sign-in, network access, backup and restore, resource profiles, and the optional Android ATAK test device.
 

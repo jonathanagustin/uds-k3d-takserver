@@ -2,7 +2,9 @@
 
 This opt-in component builds **public CommonCommo 1.17.2**, including its Java JAR and Linux amd64 JNI implementation. It does not build TAKX, create a desktop container, provide a replacement SDK, or complete [issue 376](https://github.com/jonathanagustin/uds-takserver/issues/376).
 
-The existing `upstream/atak-civ` gitlink supplies the official source. [sources.lock.json](sources.lock.json) pins its revision, the actual CommonCommo version and nine source archives by SHA256, size and official public URL. TAKX source revisions in that file are research references, not additional checkouts or build inputs. No TAK.gov account or private artifact is used by this foundation.
+The existing `upstream/atak-civ` gitlink supplies the official source. [sources.lock.json](sources.lock.json) pins its revision, the actual CommonCommo version and nine source archives by SHA256, size and official public URL. TAKX source revisions in that file are research references, separate from the native build inputs. The optional `upstream/takx` gitlink pins the official 5.8 source; this build does not initialize or compile it. No TAK.gov account or private artifact is used by this foundation.
+
+Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after full compilation and runtime/interoperability checks pass. Neither client has passed those checks. Both still require a real desktop AndroidPort implementation and a tested streaming-contact API adaptation; missing-type counts alone do not establish compatibility.
 
 ## Run locally
 

@@ -157,10 +157,13 @@ The script appends a temporary CA to the saved custom roots in ClusterConfig
 `uds-cluster-config`, waits for both namespace bundles and new API, messaging,
 and CloudTAK pod UIDs, and checks Keycloak from the SSO container. Node must
 reject the live gateway certificate when using only public roots, accept it
-when trusting only the signing CA found in the combined trust file, and reject
-it when trusting only the unrelated trial CA. If the server sends a signing CA
-that is not yet in the bundle, the script installs that CA and waits until
-both namespace bundles contain it. Core does not restart pods the first time
+when trusting only the bundled anchor of its verified chain, and reject it
+when trusting only the unrelated trial CA. For an intermediate chain, the
+anchor is its root CA, not an intermediate treated as a standalone root. If
+the server sends that root and it is absent from the bundle, the script installs
+it and waits until both namespace bundles contain it. If a required private
+root is neither configured nor sent by the gateway, configure it before running
+the trial; the test does not weaken TLS verification to accept an incomplete chain. Core does not restart pods the first time
 it creates `uds-trust-bundle`; the following trial-CA change is the reload. It then rotates to a second trial CA and repeats
 the checks. The first Node error is kept, bounded to 300 characters, with no
 certificate body. `--ui` also reruns the existing browser suite after each
@@ -173,9 +176,15 @@ exit, the script restores the saved custom CA setting and waits for the
 generated bundles. If an administrator changed public/DoD settings during the
 trial, cleanup preserves those new settings and roots while requiring the saved
 custom roots to return and all trial-only roots to disappear. With unchanged
-settings, it requires the original complete bundle. It then explicitly restarts
-the consumers to remove temporary roots from cached trust stores. It uses resource-version checks and refuses to overwrite a
-concurrent custom-CA edit. Temporary private keys stay in a private directory
+settings, it requires the original complete bundle. Core can retain its last
+namespace bundle when all global roots are removed. After Core reconciles the
+restored generation, cleanup removes only fingerprints introduced by this trial,
+using UID, resource-version and old-data tests on the Core-owned ConfigMap. It
+preserves every other certificate and all metadata, and excludes roots now
+legitimately enabled by concurrent public/DoD settings. It never deletes an
+arbitrary ConfigMap. It then explicitly restarts the consumers to clear cached
+trust and fails if temporary roots return. A concurrent custom-CA edit is never
+overwritten. Temporary private keys stay in a private directory
 and are deleted. `out/trust-bundle-live.json` records CA fingerprints, pod UIDs,
 and cleanup success. `out/trust-bundle-original-ca.json` saves the original
 public CA settings before the first mutation, for manual recovery if the

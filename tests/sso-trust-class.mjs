@@ -75,3 +75,38 @@ export function negativeControl(outcome, label) {
   const detail = outcome.detail || 'no error text';
   return { pass: false, reason: `${label} inconclusive (${outcome.kind}): ${detail}`.slice(0, 300) };
 }
+
+// Keep cryptographic issuer links intact when a gateway sends intermediates.
+// `parse` is supplied by the caller (Node's X509Certificate in production).
+export function certificateChain(peer, parse, trust = []) {
+  const chain = [];
+  const seen = new Set();
+  let current = peer;
+  while (current && current.raw) {
+    const cert = parse(current.raw);
+    const fingerprint = cert.fingerprint256;
+    if (seen.has(fingerprint)) break;
+    seen.add(fingerprint);
+    chain.push(cert);
+    let parent = current.issuerCertificate;
+    if (!parent || !parent.raw || parse(parent.raw).fingerprint256 === fingerprint) {
+      const issuer = trust.find(candidate => candidate.fingerprint256 !== fingerprint
+        && cert.checkIssued(candidate) && cert.verify(candidate.publicKey));
+      parent = issuer ? { raw: issuer.raw } : undefined;
+    }
+    if (parent && parent.raw) {
+      const issuer = parse(parent.raw);
+      if (!cert.checkIssued(issuer) || !cert.verify(issuer.publicKey)) {
+        throw new Error('SSO server sent an invalid certificate issuer chain');
+      }
+    }
+    current = parent;
+  }
+  return chain;
+}
+
+export function bundledAnchor(peer, certificates, parse) {
+  const trusted = new Map(certificates.map(cert => [cert.fingerprint256, cert]));
+  const chain = certificateChain(peer, parse, certificates);
+  return chain.map(cert => trusted.get(cert.fingerprint256)).filter(Boolean).at(-1);
+}

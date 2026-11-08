@@ -34,6 +34,38 @@ def fingerprints(pem):
             re.findall(r"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----", pem)}
 
 
+def without_trial_roots(content, trial_roots):
+    """Remove only exact certificate fingerprints introduced by this trial."""
+    def keep(match):
+        return "" if fingerprints(match.group()) & trial_roots else match.group()
+
+    return re.sub(r"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----", keep, content)
+
+
+def sso_failure(result):
+    """Read our bounded Node diagnostic, never kubectl's trailing exit line."""
+    for line in (result.stderr or "").splitlines():
+        if not line.startswith("UDS_SSO_TRUST_ERROR "):
+            continue
+        try:
+            error = json.loads(line.split(" ", 1)[1])
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(error, dict):
+            continue
+        message = str(error.get("message", "Node trust check failed"))
+        # A crypto library must not cause certificate/key material to be logged.
+        message = message.split("-----BEGIN", 1)[0]
+        message = " ".join("".join(ch for ch in message if ch.isprintable()).split())[:240]
+        code = str(error.get("code", ""))
+        code = code if re.fullmatch(r"[A-Z][A-Z0-9_]{0,79}", code) else ""
+        return (message if not code or message.startswith(code) else f"{code}: {message}")[:300]
+    for line in (result.stderr or "").splitlines():
+        if re.match(r"^(?:Error|[A-Za-z]+Error):", line):
+            return " ".join(line.split("-----BEGIN", 1)[0].split())[:300]
+    return f"Node trust check exited {result.returncode} without a structured diagnostic"
+
+
 def append_ca(original, certificate):
     saved = "" if original is MISSING else base64.b64decode(original, validate=True).decode()
     return base64.b64encode((saved.rstrip() + "\n" + certificate.strip() + "\n").encode()).decode()
@@ -77,6 +109,44 @@ class Kubectl:
                         "--ignore-not-found", "-o", "json")
         return json.loads(text).get("data", {}).get("ca-bundle.pem", "") if text.strip() else ""
 
+    def configured_roots(self, config):
+        """Roots legitimately enabled now, including concurrent public/DoD flags."""
+        value = certs_value(config)
+        roots = fingerprints("" if value is MISSING else base64.b64decode(value, validate=True).decode())
+        flags = config.get("spec", {}).get("caBundle", {})
+        if not (flags.get("includePublicCerts") or flags.get("includeDoDCerts")):
+            return roots
+        source = json.loads(self.run("get", "configmap", "uds-ca-certs", "-n", "pepr-system", "-o", "json"))
+        for flag, key in (("includePublicCerts", "publicCACerts"), ("includeDoDCerts", "dodCACerts")):
+            if flags.get(flag):
+                roots |= fingerprints(base64.b64decode(source.get("data", {}).get(key, ""), validate=True).decode())
+        return roots
+
+    def prune_trial_roots(self, namespace, trial_roots):
+        """CAS-prune only our roots; retain the object, owners and all other data."""
+        resource = json.loads(self.run("get", "configmap", "uds-trust-bundle", "-n", namespace, "-o", "json"))
+        metadata = resource.get("metadata", {})
+        labels = metadata.get("labels", {})
+        owners = metadata.get("ownerReferences", [])
+        if namespace not in {"takserver", "cloudtak"} or metadata.get("name") != "uds-trust-bundle" \
+                or metadata.get("namespace") != namespace or labels.get("uds/ca-bundle") != "true" \
+                or labels.get("uds/package") != namespace \
+                or not any(owner.get("kind") == "Package" and owner.get("name") == namespace
+                           and owner.get("apiVersion", "").startswith("uds.dev/") for owner in owners):
+            raise ValueError(f"refusing cleanup of a bundle not owned by Core's {namespace} Package")
+        content = resource.get("data", {}).get("ca-bundle.pem", "")
+        updated = without_trial_roots(content, trial_roots)
+        if updated == content:
+            return
+        operations = [
+            {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+            {"op": "test", "path": "/data/ca-bundle.pem", "value": content},
+            {"op": "replace", "path": "/data/ca-bundle.pem", "value": updated},
+        ]
+        self.run("patch", "configmap", "uds-trust-bundle", "-n", namespace, "--type=json", "-p", json.dumps(operations))
+        print(f"CAS-pruned trial-owned CA roots from {namespace}; all other roots and metadata preserved", flush=True)
+
     def pods(self):
         result = {}
         for namespace, name in WORKLOADS:
@@ -95,31 +165,28 @@ class Kubectl:
             text=True, capture_output=True, timeout=60)
         if result.returncode == 0:
             return result.stdout.strip()
-        detail = (result.stderr or result.stdout or "no error text").strip().splitlines()
-        first = detail[-1][:300] if detail else "no error text"
-        raise RuntimeError(f"CloudTAK SSO trust check failed: {first}")
+        raise RuntimeError(f"CloudTAK SSO trust check failed: {sso_failure(result)}")
 
     def signing_status(self, domain):
         # The inspection handshake records the peer certificate only. Acceptance
         # uses a separate connection that requires the bundled signing CA.
-        code = r"""const tls=require('node:tls');const crypto=require('node:crypto');const fs=require('node:fs');
+        classifier = Path(__file__).with_name("sso-trust-class.mjs").read_text().replace("export function", "function")
+        code = classifier + r"""const tls=require('node:tls');const crypto=require('node:crypto');const fs=require('node:fs');
 const host=process.argv[1];
 function pems(text){return text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[]}
 function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
-function derPem(raw){const b64=raw.toString('base64');return '-----BEGIN CERTIFICATE-----\n'+b64.match(/.{1,64}/g).join('\n')+'\n-----END CERTIFICATE-----\n'}
 (async()=>{
   const peer=await new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,rejectUnauthorized:false,timeout:20000},()=>{const cert=socket.getPeerCertificate(true);socket.end();resolve(cert)});socket.on('error',reject)});
   if(!peer||!peer.raw) throw new Error('SSO server sent no certificate');
   const leaf=new crypto.X509Certificate(peer.raw);
   const bundled=pems(fs.readFileSync('/var/run/combined-trust/ca-bundle.pem','utf8')).map(pem=>new crypto.X509Certificate(pem));
-  const signer=bundled.find(ca=>{try{return fp(ca)===fp(leaf)||leaf.verify(ca.publicKey)}catch{return false}});
-  if(signer){console.log('IN_BUNDLE '+fp(signer));return}
-  if(!peer.issuerCertificate||!peer.issuerCertificate.raw) throw new Error('SSO signing CA is not in the combined trust file and the server sent no issuer certificate: peer='+fp(leaf));
-  const issuerPem=derPem(peer.issuerCertificate.raw);
-  const issuer=new crypto.X509Certificate(issuerPem);
-  if(!(fp(issuer)===fp(leaf)||leaf.verify(issuer.publicKey))) throw new Error('presented issuer did not sign the SSO certificate: peer='+fp(leaf));
-  console.log('NEED_CA '+Buffer.from(issuerPem).toString('base64'));
-})().catch(error=>{console.error(String(error&&error.message||error).replace(/\s+/g,' ').slice(0,300));process.exitCode=1});"""
+  const signer=bundledAnchor(peer,bundled,raw=>new crypto.X509Certificate(raw));
+  if(signer&&signer.checkIssued(signer)&&signer.verify(signer.publicKey)){console.log('IN_BUNDLE '+fp(signer));return}
+  const chain=certificateChain(peer,raw=>new crypto.X509Certificate(raw),bundled);
+  const root=chain.at(-1);
+  if(!root||!root.ca||!root.checkIssued(root)||!root.verify(root.publicKey)) throw new Error('SSO root CA is unavailable: configure its private root before this trial; peer='+fp(leaf));
+  console.log('NEED_CA '+Buffer.from(root.toString()).toString('base64'));
+})().catch(error=>{console.error('UDS_SSO_TRUST_ERROR '+JSON.stringify({code:String(error&&error.code||''),message:String(error&&error.message||error).replace(/\s+/g,' ').slice(0,240)}));process.exitCode=1});"""
         return self.exec_sso(code, f"sso.{domain}")
 
     def discovery(self, domain, fingerprint):
@@ -127,14 +194,14 @@ function derPem(raw){const b64=raw.toString('base64');return '-----BEGIN CERTIFI
         code = classifier + r"""
 const tls=require('node:tls');const https=require('node:https');const fs=require('node:fs');const crypto=require('node:crypto');
 const realm=process.argv[1];const host=new URL(realm).host;const trial=process.argv[2];
-if(process.env.NODE_TLS_REJECT_UNAUTHORIZED==='0') throw new Error('TLS validation is disabled');
 const path='/var/run/combined-trust/ca-bundle.pem';
-if(process.env.NODE_EXTRA_CA_CERTS!==path) throw new Error('combined trust file is not configured');
 function pems(text){return text.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)||[]}
 function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
-function connect(ca){return new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,ca,rejectUnauthorized:true,timeout:20000},()=>{const peer=socket.getPeerCertificate();socket.end();if(!peer||!peer.raw) reject(new Error('SSO server sent no certificate')); else resolve(peer)});socket.on('timeout',()=>{const error=new Error('TLS connection timed out');error.code='ETIMEDOUT';socket.destroy();reject(error)});socket.on('error',reject)})}
+function connect(ca){return new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,ca,rejectUnauthorized:true,timeout:20000},()=>{const peer=socket.getPeerCertificate(true);socket.end();if(!peer||!peer.raw) reject(new Error('SSO server sent no certificate')); else resolve(peer)});socket.on('timeout',()=>{const error=new Error('TLS connection timed out');error.code='ETIMEDOUT';socket.destroy();reject(error)});socket.on('error',reject)})}
 async function outcome(ca){try{await connect(ca);return {kind:'success',detail:''}}catch(error){return {kind:classifyTlsError(error),detail:boundedDiagnostic(error)}}}
 (async()=>{
+if(process.env.NODE_TLS_REJECT_UNAUTHORIZED==='0') throw new Error('TLS validation is disabled');
+if(process.env.NODE_EXTRA_CA_CERTS!==path) throw new Error('combined trust file is not configured');
   const parsed=pems(fs.readFileSync(path,'utf8')).map(pem=>new crypto.X509Certificate(pem));
   const trialCert=parsed.find(cert=>fp(cert)===trial);
   if(!trialCert) throw new Error('trial CA is missing from the combined trust file');
@@ -144,7 +211,7 @@ async function outcome(ca){try{await connect(ca);return {kind:'success',detail:'
   if(!publicDecision.pass) throw new Error(publicDecision.reason);
   const peer=await connect(parsed.map(cert=>cert.toString()));
   const leaf=new crypto.X509Certificate(peer.raw);
-  const signer=parsed.find(cert=>{try{return fp(cert)===fp(leaf)||leaf.verify(cert.publicKey)}catch{return false}});
+  const signer=bundledAnchor(peer,parsed,raw=>new crypto.X509Certificate(raw));
   if(!signer) throw new Error('SSO signing CA is not in the combined trust file: peer='+fp(leaf));
   await connect([signer.toString()]);
   const body=await new Promise((resolve,reject)=>{const req=https.get(realm+'/.well-known/openid-configuration',{ca:[signer.toString()],servername:host,rejectUnauthorized:true,timeout:20000},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>resolve({status:res.statusCode,text:Buffer.concat(chunks).toString('utf8')}))});req.on('error',reject);req.on('timeout',()=>{req.destroy();const error=new Error('TLS connection timed out');error.code='ETIMEDOUT';reject(error)})});
@@ -153,7 +220,7 @@ async function outcome(ca){try{await connect(ca);return {kind:'success',detail:'
   const trialDecision=negativeControl(await outcome([trialCert.toString()]),'trial-CA check');
   if(!trialDecision.pass) throw new Error(trialDecision.reason);
   console.log('CloudTAK SSO verified peer='+fp(leaf)+' signer='+fp(signer)+' trial_ca_rejected=true');
-})().catch(error=>{console.error(boundedDiagnostic(error));process.exitCode=1});"""
+})().catch(error=>{console.error('UDS_SSO_TRUST_ERROR '+JSON.stringify({code:String(error&&error.code||''),message:boundedDiagnostic(error)}));process.exitCode=1});"""
         return self.exec_sso(code, f"https://sso.{domain}/realms/uds", fingerprint)
 
 
@@ -279,18 +346,31 @@ class Trial:
         def non_custom_settings(config):
             return {key: value for key, value in config.get("spec", {}).get("caBundle", {}).items() if key != "certs"}
 
-        def restored_bundles():
+        def restored_bundles(allow_prune=True):
             latest = self.kube.config()
             if certs_value(latest) != self.saved:
                 raise ValueError("custom CA certs changed again during cleanup")
+            if latest.get("status", {}).get("phase") == "Failed":
+                raise RuntimeError("Core failed to reconcile restored custom CA settings")
+            generation = latest.get("metadata", {}).get("generation")
+            if generation is None or latest.get("status", {}).get("phase") != "Ready" \
+                    or latest.get("status", {}).get("observedGeneration") != generation:
+                raise ValueError("Core has not reconciled the restored CA generation")
             flags_changed = non_custom_settings(latest) != non_custom_settings(self.original)
+            # Core can leave the last namespace bundle after clearing all roots.
+            # Remove only roots we introduced, excluding roots now legitimately
+            # enabled by concurrent flags. Never delete the ConfigMap or unknown CAs.
+            unwanted = trial_only - self.kube.configured_roots(latest)
             for namespace, saved in self.original_bundles.items():
                 found = fingerprints(self.kube.bundle(namespace))
+                if allow_prune and unwanted & found:
+                    self.kube.prune_trial_roots(namespace, unwanted)
+                    found = fingerprints(self.kube.bundle(namespace))
                 if flags_changed:
                     # An administrator may have legitimately added or removed
                     # public/DoD roots. Preserve those flags and roots, but still
                     # require our saved custom roots and removal of trial roots.
-                    if not saved_custom <= found or trial_only & found:
+                    if not saved_custom <= found or unwanted & found:
                         raise ValueError(f"{namespace} has not restored custom trust and removed trial roots")
                 elif found != saved:
                     state = "absent" if not found else f"{len(found)} certificate(s) still present"
@@ -301,12 +381,15 @@ class Trial:
                         f"extra fingerprints={added}; missing fingerprints={removed}")
 
         wait_for(restored_bundles, "restore namespace trust without replacing concurrent CA settings", 180)
-        # Empty original bundles are deleted by Core. Restart explicitly in
-        # cleanup so a cached temporary root cannot survive a ConfigMap deletion.
+        # Restart explicitly after restoring/pruning roots: init containers
+        # and Node processes must not retain a cached temporary certificate.
         before = wait_for(self.kube.pods, "consumers ready before cleanup restart")
         for namespace, name in WORKLOADS:
             self.kube.run("rollout", "restart", f"deploy/{name}", "-n", namespace)
         wait_for(lambda: self.replaced_pods(before), "cleanup consumer rollouts")
+        # A controller reintroducing a temporary root is a failure, not another
+        # opportunity to prune it after consumers have already restarted.
+        restored_bundles(allow_prune=False)
         print("Saved Core custom CA setting restored and temporary roots removed; consumers restarted", flush=True)
 
 

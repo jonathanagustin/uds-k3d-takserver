@@ -50,7 +50,7 @@ inputs() {
     ':(exclude).github/**' ':(exclude)bundle/**' ':(exclude)atak/**' \
     ':(exclude)demo/**' ':(exclude)bench/**' ':(exclude)*.md' \
     ':(exclude)renovate.json' ':(exclude).release-please-manifest.json' \
-    ':(exclude)upstream/atak-civ' \
+    ':(exclude)upstream/atak-civ' ':(exclude)takx/**' ':(exclude)upstream/takx' \
     | python3 -c '
 import sys
 for rec in sys.stdin.buffer.read().split(b"\0"):
@@ -73,6 +73,21 @@ key() {
       inputs | while IFS= read -r line; do
         case "${line}" in
           gitlink\ *) echo "${line}" ;;
+          'file .gitmodules')
+            # TAKX is opt-in and absent from the default package. Preserve all
+            # existing module metadata while ignoring only its own section.
+            python3 -c '
+import hashlib, pathlib, re
+lines = pathlib.Path(".gitmodules").read_bytes().splitlines(keepends=True)
+kept, skip = [], False
+for line in lines:
+    if re.match(rb"^[ \t]*\[", line):
+        skip = line.rstrip(b"\r\n") == b"[submodule \"upstream/takx\"]"
+    if not skip:
+        kept.append(line)
+print(hashlib.sha256(b"".join(kept)).hexdigest() + "  .gitmodules")
+'
+            ;;
           file\ *) sha256sum -- "${line#file }" ;;
           *) echo "dev-package: unexpected input line ${line}" >&2; exit 1 ;;
         esac

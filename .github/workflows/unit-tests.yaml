@@ -121,6 +121,9 @@ jobs:
           PYYAML_VERSION: 6.0.3
         run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_bench_capacity tests.test_full_core_top tests.test_basemap_probe tests.test_runner_wedge_probe tests.test_node_airgap tests.test_image_producers tests.test_ca_propagation tests.test_pin_image_tags -v
 
+      - name: Optional native source and cache guards
+        run: python3 -B -m unittest discover -s takx -p 'test_source_inputs.py' -v
+
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.
   package-values:

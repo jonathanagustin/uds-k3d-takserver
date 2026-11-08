@@ -13,3 +13,8 @@
 	url = https://github.com/dfpc-coe/CloudTAK
 	shallow = true
 	branch = v13.112.3
+[submodule "upstream/takx"]
+	shallow = true
+	path = upstream/takx
+	url = https://github.com/TAK-Product-Center/TAKX.git
+	branch = develop

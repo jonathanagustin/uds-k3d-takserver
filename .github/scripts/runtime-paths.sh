@@ -9,7 +9,7 @@
 # A file that matches none of these globs is relevant. That is the safe side:
 # charts, Pepr, network policies, values, bundles, tasks, image builds,
 # dependency pins, and the scripts the cluster jobs run are not listed here.
-# Docs, device, benchmark, demo, unit-test-only, and repository metadata are.
+# Docs, device, optional TAKX, benchmark, demo, unit tests, and metadata are.
 # mise.toml is not on this list: it pins Node, k3d, Helm, the UDS CLI, and
 # pnpm in the same file as the linters, so a pin-only change still starts
 # Test and Package.
@@ -29,6 +29,8 @@ atak/**
 bench/**
 demo/**
 upstream/atak-civ
+takx/**
+upstream/takx
 .github/ISSUE_TEMPLATE/**
 .github/pull_request_template.md
 .github/test-infra/**

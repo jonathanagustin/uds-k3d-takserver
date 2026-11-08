@@ -15,6 +15,8 @@ includes:
   - publish: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.32.1/tasks/publish.yaml
 
 variables:
+  - name: TEST_BUNDLE_CONFIG
+    default: bundle/uds-config.yaml
   - name: DOMAIN
     default: uds.dev
   - name: TAK_IMAGE_TAG
@@ -69,6 +71,7 @@ tasks:
       - task: deploy:test-bundle
         with:
           options: "--force-conflicts"
+          config: "${TEST_BUNDLE_CONFIG}"
       - task: setup:keycloak-user
         with:
           group: "/UDS Core/Admin"

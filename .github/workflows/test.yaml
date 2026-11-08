@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       trust_bundle:
-        description: Verify live Core CA propagation and consumer reloads
+        description: Install private gateway PKI and verify live CA rotation and SSO
         type: boolean
         default: false
   pull_request:
@@ -525,8 +525,25 @@ jobs:
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: ./.github/scripts/pin-image-tags.sh
 
+      - name: Prepare private gateway baseline
+        id: trust-fixture
+        if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
+        timeout-minutes: 2
+        run: uds zarf tools yq -o=json '.' bundle/uds-config.yaml | python3 tests/prepare-trust-fixture.py prepare --parent "${RUNNER_TEMP}"
+
+      - name: Install with the private gateway CA
+        if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
+        timeout-minutes: 40
+        env:
+          PRIVATE_CONFIG: ${{ steps.trust-fixture.outputs.config }}
+          SSL_CERT_FILE: ${{ steps.trust-fixture.outputs.host-ca }}
+          CURL_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          REQUESTS_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          NODE_EXTRA_CA_CERTS: ${{ steps.trust-fixture.outputs.ca }}
+        run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TEST_BUNDLE_CONFIG="${PRIVATE_CONFIG}" --no-progress
+
       - name: Test
-        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true'
+        if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle)
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
         # A normal install test takes about 20 minutes. This fires before the
@@ -548,6 +565,11 @@ jobs:
       - name: Verify CA bundle rotation and live SSO
         if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
         timeout-minutes: 65
+        env:
+          SSL_CERT_FILE: ${{ steps.trust-fixture.outputs.host-ca }}
+          CURL_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          REQUESTS_CA_BUNDLE: ${{ steps.trust-fixture.outputs.host-ca }}
+          NODE_EXTRA_CA_CERTS: ${{ steps.trust-fixture.outputs.ca }}
         run: python3 -B tests/trust-bundle-live.py --ui
 
       - name: Upgrade from the released package and check retained state
@@ -665,6 +687,13 @@ jobs:
           name: debug-log-${{ env.TEST_TYPE }}-${{ env.TEST_FLAVOR }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.arch }}-${{ steps.uniq.outputs.suffix }}
           path: ${{ steps.sanitize.outputs.dir }}/payload/tmp
           if-no-files-found: ignore
+
+      - name: Remove private gateway fixture files
+        if: always() && steps.trust-fixture.outputs.directory != ''
+        timeout-minutes: 1
+        env:
+          PRIVATE_FIXTURE: ${{ steps.trust-fixture.outputs.directory }}
+        run: python3 tests/prepare-trust-fixture.py cleanup --parent "${RUNNER_TEMP}" --directory "${PRIVATE_FIXTURE}"
 
   validate-upgrade:
     needs: [images, cloudtak-index, postgis-index]

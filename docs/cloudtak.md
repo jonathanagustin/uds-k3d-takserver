@@ -147,7 +147,7 @@ also rebuild their JVM trust stores when the bundle changes.
 
 ### Run the CA rotation acceptance test
 
-On a disposable test cluster with this package deployed, run:
+On a disposable test cluster with this package deployed and a private-CA tenant gateway, run:
 
 ```bash title="Verify live CA propagation and SSO reloads"
 python3 -B tests/trust-bundle-live.py --ui
@@ -191,15 +191,25 @@ public CA settings before the first mutation, for manual recovery if the
 process is forcibly killed before cleanup can finish.
 
 The same test is available through **Test** workflow dispatch with
-`trust_bundle=true` (both native install jobs only; the separate airgap and upgrade jobs are intentionally skipped), on both install architectures. It changes cluster-wide
+`trust_bundle=true` on both native install architectures; airgap and upgrade
+jobs are intentionally skipped. This mode generates a one-day private gateway
+CA and wildcard tenant certificate, then supplies Core's supported
+`TENANT_TLS_CERT`, `TENANT_TLS_KEY` and `CA_BUNDLE_CERTS` variables during the
+baseline bundle deployment, before TAK and CloudTAK start. The initial SSO
+checks therefore require the private CA. Normal installs retain their packaged
+gateway certificate. The generated configuration preserves pinned image tags,
+stays in a private runner directory outside log artifacts, and is removed at
+job exit. Private keys are masked and redacted from staged logs. The runner's
+host trust file retains public roots and adds the fixture CA. It changes cluster-wide
 trust configuration and can restart Core's Istio consumers too, so it is an
 opt-in acceptance run. The normal install and upgrade paths remain unchanged.
 
 This test proves the live gateway certificate chains to a CA in the combined
 trust file, that public roots alone do not accept it, and that an unrelated
 trial CA does not accept it. It also proves both TAK workloads and CloudTAK
-restart when that bundle changes. It does not mint a replacement gateway
-certificate. The separate `test_trust_bundle.py` HTTPS test proves the merge
+restart when that bundle changes. The rotation script leaves the gateway
+certificate unchanged; the opt-in workflow prepares its private certificate
+before the baseline deployment. The separate `test_trust_bundle.py` HTTPS test proves the merge
 script with two local CAs.
 
 ## TAK connection

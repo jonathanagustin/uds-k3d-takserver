@@ -62,6 +62,18 @@ packages:
               value: "0%"
             - path: rollingMaxUnavailable
               value: "100%"
+      # Optional aliases supported by Core's upstream private-PKI bundle.
+      # Normal installs omit them and retain the packaged gateway defaults.
+      istio-tenant-gateway:
+        uds-istio-config:
+          variables:
+            - name: TENANT_TLS_CERT
+              description: Base64 tenant gateway certificate chain
+              path: tls.cert
+            - name: TENANT_TLS_KEY
+              description: Base64 tenant gateway private key
+              path: tls.key
+              sensitive: true
       istio-passthrough-gateway:
         gateway:
           values:

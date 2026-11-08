@@ -521,5 +521,110 @@ class SsoDiscoveryTLS(unittest.TestCase):
                 server.server_close()
 
 
+class GatewayFixtureTests(unittest.TestCase):
+    def test_ephemeral_guard_rejects_other_clusters_and_domains(self):
+        with self.assertRaisesRegex(RuntimeError, "ephemeral uds.dev k3d"):
+            live.require_ephemeral_k3d("k3d-uds", ["k3d-uds-server-0"], "example.com")
+        with self.assertRaisesRegex(RuntimeError, "ephemeral uds.dev k3d"):
+            live.require_ephemeral_k3d("prod", ["k3d-uds-server-0"], "uds.dev")
+        with self.assertRaisesRegex(RuntimeError, "ephemeral uds.dev k3d"):
+            live.require_ephemeral_k3d("k3d-uds", ["ip-10-0-0-1"], "uds.dev")
+        live.require_ephemeral_k3d("k3d-uds", ["k3d-uds-server-0"], "uds.dev")
+
+    def test_unexpected_gateway_secret_is_refused(self):
+        kube = live.Kubectl()
+        secret = {"metadata": {"name": "gateway-tls", "namespace": "istio-tenant-gateway"}, "type": "Opaque", "data": {}}
+        with patch.object(kube, "run", return_value=json.dumps(secret)) as run:
+            with self.assertRaisesRegex(RuntimeError, "unexpected tenant gateway"):
+                kube.gateway_secret()
+        self.assertEqual(run.call_args.args[:4], ("get", "secret", "gateway-tls", "-n"))
+
+    def test_install_replaces_only_the_gateway_keypair_and_restore_refuses_a_concurrent_edit(self):
+        class Fake:
+            def __init__(self):
+                self.secret = {"metadata": {"name": "gateway-tls", "namespace": "istio-tenant-gateway",
+                                            "uid": "uid-1", "resourceVersion": "9"},
+                               "type": "kubernetes.io/tls",
+                               "data": {"tls.crt": base64.b64encode(b"original-cert").decode(),
+                                        "tls.key": base64.b64encode(b"original-key").decode(),
+                                        "cacert": base64.b64encode(b"leave-me").decode()}}
+                self.patches = []
+
+            def current_context(self):
+                return "k3d-uds"
+
+            def node_names(self):
+                return ["k3d-uds-server-0"]
+
+            def gateway_secret(self):
+                return copy.deepcopy(self.secret)
+
+            def patch_gateway(self, operations):
+                self.patches.append(json.loads(json.dumps(operations)))
+                for operation in operations:
+                    if operation["op"] == "test" and operation["path"] == "/metadata/resourceVersion":
+                        self.assert_version(operation["value"])
+                    elif operation["op"] == "replace":
+                        self.secret["data"][operation["path"].rsplit("/", 1)[-1]] = operation["value"]
+                self.secret["metadata"]["resourceVersion"] = str(int(self.secret["metadata"]["resourceVersion"]) + 1)
+
+            def assert_version(self, value):
+                if value != self.secret["metadata"]["resourceVersion"]:
+                    raise AssertionError("resourceVersion was not tested against the current secret")
+
+            def presented_issuer(self, _domain):
+                chain = base64.b64decode(self.secret["data"]["tls.crt"]).decode()
+                certs = live.re.findall(r"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----", chain)
+                return next(iter(live.fingerprints(certs[-1])))
+
+        kube = Fake()
+        fixture = live.GatewayFixture(kube, "uds.dev")
+        with tempfile.TemporaryDirectory() as directory:
+            fingerprint = fixture.install(directory)
+            self.assertEqual(kube.secret["data"]["cacert"], base64.b64encode(b"leave-me").decode())
+            self.assertEqual([operation["path"] for operation in kube.patches[0]],
+                             ["/metadata/uid", "/metadata/resourceVersion", "/data/tls.crt", "/data/tls.key"])
+            kube.secret["data"]["tls.crt"] = base64.b64encode(b"someone-else").decode()
+            with self.assertRaisesRegex(RuntimeError, "changed concurrently"):
+                fixture.restore()
+            self.assertEqual(len(kube.patches), 1)
+            kube.secret["data"]["tls.crt"] = fixture.applied["tls.crt"]
+            fixture.restore()
+        self.assertEqual(base64.b64decode(kube.secret["data"]["tls.crt"]), b"original-cert")
+        self.assertEqual(base64.b64decode(kube.secret["data"]["tls.key"]), b"original-key")
+        self.assertEqual(fingerprint, next(iter(live.fingerprints(fixture.ca_pem))))
+        self.assertIsNone(fixture.applied)
+
+    def test_issued_gateway_leaf_fails_public_roots_and_verifies_with_its_ca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            ca_pem, chain, key = live.issue_gateway_certificate(directory, "uds.dev")
+            (directory / "full.pem").write_text(chain)
+            (directory / "gateway.key").write_text(key)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(directory / "full.pem", directory / "gateway.key")
+            server = http.server.HTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            probe = directory / "probe.mjs"
+            probe.write_text(
+                "import tls from 'node:tls';\nimport fs from 'node:fs';\n"
+                "const port=Number(process.argv[2]);const ca=fs.readFileSync(process.argv[3]);\n"
+                "function connect(trust){return new Promise(resolve=>{const socket=tls.connect({host:'127.0.0.1',port,servername:'sso.uds.dev',ca:trust,rejectUnauthorized:true,timeout:3000},()=>{socket.end();resolve('success')});socket.on('timeout',()=>{socket.destroy();resolve('fail:timeout')});socket.on('error',error=>resolve('fail:'+(error.code||error.message)))})}\n"
+                "const pub=await connect(tls.rootCertificates);const priv=await connect([ca]);\n"
+                "console.log(JSON.stringify({pub,priv}));\n")
+            try:
+                result = subprocess.run(["node", str(probe), str(server.server_port), str(directory / "gateway-ca.pem")],
+                                        text=True, capture_output=True, timeout=20, check=True)
+            finally:
+                server.shutdown()
+                server.server_close()
+        outcomes = json.loads(result.stdout)
+        self.assertTrue(outcomes["pub"].startswith("fail:"), outcomes)
+        self.assertEqual(outcomes["priv"], "success")
+        self.assertNotIn("PRIVATE KEY", ca_pem)
+
+
 if __name__ == "__main__":
     unittest.main()

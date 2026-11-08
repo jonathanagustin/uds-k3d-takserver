@@ -4,11 +4,13 @@
 
 """Exercise Core CA propagation and automatic consumer reloads on a test cluster.
 
-Appends temporary roots to the saved custom bundle and proves the live SSO
-certificate is accepted only by its signing CA from the combined trust file.
-Public roots and the unrelated trial CA must reject it. A signing CA missing
-from the bundle is installed, then the consumers reload. test_trust_bundle.py
-separately tests private-CA TLS with local servers.
+The k3d dev gateway certificate is publicly trusted, so this test first serves
+sso.<domain> with a private CA on the ephemeral cluster only. It appends
+temporary roots to the saved custom bundle and proves the live SSO certificate
+is accepted only by its signing CA from the combined trust file. Public roots
+and the unrelated trial CA must reject it. A signing CA missing from the bundle
+is installed, then the consumers reload. test_trust_bundle.py separately tests
+private-CA TLS with local servers.
 """
 
 import argparse
@@ -26,7 +28,16 @@ import tempfile
 import time
 
 WORKLOADS = (("takserver", "takserver-api"), ("takserver", "takserver-messaging"), ("cloudtak", "cloudtak"))
+GATEWAY_NAMESPACE = "istio-tenant-gateway"
+GATEWAY_SECRET = "gateway-tls"
 MISSING = object()
+
+
+def require_ephemeral_k3d(context, node_names, domain):
+    """The gateway key is replaced only on the disposable uds.dev k3d cluster."""
+    if domain != "uds.dev" or not str(context).startswith("k3d-") \
+            or not any(str(name).startswith("k3d-") for name in node_names):
+        raise RuntimeError("refusing to replace a gateway certificate outside the ephemeral uds.dev k3d cluster")
 
 
 def fingerprints(pem):
@@ -157,6 +168,48 @@ class Kubectl:
                 raise ValueError(f"{namespace}/{name} has no ready replacement pod")
             result[f"{namespace}/{name}"] = {pod["metadata"]["uid"] for pod in items}
         return result
+
+    def current_context(self):
+        return self.run("config", "current-context").strip()
+
+    def node_names(self):
+        nodes = json.loads(self.run("get", "nodes", "-o", "json"))["items"]
+        return [item["metadata"]["name"] for item in nodes]
+
+    def gateway_secret(self):
+        secret = json.loads(self.run("get", "secret", GATEWAY_SECRET, "-n", GATEWAY_NAMESPACE, "-o", "json"))
+        metadata = secret.get("metadata", {})
+        if metadata.get("name") != GATEWAY_SECRET or metadata.get("namespace") != GATEWAY_NAMESPACE \
+                or secret.get("type") != "kubernetes.io/tls":
+            raise RuntimeError("refusing to patch an unexpected tenant gateway secret")
+        return secret
+
+    def patch_gateway(self, operations):
+        self.run("patch", "secret", GATEWAY_SECRET, "-n", GATEWAY_NAMESPACE, "--type=json", "-p", json.dumps(operations))
+
+    def presented_issuer(self, domain):
+        # Inspection only. Acceptance is the separate rejectUnauthorized check.
+        code = r"""const tls=require('node:tls');const crypto=require('node:crypto');
+const host=process.argv[1];
+function fp(cert){return cert.fingerprint256.replaceAll(':','').toLowerCase()}
+(async()=>{
+  const peer=await new Promise((resolve,reject)=>{const socket=tls.connect({host,port:443,servername:host,rejectUnauthorized:false,timeout:20000},()=>{const cert=socket.getPeerCertificate(true);socket.end();resolve(cert)});socket.on('error',reject)});
+  let current=peer;let root=null;const seen=new Set();
+  while(current&&current.raw){
+    const cert=new crypto.X509Certificate(current.raw);
+    if(seen.has(cert.fingerprint256)) break;
+    seen.add(cert.fingerprint256);root=cert;
+    const parent=current.issuerCertificate;
+    if(!parent||!parent.raw||parent.fingerprint256===cert.fingerprint256) break;
+    current=parent;
+  }
+  if(!root||!root.ca) throw new Error('tenant gateway sent no CA certificate');
+  console.log(fp(root));
+})().catch(error=>{console.error(String(error&&error.message||error).replace(/\s+/g,' ').slice(0,200));process.exitCode=1});"""
+        try:
+            return self.exec_sso(code, f"sso.{domain}")
+        except RuntimeError as error:
+            raise ValueError(str(error)[:240]) from error
 
     def exec_sso(self, code, *args):
         result = subprocess.run(
@@ -393,6 +446,68 @@ class Trial:
         print("Saved Core custom CA setting restored and temporary roots removed; consumers restarted", flush=True)
 
 
+class GatewayFixture:
+    """Serve the tenant gateway with a private CA for this job, then put the original back.
+
+    UDS documents this certificate as the gateway TLS secret. The compare-and-swap
+    below replaces and restores only tls.crt and tls.key. It does not remove a
+    trust-bundle root; that cleanup is separate and still explicit.
+    """
+
+    def __init__(self, kube, domain):
+        self.kube = kube
+        self.domain = domain
+        self.ca_pem = None
+        self.original = None
+        self.applied = None
+
+    def install(self, directory):
+        require_ephemeral_k3d(self.kube.current_context(), self.kube.node_names(), self.domain)
+        ca_pem, chain, key = issue_gateway_certificate(directory, self.domain)
+        secret = self.kube.gateway_secret()
+        data = secret.get("data") or {}
+        if "tls.crt" not in data or "tls.key" not in data:
+            raise RuntimeError("tenant gateway secret has no tls certificate and key")
+        metadata = secret["metadata"]
+        self.ca_pem = ca_pem
+        self.original = {"tls.crt": data["tls.crt"], "tls.key": data["tls.key"]}
+        applied = {"tls.crt": base64.b64encode(chain.encode()).decode(),
+                   "tls.key": base64.b64encode(key.encode()).decode()}
+        self.kube.patch_gateway([
+            {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+            {"op": "replace", "path": "/data/tls.crt", "value": applied["tls.crt"]},
+            {"op": "replace", "path": "/data/tls.key", "value": applied["tls.key"]},
+        ])
+        self.applied = applied
+        expected = next(iter(fingerprints(ca_pem)))
+
+        def presented():
+            if self.kube.presented_issuer(self.domain) != expected:
+                raise ValueError("tenant gateway has not presented the private CA")
+
+        wait_for(presented, "private gateway certificate", 180)
+        print(f"tenant gateway serving private CA {expected}; public roots remain a required rejection", flush=True)
+        return expected
+
+    def restore(self):
+        if not self.applied:
+            return
+        secret = self.kube.gateway_secret()
+        data = secret.get("data") or {}
+        if data.get("tls.crt") != self.applied["tls.crt"] or data.get("tls.key") != self.applied["tls.key"]:
+            raise RuntimeError("tenant gateway certificate changed concurrently; refusing to restore over it")
+        metadata = secret["metadata"]
+        self.kube.patch_gateway([
+            {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+            {"op": "replace", "path": "/data/tls.crt", "value": self.original["tls.crt"]},
+            {"op": "replace", "path": "/data/tls.key", "value": self.original["tls.key"]},
+        ])
+        self.applied = None
+        print("restored the original tenant gateway certificate", flush=True)
+
+
 def generate_ca(directory, name):
     certificate = directory / f"{name}.pem"
     subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
@@ -401,6 +516,32 @@ def generate_ca(directory, name):
                     "-keyout", str(directory / f"{name}.key"), "-out", str(certificate)],
                    check=True, capture_output=True, timeout=30)
     return certificate.read_text()
+
+
+def issue_gateway_certificate(directory, domain):
+    """Private CA and a wildcard server certificate for the tenant gateway."""
+    directory = Path(directory)
+    ca = directory / "gateway-ca.pem"
+    ca_key = directory / "gateway-ca.key"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                    "-subj", "/CN=uds-ci-private-gateway-ca",
+                    "-addext", "basicConstraints=critical,CA:TRUE",
+                    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+                    "-keyout", str(ca_key), "-out", str(ca)],
+                   check=True, capture_output=True, timeout=30)
+    leaf_key = directory / "gateway.key"
+    csr = directory / "gateway.csr"
+    subprocess.run(["openssl", "req", "-newkey", "rsa:2048", "-nodes", "-subj", f"/CN=*.{domain}",
+                    "-keyout", str(leaf_key), "-out", str(csr)],
+                   check=True, capture_output=True, timeout=30)
+    ext = directory / "gateway.ext"
+    ext.write_text("subjectAltName=DNS:*.{0},DNS:{0}\nbasicConstraints=CA:FALSE\n"
+                   "keyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n".format(domain))
+    leaf = directory / "gateway.crt"
+    subprocess.run(["openssl", "x509", "-req", "-in", str(csr), "-CA", str(ca), "-CAkey", str(ca_key),
+                    "-CAcreateserial", "-out", str(leaf), "-days", "1", "-extfile", str(ext)],
+                   check=True, capture_output=True, timeout=30)
+    return ca.read_text(), leaf.read_text() + ca.read_text(), leaf_key.read_text()
 
 
 def main():
@@ -419,8 +560,11 @@ def main():
               "caBundle": trial.original.get("spec", {}).get("caBundle")}
     Path("out/trust-bundle-original-ca.json").write_text(json.dumps(backup, indent=2) + "\n")
     restored = False
+    gateway = GatewayFixture(trial.kube, trial.domain)
+    gateway_ca = None
     with tempfile.TemporaryDirectory(prefix="trust-bundle-live-") as directory:
         try:
+            gateway_ca = gateway.install(Path(directory))
             trial.ensure_signing_ca()
             first = trial.phase(generate_ca(Path(directory), "uds-test-ca-a"))
             trial.phase(generate_ca(Path(directory), "uds-test-ca-b"), excluded=first)
@@ -429,7 +573,11 @@ def main():
                 trial.restore()
                 restored = True
             finally:
-                output.write_text(json.dumps({"phases": trial.evidence, "restored": restored}, indent=2) + "\n")
+                try:
+                    gateway.restore()
+                finally:
+                    output.write_text(json.dumps({"phases": trial.evidence, "restored": restored,
+                                                  "gatewayCaSha256": gateway_ca}, indent=2) + "\n")
 
 
 if __name__ == "__main__":

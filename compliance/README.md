@@ -76,7 +76,9 @@ pinned; this draft does not patch or silently replace its crawler.
 - The network/TLS mappings cover named paths, not every internal transport.
 - Android 9 PKCS12 compatibility uses SHA-1/3DES. No FIPS claim is made.
 - CA key custody, rotation, Secret encryption at rest, and recovery are partly
-  deployment responsibilities. Current certificate revocation restarts TAK.
+  deployment responsibilities. TAK-signed client revocation uses the certificate table without rolling TAK;
+  legacy certificates retain a CRL reload fallback. Live disconnect timing
+  still needs assessment in the deployed environment.
 - The logging checks cover selected stdout/Loki events. File-only access,
   database audit, and ESAPI logs are not collected by those queries; retention
   and audit integrity need separate assessment.

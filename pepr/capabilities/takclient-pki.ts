@@ -23,6 +23,7 @@ export interface Issued {
   keyPem: string;
   serial: string;
   fingerprint: string;
+  notBefore: Date;
   notAfter: Date;
 }
 
@@ -83,7 +84,14 @@ export function issue(ca: Ca, callsign: string, days: number, now: Date, serial 
   ]);
   cert.sign(ca.key, forge.md.sha256.create());
   const certPem = pki.certificateToPem(cert);
-  return { certPem, keyPem, serial, fingerprint: fingerprint(certPem), notAfter: cert.validity.notAfter };
+  return {
+    certPem,
+    keyPem,
+    serial,
+    fingerprint: fingerprint(certPem),
+    notBefore: cert.validity.notBefore,
+    notAfter: cert.validity.notAfter,
+  };
 }
 
 // @lulaEnd 12d1f817-a19b-5b3c-b021-aa47cc1071f5

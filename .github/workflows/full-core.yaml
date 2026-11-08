@@ -168,17 +168,30 @@ jobs:
       - name: Deploy full core and test
         run: uds run test-full-core --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         shell: bash
-        # The deploy and tests take about 50 minutes on amd64, and the
-        # TakClient test adds about 5 for its TAK restart. This fires before
-        # the job limit so the log and dump steps below still run.
-        timeout-minutes: 70
+        # Passing amd64 run 42180258293 finished in 68m45s, including a
+        # completed api-smoke. The 70 minute cap cut later amd64 runs after
+        # that smoke had started. api-smoke.sh now stops itself at 10 minutes
+        # and SIGKILLs that process group after a short grace period.
+        # 80 minutes is 69 minutes (that measured pass, rounded up) plus that
+        # enforced 10 minute smoke budget. It is a measured margin plus the
+        # cap, not a sum of curl or handshake ceilings. A restore rollout
+        # still fails this script at its own 600s.
+        timeout-minutes: 80
+
+      # Probe before any diagnostics that call Docker or Kubernetes. A routing
+      # timeout skips those calls; local sanitized logs are still printed.
+      - name: Check for the runner network wedge
+        id: runner-wedge
+        if: failure()
+        timeout-minutes: 1
+        run: ./.github/scripts/runner-wedge-probe.sh || true
 
       # test:full-core writes out/falco-events.txt only when it reaches
       # tests/falco-events.sh, so an earlier failure left the upload below
       # with no file. Collect the events here instead. The script skips when
       # Falco or Loki never came up, and it redacts passwords itself.
       - name: Collect Falco events when the test did not
-        if: failure()
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 10
         shell: bash
         run: |
@@ -190,7 +203,7 @@ jobs:
           FALCO_COLLECT_ONLY=1 ./tests/falco-events.sh
 
       - name: Disk use after the test
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         timeout-minutes: 2
         shell: bash
         run: |
@@ -198,19 +211,19 @@ jobs:
           sudo timeout 60 docker system df || true
 
       - name: Debug Output
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:debug-output
         timeout-minutes: 3
         shell: bash
 
       - name: Node memory
-        if: failure()
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: ./.github/scripts/dump-memory.sh
         # A dead API server can hang kubectl; later always() steps still run.
         timeout-minutes: 5
 
       - name: Save logs
-        if: always()
+        if: always() && steps.runner-wedge.outputs.network-stalled != 'true'
         run: uds run actions:save-logs
         shell: bash
         timeout-minutes: 2
@@ -247,8 +260,13 @@ jobs:
           # shellcheck disable=SC3028
           echo "suffix=${RANDOM}" >> "$GITHUB_OUTPUT"
 
+      # A failed deploy must not start these uploads. actions/upload-artifact
+      # v7.0.2 can ignore timeout-minutes. This job's limit then cancels the
+      # job, and GitHub keeps no log of the failure. The print step already
+      # wrote the sanitized logs. success() lets that job finish. A sanitizer
+      # that did not finish still cannot upload.
       - name: Upload uptime probe log
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -258,7 +276,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Grafana and Prometheus rule check
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -271,7 +289,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Falco events
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -281,7 +299,7 @@ jobs:
           retention-days: 14
 
       - name: Upload kubectl top
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -291,7 +309,7 @@ jobs:
           retention-days: 14
 
       - name: Upload backup restore log
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -301,7 +319,7 @@ jobs:
           retention-days: 14
 
       - name: Upload debug logs
-        if: ${{ !cancelled() && steps.sanitize.outputs.ok == 'true' }}
+        if: ${{ success() && !cancelled() && steps.sanitize.outputs.ok == 'true' }}
         timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

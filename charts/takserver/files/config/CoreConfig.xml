@@ -15,7 +15,7 @@
 <!-- TAK_WEB_CONNECTOR -->
 	</network>
 	<!-- @lulaEnd 0ba6e9e4-4061-5ff4-9c29-69bffbd3a489 -->
-	<auth default="file" x509groups="true" x509tokenAuth="true">
+	<auth default="file" x509groups="true" x509tokenAuth="true" x509checkRevocation="true">
 	        <File location="/opt/tak/UserAuthenticationFile.xml"/>
 <!-- TAK_OAUTH -->
 	</auth>

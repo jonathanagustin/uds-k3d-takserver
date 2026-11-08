@@ -84,8 +84,20 @@ def kubectl_cmd():
     raise RuntimeError("kubectl is not available")
 
 
-def kubectl(*args, check=True):
-    result = subprocess.run([*kubectl_cmd(), *args], check=False, capture_output=True, text=True)
+def kubectl(*args, check=True, timeout=None):
+    try:
+        result = subprocess.run(
+            [*kubectl_cmd(), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        # Drop any partial stream. It was cut off before redaction.
+        if check:
+            raise RuntimeError(f"kubectl timed out after {timeout}s")
+        return subprocess.CompletedProcess(list(args), 124, stdout="", stderr="")
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         command = " ".join(str(part) for part in result.args)
@@ -189,12 +201,16 @@ def redacted_text(text, tail=None):
     """
     script = ROOT / ".github" / "scripts" / "redact-logs.py"
     raw = text.encode("utf-8", errors="replace") if isinstance(text, str) else (text or b"")
-    result = subprocess.run(
-        [sys.executable, str(script), "-"],
-        input=raw,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "-"],
+            input=raw,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return "omitted: unsanitizable stream"
     if result.returncode != 0:
         return "omitted: unsanitizable stream"
     body = result.stdout.decode("utf-8", errors="replace")
@@ -269,6 +285,79 @@ def startup_shape():
     return {"max_generation": generations, "max_restart_count": restarts}, errors
 
 
+def termination_summary(status):
+    """Exit and signal from a container status. No log text."""
+    last = (status.get("lastState") or {}).get("terminated") or {}
+    state = status.get("state") or {}
+    current = state.get("terminated") or {}
+    waiting = state.get("waiting") or {}
+    bits = [
+        f"container={status.get('name') or 'unknown'}",
+        f"restarts={status.get('restartCount', 0)}",
+    ]
+    if last:
+        bits.append(
+            "previous reason={reason} exit={exit} signal={signal}".format(
+                reason=last.get("reason"),
+                exit=last.get("exitCode"),
+                signal=last.get("signal"),
+            )
+        )
+    if current:
+        bits.append(
+            "current reason={reason} exit={exit} signal={signal}".format(
+                reason=current.get("reason"),
+                exit=current.get("exitCode"),
+                signal=current.get("signal"),
+            )
+        )
+    if waiting.get("reason"):
+        bits.append(f"waiting={waiting.get('reason')}")
+    return " ".join(bits)
+
+
+def format_restart(pod_name, statuses, logs_by_container):
+    """Cold-start failure text. A restart is still a failure.
+
+    logs_by_container values must already be redacted. This function does not
+    decide that a restart is acceptable.
+    """
+    parts = [f"{pod_name} restarted, so this is not a cold start"]
+    for status in statuses:
+        if not status.get("restartCount", 0):
+            continue
+        parts.append(termination_summary(status))
+        name = status.get("name") or ""
+        excerpt = (logs_by_container.get(name) or "").strip()
+        if excerpt:
+            parts.append(name + " log: " + excerpt)
+    return "; ".join(parts)
+
+
+# A dead API server can leave kubectl logs blocked. This is only the
+# cold-start diagnostic, so give up and keep the exit fields.
+_LOG_TIMEOUT_S = 30
+
+
+def _container_excerpt(namespace, pod_name, container):
+    """Redacted tail of the previous log, then the current log."""
+    excerpts = []
+    for label, extra in (("previous", ["--previous"]), ("current", [])):
+        result = kubectl(
+            "logs", "-n", namespace, pod_name, "-c", container, *extra,
+            check=False, timeout=_LOG_TIMEOUT_S,
+        )
+        if result.returncode == 124:
+            excerpts.append(f"{label}=timed out")
+            continue
+        body = result.stdout or ""
+        if result.returncode != 0 and not body.strip():
+            excerpts.append(f"{label}=unreadable")
+            continue
+        excerpts.append(label + "=" + redacted_text(body, tail=20).replace("\n", " | "))
+    return " ".join(excerpts)
+
+
 def ready_age():
     """Seconds from pod creation to Ready. Null when a pod has restarted."""
     ages = []
@@ -285,7 +374,19 @@ def ready_age():
         for pod in json.loads(raw).get("items", []):
             statuses = pod.get("status", {}).get("containerStatuses") or []
             if any(status.get("restartCount", 0) for status in statuses):
-                errors.append(f"{pod['metadata']['name']} restarted, so this is not a cold start")
+                name = pod.get("metadata", {}).get("name") or "unknown"
+                logs = {}
+                for status in statuses:
+                    if not status.get("restartCount", 0):
+                        continue
+                    container = status.get("name") or ""
+                    if not container:
+                        continue
+                    try:
+                        logs[container] = _container_excerpt(namespace, name, container)
+                    except (RuntimeError, OSError) as error:
+                        logs[container] = f"unreadable: {error.__class__.__name__}"
+                errors.append(format_restart(name, statuses, logs))
                 return None, errors
             created = pod["metadata"].get("creationTimestamp")
             ready = next(

@@ -6,7 +6,7 @@
   justification: Proposed partial evidence association. TakClient issuance binds a unique certificate serial and
     callsign to a client-authentication certificate signed by the TAK CA. TAK maps that identity to its file user/groups.
     Browser session lifecycle, every upstream session boundary, and revocation timing require separate assessment;
-    current CRL changes restart TAK.
+    TAK-signed clients use certificate-table revocation without rolling TAK, while legacy clients retain a CRL reload fallback.
   status: planned
   source_entries:
     - location: pepr/capabilities/takclient-pki.ts

@@ -27,6 +27,9 @@ On k3d, host port 443 is the tenant gateway. Tests port-forward `svc/passthrough
 
 ### Uptime probes and Portal tiles
 
+For a step-by-step check, see
+[Check uptime probes and Portal tiles](how-to/check-uptime-and-portal.md).
+
 The Package `expose` entries also tell UDS Core what to monitor and what to show in UDS Portal:
 
 | Expose entry | Portal tile | Uptime check |
@@ -112,7 +115,7 @@ The pod mounts only that Secret, read-only, and runs as a non-root user with no 
 
 **Network.** The pod may connect only to the passthrough gateway on ports 443, 8446, and 8089. Its HTTP answers carry only a pass or fail and a short reason, never certificate material.
 
-**What the certificate can and cannot do.** TAK accepts it on 8089 and 8443 because the deploy-time CA signed it. The `auth` block in `CoreConfig.xml` sets `x509groups="true"` and leaves `x509addAnonymous` at its default, `false`, so the certificate gets no groups. With no groups it receives no CoT from other clients, and data that TAK limits by group, such as missions and files, is not visible to it. It has no admin role, so admin pages and admin API calls are refused. It can still open a connection and call API endpoints that TAK does not limit by group, such as `/Marti/api/version`. The package does not set up certificate revocation checks in TAK, so to stop the certificate working before it expires, rotate the deploy-time CA.
+**What the certificate can and cannot do.** TAK accepts it on 8089 and 8443 because the deploy-time CA signed it. The `auth` block in `CoreConfig.xml` sets `x509groups="true"` and leaves `x509addAnonymous` at its default, `false`, so the certificate gets no groups. With no groups it receives no CoT from other clients, and data that TAK limits by group, such as missions and files, is not visible to it. It has no admin role, so admin pages and admin API calls are refused. It can still open a connection and call API endpoints that TAK does not limit by group, such as `/Marti/api/version`. This health certificate is signed locally and has no TAK enrollment-table row. To revoke it before expiry, update the CA-signed CRL and reload its TAK consumers, or rotate the deploy-time CA. TakClient certificates use the separate [certificate-table revocation path](../adr/0024-tak-signed-takclient-revocation.md).
 
 **With the TAK alerts.** These checks are in addition to the alerts in PrometheusRule `takserver` (see [Monitoring](configuration.md#monitoring)), not a replacement. Those alerts read the JMX exporter and kube-state-metrics: a Deployment scaled to 0, no available pods, a high JVM heap, or a restart loop. They do not show whether a client can connect. `tak-health` checks that. It does not see heap use or restarts.
 

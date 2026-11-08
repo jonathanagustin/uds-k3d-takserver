@@ -26,6 +26,9 @@ CI tags each image with the ATAK version and a hash of its inputs, for example `
 
 ## Deploy
 
+For deployment, provisioning, and connection checks in one procedure, see
+[Connect the ATAK test device](how-to/connect-atak-test-device.md).
+
 ```bash
 uds zarf package create atak --set ATAK_TAG=5.5.1.10 --confirm
 uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=uds.dev --confirm
@@ -49,7 +52,7 @@ The device authenticates with a client certificate, the way a provisioned field 
 
 At run time `atak/ci/e2e.sh` applies a `TakClient` ([ADR 22](../adr/0022-takclient-operator.md)) for callsign `atak-device` in group `Operators`, waits for it to be `Ready`, and copies `package.zip` from Secret `takclients/atak-device` into Secret `atak/atak-device-dpk`, which the driver pod mounts. The `takserver-oidc` watcher does the work:
 
-1. It signs a 30-day client certificate with `CN=atak-device` and `extendedKeyUsage = clientAuth` with the deploy-time TAK CA ([ADR 2](../adr/0002-generate-certificates-at-deploy-time.md)). The CA key is read from Secret `takserver/takserver-ca-key` into memory and is not written anywhere.
+1. It creates a key and CSR with `CN=atak-device, O=TAK, OU=UDS` and asks TAK to sign it through Basic enrollment on 8446. TAK sets the lifetime globally (`TAKServerCAConfig`, 30 days by default). The watcher validates the returned key, CA signature, subject, client usage and validity before publishing it. See [ADR 24](../adr/0024-tak-signed-takclient-revocation.md).
 2. It registers `atak-device` as a TAK file user in `Operators` through TAK's admin API on 8443. TAK 5.7 maps a certificate to a user this way: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
 3. It builds a standard ATAK connection data package: `MANIFEST/manifest.xml`, `certs/server.pref` with one stream `takserver-stream.<domain>:8089:ssl` and its `caLocation0`, `caPassword0`, `certificateLocation0`, and `clientPassword0` entries, the client `certs/atak-device.p12`, and the CA in `certs/truststore.p12`. Both PKCS#12 files use SHA-1 and 3DES, which Android 9 reads, and a generated password. The CA certificate in the truststore has a friendlyName (`tak-ca`). Without one, Android's PKCS12 keystore lists no entry and ATAK reports "Unable to validate Truststore".
 
@@ -91,12 +94,13 @@ spec:
   callsign: alpha-1
   groups:
     - Operators
-  validityDays: 30
 ```
 
 When `kubectl get takclient alpha-1 -n takclients` shows `Ready`, Secret `takclients/alpha-1` has `package.zip`. Copy it to the device's `Download` folder as `atak-alpha-1.dpk`, or open it with ATAK's Import Manager. The Secret also has `client.pem`, `client.key`, and `ca.pem` for other clients.
 
-Delete the `TakClient` to remove the device. The watcher deletes the TAK user and adds the certificate's serial to the certificate revocation list (CRL) in Secret `takserver/takserver-crl`. UDS Core then restarts the TAK pods that mount it, and TAK rejects the certificate from then on. The restart drops every connected client for a few minutes. Until it finishes, the certificate still connects, with no groups. This restart is accepted for now. Issue [#288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) tracks revocation without a restart. See [ADR 22](../adr/0022-takclient-operator.md).
+Delete the `TakClient` to remove the device. The watcher first revokes its certificate-table row through TAK's certadmin API on 8443, which closes its streaming connection and rejects reconnects. It then deletes the file user and Secret and records the serial in the CRL as a backstop. Revoking a new TAK-issued certificate does not request a TAK restart. A pending legacy migration or periodic CRL-expiry refresh can still require one. A failed certificate lookup or revoke retains the finalizer and Secret for retry.
+
+On upgrade, existing locally signed certificates are reissued through TAK. The previous certificate still takes the CRL restart path once; connected clients can be interrupted during this migration. Its reload request is retained until both API and messaging pods were created after that CRL update, even if another client is revoked meanwhile. Import the updated data package into devices after migration. Existing `spec.validityDays` fields remain accepted but are deprecated and ignored; change the global TAK CA lifetime instead. The random file-user password used for enrollment and recovery stays in watcher-only Secret `takserver/takclient-enrollment`. Device Secrets and data packages never include it; access to the device material does not grant Basic enrollment capability.
 
 ## Network rules
 

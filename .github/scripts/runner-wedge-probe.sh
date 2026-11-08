@@ -6,7 +6,39 @@
 # and the kernel logs hung tasks. Diagnostic only; always exits 0.
 # network-stalled=true means routing timed out, so later network diagnostics
 # should be skipped. A missing tool/permission is inconclusive, not a wedge.
+#
+# A task in uninterruptible sleep ignores KILL, and waiting for it would hold
+# the Actions step until timeout-minutes fails the step. The outer deadline
+# does not wait for that child. It still exits 0 and records a stall when the
+# probe wrote nothing.
 set -u
+
+if [[ "${WEDGE_PROBE_INNER:-}" != 1 ]]; then
+  deadline="${WEDGE_PROBE_DEADLINE:-20}"
+  if [[ ! "${deadline}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "runner-wedge: deadline must be a positive integer" >&2
+    exit 2
+  fi
+  WEDGE_PROBE_INNER=1 "$0" &
+  probe_pid=$!
+  elapsed=0
+  while kill -0 "${probe_pid}" 2>/dev/null; do
+    if [[ "${elapsed}" -ge "${deadline}" ]]; then
+      kill -TERM "${probe_pid}" 2>/dev/null || true
+      sleep 1
+      kill -KILL "${probe_pid}" 2>/dev/null || true
+      echo "runner-wedge probe did not finish within ${deadline}s."
+      if [[ -n "${GITHUB_OUTPUT:-}" ]] && ! grep -q '^network-stalled=' "${GITHUB_OUTPUT}" 2>/dev/null; then
+        echo "network-stalled=true" >> "${GITHUB_OUTPUT}"
+      fi
+      exit 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  wait "${probe_pid}" 2>/dev/null || true
+  exit 0
+fi
 
 wedged=0
 network_stalled=false

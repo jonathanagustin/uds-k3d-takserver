@@ -46,6 +46,49 @@ The package (`atak/zarf.yaml`) has two components:
 - `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt CR in `atak/deploy/kubevirt-cr.yaml`, and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in custom resource definition (CRD) schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every virtual machine instance (VMI) status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without CRI image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
 - `atak-device`: the VM, Service `atak-device-adb`, the viewer Deployment, and the UDS Package `atak`. The Package's expose entry probes `https://atak.<domain>/phone.html`. That path is the viewer page. Authservice sits in front of it, and the operator's probe client is what the check uses.
 
+## Check the viewer uptime probe
+
+Run **ATAK e2e** by hand with the `uptime_probe` input enabled. The run first
+adds `atak/ci/monitoring/uds-bundle.yaml` to the normal slim cluster, then deploys
+and tests the ATAK device. It installs only Core monitoring, without the
+logging, runtime-security, backup, or Portal layers. Grafana has zero replicas
+because the check queries Prometheus directly.
+
+This option remains off by default. The deploy step records allocated node
+resources and host memory. The manual run on `9aebc946` requested 10850Mi
+after Core monitoring and left the 3348Mi virt-launcher Pending, so the
+authenticated probe never ran. The opt-in bundle therefore keeps Prometheus
+and Blackbox, turns Grafana, Alertmanager, node-exporter, and kube-state-metrics
+off, and sets the Prometheus memory request to 256Mi. That is a CI footprint,
+not a change to the ATAK package's runtime requirements.
+
+After the device and viewer SSO checks pass, `atak/ci/uptime-probe.py` requires:
+
+- Probe `atak/uds-atak-tenant-uptime` targets exactly
+  `https://atak.<domain>/phone.html` using the operator-generated
+  `http_200x_sso_atak_uds-atak-viewer-probe` module.
+- `probe_success=1`, `probe_http_status_code=200`, and
+  `probe_http_redirects=0` for that exact target, scraped within the last 120
+  seconds. Freshness is the scrape time from `timestamp(metric)`. Prometheus
+  still returns the last sample through its lookback period (five minutes by
+  default), and an instant query's sample timestamp is the evaluation time, so
+  that returned value is not fresh by itself. A redirect to Keycloak's login
+  page cannot pass.
+
+The operator provisions the probe client and its client-credentials module;
+the test does not copy its secret or edit Blackbox configuration. Evidence is
+saved to `out/atak-uptime-probe.json` in the run's `atak-e2e` artifact. A missing
+Probe, missing monitoring service, stale series, or failed query fails the run.
+
+To repeat only the assertion on a cluster where Core monitoring and ATAK are
+already installed:
+
+```bash title="Check the authenticated ATAK viewer probe"
+python3 -B atak/ci/uptime-probe.py
+```
+
+Set `DOMAIN` when the cluster does not use `uds.dev`.
+
 ## Device certificate
 
 The device authenticates with a client certificate, the way a provisioned field device does. There is no password enrollment.

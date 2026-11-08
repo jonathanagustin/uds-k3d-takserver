@@ -5,7 +5,7 @@ name: Test
 
 on:
   pull_request:
-    types: [milestoned, opened, reopened, synchronize]
+    types: [opened, reopened, synchronize]
     # Anything not listed is relevant and starts the install and upgrade
     # matrices, including charts, Pepr, network policies, values, bundles,
     # tasks, image builds, dependency pins, and the scripts those jobs run.

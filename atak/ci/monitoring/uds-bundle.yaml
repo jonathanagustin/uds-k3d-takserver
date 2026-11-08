@@ -1,0 +1,46 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Opt-in addition to the ATAK e2e slim cluster. Core monitoring supplies the
+# Prometheus controller/server and operator-configured Blackbox Exporter.
+# The existing core-base supplies the Probe CRD. Other
+# full-core layers (logging, Falco, backup and Portal) are not installed.
+kind: UDSBundle
+metadata:
+  name: atak-uptime-monitoring
+  description: UDS monitoring for the authenticated ATAK viewer probe
+  version: dev
+
+packages:
+  - name: core-monitoring
+    repository: ghcr.io/defenseunicorns/packages/uds/core-monitoring
+    ref: 1.16.0-upstream
+    keylessVerification:
+      certificateIdentityRegexp: "^https://github\\.com/defenseunicorns/uds-core/\\.github/workflows/publish\\.yaml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      certificateOIDCIssuer: https://token.actions.githubusercontent.com
+    overrides:
+      # The test queries Prometheus directly; Grafana needs no running pod.
+      grafana:
+        grafana:
+          values:
+            - path: replicas
+              value: 0
+      # Run 42424190273 requested 10850Mi after this bundle and the 3348Mi
+      # virt-launcher stayed Pending (Insufficient memory). The viewer check
+      # needs Prometheus and Blackbox, not Alertmanager, node-exporter, or
+      # kube-state-metrics.
+      kube-prometheus-stack:
+        kube-prometheus-stack:
+          values:
+            - path: alertmanager.enabled
+              value: false
+            - path: kube-state-metrics.enabled
+              value: false
+            - path: nodeExporter.enabled
+              value: false
+            - path: prometheus-node-exporter.enabled
+              value: false
+            - path: prometheus.prometheusSpec.resources.requests.memory
+              value: 256Mi
+            - path: prometheus.prometheusSpec.resources.limits.memory
+              value: 1Gi

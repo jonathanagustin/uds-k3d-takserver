@@ -46,6 +46,19 @@ The image workflows also attest the images they push. See [Verify a release](../
 | ATAK | `atak.yaml` | changes to the APK build or the `upstream/atak-civ` submodule, and by hand | Builds the ATAK-CIV APK and uploads it |
 | ATAK device VM | `atak-vm.yaml` | changes to `atak/vm/`, `atak/ci/`, or `atak/viewer/`, and by hand | Builds the containerDisk and the viewer, boots Android under KubeVirt on k3d, reaches it over adb, and opens the phone view in a browser |
 | ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GitHub Container Registry (GHCR) when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
+| ATAK uptime native | `atak-uptime-native.yaml` | changes to the viewer freshness check or that workflow, and by hand | Runs the freshness check against Prometheus 3.16.0 on a standard runner. A fresh success passes. A success still inside the lookback, and a broken status, fail. It does not deploy the device |
+
+Manual **ATAK e2e** runs accept an `uptime_probe` boolean. It adds only the Core
+monitoring layer, leaves Grafana at zero replicas, and checks the authenticated
+`/phone.html` target in Prometheus after the device test. The option is off by
+default while its extra memory and CPU footprint is measured beside the VM, so
+a pull request run does not exercise it.
+`tests/test_atak_uptime.py` is a stand-in for the query API, not a Prometheus
+server. ATAK uptime native runs the same check against Prometheus and records
+a fresh success, a success still inside the lookback, and a broken status.
+That job does not deploy Core monitoring, Blackbox, or the ATAK device, so it
+does not prove the authenticated `/phone.html` probe.
+See [Check the viewer uptime probe](atak-device.md#check-the-viewer-uptime-probe).
 
 ### Reused build outputs
 
@@ -123,6 +136,13 @@ It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a
 fresh runner and retain the image and kernel notice for the investigation.
+
+Lint, Unit tests, CodeQL, dependency review, image scanning, and PR title checks
+cancel superseded runs for the same pull request or branch. CodeQL schedules
+remain separate from push validation. Test, Lint, Unit tests,
+and PR title checks do not rerun when a milestone is assigned. PR title checks
+still validate title and body edits, so a skipped edit cannot replace a failed
+required title check.
 
 ## Limits on supporting jobs
 

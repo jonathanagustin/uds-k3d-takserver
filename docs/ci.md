@@ -65,18 +65,18 @@ To force a rebuild of every keyed image, change `KEY_SALT` in `device-images.sh`
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
 | Full Core | `full-core.yaml` | daily at 07:17, by hand, pull requests labeled `full-core`, and pull requests or pushes to `main` that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. A cancelled validation skips that job instead of failing it. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
-| Benchmark | `benchmark.yaml` | daily at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. See [Benchmarks](benchmarks.md) |
+| Benchmark | `benchmark.yaml` | Mondays at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. Adding a different label does not start it and does not cancel a run already going. See [Benchmarks](benchmarks.md) |
 | Scorecard | `scorecard.yaml` | Saturdays at 01:30, pushes to `main`, branch protection changes, and by hand | OpenSSF Scorecard, through the shared uds-common workflow |
 | Mirror the UDS Core checkpoint | `mirror-checkpoint.yaml` | changes to the checkpoint versions, and by hand | Copies each `k3d-core-slim-dev` version that CI deploys into this repository's GHCR, with the same digest |
 | Demo Video | `demo.yaml` | pull requests that change the demo scripts, and by hand | Records the demo videos. Only a manual run from `main` publishes and signs them. See [Demo videos](../CONTRIBUTING.md#demo-videos) |
 
-A pull request without the `benchmark` label skips Benchmark. Full Core also runs without its label when the path filter matches. Adding the label, or pushing to a pull request that already has it, runs the job.
+A pull request without the `benchmark` label skips Benchmark. Adding that label, or pushing to a pull request that already has it, runs the job. Adding any other label does not. Full Core also runs without its label when the path filter matches. Adding the `full-core` label, or pushing to a pull request that already has it, runs that job. A push to `main` still runs Full Core when the pushed commits change a Full Core path.
 
 ## Concurrency
 
 Test, Package, Benchmark, the image workflows, and the ATAK workflows each use one concurrency group per workflow and ref. A newer pull request push cancels only that pull request's older run. A newer push to `main` cancels only that workflow's older push. Two pull requests do not cancel each other, and a pull request does not cancel `main`.
 
-A schedule and a `workflow_dispatch` each get a group of their own, so they are not cancelled and they do not wait behind a push. Release keeps `cancel-in-progress: false` and groups by tag. Demo Video is unchanged. A finished run is kept.
+A schedule and a `workflow_dispatch` each get a group of their own, so they are not cancelled and they do not wait behind a push. Benchmark's weekly run uses that same isolation. A pull request label other than `benchmark` also gets its own run id, so it does not cancel a benchmark validation. Release keeps `cancel-in-progress: false` and groups by tag. Demo Video is unchanged. A finished run is kept.
 
 On `main`, the previous setting left the running validation in place (`cancel-in-progress` false) and queued the newest push behind it. One pending run was allowed, so an older hung run held every later push until the job timeout. Cancelling the superseded push drops that run. The nightly Full Core and a manual benchmark stay in their own groups, so a push does not cancel them.
 

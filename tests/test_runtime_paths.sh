@@ -31,14 +31,31 @@ check_match() {
   fi
 }
 
+# decide writes runtime= to $GITHUB_OUTPUT. The Unit tests job inherits that
+# variable, so capturing stdout there is empty. Cover both contracts: stdout
+# when it is unset, and the file when the runner set it.
 check_decide() {
-  local want="$1" changed="$2" got
-  got="$(CHANGED="${changed}" "${script}" decide)"
-  if [[ "${got}" == "runtime=${want}" ]]; then
-    ok "decide [${changed//$'\n'/ }] -> ${got}"
-  else
-    bad "decide [${changed//$'\n'/ }] -> ${got}, want runtime=${want}"
+  local want="$1" changed="$2" got out label
+  label="[${changed//$'\n'/ }]"
+  got="$(env -u GITHUB_OUTPUT CHANGED="${changed}" "${script}" decide)"
+  if [[ "${got}" != "runtime=${want}" ]]; then
+    bad "stdout decide ${label} -> ${got}, want runtime=${want}"
+    return
   fi
+  out="$(mktemp)"
+  got="$(GITHUB_OUTPUT="${out}" CHANGED="${changed}" "${script}" decide)"
+  if [[ -n "${got}" ]]; then
+    bad "runner decide ${label} also wrote stdout: ${got}"
+    rm -f "${out}"
+    return
+  fi
+  got="$(sed -n 's/^runtime=//p' "${out}")"
+  rm -f "${out}"
+  if [[ "${got}" != "${want}" ]]; then
+    bad "runner decide ${label} -> ${got}, want ${want}"
+    return
+  fi
+  ok "decide ${label} -> runtime=${want}"
 }
 
 # Docs, metadata, device, benchmark, demo, and unit tests do not deploy TAK.
@@ -134,6 +151,21 @@ for pin in 'node =' 'k3d =' 'helm =' 'pnpm =' 'aqua:defenseunicorns/uds-cli'; do
 done
 check_decide true $'pepr/capabilities/workload.test.ts\npepr/capabilities/workload.ts'
 check_decide false ""
+
+# The runner's GITHUB_OUTPUT is already set when this script starts. The
+# decision checks above must not read or extend that file.
+inherit="$(mktemp)"
+printf 'sentinel=1\n' > "${inherit}"
+if GITHUB_OUTPUT="${inherit}" check_decide true "charts/takserver/templates/prereqs.yaml"; then
+  if grep -q '^runtime=' "${inherit}"; then
+    bad "decide appended to the inherited GITHUB_OUTPUT"
+  elif [[ "$(cat "${inherit}")" == "sentinel=1" ]]; then
+    ok "inherited GITHUB_OUTPUT was left alone"
+  else
+    bad "inherited GITHUB_OUTPUT changed: $(cat "${inherit}")"
+  fi
+fi
+rm -f "${inherit}"
 
 # Every tracked file under a runtime tree stays relevant. A new chart, Pepr
 # source file, value, bundle, task, or image input that the globs swallow

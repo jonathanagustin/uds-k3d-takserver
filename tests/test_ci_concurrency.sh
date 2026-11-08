@@ -90,10 +90,50 @@ require_expr() {
   fi
 }
 
-for name in test package benchmark container cloudtak-image postgis-image atak atak-vm atak-e2e; do
+for name in test package container cloudtak-image postgis-image atak atak-vm atak-e2e; do
   require_expr "${wf}/${name}.yaml" "${gate_group}" "${name} group"
   require_expr "${wf}/${name}.yaml" "${gate_cancel}" "${name} cancel"
 done
+
+bench_group='${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == '"'"'schedule'"'"' || github.event_name == '"'"'workflow_dispatch'"'"' || (github.event.action == '"'"'labeled'"'"' && github.event.label.name != '"'"'benchmark'"'"')) && github.run_id || '"'"'gate'"'"' }}'
+require_expr "${wf}/benchmark.yaml" "${bench_group}" "benchmark group"
+require_expr "${wf}/benchmark.yaml" "${gate_cancel}" "benchmark cancel"
+if grep -F -q 'cron: "41 9 * * 1"' "${wf}/benchmark.yaml"; then
+  ok "benchmark schedule is weekly"
+else
+  bad "benchmark schedule is not weekly"
+fi
+if grep -F -q "github.event.label.name == 'benchmark'" "${wf}/benchmark.yaml"; then
+  ok "unrelated labels do not start benchmark"
+else
+  bad "benchmark still starts on every labeled event"
+fi
+
+bench_validation="$(${script} benchmark-group pull_request refs/pull/17/merge 17 500 synchronize "")"
+bench_label="$(${script} benchmark-group pull_request refs/pull/17/merge 17 501 labeled benchmark)"
+bench_other="$(${script} benchmark-group pull_request refs/pull/17/merge 17 502 labeled full-core)"
+eq "${bench_validation}" "Benchmark-pull_request-17-gate" "benchmark push stays in the validation group"
+eq "${bench_label}" "${bench_validation}" "adding the benchmark label stays in the validation group"
+ne "${bench_other}" "${bench_validation}" "an unrelated label does not cancel benchmark"
+if [[ "$(${script} benchmark-runs pull_request synchronize "" true)" == true \
+  && "$(${script} benchmark-runs pull_request labeled benchmark true)" == true \
+  && "$(${script} benchmark-runs pull_request labeled full-core true)" == false \
+  && "$(${script} benchmark-runs pull_request labeled benchmark false)" == false \
+  && "$(${script} benchmark-runs schedule "" "" false)" == true ]]; then
+  ok "benchmark matrix starts only for its own label, a push, or the schedule"
+else
+  bad "benchmark run predicate"
+fi
+if grep -F -q 'push:' "${wf}/full-core.yaml" && grep -F -q 'branches: [main]' "${wf}/full-core.yaml"; then
+  ok "full-core still validates relevant main pushes"
+else
+  bad "full-core lost main push validation"
+fi
+if grep -F -q 'cancel-in-progress:' "${wf}/codeql.yaml"; then
+  bad "codeql cancels in progress"
+else
+  ok "codeql is not in a cancelling group"
+fi
 
 require_expr "${wf}/full-core.yaml" "${full_group}" "full-core validate group"
 require_expr "${wf}/full-core.yaml" "${full_cancel}" "full-core validate cancel"

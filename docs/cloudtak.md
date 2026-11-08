@@ -159,8 +159,9 @@ and CloudTAK pod UIDs, and checks Keycloak from the SSO container. Node must
 reject the live gateway certificate when using only public roots, accept it
 when trusting only the signing CA found in the combined trust file, and reject
 it when trusting only the unrelated trial CA. If the server sends a signing CA
-that is not yet in the bundle, the script installs that CA and waits for the
-same reloads before the check. It then rotates to a second trial CA and repeats
+that is not yet in the bundle, the script installs that CA and waits until
+both namespace bundles contain it. Core does not restart pods the first time
+it creates `uds-trust-bundle`; the following trial-CA change is the reload. It then rotates to a second trial CA and repeats
 the checks. The first Node error is kept, bounded to 300 characters, with no
 certificate body. `--ui` also reruns the existing browser suite after each
 rotation, requiring Keycloak setup rather than allowing SSO tests to skip. The

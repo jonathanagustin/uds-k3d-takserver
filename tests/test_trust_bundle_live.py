@@ -98,6 +98,55 @@ class TrustBundleLiveTests(unittest.TestCase):
         self.assertIn("negativeControl", discovery)
         self.assertNotIn("publiclyTrusted=false", discovery)
         self.assertNotIn("unrelatedRejected=true", discovery)
+    def test_creating_a_missing_namespace_bundle_does_not_require_reload(self):
+        kube = FakeKubectl(existing=False)
+
+        def bundle(_namespace):
+            value = live.certs_value(kube.current)
+            return "" if value is live.MISSING else base64.b64decode(value).decode()
+
+        kube.bundle = bundle
+        kube.signing_status = lambda _domain: "NEED_CA " + base64.b64encode(pem("signer").encode()).decode()
+        kube.pods = lambda: {f"{ns}/{name}": {"same-uid"} for ns, name in live.WORKLOADS}
+        trial = live.Trial(kube, "uds.dev")
+        with patch.object(live, "wait_for", side_effect=lambda check, *_args, **_kwargs: check()):
+            trial.ensure_signing_ca()
+        self.assertTrue(live.fingerprints(pem("signer")) <= live.fingerprints(kube.bundle("cloudtak")))
+        self.assertTrue(live.fingerprints(pem("signer")) <= live.fingerprints(kube.bundle("takserver")))
+
+    def test_updating_an_existing_bundle_still_requires_reload(self):
+        kube = FakeKubectl()
+        kube.signing_status = lambda _domain: "NEED_CA " + base64.b64encode(pem("signer").encode()).decode()
+        kube.pods = lambda: {f"{ns}/{name}": {"same-uid"} for ns, name in live.WORKLOADS}
+        trial = live.Trial(kube, "uds.dev")
+        with patch.object(live, "wait_for", side_effect=lambda check, *_args, **_kwargs: check()):
+            with self.assertRaisesRegex(ValueError, "takserver/takserver-api, takserver/takserver-messaging, cloudtak/cloudtak still has its pre-rotation pod UID"):
+                trial.ensure_signing_ca()
+
+    def test_restore_reports_absent_and_leftover_namespace_bundles(self):
+        self.assertFalse(live.automatic_reload_expected(False))
+        self.assertTrue(live.automatic_reload_expected(True))
+        kube = FakeKubectl(existing=False)
+
+        def bundle(_namespace):
+            value = live.certs_value(kube.current)
+            return "" if value is live.MISSING else base64.b64decode(value).decode()
+
+        kube.bundle = bundle
+        trial = live.Trial(kube, "uds.dev")
+        trial.phase(pem("temporary"))
+        with patch.object(live, "wait_for", side_effect=lambda check, *_args, **_kwargs: check()):
+            trial.restore()
+        self.assertIs(live.certs_value(kube.current), live.MISSING)
+        kube = FakeKubectl()
+        trial = live.Trial(kube, "uds.dev")
+        trial.phase(pem("temporary"))
+        original = kube.bundle
+        with patch.object(kube, "bundle", side_effect=lambda namespace: original(namespace) + pem("unexpected-root")), \
+                patch.object(live, "wait_for", side_effect=lambda check, *_args, **_kwargs: check()):
+            with self.assertRaisesRegex(ValueError, "original CA bundles have not returned: takserver is .* still present"):
+                trial.restore()
+
     def test_append_preserves_existing_custom_roots(self):
         original = base64.b64encode(pem("old").encode()).decode()
         combined = base64.b64decode(live.append_ca(original, pem("new"))).decode()

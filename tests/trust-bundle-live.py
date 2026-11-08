@@ -39,6 +39,16 @@ def append_ca(original, certificate):
     return base64.b64encode((saved.rstrip() + "\n" + certificate.strip() + "\n").encode()).decode()
 
 
+def automatic_reload_expected(bundle_already_present):
+    """Core records the first observation of a ConfigMap and does not restart pods.
+
+    A later change to that ConfigMap's data reloads pods selected by
+    uds.dev/pod-reload-selector. Creating the namespace bundle is propagation
+    only; the following rotation is the reload.
+    """
+    return bundle_already_present
+
+
 def wait_for(check, description, seconds=600):
     deadline = time.monotonic() + seconds
     last = None
@@ -196,11 +206,15 @@ class Trial:
             raise RuntimeError("refusing a private key from the gateway handshake")
         self.signer_pem = pem_text
         fingerprint = next(iter(fingerprints(pem_text)))
+        already_present = any(self.kube.bundle(namespace) for namespace in ("takserver", "cloudtak"))
         before = self.kube.pods()
         self.set_certs(append_ca(self.saved, pem_text))
         wait_for(lambda: self.bundles_match(fingerprint), "signing CA propagation", 180)
-        wait_for(lambda: self.replaced_pods(before), "reload after installing the SSO signing CA")
-        print(f"installed SSO signing CA {fingerprint} into the trust bundle and reloaded consumers", flush=True)
+        if automatic_reload_expected(already_present):
+            after = wait_for(lambda: self.replaced_pods(before), "reload after updating the existing SSO signing CA bundle")
+            print(f"updated SSO signing CA {fingerprint} and reloaded {', '.join(sorted(after))}", flush=True)
+        else:
+            print(f"installed SSO signing CA {fingerprint}; namespace bundle was created and Core does not reload on first observation", flush=True)
 
     def set_certs(self, desired):
         expected = self.issued[-1] if self.issued else self.saved
@@ -218,8 +232,9 @@ class Trial:
 
     def replaced_pods(self, before):
         after = self.kube.pods()
-        if any(before[name] & after[name] for name in before):
-            raise ValueError("a consumer still has its pre-rotation pod UID")
+        stuck = [name for name in before if before[name] & after[name]]
+        if stuck:
+            raise ValueError(f"{', '.join(stuck)} still has its pre-rotation pod UID")
         return after
 
     def phase(self, certificate, excluded=None):
@@ -274,7 +289,9 @@ class Trial:
                     if not saved_custom <= found or trial_only & found:
                         raise ValueError(f"{namespace} has not restored custom trust and removed trial roots")
                 elif found != saved:
-                    raise ValueError("original CA bundles have not returned")
+                    state = "absent" if not found else f"{len(found)} certificate(s) still present"
+                    raise ValueError(
+                        f"original CA bundles have not returned: {namespace} is {state}")
 
         wait_for(restored_bundles, "restore namespace trust without replacing concurrent CA settings", 180)
         # Empty original bundles are deleted by Core. Restart explicitly in

@@ -1,6 +1,9 @@
 <p align="center">
   <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="docs-site/public/badges/release.svg" alt="Release"></a>
   <a href="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml"><img src="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main" alt="Test"></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver"><img src="docs-site/public/badges/openssf-scorecard.svg" alt="OpenSSF Scorecard"></a>
+  <a href="https://www.bestpractices.dev/projects/15775"><img src="https://www.bestpractices.dev/projects/15775/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/blob/main/LICENSE"><img src="docs-site/public/badges/license.svg" alt="License: GPL-3.0-only"></a>
 </p>
 
 <!-- github-only:start -->
@@ -481,11 +484,7 @@ The layout follows the [UDS package guide](https://docs.defenseunicorns.com/core
 > [!NOTE]
 > **Status:** pre-1.0 and under active development. See [Known limitations](#known-limitations).
 
-<p align="center">
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver"><img src="docs-site/public/badges/openssf-scorecard.svg" alt="OpenSSF Scorecard"></a>
-  <a href="https://www.bestpractices.dev/projects/15775"><img src="https://www.bestpractices.dev/projects/15775/badge" alt="OpenSSF Best Practices"></a>
-  <a href="https://github.com/jonathanagustin/uds-takserver/blob/main/LICENSE"><img src="docs-site/public/badges/license.svg" alt="License: GPL-3.0-only"></a>
-</p>
+
 
 Report vulnerabilities through a private GitHub security advisory. See [SECURITY.md](SECURITY.md).
 

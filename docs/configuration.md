@@ -32,6 +32,13 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 
 Each default is the placeholder of the matching variable, for example `global.domain: "###ZARF_VAR_DOMAIN###"`. Zarf replaces placeholders after Helm renders, so with no package value set the variable decides, exactly as before. `--set DOMAIN=`, a bundle's `uds-config.yaml`, and UDS CLI 0.40 bundles keep working unchanged. A package value only overrides its variable, for that key: `uds zarf package deploy --set-values global.domain=example.com`, or `--values`. The `images:` list and `certs.image` in `charts/takserver/values.yaml` read only `TAK_IMAGE_TAG`. `health.enabled` is the exception: it has no variable and defaults to `true`, so Helm sees a real value.
 
+A file passed to `--values` sets the same keys:
+
+```yaml title="values.yaml"
+global:
+  domain: example.com
+```
+
 | Package value | Defaults to | Overrides |
 | --- | --- | --- |
 | `global.domain` | `DOMAIN` | TAK, CloudTAK, and watcher hosts |

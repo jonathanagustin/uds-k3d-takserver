@@ -69,6 +69,16 @@ File-system backup needs volumes that are not hostPath. Velero skips a hostPath 
 
 Use a Container Storage Interface (CSI) class, or on k3d a `local-path` variant with annotation `defaultVolumeType: local` (see `tests/local-path-local.sh`: uds-k3d runs the provisioner with a shared filesystem path, which gives no node affinity, so the variant needs its own `nodePathMap` under `storageClassConfigs`). Point the TAK Postgres volume at it with `POSTGRES_STORAGE_CLASS`, and the CloudTAK PostGIS volume with `CLOUDTAK_STORAGE_CLASS`. Both default to empty, which keeps the cluster default class. Set them only on a new install: a StatefulSet volume claim template cannot change on an upgrade. They are two variables so that setting one on an existing install does not also change the other StatefulSet. The full-core deploy creates `local-path-local` and sets both to it.
 
+`bundle/full/uds-config.yaml` sets the three variables together:
+
+```yaml title="uds-config.yaml"
+variables:
+  takserver:
+    FILESYSTEM_BACKUP: "true"
+    POSTGRES_STORAGE_CLASS: local-path-local
+    CLOUDTAK_STORAGE_CLASS: local-path-local
+```
+
 The gzipped logical dumps are the backup that works on every storage class. Keep them even with file-system backup on.
 
 What a namespace backup contains:

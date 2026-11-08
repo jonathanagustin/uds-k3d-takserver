@@ -16,7 +16,7 @@ Doc-only changes skip the cluster workflows. Test, Package, and Full Core ignore
 | Scan | `scan.yaml` | pull requests that change the package, charts, values, bundle, image builds, or submodules | Compares image scans with `uds-pk scan compare` and posts the result as a pull request comment |
 | CodeQL | `codeql.yaml` | every pull request, pushes to `main`, and Mondays at 06:00 | CodeQL code scanning |
 | Dependency Review | `dependency-review.yaml` | every pull request | GitHub dependency review of the changed dependencies |
-| Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
+| Docs | `docs.yaml` | changes to `docs-site/`, `docs/`, `adr/`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, or `CHANGELOG.md` | Builds the docs site and runs its browser tests. A broken internal link fails the build. On `main` it also deploys the site to GitHub Pages |
 
 "Docs" in the triggers above means Markdown files, images, `docs/`, `adr/`, `docs-site/`, and the Docs workflow file. A docs-only pull request skips Test and Package. Full Core decides in its own `changes` job and skips too. The checks that `main` requires still report on it: `hk`, both CodeQL `Analyze` jobs, and `dependency-review`.
 

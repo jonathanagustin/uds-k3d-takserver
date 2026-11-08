@@ -10,7 +10,7 @@ are procedures to rerun, not claims that a new live assessment passed.
 Issue [#37](https://github.com/jonathanagustin/uds-k3d-takserver/issues/37) was
 explicitly deferred until Lula releases again or compliance becomes a priority.
 The latest npm version is still 0.9.5, with registry activity last modified on
-2026-03-12. Keep this change in draft until that maintainer decision changes.
+2026-03-12. The foundational mappings are separate from activating the deferred automated crawler.
 All source associations have mapping status `planned` pending review; their
 presence does not turn the parent control into an implemented control.
 
@@ -47,11 +47,19 @@ Multiple distinct blocks may share a UUID when all locations are declared.
 
 ## What the workflow can prove
 
-The Lula workflow validates mappings for every pull request. Its separate
-crawler job has only `contents: read` and `pull-requests: write`, posts an
-ordinary compliance comment with `--post-mode=comment`, and runs only on
-non-draft pull requests from this repository. Fork pull requests still run the
-marker validation; they receive no write-token execution.
+The automatic Lula workflow validates mappings for every pull request, including
+forks. It does not crawl PRs or post comments. Automated live crawler activation
+remains deferred under issue #37; the foundational marker set can be reviewed
+separately from that activation decision.
+
+A separate **Lula manual crawl** workflow runs only from `main`, after a user
+supplies a PR number and explicitly enables `post_comments`. That input authorizes
+the pinned CLI to delete its previous signed comments and post current findings.
+The workflow checks out only trusted workflow source and never executes PR code.
+It rejects forks, drafts, closed PRs, more than 30 changed files, and a base commit
+without the existing mapped CoreConfig marker pair. Thus this foundational PR
+cannot serve as proof of a successful later crawl. A later small PR must modify
+an already mapped block and demonstrate the expected UUID in the comment.
 
 Two verified limits in the pinned 0.9.5 CLI prevent claiming complete crawl
 acceptance today:

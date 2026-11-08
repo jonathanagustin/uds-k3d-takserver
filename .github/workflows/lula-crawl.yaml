@@ -1,0 +1,64 @@
+# Copyright 2026 uds-k3d-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Lula manual crawl
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: Open same-repository PR number with an existing mapped baseline
+        required: true
+        type: string
+      post_comments:
+        description: Authorize Lula to replace its previous comments and post findings
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  crawl:
+    if: github.ref == 'refs/heads/main' && inputs.post_comments
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout trusted workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+
+      # The pinned crawler lists files without pagination. Keep this fail-closed
+      # guard until a separately tested implementation covers larger PRs.
+      - name: Require a supported PR and an existing mapped baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_NUMBER: ${{ inputs.pull_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${PULL_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_NUMBER}" > "${RUNNER_TEMP}/lula-pr.json"
+          base="$(jq -r .base.sha "${RUNNER_TEMP}/lula-pr.json")"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/charts/takserver/files/config/CoreConfig.xml?ref=${base}" > "${RUNNER_TEMP}/lula-baseline.json"
+          python3 .github/scripts/lula-crawl-preflight.py "${RUNNER_TEMP}/lula-pr.json" "${RUNNER_TEMP}/lula-baseline.json" "${GITHUB_REPOSITORY}"
+
+      - name: Comment on changed mapped source blocks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_NUMBER: ${{ inputs.pull_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OWNER="${GITHUB_REPOSITORY%%/*}" REPO="${GITHUB_REPOSITORY#*/}"
+          npx --yes lula2@0.9.5 crawl --post-mode=comment

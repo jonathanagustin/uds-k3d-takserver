@@ -29,42 +29,4 @@ jobs:
           PYYAML_VERSION: 6.0.3
         run: |
           uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B .github/scripts/check-compliance.py
-          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_compliance_mappings -v
-
-  crawl:
-    # Fork tokens cannot post a comment. Drafts keep source validation above,
-    # while the proposed mapping set awaits review and a maintainer decision.
-    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26.13.0
-
-      # Lula 0.9.5 lists PR files without pagination, so GitHub returns only
-      # the first 30. Fail visibly rather than call that a complete review.
-      - name: Require a PR within the pinned crawler's file limit
-        env:
-          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "${CHANGED_FILES}" =~ ^[0-9]+$ ]] || (( CHANGED_FILES > 30 )); then
-            echo "::error::Lula 0.9.5 cannot cover more than 30 changed files. Split the change or review the mapped blocks manually; do not treat this as a passing compliance crawl."
-            exit 1
-          fi
-
-      - name: Comment on changed mapped source blocks
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Pinned deliberately: issue #37 remains deferred pending tool
-        # maturity or an explicit compliance priority decision.
-        run: npx --yes lula2@0.9.5 crawl --post-mode=comment
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_compliance_mappings tests.test_lula_crawl_preflight -v

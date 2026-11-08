@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>map zoom fixture</title>
+<canvas id="map" class="maplibregl-canvas" width="10" height="10" style="width:10px;height:10px"></canvas>
+<script>
+  let zoom = 5;
+  let ready = false;
+  window.clicked = false;
+  const canvas = document.getElementById("map");
+  setTimeout(() => {
+    canvas.style.width = "800px";
+    canvas.style.height = "600px";
+    canvas.width = 800;
+    canvas.height = 600;
+    ready = true;
+  }, 600);
+  canvas.addEventListener("click", () => { window.clicked = true; });
+  window.addEventListener("wheel", (event) => {
+    const box = canvas.getBoundingClientRect();
+    const over = event.clientX >= box.left && event.clientX <= box.right
+      && event.clientY >= box.top && event.clientY <= box.bottom;
+    if (!ready || !window.clicked || !over || box.width <= 100) return;
+    if (event.deltaY < 0) zoom += 1;
+  }, { passive: true });
+  window.mapZoom = () => zoom;
+</script>

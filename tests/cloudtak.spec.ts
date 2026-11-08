@@ -4,6 +4,7 @@
  */
 
 import { expect, test } from "@playwright/test";
+import { zoomMap } from "./map-zoom.mjs";
 
 // CloudTAK on map.<domain> with Keycloak sign-in. Opening the map sends the
 // browser to the UDS Keycloak login, and the Keycloak user comes back to the
@@ -161,15 +162,20 @@ test.describe("CloudTAK", () => {
       await page.screenshot({ path: `${shots}/cloudtak-02-map.png` });
 
       // Zoom in as a user would. The map asks for tiles at the new zoom.
+      // A gesture sent before the canvas has a real size does not move the
+      // map, so repeat it until a higher zoom tile arrives. The requirement
+      // is still a zoom past the tiles already on screen.
       const before = Math.max(...tiles.map((t) => t.z));
       const canvas = page.locator("canvas.maplibregl-canvas");
-      const box = await canvas.boundingBox();
-      if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      for (let i = 0; i < 4; i++) {
-        await page.mouse.wheel(0, -600);
-        await page.waitForTimeout(400);
-      }
-      await expect.poll(() => Math.max(...tiles.map((t) => t.z)), { timeout: 60_000, intervals: [1_000] }).toBeGreaterThan(before);
+      await expect
+        .poll(
+          async () => {
+            await zoomMap(page, canvas);
+            return Math.max(...tiles.map((t) => t.z));
+          },
+          { timeout: 60_000, intervals: [2_000] },
+        )
+        .toBeGreaterThan(before);
       await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(3_000);
       const zooms = [...new Set(tiles.map((t) => t.z))].sort((a, b) => a - b);

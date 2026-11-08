@@ -7,6 +7,17 @@ paths:
   .github/workflows/scorecard.yaml:
     ignore:
       - 'unknown permission scope "(code-quality|drives|vulnerability-alerts)"'
+  # GitHub supports FIFO queues; pinned actionlint 1.7.12 does not know this
+  # single key yet. tests/test_image_producers.py validates these sections.
+  .github/workflows/test.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/cloudtak-image.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/postgis-image.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
 
 # GitHub-hosted Ubuntu 26.04 labels. They are GA (actions/runner-images
 # #14747), but actionlint 1.7.12 does not list them yet.

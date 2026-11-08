@@ -40,7 +40,8 @@ test('home page links the four tasks and the theme toggle changes the document',
 });
 
 test('an old home-page anchor opens that section on Getting started', async ({ page }) => {
-  await page.goto('#quick-start');
+  // The README includes third-party badges; they do not gate local content.
+  await page.goto('#quick-start', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/getting-started\/#quick-start$/);
   await expect(page.getByRole('heading', { level: 3, name: 'Quick start' })).toBeVisible();
 });
@@ -57,7 +58,7 @@ test('an unknown page is a 404 with a link home', async ({ page }) => {
 });
 
 test('Getting started serves the demo videos without preloading them', async ({ page }) => {
-  await page.goto('getting-started/');
+  await page.goto('getting-started/', { waitUntil: 'domcontentloaded' });
   const videos = page.locator('video');
   expect(await videos.count()).toBeGreaterThanOrEqual(2);
 
@@ -82,7 +83,7 @@ test('Getting started serves the demo videos without preloading them', async ({ 
 });
 
 test('architecture diagrams render their labels', async ({ page }) => {
-  await page.goto('getting-started/#architecture');
+  await page.goto('getting-started/#architecture', { waitUntil: 'domcontentloaded' });
   const diagrams = page.locator('pre.mermaid svg');
   await expect(diagrams).toHaveCount(2, { timeout: 15_000 });
   await expect(diagrams.first()).toContainText('Browser');

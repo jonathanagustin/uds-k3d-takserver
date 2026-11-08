@@ -3,6 +3,9 @@
 
 """Pareto and log-parser fixtures. These dicts are not benchmark measurements."""
 
+import ast
+import contextlib
+import io
 import importlib.util
 import json
 import os
@@ -15,6 +18,7 @@ import textwrap
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 def load(name, relative):
@@ -31,6 +35,48 @@ phases = load("bench_phases", "bench/phases.py")
 runner = load("bench_run", "bench/run.py")
 startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
+
+
+class ProfileSelectionTests(unittest.TestCase):
+    def paths(self):
+        return sorted((runner.ROOT / "bench" / "configs").glob("*.yaml"))
+
+    def test_default_all_preserves_every_config_including_explicit_skip(self):
+        with patch.dict(os.environ, {}, clear=True):
+            configs = runner.selected_configs(self.paths())
+        self.assertEqual([config["name"] for config in configs],
+                         [runner.load_config(path)["name"] for path in self.paths()])
+        self.assertTrue(next(config for config in configs if config["name"] == "gc-serial")["skip"])
+
+    def test_baseline_only_preserves_requested_client_counts_and_config(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline", "BENCH_CLIENTS": "10,50"}):
+            configs = runner.selected_configs(self.paths())
+            self.assertEqual(configs, [runner.load_config(runner.ROOT / "bench/configs/baseline.yaml")])
+            self.assertEqual(runner.selected_clients(configs[0]), [10, 50])
+        self.assertFalse(configs[0]["restart"])
+
+    def test_main_runs_only_selected_baseline_points(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline", "BENCH_CLIENTS": "10,50"}), \
+                patch.object(runner.shutil, "which", return_value="fixture-kubectl"), \
+                patch.object(runner, "ready_age", return_value=(12, [])), \
+                patch.object(runner, "snapshot", return_value={}) as snapshot, \
+                patch.object(runner, "restore") as restore, \
+                patch.object(runner, "one", return_value={"errors": []}) as one:
+            self.assertEqual(runner.main([]), 0)
+        self.assertEqual([(call.args[0]["name"], call.args[1]) for call in one.call_args_list],
+                         [("baseline", 10), ("baseline-c50", 50)])
+        snapshot.assert_called_once()
+        restore.assert_called_once()
+
+    def test_invalid_selector_exits_before_cluster_queries(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "unknown"}), patch.object(runner, "ready_age") as query:
+            self.assertEqual(runner.main([]), 2)
+        query.assert_not_called()
+
+    def test_baseline_cannot_silently_run_nothing(self):
+        with patch.dict(os.environ, {"BENCH_PROFILE": "baseline"}):
+            with self.assertRaisesRegex(ValueError, "exactly one enabled baseline"):
+                runner.selected_configs([])
 
 
 def record(config, arch, rss, received, duration, mean, ready):
@@ -263,6 +309,7 @@ def tester_fixture():
     exit_mod = tester_exit
     return "".join([
         exit_mod.ANCHOR,
+        "target=print_info_without_sending_to_cloud_watch_process,\n" * 2,
         exit_mod.STREAM_LOOP * 3,
         exit_mod.TLS_LOOP,
         exit_mod.START_JOIN * 3,
@@ -276,6 +323,131 @@ def tester_fixture():
         exit_mod.TCP_LOOP,
         "                pass\n",
     ])
+
+
+class CumulativeCounterTests(unittest.TestCase):
+    def contract(self):
+        root = runner.ROOT / "bench/fixtures/tester"
+        source = (root / "tak_tester.py.txt").read_text()
+        # Every guarded replacement must still match the actual pinned source.
+        bound = tester_exit.bind_tester(source)
+        namespace = {"time": time, "print_info_without_sending_to_cloud_watch_process": lambda *args: None}
+        exec((root / "stats.py.txt").read_text(), namespace)
+        namespace["stats"] = namespace["Stats"]()
+        with patch.dict(os.environ, {"BENCH_CUMULATIVE_STATS": "1"}):
+            exec(tester_exit.HELPER, namespace)
+        return root, source, bound, namespace
+
+    def test_real_startup_and_printer_explain_41_reports_for_50_clients(self):
+        root, source, bound, namespace = self.contract()
+        clock = [0.0]
+        reports = []
+        class Clock:
+            @staticmethod
+            def sleep(seconds):
+                clock[0] += seconds
+        class StopPrinter(Exception):
+            pass
+        def capture(*args):
+            reports.append((clock[0], args[0]))
+            raise StopPrinter
+        printer_scope = {"time": Clock, "print": capture}
+        exec((root / "printer.py.txt").read_text(), printer_scope)
+        startup = next(node for node in ast.parse(source).body
+                       if isinstance(node, ast.FunctionDef) and node.name == "test_streaming_cot")
+        self.assertIn("time.sleep(offset)", ast.get_source_segment(source, startup))
+        scheduled = []
+        class Client:
+            def __init__(self, **kwargs):
+                self.arr = kwargs["arr"]
+            def start(self):
+                self.arr[2] += 1  # A fixture connection event, not a real server.
+        class PrinterProcess:
+            def __init__(self, target, args):
+                self.args = args
+            def start(self):
+                scheduled.append((clock[0], self.args))
+        class Manager:
+            def dict(self):
+                return {}
+        startup_scope = {**namespace, "time": Clock, "Manager": Manager,
+                         "PyTAKStreamingCotProcess": Client, "Process": PrinterProcess,
+                         "print_info_without_sending_to_cloud_watch_process": None,
+                         "print_data_dict": lambda data: "", "logger": type("Logger", (), {"info": staticmethod(lambda *args: None)})}
+        # Execute the unmodified pinned startup body; return at its infinite
+        # monitoring loop so the fixture itself never needs a live server.
+        startup.body[-1] = ast.Return(value=ast.Constant(value=None))
+        module = ast.fix_missing_locations(ast.Module(body=[startup], type_ignores=[]))
+        exec(compile(module, "pinned-startup", "exec"), startup_scope)
+        startup_scope["test_streaming_cot"]("fixture", 0, None, None, clients=50, offset=1)
+        self.assertEqual(clock[0], 50)
+        self.assertEqual(len(scheduled), 50)
+        for arrival, args in scheduled:
+            clock[0] = arrival
+            try:
+                printer_scope["print_info_without_sending_to_cloud_watch_process"](*args[:2], 20)
+            except StopPrinter:
+                pass
+        self.assertEqual(sum(timestamp <= 60 for timestamp, _ in reports), 41)
+        self.assertEqual(sum(arr[2] for arr in namespace["stats"].data.values()), 0)
+        self.assertIn("target=_tak_tester_quiet_printer,", bound)
+
+    def test_cumulative_snapshot_preserves_observed_events_without_reset_or_duplicates(self):
+        _root, _source, _bound, namespace = self.contract()
+        for index in range(50):
+            arr = namespace["stats"].init_uid(str(index))
+            arr[0], arr[1], arr[2], arr[5], arr[6] = 3, 2, 1, 2, 8
+        output = io.StringIO()
+        with patch.dict(os.environ, {"BENCH_CUMULATIVE_STATS": "1"}), contextlib.redirect_stdout(output):
+            namespace["_tak_tester_quiet_printer"]("unused", [], 20)
+            namespace["_tak_tester_emit_stats"]()
+            namespace["_tak_tester_emit_stats"]()
+        parsed = loadlog.parse(output.getvalue())
+        self.assertEqual(parsed["connects"], 50)
+        self.assertEqual(parsed["messages_sent"], 150)
+        self.assertEqual(parsed["messages_received"], 100)
+        self.assertEqual(parsed["ping_pong_ms_mean"], 4)
+        self.assertEqual(len(output.getvalue().splitlines()), 50)
+        self.assertEqual(sum(arr[2] for arr in namespace["stats"].data.values()), 50)
+
+    def test_unbound_mode_retains_upstream_printer_and_drift_fails_closed(self):
+        _root, source, _bound, namespace = self.contract()
+        calls = []
+        namespace["print_info_without_sending_to_cloud_watch_process"] = lambda *args: calls.append(args)
+        with patch.dict(os.environ, {"BENCH_CUMULATIVE_STATS": "0"}):
+            namespace["_tak_tester_quiet_printer"]("uid", [1], 20)
+        self.assertEqual(calls, [("uid", [1], 20)])
+        changed = source.replace("target=print_info_without_sending_to_cloud_watch_process,",
+                                 "target=changed_printer,", 1)
+        with self.assertRaisesRegex(RuntimeError, "offline metrics printer appeared 1 times"):
+            tester_exit.bind_tester(changed)
+
+    def test_requested_but_unconnected_clients_are_not_invented(self):
+        _root, _source, _bound, namespace = self.contract()
+        for index in range(50):
+            namespace["stats"].init_uid(str(index))[2] = int(index < 41)
+        output = io.StringIO()
+        with patch.dict(os.environ, {"BENCH_CUMULATIVE_STATS": "1"}), contextlib.redirect_stdout(output):
+            namespace["_tak_tester_emit_stats"]()
+        self.assertEqual(loadlog.parse(output.getvalue())["connects"], 41)
+
+    def test_snapshot_failure_is_invalid_evidence_and_still_stops_children(self):
+        _root, _source, _bound, namespace = self.contract()
+        class BusyLock:
+            def acquire(self, timeout):
+                return False
+        class BusyArray:
+            def get_lock(self):
+                return BusyLock()
+        namespace["stats"].data["busy"] = BusyArray()
+        stopped = []
+        namespace["_tak_tester_terminate_procs"] = lambda procs: stopped.extend(procs)
+        output = io.StringIO()
+        with patch.dict(os.environ, {"BENCH_CUMULATIVE_STATS": "1"}), contextlib.redirect_stdout(output):
+            namespace["_tak_tester_stop_procs"](["client"])
+        self.assertEqual(stopped, ["client"])
+        with self.assertRaisesRegex(ValueError, "snapshot"):
+            loadlog.parse(output.getvalue())
 
 
 class TesterExitTests(unittest.TestCase):

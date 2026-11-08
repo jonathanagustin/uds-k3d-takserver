@@ -4,9 +4,10 @@
 
 """Read the counters tak_tester.py prints when CloudWatch is off.
 
-The 5.7-RELEASE-14 printer sleeps, prints the shared array, then zeroes it.
-Each line is one interval, so the record adds every line. A log with no such
-line is an error, not a zero.
+The historical 5.7-RELEASE-14 printer prints and resets each shared array.
+The benchmark-bound tester instead prints one cumulative parent snapshot per
+UID. Both use the same counter names; add each line without inferring clients.
+A log with no such line or a snapshot error is invalid, not a zero.
 """
 
 import ast
@@ -28,6 +29,8 @@ COUNTERS = (
 
 
 def parse(text):
+    if "BENCH_COUNTER_ERROR:" in text:
+        raise ValueError("the load tester could not snapshot its cumulative counters")
     totals = {name: 0 for name, _source in COUNTERS}
     seen = False
     for raw in text.splitlines():

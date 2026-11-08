@@ -9,6 +9,14 @@ name: Benchmark
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: "Profiles to measure; baseline avoids tuning rollouts"
+        default: all
+        required: false
+        type: choice
+        options:
+          - all
+          - baseline
       clients:
         description: "Client counts, comma-separated, or all"
         default: "10"
@@ -58,6 +66,7 @@ jobs:
       id-token: write
     env:
       TEST_FLAVOR: upstream
+      BENCH_PROFILE: ${{ github.event.inputs.profile || 'all' }}
       BENCH_CLIENTS: ${{ github.event.inputs.clients || '10' }}
       # Test's package job publishes the dev package for these inputs; pull
       # it instead of creating it (.github/scripts/dev-package.sh).

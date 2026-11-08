@@ -33,7 +33,8 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `startup.max_generation` | count | highest `metadata.generation` on the TAK Deployments. 1 is a single rollout |
 | `startup.max_restart_count` | count | highest container or init restart count on the four TAK apps |
 | `load.clients` | count | the client count this record ran |
-| `load.duration_s` | seconds | how long `tak_tester.py` was left running |
+| `load.duration_s` | seconds | requested overall tester window, including client startup at one-second offsets |
+| `load.counter_source` | string | `parent-cumulative-ramp-inclusive` for the bounded parent snapshot; absent in historical records |
 | `load.messages_sent` | count | sum of every per-uid `messages_sent` the tester printed |
 | `load.messages_received` | count | same, for `messages_received` |
 | `load.connects` | count | same, for `connect_event_count` |
@@ -131,3 +132,20 @@ any client starts. `--send-metrics-interval` is one third of the duration, in
 seconds, so a line is printed before the process is stopped. The printer
 zeroes each counter after the line, so the record adds every line. Python is
 started with `-u` so that line is not left in a block buffer.
+
+### Counter window and provenance
+
+The benchmark-bound tester suppresses the upstream per-client printers, which
+otherwise print and reset each shared array at staggered intervals. At shutdown,
+the parent emits each observed cumulative array once, before terminating children.
+The parser retains the upstream counter names and sums those snapshots. A
+connection count is observed connection events, not the requested clients or a
+concurrent-connection gauge. No connection is inferred from a client being started.
+
+The 60-second window includes the one-second-per-client startup ramp. A requested
+50-client point therefore does not mean 50 clients sustained for 60 seconds.
+Memory samples include the ramp and shutdown boundary. Arrays are locked one at
+a time with a shared two-second snapshot budget, so this is not one atomic
+cross-client instant; no counters from the later termination/join period are
+intentionally included. A lock timeout invalidates the counters. Historical
+interval-printer records omit unprinted tails and are not counter-equivalent.

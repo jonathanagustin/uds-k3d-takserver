@@ -57,7 +57,44 @@ def _tak_tester_close(obj):
         except Exception:
             pass
 
+def _tak_tester_quiet_printer(*args):
+    if _tak_os.environ.get("BENCH_CUMULATIVE_STATS") != "1":
+        return print_info_without_sending_to_cloud_watch_process(*args)
+
+_TAK_STATS_EMITTED = False
+
+def _tak_tester_emit_stats():
+    global _TAK_STATS_EMITTED
+    if (_tak_os.environ.get("BENCH_CUMULATIVE_STATS") != "1"
+            or _tak_os.getpid() != _TAK_TESTER_PARENT or _TAK_STATS_EMITTED):
+        return
+    _TAK_STATS_EMITTED = True
+    # Only the parent changes this dictionary, synchronously during startup.
+    # Children update shared arrays, not the parent's dictionary.
+    entries = list(stats.data.items())
+    deadline = time.monotonic() + 2
+    fields = ("messages_sent", "messages_received", "connect_event_count",
+              "disconnect_event_count", "ping_count", "pong_count", "time_between_ping_pong")
+    for uid, arr in entries:
+        lock = arr.get_lock()
+        if not lock.acquire(timeout=max(0, deadline - time.monotonic())):
+            print("BENCH_COUNTER_ERROR: shared stats lock timed out", flush=True)
+            return
+        try:
+            values = list(arr)
+        finally:
+            lock.release()
+        print(f"Info that would be sent to CloudWatch if it was enabled, uid: {uid}, stats: {dict(zip(fields, values))}", flush=True)
+
 def _tak_tester_stop_procs(procs):
+    try:
+        _tak_tester_emit_stats()
+    except Exception as error:
+        print(f"BENCH_COUNTER_ERROR: {error}", flush=True)
+    finally:
+        _tak_tester_terminate_procs(procs)
+
+def _tak_tester_terminate_procs(procs):
     for proc in list(procs):
         _tak_tester_close(proc)
         alive = getattr(proc, "is_alive", None)
@@ -213,6 +250,8 @@ def bind_tester(source):
     if ANCHOR not in source:
         raise RuntimeError("tak_tester.py is missing the create_proto import")
     source = source.replace(ANCHOR, ANCHOR + HELPER, 1)
+    source = _replace(source, "target=print_info_without_sending_to_cloud_watch_process,",
+                      "target=_tak_tester_quiet_printer,", 2, "offline metrics printer")
     source = _replace(source, STREAM_LOOP, STREAM_LOOP_BOUNDED, 3, "streaming loop")
     source = _replace(source, TLS_LOOP, TLS_LOOP_BOUNDED, 1, "tls loop")
     source = _replace(source, START_JOIN, START_JOIN_BOUNDED, 3, "startup join")

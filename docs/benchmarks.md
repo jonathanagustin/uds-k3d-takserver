@@ -12,11 +12,24 @@ architecture default, or a 200-client load.
 
 [`.github/workflows/benchmark.yaml`](../.github/workflows/benchmark.yaml) runs:
 
-- daily at 09:41 UTC
+- Mondays at 09:41 UTC
 - by hand (`workflow_dispatch`)
 - on a pull request labeled `benchmark`
 
-It runs on amd64 and arm64 runners. The nightly run uses client count 10. To run more, set the workflow input `clients` to a comma-separated list such as `10,50,200`, or to `all` for every count a config lists.
+It runs on amd64 and arm64 runners. The weekly run uses client count 10. To run more, set the workflow input `clients` to a comma-separated list such as `10,50,200`, or to `all` for every count a config lists.
+
+Manual runs also accept `profile`: `all` (the default) keeps the full sweep;
+`baseline` measures only the unchanged install, without tuning rollouts.
+With `clients=10,50`, baseline produces two points per architecture instead of
+fourteen across the seven enabled profiles. Installation and its tests still
+run on both architectures. Scheduled and labeled runs keep the full sweep.
+This option does not establish 50-client headroom or relax the gate on 200 clients.
+The 60-second window includes clients starting one second apart. Requested
+clients and observed connection events do not establish sustained concurrency.
+New records identify their cumulative parent-snapshot counters; older interval
+reports could omit late clients and final partial intervals. See the
+[counter provenance](../bench/SCHEMA.md#counter-window-and-provenance) before
+comparing results.
 
 ## What one run does
 

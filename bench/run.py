@@ -761,14 +761,40 @@ def capacity_inventory(errors):
     return capacity.inventory(pods, quantity, errors)
 
 
+def load_operation(operation, action, *args, **kwargs):
+    """Keep credential-bearing process arguments and output out of failures."""
+    try:
+        return action(*args, **kwargs)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"{operation}: process failed (exit {error.returncode})") from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{operation}: process timed out") from None
+    except OSError as error:
+        raise RuntimeError(f"{operation}: operating system failure (errno {error.errno})") from None
+
+
+def stop_load_forward(forward):
+    if forward.poll() is None:
+        forward.terminate()
+        try:
+            forward.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            forward.kill()
+            forward.wait(timeout=5)
+
+
 def run_load(clients, duration, password, tester):
     if not tester.is_file():
-        raise RuntimeError(f"load tester is not at {tester}")
+        raise RuntimeError("load tester unavailable")
     cert_dir = Path(tempfile.mkdtemp(prefix="bench-certs-"))
+    forward = None
+    patched_dir = None
     try:
-        subprocess.run(["bash", str(ROOT / "tests" / "extract-certs.sh"), str(cert_dir)], check=True, cwd=ROOT)
+        load_operation("certificate extraction", subprocess.run,
+                       ["bash", str(ROOT / "tests" / "extract-certs.sh"), str(cert_dir)], check=True, cwd=ROOT)
         p12 = cert_dir / "admin.p12"
-        subprocess.run(
+        load_operation(
+            "certificate export", subprocess.run,
             [
                 "openssl", "pkcs12", "-export",
                 "-in", str(cert_dir / "admin.pem"),
@@ -780,18 +806,16 @@ def run_load(clients, duration, password, tester):
             check=True,
             capture_output=True,
         )
-        forward = subprocess.Popen(
+        forward = load_operation(
+            "port forward launch", subprocess.Popen,
             [*kubectl_cmd(), "port-forward", "-n", "istio-passthrough-gateway",
              "svc/passthrough-ingressgateway", "18089:8089"],
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
         )
         time.sleep(2)
-        # --send-metrics is omitted on purpose. The tester declares it as
-        # type=bool, and argparse treats every present string as true.
-        # Without a config file, mission_api_config is set only when
-        # --skip-mission-api is passed. Otherwise the process exits before
-        # any client starts. The printer sleeps for --send-metrics-interval
-        # before the first line, so that interval has to land inside duration.
+        # --send-metrics is omitted: upstream type=bool treats any present
+        # string as true. --skip-mission-api avoids an unset mission config.
+        # Keep the existing metrics interval and cumulative-bound mode.
         interval = max(1, duration // 3)
         patched_dir = Path(tempfile.mkdtemp(prefix="bench-tester-"))
         patched = patched_dir / "tak_tester.py"
@@ -808,10 +832,9 @@ def run_load(clients, duration, password, tester):
             "--skip-mission-api",
             "--send-metrics-interval", str(interval),
         ]
-        # New session so the client processes share a group we can kill.
-        # The patched tester exits at TAK_TESTER_DURATION. reap is the
-        # hard stop when a child join still outlives that deadline.
-        proc = subprocess.Popen(
+        # Preserve the bounded tester and its process-group timeout escalation.
+        proc = load_operation(
+            "load tester launch", subprocess.Popen,
             command,
             cwd=tester.parent,
             env=env,
@@ -820,26 +843,19 @@ def run_load(clients, duration, password, tester):
             stderr=subprocess.STDOUT,
             text=True,
         )
-        try:
-            text = reap(proc, duration + 20)
-        finally:
-            if forward.poll() is None:
-                forward.terminate()
-                try:
-                    forward.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    forward.kill()
-                    forward.wait(timeout=5)
-            shutil.rmtree(patched_dir, ignore_errors=True)
+        text = load_operation("load tester wait", reap, proc, duration + 20)
         try:
             return parse(text)
-        except ValueError as error:
-            tail = "\n".join(text.splitlines()[-12:])
-            if tail:
-                raise ValueError(f"{error}\n{tail}") from error
-            raise
+        except ValueError:
+            raise ValueError("load metrics invalid or missing") from None
     finally:
-        shutil.rmtree(cert_dir, ignore_errors=True)
+        try:
+            if forward is not None:
+                load_operation("port forward cleanup", stop_load_forward, forward)
+        finally:
+            if patched_dir is not None:
+                shutil.rmtree(patched_dir, ignore_errors=True)
+            shutil.rmtree(cert_dir, ignore_errors=True)
 
 
 def git_sha():

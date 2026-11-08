@@ -17,8 +17,9 @@ import tempfile
 import textwrap
 import time
 import unittest
+import traceback
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 def load(name, relative):
@@ -35,6 +36,99 @@ phases = load("bench_phases", "bench/phases.py")
 runner = load("bench_run", "bench/run.py")
 startup = load("bench_startup", "bench/startup.py")
 tester_exit = load("bench_tester_exit", "bench/tester_exit.py")
+
+
+class PrivateLoadFailureTests(unittest.TestCase):
+    password = "private-password-sentinel-7462"
+    key_text = "private-key-sentinel-9174"
+
+    def fixture(self, stack, root, failure):
+        tester = root / "tester.py"
+        tester.write_text("# fixture source")
+        directories = []
+        real_mkdtemp = tempfile.mkdtemp
+        def make_dir(**kwargs):
+            path = real_mkdtemp(dir=root, **kwargs)
+            directories.append(Path(path))
+            return path
+        stack.enter_context(patch.object(runner.tempfile, "mkdtemp", side_effect=make_dir))
+        stack.enter_context(patch.object(runner.time, "sleep"))
+        stack.enter_context(patch.object(runner, "kubectl_cmd", return_value=["fixture-kubectl"]))
+        stack.enter_context(patch.object(runner, "bind_tester", return_value="# bounded fixture"))
+        export_error = subprocess.CalledProcessError(7, ["openssl", "-passin", "pass:" + self.password],
+                                                     output=self.key_text, stderr=self.password)
+        timeout = subprocess.TimeoutExpired(["python", "--password", self.password], 80,
+                                             output=self.key_text, stderr=self.password)
+        runs = stack.enter_context(patch.object(runner.subprocess, "run"))
+        if failure == "export":
+            runs.side_effect = [None, export_error]
+        forward = MagicMock()
+        forward.poll.return_value = None
+        forward.wait.side_effect = [subprocess.TimeoutExpired(["fixture-forward", self.password], 5), 0]
+        launch = stack.enter_context(patch.object(runner.subprocess, "Popen"))
+        launch.side_effect = [forward, OSError(2, self.password, self.key_text)] if failure == "launch" else [forward, MagicMock()]
+        waiter = stack.enter_context(patch.object(runner, "reap"))
+        if failure == "timeout":
+            waiter.side_effect = timeout
+        else:
+            waiter.return_value = self.key_text + self.password
+        return tester, directories, forward, launch
+
+    def assert_private(self, text):
+        self.assertNotIn(self.password, text)
+        self.assertNotIn(self.key_text, text)
+
+    def test_subprocess_errors_and_normal_tracebacks_are_private_and_cleanup_runs(self):
+        for failure, message in (("export", "certificate export: process failed (exit 7)"),
+                                 ("timeout", "load tester wait: process timed out"),
+                                 ("launch", "load tester launch: operating system failure (errno 2)"),
+                                 ("parse", "load metrics invalid or missing")):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+                tester, directories, forward, launch = self.fixture(stack, Path(directory), failure)
+                try:
+                    runner.run_load(50, 60, self.password, tester)
+                except (RuntimeError, ValueError) as error:
+                    self.assertEqual(str(error), message)
+                    self.assert_private("".join(traceback.format_exception(error)))
+                    self.assertTrue(error.__suppress_context__)
+                else:
+                    self.fail("fixture failure was not raised")
+                self.assertTrue(all(not path.exists() for path in directories))
+                if failure != "export":
+                    forward.terminate.assert_called_once()
+                    forward.kill.assert_called_once()
+                    self.assertEqual(forward.wait.call_count, 2)
+                    self.assertIn(self.password, launch.call_args.args[0])
+
+    def test_successful_metrics_and_cleanup_are_preserved(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            tester, directories, forward, _launch = self.fixture(stack, Path(directory), "success")
+            stats = {"messages_sent": 5, "messages_received": 6, "connect_event_count": 2,
+                     "disconnect_event_count": 0, "pong_count": 2, "time_between_ping_pong": 8}
+            runner.reap.return_value = f"Info that would be sent to CloudWatch if it was enabled, uid: fixture, stats: {stats}"
+            parsed = runner.run_load(50, 60, self.password, tester)
+            self.assertEqual(parsed["connects"], 2)
+            self.assertEqual(parsed["messages_received"], 6)
+            self.assertEqual(parsed["ping_pong_ms_mean"], 4)
+            self.assertTrue(all(not path.exists() for path in directories))
+            forward.terminate.assert_called_once()
+            forward.kill.assert_called_once()
+
+    def test_public_record_does_not_serialize_credential_bearing_exceptions(self):
+        for failure in ("export", "timeout"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+                root = Path(directory)
+                tester, directories, _forward, _launch = self.fixture(stack, root, failure)
+                for name, value in (("git_sha", "a" * 40), ("apply_postgres", False), ("apply_config", None), ("footprint", ({}, [])),
+                                    ("start_phases", ({}, [])), ("startup_shape", ({}, [])), ("package_bytes", 1),
+                                    ("image_bytes", {}), ("capacity_inventory", {}), ("reset_postgres_counters", None),
+                                    ("keystore_password", self.password), ("read_postgres", {})):
+                    stack.enter_context(patch.object(runner, name, return_value=value))
+                stack.enter_context(patch.object(runner, "kubelet_samples", return_value=None))
+                record = runner.one({"name": "baseline", "duration_s": 60}, 50, root / "out", tester, 1)
+                self.assert_private(json.dumps(record))
+                self.assertTrue(any("load:" in error for error in record["errors"]))
+                self.assertTrue(all(not path.exists() for path in directories))
 
 
 class ProfileSelectionTests(unittest.TestCase):

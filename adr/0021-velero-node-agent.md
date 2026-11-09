@@ -190,3 +190,20 @@ exited with code 1 before emitting startup logs; k3d could not get a ready API.
 The retained node reported no OOM kill or runtime error text. The test cluster
 was removed. No handoff or rollback result is claimed from that attempt, and
 no runtime owner switch is introduced here.
+
+## Staging prerequisite: explicit local or Core owner
+
+`backup.filesystem.owner` accepts only `local` (the default) or `core`.
+When file-system backup is enabled, `local` preserves the existing DaemonSet,
+configuration and Exemption. `core` omits only the app-owned DaemonSet and
+ConfigMap; the Exemption and volume annotations remain. With file-system
+backup disabled, neither owner renders those agent resources or the Exemption.
+The standard full bundle still uses the local owner.
+
+This render gate does not implement a migration. **Do not switch an existing
+installation directly to `core`: Helm could delete the current agent and
+configuration before Core owns replacements.** A new installation also needs
+the bootstrap Exemption before Core enables its agent. The fail-closed handoff,
+retry and reverse orchestration and dual-architecture live backup/restore
+acceptance described above remain pending under issue 258. The gate alone
+establishes no Helm ownership transfer or safe independent rollback.

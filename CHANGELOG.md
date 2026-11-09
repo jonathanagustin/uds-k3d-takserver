@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.11.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.10.0...v0.11.0) (2026-11-09)
+
+
+### Features
+
+* **takx:** add native streaming-contact fallback routing ([#388](https://github.com/jonathanagustin/uds-takserver/issues/388)) ([9649752](https://github.com/jonathanagustin/uds-takserver/commit/964975268ba4275a0cdb9e77859f154a2e2d17a3))
+* **takx:** add tested public Kernel desktop compatibility ([#386](https://github.com/jonathanagustin/uds-takserver/issues/386)) ([52a9c43](https://github.com/jonathanagustin/uds-takserver/commit/52a9c436486299b1dac93d9eab44724752eeffaa))
+
+
+### Bug Fixes
+
+* **takclient:** prevent duplicate certificate issuance from stale and concurrent resource events; keep finalization safe for recreated resources ([#389](https://github.com/jonathanagustin/uds-takserver/pull/389)).
+* **deps:** refresh Pepr dependency patches ([#385](https://github.com/jonathanagustin/uds-takserver/issues/385)) ([82fce06](https://github.com/jonathanagustin/uds-takserver/commit/82fce0681659a46515d7427b599664e518a70a74))
+
+### Packaging
+
+* Publish images and packages under `ghcr.io/jonathanagustin/uds-takserver` from 0.11 onward. Releases through 0.10 keep their original registry coordinates ([#389](https://github.com/jonathanagustin/uds-takserver/pull/389)).
+* Build the experimental TAKX GIS Java bindings from pinned official modified sources. The complete native TAKX client remains under development ([#390](https://github.com/jonathanagustin/uds-takserver/pull/390)).
+
 ## [0.10.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.9.1...v0.10.0) (2026-11-08)
 
 

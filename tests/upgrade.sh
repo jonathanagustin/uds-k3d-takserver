@@ -105,6 +105,17 @@ if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
   exit 1
 fi
 rm -rf "${work}/bundle-wrong-signer"
+# A local, actions-only barrier leaves the signed released packages unchanged.
+uds zarf package create tests/upgrade-agent-gate --architecture="${arch}" --confirm --skip-sbom -o "${work}"
+uds zarf tools yq -e '
+  .packages[0].name == "core-base" and
+  ([.packages[] | select(.name == "core-base")] | length) == 1 and
+  ([.packages[] | select(.name == "upgrade-agent-gate")] | length) == 0
+' "${work}/bundle/uds-bundle.yaml" >/dev/null
+uds zarf tools yq -i '
+  .packages = (.packages[:1] +
+    [{"name": "upgrade-agent-gate", "path": "../", "ref": "0.0.0"}] + .packages[1:])
+' "${work}/bundle/uds-bundle.yaml"
 uds create "${work}/bundle" --architecture="${arch}" --confirm --no-progress
 # Preserve v0.6's controller 2.0.3 preload for the PostgreSQL 15 upgrade. Recent
 # releases start at their matching Core instead of an unnecessary older Core.
@@ -116,9 +127,16 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   rm -f "${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"/zarf-package-k3d-core-slim-dev-*-"${bootstrap_core}".tar.zst
 fi
 uds run fit-runner --no-progress
+if ! uds zarf package deploy "${work}/zarf-package-upgrade-agent-gate-${arch}-0.0.0.tar.zst" --confirm; then
+  ./tests/upgrade-agent-diagnostics.sh checkpoint
+  exit 1
+fi
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')
 [[ "${#bundles[@]}" -eq 1 ]]
-UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts
+if ! UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts; then
+  ./tests/upgrade-agent-diagnostics.sh released-bundle
+  exit 1
+fi
 # The released package and bundle files are not used again. The bundle's
 # uds-bundle.yaml stays: the core-base comparison below reads it.
 rm -f "${bundles[0]}" "${released}"

@@ -1,0 +1,38 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+kind: ZarfPackageConfig
+metadata:
+  name: upgrade-agent-gate
+  version: 0.0.0
+  description: CI-only admission readiness barrier around the released Core transition
+components:
+  - name: agent-ready
+    required: true
+    actions:
+      onDeploy:
+        before:
+          - description: Wait for the restored Zarf agent deployment
+            maxTotalSeconds: 300
+            wait:
+              cluster:
+                kind: deployment
+                name: agent-hook
+                namespace: zarf
+                condition: Available
+          - description: Wait for a ready agent endpoint (not a notReadyAddress)
+            maxTotalSeconds: 45
+            wait:
+              cluster:
+                kind: endpoints
+                name: agent-hook
+                namespace: zarf
+                condition: '{.subsets[0].addresses[0].targetRef.kind}=Pod'
+          - description: Verify the agent endpoint serves its HTTPS target port
+            maxTotalSeconds: 15
+            wait:
+              cluster:
+                kind: endpoints
+                name: agent-hook
+                namespace: zarf
+                condition: '{.subsets[0].ports[0].port}=8443'

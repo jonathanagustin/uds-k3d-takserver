@@ -24,7 +24,7 @@ useful behavior, but do not satisfy engine imports of `android.graphics`.
   AOSP revision `1a522bd5e7947ee5a4b44951b9099861c1dbcce4` as its ancestry.
   The adaptation changes the package and Rect-typed operations to RectF-typed
   operations, removes annotation dependencies and the unsupported Insets
-  overload, corrects copied integer-center documentation and the type label,
+  overload, corrects copied coordinate/center documentation and the type label,
   and makes signed-zero hashing consistent with the retained numeric equality.
   No unofficial implementation or prebuilt artifact was used.
 

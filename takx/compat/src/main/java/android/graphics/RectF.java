@@ -27,7 +27,7 @@ package android.graphics;
 
 
 /**
- * RectF holds four integer coordinates for a rectangle. The rectangle is
+ * RectF holds four float coordinates for a rectangle. The rectangle is
  * represented by the coordinates of its 4 edges (left, top, right bottom).
  * These fields can be accessed directly. Use width() and height() to retrieve
  * the rectangle's width and height. Note: most methods do not check to see that

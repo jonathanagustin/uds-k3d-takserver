@@ -48,6 +48,11 @@ The routing smoke uses real loopback TCP server sockets and a UDP receiver throu
 
 The successful native investigation used the isolated quictls `libssl.so.81.3` / `libcrypto.so.81.3`. Curl also detected host libraries for IDN2, RTMP, PSL, Zstandard and Brotli; the JNI runtime additionally needs the usual C/C++ runtime and loader. This recipe is **not yet a hermetic runtime package**: a future container must capture/audit that closure or deliberately configure dependency features and retest. The cache fingerprint does not pin every host library.
 
+The separate [mutual TLS loopback smoke](TLS.md) exercises real source-built
+transport with ephemeral certificates, CoT delivery and wrong-CA rejection.
+It does not change the native build recipe or establish hostname validation,
+TAK Server interoperability or full client compatibility.
+
 ## Compatibility boundary
 
 Current TAKX requires CommonCommo 1.22.3. Public 1.17.2 supports the inspected enrollment, streaming transport and mission-package call shapes, and the local patch implements `configKnownEndpointForContact(uid, callsign, streamId)`. A configured route is a separate fallback: active discovered routes retain precedence, and the fallback uses the existing streaming manager rather than converting a stream ID to UDP. Both optional arguments must be null to remove the fallback; an unknown stream ID fails. Existing fixed-UDP routes retain their original behavior. Removing a streaming interface leaves its explicit contact configuration in place until cleared or replaced. Sends through that removed ID fail; they do not move to another live stream or invent a UDP route. Clear that configuration with both optional arguments null. Clearing an already absent contact is rejected, matching the existing fixed-endpoint API rather than silently recreating it. Full client integration remains required before claiming compatibility. Full TAKX also needs the Kernel, patched WorldWind and other dependencies.

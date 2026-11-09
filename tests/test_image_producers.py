@@ -19,6 +19,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ProducerQueues(unittest.TestCase):
+    def test_optional_apk_producers_share_a_queue_and_recheck_after_admission(self):
+        standalone = yaml.safe_load((ROOT / ".github/workflows/atak.yaml").read_text())["jobs"]["apk"]
+        device = yaml.safe_load((ROOT / ".github/workflows/atak-e2e.yaml").read_text())["jobs"]["images"]
+        self.assertEqual(standalone["concurrency"], device["concurrency"])
+        queue = standalone["concurrency"]
+        self.assertEqual(queue["group"], "atak-apk-producer")
+        self.assertIs(queue["cancel-in-progress"], False)
+        self.assertEqual(queue["queue"], "max")
+        self.assertTrue(any("imagetools inspect" in step.get("run", "")
+                            for step in standalone["steps"]))
+        self.assertTrue(any("device-images.sh missing" in step.get("run", "")
+                            for step in device["steps"]))
+
     def test_same_key_and_arch_share_fifo_groups_across_workflows(self):
         workflows = {name: yaml.safe_load((ROOT / f".github/workflows/{name}.yaml").read_text())
                      for name in ["test", "cloudtak-image", "postgis-image"]}
@@ -48,7 +61,7 @@ class ProducerQueues(unittest.TestCase):
     def test_actionlint_exception_only_accepts_the_supported_queue_key(self):
         config = yaml.safe_load((ROOT / ".github/actionlint.yaml").read_text())
         diagnostic = 'unexpected key "queue" for "concurrency" section. expected one of "cancel-in-progress", "group"'
-        for name in ["test", "cloudtak-image", "postgis-image"]:
+        for name in ["test", "cloudtak-image", "postgis-image", "atak", "atak-e2e"]:
             patterns = config["paths"][f".github/workflows/{name}.yaml"]["ignore"]
             self.assertEqual(len(patterns), 1)
             self.assertIsNotNone(re.fullmatch(patterns[0], diagnostic))

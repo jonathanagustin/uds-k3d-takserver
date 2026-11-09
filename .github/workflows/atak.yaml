@@ -26,6 +26,12 @@ concurrency:
 
 jobs:
   apk:
+    # Share the heavy APK producer with ATAK e2e. Recheck the immutable image
+    # and stage cache after admission, so another workflow's work is reused.
+    concurrency:
+      group: atak-apk-producer
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -21,6 +21,12 @@ paths:
   .github/workflows/postgis-image.yaml:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/atak.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/atak-e2e.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
 
 # GitHub-hosted native ARM 22 and Ubuntu 26 labels. ARM 22 is official;
 # Ubuntu 22 retires 2027-04-17 (actions/runner-images#14254). Ubuntu 26 is GA (actions/runner-images

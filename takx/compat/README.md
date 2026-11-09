@@ -36,7 +36,7 @@ The font and bitmap tests exercise real upstream wrappers and the marshal regist
 
 The combined prototype compiles all 77 public port sources and six annotation sources with Java 11 compatibility. This resolves that module's earlier 97 compiler errors. It does not compile the engine or either TAKX application.
 
-Download the five public JARs from the exact official URLs in [port-classpath.lock.json](port-classpath.lock.json), placing their named files in one directory. The runner checks every SHA-256 and uses only those files, even if the directory contains other JARs. It uses JOGL/gluegen 2.5.0 and SLF4J 1.7.30, plus Commons Text 1.15.0 with its Commons Lang 3.20.0 runtime dependency. The newer Commons Text replaces the earlier investigation's 1.9 compile-only coordinate; the actual upstream HTML utility is exercised with the complete transitive pair.
+Download the locked public JARs from the exact official URLs in [port-classpath.lock.json](port-classpath.lock.json), placing their named files in one directory. The runner checks every SHA-256 and uses only those files, even if the directory contains other JARs. It uses JOGL/gluegen 2.5.0 and SLF4J 1.7.30, plus Commons Text 1.15.0 with its Commons Lang 3.20.0 runtime dependency. kXML2 2.3.0 supplies the scoped XML pull-parser backend. The newer Commons Text replaces the earlier investigation's 1.9 compile-only coordinate; the actual upstream HTML utility is exercised with the complete transitive pair.
 
 ```bash
 python3 takx/compat/test-port.py \

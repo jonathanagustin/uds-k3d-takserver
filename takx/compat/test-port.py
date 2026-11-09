@@ -29,7 +29,7 @@ def sha256(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True, help="Clean pinned official ATAK checkout")
-    parser.add_argument("--classpath-dir", type=Path, required=True, help="The five locked public JARs")
+    parser.add_argument("--classpath-dir", type=Path, required=True, help="The locked public JARs")
     parser.add_argument("--parcel-consumer", action="store_true", help="Also roundtrip the unchanged Kernel Icon consumer")
     args = parser.parse_args()
     source = args.source.resolve()

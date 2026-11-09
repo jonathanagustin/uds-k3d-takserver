@@ -24,7 +24,7 @@ No Java serialization, Binder objects, file descriptors, native handles,
 class-loader parcelables, Android permission checks or process transport exists.
 Unsupported methods are absent, not successful no-ops.
 
-Run the opt-in test using the five already locked public classpath JARs:
+Run the opt-in test using the locked public classpath JARs:
 
 ```sh
 python3 takx/compat/test-port.py --source "$ATAK_SOURCE_DIR" \

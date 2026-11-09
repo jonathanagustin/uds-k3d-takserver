@@ -96,6 +96,11 @@ public final class Bitmap {
         reshape(width, height);
     }
 
+    BufferedImage getDrawingImage() {
+        checkWritable();
+        return image;
+    }
+
     BufferedImage getAwtBufferedImageImplementation() {
         checkLive();
         return image;

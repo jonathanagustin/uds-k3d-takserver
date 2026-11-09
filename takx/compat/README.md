@@ -5,6 +5,7 @@
 The implementation uses JDK `BufferedImage`, ImageIO, Java2D fonts, classpath streams and real filesystem persistence. Its supported surfaces are documented separately:
 
 - [Bitmap pixels, decoding and upstream marshaling](BITMAP.md)
+- [Software bitmap composition, shapes and glyphs](CANVAS.md)
 - [Coordinate and rectangle primitives](GEOMETRY.md)
 - [Packed integer colors and integer rectangles](COLOR-RECT.md)
 - [Font selection and text measurement](FONT.md)
@@ -20,6 +21,7 @@ Put JDK 17's `java` and `javac` on `PATH`; tests compile with `--release 11` to 
 export ATAK_SOURCE_DIR=/path/to/atak-civ
 ./takx/compat/test-font.sh
 ./takx/compat/test-bitmap.sh
+./takx/compat/test-canvas.sh
 ./takx/compat/test-context.sh
 ./takx/compat/test-pair.sh
 python3 takx/compat/test-geometry.py --source "$ATAK_SOURCE_DIR"

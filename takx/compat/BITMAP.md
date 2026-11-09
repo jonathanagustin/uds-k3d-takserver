@@ -162,7 +162,7 @@ Recycling drops the wrapper's references without destroying separately held
 views. The adapter's raster storage is an implementation detail, not a claim
 about Android native memory order or a raw-buffer API.
 
-The 148-check harness compiles the unchanged official `ResourcePool` used by
+The 152-check harness compiles the unchanged official `ResourcePool` used by
 TerrainRGB and the real marshal chain. It exercises pooled return identity,
 repeated real PNG decoding, equal-capacity aspect-ratio changes, recovered
 capacity after shrink, allocation-array identity, retained storage, invalid

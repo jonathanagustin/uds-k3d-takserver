@@ -315,6 +315,10 @@ public final class BitmapCompatibilityTest {
             raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts));
             check(view(borrowed) == source && borrowed.getWidth() == 3 && borrowed.getHeight() == 2
                     && source.getRGB(1, 0) == 0xffffffff, "unsupported borrowed reuse neither detaches nor mutates");
+            android.graphics.Paint drawing = new android.graphics.Paint();
+            drawing.setColor(0xffffffff);
+            new android.graphics.Canvas(borrowed).drawRect(0, 1, 1, 2, drawing);
+            check(source.getRGB(0, 1) == 0xffffffff, "canvas updates the actual borrowed color model storage");
             borrowed.recycle();
             check(source.getRGB(1, 0) == 0xffffffff, "borrowed storage survives recycle");
         }

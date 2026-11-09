@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Deploys the bundle on k3d, then records a short demo video: terminal
@@ -72,9 +72,9 @@ jobs:
       # Pull request runs record the upgrade chapter too, so a change to it
       # is tested before main publishes it.
       UPGRADE: ${{ (github.event_name == 'pull_request' || inputs.upgrade) && 'true' || 'false' }}
-      CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+      CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
       ATAK_TAG: dev
-      DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
+      DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -489,7 +489,7 @@ jobs:
   # It runs after publish, or alone with sign_only for the videos already
   # there. Verify with:
   #   cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
-  #     --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
+  #     --certificate-identity https://github.com/jonathanagustin/uds-takserver/.github/workflows/demo.yaml@refs/heads/main \
   #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
   sign:
     needs: [record, publish]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # End-to-end check of the ATAK test device on a cluster that `uds run
@@ -13,7 +13,7 @@ set -euo pipefail
 OUT="${OUT:-out}"
 DOMAIN="${DOMAIN:-uds.dev}"
 ATAK_TAG="${ATAK_TAG:-dev}"
-DRIVER_IMAGE="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:${ATAK_TAG}}"
+DRIVER_IMAGE="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-takserver/atak-driver:${ATAK_TAG}}"
 TAK_USER="${KEYCLOAK_USER:-doug}"
 TAK_PASS="${KEYCLOAK_PASSWORD:-unicorn123!@#UN}"
 TAK_HOST="${TAK_HOST:-takserver-stream.${DOMAIN}}"

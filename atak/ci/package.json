@@ -1,5 +1,5 @@
 {
-  "name": "uds-k3d-takserver-atak-ci",
+  "name": "uds-takserver-atak-ci",
   "private": true,
   "description": "Playwright for atak/ci/e2e.sh, installed with npm ci from the lockfile",
   "dependencies": {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Build the PostGIS image used by TAK and CloudTAK.
@@ -37,14 +37,14 @@
 # upgrades (Trivy --pkg-types os --ignore-unfixed). The TAK and CloudTAK
 # builds do the same. COPA=false leaves the image as Docker built it.
 #
-#   REGISTRY       default: ghcr.io/jonathanagustin/uds-k3d-takserver
+#   REGISTRY       default: ghcr.io/jonathanagustin/uds-takserver
 #   POSTGRES_IMAGE override the pinned base image, for example to pull it
 #                  through a mirror when Docker Hub limits anonymous pulls
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "${here}" rev-parse --show-toplevel)"
-registry="${REGISTRY:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
+registry="${REGISTRY:-ghcr.io/jonathanagustin/uds-takserver}"
 # PostgreSQL major and PostGIS major.minor, the tag the chart and zarf.yaml use.
 version="18-3.6"
 version_image="${registry}/postgis:${version}"
@@ -88,7 +88,7 @@ for platform, image in sorted(images.items()):
     if platform.startswith("unknown"):
         continue
     labels = ((image or {}).get("config") or {}).get("Labels") or {}
-    print(platform, labels.get("dev.uds-k3d-takserver.inputs", ""))
+    print(platform, labels.get("dev.uds-takserver.inputs", ""))
 ' 2>/dev/null || true
 }
 

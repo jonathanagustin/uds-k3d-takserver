@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 domain: "###ZARF_VAR_DOMAIN###"
@@ -16,7 +16,7 @@ uptime:
   enabled: true
 
 image:
-  repository: ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak
+  repository: ghcr.io/jonathanagustin/uds-takserver/cloudtak
   tag: v13.112.3 # cloudtak-version
 
 # Logical pg_dump of the CloudTAK database into Secret cloudtak-db-dump.
@@ -26,7 +26,7 @@ backup:
     enabled: false
     schedule: "20 2 * * *"
     # Writes the Secret. The PostGIS image has pg_dump and no curl.
-    publishImage: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
+    publishImage: "ghcr.io/jonathanagustin/uds-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
   # Same string switch as the TAK chart. See adr/0021-velero-node-agent.md.
   filesystem:
     enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
@@ -35,7 +35,7 @@ postgis:
   # The image the TAK chart already uses. One image covers both databases.
   # Built in this repository for amd64 and arm64. The entrypoint upgrades a
   # PostgreSQL 15 data directory (adr/0018-upgrade-postgres-in-place.md).
-  image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
+  image: ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6
   storage: 2Gi
   # StorageClass for the data volume. Empty leaves storageClassName unset, so
   # the cluster default class is used, as before. The package sets it from

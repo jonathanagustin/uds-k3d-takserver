@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Wait until the six TAK images can be inspected in GHCR, each as a
@@ -21,7 +21,7 @@ else
   keyed="true"
 fi
 echo "TAK image tag: ${tag}"
-owner_repo="${IMAGE_OWNER_REPO:-jonathanagustin/uds-k3d-takserver}"
+owner_repo="${IMAGE_OWNER_REPO:-jonathanagustin/uds-takserver}"
 branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
 grace_seconds="${WAIT_GRACE_SECONDS:-300}"
 sleep_seconds="${WAIT_SLEEP_SECONDS:-30}"

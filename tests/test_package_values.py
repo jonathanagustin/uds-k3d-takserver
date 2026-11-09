@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Package values default to the Zarf variables, and only override them.
@@ -123,7 +123,7 @@ def tak_tags(docs):
     for app in TAK_APPS:
         deploy = find(docs, "Deployment", app)
         for container in deploy["spec"]["template"]["spec"]["containers"]:
-            if "/uds-k3d-takserver/" in container["image"]:
+            if "/uds-takserver/" in container["image"]:
                 tags.add(container["image"].rsplit(":", 1)[1])
     return tags
 

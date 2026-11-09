@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/tasks.schema.json
@@ -27,7 +27,7 @@ variables:
   - name: DEMO_RUN_ID
     default: ""
   - name: TARGET_REPO
-    default: ghcr.io/jonathanagustin/uds-k3d-takserver
+    default: ghcr.io/jonathanagustin/uds-takserver
   # Extra zarf package create flags. Docker Hub limits anonymous pulls per IP
   # and the package pulls three docker.io images, so a shared CI or sandbox IP
   # can hit HTTP 429. Pull them through a mirror instead:

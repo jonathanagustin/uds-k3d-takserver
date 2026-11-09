@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Offline contracts for release selection and the first-release bootstrap."""
@@ -54,7 +54,7 @@ class BaselineTests(unittest.TestCase):
             release("v3.0.0", prerelease=True), release("v4.0.0-rc.1"),
         ])
         self.assertEqual(result["tag"], "v1.10.0")
-        self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:1.10.0-upstream")
+        self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:1.10.0-upstream")
         self.run.assert_called_once_with(
             ["git", "merge-base", "--is-ancestor", "a" * 40, "refs/remotes/origin/main"],
             check=True, capture_output=True,
@@ -80,6 +80,16 @@ class BaselineTests(unittest.TestCase):
         )
         self.assertEqual(result["tag"], "v0.6.0")
         self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.6.0-upstream")
+
+    def test_registry_namespace_tracks_the_first_renamed_release(self):
+        self.git.side_effect = self.valid_git
+        for version, namespace in (("0.10.0", "uds-k3d-takserver"),
+                                   ("0.11.0", "uds-takserver"),
+                                   ("1.10.0", "uds-takserver")):
+            with self.subTest(version=version):
+                result = baseline.select_release([release("v" + version)])
+                self.assertEqual(result["package"],
+                                 f"oci://ghcr.io/jonathanagustin/{namespace}/takserver:{version}-upstream")
 
     def test_pinned_tag_must_be_published(self):
         self.git.side_effect = self.valid_git

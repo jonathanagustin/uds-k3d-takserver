@@ -4,7 +4,7 @@ Date: 2026-11-03
 
 ## Status
 
-Accepted. This record was written on November 3, 2026, after the decision. It documents a choice made in pull requests [#4](https://github.com/jonathanagustin/uds-k3d-takserver/pull/4) (October 20, 2026) and [#177](https://github.com/jonathanagustin/uds-k3d-takserver/pull/177) (November 1, 2026). Those pull requests did not compare the options below in writing. This record compares them now, with the evidence available on November 3.
+Accepted. This record was written on November 3, 2026, after the decision. It documents a choice made in pull requests [#4](https://github.com/jonathanagustin/uds-takserver/pull/4) (October 20, 2026) and [#177](https://github.com/jonathanagustin/uds-takserver/pull/177) (November 1, 2026). Those pull requests did not compare the options below in writing. This record compares them now, with the evidence available on November 3.
 
 ## Context
 
@@ -18,8 +18,8 @@ The package deploys TAK's upstream Helm chart, `src/takserver-cluster/deployment
 
 Two facts set the bar:
 
-- A TAK pod must never start with the unrendered template. TAK copies one node's `CoreConfig.xml` to the others through the Ignite cache, so one bad pod breaks sign-in on all of them ([#3](https://github.com/jonathanagustin/uds-k3d-takserver/issues/3), [#4](https://github.com/jonathanagustin/uds-k3d-takserver/pull/4)). Before #4, a Python script patched the Deployments after Helm finished. The first pods had already started by then.
-- UDS package rules say a package MUST use the upstream chart when one is available and suitable. Zarf actions MUST NOT run local commands other than `coreutils` and `./zarf` ([UDS Package Requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/)). Before #177, `zarf.yaml` ran `kubectl`, `python3`, and `sed` at deploy time ([#35](https://github.com/jonathanagustin/uds-k3d-takserver/issues/35)).
+- A TAK pod must never start with the unrendered template. TAK copies one node's `CoreConfig.xml` to the others through the Ignite cache, so one bad pod breaks sign-in on all of them ([#3](https://github.com/jonathanagustin/uds-takserver/issues/3), [#4](https://github.com/jonathanagustin/uds-takserver/pull/4)). Before #4, a Python script patched the Deployments after Helm finished. The first pods had already started by then.
+- UDS package rules say a package MUST use the upstream chart when one is available and suitable. Zarf actions MUST NOT run local commands other than `coreutils` and `./zarf` ([UDS Package Requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/)). Before #177, `zarf.yaml` ran `kubectl`, `python3`, and `sed` at deploy time ([#35](https://github.com/jonathanagustin/uds-takserver/issues/35)).
 
 The options:
 
@@ -60,13 +60,13 @@ Keep the Pepr module. It is the only option here that is supported by both Zarf 
 
 - **Fork.** If upstream TAK stays inactive, a fork's merge cost stays near zero. It would remove the controller, its memory, and the fail-closed admission path. The CA copies and CoreDNS work would still need a Jobs-based or controller-based home. Revisit if the module grows mainly to patch templates.
 - **Post-renderer.** For static template patches, a post-renderer would do the same work without a running controller. Revisit when Zarf supports post-renderers ([zarf-dev/zarf#3587](https://github.com/zarf-dev/zarf/issues/3587)). A related pattern applies `.patch` files to the chart source at package create time ([zarf-dev/zarf#4840](https://github.com/zarf-dev/zarf/pull/4840), an open docs pull request). It is a fork with the patches kept in this repository.
-- **Upstream pull requests.** This is the long-term fix for the init container, the Secret volume, the probes, and the metrics port. Upstream has open outside pull requests and no push since April 3, 2026. This repository closed [#175](https://github.com/jonathanagustin/uds-k3d-takserver/issues/175), an upstream patch request, for that reason. If upstream becomes active, send the chart values first. Each value it accepts removes code from the module.
+- **Upstream pull requests.** This is the long-term fix for the init container, the Secret volume, the probes, and the metrics port. Upstream has open outside pull requests and no push since April 3, 2026. This repository closed [#175](https://github.com/jonathanagustin/uds-takserver/issues/175), an upstream patch request, for that reason. If upstream becomes active, send the chart values first. Each value it accepts removes code from the module.
 
 ## Consequences
 
 - The package depends on UDS Core's Pepr controller image and version. Upgrade Core first.
 - The module must keep its webhook narrow. `pepr/scripts/finalize-chart.mjs` fails the build if a Pepr upgrade changes the template it edits.
-- The webhook's object selector matched the `app` label. In the upstream chart, the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet have no `app` label on the object itself, only in their pod templates. Their admission handlers never ran, and the watcher's reconcile did that work after each object was stored. The pods were still prepared at admission. Confirmed from CI admission logs in [#273](https://github.com/jonathanagustin/uds-k3d-takserver/issues/273). The webhook now matches those objects by name.
+- The webhook's object selector matched the `app` label. In the upstream chart, the four Deployments, the Ignite ConfigMap, and the Ignite StatefulSet have no `app` label on the object itself, only in their pod templates. Their admission handlers never ran, and the watcher's reconcile did that work after each object was stored. The pods were still prepared at admission. Confirmed from CI admission logs in [#273](https://github.com/jonathanagustin/uds-takserver/issues/273). The webhook now matches those objects by name.
 - A new upstream release needs a check that the names and labels the module selects on still exist.
 
 ## Evidence
@@ -78,8 +78,8 @@ Keep the Pepr module. It is the only option here that is supported by both Zarf 
 - **E5.** Helm v4.3.0 `pkg/action/action.go` defaults to `PostRenderStrategyCombined`, which sends hooks and templates to the post-renderer together. Its `nohooks` mode is described as the Helm 3 behavior.
 - **E6.** Zarf v0.89.0 accepts `kustomizations` on manifests only ([`component.go` line 283](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/api/v1alpha1/component.go#L283)). It builds them during package assembly ([`src/pkg/packager/assemble/assemble.go` line 656](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/pkg/packager/assemble/assemble.go#L656)).
 - **E7.** [UDS Package Requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/): use the upstream chart when available and suitable, and keep UDS settings in a separate config chart. Zarf actions use only `coreutils` or `./zarf`.
-- **E8.** GitHub reports `pushed_at` 2026-04-03 for [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server), with outside pull requests still open. See the closing note on [#175](https://github.com/jonathanagustin/uds-k3d-takserver/issues/175).
+- **E8.** GitHub reports `pushed_at` 2026-04-03 for [TAK-Product-Center/Server](https://github.com/TAK-Product-Center/Server), with outside pull requests still open. See the closing note on [#175](https://github.com/jonathanagustin/uds-takserver/issues/175).
 - **E9.** [UDS Core `src/pepr`](https://github.com/defenseunicorns/uds-core/tree/main/src/pepr) holds the operator and the policies.
-- **E10.** `pepr/package.json` script `test:coverage` passes `--test-coverage-lines=100`, `--test-coverage-branches=100`, and `--test-coverage-functions=100`. Added in [#69](https://github.com/jonathanagustin/uds-k3d-takserver/pull/69).
-- **E11.** [#234](https://github.com/jonathanagustin/uds-k3d-takserver/pull/234) and `values/pepr-values.yaml`.
+- **E10.** `pepr/package.json` script `test:coverage` passes `--test-coverage-lines=100`, `--test-coverage-branches=100`, and `--test-coverage-functions=100`. Added in [#69](https://github.com/jonathanagustin/uds-takserver/pull/69).
+- **E11.** [#234](https://github.com/jonathanagustin/uds-takserver/pull/234) and `values/pepr-values.yaml`.
 - **E12.** `pepr/scripts/finalize-chart.mjs` narrows the webhook to the `takserver` namespace and the TAK objects. The generated chart keeps `failurePolicy: Fail`. `tests/oidc-render.sh` checks both in a cluster.

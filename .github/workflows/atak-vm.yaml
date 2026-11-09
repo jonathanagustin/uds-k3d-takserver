@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: ATAK device VM
@@ -41,8 +41,8 @@ jobs:
       # and atak/zarf.yaml. The KubeVirt CR is atak/deploy/kubevirt-cr.yaml.
       VIRTCTL_SHA256: c289393c8186a258653594605f5199b4c171a3131e6e409ed204a96b491b782a
       KUBEVIRT_OPERATOR_SHA256: 9ac45a436c49d32e6fc21d542bcb7600b970705297b9e6752f3ef9b0a1d292da
-      IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
-      VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
+      IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-civ-vm:dev
+      VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-viewer:dev
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,16 +68,16 @@ jobs:
         run: |
           start=$(date +%s)
           docker buildx build -f atak/vm/Dockerfile -t "${IMAGE}" --load \
-            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-vm \
-            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-vm,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
+            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-takserver/build-cache:atak-vm \
+            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-takserver/build-cache:atak-vm,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
           echo "build seconds: $(( $(date +%s) - start ))"
           docker image ls "${IMAGE}"
 
       - name: Build the viewer
         run: |
           docker buildx build -f atak/viewer/Dockerfile -t "${VIEWER_IMAGE}" --load \
-            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-viewer \
-            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache:atak-viewer,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
+            --cache-from type=registry,ref=ghcr.io/jonathanagustin/uds-takserver/build-cache:atak-viewer \
+            --cache-to type=registry,ref=ghcr.io/jonathanagustin/uds-takserver/build-cache:atak-viewer,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true .
           docker image ls "${VIEWER_IMAGE}"
 
       - name: k3d and KubeVirt

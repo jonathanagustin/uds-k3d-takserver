@@ -1,4 +1,4 @@
-// Copyright 2026 uds-k3d-takserver authors
+// Copyright 2026 uds-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
 // Copies the repository markdown into src/content/docs with the frontmatter
@@ -43,7 +43,7 @@ const siteBase = `${assetBase}${args['url-prefix'] ? '/' + args['url-prefix'] : 
 // videos into public/demo/ and Pages serves them as video/mp4. The posters
 // in public/demo/ are committed. The copies are gitignored.
 // Preserve the published demo source and its historical provenance.
-const demoRelease = 'https://github.com/jonathanagustin/uds-k3d-takserver/releases/download/demo';
+const demoRelease = 'https://github.com/jonathanagustin/uds-takserver/releases/download/demo';
 const demoDir = path.resolve(import.meta.dirname, '../public/demo');
 
 const pages = [
@@ -366,7 +366,7 @@ function rewriteLinks(markdown, fromSrc, byPath) {
       });
     if (fromSrc === 'README.md') {
       next = next.split(githubTestBadge).join(siteTestBadge);
-      next = next.split(githubTestBadge.replace('/uds-takserver/', '/uds-k3d-takserver/')).join(siteTestBadge);
+      next = next.split(githubTestBadge.replace('/uds-takserver/', '/uds-takserver/')).join(siteTestBadge);
     }
     return next;
   });
@@ -496,7 +496,7 @@ let home;
 if (existsSync(homePath)) {
   home = await readFile(homePath, 'utf8');
   home = home.replace(/(^|[\s"'(=])\/uds-(?:k3d-)?takserver\//g, `$1${siteBase}/`);
-  home = home.replaceAll('https://github.com/jonathanagustin/uds-k3d-takserver/', `${repoUrl}/`);
+  home = home.replaceAll('https://github.com/jonathanagustin/uds-takserver/', `${repoUrl}/`);
   home = home.replace('../../components/LegacyHomeHash.astro', legacyImport);
   if (currentLanding) {
     const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(home);

@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: Container
@@ -44,7 +44,7 @@ concurrency:
 
 env:
   PUSH_IMAGES: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
-  IMAGE_REPO: ghcr.io/jonathanagustin/uds-k3d-takserver
+  IMAGE_REPO: ghcr.io/jonathanagustin/uds-takserver
 
 jobs:
   # One decision for both architectures, so the two builds and the manifest

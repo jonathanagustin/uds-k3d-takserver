@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Point this checkout's TAK, CloudTAK and PostGIS references at the tags keyed
@@ -25,7 +25,7 @@ postgis_tag="$(./.github/container-and-chart/postgis/build.sh --tag)"
 tak_version="$(tr -d '[:space:]' < .github/container-and-chart/docker/version.txt)"
 tak_tag="$(./.github/container-and-chart/docker/build.sh --tag)"
 
-repo="ghcr.io/jonathanagustin/uds-k3d-takserver"
+repo="ghcr.io/jonathanagustin/uds-takserver"
 
 # Replace a literal string in a file and fail if it is not there, so a moved
 # reference cannot be silently left on the mutable tag.

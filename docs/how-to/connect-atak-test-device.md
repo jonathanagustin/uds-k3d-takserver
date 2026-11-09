@@ -38,8 +38,8 @@ repository's k3d test cluster. For a real phone, follow
 
    ```bash title="Prepare the device package and driver"
    export ATAK_TAG=5.5.1.10
-   export ATAK_PACKAGE=oci://ghcr.io/jonathanagustin/uds-k3d-takserver/packages/atak-device:5.5.1.10
-   docker pull "ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:${ATAK_TAG}"
+   export ATAK_PACKAGE=oci://ghcr.io/jonathanagustin/uds-takserver/packages/atak-device:5.5.1.10
+   docker pull "ghcr.io/jonathanagustin/uds-takserver/atak-driver:${ATAK_TAG}"
    ```
 
 2. On the k3d test cluster, run the ATAK e2e provisioning and connection check:

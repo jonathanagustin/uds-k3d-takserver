@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Turn a recorded script (demo/deploy.sh, demo/after-atak.sh under
@@ -22,8 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-LEGACY_PROMPT = "uds-k3d-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
-PROMPT = LEGACY_PROMPT.replace("uds-k3d-takserver", "uds-takserver")
+LEGACY_PROMPT = "uds-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
+PROMPT = LEGACY_PROMPT.replace("uds-takserver", "uds-takserver")
 IDLE = 2.0
 # Short outputs read better large: CAST_FONT_SIZE, CAST_COLS and CAST_ROWS
 # override the font size and the terminal size agg renders.

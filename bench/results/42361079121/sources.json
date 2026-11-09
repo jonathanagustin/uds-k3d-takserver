@@ -1,6 +1,6 @@
 {
   "run_id": 42361079121,
-  "run_url": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121",
+  "run_url": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42361079121",
   "source_git_sha": "68b44db46326285f6533d1ff4dd59a410f20b6c1",
   "reporter_git_sha": "a7e0068b9ef026e5b1a63b48f9dcfbcd89337abf",
   "reporter_sha256": "86fc7b5ffdbf493e8e424287ce1112465c4329cb9f1cc9aa72db9a730d3c9cca",
@@ -11,8 +11,8 @@
     "arm64": "failure"
   },
   "artifact_urls": {
-    "amd64": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121/artifacts/13571982706",
-    "arm64": "https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42361079121/artifacts/13571567932"
+    "amd64": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42361079121/artifacts/13571982706",
+    "arm64": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42361079121/artifacts/13571567932"
   },
   "files": [
     {

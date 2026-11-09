@@ -1,5 +1,5 @@
 {{/*
-Copyright 2026 uds-k3d-takserver authors
+Copyright 2026 uds-takserver authors
 SPDX-License-Identifier: GPL-3.0-only
 */}}
 
@@ -45,7 +45,7 @@ capabilities:
 {{- define "cloudtak.basemap.userAgent" -}}
 {{- if .Values.basemap.userAgent }}{{ .Values.basemap.userAgent }}
 {{- else -}}
-CloudTAK/{{ .Values.image.tag | trimPrefix "v" }} (uds-k3d-takserver; +https://github.com/jonathanagustin/uds-k3d-takserver{{ with .Values.basemap.contact }}; contact: {{ . }}{{ end }})
+CloudTAK/{{ .Values.image.tag | trimPrefix "v" }} (uds-takserver; +https://github.com/jonathanagustin/uds-takserver{{ with .Values.basemap.contact }}; contact: {{ . }}{{ end }})
 {{- end }}
 {{- end }}
 

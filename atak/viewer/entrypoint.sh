@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 # Keeps adb connected to the device VM and serves ws-scrcpy plus phone.html.
 set -eu

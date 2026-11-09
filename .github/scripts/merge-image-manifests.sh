@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Join the per-architecture TAK image tags into one multi-arch index.
@@ -12,13 +12,13 @@
 # WRITE_VERSION_TAG=true) the same images are also written as <version> and
 # <version>-<arch>, the tags zarf.yaml and releases reference.
 #
-#   IMAGE_REPO         default: ghcr.io/jonathanagustin/uds-k3d-takserver
+#   IMAGE_REPO         default: ghcr.io/jonathanagustin/uds-takserver
 #   IMAGE_TAG          default: docker/build.sh --tag
 #   ARCHES             default: "amd64 arm64". Every one must be present.
 #   WRITE_VERSION_TAG  true also writes <version> outside main.
 set -euo pipefail
 
-repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
+repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-takserver}"
 tag="${IMAGE_TAG:-$(./.github/container-and-chart/docker/build.sh --tag)}"
 version="$(tr -d '[:space:]' < .github/container-and-chart/docker/version.txt)"
 read -r -a arches <<< "${ARCHES:-amd64 arm64}"

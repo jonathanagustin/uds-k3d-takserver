@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Inputs for charts/takserver/templates/uds-package.yaml.
@@ -215,7 +215,7 @@ additionalNetworkAllow: []
 # Subject fields for the deploy-time CA. The Job skips generation when
 # ConfigMap cert-migration already exists.
 certs:
-  image: "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
+  image: "ghcr.io/jonathanagustin/uds-takserver/takserver-config:###ZARF_VAR_TAK_IMAGE_TAG###"
   caName: uds-tak-ca
   state: VA
   city: Arlington
@@ -239,7 +239,7 @@ backup:
     schedule: "15 2 * * *"
     # Same image as the server. pg_dump refuses a newer server major, and
     # zarf.yaml carries only this tag.
-    image: ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6
+    image: ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6
   # String, not a boolean. The Zarf variable is text, and Helm treats the
   # string "false" as true. Templates compare it to "true".
   filesystem:

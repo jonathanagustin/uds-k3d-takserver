@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Start a PostgreSQL 15 PostGIS database, then start IMAGE on the same
 # directory and check the row, the server major, and the PostGIS version.
 #
-#   smoke.sh ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6-<key>-amd64
+#   smoke.sh ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6-<key>-amd64
 #
-# OLD_IMAGE defaults to the 15-3.4 tag this repository still publishes.
+# OLD_IMAGE reads the immutable pre-rename PG15 baseline. New builds publish
+# only to the renamed repository; the old PG15 image is not republished.
 set -euo pipefail
 
 image="${1:?usage: smoke.sh IMAGE}"

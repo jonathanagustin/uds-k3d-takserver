@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # The "Upgrades from the Last Signed Release" chapter of the Operate and
@@ -75,7 +75,7 @@ if [[ "${phase}" == prepare ]]; then
     } |
     del(.packages[] | select(.name == "takserver") | .repository)
   ' "${work}/bundle/uds-bundle.yaml"
-  uds zarf package pull "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${previous}-upstream" \
+  uds zarf package pull "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${previous}-upstream" \
     --architecture "${arch}" --certificate-identity-regexp "${RELEASE_WORKFLOW}" \
     --certificate-oidc-issuer "${RELEASE_ISSUER}" --features values=true -o "${work}" --no-progress
   uds create "${work}/bundle" --architecture "${arch}" --confirm --no-progress

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Copy one Demo Video run's posters, stills and chapter times into the docs.

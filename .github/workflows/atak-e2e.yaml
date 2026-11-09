@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # ATAK test device end to end: UDS Core slim + TAK Server (the normal test
@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 env:
-  CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+  CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
   # The tests use local "dev" images. They come from GHCR under a tag made of
   # the ATAK version and a hash of their inputs (atak/ci/device-images.sh);
   # the images job builds and pushes the ones that are not there yet. Only
@@ -44,9 +44,9 @@ env:
   # passes. Fork pull requests cannot push, so they build in the e2e job.
   ATAK_TAG: dev
   RELEASE_TAG: 5.5.1.10
-  VM_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
-  VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
-  DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
+  VM_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-civ-vm:dev
+  VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-viewer:dev
+  DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev
 
 jobs:
   # Runs beside the e2e job's UDS Core and TAK deploy. With every image

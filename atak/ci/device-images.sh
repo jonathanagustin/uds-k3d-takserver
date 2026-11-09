@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Content-addressed ATAK device images. Each image gets a tag made of the
 # ATAK version and a short hash of the files it is built from:
 #
-#   ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:5.5.1.10-<hash>
+#   ghcr.io/jonathanagustin/uds-takserver/atak-civ-vm:5.5.1.10-<hash>
 #
 # When that tag is already in GHCR, nothing is built: the image is pulled.
 # Building the APK takes about 25 minutes; a pull takes seconds.
@@ -30,7 +30,7 @@
 # git checkout and ignores unstaged edits. KEY_SALT invalidates every hash.
 set -euo pipefail
 
-REPO="${REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
+REPO="${REPO:-ghcr.io/jonathanagustin/uds-takserver}"
 CACHE="${CACHE:-${REPO}/build-cache}"
 LOCAL_TAG="${LOCAL_TAG:-dev}"
 KEY_SALT="${KEY_SALT:-v1}"

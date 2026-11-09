@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Queue contracts and real build-script registry reuse, without hosted builds."""
@@ -96,7 +96,7 @@ elif args[:2] == ["buildx", "build"]:
     image = args[args.index("--tag") + 1]
     time.sleep(0.05)
     (root / "loaded.json").write_text(json.dumps({image: {"os": "linux", "architecture": arch,
-        "config": {"Labels": {"dev.uds-k3d-takserver.inputs": inputs}}}}))
+        "config": {"Labels": {"dev.uds-takserver.inputs": inputs}}}}))
 elif args[0] == "push":
     state.write_text((root / "loaded.json").read_text())
 else:

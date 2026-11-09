@@ -219,7 +219,7 @@
     {
       "description": "These image tags are the Zarf variable TAK_IMAGE_TAG, not a registry tag.",
       "matchPackageNames": [
-        "ghcr.io/jonathanagustin/uds-k3d-takserver/**"
+        "ghcr.io/jonathanagustin/uds-takserver/**"
       ],
       "enabled": false
     },

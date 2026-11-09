@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Deploy the slim UDS Core checkpoint. A tarball of this version in the cache
@@ -31,7 +31,7 @@ version="${SLIM_CORE_VERSION:-${slim_core_version}}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"
 upstream_repo="ghcr.io/defenseunicorns/dev/uds/checkpoints"
-mirror_repo="${SLIM_CORE_MIRROR-ghcr.io/jonathanagustin/uds-k3d-takserver/checkpoints}"
+mirror_repo="${SLIM_CORE_MIRROR-ghcr.io/jonathanagustin/uds-takserver/checkpoints}"
 want_digest="${slim_core_digests[${version}]:-}"
 
 mkdir -p "${out}"

@@ -20,7 +20,7 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 | `atak-viewer` | `atak/viewer/Dockerfile` | ws-scrcpy v0.8.1 (MIT) with the shell and file listing compiled out, an adb client, and a phone-bezel page |
 | `atak-driver` | `atak/apk/Dockerfile` target `driver` | The ATAK APK, adb, and `atak/driver/drive.sh`. Test tool only, not in the package |
 
-The APK build (`atak/apk/Dockerfile`, driven by `atak/ci/build-apk.sh`) compiles the takthirdparty natives, the Conan dependencies, and cesium-native from source. A cold build takes well over an hour on a GitHub runner; the layers are cached in `ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache`. No key, certificate, or password is in any image. The APK is signed with the debug keystore that ships in the public atak-civ repository.
+The APK build (`atak/apk/Dockerfile`, driven by `atak/ci/build-apk.sh`) compiles the takthirdparty natives, the Conan dependencies, and cesium-native from source. A cold build takes well over an hour on a GitHub runner; the layers are cached in `ghcr.io/jonathanagustin/uds-takserver/build-cache`. No key, certificate, or password is in any image. The APK is signed with the debug keystore that ships in the public atak-civ repository.
 
 CI tags each image with the ATAK version and a hash of its inputs, for example `atak-civ-vm:5.5.1.10-<hash>`. When that tag is in GitHub Container Registry (GHCR), CI pulls it. A pull request builds and pushes only the images whose inputs changed. Fork pull requests cannot push, so they build locally. After a passing e2e run on `main`, the plain `5.5.1.10` tags point at the tested images. `packages/atak-device:5.5.1.10` points at the tested Zarf package. See [Reused build outputs](ci.md#reused-build-outputs).
 
@@ -37,7 +37,7 @@ uds zarf package deploy zarf-package-atak-device-amd64-*.tar.zst --set DOMAIN=ud
 Or deploy the package the last `main` run tested, without building it:
 
 ```bash
-uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-k3d-takserver/packages/atak-device:5.5.1.10 \
+uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-takserver/packages/atak-device:5.5.1.10 \
   --architecture amd64 --set DOMAIN=uds.dev --confirm
 ```
 

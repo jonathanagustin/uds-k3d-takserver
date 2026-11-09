@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: ATAK
@@ -58,7 +58,7 @@ jobs:
       # When that tag exists, the APK is copied out of it instead of rebuilt.
       - name: Build the APK
         env:
-          CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+          CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
         run: |
           set -euo pipefail
           ref="$(./atak/ci/device-images.sh keys | sed -n 's/^APK_IMAGE_KEYED=//p')"

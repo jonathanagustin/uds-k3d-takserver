@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Resolve a published Release Please version reachable from main, never a dev tag."""
@@ -86,11 +86,13 @@ def select_release(items, head=None, pin=None):
     version = ".".join(match.groups())
     if manifest.get(".") != version:
         raise RuntimeError(f"Release {tag} does not match its Release Please manifest")
+    # Published versions before the repository migration remain immutable.
+    namespace = "uds-k3d-takserver" if tuple(map(int, match.groups())) < (0, 11, 0) else "uds-takserver"
     return {
         "tag": tag,
         "version": version,
         "commit": commit,
-        "package": f"oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:{version}-upstream",
+        "package": f"oci://ghcr.io/jonathanagustin/{namespace}/takserver:{version}-upstream",
     }
 
 

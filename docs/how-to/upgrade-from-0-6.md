@@ -49,6 +49,8 @@ certificate objects as described in [Backup](../data.md#backup).
    uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${VERSION}-upstream" --confirm
    ```
 
+   The 0.7 release retains the registry namespace used before the repository rename.
+
    Pass `--architecture amd64` or `--architecture arm64` when the target differs
    from the deployment host. Each database pod runs its own migration on first
    start; its startup probe allows ten minutes for that first start.

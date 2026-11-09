@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.28
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # CloudTAK, built from the upstream/cloudtak submodule.
@@ -61,7 +61,7 @@ LABEL org.opencontainers.image.title="cloudtak" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.version="${CLOUDTAK_VERSION}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
-      org.opencontainers.image.source="https://github.com/jonathanagustin/uds-k3d-takserver"
+      org.opencontainers.image.source="https://github.com/jonathanagustin/uds-takserver"
 
 COPY --chmod=0755 start.sh /home/etl/uds/start.sh
 COPY --chmod=0644 bootstrap.mjs basemap.mjs /home/etl/uds/

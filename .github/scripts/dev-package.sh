@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Build the dev Zarf package once per set of inputs and reuse it.
@@ -9,7 +9,7 @@
 # UDS CLI version, the flavor and the architecture. DOMAIN and TAK_IMAGE_TAG
 # are not in the key: their values come from tasks.yaml and the bundle files,
 # which are hashed. A run that overrides them with --set must not reuse. The package is
-# published as ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages/takserver:<key>,
+# published as ghcr.io/jonathanagustin/uds-takserver/ci-packages/takserver:<key>,
 # a tag written once by the run that built it and never overwritten.
 #
 #   dev-package.sh key        print the key
@@ -27,7 +27,7 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 cd "${root}"
 
-repo="${DEV_PACKAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver/ci-packages}"
+repo="${DEV_PACKAGE_REPO:-ghcr.io/jonathanagustin/uds-takserver/ci-packages}"
 case "$(uname -m)" in
   x86_64 | amd64) arch=amd64 ;;
   aarch64 | arm64) arch=arm64 ;;

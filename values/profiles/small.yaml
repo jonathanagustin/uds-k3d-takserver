@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Overlay for the upstream TAK chart. Merge it after values/common-values.yaml.
@@ -16,7 +16,7 @@
 # here. NATS is already sized in common-values.yaml.
 #
 # Replicas stay 1. More than one messaging or API pod overwrites CoreConfig
-# with the cached copy: https://github.com/jonathanagustin/uds-k3d-takserver/issues/3
+# with the cached copy: https://github.com/jonathanagustin/uds-takserver/issues/3
 takserver:
   config:
     replicas: 1

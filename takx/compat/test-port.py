@@ -30,12 +30,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True, help="Clean pinned official ATAK checkout")
     parser.add_argument("--classpath-dir", type=Path, required=True, help="The five locked public JARs")
+    parser.add_argument("--parcel-consumer", action="store_true", help="Also roundtrip the unchanged Kernel Icon consumer")
     args = parser.parse_args()
     source = args.source.resolve()
     observed = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     if observed != REVISION:
         parser.error("ATAK source revision differs from the pinned public source")
     modules = ["takkernel/annotation/src/main/java", "takkernel/port/src/main/java", "takkernel/port/src/jre/java"]
+    if args.parcel_consumer:
+        modules.append("takkernel/engine/src/main/java/com/atakmap/coremap/maps/assets/Icon.java")
     subprocess.run(["git", "-C", str(source), "diff", "--exit-code", "HEAD", "--", *modules], check=True)
     untracked = subprocess.check_output(
         ["git", "-C", str(source), "ls-files", "--others", "--exclude-standard", "--", *modules], text=True
@@ -56,7 +59,7 @@ def main():
         ["git", "-C", str(source), "ls-files", "-z", "--", *modules]
     ).decode().split("\0")
     java_paths = [Path(name) for name in tracked if name.endswith(".java")]
-    if len(java_paths) != 83:
+    if len(java_paths) != 83 + int(args.parcel_consumer):
         parser.error("Expected all 77 port and six annotation source files")
     with tempfile.TemporaryDirectory(prefix="uds-takx-port-") as temporary:
         stage = Path(temporary)
@@ -68,20 +71,28 @@ def main():
             ["patch", "--batch", "--fuzz=0", "-p1", "-i", str(patch)],
             cwd=stage, check=True, stdout=subprocess.DEVNULL
         )
-        upstream = sorted(stage.glob("takkernel/*/src/*/java/**/*.java"))
+        upstream = sorted(p for module in modules[:3] for p in (stage / module).rglob("*.java"))
         compat = sorted((HERE / "src/main/java").rglob("*.java"))
+        consumer_inputs = []
+        if args.parcel_consumer:
+            consumer_inputs = [str(stage / modules[-1]), str(HERE / "src/test/java/ParcelCompatibilityTest.java")]
         classes = stage / "classes"
         classes.mkdir()
         subprocess.run(
             ["javac", "--release", "11", "-cp", os.pathsep.join(jars), "-d", str(classes),
-             *map(str, upstream), *map(str, compat),
+             *map(str, upstream), *map(str, compat), *consumer_inputs,
              str(HERE / "src/test/java/PortRuntimeTest.java")], check=True
         )
         runtime = subprocess.check_output(
             ["java", "-Djava.awt.headless=true", "-cp", os.pathsep.join([str(classes), *jars]),
              "PortRuntimeTest"], text=True
         ).strip()
+        parcel_runtime = None
+        if args.parcel_consumer:
+            parcel_runtime = subprocess.check_output(
+                ["java", "-cp", os.pathsep.join([str(classes), *jars]), "ParcelCompatibilityTest"], text=True).strip()
         print(json.dumps({
+            "parcel_icon_runtime": parcel_runtime,
             "atak_revision": observed,
             "upstream_java_files": len(upstream),
             "compat_java_files": len(compat),

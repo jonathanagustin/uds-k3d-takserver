@@ -220,7 +220,7 @@ public final class BitmapCompatibilityTest {
         android.graphics.Bitmap image = bitmap(4, 3);
         image.setPixel(3, 2, 0xff123456);
         BufferedImage oldView = view(image);
-        Object allocation = ((java.awt.image.DataBufferInt) oldView.getRaster().getDataBuffer()).getData();
+        Object allocation = ((java.awt.image.DataBufferByte) oldView.getRaster().getDataBuffer()).getData();
         check(image.getByteCount() == 48 && image.getAllocationByteCount() == 48, "initial byte counts");
         image.reconfigure(2, 2, android.graphics.Bitmap.Config.ARGB_8888);
         check(image.getWidth() == 2 && image.getHeight() == 2 && image.getByteCount() == 16,
@@ -229,7 +229,7 @@ public final class BitmapCompatibilityTest {
         image.reconfigure(6, 2, android.graphics.Bitmap.Config.ARGB_8888);
         BufferedImage reshaped = view(image);
         check(reshaped.getWidth() == 6 && reshaped.getHeight() == 2, "new marshal view reflects shape");
-        check(((java.awt.image.DataBufferInt) reshaped.getRaster().getDataBuffer()).getData() == allocation,
+        check(((java.awt.image.DataBufferByte) reshaped.getRaster().getDataBuffer()).getData() == allocation,
                 "aspect-ratio change retains the exact pixel allocation");
         check(oldView.getWidth() == 4 && oldView.getHeight() == 3, "previous view retains its Java2D dimensions");
         check(image.getPixel(5, 1) == 0xff123456, "reconfiguration does not clear retained pixel storage");
@@ -254,7 +254,7 @@ public final class BitmapCompatibilityTest {
                 "reuse decodes real alpha and color pixels into the new shape");
         check(reused.getByteCount() == 24 && reused.getAllocationByteCount() == 48,
                 "decode reuse preserves original capacity");
-        check(((java.awt.image.DataBufferInt) view(reused).getRaster().getDataBuffer()).getData() == allocation,
+        check(((java.awt.image.DataBufferByte) view(reused).getRaster().getDataBuffer()).getData() == allocation,
                 "decode reuse keeps exact destination allocation");
         byte[] wider = png(6, 2, 0xff332211);
         check(android.graphics.BitmapFactory.decodeByteArray(wider, 0, wider.length, opts) == image
@@ -395,12 +395,12 @@ public final class BitmapCompatibilityTest {
         android.graphics.Bitmap scaledOpaque = android.graphics.Bitmap.createScaledBitmap(opaque, 4, 4, true);
         check(!scaledOpaque.hasAlpha() && scaledOpaque.getAllocationByteCount() == 64,
                 "scaling preserves opaque metadata and creates bounded owned storage");
-        Object allocation = ((java.awt.image.DataBufferInt) view(opaque).getRaster().getDataBuffer()).getData();
+        Object allocation = ((java.awt.image.DataBufferByte) view(opaque).getRaster().getDataBuffer()).getData();
         options.inBitmap = opaque;
         check(android.graphics.BitmapFactory.decodeByteArray(png, 0, png.length, options) == opaque
                 && opaque.hasAlpha() && opaque.getPixel(1, 0) == 0x80123456,
                 "pooled opaque-to-alpha decode updates actual destination color model");
-        check(((java.awt.image.DataBufferInt) view(opaque).getRaster().getDataBuffer()).getData() == allocation
+        check(((java.awt.image.DataBufferByte) view(opaque).getRaster().getDataBuffer()).getData() == allocation
                 && opaque.getAllocationByteCount() == 1024, "alpha metadata transition retains exact owned allocation");
         check(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length, options) == opaque && !opaque.hasAlpha(),
                 "pooled alpha-to-opaque decode restores opaque metadata");

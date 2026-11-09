@@ -3,7 +3,7 @@
 package android.graphics;
 
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
+import java.awt.image.DataBufferByte;
 
 /** Package-level storage contracts only; not a BitmapRegionDecoder substitute. */
 public final class BitmapRegionStorageTest {
@@ -23,11 +23,11 @@ public final class BitmapRegionStorageTest {
                 0xff456789,0xff56789a,0xff6789ab}, true, false);
         target.setPixel(2, 1, 0x00010203);
         BufferedImage previous = target.getAwtBufferedImageImplementation();
-        Object allocation = ((DataBufferInt) previous.getRaster().getDataBuffer()).getData();
+        Object allocation = ((DataBufferByte) previous.getRaster().getDataBuffer()).getData();
         target.replaceDecodedRegion(new int[]{0x80112233, 0x40445566, 99, 0x20778899, 0x10aabbcc}, 3, 2, 2, true);
         check(target.getWidth() == 3 && target.getHeight() == 2 && target.getAllocationByteCount() == 24,
                 "region reuse retains shape and capacity");
-        check(((DataBufferInt) target.getAwtBufferedImageImplementation().getRaster().getDataBuffer()).getData() == allocation,
+        check(((DataBufferByte) target.getAwtBufferedImageImplementation().getRaster().getDataBuffer()).getData() == allocation,
                 "region alpha transition retains exact pixel allocation");
         check(target.hasAlpha() && target.getPixel(0,0) == 0x80112233 && target.getPixel(1,1) == 0x10aabbcc,
                 "region rows honor source stride and alpha");

@@ -1,0 +1,40 @@
+{
+  "frameworks_base_revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "skia_revision": "1145116447a46710a65e3a5deabb7d7c752af5ea",
+  "android_release": "android-14.0.0_r1",
+  "layouts": {
+    "ARGB_8888": "unpremultiplied RGBA bytes",
+    "RGB_565": "little-endian R5G6B5 words",
+    "ALPHA_8": "one alpha byte"
+  },
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/Bitmap.cpp",
+      "sha256": "7bcb7148d6333f5f89b35f761de8ccecc24a4ec6ae0408a4539f3c4fbec40877"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/Graphics.cpp",
+      "sha256": "37acaa4a58fc003999765230c8f6cabac698f197dbbcc82ee2535325947cba6b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/include/core/SkColorPriv.h",
+      "sha256": "a854daa9a74423529c6fe29ff0f4685906d738e2e7bce6408fa58041e0920ed0"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/include/core/SkColorType.h",
+      "sha256": "57ead9ec30f2f8eaca237b9c0277aa11a28b8106cf70bc430d8f931cafa994fd"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/include/core/SkTypes.h",
+      "sha256": "adc91521ef512eaad1fc5bd848dc5722858ae8f8c74d2c2e353ff8f681ae89ee"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/src/core/SkConvertPixels.cpp",
+      "sha256": "4b99addf078b554fe8a176bc7527c6ab4236037c13954cb5ad082828d4617ffd"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/src/opts/SkRasterPipeline_opts.h",
+      "sha256": "51b5251dfbff3d70ce85662b2bf805544084027220420afe8e209aa2de513bc6"
+    }
+  ]
+}

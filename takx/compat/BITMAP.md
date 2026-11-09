@@ -42,13 +42,13 @@ unlicensed AndroidPort implementation or binary was copied.
   `outHeight` reset to -1 on an unreadable input. Byte-array decoding respects
   the requested offset and length and rejects invalid ranges before decoding.
 
-The only declared configuration is `ARGB_8888`. Options expose
+The implemented configurations are `ARGB_8888`, `RGB_565` and `ALPHA_8`; see [native pixel layouts](NATIVE-PIXELS.md). Options expose
 `inPreferredConfig`, `inMutable`, `inBitmap`, `inJustDecodeBounds`, `outWidth` and
 `outHeight`; null uses the same default. The three-argument stream
 method accepts a null padding argument (typed `Object`) as used by the pinned
 portable factory; non-null padding is explicitly rejected. It is not a binary
 replacement for Android's `Rect`-typed method. Scaling, region decoding,
-buffer copying, native bitmap handles and other
+native bitmap handles and other
 Android APIs are outside this slice. Fatal JVM resource errors are not converted
 to a successful or fabricated image. Untrusted-image memory budgets are not
 implemented here.
@@ -125,7 +125,7 @@ that external Java2D reference.
 ## Owned allocation reuse
 
 Images created by this adapter or decoded into it own a packed, straight-alpha
-ARGB `int[]` allocation. `reconfigure` changes the logical dimensions by making
+pixel `byte[]` allocation. `reconfigure` changes the logical dimensions by making
 a new Java2D raster view over that same array. It does not allocate replacement
 pixel storage or clear existing pixels. `getByteCount` reports the current
 packed shape; `getAllocationByteCount` reports the original capacity. Positive
@@ -160,7 +160,7 @@ current dimensions. Callers must stop using old views before reconfiguration;
 this corresponds to AOSP's warning about reconfiguring images still in use.
 Recycling drops the wrapper's references without destroying separately held
 views. The adapter's raster storage is an implementation detail, not a claim
-about Android native memory order or a raw-buffer API.
+about a complete Android native renderer; the separate [raw byte contract](NATIVE-PIXELS.md) states the supported layouts.
 
 The 239-check harness compiles the unchanged official `ResourcePool` used by
 TerrainRGB and the real marshal chain. It exercises pooled return identity,

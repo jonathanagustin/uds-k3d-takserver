@@ -30,13 +30,17 @@ final class BitmapEncoder {
         };
         try (ImageOutputStream output = new MemoryCacheImageOutputStream(borrowed)) {
             writer.setOutput(output);
-            BufferedImage encoded = image;
+            // Normalize semantic pixels before handing custom byte/raster layouts to
+            // codecs: ImageIO must not reinterpret RGB565 samples or alpha-only bytes
+            // as ordinary sRGB/gray components.
+            boolean alpha = format == Bitmap.CompressFormat.PNG && image.getColorModel().hasAlpha();
+            BufferedImage encoded = new BufferedImage(image.getWidth(), image.getHeight(),
+                    alpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+            int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
+            encoded.setRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
             ImageWriteParam parameters = writer.getDefaultWriteParam();
             if (format == Bitmap.CompressFormat.JPEG) {
                 // JPEG has no alpha channel: retain the decoded straight RGB values.
-                encoded = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-                int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
-                encoded.setRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
                 parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
                 parameters.setCompressionQuality(quality / 100f);
             }

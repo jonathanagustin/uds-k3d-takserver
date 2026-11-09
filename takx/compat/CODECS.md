@@ -1,19 +1,18 @@
 # Bitmap metadata, scaling and codecs
 
-This slice adds real desktop metadata, scaling and PNG/JPEG encoding. It does
-not add native Android storage layouts, raw-buffer copying, RGB_565, ALPHA_8,
-WebP or other configurations merely to make engine references compile.
+This slice adds real desktop metadata, scaling and PNG/JPEG encoding. Additional real owned formats and raw byte copying are documented in
+[NATIVE-PIXELS.md](NATIVE-PIXELS.md). WebP and further configurations remain absent.
 
 ## Metadata and owned storage
 
-Owned images report `Config.ARGB_8888`. Borrowed Java2D rasters report null
+Owned images report their actual implemented configuration. Borrowed Java2D rasters report null
 because the adapter does not classify their arbitrary layout as an Android
 configuration. `hasAlpha()` reports alpha capability/opacity metadata, not a
 scan for transparent pixels. New ARGB images have alpha; opaque decoded images
 retain opaque metadata. Metadata queries on recycled images explicitly fail.
 Android documents those recycled queries as undefined behavior.
 
-Opaque owned images use an RGB view over the same four-byte-per-pixel `int[]`
+Opaque owned images use an RGB view over the same four-byte-per-pixel byte-array
 allocation. Reads and writes then treat pixels as opaque. Decoding a new image
 into an owned pool candidate updates its alpha model and shape while retaining
 that exact allocation and its original capacity. Old borrowed views retain
@@ -61,10 +60,9 @@ and CustomMultiLayerMobacMapSource.
 
 The same source also genuinely requests RGB_565: GLQuadTileNode2 decode options,
 GLRenderGlobals texture/pixel creation, GLPendingTexture's opaque fallback and
-GLTexture format/type selection. Those paths remain unsupported. ALPHA_8 is
-not requested in the scanned engine tree. The existing copyPixelsToBuffer
-consumers still need proven native format, premultiplication and byte-order
-semantics; `getRGB()` arrays are not a raw-memory substitute.
+GLTexture format/type selection. Those formats now have real owned storage. ALPHA_8 is
+not requested in the scanned engine tree. The raw-copy contract and supported unpremultiplied layout are described in
+NATIVE-PIXELS.md; `getRGB()` arrays are not used as a raw-memory substitute.
 
 The bitmap harness now passes 198 checks, including its earlier 152 contracts,
 opaque/alpha reuse transitions with allocation identity, borrowed metadata and

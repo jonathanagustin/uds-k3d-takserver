@@ -3,21 +3,22 @@
 package android.graphics;
 
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
-import java.awt.image.DirectColorModel;
-import java.awt.image.Raster;
-import java.awt.image.WritableRaster;
 import java.util.Objects;
 
 /** ARGB pixel slice of uds-desktop-android-compat 0.1.0; not an Android SDK. */
 public final class Bitmap {
-    public enum Config { ARGB_8888 }
+    public enum Config {
+        ARGB_8888(4), RGB_565(2), ALPHA_8(1);
+        final int bytes;
+        Config(int bytes) { this.bytes = bytes; }
+    }
     public enum CompressFormat { PNG, JPEG }
 
     private BufferedImage image;
     private int width;
     private int height;
-    private int[] allocation;
+    private byte[] allocation;
+    private Config config;
     private final boolean mutable;
     private boolean recycled;
     private boolean alpha = true;
@@ -40,47 +41,63 @@ public final class Bitmap {
     }
 
     private Bitmap(int width, int height, boolean mutable) {
-        int count = pixelCount(width, height);
-        this.allocation = new int[count];
+        this(width, height, mutable, Config.ARGB_8888);
+    }
+
+    private Bitmap(int width, int height, boolean mutable, Config config) {
+        int count = byteCount(width, height, config);
+        this.config = config;
+        this.alpha = config != Config.RGB_565;
+        this.allocation = new byte[count];
         this.owned = true;
         this.mutable = mutable;
         reshape(width, height);
     }
 
-    private static int pixelCount(int width, int height) {
-        if (width <= 0 || height <= 0 || (long) width * height > Integer.MAX_VALUE / 4) {
-            throw new IllegalArgumentException("invalid or unrepresentable ARGB allocation size");
+    private static int byteCount(int width, int height, Config config) {
+        Objects.requireNonNull(config, "config");
+        long pixels = (long) width * height;
+        if (width <= 0 || height <= 0 || pixels > Integer.MAX_VALUE / config.bytes) {
+            throw new IllegalArgumentException("invalid or unrepresentable bitmap allocation size");
         }
-        return width * height;
+        return (int) (pixels * config.bytes);
     }
 
     private void reshape(int width, int height) {
-        int[] masks = alpha ? new int[]{0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000}
-                : new int[]{0x00ff0000, 0x0000ff00, 0x000000ff};
-        DataBufferInt buffer = new DataBufferInt(allocation, allocation.length);
-        WritableRaster raster = Raster.createPackedRaster(buffer, width, height, width, masks, null);
-        image = new BufferedImage(new DirectColorModel(alpha ? 32 : 24, masks[0], masks[1], masks[2], alpha ? masks[3] : 0),
-                raster, false, null);
+        image = BitmapStorage.view(allocation, width, height, config, alpha);
         this.width = width;
         this.height = height;
     }
 
+    private static boolean alphaFor(Config config, boolean alpha) {
+        return config == Config.ALPHA_8 || (config == Config.ARGB_8888 && alpha);
+    }
+
     static Bitmap decoded(int width, int height, int[] pixels, boolean mutable, boolean alpha) {
-        Bitmap result = new Bitmap(width, height, mutable);
-        result.alpha = alpha;
+        return decoded(width, height, pixels, mutable, alpha, Config.ARGB_8888);
+    }
+
+    static Bitmap decoded(int width, int height, int[] pixels, boolean mutable, boolean alpha, Config config) {
+        Bitmap result = new Bitmap(width, height, mutable, config);
+        result.alpha = alphaFor(config, alpha);
         result.reshape(width, height);
-        System.arraycopy(pixels, 0, result.allocation, 0, pixels.length);
+        result.image.setRGB(0, 0, width, height, pixels, 0, width);
         return result;
     }
 
     void replaceDecoded(int width, int height, int[] pixels, boolean alpha) {
+        replaceDecoded(width, height, pixels, alpha, Config.ARGB_8888);
+    }
+
+    void replaceDecoded(int width, int height, int[] pixels, boolean alpha, Config config) {
         checkWritable();
-        int count = pixelCount(width, height);
+        int count = byteCount(width, height, config);
         requireOwned();
         if (count > allocation.length) { throw new IllegalArgumentException("bitmap allocation is too small"); }
-        this.alpha = alpha;
+        this.config = config;
+        this.alpha = alphaFor(config, alpha);
         reshape(width, height);
-        System.arraycopy(pixels, 0, allocation, 0, count);
+        image.setRGB(0, 0, width, height, pixels, 0, width);
     }
 
     /** Desktop region reuse: retain shape/capacity and preserve untouched visible colors. */
@@ -92,34 +109,51 @@ public final class Bitmap {
                 || stride < copyWidth || (long) (copyHeight - 1) * stride + copyWidth > pixels.length) {
             throw new IllegalArgumentException("invalid decoded region rows");
         }
-        if (!this.alpha && alpha) {
-            // RGB raster views need not store alpha bytes. Preserve their visible
-            // opaque colors when changing the interpretation of untouched pixels.
-            for (int i = 0; i < width * height; i++) { allocation[i] |= 0xff000000; }
-        }
-        if (this.alpha != alpha) {
-            this.alpha = alpha;
+        boolean nextAlpha = alphaFor(config, alpha);
+        if (!this.alpha && nextAlpha) { BitmapStorage.makeOpaqueRgba(allocation, width * height); }
+        if (this.alpha != nextAlpha) {
+            this.alpha = nextAlpha;
             reshape(width, height);
         }
-        for (int row = 0; row < copyHeight; row++) {
-            System.arraycopy(pixels, row * stride, allocation, row * width, copyWidth);
-        }
+        image.setRGB(0, 0, copyWidth, copyHeight, pixels, 0, stride);
     }
 
-    public Config getConfig() {
-        checkLive();
-        return owned ? Config.ARGB_8888 : null;
-    }
-
+    public Config getConfig() { checkLive(); return owned ? config : null; }
     public boolean hasAlpha() { checkLive(); return alpha; }
+    public boolean isPremultiplied() { checkLive(); return !owned && image.isAlphaPremultiplied(); }
+    public void setPremultiplied(boolean value) {
+        checkLive();
+        requireOwned();
+        if (value) { throw new UnsupportedOperationException("owned storage supports unpremultiplied pixels only"); }
+    }
+
+    public void copyPixelsToBuffer(java.nio.Buffer buffer) {
+        checkLive(); requireOwned();
+        Objects.requireNonNull(buffer, "buffer");
+        if (!(buffer instanceof java.nio.ByteBuffer)) { throw new UnsupportedOperationException("only ByteBuffer is supported"); }
+        java.nio.ByteBuffer bytes = (java.nio.ByteBuffer) buffer;
+        int count = getByteCount();
+        if (bytes.remaining() < count) { throw new RuntimeException("Buffer not large enough for pixels"); }
+        bytes.put(allocation, 0, count);
+    }
+
+    public void copyPixelsFromBuffer(java.nio.Buffer buffer) {
+        checkWritable(); requireOwned();
+        Objects.requireNonNull(buffer, "buffer");
+        if (!(buffer instanceof java.nio.ByteBuffer)) { throw new UnsupportedOperationException("only ByteBuffer is supported"); }
+        java.nio.ByteBuffer bytes = (java.nio.ByteBuffer) buffer;
+        int count = getByteCount();
+        if (bytes.remaining() < count) { throw new RuntimeException("Buffer not large enough for pixels"); }
+        bytes.get(allocation, 0, count);
+    }
 
     public static Bitmap createScaledBitmap(Bitmap source, int width, int height, boolean filter) {
         Objects.requireNonNull(source, "source");
-        pixelCount(width, height);
+        byteCount(width, height, source.owned ? source.config : Config.ARGB_8888);
         if (source.recycled) { throw new IllegalArgumentException("cannot scale a recycled bitmap"); }
         if (!source.mutable && source.width == width && source.height == height) { return source; }
-        Bitmap result = new Bitmap(width, height, true);
-        result.alpha = source.alpha;
+        Bitmap result = new Bitmap(width, height, true, source.owned ? source.config : Config.ARGB_8888);
+        result.alpha = alphaFor(result.config, source.alpha);
         result.reshape(width, height);
         java.awt.Graphics2D graphics = result.image.createGraphics();
         try {
@@ -157,8 +191,10 @@ public final class Bitmap {
         }
         int targetWidth = Math.round(bounds.width());
         int targetHeight = Math.round(bounds.height());
-        pixelCount(targetWidth, targetHeight);
-        Bitmap result = new Bitmap(targetWidth, targetHeight, true);
+        Config resultConfig = source.owned ? source.config : Config.ARGB_8888;
+        if (!rectilinear) { resultConfig = Config.ARGB_8888; }
+        byteCount(targetWidth, targetHeight, resultConfig);
+        Bitmap result = new Bitmap(targetWidth, targetHeight, true, resultConfig);
         // AOSP's source-derived createBitmap path restores the source alpha flag
         // after choosing the transformed allocation, including non-rectilinear cases.
         result.alpha = source.alpha;
@@ -188,33 +224,41 @@ public final class Bitmap {
 
     boolean hasOwnedAllocation() { return allocation != null; }
 
+    public int getRowBytes() {
+        checkLive(); requireOwned();
+        return width * config.bytes;
+    }
+
     public int getByteCount() {
         if (recycled) { return 0; }
         requireOwned();
-        return width * height * 4;
+        return width * height * config.bytes;
     }
 
     public int getAllocationByteCount() {
         if (recycled) { return 0; }
         requireOwned();
-        return allocation.length * 4;
+        return allocation.length;
     }
 
     private void requireOwned() {
         if (allocation == null) {
-            throw new UnsupportedOperationException("borrowed Java2D raster allocation is not an owned ARGB buffer");
+            throw new UnsupportedOperationException("borrowed Java2D raster allocation is not owned packed storage");
         }
     }
 
     public void reconfigure(int width, int height, Config config) {
         checkLive();
-        int count = pixelCount(width, height);
+        int count = byteCount(width, height, config);
         if (!mutable) { throw new IllegalStateException("bitmap is immutable"); }
         Objects.requireNonNull(config, "config");
         requireOwned();
         if (count > allocation.length) {
             throw new IllegalArgumentException("bitmap allocation is too small");
         }
+        this.alpha = config == Config.RGB_565 ? false : config == Config.ALPHA_8 ? true
+                : this.config == Config.RGB_565 || this.alpha;
+        this.config = config;
         reshape(width, height);
     }
 
@@ -233,7 +277,15 @@ public final class Bitmap {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("bitmap dimensions must be positive");
         }
-        return new Bitmap(width, height, true);
+        return new Bitmap(width, height, true, config);
+    }
+
+    public static Bitmap createBitmap(int[] colors, int width, int height, Config config) {
+        Objects.requireNonNull(colors, "colors");
+        if (width <= 0 || height <= 0 || (long) width * height > colors.length) {
+            throw new IllegalArgumentException("colors do not contain the bitmap");
+        }
+        return decoded(width, height, colors, false, true, config);
     }
 
     public int getWidth() { return width; }

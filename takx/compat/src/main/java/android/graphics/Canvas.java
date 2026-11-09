@@ -52,6 +52,9 @@ public final class Canvas {
 
     public void drawBitmap(Bitmap bitmap, Rect source, RectF destination, Paint paint) {
         BufferedImage image = Objects.requireNonNull(bitmap, "bitmap").getAwtBufferedImageImplementation();
+        if (bitmap.getConfig() == Bitmap.Config.ALPHA_8 && paint != null && (paint.getColor() & 0x00ffffff) != 0) {
+            throw new UnsupportedOperationException("ALPHA_8 source paint tint is outside this drawing slice");
+        }
         Objects.requireNonNull(destination, "destination");
         finite(destination.left, destination.top, destination.right, destination.bottom);
         Rect src = source == null ? new Rect(0, 0, image.getWidth(), image.getHeight()) : source;

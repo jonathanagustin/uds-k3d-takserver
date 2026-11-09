@@ -43,12 +43,12 @@ unlicensed AndroidPort implementation or binary was copied.
   the requested offset and length and rejects invalid ranges before decoding.
 
 The only declared configuration is `ARGB_8888`. Options expose
-`inPreferredConfig`, `inMutable`, `inJustDecodeBounds`, `outWidth` and
+`inPreferredConfig`, `inMutable`, `inBitmap`, `inJustDecodeBounds`, `outWidth` and
 `outHeight`; null uses the same default. The three-argument stream
 method accepts a null padding argument (typed `Object`) as used by the pinned
 portable factory; non-null padding is explicitly rejected. It is not a binary
 replacement for Android's `Rect`-typed method. Scaling, region decoding,
-allocation reuse (`inBitmap`), buffer copying, compression, canvas operations, native bitmap handles and other
+buffer copying, compression, canvas operations, native bitmap handles and other
 Android APIs are outside this slice. Fatal JVM resource errors are not converted
 to a successful or fabricated image. Untrusted-image memory budgets are not
 implemented here.
@@ -109,14 +109,73 @@ and [BitmapFactory](https://github.com/aosp-mirror/platform_frameworks_base/blob
 These are behavioral references, not executable desktop oracles: their native
 Android decoder cannot run in this JDK harness. No AOSP implementation is copied.
 The tests exercise real PNG data and the unchanged official marshal chain.
-The 77 checks include the previous 51 contracts plus header-only PNG inspection, lifecycle, borrowed-image
+The bitmap checks include the previous 51 contracts plus header-only PNG inspection, lifecycle, borrowed-image
 survival, independent decodes, immutable writes, bounds reset and byte ranges.
 
 The full-engine diagnostics identify consumers of these APIs, including map
 texture cleanup and raster metadata inspection. The unchanged `TerrainRGB`
-class additionally needs `inBitmap` allocation reuse and native elevation/geo
-support. This slice does not enable that class, add placeholder dependencies,
+class additionally needs the complete elevation/geo dependency closure and
+native support. This slice does not enable that class, add placeholder dependencies,
 or establish full-engine, client, JNI or rendering acceptance. The mutable
 image exposed through the existing reflective marshal remains an explicit
 borrowed backing view; immutability governs Bitmap writes, not code holding
 that external Java2D reference.
+
+
+## Owned allocation reuse
+
+Images created by this adapter or decoded into it own a packed, straight-alpha
+ARGB `int[]` allocation. `reconfigure` changes the logical dimensions by making
+a new Java2D raster view over that same array. It does not allocate replacement
+pixel storage or clear existing pixels. `getByteCount` reports the current
+packed shape; `getAllocationByteCount` reports the original capacity. Positive
+dimensions, a mutable live bitmap, and sufficient capacity are required.
+Sizes whose byte count cannot fit the Java `int` API are rejected before
+allocation. Capacity and argument failures preserve the existing shape/view.
+Both byte counts return zero after recycling, as in the referenced AOSP code.
+
+`Options.inBitmap` reuses a mutable owned allocation when the decoded shape fits,
+returns the exact same Bitmap object, and leaves it mutable independently of
+`inMutable`. ImageIO may still allocate temporary decoding pixels; this is reuse
+of the destination allocation, not an allocation-free image decoder. Decode
+failure or incompatible byte-array/stream reuse raises `IllegalArgumentException`.
+The AOSP file wrapper instead converts an incompatible decode into null; recycled
+input validation occurs before that wrapper catches decode errors. A null stream
+returns null before reuse validation. In the referenced AOSP Java wrapper,
+bounds-only decoding together with non-null `inBitmap` also raises after setting
+the output bounds; these semantics are covered explicitly.
+
+Borrowed Java2D images remain a separate storage category. The original image,
+including its color model, premultiplication, stride and subimage offset, is
+retained. Reconfiguration and byte-count queries on a live borrowed raster
+raise `UnsupportedOperationException`; decoding into one raises
+`IllegalArgumentException`. This explicit adapter limit avoids inventing an
+ARGB allocation capacity for indexed/custom/external storage or silently
+converting/detaching it. The AOSP capacity promise is implemented for owned
+packed ARGB images, not all arbitrary Java2D layouts.
+
+Existing Java2D views keep their previous dimensions and continue sharing the
+owned allocation after reconfiguration. A newly marshaled view reflects the
+current dimensions. Callers must stop using old views before reconfiguration;
+this corresponds to AOSP's warning about reconfiguring images still in use.
+Recycling drops the wrapper's references without destroying separately held
+views. The adapter's raster storage is an implementation detail, not a claim
+about Android native memory order or a raw-buffer API.
+
+The 148-check harness compiles the unchanged official `ResourcePool` used by
+TerrainRGB and the real marshal chain. It exercises pooled return identity,
+repeated real PNG decoding, equal-capacity aspect-ratio changes, recovered
+capacity after shrink, allocation-array identity, retained storage, invalid
+reuse without mutation, immutable/recycled rules, and borrowed RGB/indexed/
+premultiplied/subimage ownership. This tests the pool and graphics contracts;
+it does not compile or run the complete TerrainRGB/elevation/native dependency
+closure. The same AOSP references above define the reconfiguration, byte-count,
+and reuse contracts; no AOSP implementation is copied.
+
+The pinned engine consumers motivating reuse are `TerrainRGB.sample`,
+`AbstractTilePyramidTileReader` and `SQLiteSingleTileReader.decodeTileBitmap`.
+They retrieve candidates from a pool, request mutable decoding, and compare
+returned object identity before recycling or returning an unused candidate.
+`SQLiteSingleTileReader` also retries after an incompatible-reuse exception.
+Only the actual ResourcePool and graphics/marshal chain run in this harness;
+those complete tile-reader classes retain other engine/database/native gaps.

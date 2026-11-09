@@ -1,0 +1,7 @@
+{
+  "url": "https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/util/LruCache.java?format=TEXT",
+  "revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "sha256": "a967489ecde0bdab05af1d2e1b55258f8e6762065cd48200a45f5733d2514995",
+  "license": "Apache-2.0",
+  "adaptation": "Remove Android UnsupportedAppUsage import/annotation and replace map.eldest() with an empty-safe entrySet iterator equivalent under the original monitor; preserve cache logic."
+}

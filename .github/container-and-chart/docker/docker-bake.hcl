@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # One builder stage, then the six runtime targets together.
@@ -6,7 +6,7 @@
 # UPSTREAM_TREE, and INPUTS.
 
 variable "REPO" {
-  default = "ghcr.io/jonathanagustin/uds-k3d-takserver"
+  default = "ghcr.io/jonathanagustin/uds-takserver"
 }
 
 variable "TAG" {
@@ -71,7 +71,7 @@ target "_image" {
     UPSTREAM_TREE = UPSTREAM_TREE
   }
   labels = {
-    "dev.uds-k3d-takserver.inputs" = INPUTS
+    "dev.uds-takserver.inputs" = INPUTS
   }
   platforms = platform_list(PLATFORMS)
 }

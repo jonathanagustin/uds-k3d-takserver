@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Prints the SQL held in a dump Secret (tak-db-dump or cloudtak-db-dump).

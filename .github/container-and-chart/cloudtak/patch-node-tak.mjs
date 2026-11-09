@@ -1,4 +1,4 @@
-// Copyright 2026 uds-k3d-takserver authors
+// Copyright 2026 uds-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
 // node-tak 12.31.0 and 12.31.1 destroy the TLS socket in the 'end' handler.

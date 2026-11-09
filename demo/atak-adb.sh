@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # adb on the ATAK test device for the demo walkthroughs, from a short-lived
@@ -24,7 +24,7 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-image="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev}"
+image="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev}"
 device="${ATAK_ADB:-atak-device-adb.atak.svc.cluster.local:5555}"
 pod=atak-demo-adb
 k() { uds zarf tools kubectl "$@"; }

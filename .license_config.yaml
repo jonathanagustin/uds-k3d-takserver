@@ -1,5 +1,5 @@
 license: GPL-3.0-only
-copyright: uds-k3d-takserver authors
+copyright: uds-takserver authors
 ignore:
   - "tests/pnpm-lock.yaml"
   - "tests/.playwright/**"

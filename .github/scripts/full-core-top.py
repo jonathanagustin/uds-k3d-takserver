@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Readiness and kubectl top checks for the full-core job.

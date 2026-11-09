@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: ATAK
@@ -16,16 +16,14 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # A newer pull request push or main push cancels the older run of this
-  # workflow on that ref. Schedule and workflow_dispatch each get their own
-  # run id: they are not cancelled, and they do not wait behind a push.
-  # Release and Demo Video are not in this group. A finished run is kept.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
-
 jobs:
   apk:
+    # Share the heavy APK producer with ATAK e2e. Recheck the immutable image
+    # and stage cache after admission, so another workflow's work is reused.
+    concurrency:
+      group: atak-apk-producer
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,7 +56,7 @@ jobs:
       # When that tag exists, the APK is copied out of it instead of rebuilt.
       - name: Build the APK
         env:
-          CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+          CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
         run: |
           set -euo pipefail
           ref="$(./atak/ci/device-images.sh keys | sed -n 's/^APK_IMAGE_KEYED=//p')"

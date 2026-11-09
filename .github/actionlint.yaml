@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # GitHub added these permission scopes before actionlint knew about them.
@@ -19,6 +19,12 @@ paths:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
   .github/workflows/postgis-image.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/atak.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/atak-e2e.yaml:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
 

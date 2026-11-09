@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Chapter 3: secure by default. Kept short: the mesh, the generated network
@@ -53,7 +53,7 @@ Screenshot "demo/out/shots/release-signature-verified.png"
 Sleep 1s
 # caption: Build provenance for the same package, attested with the release workflow's identity
 # fast
-Type@40ms "gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:{{VERSION}}-upstream --owner jonathanagustin"
+Type@40ms "gh attestation verify {{PACKAGE_REF}} --owner jonathanagustin"
 Sleep 400ms
 Enter
 Wait@120s /takserver \$\s*$/

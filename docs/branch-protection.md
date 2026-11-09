@@ -49,7 +49,7 @@ Apply with an account or token that can administer this repository:
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   --input ruleset-25580922-solo.json
 ```
 
@@ -78,7 +78,7 @@ GitHub's rule reference: [Available rules for rulesets](https://docs.github.com/
 
 ## What is on main today
 
-Read on 2026-11-06 from `GET /repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922`.
+Read on 2026-11-06 from `GET /repos/jonathanagustin/uds-takserver/rulesets/25580922`.
 
 The ruleset is named `main`, id `25580922`, enforcement `active`, target `branch`, and it includes `~DEFAULT_BRANCH`. One ruleset is configured on the repository.
 
@@ -130,7 +130,7 @@ Use `gh auth login` as the repository owner, or a token that can administer this
 gh api \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   > ruleset-25580922-backup.json
 ```
 
@@ -141,7 +141,7 @@ curl -fsSL \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GH_TOKEN" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  https://api.github.com/repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  https://api.github.com/repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   -o ruleset-25580922-backup.json
 ```
 
@@ -149,7 +149,7 @@ Read `bypass_actors` in that file. The admin entry should have `"bypass_mode": "
 
 ## Apply
 
-`PUT /repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922` replaces this ruleset. It does not create another one. Write this to `ruleset-25580922-strict.json`.
+`PUT /repos/jonathanagustin/uds-takserver/rulesets/25580922` replaces this ruleset. It does not create another one. Write this to `ruleset-25580922-strict.json`.
 
 ```json
 {
@@ -200,7 +200,7 @@ Read `bypass_actors` in that file. The admin entry should have `"bypass_mode": "
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   --input ruleset-25580922-strict.json
 ```
 
@@ -209,7 +209,7 @@ curl -fsSL -X PUT \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GH_TOKEN" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  https://api.github.com/repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  https://api.github.com/repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   --data-binary @ruleset-25580922-strict.json
 ```
 
@@ -230,7 +230,7 @@ jq 'del(._links, .id, .node_id, .source, .source_type, .created_at, .updated_at,
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  repos/jonathanagustin/uds-k3d-takserver/rulesets/25580922 \
+  repos/jonathanagustin/uds-takserver/rulesets/25580922 \
   --input ruleset-25580922-restore.json
 ```
 

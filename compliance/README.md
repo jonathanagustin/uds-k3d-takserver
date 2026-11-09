@@ -7,7 +7,7 @@ the narratives describe package behavior and the gaps that belong to Core,
 upstream applications, the deployment, or organizational policy. Linked tests
 are procedures to rerun, not claims that a new live assessment passed.
 
-Issue [#37](https://github.com/jonathanagustin/uds-k3d-takserver/issues/37) was
+Issue [#37](https://github.com/jonathanagustin/uds-takserver/issues/37) was
 explicitly deferred until Lula releases again or compliance becomes a priority.
 The latest npm version is still 0.9.5, with registry activity last modified on
 2026-03-12. The foundational mappings are separate from activating the deferred automated crawler.

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 #
@@ -214,7 +214,7 @@ RUN chmod 0666 /opt/tak/UserAuthenticationFile.xml
 
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 
 # The plugins entrypoint expands PLUGIN_MANAGER_MAX_HEAP into -Xmx. An empty
 # value is -Xmxm and the JVM exits.
@@ -251,7 +251,7 @@ RUN curl -fsSL -o /opt/tak/metrics/jmx_prometheus_javaagent.jar \
 FROM cluster-base AS takserver-config
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
       org.opencontainers.image.version="${UPSTREAM_REF}" \
@@ -272,7 +272,7 @@ CMD ["sh", "/takserver-config-cluster.sh"]
 FROM cluster-base AS takserver-messaging
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
       org.opencontainers.image.version="${UPSTREAM_REF}" \
@@ -282,7 +282,7 @@ CMD ["sh", "/takserver-messaging-cluster.sh"]
 FROM cluster-base AS takserver-api
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
       org.opencontainers.image.version="${UPSTREAM_REF}" \
@@ -292,7 +292,7 @@ CMD ["sh", "/takserver-api-cluster.sh"]
 FROM cluster-base AS takserver-plugins
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
       org.opencontainers.image.version="${UPSTREAM_REF}" \
@@ -317,7 +317,7 @@ COPY --from=builder \
 
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.revision="${UPSTREAM_SHA}" \
@@ -342,7 +342,7 @@ ARG IGNITE_URL=https://archive.apache.org/dist/ignite/2.17.0/apache-ignite-2.17.
 ARG IGNITE_SHA512=cd14c9344cc91e9d328a4c4478d9686edc9e1065a0b558e345389a6241afcdfc29f927644cecaf1243a0db7e02113e4dd81ba2df44b65c75c8ec08cab3d405a1
 ARG UPSTREAM_REF=5.7-RELEASE-14
 ARG UPSTREAM_SHA
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 
 WORKDIR /opt
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Record each terminal chapter with VHS against the running cluster.
@@ -24,7 +24,9 @@ mkdir -p "${release_dir}" demo/out/shots
 # The release workflow's keyless signing identity, as in demo/shell.sh.
 RELEASE_WORKFLOW='^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$'
 RELEASE_ISSUER=https://token.actions.githubusercontent.com
-uds zarf package pull "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${DEMO_VERSION}-upstream" \
+export DEMO_PACKAGE_REF
+DEMO_PACKAGE_REF="$(python3 .github/scripts/published_package_ref.py "${DEMO_VERSION}")"
+uds zarf package pull "${DEMO_PACKAGE_REF}" \
   --architecture amd64 --certificate-identity-regexp "${RELEASE_WORKFLOW}" --certificate-oidc-issuer "${RELEASE_ISSUER}" \
   -o "${release_dir}" --no-progress
 export DEMO_RELEASE_PACKAGE="${release_dir}/zarf-package-takserver-amd64-${DEMO_VERSION}-upstream.tar.zst"

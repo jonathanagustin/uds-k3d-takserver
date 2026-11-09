@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="5.7-RELEASE-14"
-          repo="ghcr.io/jonathanagustin/uds-k3d-takserver"
+          repo="ghcr.io/jonathanagustin/uds-takserver"
           for name in takserver-api takserver-messaging takserver-config takserver-plugins takserver-database-setup takserver-ignite; do
             # --recursive also signs each per-architecture manifest in the index.
             cosign sign --yes --recursive "${repo}/${name}:${tag}"

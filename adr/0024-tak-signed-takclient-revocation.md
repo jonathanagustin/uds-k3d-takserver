@@ -4,11 +4,11 @@ Date: 2026-11-05
 
 ## Status
 
-Accepted. Confirmed on a live cluster in [issue #288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) ([run 42072025085](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42072025085)). This record supersedes the **restart** part of [ADR 22](0022-takclient-operator.md): TakClient certificates will no longer depend on a UDS Core pod reload to take effect after revoke. The rest of ADR 22 (the resource, the Secret shape, RBAC, and the data package) stays.
+Accepted. Confirmed on a live cluster in [issue #288](https://github.com/jonathanagustin/uds-takserver/issues/288) ([run 42072025085](https://github.com/jonathanagustin/uds-takserver/actions/runs/42072025085)). This record supersedes the **restart** part of [ADR 22](0022-takclient-operator.md): TakClient certificates will no longer depend on a UDS Core pod reload to take effect after revoke. The rest of ADR 22 (the resource, the Secret shape, RBAC, and the data package) stays.
 
 ## Context
 
-[ADR 22](0022-takclient-operator.md) has the watcher sign each `TakClient` certificate with the TAK CA key, register a file user, and on delete write the serial into Secret `takserver-crl` with the UDS Core `uds.dev/pod-reload` label. TAK reads that CRL only when a TLS context is built, so UDS Core restarts the API and messaging pods. That restart drops every connected client for a few minutes. Between the delete and the restart the revoked certificate can still connect, with no groups. Issue [#288](https://github.com/jonathanagustin/uds-k3d-takserver/issues/288) asked for revocation without that restart.
+[ADR 22](0022-takclient-operator.md) has the watcher sign each `TakClient` certificate with the TAK CA key, register a file user, and on delete write the serial into Secret `takserver-crl` with the UDS Core `uds.dev/pod-reload` label. TAK reads that CRL only when a TLS context is built, so UDS Core restarts the API and messaging pods. That restart drops every connected client for a few minutes. Between the delete and the restart the revoked certificate can still connect, with no groups. Issue [#288](https://github.com/jonathanagustin/uds-takserver/issues/288) asked for revocation without that restart.
 
 TAK Server 5.7 (`5.7-RELEASE-14`) already has another path, from its source:
 
@@ -51,7 +51,7 @@ Have TAK sign TakClient certificates, and revoke them through TAK's certificate 
 
 ### Confirmed on a cluster
 
-Run [42072025085](https://github.com/jonathanagustin/uds-k3d-takserver/actions/runs/42072025085) on free `ubuntu-latest`, against this repository's slim local install:
+Run [42072025085](https://github.com/jonathanagustin/uds-takserver/actions/runs/42072025085) on free `ubuntu-latest`, against this repository's slim local install:
 
 | Check | Result |
 | --- | --- |
@@ -123,7 +123,7 @@ per-client certificate-table revocation; it is not removed by this change.
 
 ## Security correction: enrollment capability is not device material
 
-[Issue 345](https://github.com/jonathanagustin/uds-k3d-takserver/issues/345) records
+[Issue 345](https://github.com/jonathanagustin/uds-takserver/issues/345) records
 a flaw in the original storage decision. A device Secret reader given the
 reusable Basic password could enroll extra certificate-table rows that a revoke
 of the operator's fingerprint would miss. The released locally signed path did
@@ -149,4 +149,4 @@ namespace backup.
 Enrollment validates both certificate date bounds against one fresh clock sample
 after the response arrives. Reusing reconcile start time could reject a newly
 valid certificate or accept one that expired in flight; advancing-clock tests
-cover both cases ([issue 350](https://github.com/jonathanagustin/uds-k3d-takserver/issues/350)).
+cover both cases ([issue 350](https://github.com/jonathanagustin/uds-takserver/issues/350)).

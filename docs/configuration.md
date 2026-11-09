@@ -17,7 +17,7 @@ The flavor is `upstream`. `uds run create-dev-package` passes `--flavor upstream
 | Variable | Default | Used for |
 | --- | --- | --- |
 | `DOMAIN` | `uds.dev` | Gateway hosts, such as `takserver.uds.dev` |
-| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
+| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | The six images under `ghcr.io/jonathanagustin/uds-takserver` |
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts resolve to the Istio gateways inside the cluster. See [Networking](networking.md#in-cluster-dns) |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that resolve to the passthrough gateway inside the cluster |
 | `PLUGINS_MEMORY_REQUEST` | `320Mi` | Memory request for the TAK plugins container. See [Profiles](profiles.md#plugins-memory) |
@@ -53,7 +53,7 @@ global:
 
 `tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable. It checks that the plugins memory reaches both the admission and watcher env. It also checks that both database volumes have no StorageClass by default and get the one their variable names, and that `health.enabled=false` removes the `tak-health` pod, expose entry, and certificate.
 
-Postgres is `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
+Postgres is `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [ADR 18](../adr/0018-upgrade-postgres-in-place.md).
 
 NATS is still upstream chart 1.0.1. The overlay sets the server to `nats:2.15.1-alpine` and the config reloader to `natsio/nats-server-config-reloader:0.25.0`, and `zarf.yaml` packages those tags. The rendered config is one replica, clustering off, JetStream off, client port 4222, and monitor port 8222. NATS 2.15.1 accepts that file. There is no JetStream store, so an upgrade replaces the pod and TAK's client reconnects to `nats://takserver-nats:4222`. Rolling back is the previous tags, `2.9.21-alpine` and `0.11.0`. This repository does not build those images.
 
@@ -126,7 +126,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 
 | Value | Developer example | This overlay | Why |
 | --- | --- | --- | --- |
-| `takserver.{api,messaging,config,plugins}.image` and `takserverDatabaseSetup.image` | `docker-devtest-local.artifacts.tak.gov/...` | `ghcr.io/jonathanagustin/uds-k3d-takserver/...` and `###ZARF_VAR_TAK_IMAGE_TAG###` | The example registry is private. These are the images built from the same tag. |
+| `takserver.{api,messaging,config,plugins}.image` and `takserverDatabaseSetup.image` | `docker-devtest-local.artifacts.tak.gov/...` | `ghcr.io/jonathanagustin/uds-takserver/...` and `###ZARF_VAR_TAK_IMAGE_TAG###` | The example registry is private. These are the images built from the same tag. |
 | `ignite.image` | tag `2.17.0` on the chart's tak.gov repository | this repo's `takserver-ignite` tag | Same Ignite version, built here. |
 | `takserver.api.resources` and the messaging limits | request and limit 1 CPU and 8Gi | `values/common-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; its own limit is ignored. `bundle/test-values.yaml`: API request 100m and 1Gi, limit 1 CPU and 1536Mi. Messaging request 50m and 1Gi; the template ignores its 500m CPU limit and copies the API limit | Steady working set on run 40174810574 was 911Mi (api) and 888Mi (messaging) at `-Xmx512m`. The messaging template copies the API memory limit. 1536Mi holds the 512m heap, metaspace, the 128MB off-heap cap, and UserManager. A 1Gi cgroup OOM-killed that pod. |
 | `takserver.config.resources` | unset | common and test values: request 50m and 1Gi, limit 1 CPU and 1280Mi | Steady working set on that run was 750Mi at `-Xmx512m`. Config does not run UserManager. 1280Mi is that set plus about half again. |
@@ -137,7 +137,7 @@ The image also creates `/work` (Tomcat's work directory under the `/` base) and 
 | `nats.replicaCount`, `nats.cluster`, `nats.config.cluster`, `nats.natsBox.enabled` | jetstream on, cluster on, 3 replicas, toolbox default on | 1 replica, clustering off, toolbox off | The toolbox crash-looped and blocked Helm. TAK does not use it. |
 | `nats.container.merge.resources` and `nats.reloader.merge.resources` | unset | NATS: request 10m and 32Mi, limit 250m and 128Mi. Reloader: request 5m and 16Mi, limit 50m and 32Mi | The subchart sets none. Idle use at the end of the install test (`tests/usage.sh`) was at most 1m and 9Mi for NATS and 1m and 5Mi for the reloader. The limits leave room for message traffic the tests do not load. |
 | `global.postgresql` and `postgresql.auth` | host, port, username, password, database | same, plus `postgresPassword` and the Bitnami username keys | Bitnami PostgreSQL 12.1.6 reads `auth.postgresPassword`. The mounted CoreConfig already points at `takserver-postgresql`. |
-| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` | PostgreSQL 18 and PostGIS 3.6.4, built here for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 volume. The upstream image is amd64 only. |
+| `postgresql.image` | `docker.io/postgis/postgis:15-3.4` | `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6` | PostgreSQL 18 and PostGIS 3.6.4, built here for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 volume. The upstream image is amd64 only. |
 | `takserver.ingress.enabled` | false | false | Unchanged. The UDS Package exposes the same ports on the passthrough gateway. |
 | `imagePullSecret`, `certConfigMapName`, `coreConfigMapName` | `reg-cred`, `cert-migration`, `core-config` | same | Unchanged. |
 | `takIgniteConfigMapName` | unset in the example, required by the template | `tak-ignite-config` | The chart mounts `TAKIgniteConfig.xml` from this name. |

@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/zarf-dev/zarf/main/zarf.schema.json
@@ -81,8 +81,8 @@ components:
         files:
           - deploy/device.yaml
     images:
-      - ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:###ZARF_PKG_TMPL_ATAK_TAG###
-      - ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:###ZARF_PKG_TMPL_ATAK_TAG###
+      - ghcr.io/jonathanagustin/uds-takserver/atak-civ-vm:###ZARF_PKG_TMPL_ATAK_TAG###
+      - ghcr.io/jonathanagustin/uds-takserver/atak-viewer:###ZARF_PKG_TMPL_ATAK_TAG###
     actions:
       onDeploy:
         after:

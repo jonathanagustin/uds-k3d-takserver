@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Build the six TAK Server images.
@@ -11,7 +11,7 @@
 #
 #   PLATFORMS     default: the host architecture. Example: linux/amd64,linux/arm64
 #   PUSH_IMAGES   true pushes the tags. Multi-arch pushes from buildx.
-#   IMAGE_REPO    default: ghcr.io/jonathanagustin/uds-k3d-takserver
+#   IMAGE_REPO    default: ghcr.io/jonathanagustin/uds-takserver
 #   IMAGE_TAG     default: the contents of version.txt
 #   GRADLE_SEED   directory of a previous Gradle home. CI restores one.
 #   CACHE_SCOPE   GitHub Actions BuildKit cache scope. default: takserver.
@@ -23,7 +23,7 @@
 #
 #   build.sh --tag   build nothing. Print <version>-<key> for this commit.
 #
-# The images carry the label dev.uds-k3d-takserver.inputs: the pinned
+# The images carry the label dev.uds-takserver.inputs: the pinned
 # upstream/takserver commit plus the git tree of this directory. <key> is the
 # first 12 hex digits of its sha256. CI pushes <version>-<key>-<arch> and the
 # manifest job writes <version>-<key>, so those tags only ever hold images
@@ -46,7 +46,7 @@ if [[ "${1:-}" = "--tag" ]]; then
 fi
 
 runtime="${CONTAINER_RUNTIME:-docker}"
-repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
+repo="${IMAGE_REPO:-ghcr.io/jonathanagustin/uds-takserver}"
 tag="${IMAGE_TAG:-${version}}"
 push="${PUSH_IMAGES:-false}"
 cache_scope="${CACHE_SCOPE:-takserver}"
@@ -230,7 +230,7 @@ for target in ${targets}; do
     --build-context "takserver-src=${src}" \
     --build-arg "UPSTREAM_SHA=${upstream_sha}" \
     --build-arg "UPSTREAM_TREE=${upstream_tree}" \
-    --label "dev.uds-k3d-takserver.inputs=${inputs}" \
+    --label "dev.uds-takserver.inputs=${inputs}" \
     "${here}"
 
   if [[ "${runtime}" = "docker" ]] && [[ "${GITHUB_ACTIONS:-}" = "true" ]]; then

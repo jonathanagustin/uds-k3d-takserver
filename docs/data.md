@@ -16,7 +16,7 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 | User | `postgres` |
 | Password | the upstream example value `postgres` |
 | JDBC | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
-| Image | `ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6` (amd64 and arm64) |
+| Image | `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6` (amd64 and arm64) |
 | Data directory | `/bitnami/postgresql/data` |
 
 The chart also renders ConfigMap `postgres-configuration`. `pg_hba.conf` and `postgres.conf` are empty because the chart has no `extras/` files for them. Bitnami PostgreSQL 12.1.6 does not read `postgresql.configurationConfigMap`, so that object is not mounted. Postgres uses the chart defaults.

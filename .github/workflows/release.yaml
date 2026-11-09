@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 name: Release
@@ -123,8 +123,8 @@ jobs:
           package="zarf-package-takserver-${ARCH}-${RELEASE_VERSION}-upstream.tar.zst"
           test -s "${package}"
           uds zarf package publish "${package}" \
-            oci://ghcr.io/jonathanagustin/uds-k3d-takserver --features values=true
-          reference="oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream"
+            oci://ghcr.io/jonathanagustin/uds-takserver --features values=true
+          reference="oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${RELEASE_VERSION}-upstream"
           # inspect highlights the YAML with ANSI escape codes even when piped,
           # and yq rejects those control characters, so strip them first.
           uds zarf package inspect definition "${reference}" --architecture "${ARCH}" \
@@ -137,14 +137,14 @@ jobs:
             --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           echo "Published upstream ${ARCH} Zarf package (includes SBOM):" >> "${GITHUB_STEP_SUMMARY}"
-          echo "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"
+          echo "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${RELEASE_VERSION}-upstream" >> "${GITHUB_STEP_SUMMARY}"
 
   # Build provenance for the published package index, signed through
   # Sigstore with this workflow's identity. The attestation is stored with
   # the package in GHCR and in the repository's attestations, and the bundle
   # is added to the GitHub release. It runs after both architectures are in
   # the index, so a failure here never blocks the publish. Verify with:
-  #   gh attestation verify oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream \
+  #   gh attestation verify oci://ghcr.io/jonathanagustin/uds-takserver/takserver:<version>-upstream \
   #     --owner jonathanagustin
   # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
   provenance:
@@ -180,7 +180,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          name="ghcr.io/jonathanagustin/uds-k3d-takserver/takserver"
+          name="ghcr.io/jonathanagustin/uds-takserver/takserver"
           digest="$(uds zarf tools registry digest "${name}:${version}-upstream")"
           [[ "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
           {

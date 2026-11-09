@@ -42,12 +42,12 @@ The builder stays on Java 17. TAK Server 5.7-RELEASE-14, commit `5187abd46d827d3
 
 The six tags match `zarf.yaml`:
 
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:5.7-RELEASE-14`
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging:5.7-RELEASE-14`
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api:5.7-RELEASE-14`
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins:5.7-RELEASE-14`
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14`
-- `ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-config:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-messaging:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-api:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-plugins:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-database-setup:5.7-RELEASE-14`
+- `ghcr.io/jonathanagustin/uds-takserver/takserver-ignite:5.7-RELEASE-14`
 
 Pull requests scan the loaded images with Grype and Trivy. A push of these files also writes SPDX SBOMs and can push the tags. A vulnerability report does not fail the workflow.
 
@@ -69,7 +69,7 @@ The images are published for `linux/amd64` and `linux/arm64`. The container work
 
 ### Tags keyed by the build inputs
 
-- The inputs are the pinned `upstream/takserver` commit plus the git tree of `.github/container-and-chart/docker`, recorded in the `dev.uds-k3d-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256. `build.sh --tag` prints `5.7-RELEASE-14-<key>` for the current commit.
+- The inputs are the pinned `upstream/takserver` commit plus the git tree of `.github/container-and-chart/docker`, recorded in the `dev.uds-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256. `build.sh --tag` prints `5.7-RELEASE-14-<key>` for the current commit.
 - The container workflow builds only when `5.7-RELEASE-14-<key>` is not already published for both architectures. A pull request that does not change those inputs reuses the images built for them before.
 - `5.7-RELEASE-14` and `5.7-RELEASE-14-<arch>`, the tags in the committed files and in released packages, are written only from `main`, from the keyed images.
 - `wait-for-tak-images.sh` waits for the keyed index, and `.github/scripts/pin-image-tags.sh` points `zarf.yaml`, `tasks.yaml` and `bundle/uds-config.yaml` at it before CI creates a package. A keyed tag only ever holds one set of inputs, so a pull request deploys its own TAK images even when another branch builds different ones at the same time.
@@ -77,7 +77,7 @@ The images are published for `linux/amd64` and `linux/arm64`. The container work
 To check a published tag:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api:5.7-RELEASE-14
+docker buildx imagetools inspect ghcr.io/jonathanagustin/uds-takserver/takserver-api:5.7-RELEASE-14
 ```
 
 A local `build.sh` run builds the host architecture. `PLATFORMS=linux/amd64,linux/arm64` builds both with Buildx, which emulates the other architecture under QEMU and takes much longer. See [ADR 10](../adr/0010-amd64-and-arm64.md).

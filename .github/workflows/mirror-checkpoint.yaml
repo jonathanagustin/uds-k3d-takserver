@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Copies the UDS Core slim checkpoints that CI deploys
@@ -47,7 +47,7 @@ jobs:
       packages: write
     env:
       UPSTREAM: ghcr.io/defenseunicorns/dev/uds/checkpoints/k3d-core-slim-dev
-      MIRROR: ghcr.io/jonathanagustin/uds-k3d-takserver/checkpoints/k3d-core-slim-dev
+      MIRROR: ghcr.io/jonathanagustin/uds-takserver/checkpoints/k3d-core-slim-dev
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

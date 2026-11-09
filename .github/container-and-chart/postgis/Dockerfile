@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.28
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # PostgreSQL 18 with PostGIS 3.6.4 for amd64 and arm64.
@@ -50,12 +50,12 @@ FROM ${POSTGRES_IMAGE}
 
 ARG TARGETARCH
 ARG INPUTS=""
-ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-k3d-takserver
+ARG SOURCE_REPO=https://github.com/jonathanagustin/uds-takserver
 
 LABEL org.opencontainers.image.source="${SOURCE_REPO}" \
       org.opencontainers.image.title="postgis" \
       org.opencontainers.image.description="PostgreSQL 18 with PostGIS 3.6.4" \
-      dev.uds-k3d-takserver.inputs="${INPUTS}"
+      dev.uds-takserver.inputs="${INPUTS}"
 
 # postgresql-15 is the server pg_upgrade uses for the old data directory. It is
 # not checksum-pinned: any 15.x newer than the cluster can read it, and the

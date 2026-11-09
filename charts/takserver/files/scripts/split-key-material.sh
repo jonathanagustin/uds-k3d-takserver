@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # @lulaStart 614ae906-f071-5d33-af56-6b7157bdc9a2

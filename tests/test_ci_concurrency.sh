@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 # shellcheck disable=SC2016 # The comparisons are literal GitHub expressions.
 
@@ -90,7 +90,7 @@ require_expr() {
   fi
 }
 
-for name in test package container cloudtak-image postgis-image atak atak-vm atak-e2e; do
+for name in test package container cloudtak-image postgis-image atak-vm atak-e2e; do
   require_expr "${wf}/${name}.yaml" "${gate_group}" "${name} group"
   require_expr "${wf}/${name}.yaml" "${gate_cancel}" "${name} cancel"
 done

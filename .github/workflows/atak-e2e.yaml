@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # ATAK test device end to end: UDS Core slim + TAK Server (the normal test
@@ -27,16 +27,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # A newer pull request push or main push cancels the older run of this
-  # workflow on that ref. Schedule and workflow_dispatch each get their own
-  # run id: they are not cancelled, and they do not wait behind a push.
-  # Release and Demo Video are not in this group. A finished run is kept.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
-
 env:
-  CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+  CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
   # The tests use local "dev" images. They come from GHCR under a tag made of
   # the ATAK version and a hash of their inputs (atak/ci/device-images.sh);
   # the images job builds and pushes the ones that are not there yet. Only
@@ -44,15 +36,21 @@ env:
   # passes. Fork pull requests cannot push, so they build in the e2e job.
   ATAK_TAG: dev
   RELEASE_TAG: 5.5.1.10
-  VM_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-civ-vm:dev
-  VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-viewer:dev
-  DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
+  VM_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-civ-vm:dev
+  VIEWER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-viewer:dev
+  DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev
 
 jobs:
   # Runs beside the e2e job's UDS Core and TAK deploy. With every image
   # already in GHCR it finishes in under a minute.
   images:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # ATAK's standalone APK job uses this same queue. Different input sets
+    # also serialize; each admitted producer rechecks its own immutable tags.
+    concurrency:
+      group: atak-apk-producer
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -94,6 +92,11 @@ jobs:
         run: ./atak/ci/device-images.sh build
 
   e2e:
+    # Supersede only consumers. A workflow-level gate would also cancel the
+    # immutable image producer while it is warming the shared APK cache.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}-consumer
+      cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
     # Pinned like the other cluster jobs (#219). On the ubuntu-26.04 image that
     # ubuntu-latest is moving to, virt-handler exits with 'Failed to create an
     # inotify watcher: too many open files', so KubeVirt never becomes Available.
@@ -186,6 +189,23 @@ jobs:
           --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
+
+      # PR producers publish immutable keyed tags, not the main-only plain tags.
+      - name: Wait for the six TAK images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
+
+      - name: Use the selected source's keyed application images
+        run: ./.github/scripts/pin-image-tags.sh
 
       - name: Deploy UDS Core slim and TAK Server
         run: uds run actions:test-deploy --set FLAVOR=upstream --set TYPE=install --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"

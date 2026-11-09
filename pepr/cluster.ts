@@ -1,4 +1,4 @@
-// Copyright 2026 uds-k3d-takserver authors
+// Copyright 2026 uds-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
 // Live Kubernetes calls for the reconcile capabilities. The decision logic
@@ -162,6 +162,7 @@ function restartOps(hasAnnotations: boolean): JsonOp[] {
 }
 
 const live: TakClientCluster = {
+  getTakClient: (namespace, name) => read(() => K8s(TakClient).InNamespace(namespace).Get(name)) as Promise<TakClientDoc | undefined>,
   getConfigMap: (namespace, name) => read(() => K8s(kind.ConfigMap).InNamespace(namespace).Get(name)),
   deleteConfigMap: async (namespace, name) => {
     try {

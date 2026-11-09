@@ -35,7 +35,7 @@ Release Please builds the changelog and the release pull requests from the merge
 - **License headers.** New source files carry the SPDX header used across the repository:
 
   ```text
-  Copyright 2026 uds-k3d-takserver authors
+  Copyright 2026 uds-takserver authors
   SPDX-License-Identifier: GPL-3.0-only
   ```
 

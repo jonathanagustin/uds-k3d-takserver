@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Deploys the bundle on k3d, then records a short demo video: terminal
@@ -63,6 +63,7 @@ jobs:
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 240
     permissions:
+      actions: read
       attestations: read
       contents: read
       packages: read
@@ -72,27 +73,20 @@ jobs:
       # Pull request runs record the upgrade chapter too, so a change to it
       # is tested before main publishes it.
       UPGRADE: ${{ (github.event_name == 'pull_request' || inputs.upgrade) && 'true' || 'false' }}
-      CACHE: ghcr.io/jonathanagustin/uds-k3d-takserver/build-cache
+      CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
       ATAK_TAG: dev
-      DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-k3d-takserver/atak-driver:dev
+      DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Lets the demo record a branch that is not on main yet. Everything
-      # outside the demo files comes from APP_REF.
-      - name: Use the requested app ref
-        if: env.APP_REF != ''
-        run: |
-          set -euo pipefail
-          git fetch --no-tags --depth=1 origin "${APP_REF}"
-          keep=(':!demo' ':!tests/demo' ':!tests/playwright.demo.config.ts'
-            ':!tasks.yaml' ':!.gitignore' ':!.github/workflows/demo.yaml')
-          git checkout FETCH_HEAD -- . "${keep[@]}"
-          # Files added after APP_REF would mix with its tree (a template
-          # calling a helper APP_REF does not have): remove them.
-          git diff --name-only --diff-filter=A -z FETCH_HEAD HEAD -- . "${keep[@]}" | xargs -0 -r git rm -q --
-          echo "Deploying $(git rev-parse --short FETCH_HEAD) from ${APP_REF}"
+      # APP_REF moves HEAD so immutable image keys describe the selected app.
+      # Only the existing recorder/task paths are restored from this workflow.
+      - name: Select the application source
+        id: app-source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/select-demo-app-ref.sh
 
       - name: Trim the runner
         if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04'
@@ -209,6 +203,23 @@ jobs:
           --set RAPIDFORT_PASSWORD="${{ secrets.RAPIDFORT_PASSWORD }}" \
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
+
+      # PR producers publish immutable keyed tags, not the main-only plain tags.
+      - name: Wait for the six TAK images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ steps.app-source.outputs.expected-sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
+
+      - name: Use the selected source's keyed application images
+        run: ./.github/scripts/pin-image-tags.sh
 
       # The video shows the release it was recorded for: the Zarf package and
       # the bundle get the Release Please version, as release.yaml stamps
@@ -489,7 +500,7 @@ jobs:
   # It runs after publish, or alone with sign_only for the videos already
   # there. Verify with:
   #   cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
-  #     --certificate-identity https://github.com/jonathanagustin/uds-k3d-takserver/.github/workflows/demo.yaml@refs/heads/main \
+  #     --certificate-identity https://github.com/jonathanagustin/uds-takserver/.github/workflows/demo.yaml@refs/heads/main \
   #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
   sign:
     needs: [record, publish]

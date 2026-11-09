@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Resolve a published Release Please version reachable from main, never a dev tag."""
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -12,6 +13,12 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+
+
+_PACKAGE_SPEC = importlib.util.spec_from_file_location(
+    'published_package_ref', Path(__file__).resolve().parents[1] / '.github/scripts/published_package_ref.py')
+_PACKAGE_MODULE = importlib.util.module_from_spec(_PACKAGE_SPEC)
+_PACKAGE_SPEC.loader.exec_module(_PACKAGE_MODULE)
 
 
 VERSION = re.compile(r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
@@ -90,7 +97,7 @@ def select_release(items, head=None, pin=None):
         "tag": tag,
         "version": version,
         "commit": commit,
-        "package": f"oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:{version}-upstream",
+        "package": _PACKAGE_MODULE.published_package_ref(version),
     }
 
 

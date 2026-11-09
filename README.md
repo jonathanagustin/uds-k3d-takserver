@@ -141,7 +141,7 @@ To work on the repository itself, [mise](https://mise.jdx.dev/) installs every p
 
 ### Deploy a release
 
-Releases are published as `oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:<version>-upstream`, with one entry per architecture. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
+The current 0.10 release is published as `oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.10.0-upstream`, with one entry per architecture. Releases through 0.10 retain this registry namespace. The next 0.11 release will use `ghcr.io/jonathanagustin/uds-takserver`; use that namespace only after the release is published. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
 
 ```bash
 VERSION=0.10.0 # x-release-please-version
@@ -269,7 +269,7 @@ uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserv
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-In a UDS bundle, put the same check on the package entry, as `core-base` has in [bundle/uds-bundle.yaml](bundle/uds-bundle.yaml):
+For the current 0.10 release, put the same check on the package entry, as `core-base` has in [bundle/uds-bundle.yaml](bundle/uds-bundle.yaml):
 
 ```yaml title="uds-bundle.yaml"
   - name: takserver
@@ -293,10 +293,10 @@ Each release also has the same provenance as a Sigstore bundle, `takserver-<vers
 The TAK, CloudTAK, and PostGIS images have signed SLSA v1 build provenance too. Each architecture's image is signed by the workflow run that built it. A multi-arch tag is signed by the run that wrote the index. Images built before that was added, including the ones in 0.5.4 and earlier, have none. To check an image tag listed in `zarf.yaml`:
 
 ```bash
-gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/<image>:<tag>" --owner jonathanagustin
+gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/<image>:<tag>" --owner jonathanagustin
 ```
 
-The demo videos on the `demo` release are signed the same way, by `.github/workflows/demo.yaml` on `main`. Each video has a Cosign bundle, `<video>.sigstore.json`, and both have SLSA v1 provenance in `demo-videos.intoto.jsonl`:
+The existing demo videos retain their original signing identity from before the repository rename. The videos on the `demo` release are signed by `.github/workflows/demo.yaml` on `main`. Each video has a Cosign bundle, `<video>.sigstore.json`, and both have SLSA v1 provenance in `demo-videos.intoto.jsonl`:
 
 ```bash
 cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
@@ -391,7 +391,7 @@ Release Please opens a release pull request from the Conventional Commit titles.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DOMAIN` | `uds.dev` | Domain suffix for gateway hosts |
-| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-k3d-takserver` |
+| `TAK_IMAGE_TAG` | `5.7-RELEASE-14` | Tag of the TAK images under `ghcr.io/jonathanagustin/uds-takserver` |
 | `IN_CLUSTER_DNS` | `true` | On uds-k3d, add CoreDNS rewrites so `DOMAIN` hosts reach the Istio gateways from inside the cluster |
 | `PASSTHROUGH_HOSTS` | `takserver-api takserver-stream` | Hosts under `DOMAIN` that the passthrough gateway serves |
 | `PLUGINS_MEMORY_REQUEST` | `320Mi` | Memory request for the TAK plugins container |
@@ -494,6 +494,6 @@ Questions and bug reports are welcome in [GitHub issues](https://github.com/jona
 
 ## License
 
-Copyright © 2026 uds-k3d-takserver authors.
+Copyright © 2026 uds-takserver authors.
 
 [GPL-3.0-only](LICENSE). TAK Server, which the TAK images are built from, is also GPL-3.0. CloudTAK, which the `cloudtak` image is built from, is AGPL-3.0. ATAK-CIV, used only for the test device, is GPL-3.0.

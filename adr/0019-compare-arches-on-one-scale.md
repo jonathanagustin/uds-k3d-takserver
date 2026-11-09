@@ -28,7 +28,7 @@ There is no completed nightly load artifact to cite. RSS, throughput, and latenc
 
 ## Amendment: matched workload cohorts
 
-Date: 2026-11-07. [Issue 333](https://github.com/jonathanagustin/uds-k3d-takserver/issues/333).
+Date: 2026-11-07. [Issue 333](https://github.com/jonathanagustin/uds-takserver/issues/333).
 
 When a sweep selects several client counts, points at different offered loads
 must not dominate each other. The report now groups records by source revision,

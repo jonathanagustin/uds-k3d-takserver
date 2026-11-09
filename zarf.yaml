@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/zarf-dev/zarf/main/zarf.schema.json
@@ -15,7 +15,7 @@ metadata:
     dev.uds.categories: Command And Control, Situational Awareness
     dev.uds.keywords: TAK, TAK Server, CloudTAK, Cursor on Target, CoT, ATAK
     # base64 of assets/icon.svg. hk's icon check fails when they differ.
-    dev.uds.icon: data:image/svg+xml;base64,PCEtLSBDb3B5cmlnaHQgMjAyNiB1ZHMtazNkLXRha3NlcnZlciBhdXRob3JzOyBTUERYLUxpY2Vuc2UtSWRlbnRpZmllcjogR1BMLTMuMC1vbmx5IC0tPgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjE3NiIgaGVpZ2h0PSIxNzYiIHZpZXdCb3g9IjAgMCAxNzYgMTc2IiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUiPgogIDx0aXRsZSBpZD0idGl0bGUiPlRBSyBsb2NhdGlvbiBiZWFjb248L3RpdGxlPgogIDxwYXRoIGZpbGw9IiM0ZjQ2ZTUiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTYyIDMyQzM0LjQgMzIgMTIgNTQuNCAxMiA4MmMwIDM1IDUwIDgyIDUwIDgyczUwLTQ3IDUwLTgyYzAtMjcuNi0yMi40LTUwLTUwLTUwWm0wIDI2YTI0IDI0IDAgMSAwIDAgNDggMjQgMjQgMCAwIDAgMC00OFoiLz4KICA8Y2lyY2xlIGN4PSI2MiIgY3k9IjgyIiByPSIxMiIgZmlsbD0iIzIyZDNlZSIvPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzIyZDNlZSIgc3Ryb2tlLXdpZHRoPSIxMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik0xMDIgMTFhNzEgNzEgMCAwIDEgNTQgNTQiLz4KICAgIDxwYXRoIGQ9Ik05NyAzNWE0NiA0NiAwIDAgMSAzNSAzNSIvPgogIDwvZz4KPC9zdmc+Cg==
+    dev.uds.icon: data:image/svg+xml;base64,PCEtLSBDb3B5cmlnaHQgMjAyNiB1ZHMtdGFrc2VydmVyIGF1dGhvcnM7IFNQRFgtTGljZW5zZS1JZGVudGlmaWVyOiBHUEwtMy4wLW9ubHkgLS0+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMTc2IiBoZWlnaHQ9IjE3NiIgdmlld0JveD0iMCAwIDE3NiAxNzYiIHJvbGU9ImltZyIgYXJpYS1sYWJlbGxlZGJ5PSJ0aXRsZSI+CiAgPHRpdGxlIGlkPSJ0aXRsZSI+VEFLIGxvY2F0aW9uIGJlYWNvbjwvdGl0bGU+CiAgPHBhdGggZmlsbD0iIzRmNDZlNSIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNNjIgMzJDMzQuNCAzMiAxMiA1NC40IDEyIDgyYzAgMzUgNTAgODIgNTAgODJzNTAtNDcgNTAtODJjMC0yNy42LTIyLjQtNTAtNTAtNTBabTAgMjZhMjQgMjQgMCAxIDAgMCA0OCAyNCAyNCAwIDAgMCAwLTQ4WiIvPgogIDxjaXJjbGUgY3g9IjYyIiBjeT0iODIiIHI9IjEyIiBmaWxsPSIjMjJkM2VlIi8+CiAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjJkM2VlIiBzdHJva2Utd2lkdGg9IjEwIiBzdHJva2UtbGluZWNhcD0icm91bmQiPgogICAgPHBhdGggZD0iTTEwMiAxMWE3MSA3MSAwIDAgMSA1NCA1NCIvPgogICAgPHBhdGggZD0iTTk3IDM1YTQ2IDQ2IDAgMCAxIDM1IDM1Ii8+CiAgPC9nPgo8L3N2Zz4K
 
 # Shipped in the package. Inspect with: uds zarf package inspect documentation
 documentation:
@@ -46,7 +46,7 @@ variables:
     description: Domain suffix for gateway hosts. k3d-core-slim-dev uses uds.dev. The global.domain package value defaults to this and overrides it when set.
     default: uds.dev
   - name: TAK_IMAGE_TAG
-    description: Tag for images published at ghcr.io/jonathanagustin/uds-k3d-takserver. Building those images is separate from this package. The tak.imageTag package value defaults to this. The images list and certs.image read only this variable.
+    description: Tag for images published at ghcr.io/jonathanagustin/uds-takserver. Building those images is separate from this package. The tak.imageTag package value defaults to this. The images list and certs.image read only this variable.
     default: 5.7-RELEASE-14
   - name: IN_CLUSTER_DNS
     description: On a uds-k3d cluster, the takserver-oidc watcher adds CoreDNS rewrites so DOMAIN hosts resolve to the right Istio gateway inside the cluster. Skipped when kube-system/coredns-custom does not exist. The dns.inCluster package value defaults to this.
@@ -110,13 +110,13 @@ components:
     # upstream chart's dependencies render. The NATS toolbox is disabled in
     # values/common-values.yaml, so its image is not part of the package.
     images:
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite:5.7-RELEASE-14"
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-api:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-messaging:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-config:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-plugins:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-database-setup:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/takserver-ignite:5.7-RELEASE-14"
+      - "ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6"
       - "docker.io/library/nats:2.15.2-alpine"
       - "docker.io/natsio/nats-server-config-reloader:0.25.0"
       # Same tag UDS Core 1.16.0 runs. The manifest lists amd64 and arm64.
@@ -155,5 +155,5 @@ components:
         name: cloudtak
         namespace: cloudtak
     images:
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/cloudtak:v13.112.3" # cloudtak-version
-      - "ghcr.io/jonathanagustin/uds-k3d-takserver/postgis:18-3.6"
+      - "ghcr.io/jonathanagustin/uds-takserver/cloudtak:v13.112.3" # cloudtak-version
+      - "ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6"

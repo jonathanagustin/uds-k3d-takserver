@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # Build the CloudTAK image from the upstream/cloudtak submodule.
@@ -38,7 +38,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "${here}" rev-parse --show-toplevel)"
 src="${root}/upstream/cloudtak"
-registry="${REGISTRY:-ghcr.io/jonathanagustin/uds-k3d-takserver}"
+registry="${REGISTRY:-ghcr.io/jonathanagustin/uds-takserver}"
 
 read -r -a arches <<< "${ARCHES:-amd64 arm64}"
 
@@ -54,7 +54,7 @@ for platform, image in sorted(images.items()):
     if platform.startswith("unknown"):
         continue
     labels = ((image or {}).get("config") or {}).get("Labels") or {}
-    print(platform, labels.get("dev.uds-k3d-takserver.inputs", ""))
+    print(platform, labels.get("dev.uds-takserver.inputs", ""))
 ' 2>/dev/null || true
 }
 

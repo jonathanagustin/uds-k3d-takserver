@@ -42,7 +42,7 @@ Those pod names change every backup. The Exemption custom resource definition (C
 
 ## Investigation: upstream chart ownership
 
-Date: 2026-11-07. Follow-up: [issue 258](https://github.com/jonathanagustin/uds-k3d-takserver/issues/258).
+Date: 2026-11-07. Follow-up: [issue 258](https://github.com/jonathanagustin/uds-takserver/issues/258).
 
 Core 1.16.0 pins the upstream Velero chart to `12.2.1` in
 [`src/velero/common/zarf.yaml`](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/velero/common/zarf.yaml).

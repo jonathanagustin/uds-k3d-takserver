@@ -1,4 +1,4 @@
-// Copyright 2026 uds-k3d-takserver authors
+// Copyright 2026 uds-takserver authors
 // SPDX-License-Identifier: GPL-3.0-only
 
 // Adjusts the chart that `pepr build` writes. Two things in it do not fit a

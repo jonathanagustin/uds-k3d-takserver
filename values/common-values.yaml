@@ -1,4 +1,4 @@
-# Copyright 2026 uds-k3d-takserver authors
+# Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
 # @lulaStart 6c29faf2-092d-594d-83ec-d56a7a2b7d57
@@ -31,7 +31,7 @@ takserver:
   # OOM-killed when UserManager started.
   config:
     image:
-      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-config
+      repository: ghcr.io/jonathanagustin/uds-takserver/takserver-config
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
     replicas: 1
     resources:
@@ -43,7 +43,7 @@ takserver:
         memory: 1280Mi
   messaging:
     image:
-      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-messaging
+      repository: ghcr.io/jonathanagustin/uds-takserver/takserver-messaging
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
     replicas: 1
     resources:
@@ -56,7 +56,7 @@ takserver:
         memory: 1536Mi
   api:
     image:
-      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-api
+      repository: ghcr.io/jonathanagustin/uds-takserver/takserver-api
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
     replicas: 1
     resources:
@@ -69,7 +69,7 @@ takserver:
   plugins:
     enabled: true
     image:
-      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-plugins
+      repository: ghcr.io/jonathanagustin/uds-takserver/takserver-plugins
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
     replicas: 1
     resources:
@@ -79,7 +79,7 @@ takserver:
         cpu: "500m"
   takserverDatabaseSetup:
     image:
-      repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-database-setup
+      repository: ghcr.io/jonathanagustin/uds-takserver/takserver-database-setup
       tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
   limits:
     persistentVolumeClaims: "5"
@@ -111,7 +111,7 @@ postgresql:
   # adr/0018-upgrade-postgres-in-place.md.
   image:
     registry: ghcr.io
-    repository: jonathanagustin/uds-k3d-takserver/postgis
+    repository: jonathanagustin/uds-takserver/postgis
     tag: "18-3.6"
   configurationConfigMap: postgres-configuration
   auth:
@@ -146,7 +146,7 @@ ignite:
   rbac:
     create: true
   image:
-    repository: ghcr.io/jonathanagustin/uds-k3d-takserver/takserver-ignite
+    repository: ghcr.io/jonathanagustin/uds-takserver/takserver-ignite
     tag: "###ZARF_VAR_TAK_IMAGE_TAG###"
   serviceAccount:
     name: takserver-ignite

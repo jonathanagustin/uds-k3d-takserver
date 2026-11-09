@@ -13,6 +13,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { download } from './download.mjs';
 import { howToSteps } from './how-to-ui.mjs';
+import { repositoryUrl as repoUrl, rewriteTestBadge, rewriteLegacyGithubLinks } from '../src/lib/repository-links.mjs';
 import { fromHtml } from 'hast-util-from-html';
 
 const { values: args } = parseArgs({ options: {
@@ -32,7 +33,6 @@ const outRoot = path.resolve(args['output-root'] || path.resolve(import.meta.dir
 const sourceRef = args['source-ref'];
 const gitRef = args['git-ref'];
 const unreleased = args['version-id'] === 'main';
-const repoUrl = 'https://github.com/jonathanagustin/uds-takserver';
 // Root-relative, including the Pages base. The link checker rejects relative
 // links, and it looks these paths up against the built routes.
 const assetBase = '/uds-takserver';
@@ -344,10 +344,6 @@ function titleLinkLabels(markdown, fromSrc, headings) {
 // On the docs site it has shown as a broken image in Chrome, so the site build
 // swaps it for the shields.io workflow-status badge, which sets CORP to
 // cross-origin. Keep both URLs in sync when either changes.
-const githubTestBadge =
-  'https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main';
-const siteTestBadge =
-  'https://img.shields.io/github/actions/workflow/status/jonathanagustin/uds-takserver/test.yaml?branch=main&label=Test';
 
 function rewriteLinks(markdown, fromSrc, byPath) {
   // Replace the destination of every ](url), including links whose label is an
@@ -365,8 +361,7 @@ function rewriteLinks(markdown, fromSrc, byPath) {
         return rewritten === null ? full : `${before}${rewritten}${after}`;
       });
     if (fromSrc === 'README.md') {
-      next = next.split(githubTestBadge).join(siteTestBadge);
-      next = next.split(githubTestBadge.replace('/uds-takserver/', '/uds-takserver/')).join(siteTestBadge);
+      next = rewriteTestBadge(next);
     }
     return next;
   });
@@ -496,7 +491,7 @@ let home;
 if (existsSync(homePath)) {
   home = await readFile(homePath, 'utf8');
   home = home.replace(/(^|[\s"'(=])\/uds-(?:k3d-)?takserver\//g, `$1${siteBase}/`);
-  home = home.replaceAll('https://github.com/jonathanagustin/uds-takserver/', `${repoUrl}/`);
+  home = rewriteLegacyGithubLinks(home);
   home = home.replace('../../components/LegacyHomeHash.astro', legacyImport);
   if (currentLanding) {
     const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(home);

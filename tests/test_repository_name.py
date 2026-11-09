@@ -95,6 +95,8 @@ class RepositoryNameTests(unittest.TestCase):
                 elif name == 'docs/how-to/upgrade-from-0-6.md':
                     self.assertEqual(line.strip(),
                         f'uds zarf package deploy "oci://ghcr.io/jonathanagustin/{OLD}/takserver:${{VERSION}}-upstream" --confirm')
+                elif name == 'docs-site/src/lib/repository-links.mjs':
+                    self.assertEqual(line, f"export const legacyGithubRepositoryUrl = 'https://github.com/jonathanagustin/{OLD}';")
                 elif name == '.github/container-and-chart/postgis/smoke.sh':
                     self.assertEqual(line, f'old_image="${{OLD_IMAGE:-ghcr.io/jonathanagustin/{OLD}/postgis:15-3.4}}"')
                 elif name == '.github/scripts/published_package_ref.py':
@@ -107,6 +109,7 @@ class RepositoryNameTests(unittest.TestCase):
         self.assertEqual(signer_counts, Counter(SIGNERS))
         self.assertEqual(counts, Counter({**SIGNERS, 'README.md': 8 if legacy_readme else 3,
                          'docs/how-to/upgrade-from-0-6.md': 1,
+                         'docs-site/src/lib/repository-links.mjs': 1,
                          '.github/container-and-chart/postgis/smoke.sh': 1,
                          '.github/scripts/published_package_ref.py': 1, 'tests/test_upgrade_baseline.py': 2}))
 

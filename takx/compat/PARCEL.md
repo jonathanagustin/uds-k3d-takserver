@@ -39,3 +39,5 @@ truncation, recycled access, Bundle reference/type behavior and fixed wire bytes
 GeoPoint and CoordinatedTime use these primitives too, but their additional
 engine dependencies have not been substituted or executed. Full engine/client
 and Android IPC acceptance remain unproven.
+
+The copied Parcelable interface also normalizes trailing comment whitespace.

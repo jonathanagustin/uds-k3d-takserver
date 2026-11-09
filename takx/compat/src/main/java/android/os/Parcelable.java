@@ -148,14 +148,14 @@ public interface Parcelable {
      * @see #describeContents()
      */
     public static final int CONTENTS_FILE_DESCRIPTOR = 0x0001;
-    
+
     /**
      * Describe the kinds of special objects contained in this Parcelable
      * instance's marshaled representation. For example, if the object will
      * include a file descriptor in the output of {@link #writeToParcel(Parcel, int)},
      * the return value of this method must include the
      * {@link #CONTENTS_FILE_DESCRIPTOR} bit.
-     *  
+     *
      * @return a bitmask indicating the set of special object types marshaled
      * by this Parcelable object instance.
      */
@@ -177,7 +177,7 @@ public interface Parcelable {
 
     /**
      * Flatten this object in to a Parcel.
-     * 
+     *
      * @param dest The Parcel in which the object should be written.
      * @param flags Additional flags about how the object should be written.
      * May be 0 or {@link #PARCELABLE_WRITE_RETURN_VALUE}.
@@ -193,15 +193,15 @@ public interface Parcelable {
          * Create a new instance of the Parcelable class, instantiating it
          * from the given Parcel whose data had previously been written by
          * {@link Parcelable#writeToParcel Parcelable.writeToParcel()}.
-         * 
+         *
          * @param source The Parcel to read the object's data from.
          * @return Returns a new instance of the Parcelable class.
          */
         public T createFromParcel(Parcel source);
-        
+
         /**
          * Create a new array of the Parcelable class.
-         * 
+         *
          * @param size Size of the array.
          * @return Returns an array of the Parcelable class, with every entry
          * initialized to null.

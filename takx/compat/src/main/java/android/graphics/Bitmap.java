@@ -9,15 +9,27 @@ import java.util.Objects;
 public final class Bitmap {
     public enum Config { ARGB_8888 }
 
-    private final BufferedImage image;
+    private BufferedImage image;
+    private final int width;
+    private final int height;
+    private final boolean mutable;
+    private boolean recycled;
 
     // Pinned Kernel BitmapMarshal reflects this exact constructor and method.
     // Retain the caller's backing image, including its actual color model.
     Bitmap(BufferedImage image) {
+        this(image, true);
+    }
+
+    Bitmap(BufferedImage image, boolean mutable) {
         this.image = Objects.requireNonNull(image, "image");
+        this.width = image.getWidth();
+        this.height = image.getHeight();
+        this.mutable = mutable;
     }
 
     BufferedImage getAwtBufferedImageImplementation() {
+        checkLive();
         return image;
     }
 
@@ -29,8 +41,25 @@ public final class Bitmap {
         return new Bitmap(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB));
     }
 
-    public int getWidth() { return image.getWidth(); }
-    public int getHeight() { return image.getHeight(); }
+    public int getWidth() { return width; }
+    public int getHeight() { return height; }
+    public boolean isMutable() { return mutable; }
+    public boolean isRecycled() { return recycled; }
+
+    /** Releases only this wrapper's reference; other owners keep their pixels. */
+    public void recycle() {
+        recycled = true;
+        image = null;
+    }
+
+    private void checkLive() {
+        if (recycled) { throw new IllegalStateException("bitmap has been recycled"); }
+    }
+
+    private void checkWritable() {
+        checkLive();
+        if (!mutable) { throw new IllegalStateException("bitmap is immutable"); }
+    }
 
     private void checkPixel(int x, int y) {
         if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) {
@@ -39,11 +68,13 @@ public final class Bitmap {
     }
 
     public int getPixel(int x, int y) {
+        checkLive();
         checkPixel(x, y);
         return image.getRGB(x, y);
     }
 
     public void setPixel(int x, int y, int color) {
+        checkWritable();
         checkPixel(x, y);
         image.setRGB(x, y, color);
     }
@@ -64,6 +95,7 @@ public final class Bitmap {
     }
 
     public void getPixels(int[] pixels, int offset, int stride, int x, int y, int width, int height) {
+        checkLive();
         // Android's zero-area transfers do not access or validate the array.
         if (width == 0 || height == 0) { return; }
         checkRegion(pixels, offset, stride, x, y, width, height);
@@ -73,6 +105,7 @@ public final class Bitmap {
     }
 
     public void setPixels(int[] pixels, int offset, int stride, int x, int y, int width, int height) {
+        checkWritable();
         if (width == 0 || height == 0) { return; }
         checkRegion(pixels, offset, stride, x, y, width, height);
         for (int row = 0; row < height; row++) {

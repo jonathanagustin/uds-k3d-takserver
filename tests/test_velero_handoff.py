@@ -118,6 +118,19 @@ class HandoffTests(unittest.TestCase):
         private = 'kind: Secret\nmetadata:\n  name: node-agent\n  namespace: velero\ndata:\n  token: DO_NOT_RETAIN\n'
         self.assertEqual(observe.resources(private), [])
 
+    def test_reverse_refuses_unrelated_or_stale_forward_proof_before_cluster_reads(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            before = observe.validate(snapshot(True), 'local-before')
+            (directory / 'local-before.json').write_text(json.dumps(before))
+            forward = observe.validate(snapshot(), 'core-after', before)
+            forward['clusterUID'] = 'another-cluster'
+            (directory / 'core-after.json').write_text(json.dumps(forward))
+            argv = ['observe.py', '--context', 'ephemeral', '--stage', 'local-ready', '--directory', temporary]
+            with mock.patch('sys.argv', argv), mock.patch.object(observe.subprocess, 'run') as command:
+                with self.assertRaises(ValueError): observe.main()
+                command.assert_not_called()
+
     def test_cli_only_reads_and_refuses_proof_overwrite_without_leaking_secrets(self):
         value = snapshot()
         baseline = observe.validate(snapshot(True), 'local-before')

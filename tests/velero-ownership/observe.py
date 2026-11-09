@@ -110,7 +110,8 @@ def main():
         baseline = json.loads((args.directory / 'local-before.json').read_text())
         require(baseline.get('schema') == 1 and baseline.get('stage') == 'local-before' and baseline.get('observerSHA256') == hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'unknown or changed baseline proof')
     if args.stage in ('local-ready', 'local-after'):
-        require((args.directory / 'core-after.json').is_file(), 'forward acceptance must precede reverse acceptance')
+        forward = json.loads((args.directory / 'core-after.json').read_text())
+        require(forward.get('schema') == 1 and forward.get('stage') == 'core-after' and forward.get('backupRestore') is True and forward.get('clusterUID') == baseline['clusterUID'] and forward.get('daemonsetUID') == baseline['daemonsetUID'] and forward.get('observerSHA256') == baseline['observerSHA256'], 'valid same-cluster forward acceptance must precede reversal')
     def command(argv):
         result = subprocess.run(argv, text=True, capture_output=True, timeout=45)
         require(result.returncode == 0, 'read-only observation command failed')

@@ -15,7 +15,7 @@ unlicensed AndroidPort implementation or binary was copied.
   arithmetic to avoid integer overflow. Invalid regions/strides throw
   `IllegalArgumentException`; invalid array ranges throw
   `ArrayIndexOutOfBoundsException`; null arrays on nonempty transfers throw
-  `NullPointerException`. Zero-area transfers are no-ops without array access.
+  `NullPointerException`. Zero-area transfers on live, writable images are no-ops without array access.
 - The exact reflective `Bitmap(BufferedImage)` constructor and
   `getAwtBufferedImageImplementation()` method retain the caller's actual image
   backing. Mutations remain visible in both directions. An externally supplied
@@ -30,12 +30,25 @@ unlicensed AndroidPort implementation or binary was copied.
   is promised. Its internal memory cache is closed without changing global
   `ImageIO` cache settings.
 
-The only declared configuration is `ARGB_8888`. Options expose only
-`inPreferredConfig`; null uses the same default. The three-argument stream
+- `recycle()` releases this wrapper's reference to its backing pixels and is
+  idempotent. Pixel reads, writes and marshal unwrapping then fail; metadata
+  dimensions remain available. It does not flush or destroy an image still
+  owned by a caller or another wrapper. This is reference release, not a
+  promise of immediate garbage collection.
+- Decodes are immutable by default; `Options.inMutable` requests writable
+  pixels. `createBitmap` and the upstream reflective image wrapper remain
+  mutable. `inJustDecodeBounds` reads dimensions through the selected ImageIO
+  reader without calling its pixel decode and returns null; `outWidth` and
+  `outHeight` reset to -1 on an unreadable input. Byte-array decoding respects
+  the requested offset and length and rejects invalid ranges before decoding.
+
+The only declared configuration is `ARGB_8888`. Options expose
+`inPreferredConfig`, `inMutable`, `inJustDecodeBounds`, `outWidth` and
+`outHeight`; null uses the same default. The three-argument stream
 method accepts a null padding argument (typed `Object`) as used by the pinned
 portable factory; non-null padding is explicitly rejected. It is not a binary
 replacement for Android's `Rect`-typed method. Scaling, region decoding,
-recycling, compression, canvas operations, native bitmap handles and other
+allocation reuse (`inBitmap`), buffer copying, compression, canvas operations, native bitmap handles and other
 Android APIs are outside this slice. Fatal JVM resource errors are not converted
 to a successful or fabricated image. Untrusted-image memory budgets are not
 implemented here.
@@ -87,3 +100,23 @@ backing identity and bidirectional mutation. Passing these tests establishes
 this graphics slice only. It does not establish full port/Kernel compilation,
 resource catalogs, Context/preferences, SQLite, Android graphics completeness,
 map rendering, fonts, CommonCommo routing, or either full TAKX candidate.
+
+## Lifecycle and decoder reference
+
+The added lifecycle, mutability, bounds and byte-array contracts follow
+[AOSP Android 14 Bitmap](https://github.com/aosp-mirror/platform_frameworks_base/blob/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Bitmap.java)
+and [BitmapFactory](https://github.com/aosp-mirror/platform_frameworks_base/blob/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/BitmapFactory.java).
+These are behavioral references, not executable desktop oracles: their native
+Android decoder cannot run in this JDK harness. No AOSP implementation is copied.
+The tests exercise real PNG data and the unchanged official marshal chain.
+The 77 checks include the previous 51 contracts plus header-only PNG inspection, lifecycle, borrowed-image
+survival, independent decodes, immutable writes, bounds reset and byte ranges.
+
+The full-engine diagnostics identify consumers of these APIs, including map
+texture cleanup and raster metadata inspection. The unchanged `TerrainRGB`
+class additionally needs `inBitmap` allocation reuse and native elevation/geo
+support. This slice does not enable that class, add placeholder dependencies,
+or establish full-engine, client, JNI or rendering acceptance. The mutable
+image exposed through the existing reflective marshal remains an explicit
+borrowed backing view; immutability governs Bitmap writes, not code holding
+that external Java2D reference.

@@ -144,8 +144,66 @@ public final class BitmapCompatibilityTest {
         check(MarshalManager.marshal((BufferedImage) null, BufferedImage.class, Bitmap.class) == null, "null marshal");
     }
 
+    private static void lifecycleAndBounds() throws Exception {
+        android.graphics.Bitmap created = bitmap(2, 1);
+        check(created.isMutable() && !created.isRecycled(), "created image is live and mutable");
+        Bitmap portable = new Bitmap(created);
+        BufferedImage borrowed = MarshalManager.marshal(portable, Bitmap.class, BufferedImage.class);
+        created.setPixel(0, 0, 0xff112233);
+        created.recycle();
+        created.recycle();
+        check(created.isRecycled(), "recycle is idempotent");
+        check(created.getWidth() == 2 && created.getHeight() == 1, "dimensions retained after release");
+        check(borrowed.getRGB(0, 0) == 0xff112233, "borrowed backing is not destroyed");
+        check(MarshalManager.marshal(portable, Bitmap.class, BufferedImage.class) == null,
+                "recycled wrapper cannot expose released backing");
+        raises(IllegalStateException.class, () -> created.getPixel(0, 0));
+        raises(IllegalStateException.class, () -> created.setPixel(0, 0, 1));
+        raises(IllegalStateException.class, () -> created.getPixels(null, 0, 0, 0, 0, 0, 0));
+        raises(IllegalStateException.class, () -> created.setPixels(null, 0, 0, 0, 0, 0, 0));
+
+        BufferedImage source = new BufferedImage(3, 2, BufferedImage.TYPE_INT_ARGB);
+        source.setRGB(1, 1, 0x80123456);
+        ByteArrayOutputStream encoded = new ByteArrayOutputStream();
+        ImageIO.write(source, "png", encoded);
+        byte[] png = encoded.toByteArray();
+        byte[] padded = new byte[png.length + 9];
+        System.arraycopy(png, 0, padded, 4, png.length);
+        android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        check(android.graphics.BitmapFactory.decodeByteArray(padded, 4, png.length, options) == null,
+                "bounds request returns no bitmap");
+        check(options.outWidth == 3 && options.outHeight == 2, "bounds from encoded metadata");
+        byte[] headerOnly = Arrays.copyOf(png, 33);
+        check(android.graphics.BitmapFactory.decodeByteArray(headerOnly, 0, headerOnly.length, options) == null
+                && options.outWidth == 3 && options.outHeight == 2,
+                "bounds inspection reads PNG header without requiring encoded pixels");
+        options.inJustDecodeBounds = false;
+        android.graphics.Bitmap decoded = android.graphics.BitmapFactory.decodeByteArray(padded, 4, png.length, options);
+        check(decoded != null && !decoded.isMutable(), "default decoding is immutable");
+        check(decoded.getPixel(1, 1) == 0x80123456, "byte range decoding preserves alpha and colors");
+        raises(IllegalStateException.class, () -> decoded.setPixel(0, 0, 1));
+        raises(IllegalStateException.class, () -> decoded.setPixels(null, 0, 0, 0, 0, 0, 0));
+        options.inMutable = true;
+        android.graphics.Bitmap writable = android.graphics.BitmapFactory.decodeByteArray(png, 0, png.length, options);
+        writable.setPixel(1, 1, 0xff987654);
+        check(writable.isMutable() && writable.getPixel(1, 1) == 0xff987654, "requested mutable decoding has writable pixels");
+        check(decoded.getPixel(1, 1) == 0x80123456, "independent decodes own independent pixels");
+        check(android.graphics.BitmapFactory.decodeByteArray(new byte[0], 0, 0, options) == null,
+                "empty decode fails");
+        check(options.outWidth == -1 && options.outHeight == -1, "failed decode clears stale bounds");
+        options.outWidth = 8;
+        android.graphics.BitmapFactory.decodeFile(null, options);
+        check(options.outWidth == -1 && options.outHeight == -1, "null file clears stale bounds");
+        raises(NullPointerException.class, () -> android.graphics.BitmapFactory.decodeByteArray(null, 0, 0));
+        raises(ArrayIndexOutOfBoundsException.class, () -> android.graphics.BitmapFactory.decodeByteArray(png, -1, 0));
+        raises(ArrayIndexOutOfBoundsException.class, () -> android.graphics.BitmapFactory.decodeByteArray(png, 0, -1));
+        raises(ArrayIndexOutOfBoundsException.class, () -> android.graphics.BitmapFactory.decodeByteArray(png, png.length, 1));
+        raises(ArrayIndexOutOfBoundsException.class, () -> android.graphics.BitmapFactory.decodeByteArray(png, Integer.MAX_VALUE, 2));
+    }
+
     public static void main(String[] args) throws Exception {
-        pixels(); decode(); marshal();
+        pixels(); decode(); marshal(); lifecycleAndBounds();
         System.out.println("PASS " + checks + " bitmap/decoder/upstream-marshal checks");
     }
 }

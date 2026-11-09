@@ -4,6 +4,9 @@ package android.graphics;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.ByteArrayInputStream;
+import java.util.Objects;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,22 +22,46 @@ public final class BitmapFactory {
 
     public static final class Options {
         public Bitmap.Config inPreferredConfig = Bitmap.Config.ARGB_8888;
+        public boolean inMutable;
+        public boolean inJustDecodeBounds;
+        public int outWidth;
+        public int outHeight;
     }
 
-    private static Bitmap decoded(BufferedImage image) {
+    private static Bitmap decoded(BufferedImage image, Options options) {
         if (image == null) { return null; }
         // Decode into a real straight-alpha ARGB buffer, including RGB inputs.
-        Bitmap result = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
+        BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
         int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
-        result.setPixels(pixels, 0, image.getWidth(), 0, 0, image.getWidth(), image.getHeight());
-        return result;
+        result.setRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
+        return new Bitmap(result, options != null && options.inMutable);
+    }
+
+    private static void reset(Options options) {
+        if (options != null) { options.outWidth = -1; options.outHeight = -1; }
+    }
+
+    public static Bitmap decodeByteArray(byte[] data, int offset, int length) {
+        return decodeByteArray(data, offset, length, null);
+    }
+
+    public static Bitmap decodeByteArray(byte[] data, int offset, int length, Options options) {
+        Objects.requireNonNull(data, "data");
+        if (offset < 0 || length < 0 || offset > data.length - length) {
+            throw new ArrayIndexOutOfBoundsException("invalid encoded data range");
+        }
+        return decodeStream(new ByteArrayInputStream(data, offset, length), null, options);
     }
 
     public static Bitmap decodeFile(String path, Options options) {
+        reset(options);
         if (path == null) { return null; }
         try {
-            return decoded(ImageIO.read(new File(path)));
+            try (InputStream input = new FileInputStream(new File(path))) {
+                return decodeStream(input, null, options);
+            }
         } catch (IOException | IllegalArgumentException exception) {
+            reset(options);
             return null;
         }
     }
@@ -43,6 +70,7 @@ public final class BitmapFactory {
         if (padding != null) {
             throw new IllegalArgumentException("padding is outside this desktop decoding slice");
         }
+        reset(options);
         if (stream == null) { return null; }
         // No global ImageIO cache setting and no ownership of the caller's stream.
         InputStream borrowed = new FilterInputStream(stream) {
@@ -54,11 +82,19 @@ public final class BitmapFactory {
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input, true, true);
-                return decoded(reader.read(0));
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (options != null) {
+                    options.outWidth = width;
+                    options.outHeight = height;
+                    if (options.inJustDecodeBounds) { return null; }
+                }
+                return decoded(reader.read(0), options);
             } finally {
                 reader.dispose();
             }
         } catch (IOException | IllegalArgumentException exception) {
+            reset(options);
             return null;
         }
     }

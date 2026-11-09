@@ -651,7 +651,8 @@ class StartPhaseTests(unittest.TestCase):
         got = phases.pod_phases(pod, events, log)
         self.assertEqual(got["image_pull_s"], 3.0)
         self.assertEqual(got["inits"], [{"name": "wait-deps", "seconds": 15.0}])
-        self.assertEqual(got["jvm_to_log_s"], 98.123)
+        self.assertEqual(got["container_to_log_s"], 98.123)
+        self.assertIsNone(got["jvm_to_log_s"])
         self.assertEqual(got["log_to_ready_s"], 10.877)
 
     def test_pull_pairs_each_container_and_skips_present_images(self):
@@ -678,6 +679,50 @@ class StartPhaseTests(unittest.TestCase):
         # Every image already present: no pull time, not zero.
         present = [event("Pulled", "2026-11-03T09:49:00Z", init), event("Pulled", "2026-11-03T09:49:30Z", main)]
         self.assertIsNone(phases.pod_phases({}, present, "")["image_pull_s"])
+
+    def test_collection_keeps_early_marker_and_binds_events_to_pod_uid(self):
+        pod = {"metadata": {"name": "api-1", "uid": "uid-1"},
+               "spec": {"containers": [{"name": "api"}]},
+               "status": {"containerStatuses": [{"name": "api", "state": {
+                   "running": {"startedAt": "2026-10-25T00:00:00Z"}}}]}}
+        calls = []
+        def command(*args, **kwargs):
+            calls.append((args, kwargs))
+            self.assertEqual(kwargs["timeout"], 30)
+            if args[0] == "logs":
+                text = "2026-10-25T00:00:05Z Started TAK Server\n" + "noise\n" * 500
+            elif args[1] == "events":
+                self.assertIn("involvedObject.uid=uid-1", args)
+                text = '{"items": []}'
+            else:
+                text = json.dumps({"items": [pod]})
+            return subprocess.CompletedProcess(args, 0, stdout=text)
+        with patch.object(runner, "kubectl", side_effect=command), patch.object(
+                runner, "redacted_text", side_effect=lambda text: text):
+            got, errors = runner.start_phases()
+        self.assertEqual(errors, [])
+        self.assertEqual(got["takserver-api"]["container_to_log_s"], 5)
+        self.assertEqual(len(calls), 6)
+
+    def test_evidence_tracks_selected_container_without_log_contents(self):
+        pod = {"metadata": {"name": "api-1", "uid": "pod-uid"},
+               "spec": {"containers": [{"name": "api"}]},
+               "status": {"containerStatuses": [
+                   {"name": "sidecar", "state": {"running": {"startedAt": "2026-10-25T00:00:00Z"}}},
+                   {"name": "api", "containerID": "containerd://abc", "restartCount": 1,
+                    "state": {"running": {"startedAt": "2026-10-25T00:00:05Z"}}}]}}
+        got = phases.pod_phases(pod, [], "2026-10-25T00:00:08Z Started TAK Server secret-data")
+        self.assertEqual(got["container_to_log_s"], 3)
+        self.assertIsNone(got["jvm_to_log_s"])
+        self.assertEqual(got["evidence"]["pod_uid"], "pod-uid")
+        self.assertEqual(got["evidence"]["container_id"], "containerd://abc")
+        self.assertEqual(got["evidence"]["restart_count"], 1)
+        self.assertNotIn("secret-data", str(got))
+        stale = phases.pod_phases(pod, [], "2026-10-25T00:00:01Z Started TAK Server")
+        self.assertIsNone(stale["container_to_log_s"])
+        self.assertIsNone(stale["evidence"]["startup_log_at"])
+        self.assertIsNone(phases.elapsed(phases.parse_time("2026-10-25T00:00:05Z"),
+                                         phases.parse_time("2026-10-25T00:00:01Z")))
 
     def test_missing_inputs_stay_unset(self):
         self.assertIsNone(phases.parse_time(None))

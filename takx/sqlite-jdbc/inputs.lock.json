@@ -1,0 +1,532 @@
+{
+  "repository": {
+    "repository": "https://github.com/xerial/sqlite-jdbc",
+    "tag": "3.54.1.0",
+    "revision": "2b39e1f8b315fbe11cdd7271ee929ae8f9638e07"
+  },
+  "inputs": [
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/LICENSE",
+      "bytes": 11560,
+      "gitBlob": "75b52484ea471f882c29e02693b4f02dba175b5e",
+      "sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    },
+    {
+      "path": "LICENSE.zentus",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/LICENSE.zentus",
+      "bytes": 1312,
+      "gitBlob": "3e044abb4cf8adce7ea0fae32d6a8ec309c2a060",
+      "sha256": "89167dab92289c7e5e2b65b044f0856b703d05e5d5e35c3548e73d9c7d2f5048"
+    },
+    {
+      "path": "Makefile",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/Makefile",
+      "bytes": 13234,
+      "gitBlob": "4fe1ded1d7ade9497d2f5db8054b6b4d1ef53700",
+      "sha256": "8586d14c772a965bfb6cb602451c7866555acb0d1896ecc73854b314d9a95a66"
+    },
+    {
+      "path": "Makefile.common",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/Makefile.common",
+      "bytes": 12228,
+      "gitBlob": "3c7cf901fdd05ed2306270b5445d8f40ed41ee56",
+      "sha256": "64a4e3161a7aa398dc65330bd32abbf61d5ddc36c530e6bc289765900e085b8c"
+    },
+    {
+      "path": "NOTICE",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/NOTICE",
+      "bytes": 174,
+      "gitBlob": "5b1228a33270beaa6af5c650dda2ba344d49ad2d",
+      "sha256": "a0670cf020edf700524c43c85321c2ba027a8bace5682001db60875d4a9fe52b"
+    },
+    {
+      "path": "VERSION",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/VERSION",
+      "bytes": 15,
+      "gitBlob": "b456fa86818cb16741d840a63123cba2af93811c",
+      "sha256": "2c5b309adaaa04f32a93301cf5c9a9cb913ba264f9458c2513e5f5a8a15c755f"
+    },
+    {
+      "path": "amalgamation_version.sh",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/amalgamation_version.sh",
+      "bytes": 595,
+      "gitBlob": "6ddba204cb1e15c4187c91dad571bafec3ed02a2",
+      "sha256": "0ac06ca589dd3b2bb7247c35c2dd4de28cb8026d1fffa9177bfd365745b21891"
+    },
+    {
+      "path": "lib/inc_linux/jni.h",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/lib/inc_linux/jni.h",
+      "bytes": 74663,
+      "gitBlob": "dc2c8f645f2dae5e6174611f54afc031b2bb8cd2",
+      "sha256": "f2e4fad6aa83f3da57e1c5666b00c2d3434f44b52c14f2f10680a40bcf231b13"
+    },
+    {
+      "path": "lib/inc_linux/jni_md.h",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/lib/inc_linux/jni_md.h",
+      "bytes": 491,
+      "gitBlob": "9b5d1a8abbf924bbc77e0c01fa5281b8b5a1f45f",
+      "sha256": "f81e0cbed2d12227a4e2271c668a3d5544a720941280fe3049520be24b72567f"
+    },
+    {
+      "path": "src/main/ext/extension-functions.c",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/ext/extension-functions.c",
+      "bytes": 52365,
+      "gitBlob": "e173cb2d6adf12aa1b10ed08c3fa1f47dad26f58",
+      "sha256": "d96d0dd34582dc1d66751a7ab5bbd7b1d65de36ec0777d8bd46a3ea746223709"
+    },
+    {
+      "path": "src/main/java/org/sqlite/BusyHandler.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/BusyHandler.java",
+      "bytes": 2069,
+      "gitBlob": "b1996e251d5f101c84a7fd0145d97ded28817513",
+      "sha256": "29267e4a612267fd6dd6389d8c9ea9591e8620c6f4cb8ac9d862d020f2c296f3"
+    },
+    {
+      "path": "src/main/java/org/sqlite/Collation.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/Collation.java",
+      "bytes": 3584,
+      "gitBlob": "c9a02436fcdd0a69dcb4bdf9dc1f1b13e0365dc0",
+      "sha256": "6c761b735e33412f382e06febd55ca0894e25b17afd3c061841aed8eed9b0808"
+    },
+    {
+      "path": "src/main/java/org/sqlite/ExtendedCommand.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/ExtendedCommand.java",
+      "bytes": 5574,
+      "gitBlob": "b863f7c889a26569e02a6ca1b69671de112e75dc",
+      "sha256": "dd16f9695b3a58fca7579cc24e24e8fc3d9183cb092438f0ab7c64f9808b6c43"
+    },
+    {
+      "path": "src/main/java/org/sqlite/FileException.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/FileException.java",
+      "bytes": 143,
+      "gitBlob": "af08f6eca8baefce269ccdfba803b6bdbc1ca246",
+      "sha256": "c3cac1dd7416e5658b915a46b21a2f956b2bf0f4bbe0fc708f59aa181db00907"
+    },
+    {
+      "path": "src/main/java/org/sqlite/Function.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/Function.java",
+      "bytes": 11704,
+      "gitBlob": "ee2171d9c3154cf34b1ca66a1712adadad31927e",
+      "sha256": "8237af2e13a2d8d9fa807bbba02478127f397a7af5fc324e39ac5410f330b5d6"
+    },
+    {
+      "path": "src/main/java/org/sqlite/JDBC.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/JDBC.java",
+      "bytes": 3949,
+      "gitBlob": "d939d526d33645fbd4197fe403e649650494d1c9",
+      "sha256": "57ed7bd09a9536c96c580f27e4a29baee9cdee7e4b6cf427e7b265f33ea929c6"
+    },
+    {
+      "path": "src/main/java/org/sqlite/NativeLibraryNotFoundException.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/NativeLibraryNotFoundException.java",
+      "bytes": 177,
+      "gitBlob": "592d5c75a2cf5168232c86de04902d53063cceb2",
+      "sha256": "f3d564a2d1ee69da42c5eb5cd7e0fbdeed4f5877d4e5b48c5cf777fb20faae8c"
+    },
+    {
+      "path": "src/main/java/org/sqlite/ProgressHandler.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/ProgressHandler.java",
+      "bytes": 1513,
+      "gitBlob": "73a87f72a98cf663ad4d9233ddd836afc5fd1d1a",
+      "sha256": "ed0fa5eddb2c11348cac45d81eb04e39073af93784ebe7727f48d55923013155"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteCommitListener.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteCommitListener.java",
+      "bytes": 162,
+      "gitBlob": "36bbc9b7449dfe7dbc7c836c631a7a39ec1675e5",
+      "sha256": "280d0713214513f2ee65b05a95891a0cef7e4617dba04db33e9371ab61d8d8d6"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteConfig.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteConfig.java",
+      "bytes": 51675,
+      "gitBlob": "869f6340c7d281e9e0d536b2043cf2c96b1ac4cc",
+      "sha256": "261278c9b261b0bc147579df4d63c85efdf0db0111da1bf19657eefc63186a57"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteConnection.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteConnection.java",
+      "bytes": 21551,
+      "gitBlob": "7ee73eb7351de9e09ec7a5bcbd3d47b9ffa8b5ab",
+      "sha256": "45e50f41c534033f7a865a77766bac3da3445e8cd19f67ea357372707f12348e"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteConnectionConfig.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteConnectionConfig.java",
+      "bytes": 5579,
+      "gitBlob": "277b4db55a6741505fa313d75a2fdf11f7519465",
+      "sha256": "d88732a5604ba65bc9bbbc1be4b059fdc23808f38bf397610d451bff4c466684"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteDataSource.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteDataSource.java",
+      "bytes": 20344,
+      "gitBlob": "1a092c4a132e0b263b8e5b0d5cc8b283b9ee9fd9",
+      "sha256": "77701f22a9eb359cc9ae2932f7abd8d0ae4006bcd488ca4bc5050cee47389d3e"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteErrorCode.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteErrorCode.java",
+      "bytes": 11310,
+      "gitBlob": "f366046164471cb71f343c057ee8e2703a1a1dbf",
+      "sha256": "706ab0c4671ea78f5a7e07a55a9e797d8011f3aa7f6afc530c7ea662fd3de5ad"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteException.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteException.java",
+      "bytes": 1333,
+      "gitBlob": "a4900cb8912a1206db71cd40d2937a4bb2f8e925",
+      "sha256": "14a57f5e02a2b4ced1fc38f4b29b5c75d5986b05d7c99ad254fbffb729472655"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteJDBCLoader.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteJDBCLoader.java",
+      "bytes": 18015,
+      "gitBlob": "067ae67424d219abb22d41c2dbc678fe444412ad",
+      "sha256": "e87470f5067093e019c771565166b9b9e03a93c0337f19ef62edfa5ef586404a"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteLimits.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteLimits.java",
+      "bytes": 626,
+      "gitBlob": "aae571f69903095f5ef579bb7101323e57aec166",
+      "sha256": "31c8a522c9e76080a1b18a6fd2d55eb8f93162ec6e6ea2af86f57f6335b7ce8c"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteOpenMode.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteOpenMode.java",
+      "bytes": 2147,
+      "gitBlob": "5ce9cbd80a7d99994517213c9d28ba0459ce0a56",
+      "sha256": "ad3e8ac4595a0c8fdf4b1816f97d65219553aa354a0c1d0bcba0f0d47c5aa795"
+    },
+    {
+      "path": "src/main/java/org/sqlite/SQLiteUpdateListener.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/SQLiteUpdateListener.java",
+      "bytes": 267,
+      "gitBlob": "7af34b1d29759134b4cc4e3923c80c2cb43c30d7",
+      "sha256": "66528180c8910194a402b63337f8271d082cef5cd491322671cd0fd7e2853615"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/Codes.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/Codes.java",
+      "bytes": 3513,
+      "gitBlob": "c351bae6a4ba5543e905802950abf881a4d0207d",
+      "sha256": "445474fecd8a313d20f0cd31c9d67168ca5c9c5ef4454b832283bbe0a4e827d6"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/CoreDatabaseMetaData.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/CoreDatabaseMetaData.java",
+      "bytes": 6244,
+      "gitBlob": "634dd36e018c2aa687278544e0ef73f51d71cec4",
+      "sha256": "2e4534304e2b5b324cbd19ccccc9bf787a3c04dd5f2bc64b8600259bea813a66"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/CorePreparedStatement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/CorePreparedStatement.java",
+      "bytes": 4530,
+      "gitBlob": "df1fbb7a40a85622cf33be066c7448df908e0203",
+      "sha256": "ed4c317204b619518391e66e9ad33abe039e675cc459e22d840514eee7a4678e"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/CoreResultSet.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/CoreResultSet.java",
+      "bytes": 5043,
+      "gitBlob": "22e994507a283b5e83968c6c04c499a538196e8b",
+      "sha256": "0c56f03a622f8f5f1038fe967998d484e7acbd0a5e8c1b7bb1825566604b3ff9"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/CoreStatement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/CoreStatement.java",
+      "bytes": 7901,
+      "gitBlob": "62b1aa600ac54efb801ab59f8c26ab762144f4d1",
+      "sha256": "f5ffd6661132a8682f5a912c18a346af0fb5a5853d643286272c79040414e93e"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/DB.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/DB.java",
+      "bytes": 49521,
+      "gitBlob": "efd7dc28f56e203c7cf1a0c629f01003ce940a40",
+      "sha256": "770120e4e51d44d1a3861e191ab8ba697e4b347d05db321834c6268560e3148f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/NativeDB.c",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/NativeDB.c",
+      "bytes": 57671,
+      "gitBlob": "5b93b098f9a74f66341861898453f1c6922a6f45",
+      "sha256": "90ecc22f80266acae2e53840a0e18506fd21aa0108efdc16bdedf515b07e1fbd"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/NativeDB.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/NativeDB.java",
+      "bytes": 19822,
+      "gitBlob": "a71e8ea9c80e9a3075cb892d8fce2e855500db6f",
+      "sha256": "68d0d9aae5f51828b1c22ecb1d69f6d6079ac35fd12e01135921023b0d7e1c28"
+    },
+    {
+      "path": "src/main/java/org/sqlite/core/SafeStmtPtr.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/core/SafeStmtPtr.java",
+      "bytes": 5694,
+      "gitBlob": "b993f84c708d46ca3a1cd457f10528ba72737d77",
+      "sha256": "19b5b376ed921a2bb427f2751d70443b7b0ff1381bcde9a940b81c4853f7c029"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/DateFormatUtils.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/DateFormatUtils.java",
+      "bytes": 12459,
+      "gitBlob": "dbb5b818180f5094946bd2c5dc7b742bc2d1c981",
+      "sha256": "6a3154bf4a1ee3f1ab4e060abb9d7f517e536e489b974ba78804f6b0db79f98f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/DateParser.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/DateParser.java",
+      "bytes": 3598,
+      "gitBlob": "0c0edec74e234e9c81ff1b887926c432f4c4b74b",
+      "sha256": "c29b844d018c82f214175926e8def5c1f8250b6e5cee5dc28e3fb510877dd515"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/DatePrinter.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/DatePrinter.java",
+      "bytes": 3670,
+      "gitBlob": "7bdbd238d206379a8b90077ea56c5a76f1912113",
+      "sha256": "e546e21621a687b9f58d5da27f68db780981586df5fd98a14dafe9f8c85b6acd"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/ExceptionUtils.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/ExceptionUtils.java",
+      "bytes": 4057,
+      "gitBlob": "da71a0bcc6f41a39991b15b7d17a35997cacb27b",
+      "sha256": "b9242b40838a77553ae2b61955c5fd70eff75d34ec3ab06a22b5f597cb31018f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/FastDateFormat.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/FastDateFormat.java",
+      "bytes": 21588,
+      "gitBlob": "cd4992ffa28cef66e8c2dae4dcbb51e1d45577e1",
+      "sha256": "bc5524f4ad96fe8276df0e895d840fb808f4d717d4c0c15e7154c3fad1a91216"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/FastDateParser.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/FastDateParser.java",
+      "bytes": 35053,
+      "gitBlob": "116b514f2d8b4cee8c9c9f5c765dc469dd89547a",
+      "sha256": "14ab4a1ef56b5c35d7a2ac4375893425dfefef3695af743919f02eb42c01c057"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/FastDatePrinter.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/FastDatePrinter.java",
+      "bytes": 41744,
+      "gitBlob": "c0bb98d7bea09518941aceb29d25f7ad3692954a",
+      "sha256": "3baaa5511b86ef40171133f7480ffb6798a38a692dec4b3ec93f6950ebc82369"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/FormatCache.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/FormatCache.java",
+      "bytes": 11099,
+      "gitBlob": "0de73e6c51ec40ecd72ebdf1adc0746519f7f4fd",
+      "sha256": "8c5b8f8107c0f370451374f537464be5c41321f9b0f37cfe2da307cc506ed9f2"
+    },
+    {
+      "path": "src/main/java/org/sqlite/date/package-info.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/date/package-info.java",
+      "bytes": 1467,
+      "gitBlob": "f3fc12230082bd8772fd47f79a731512304b4d83",
+      "sha256": "dbda2fad534f326e49517924b958cac3a9c084dfe7f391adc658f054e0bc598f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/javax/SQLiteConnectionPoolDataSource.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/javax/SQLiteConnectionPoolDataSource.java",
+      "bytes": 1864,
+      "gitBlob": "de1b2d8b208b50d75c5bfc21d0c61b5b90ede15f",
+      "sha256": "290d6940932bd9347e05a5c5272bd06d348e0c9138c727e4e1735aa4b4408ae2"
+    },
+    {
+      "path": "src/main/java/org/sqlite/javax/SQLitePooledConnection.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/javax/SQLitePooledConnection.java",
+      "bytes": 15231,
+      "gitBlob": "d50fe6cb79895f34e18c1e491263190cd13165a5",
+      "sha256": "2457a65759acb7c7c660c967854cfc312aee35b648097f6953b508ae6dcb5622"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3Connection.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3Connection.java",
+      "bytes": 12351,
+      "gitBlob": "46e47bf8742df4fd4a2c01cb81ae3a3e7fda9255",
+      "sha256": "2a83b04fc5f32532ce51bf5318f95a601cb734082b30a92e0d137d37e03fbac9"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3DatabaseMetaData.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3DatabaseMetaData.java",
+      "bytes": 90631,
+      "gitBlob": "77d97de689696ab8b0d6297b6a6fa068274ff76e",
+      "sha256": "01228828bb778fdffb1ab5665c29854c4034404f3d6340cea715ecb4d3f7d878"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3PreparedStatement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3PreparedStatement.java",
+      "bytes": 18659,
+      "gitBlob": "6d11f028537ddd45765a0314d6d95d2f3dd0814b",
+      "sha256": "a99e179c491c4981925b79790f019582e876a3eae6b92ddf64f7bfb955d6b0b5"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3ResultSet.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3ResultSet.java",
+      "bytes": 32805,
+      "gitBlob": "0cc19bf241873194f490cb55038a66c379cfc6fa",
+      "sha256": "0a6ac5f41e6bcaa3264606ca64f61276f5d9ee75d8af4d1e72ef783a6c31ff0f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3Savepoint.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3Savepoint.java",
+      "bytes": 587,
+      "gitBlob": "817e69b2afd59edb980b58df9c02574eb7f7a04b",
+      "sha256": "84a1fcb27fad7cc8db13b53c91e145390c31064e9d200af45827c1ab5e5b0fed"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc3/JDBC3Statement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc3/JDBC3Statement.java",
+      "bytes": 16526,
+      "gitBlob": "5a1c4d681f4f813bd86073cce2f0a8d9639e7e19",
+      "sha256": "15bcdd8fba83df0e8d630282524d186b8b0264d48c1920885b0748d0ebf16130"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4Connection.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4Connection.java",
+      "bytes": 3012,
+      "gitBlob": "da7188dbd6a88b034a6d32d58a9184685af51949",
+      "sha256": "f6c1119cd9b957be1a78b4d048a8eaaaa899f8c3fbc7506eb25486d9a18dd9e0"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4DatabaseMetaData.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4DatabaseMetaData.java",
+      "bytes": 1867,
+      "gitBlob": "703eb536019852dd1c663da252ec10a6cf4e4bcf",
+      "sha256": "f6fbcb7c6a9325b3f940160f33910603f3164914bc8982ee74ebdc8a7987bd74"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4PooledConnection.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4PooledConnection.java",
+      "bytes": 393,
+      "gitBlob": "be22cb88f693a5fcb370e07eb39b41af659d8df5",
+      "sha256": "fc4a3bead7d18ad81faa6f009130644df5668e06873df1630541189cde5370bd"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4PreparedStatement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4PreparedStatement.java",
+      "bytes": 5391,
+      "gitBlob": "ee3ef3d850b7aa3ca117fa6f297fa3680a148e23",
+      "sha256": "a31807d9465a08122badbd007207d1e20b8d00ba051c8a02037cab3343b5cc25"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4ResultSet.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4ResultSet.java",
+      "bytes": 26404,
+      "gitBlob": "146fe25e3ae2b3a543485f4691af576c0e2e8940",
+      "sha256": "5d07bf147f05db78883be46a09dced98ce4e549999281d11a59d05f7a6e07d18"
+    },
+    {
+      "path": "src/main/java/org/sqlite/jdbc4/JDBC4Statement.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/jdbc4/JDBC4Statement.java",
+      "bytes": 1419,
+      "gitBlob": "3421611b9709ad17c608193622856d1c25f1f1ec",
+      "sha256": "a775ed2461625446300e69fb8451742cbac08801d8f88b3338b673cc961fe0b2"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/AndroidSignatureIgnore.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/AndroidSignatureIgnore.java",
+      "bytes": 437,
+      "gitBlob": "846ce076505c66125bcbaa782b67cc6f7d8e0dcf",
+      "sha256": "3ec8c02f2a4ffcbda35f76e61628f756f4e8d8ba96fb519e48b86a7ba20ba775"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/LibraryLoaderUtil.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/LibraryLoaderUtil.java",
+      "bytes": 935,
+      "gitBlob": "98e62e2b60875751eca705fae669193744c8196b",
+      "sha256": "12795e0e0bd407c60b25498e967fc74c48f12bc68e77c77083904cd2a6f738c7"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/Logger.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/Logger.java",
+      "bytes": 316,
+      "gitBlob": "556f801e7b735dd6bffbb8158922796e5db3553b",
+      "sha256": "1e5601b336c6964cd6acf45abce51a63119ef904068deed26ac437679bfc6c8e"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/LoggerFactory.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/LoggerFactory.java",
+      "bytes": 2978,
+      "gitBlob": "6b3e8c7618169d7eef6da6fd47e4a231c8220e97",
+      "sha256": "d585753f11377f26fedcb8aabf68f6f7fc1c7250a62859ea42130efb5a442a4d"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/OSInfo.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/OSInfo.java",
+      "bytes": 11394,
+      "gitBlob": "ec13e37670a3bb14d30b955e748b45e4b56ee082",
+      "sha256": "5af70cbc091b8c63b2d255ea084e3076a14d6e27453f27083659ae77fc3fa9c4"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/ProcessRunner.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/ProcessRunner.java",
+      "bytes": 791,
+      "gitBlob": "bea35fa8dd880112ce8b553db93d93e55ec31e8e",
+      "sha256": "f214259252b2330f373a849a66c6c8363efd1057b6343c76559440518f4d74bf"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/QueryUtils.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/QueryUtils.java",
+      "bytes": 3025,
+      "gitBlob": "81d1f81fba943b095388ee81ece0752e66f952e2",
+      "sha256": "7d2f120f6c79aa62d5bd2261eca9adae16fef016f7ffa9f7e174b75c2264ee5f"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/ResourceFinder.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/ResourceFinder.java",
+      "bytes": 3467,
+      "gitBlob": "69e2fecba2a9dfd8fd012d220c9ef52b003e1658",
+      "sha256": "907ee44ff2207852c756b1311b6fd0ecf3b934b00b9b698918650174f44828c2"
+    },
+    {
+      "path": "src/main/java/org/sqlite/util/StringUtils.java",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/java/org/sqlite/util/StringUtils.java",
+      "bytes": 414,
+      "gitBlob": "3e38281db080a90f10feb63f29c64dd5860e09c4",
+      "sha256": "20eca67d3041922941a164fd38017eb0cccd9acdff8a95aed8311dc75ae377d4"
+    },
+    {
+      "path": "src/main/resources/java.sql.Driver",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/resources/java.sql.Driver",
+      "bytes": 15,
+      "gitBlob": "1359f6fd14ca2f684e992b10802e5913ea337c48",
+      "sha256": "6f13d8db0c78f5b44c08720b0544d0a17718eb1b8fde920a4509e636bc9b8214"
+    },
+    {
+      "path": "src/main/resources/sqlite-jdbc.properties",
+      "url": "https://raw.githubusercontent.com/xerial/sqlite-jdbc/2b39e1f8b315fbe11cdd7271ee929ae8f9638e07/src/main/resources/sqlite-jdbc.properties",
+      "bytes": 48,
+      "gitBlob": "de55c14db31753709582a00fc8a5d65db08f8b43",
+      "sha256": "05ae9ac84db626ba3200669cfbc6f3b6b8f19f7b7ba768ba1204e3d75667d765"
+    },
+    {
+      "path": "target/sqlite-3.54.1-src.zip",
+      "url": "https://www.sqlite.org/2026/sqlite-src-3540100.zip",
+      "bytes": 14899528,
+      "upstreamDigest": {
+        "sha3_256": "877c6f4996ce7adb368686bce21638de9e3d91534832ad3d9d119037d1bc22ad"
+      },
+      "sha256": "387e7f6cad4797b17848c07d453dc6606917bb356a6cfe5a3abafd38c240c71b"
+    },
+    {
+      "path": "target/classpath/slf4j-api.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar",
+      "bytes": 41125,
+      "upstreamDigest": {
+        "sha1": "6c62681a2f655b49963a5983b8b0950a6120ae14"
+      },
+      "sha256": "d3ef575e3e4979678dc01bf1dcce51021493b4d11fb7f1be8ad982877c16a1c0"
+    }
+  ],
+  "scope": "host-only own source build; no imported native binaries"
+}

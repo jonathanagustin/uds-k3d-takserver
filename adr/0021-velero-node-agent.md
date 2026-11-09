@@ -190,3 +190,38 @@ exited with code 1 before emitting startup logs; k3d could not get a ready API.
 The retained node reported no OOM kill or runtime error text. The test cluster
 was removed. No handoff or rollback result is claimed from that attempt, and
 no runtime owner switch is introduced here.
+
+## Staging prerequisite: explicit local or Core owner
+
+`backup.filesystem.owner` accepts only `local` (the default) or `core`.
+When file-system backup is enabled, `local` preserves the existing DaemonSet,
+configuration and Exemption. `core` omits only the app-owned DaemonSet and
+ConfigMap; the Exemption and volume annotations remain. With file-system
+backup disabled, neither owner renders those agent resources or the Exemption.
+The standard full bundle still uses the local owner.
+
+This render gate does not implement a migration. **Do not switch an existing
+installation directly to `core`: Helm could delete the current agent and
+configuration before Core owns replacements.** A new installation also needs
+the bootstrap Exemption before Core enables its agent. The fail-closed handoff,
+retry and reverse orchestration and dual-architecture live backup/restore
+acceptance described above remain pending under issue 258. The gate alone
+establishes no Helm ownership transfer or safe independent rollback.
+
+## Opt-in experiment preparation (not live migration evidence)
+
+`FILESYSTEM_BACKUP_OWNER` now passes the chart's reviewed `local`/`core` gate
+through Zarf's pre-render values file; it defaults to `local`. The existing
+full bundle still uses that owner and the same disabled-by-default filesystem
+switch. Do not change an existing install directly to `core`.
+
+[The optional preparation and observation harness](../tests/velero-ownership/README.md)
+creates a separate bundle candidate with the equivalent bootstrap exemption
+and Core's desired `helm.sh/resource-policy: keep` annotation, then observes
+fresh/forward/reverse boundaries without mutating ownership or initiating a
+restore. It rejects stale volume-copy evidence using post-readiness backup
+timestamps and checks both database volumes. Offline tests and chart rendering
+prove those checks and settings, not admission, Zarf override passage, server-side
+field ownership, safe rollback or live backup/restore. The mutating experimental
+driver and dual-architecture live acceptance remain pending. No default owner
+change or issue closure follows from this prerequisite.

@@ -1,3 +1,6 @@
+{{- if not (has .Values.backup.filesystem.owner (list "local" "core")) }}
+{{- fail "backup.filesystem.owner must be local or core" }}
+{{- end }}
 {{- if eq (toString .Values.backup.filesystem.enabled) "true" }}
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
@@ -44,6 +47,7 @@ spec:
         kind: pod
       title: "Velero data mover"
       description: "Velero's file-system backup and restore pods read and write pod volumes under the node kubelet directory as privileged root, because a volume such as PGDATA is mode 0700 for another user. Every pod in the velero namespace, only when file-system backup is on. UDS Core 1.16.0's Exemption matcher has no podLabels."
+{{- if eq .Values.backup.filesystem.owner "local" }}
 ---
 # Read by the node-agent (--node-agent-configmap). Velero expects one key.
 # app.kubernetes.io/name=velero puts the data-mover pods under the Velero
@@ -151,4 +155,5 @@ spec:
             path: /var/lib/kubelet/plugins
         - name: scratch
           emptyDir: {}
+{{- end }}
 {{- end }}

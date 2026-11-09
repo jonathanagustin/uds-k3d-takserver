@@ -63,6 +63,7 @@ interface Container {
 export interface PodLike {
   metadata?: { labels?: Record<string, string>; namespace?: string };
   spec?: {
+    serviceAccountName?: string;
     containers?: Container[];
     initContainers?: Container[];
     volumes?: Volume[];

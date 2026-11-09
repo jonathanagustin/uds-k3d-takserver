@@ -429,3 +429,63 @@ spec:
       targetPort: {{ .Values.quic.port }}
       protocol: UDP
 {{- end }}
+
+{{- if ne (include "takserver.identityPhase" .) "shared" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: takserver-workload-discovery
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: takserver-config-ignite-log
+rules:
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    resourceNames: ["takserver-ignite-0"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: takserver-config-ignite-log
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: takserver-config-ignite-log
+subjects:
+  - kind: ServiceAccount
+    name: takserver-config
+    namespace: {{ .Release.Namespace }}
+{{- range $name := list "takserver-api" "takserver-messaging" "takserver-config" "takserver-plugins" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-discovery
+  namespace: {{ $.Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: takserver-workload-discovery
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

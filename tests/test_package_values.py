@@ -205,6 +205,15 @@ class PackageValuesTests(unittest.TestCase):
             self.assertEqual(env["PLUGINS_MEMORY_REQUEST"], "640Mi")
             self.assertEqual(env["PLUGINS_MEMORY_LIMIT"], "2Gi")
 
+    def test_identity_phase_reaches_policy_and_both_controllers(self):
+        for phase in ['shared', 'transition']:
+            _out, docs = render(values=[f"tak.workloadIdentityPhase={phase}"])
+            for env in (watcher_env(docs), admission_env(docs)):
+                self.assertEqual(env['TAK_WORKLOAD_IDENTITY_PHASE'], phase)
+            rules = find(docs, 'Package', 'takserver')['spec']['network']['allow']
+            dedicated = [rule for rule in rules if rule.get('remoteServiceAccount') in TAK_APPS]
+            self.assertEqual(bool(dedicated), phase == 'transition')
+
     def test_storage_classes_are_unset_by_default(self):
         _out, docs = render()
         for name in ("takserver-postgresql", "cloudtak-postgis"):

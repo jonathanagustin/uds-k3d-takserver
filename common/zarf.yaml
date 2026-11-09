@@ -23,6 +23,8 @@ components:
         values:
           - sourcePath: .global.domain
             targetPath: .domain
+          - sourcePath: .tak.workloadIdentityPhase
+            targetPath: .workloadIdentityPhase
           - sourcePath: .health.enabled
             targetPath: .health.enabled
       # Admission module. Installed before the upstream chart so that every

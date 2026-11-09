@@ -53,10 +53,13 @@ The offline runner verifies the revision and exports unchanged tracked official
 Rect/Color/Insets and annotation sources into temporary storage. It compiles
 those real source oracles and the adapters locally with trusted JDK 17,
 `--release 11`, then runs deterministic differential checks. Cases include
-random packed pixels/channels and rectangles, boundary exclusion, inverted and
+1,000 packed-color/channel trials and 500 rectangle trials using fixed Java
+Random seed `0x524742`, boundary exclusion, inverted and
 empty rectangles, failed intersections, copy/mutation/equality, overflow,
 negative centers, valid and malformed parse inputs, alpha zero and Turkish
-locale lookup. No unofficial binary or native dependency is adopted.
+locale lookup. The 43,569 checks count individual assertions, not independent
+APIs or engine acceptance cases. No unofficial binary or native dependency is
+adopted.
 
 Actual engine consumers include `TerrainRGB.decode` (channel extraction),
 `DepthSampler` (depth-channel extraction), feature renderers (argb),
@@ -67,3 +70,10 @@ These tests therefore use actual source oracles and direct API behavior; they
 do not pretend to execute those whole engine consumers with substitute types.
 The full public port compile is separate. A successful primitive test does not
 establish full engine compilation, native GIS/JNI or desktop interoperability.
+
+The cached full-engine comparison emitted no remaining RectF diagnostics and
+its pinned engine sources do not call RectF round/roundOut or construct it from
+Rect. Existing callers use float coordinates and RectF fields. Integer-Rect
+construct/set and rounding overloads are therefore still outside the current
+bounded slice; adding Rect does not silently imply their implementation. A
+future actual consumer can justify them with authoritative rounding edge tests.

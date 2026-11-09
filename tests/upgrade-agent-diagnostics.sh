@@ -6,6 +6,18 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 filter="${here}/../.github/scripts/redact-then-filter.sh"
+# Agent logs are untrusted. Omit the whole stream on authentication markers,
+# including JSON/header variants, before the existing config-secret redactor.
+redact() {
+  python3 -c '
+import re, sys
+text = sys.stdin.read()
+if re.search(r"authorization|bearer|basic", text, re.IGNORECASE):
+    print("Omitted authentication-bearing agent diagnostic")
+else:
+    sys.stdout.write(text)
+' | "${filter}" --tail "${1}"
+}
 if [[ "${UPGRADE_AGENT_DIAGNOSTICS_INNER:-}" != 1 ]]; then
   log="$(mktemp)"
   setsid env UPGRADE_AGENT_DIAGNOSTICS_INNER=1 bash "$0" "${1:-unknown}" >"${log}" 2>&1 &
@@ -21,12 +33,12 @@ if [[ "${UPGRADE_AGENT_DIAGNOSTICS_INNER:-}" != 1 ]]; then
   else
     wait "${pid}" || true
   fi
-  "${filter}" --tail 120 <"${log}" || echo 'Omitted unsanitizable agent diagnostics'
+  redact 120 <"${log}" || echo 'Omitted unsanitizable agent diagnostics'
   rm -f "${log}"
   exit 0
 fi
 k() { timeout --kill-after=1s 3s uds zarf tools kubectl --request-timeout=2s "$@"; }
-safe() { k "$@" 2>&1 | "${filter}" --tail 40 || echo 'Omitted unavailable or unsanitizable agent diagnostic'; }
+safe() { k "$@" 2>&1 | redact 40 || echo 'Omitted unavailable or unsanitizable agent diagnostic'; }
 echo "Zarf agent diagnostics: phase=${1:-unknown}, namespace=zarf deployment/service=agent-hook"
 safe get deployment agent-hook -n zarf -o wide
 safe get service,endpoints agent-hook -n zarf -o wide

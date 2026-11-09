@@ -82,7 +82,11 @@ if 'service' in args and 'json' in args:
 elif 'pods' in args and any('jsonpath=' in a for a in args):
     print('restored-agent')
 elif 'logs' in args:
-    print('password=unique-secret-value')
+    if '--previous' in args:
+        print('password=other-secret-value')
+    else:
+        print('Authorization: Bearer unique-secret-value')
+        print('{\"AUTHORIZATION\":\"Basic third-secret-value\"}')
 else:
     print('healthy diagnostic metadata')
 ''')
@@ -92,7 +96,9 @@ else:
                 'bash', str(ROOT / 'tests/upgrade-agent-diagnostics.sh'), 'fixture'],
                 env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'],
                      'CALLS': str(calls)}, text=True, capture_output=True, check=True)
-            self.assertNotIn('unique-secret-value', result.stdout + result.stderr)
+            for secret in ['unique-secret-value', 'other-secret-value', 'third-secret-value']:
+                self.assertNotIn(secret, result.stdout + result.stderr)
+            self.assertIn('Omitted authentication-bearing', result.stdout)
             self.assertIn('Previous agent log', result.stdout)
             recorded = [json.loads(line) for line in calls.read_text().splitlines()]
             self.assertTrue(any('--previous' in call for call in recorded))

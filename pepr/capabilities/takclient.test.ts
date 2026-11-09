@@ -141,6 +141,8 @@ interface Calls {
   logs: string[];
 }
 
+const currentFixtures = new WeakMap<TakClientCluster, (doc: TakClientDoc) => void>();
+
 function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: number; tak?: (method: string, path: string) => TakResponse } = {}) {
   const store = opts.store ?? material();
   if (opts.clients) {
@@ -150,7 +152,10 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: numb
   const issuedDays = opts.issuedDays ?? 30;
   let at = NOW;
   const calls: Calls = { status: [], annotate: [], deleted: [], sleeps: [], tak: [], logs: [] };
+  const clients = new Map((opts.clients ?? [client()]).map(doc => [doc.metadata!.name!, structuredClone(doc)]));
+  const setClient = (doc: TakClientDoc) => { clients.set(doc.metadata!.name!, structuredClone(doc)); };
   const cluster = {
+    getTakClient: async (_ns: string, name: string) => structuredClone(clients.get(name)),
     getConfigMap: async (ns: string, name: string) => store.configMaps[`${ns}/${name}`],
     getSecret: async (ns: string, name: string) => store.secrets[`${ns}/${name}`],
     applySecret: async (ns: string, name: string, labels: Record<string, string>, data: Record<string, string>) => {
@@ -167,9 +172,13 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: numb
     },
     patchTakClientStatus: async (_ns: string, name: string, conditions: Condition[]) => {
       calls.status.push({ name, conditions });
+      const current = clients.get(name);
+      if (current) current.status = { conditions: structuredClone(conditions) };
     },
     annotateTakClient: async (_ns: string, name: string, annotations: Record<string, string>) => {
       calls.annotate.push({ name, annotations });
+      const current = clients.get(name);
+      if (current) current.metadata!.annotations = { ...current.metadata?.annotations, ...annotations };
     },
     listTakClients: async () => opts.clients ?? [],
     listPods: async () => [],
@@ -181,6 +190,7 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: numb
       calls.sleeps.push(ms);
     },
   } as unknown as TakClientCluster;
+  currentFixtures.set(cluster, setClient);
   const tak: TakApi = {
     request: async (_tls, method, path, body) => {
       calls.tak.push({ method, path, body });
@@ -203,15 +213,26 @@ function fake(opts: { store?: Store; clients?: TakClientDoc[]; issuedDays?: numb
     },
   };
   const d: Deps = { cluster, tak, now: () => at, domain: "uds.dev", log: msg => calls.logs.push(msg) };
-  return { d, calls, store, setNow: (value: Date) => { at = value; } };
+  return { d, calls, store, clients, setClient, setNow: (value: Date) => { at = value; } };
 }
 
 function client(extra: Partial<TakClientDoc> = {}): TakClientDoc {
   return {
-    metadata: { name: "takclient-test", namespace: "takclients", generation: 1, ...extra.metadata },
+    metadata: { name: "takclient-test", uid: "client-uid", namespace: "takclients", generation: 1, ...extra.metadata },
     spec: { callsign: "takclient-test", groups: ["Operators"], ...extra.spec },
     status: extra.status,
   };
+}
+
+// Existing scenarios supply the current API object explicitly. Stale/concurrent
+// regressions below bypass these setup helpers and replay older event snapshots.
+async function reconcileCurrentEvent(doc: TakClientDoc, phase: string, d: Deps): Promise<boolean> {
+  currentFixtures.get(d.cluster)!(doc);
+  return reconcileTakClient(doc, phase, d);
+}
+async function finalizeCurrentEvent(doc: TakClientDoc, d: Deps): Promise<boolean> {
+  currentFixtures.get(d.cluster)!({ ...doc, metadata: { ...doc.metadata, deletionTimestamp: NOW.toISOString() } });
+  return finalizeTakClient(doc, d);
 }
 
 test("the capability watches TakClients in takclients and the CA material in takserver", () => {
@@ -451,7 +472,7 @@ test("condition keeps the transition time while the status holds", () => {
 
 test("reconcile issues a Secret, annotates the TakClient, registers it, and reports Ready", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const secret = store.secrets["takclients/takclient-test"] as SecretDoc;
   assert.ok(secret);
   const annotations = secret.metadata!.annotations!;
@@ -475,26 +496,176 @@ test("reconcile issues a Secret, annotates the TakClient, registers it, and repo
   assert.ok(store.secrets[`takserver/${CRL_SECRET}`]);
 });
 
+test("stale queued events do not revoke and reissue an already committed certificate", async () => {
+  const { d, calls, clients } = fake();
+  const stale = client();
+  await reconcileTakClient(stale, "ADDED", d);
+  const serial = calls.annotate[0].annotations[SERIAL];
+  const statuses = calls.status.length;
+  await reconcileTakClient(stale, "MODIFIED", d);
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 1);
+  assert.equal(calls.annotate.at(-1)!.annotations[SERIAL], serial);
+  assert.equal(clients.get("takclient-test")!.metadata!.annotations![SERIAL], serial);
+  assert.equal(calls.status.length, statuses);
+});
+
+test("concurrent queued events issue one distinct certificate, not competing serials", async () => {
+  const { d, calls } = fake();
+  await Promise.all([reconcileTakClient(client(), "ADDED", d), reconcileTakClient(client(), "MODIFIED", d)]);
+  assert.equal(new Set(calls.annotate.map(call => call.annotations[SERIAL])).size, calls.annotate.length);
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 1);
+  assert.equal(calls.annotate.length, 1);
+});
+
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+test("a queued event cannot enter the Secret-to-CR window and Ready is false throughout renewal", async () => {
+  const { d, calls, clients, store, setNow } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const stale = structuredClone(clients.get("takclient-test")!);
+  const oldSerial = stale.metadata!.annotations![SERIAL];
+  setNow(new Date(NOW.getTime() + 25 * DAY));
+  const written = gate();
+  const release = gate();
+  const apply = d.cluster.applySecretWithAnnotations;
+  d.cluster.applySecretWithAnnotations = async (...args) => {
+    await apply(...args);
+    written.resolve();
+    await release.promise;
+  };
+  const first = reconcileTakClient(stale, "MODIFIED", d);
+  await written.promise;
+  assert.equal(clients.get("takclient-test")!.status!.conditions![0].status, "False");
+  assert.notEqual(store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL], oldSerial);
+  assert.equal(clients.get("takclient-test")!.metadata!.annotations![SERIAL], oldSerial);
+  const second = reconcileTakClient(stale, "MODIFIED", d);
+  d.cluster.listTakClients = async () => [stale];
+  const restart = registerAll(d);
+  release.resolve();
+  await Promise.all([first, second, restart]);
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 2);
+  assert.notEqual(calls.annotate[0].annotations[SERIAL], calls.annotate[1].annotations[SERIAL]);
+  assert.equal(clients.get("takclient-test")!.metadata!.annotations![SERIAL],
+    store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL]);
+  assert.equal(clients.get("takclient-test")!.status!.conditions![0].status, "True");
+});
+
+test("finalization waits for issuance and stale updates cannot recreate a deleted client's access", async () => {
+  const { d, calls, clients, store } = fake();
+  const written = gate();
+  const release = gate();
+  const apply = d.cluster.applySecretWithAnnotations;
+  d.cluster.applySecretWithAnnotations = async (...args) => {
+    await apply(...args);
+    written.resolve();
+    await release.promise;
+  };
+  const issuance = reconcileTakClient(client(), "ADDED", d);
+  await written.promise;
+  const serial = store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL];
+  clients.get("takclient-test")!.metadata!.deletionTimestamp = NOW.toISOString();
+  const deleted = structuredClone(clients.get("takclient-test")!);
+  const finalization = finalizeTakClient(deleted, d);
+  const stale = reconcileTakClient(client(), "MODIFIED", d);
+  d.cluster.listTakClients = async () => [deleted];
+  const restart = registerAll(d);
+  release.resolve();
+  const results = await Promise.all([issuance, finalization, stale, restart]);
+  assert.equal(results[1], true);
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 1);
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
+  assert.equal(readCrlState(store.secrets[`takserver/${CRL_SECRET}`]).entries.some(entry => entry.serial === serial), true);
+});
+
+test("gone, recreated and active resources are safe against stale lifecycle events", async () => {
+  const { d, calls, clients, setClient } = fake();
+  const old = client();
+  clients.delete("takclient-test");
+  assert.equal(await reconcileTakClient(old, "MODIFIED", d), false);
+  assert.equal(await finalizeTakClient(old, d), false);
+  setClient(client({ metadata: { uid: "new-resource" } }));
+  assert.equal(await reconcileTakClient(old, "MODIFIED", d), false);
+  assert.equal(await finalizeTakClient(old, d), false);
+  assert.equal(await finalizeTakClient(client({ metadata: { uid: "new-resource" } }), d), false);
+  assert.equal(await reconcileTakClient(old, "DELETED", d), false);
+  assert.equal(calls.tak.length + calls.annotate.length + calls.status.length + calls.deleted.length, 0);
+  const missing = client({ metadata: { name: "missing" } });
+  d.cluster.listTakClients = async () => [missing];
+  await registerAll(d);
+  assert.equal(calls.tak.length, 0);
+});
+
+test("a failed client operation releases its queued successor", async () => {
+  const { d, calls } = fake();
+  const get = d.cluster.getTakClient;
+  let reads = 0;
+  d.cluster.getTakClient = async (...args) => {
+    if (++reads === 1) throw new Error("temporary API read failure");
+    return get(...args);
+  };
+  const first = reconcileTakClient(client(), "ADDED", d);
+  const next = reconcileTakClient(client(), "MODIFIED", d);
+  await assert.rejects(first, /temporary API read failure/);
+  await next;
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 1);
+});
+
+test("serialization is per client rather than a global enrollment lock", async () => {
+  const { d, setClient, store } = fake();
+  const entered = gate();
+  const release = gate();
+  const get = d.cluster.getTakClient;
+  d.cluster.getTakClient = async (ns, name) => {
+    if (name === "takclient-test") { entered.resolve(); await release.promise; }
+    return get(ns, name);
+  };
+  const first = reconcileTakClient(client(), "ADDED", d);
+  await entered.promise;
+  const other = client({ metadata: { name: "other-client", uid: "other-uid" }, spec: { callsign: "other-client" } });
+  setClient(other);
+  await reconcileTakClient(other, "ADDED", d);
+  assert.ok(store.secrets["takclients/other-client"]);
+  assert.equal(store.secrets["takclients/takclient-test"], undefined);
+  release.resolve();
+  await first;
+});
+
+test("a genuine current serial mismatch still revokes and reissues", async () => {
+  const { d, clients, calls, store } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  const serial = calls.annotate[0].annotations[SERIAL];
+  clients.get("takclient-test")!.metadata!.annotations![SERIAL] = "unexpected-serial";
+  await reconcileTakClient(client(), "MODIFIED", d);
+  assert.equal(calls.tak.filter(call => call.path.includes("signClient/v2")).length, 2);
+  assert.notEqual(calls.annotate[1].annotations[SERIAL], serial);
+  assert.equal(readCrlState(store.secrets[`takserver/${CRL_SECRET}`]).entries.some(entry => entry.serial === serial), true);
+});
+
 test("a second reconcile with the same Secret keeps the certificate and writes no status", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const annotations = calls.annotate[0].annotations;
   const ready = calls.status.at(-1)!.conditions;
   const again = client({ metadata: { name: "takclient-test", annotations }, status: { conditions: ready } });
   again.metadata!.generation = 1;
   const before = store.secrets["takclients/takclient-test"];
-  await reconcileTakClient(again, "MODIFIED", d);
+  await reconcileCurrentEvent(again, "MODIFIED", d);
   assert.equal(store.secrets["takclients/takclient-test"], before);
   assert.equal(calls.annotate.length, 1);
-  assert.equal(calls.status.length, 1);
+  assert.equal(calls.status.length, 2);
 });
 
 test("a replaced certificate is revoked", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const old = calls.annotate[0].annotations;
   delete store.secrets["takclients/takclient-test"];
-  await reconcileTakClient(client({ metadata: { name: "takclient-test", annotations: old } }), "MODIFIED", d);
+  await reconcileCurrentEvent(client({ metadata: { name: "takclient-test", annotations: old } }), "MODIFIED", d);
   assert.notEqual(calls.annotate[1].annotations[SERIAL], old[SERIAL]);
   const state = readCrlState(store.secrets[`takserver/${CRL_SECRET}`]);
   assert.deepEqual(
@@ -572,7 +743,7 @@ test("a seven-day issued certificate renews on its own lifetime, not a ten-day t
 test("reconcile keeps a seven-day certificate until the last third of the issued lifetime", async () => {
   const { d, calls, store, setNow } = fake({ issuedDays: 7 });
   const spec = { callsign: "takclient-test", groups: ["Operators"], validityDays: 1 };
-  await reconcileTakClient(client({ spec }), "ADDED", d);
+  await reconcileCurrentEvent(client({ spec }), "ADDED", d);
   const first = store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL];
   const current = () => {
     const annotations = store.secrets["takclients/takclient-test"].metadata!.annotations!;
@@ -580,14 +751,14 @@ test("reconcile keeps a seven-day certificate until the last third of the issued
   };
   assert.equal(needsIssue(current(), store.secrets["takclients/takclient-test"], NOW), false);
   setNow(new Date(NOW.getTime() + 2 * DAY));
-  await reconcileTakClient(current(), "MODIFIED", d);
+  await reconcileCurrentEvent(current(), "MODIFIED", d);
   assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL], first);
   setNow(new Date(NOW.getTime() + 5 * DAY));
   assert.equal(needsIssue(current(), store.secrets["takclients/takclient-test"], d.now()), true);
-  await reconcileTakClient(current(), "MODIFIED", d);
+  await reconcileCurrentEvent(current(), "MODIFIED", d);
   const renewed = store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL];
   assert.notEqual(renewed, first);
-  await reconcileTakClient(current(), "MODIFIED", d);
+  await reconcileCurrentEvent(current(), "MODIFIED", d);
   assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![SERIAL], renewed);
   const cert = new X509Certificate(unb64(store.secrets["takclients/takclient-test"].data!["client.pem"]));
   const lifetime = Date.parse(cert.validTo) - Date.parse(cert.validFrom);
@@ -597,37 +768,37 @@ test("reconcile keeps a seven-day certificate until the last third of the issued
 
 test("reconcile reports why it is not Ready", async () => {
   const invalid = fake();
-  assert.equal(await reconcileTakClient(client({ spec: { callsign: "no" } }), "ADDED", invalid.d), false);
+  assert.equal(await reconcileCurrentEvent(client({ spec: { callsign: "no" } }), "ADDED", invalid.d), false);
   assert.equal(invalid.calls.status[0].conditions[0].reason, "InvalidSpec");
 
   const noDomain = fake();
   noDomain.d.domain = "";
-  assert.equal(await reconcileTakClient(client(), "ADDED", noDomain.d), false);
+  assert.equal(await reconcileCurrentEvent(client(), "ADDED", noDomain.d), false);
   assert.equal(noDomain.calls.status[0].conditions[0].reason, "NoDomain");
 
   const store = material();
   delete store.secrets["takserver/takserver-ca-key"];
   const noCa = fake({ store });
-  assert.equal(await reconcileTakClient(client(), "ADDED", noCa.d), true);
+  assert.equal(await reconcileCurrentEvent(client(), "ADDED", noCa.d), true);
   assert.equal(noCa.calls.status[0].conditions[0].reason, "WaitingForCa");
 
   const adminless = material();
   delete adminless.secrets["takserver/takserver-certs"];
   const noAdmin = fake({ store: adminless });
-  assert.equal(await reconcileTakClient(client(), "ADDED", noAdmin.d), true);
+  assert.equal(await reconcileCurrentEvent(client(), "ADDED", noAdmin.d), true);
   assert.equal(noAdmin.calls.status[0].conditions[0].reason, "WaitingForAdmin");
 
   const down = fake({ tak: () => ({ status: 503, body: "" }) });
-  assert.equal(await reconcileTakClient(client(), "ADDED", down.d), true);
-  assert.equal(down.calls.status[0].conditions[0].reason, "TakUnavailable");
+  assert.equal(await reconcileCurrentEvent(client(), "ADDED", down.d), true);
+  assert.equal(down.calls.status.at(-1)!.conditions[0].reason, "TakUnavailable");
   assert.equal(down.calls.logs[0].includes("HTTP 503"), true);
 });
 
 test("reconcile skips deletes and objects being deleted", async () => {
   const { d, calls } = fake();
-  assert.equal(await reconcileTakClient(client(), "DELETED", d), false);
+  assert.equal(await reconcileCurrentEvent(client(), "DELETED", d), false);
   assert.equal(
-    await reconcileTakClient(client({ metadata: { name: "x", deletionTimestamp: NOW.toISOString() } }), "MODIFIED", d),
+    await reconcileCurrentEvent(client({ metadata: { name: "x", deletionTimestamp: NOW.toISOString() } }), "MODIFIED", d),
     false,
   );
   assert.equal(calls.status.length + calls.tak.length, 0);
@@ -635,9 +806,9 @@ test("reconcile skips deletes and objects being deleted", async () => {
 
 test("finalize deletes the TAK user, revokes the serial, and deletes the Secret", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const annotations = calls.annotate[0].annotations;
-  const done = await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations } }), d);
+  const done = await finalizeCurrentEvent(client({ metadata: { name: "takclient-test", annotations } }), d);
   assert.equal(done, true);
   assert.equal(calls.tak.at(-1)!.method, "DELETE");
   assert.deepEqual(calls.deleted, ["takclients/takclient-test"]);
@@ -651,22 +822,22 @@ test("finalize deletes the TAK user, revokes the serial, and deletes the Secret"
 
 test("finalize waits when the enrollment user or the CA cannot be cleaned up", async () => {
   const down = fake({ tak: () => ({ status: 500, body: "" }) });
-  assert.equal(await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab" } } }), down.d), false);
+  assert.equal(await finalizeCurrentEvent(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab" } } }), down.d), false);
   assert.equal(down.calls.logs[0].includes("HTTP 500"), true);
   assert.deepEqual(down.calls.deleted, []);
   const unissued = fake();
-  assert.equal(await finalizeTakClient(client({ spec: { callsign: undefined } as never }), unissued.d), true);
+  assert.equal(await finalizeCurrentEvent(client({ spec: { callsign: undefined } as never }), unissued.d), true);
   assert.equal(unissued.calls.tak.length, 0);
   const store = material();
   delete store.secrets["takserver/takserver-ca-key"];
   const noCa = fake({ store });
-  assert.equal(await finalizeTakClient(client(), noCa.d), false);
+  assert.equal(await finalizeCurrentEvent(client(), noCa.d), false);
   assert.equal(noCa.calls.logs[0].includes("cannot be revoked"), true);
   const adminless = material();
   delete adminless.secrets["takserver/takserver-certs"];
   adminless.secrets["takclients/takclient-test"] = { data: { password: b64("x") } };
   const noAdmin = fake({ store: adminless });
-  assert.equal(await finalizeTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab", [CALLSIGN]: "takclient-test" } } }), noAdmin.d), false);
+  assert.equal(await finalizeCurrentEvent(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "ab", [CALLSIGN]: "takclient-test" } } }), noAdmin.d), false);
   assert.deepEqual(noAdmin.calls.deleted, []);
   assert.ok(adminless.secrets["takclients/takclient-test"]);
   assert.equal(noAdmin.calls.logs.some(line => line.includes("enrollment user")), true);
@@ -674,7 +845,7 @@ test("finalize waits when the enrollment user or the CA cannot be cleaned up", a
 
 test("failed user deletion keeps the Secret until an idempotent retry removes the account", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
   let users = 0;
   d.tak.request = async (_tls, method, path) => {
@@ -691,14 +862,14 @@ test("failed user deletion keeps the Secret until an idempotent retry removes th
     if (method === "DELETE" && path.includes("/certadmin/cert/revoke/")) return { status: 200, body: "" };
     return { status: 200, body: "" };
   };
-  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.equal(await finalizeCurrentEvent(doc, d), false);
   assert.ok(store.secrets["takclients/takclient-test"]);
   assert.ok(await readCredential(d.cluster, "takclient-test"));
   assert.deepEqual(calls.deleted, []);
   assert.equal(calls.logs.some(line => line.includes("HTTP 500") && !line.includes("hidden-account")), true);
   const revokeDeletes = () => calls.tak.filter(call => call.method === "DELETE" && call.path.includes("/certadmin/cert/revoke/")).length;
   assert.equal(revokeDeletes(), 1);
-  assert.equal(await finalizeTakClient(doc, d), true);
+  assert.equal(await finalizeCurrentEvent(doc, d), true);
   assert.equal(revokeDeletes(), 1);
   assert.equal(calls.tak.filter(call => call.path.includes("delete-user")).length, 2);
   assert.deepEqual(calls.deleted, ["takclients/takclient-test"]);
@@ -713,7 +884,7 @@ test("ambiguous delete-user responses keep the finalizer, device Secret, and pri
   ];
   for (const response of responses) {
     const { d, calls, store } = fake();
-    await reconcileTakClient(client(), "ADDED", d);
+    await reconcileCurrentEvent(client(), "ADDED", d);
     const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
     d.tak.request = async (_tls, method, path) => {
       calls.tak.push({ method, path });
@@ -723,7 +894,7 @@ test("ambiguous delete-user responses keep the finalizer, device Secret, and pri
       if (method === "DELETE" && path.includes("delete-user")) return response;
       return { status: 200, body: "" };
     };
-    assert.equal(await finalizeTakClient(doc, d), false);
+    assert.equal(await finalizeCurrentEvent(doc, d), false);
     assert.ok(store.secrets["takclients/takclient-test"]);
     assert.ok(await readCredential(d.cluster, "takclient-test"));
     assert.deepEqual(calls.deleted, []);
@@ -734,7 +905,7 @@ test("ambiguous delete-user responses keep the finalizer, device Secret, and pri
 
 test("list-users readback that omits the callsign finishes cleanup after an ambiguous delete", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
   d.tak.request = async (_tls, method, path) => {
     calls.tak.push({ method, path });
@@ -743,7 +914,7 @@ test("list-users readback that omits the callsign finishes cleanup after an ambi
     if (method === "DELETE" && path.includes("delete-user")) return { status: 400, body: '{"message":"Invalid Request"}' };
     return { status: 200, body: "" };
   };
-  assert.equal(await finalizeTakClient(doc, d), true);
+  assert.equal(await finalizeCurrentEvent(doc, d), true);
   assert.equal(store.secrets["takclients/takclient-test"], undefined);
   assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
   assert.equal(calls.tak.some(call => call.path.endsWith("/list-users")), true);
@@ -754,6 +925,7 @@ test("onFinalize retries through an annotation when finalize cannot finish", asy
   const store = material();
   delete store.secrets["takserver/takserver-ca-key"];
   const noCa = fake({ store });
+  noCa.setClient(client({ metadata: { deletionTimestamp: NOW.toISOString() } }));
   runtime.takCluster = noCa.d.cluster;
   runtime.tak = noCa.d.tak;
   try {
@@ -761,16 +933,44 @@ test("onFinalize retries through an annotation when finalize cannot finish", asy
     assert.deepEqual(noCa.calls.sleeps, [FINALIZE_RETRY_MS]);
     assert.equal(RETRY in noCa.calls.annotate[0].annotations, true);
     const broken = fake();
+    broken.setClient(client({ metadata: { deletionTimestamp: NOW.toISOString() } }));
     broken.d.cluster.getConfigMap = async () => {
       throw new Error("boom");
     };
     runtime.takCluster = broken.d.cluster;
     assert.equal(await onFinalize(client()), false);
     const ok = fake();
+    ok.setClient(client({ metadata: { deletionTimestamp: NOW.toISOString() } }));
     runtime.takCluster = ok.d.cluster;
     runtime.tak = ok.d.tak;
     assert.equal(await onFinalize(client()), true);
     assert.equal(ok.calls.sleeps.length, 0);
+  } finally {
+    runtime.takCluster = saved.cluster;
+    runtime.tak = saved.tak;
+  }
+});
+
+test("the finalizer callback never removes a replacement or throws on retry API failures", async () => {
+  const saved = { cluster: runtime.takCluster, tak: runtime.tak };
+  const { d, calls, setClient } = fake();
+  runtime.takCluster = d.cluster;
+  runtime.tak = d.tak;
+  try {
+    setClient(client({ metadata: { uid: "replacement" } }));
+    assert.equal(await onFinalize(client({ metadata: { deletionTimestamp: NOW.toISOString() } })), false);
+    assert.equal(calls.annotate.length + calls.deleted.length + calls.tak.length, 0);
+    setClient(client({ metadata: { uid: "replacement", deletionTimestamp: NOW.toISOString() } }));
+    assert.equal(await onFinalize(client()), false);
+    assert.equal(calls.annotate.length, 0);
+    setClient(client({ metadata: { deletionTimestamp: NOW.toISOString() } }));
+    d.cluster.getConfigMap = async () => { throw new Error("CA read unavailable"); };
+    let retryWrites = 0;
+    d.cluster.annotateTakClient = async () => { retryWrites++; throw new Error("retry write unavailable"); };
+    assert.equal(await onFinalize(client()), false);
+    assert.equal(retryWrites, 1);
+    d.cluster.getTakClient = async () => { throw new Error("resource read unavailable"); };
+    assert.equal(await onFinalize(client()), false);
   } finally {
     runtime.takCluster = saved.cluster;
     runtime.tak = saved.tak;
@@ -856,7 +1056,7 @@ test("legacy CRL reload cannot be cancelled until both consumer pods were recrea
 test("legacy certificates migrate through the CRL restart fallback before TAK enrollment", async () => {
   const { d, calls, store } = fake();
   const legacy = client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "aa", [CALLSIGN]: "takclient-test" } } });
-  assert.equal(await reconcileTakClient(legacy, "MODIFIED", d), false);
+  assert.equal(await reconcileCurrentEvent(legacy, "MODIFIED", d), false);
   assert.equal(calls.annotate.at(-1)!.annotations[ISSUER], "tak");
   const crl = store.secrets[`takserver/${CRL_SECRET}`] as SecretDoc & { labels: Record<string, string> };
   assert.equal(crl.labels["uds.dev/pod-reload"], "true");
@@ -865,37 +1065,49 @@ test("legacy certificates migrate through the CRL restart fallback before TAK en
   assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
   assert.ok(await readCredential(d.cluster, "takclient-test"));
   const withoutCallsign = fake();
-  await reconcileTakClient(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "bb" } } }), "MODIFIED", withoutCallsign.d);
+  await reconcileCurrentEvent(client({ metadata: { name: "takclient-test", annotations: { [SERIAL]: "bb" } } }), "MODIFIED", withoutCallsign.d);
   assert.equal(withoutCallsign.calls.tak[0].method, "PUT");
 });
 
 test("TAK-issued certificate revocation failures retain the finalizer and Secret", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
   d.tak.request = async () => ({ status: 503, body: "" });
-  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.equal(await finalizeCurrentEvent(doc, d), false);
   assert.ok(store.secrets["takclients/takclient-test"]);
   assert.ok(await readCredential(d.cluster, "takclient-test"));
   delete store.secrets["takserver/takserver-certs"];
-  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.equal(await finalizeCurrentEvent(doc, d), false);
 });
 
 test("a replacement cannot bypass a missing certificate fingerprint", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const annotations = { ...calls.annotate.at(-1)!.annotations };
   delete annotations["tak.jonathanagustin.github.io/fingerprint"];
   store.secrets["takclients/takclient-test"].metadata!.annotations = annotations;
   const doc = client({ metadata: { name: "takclient-test", annotations }, spec: { callsign: "different" } });
-  assert.equal(await reconcileTakClient(doc, "MODIFIED", d), true);
+  assert.equal(await reconcileCurrentEvent(doc, "MODIFIED", d), true);
   assert.equal(calls.status.at(-1)!.conditions[0].status, "False");
-  assert.equal(await finalizeTakClient(doc, d), false);
+  assert.equal(await finalizeCurrentEvent(doc, d), false);
+});
+
+test("restart registration refuses a genuine current certificate mismatch before registering", async () => {
+  const { d, calls, clients } = fake();
+  await reconcileTakClient(client(), "ADDED", d);
+  clients.get("takclient-test")!.metadata!.annotations![SERIAL] = "mismatched";
+  d.cluster.listTakClients = async () => [structuredClone(clients.get("takclient-test")!)];
+  const requests = calls.tak.length;
+  await registerAll(d);
+  assert.equal(calls.tak.length, requests);
+  assert.equal(calls.status.at(-1)!.conditions[0].reason, "MigrationRequired");
+  assert.ok(RECONCILE_RETRY in calls.annotate.at(-1)!.annotations);
 });
 
 test("registerAll retains Ready for a current TAK-issued certificate", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const doc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
   d.cluster.listTakClients = async () => [doc];
   await registerAll(d);
@@ -907,7 +1119,7 @@ test("partial password-only Secrets recover without treating them as issued cert
   for (const secret of [{ data: {} }, { metadata: {}, data: {} }]) {
     const { d, store, calls } = fake();
     store.secrets["takclients/takclient-test"] = secret;
-    assert.equal(await reconcileTakClient(client(), "MODIFIED", d), false);
+    assert.equal(await reconcileCurrentEvent(client(), "MODIFIED", d), false);
     assert.equal(calls.status.at(-1)!.conditions[0].status, "True");
     assert.equal(store.secrets["takclients/takclient-test"].metadata!.annotations![ISSUER], "tak");
   }
@@ -915,7 +1127,7 @@ test("partial password-only Secrets recover without treating them as issued cert
 
 test("missing private state revokes and reissues instead of trusting a device-supplied password", async () => {
   const { d, calls, store } = fake();
-  await reconcileTakClient(client(), "ADDED", d);
+  await reconcileCurrentEvent(client(), "ADDED", d);
   const before = calls.annotate.at(-1)!.annotations;
   delete store.secrets[`takserver/${ENROLLMENT_SECRET}`];
   store.secrets["takclients/takclient-test"].data!["user-password"] = b64("attacker-chosen");
@@ -923,24 +1135,24 @@ test("missing private state revokes and reissues instead of trusting a device-su
   d.cluster.listTakClients = async () => [doc];
   await registerAll(d);
   assert.equal(calls.status.at(-1)!.conditions[0].reason, "EnrollmentStateMissing");
-  assert.equal(await reconcileTakClient(doc, "MODIFIED", d), false);
+  assert.equal(await reconcileCurrentEvent(doc, "MODIFIED", d), false);
   assert.notEqual(calls.annotate.at(-1)!.annotations[SERIAL], before[SERIAL]);
   assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
   assert.notEqual(await readCredential(d.cluster, "takclient-test"), "attacker-chosen");
   assert.ok(calls.tak.some(call => call.path.includes("cert/revoke/")));
   const finalDoc = client({ metadata: { name: "takclient-test", annotations: calls.annotate.at(-1)!.annotations } });
-  assert.equal(await finalizeTakClient(finalDoc, d), true);
+  assert.equal(await finalizeCurrentEvent(finalDoc, d), true);
   assert.equal(await readCredential(d.cluster, "takclient-test"), undefined);
 });
 
 test("finalization uses the delivered certificate even if resource annotation failed", async () => {
   const { d, calls, store } = fake();
   d.cluster.annotateTakClient = async () => { throw new Error("annotation conflict"); };
-  assert.equal(await reconcileTakClient(client(), "ADDED", d), true);
+  assert.equal(await reconcileCurrentEvent(client(), "ADDED", d), true);
   const annotations = store.secrets["takclients/takclient-test"].metadata!.annotations!;
   assert.equal(annotations[ISSUER], "tak");
   assert.equal(store.secrets["takclients/takclient-test"].data!["user-password"], undefined);
-  assert.equal(await finalizeTakClient(client(), d), true);
+  assert.equal(await finalizeCurrentEvent(client(), d), true);
   const hash = annotations["tak.jonathanagustin.github.io/fingerprint"];
   assert.ok(calls.tak.some(call => call.path === `/Marti/api/certadmin/cert/${encodeURIComponent(hash)}`));
   assert.equal(store.secrets["takclients/takclient-test"], undefined);
@@ -948,18 +1160,21 @@ test("finalization uses the delivered certificate even if resource annotation fa
 });
 
 test("registerAll registers every issued TakClient again", async () => {
-  const issued = client({ metadata: { name: "a1b2", annotations: { [SERIAL]: "aa", [NOT_AFTER]: "2026-12-01" } } });
+  const seeded = fake();
+  await reconcileCurrentEvent(client({ metadata: { name: "a1b2" } }), "ADDED", seeded.d);
+  const issued = structuredClone(seeded.clients.get("a1b2")!);
+  delete issued.status;
   const clients = [
     issued,
     client({ metadata: { name: "gone", deletionTimestamp: NOW.toISOString(), annotations: { [SERIAL]: "aa" } } }),
     client({ metadata: { name: "bad", annotations: { [SERIAL]: "aa" } }, spec: { callsign: "no" } }),
     client({ metadata: { name: "new" } }),
   ];
-  const { d, calls } = fake({ clients });
+  const { d, calls } = fake({ clients, store: seeded.store });
   await registerAll(d);
   assert.equal(calls.tak.length, 1);
   assert.equal(calls.status[0].name, "a1b2");
-  const down = fake({ clients: [issued], tak: () => ({ status: 503, body: "" }) });
+  const down = fake({ clients: [issued], store: seeded.store, tak: () => ({ status: 503, body: "" }) });
   await registerAll(down.d);
   assert.equal(down.calls.logs.length, 1);
   const store = material();
@@ -975,8 +1190,10 @@ test("registerAll registers every issued TakClient again", async () => {
 
 test("onMessaging registers again only when messaging becomes Available", async () => {
   const saved = { cluster: runtime.takCluster, tak: runtime.tak };
-  const issued = client({ metadata: { name: "a1b2", annotations: { [SERIAL]: "aa" } } });
-  const { d, calls } = fake({ clients: [issued] });
+  const seeded = fake();
+  await reconcileCurrentEvent(client({ metadata: { name: "a1b2" } }), "ADDED", seeded.d);
+  const issued = structuredClone(seeded.clients.get("a1b2")!);
+  const { d, calls } = fake({ clients: [issued], store: seeded.store });
   runtime.takCluster = d.cluster;
   runtime.tak = d.tak;
   resetMessaging();

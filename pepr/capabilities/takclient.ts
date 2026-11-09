@@ -59,6 +59,7 @@ export interface TakClientDoc {
     name?: string;
     namespace?: string;
     generation?: number;
+    uid?: string;
     deletionTimestamp?: string;
     annotations?: Record<string, string>;
   };
@@ -84,6 +85,7 @@ export interface TakApi {
 }
 
 export interface TakClientCluster extends Cluster {
+  getTakClient(namespace: string, name: string): Promise<TakClientDoc | undefined>;
   patchTakClientStatus(namespace: string, name: string, conditions: Condition[]): Promise<void>;
   annotateTakClient(namespace: string, name: string, annotations: Record<string, string>): Promise<void>;
   listTakClients(namespace: string): Promise<TakClientDoc[]>;
@@ -292,6 +294,7 @@ async function setReady(
     return;
   }
   await deps.cluster.patchTakClientStatus(CLIENT_NAMESPACE, client.metadata!.name!, next);
+  client.status = { ...client.status, conditions: next };
 }
 
 // One CRL writer at a time. Two finalizers could otherwise read the same
@@ -441,12 +444,43 @@ export function secretData(callsign: string, issued: Issued, ca: Ca, host: strin
   };
 }
 
+// Serialize only one client's lifecycle. Watch events are snapshots, not the
+// authoritative state after an earlier event has committed Secret/CR writes.
+const clientLocks = new WeakMap<TakClientCluster, Map<string, Promise<unknown>>>();
+function withClientLock<T>(cluster: TakClientCluster, name: string, fn: () => Promise<T>): Promise<T> {
+  let locks = clientLocks.get(cluster);
+  if (!locks) {
+    locks = new Map();
+    clientLocks.set(cluster, locks);
+  }
+  const previous = locks.get(name) ?? Promise.resolve();
+  const run = previous.then(fn, fn);
+  locks.set(name, run);
+  void run.finally(() => {
+    if (locks.get(name) === run) locks.delete(name);
+  }).catch(() => undefined);
+  return run;
+}
+
+async function currentClient(event: TakClientDoc, cluster: TakClientCluster): Promise<TakClientDoc | undefined> {
+  const current = await cluster.getTakClient(CLIENT_NAMESPACE, event.metadata!.name!);
+  // An old queued event must never operate on a new object with the same name.
+  if (!current || (event.metadata?.uid && event.metadata.uid !== current.metadata?.uid)) return undefined;
+  return current;
+}
+
 // Returns true when the failure is one that clears on its own (the CA, the
 // admin certificate, or TAK is not ready yet), so the caller tries again.
 export async function reconcileTakClient(client: TakClientDoc, phase: string, deps: Deps): Promise<boolean> {
-  if (phase === "DELETED" || client.metadata?.deletionTimestamp) {
-    return false;
-  }
+  if (phase === "DELETED") return false;
+  return withClientLock(deps.cluster, client.metadata!.name!, async () => {
+    const fresh = await currentClient(client, deps.cluster);
+    if (!fresh || fresh.metadata?.deletionTimestamp) return false;
+    return reconcileCurrent(fresh, deps);
+  });
+}
+
+async function reconcileCurrent(client: TakClientDoc, deps: Deps): Promise<boolean> {
   const { cluster } = deps;
   const name = client.metadata!.name!;
   const problem = validate(client.spec);
@@ -480,8 +514,12 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
   // Losing private state forces revoke/reissue with a new file-user password.
   const priorPassword = await readCredential(cluster, name);
   try {
+    const issue = needsIssue(client, current, now) || !priorPassword;
+    if (issue) {
+      await setReady(deps, client, "False", "Issuing", "Issuing the client certificate and updating its Secret");
+    }
     const userPassword = priorPassword ?? await rememberCredential(cluster, name);
-    if (needsIssue(client, current, now) || !priorPassword) {
+    if (issue) {
       const old = { ...client.metadata?.annotations, ...current?.metadata?.annotations };
       if (old[SERIAL]) {
         if (old[ISSUER] === "tak") {
@@ -519,6 +557,14 @@ export async function reconcileTakClient(client: TakClientDoc, phase: string, de
 
 // Returns false to keep the finalizer. The caller retries.
 export async function finalizeTakClient(client: TakClientDoc, deps: Deps): Promise<boolean> {
+  return withClientLock(deps.cluster, client.metadata!.name!, async () => {
+    const fresh = await currentClient(client, deps.cluster);
+    if (!fresh || !fresh.metadata?.deletionTimestamp) return false;
+    return finalizeCurrent(fresh, deps);
+  });
+}
+
+async function finalizeCurrent(client: TakClientDoc, deps: Deps): Promise<boolean> {
   const { cluster } = deps;
   const name = client.metadata!.name!;
   const ca = await readCa(cluster);
@@ -572,28 +618,32 @@ export async function registerAll(deps: Deps): Promise<void> {
   if (!admin) {
     return;
   }
-  for (const client of await deps.cluster.listTakClients(CLIENT_NAMESPACE)) {
-    const callsign = client.spec?.callsign;
-    if (client.metadata?.deletionTimestamp || validate(client.spec) || !client.metadata?.annotations?.[SERIAL]) {
-      continue;
-    }
-    try {
-      const secret = await deps.cluster.getSecret(CLIENT_NAMESPACE, secretName(client));
-      const password = await readCredential(deps.cluster, secretName(client));
-      if (!password) {
-        await setReady(deps, client, "False", "EnrollmentStateMissing", "Private enrollment state is missing; reissue required");
-        await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
-        continue;
+  for (const event of await deps.cluster.listTakClients(CLIENT_NAMESPACE)) {
+    await withClientLock(deps.cluster, event.metadata!.name!, async () => {
+      const client = await currentClient(event, deps.cluster);
+      if (!client) return;
+      const callsign = client.spec?.callsign;
+      if (client.metadata?.deletionTimestamp || validate(client.spec) || !client.metadata?.annotations?.[SERIAL]) {
+        return;
       }
-      await register(deps.tak, admin, callsign!, client.spec!.groups!, password);
-      if (needsIssue(client, secret, deps.now())) {
-        await setReady(deps, client, "False", "MigrationRequired", "The client certificate must be reissued by TAK");
-        await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
-        continue;
+      try {
+        const secret = await deps.cluster.getSecret(CLIENT_NAMESPACE, secretName(client));
+        const password = await readCredential(deps.cluster, secretName(client));
+        if (!password) {
+          await setReady(deps, client, "False", "EnrollmentStateMissing", "Private enrollment state is missing; reissue required");
+          await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
+          return;
+        }
+        if (needsIssue(client, secret, deps.now())) {
+          await setReady(deps, client, "False", "MigrationRequired", "The client certificate must be reissued by TAK");
+          await deps.cluster.annotateTakClient(CLIENT_NAMESPACE, secretName(client), { [RECONCILE_RETRY]: deps.now().toISOString() });
+          return;
+        }
+        await register(deps.tak, admin, callsign!, client.spec!.groups!, password);
+        await setReady(deps, client, "True", "Issued", `Secret ${secretName(client)}, expires ${client.metadata.annotations[NOT_AFTER]}`);
+      } catch (err) {
+        deps.log(`TakClient ${client.metadata?.name}: ${(err as Error).message}`);
       }
-      await setReady(deps, client, "True", "Issued", `Secret ${secretName(client)}, expires ${client.metadata.annotations[NOT_AFTER]}`);
-    } catch (err) {
-      deps.log(`TakClient ${client.metadata?.name}: ${(err as Error).message}`);
-    }
+    });
   }
 }

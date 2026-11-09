@@ -75,8 +75,17 @@ export async function onFinalize(client: object): Promise<boolean> {
     d.log(`TakClient ${doc.metadata?.name}: finalize failed: ${(err as Error).message}`);
   }
   if (!done) {
-    await d.cluster.sleep(FINALIZE_RETRY_MS);
-    await d.cluster.annotateTakClient(CLIENT_NAMESPACE, doc.metadata!.name!, { [RETRY]: d.now().toISOString() });
+    try {
+      await d.cluster.sleep(FINALIZE_RETRY_MS);
+      const current = await d.cluster.getTakClient(CLIENT_NAMESPACE, doc.metadata!.name!);
+      if (current?.metadata?.deletionTimestamp && current.metadata.uid === doc.metadata?.uid) {
+        await d.cluster.annotateTakClient(CLIENT_NAMESPACE, doc.metadata!.name!, { [RETRY]: d.now().toISOString() });
+      }
+    } catch (err) {
+      // Never throw from a failed finalizer retry: Pepr defaults to removing
+      // its finalizer when the callback throws instead of returning false.
+      d.log(`TakClient ${doc.metadata?.name}: finalize retry failed: ${(err as Error).message}`);
+    }
   }
   return done;
 }

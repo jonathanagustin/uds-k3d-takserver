@@ -162,6 +162,7 @@ function restartOps(hasAnnotations: boolean): JsonOp[] {
 }
 
 const live: TakClientCluster = {
+  getTakClient: (namespace, name) => read(() => K8s(TakClient).InNamespace(namespace).Get(name)) as Promise<TakClientDoc | undefined>,
   getConfigMap: (namespace, name) => read(() => K8s(kind.ConfigMap).InNamespace(namespace).Get(name)),
   deleteConfigMap: async (namespace, name) => {
     try {

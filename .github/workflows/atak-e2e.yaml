@@ -193,6 +193,23 @@ jobs:
           --set CHAINGUARD_IDENTITY="${{ secrets.CHAINGUARD_IDENTITY }}"
         shell: bash
 
+      # PR producers publish immutable keyed tags, not the main-only plain tags.
+      - name: Wait for the six TAK images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_IF_MISSING: "false"
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./.github/scripts/wait-for-tak-images.sh
+
+      - name: Wait for the CloudTAK image
+        run: ./.github/container-and-chart/cloudtak/build.sh --wait
+
+      - name: Wait for the PostGIS image
+        run: ./.github/container-and-chart/postgis/build.sh --wait
+
+      - name: Use the selected source's keyed application images
+        run: ./.github/scripts/pin-image-tags.sh
+
       - name: Deploy UDS Core slim and TAK Server
         run: uds run actions:test-deploy --set FLAVOR=upstream --set TYPE=install --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash

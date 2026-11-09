@@ -53,7 +53,7 @@ Screenshot "demo/out/shots/release-signature-verified.png"
 Sleep 1s
 # caption: Build provenance for the same package, attested with the release workflow's identity
 # fast
-Type@40ms "gh attestation verify oci://ghcr.io/jonathanagustin/uds-takserver/takserver:{{VERSION}}-upstream --owner jonathanagustin"
+Type@40ms "gh attestation verify {{PACKAGE_REF}} --owner jonathanagustin"
 Sleep 400ms
 Enter
 Wait@120s /takserver \$\s*$/

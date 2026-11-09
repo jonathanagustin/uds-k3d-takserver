@@ -119,7 +119,7 @@ jobs:
       - name: Profiles, benchmark harness, and Full Core summary
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_bench_capacity tests.test_full_core_top tests.test_basemap_probe tests.test_runner_wedge_probe tests.test_node_airgap tests.test_image_producers tests.test_repository_name tests.test_ca_propagation tests.test_pin_image_tags -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_bench_capacity tests.test_full_core_top tests.test_basemap_probe tests.test_runner_wedge_probe tests.test_node_airgap tests.test_image_producers tests.test_app_image_consumers tests.test_published_package_ref tests.test_repository_name tests.test_ca_propagation tests.test_pin_image_tags -v
 
       - name: Optional native source and cache guards
         run: |

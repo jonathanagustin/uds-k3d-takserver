@@ -75,7 +75,8 @@ if [[ "${phase}" == prepare ]]; then
     } |
     del(.packages[] | select(.name == "takserver") | .repository)
   ' "${work}/bundle/uds-bundle.yaml"
-  uds zarf package pull "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${previous}-upstream" \
+  previous_package="$(python3 .github/scripts/published_package_ref.py "${previous}")"
+  uds zarf package pull "${previous_package}" \
     --architecture "${arch}" --certificate-identity-regexp "${RELEASE_WORKFLOW}" \
     --certificate-oidc-issuer "${RELEASE_ISSUER}" --features values=true -o "${work}" --no-progress
   uds create "${work}/bundle" --architecture "${arch}" --confirm --no-progress

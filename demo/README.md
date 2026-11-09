@@ -14,3 +14,26 @@ python3 demo/style.py branding demo/out/branding
 This writes `title.png`, `endcard.png`, `frame.png` and `phone.png`. The frame and phone images preview presentation layers without recorded content. Inspect these before running the normal `demo/assemble.sh` pipeline.
 
 Presentation updates do not rewrite historical recordings, release references, signatures, provenance or measured captions. The cast renderer recognizes both the current `uds-takserver` prompt and the legacy prompt so existing captured output remains usable. Reassemble and inspect recordings separately before publishing new videos; this template change does not replace published media.
+
+## Selecting application source in CI
+
+The Demo workflow waits for the selected source's immutable TAK, CloudTAK and
+PostGIS image indexes and pins their keyed tags before version stamping or
+package creation. It does not build missing application images itself.
+
+For an explicit `app_ref`, HEAD moves to that fetched commit while the recorder,
+demo tests, workflow file, `tasks.yaml`, `.gitignore` and the shared published-package
+resolver remain from the workflow
+commit. Image build directories and submodule pins therefore describe the
+selected application source. The producer lookup uses that fetched SHA; the
+default PR path keeps the PR head SHA rather than the synthetic merge SHA.
+
+An older ref must contain the supported wait/pin helpers and be compatible with
+the current recorder's task defaults. Missing helpers or unsupported read-only wait protocols fail with an explicit
+unsupported-source error; this is not universal support for historical release
+refs. No plain-tag fallback or replacement source key is used.
+
+Published-release consumers share `.github/scripts/published_package_ref.py`.
+The upgrade chapter resolves its previous release separately from the current
+recording's package; the rendered provenance command uses that same resolved
+current package URI. Publication defaults stay in the renamed namespace.

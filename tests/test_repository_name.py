@@ -56,8 +56,8 @@ class RepositoryNameTests(unittest.TestCase):
                         f'uds zarf package deploy "oci://ghcr.io/jonathanagustin/{OLD}/takserver:${{VERSION}}-upstream" --confirm')
                 elif name == '.github/container-and-chart/postgis/smoke.sh':
                     self.assertEqual(line, f'old_image="${{OLD_IMAGE:-ghcr.io/jonathanagustin/{OLD}/postgis:15-3.4}}"')
-                elif name == 'tests/upgrade-baseline.py':
-                    self.assertIn(f'namespace = "{OLD}" if tuple(map(int, match.groups())) < (0, 11, 0)', line)
+                elif name == '.github/scripts/published_package_ref.py':
+                    self.assertIn(f'namespace = "{OLD}" if parsed < (0, 11, 0)', line)
                 elif name == 'tests/test_upgrade_baseline.py':
                     self.assertTrue('takserver:0.6.0-upstream' in line or
                                     f'("0.10.0", "{OLD}")' in line, line)
@@ -67,7 +67,7 @@ class RepositoryNameTests(unittest.TestCase):
         self.assertEqual(counts, Counter({**SIGNERS, 'README.md': 8,
                          'docs/how-to/upgrade-from-0-6.md': 1,
                          '.github/container-and-chart/postgis/smoke.sh': 1,
-                         'tests/upgrade-baseline.py': 1, 'tests/test_upgrade_baseline.py': 2}))
+                         '.github/scripts/published_package_ref.py': 1, 'tests/test_upgrade_baseline.py': 2}))
 
     def test_label_publishers_and_readers_agree_on_the_new_namespace(self):
         files = [ROOT / '.github/container-and-chart' / image / 'build.sh'

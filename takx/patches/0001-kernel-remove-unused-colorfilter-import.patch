@@ -1,0 +1,4 @@
+--- a/takkernel/port/src/main/java/gov/tak/platform/marshal/ColorBlendModeMarshal.java
++++ b/takkernel/port/src/main/java/gov/tak/platform/marshal/ColorBlendModeMarshal.java
+@@ -3 +2,0 @@
+-import android.graphics.ColorFilter;

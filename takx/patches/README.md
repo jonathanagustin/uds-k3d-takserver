@@ -1,6 +1,6 @@
 # Upstream patches
 
-There are currently no source patches: the CommonCommo foundation builds the pinned official 1.17.2 source without Java/C++ API changes.
+The CommonCommo foundation currently builds the pinned official 1.17.2 source without Java/C++ API changes. The optional Kernel port test applies `0001-kernel-remove-unused-colorfilter-import.patch` to a temporary copy of official ATAK revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. It removes only an unused import, allowing the real marshal registry to compile without supplying a placeholder Android ColorFilter. The test pins the patch hash and exercises all 18 blend-mode round trips; no drawing behavior is removed. This patch is not an input to the native CommonCommo build.
 
 Future changes belong here as small, ordered diffs against a recorded upstream revision. Each patch must state the concrete incompatibility, intended behavior, applicable version and tests. Apply patches deterministically and include their hashes in build inputs before enabling them. Keep substantial upstream code in its upstream checkout rather than copying it into an untracked compatibility SDK.
 

@@ -4,7 +4,9 @@ This opt-in component builds **public CommonCommo 1.17.2**, including its Java J
 
 The existing `upstream/atak-civ` gitlink supplies the official source. [sources.lock.json](sources.lock.json) pins its revision, the actual CommonCommo version and nine source archives by SHA256, size and official public URL. TAKX source revisions in that file are research references, separate from the native build inputs. The optional `upstream/takx` gitlink pins the official 5.8 source; this build does not initialize or compile it. No TAK.gov account or private artifact is used by this foundation.
 
-Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after full compilation and runtime/interoperability checks pass. Neither client has passed those checks. Both still require a real desktop AndroidPort implementation and a tested streaming-contact API adaptation; missing-type counts alone do not establish compatibility.
+Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after full compilation and runtime/interoperability checks pass. Neither client has passed those checks. Both still require complete desktop Kernel support and a tested streaming-contact API adaptation; missing-type counts alone do not establish compatibility.
+
+The optional [desktop compatibility prototype](compat/README.md) supplies real bitmap, font, Context/resource and preference behavior. Its tests compile the complete public Kernel port module, but the engine and full clients remain unbuilt. This independently implemented slice is not the upstream AndroidPort artifact and is not installed by the server package.
 
 ## Run locally
 

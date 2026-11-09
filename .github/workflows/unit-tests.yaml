@@ -113,7 +113,7 @@ jobs:
           bash tests/test_node_agent_ready.sh
           ( cd tests && npx --yes pnpm@12.18.0 install --frozen-lockfile && npx playwright install chromium )
           node --test tests/test_tak_error_guard.mjs tests/sso-fetch.test.mjs tests/sso-trust-class.test.mjs tests/map-zoom.test.mjs
-          python3 -B -m unittest tests.test_cloudtak_sso_mount tests.test_playwright_collection tests.test_filesystem_backup_owner tests.test_velero_handoff -v
+          python3 -B -m unittest tests.test_cloudtak_sso_mount tests.test_playwright_collection -v
 
       # The profile checks and bench/run.py read YAML.
       - name: Profiles, benchmark harness, and Full Core summary
@@ -150,4 +150,4 @@ jobs:
       - name: Package values follow the variables
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff -v

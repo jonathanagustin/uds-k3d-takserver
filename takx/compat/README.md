@@ -1,14 +1,15 @@
 # Desktop compatibility prototype
 
-`uds-desktop-android-compat` 0.1.0 is a small, independently implemented Java desktop compatibility layer for the pinned public TAK Kernel. It is optional research code, not AndroidPort 6.1.2, an Android SDK, a packaged TAKX client, or a replacement for the complete Kernel runtime. Nothing in the server deployment imports or installs it.
+`uds-desktop-android-compat` 0.1.0 is a small Java desktop compatibility layer for the pinned public TAK Kernel. It is optional research code, not AndroidPort 6.1.2, an Android SDK, a packaged TAKX client, or a replacement for the complete Kernel runtime. Nothing in the server deployment imports or installs it.
 
 The implementation uses JDK `BufferedImage`, ImageIO, Java2D fonts, classpath streams and real filesystem persistence. Its supported surfaces are documented separately:
 
 - [Bitmap pixels, decoding and upstream marshaling](BITMAP.md)
+- [Coordinate and rectangle primitives](GEOMETRY.md)
 - [Font selection and text measurement](FONT.md)
 - [Context, resource catalogs and persistent preferences](CONTEXT.md)
 
-All sources are original repository code under the root GPL-3.0-only license. The tests compile upstream code from the separately checked-out official `TAK-Product-Center/atak-civ` revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. Upstream code remains in that checkout; no private SDK JAR or copied implementation is included.
+Most sources are original repository code under the root GPL-3.0-only license. RectF adapts the same pinned official public port implementation, retaining its Apache-2.0 notice and license; see [geometry provenance](GEOMETRY.md). The tests compile upstream code from the separately checked-out official `TAK-Product-Center/atak-civ` revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. Upstream code remains in that checkout; no private SDK JAR is included.
 
 ## Run the behavioral checks
 
@@ -19,6 +20,7 @@ export ATAK_SOURCE_DIR=/path/to/atak-civ
 ./takx/compat/test-font.sh
 ./takx/compat/test-bitmap.sh
 ./takx/compat/test-context.sh
+python3 takx/compat/test-geometry.py --source "$ATAK_SOURCE_DIR"
 ```
 
 The font and bitmap tests exercise real upstream wrappers and the marshal registry. Context tests include separate JVM restarts, concurrent JVM writers and concurrent threads using different Context objects. Tests use temporary directories and do not download inputs, change upstream files, load native graphics or start clusters.

@@ -23,18 +23,49 @@ public final class BitmapFactory {
     public static final class Options {
         public Bitmap.Config inPreferredConfig = Bitmap.Config.ARGB_8888;
         public boolean inMutable;
+        public Bitmap inBitmap;
         public boolean inJustDecodeBounds;
         public int outWidth;
         public int outHeight;
     }
 
     private static Bitmap decoded(BufferedImage image, Options options) {
-        if (image == null) { return null; }
+        if (image == null) { return failed(options); }
         // Decode into a real straight-alpha ARGB buffer, including RGB inputs.
-        BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
-        result.setRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
-        return new Bitmap(result, options != null && options.inMutable);
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        Bitmap reused = options == null ? null : options.inBitmap;
+        if (reused == null) {
+            return Bitmap.decoded(width, height, pixels, options != null && options.inMutable);
+        }
+        if (!reused.isMutable() || !reused.hasOwnedAllocation()) {
+            throw new ReuseException("reuse requires a mutable owned ARGB allocation");
+        }
+        try {
+            reused.reconfigure(width, height, Bitmap.Config.ARGB_8888);
+        } catch (IllegalArgumentException exception) {
+            throw new ReuseException("bitmap allocation is too small");
+        }
+        reused.setPixels(pixels, 0, width, 0, 0, width, height);
+        return reused;
+    }
+
+    private static final class ReuseException extends IllegalArgumentException {
+        ReuseException(String message) { super(message); }
+    }
+
+    private static void validate(Options options) {
+        if (options != null && options.inBitmap != null && options.inBitmap.isRecycled()) {
+            throw new ReuseException("cannot reuse a recycled bitmap");
+        }
+    }
+
+    private static Bitmap failed(Options options) {
+        if (options != null && options.inBitmap != null) {
+            throw new ReuseException("cannot decode into the supplied bitmap");
+        }
+        return null;
     }
 
     private static void reset(Options options) {
@@ -54,6 +85,7 @@ public final class BitmapFactory {
     }
 
     public static Bitmap decodeFile(String path, Options options) {
+        validate(options);
         reset(options);
         if (path == null) { return null; }
         try {
@@ -72,13 +104,14 @@ public final class BitmapFactory {
         }
         reset(options);
         if (stream == null) { return null; }
+        validate(options);
         // No global ImageIO cache setting and no ownership of the caller's stream.
         InputStream borrowed = new FilterInputStream(stream) {
             @Override public void close() { /* The caller owns this stream. */ }
         };
         try (ImageInputStream input = new MemoryCacheImageInputStream(borrowed)) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) { return null; }
+            if (!readers.hasNext()) { return failed(options); }
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input, true, true);
@@ -87,15 +120,17 @@ public final class BitmapFactory {
                 if (options != null) {
                     options.outWidth = width;
                     options.outHeight = height;
-                    if (options.inJustDecodeBounds) { return null; }
+                    if (options.inJustDecodeBounds) { return failed(options); }
                 }
                 return decoded(reader.read(0), options);
             } finally {
                 reader.dispose();
             }
+        } catch (ReuseException exception) {
+            throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             reset(options);
-            return null;
+            return failed(options);
         }
     }
 }

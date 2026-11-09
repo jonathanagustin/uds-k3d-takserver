@@ -18,6 +18,7 @@ actual_patch=$(sha256sum -- "${patch_file}")
   exit 1
 }
 files=(
+  takkernel/engine/src/main/java/com/atakmap/util/ResourcePool.java
   takkernel/port/src/main/java/gov/tak/api/commons/graphics/Bitmap.java
   takkernel/port/src/main/java/gov/tak/api/commons/graphics/BitmapFactory.java
   takkernel/port/src/main/java/gov/tak/api/commons/graphics/ColorBlendMode.java

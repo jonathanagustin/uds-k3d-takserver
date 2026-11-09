@@ -202,8 +202,126 @@ public final class BitmapCompatibilityTest {
         raises(ArrayIndexOutOfBoundsException.class, () -> android.graphics.BitmapFactory.decodeByteArray(png, Integer.MAX_VALUE, 2));
     }
 
+    private static BufferedImage view(android.graphics.Bitmap image) {
+        return MarshalManager.marshal(new Bitmap(image), Bitmap.class, BufferedImage.class);
+    }
+
+    private static byte[] png(int width, int height, int color) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) { image.setRGB(x, y, color + x + y); }
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", output);
+        return output.toByteArray();
+    }
+
+    private static void ownedReuse() throws Exception {
+        android.graphics.Bitmap image = bitmap(4, 3);
+        image.setPixel(3, 2, 0xff123456);
+        BufferedImage oldView = view(image);
+        Object allocation = ((java.awt.image.DataBufferInt) oldView.getRaster().getDataBuffer()).getData();
+        check(image.getByteCount() == 48 && image.getAllocationByteCount() == 48, "initial byte counts");
+        image.reconfigure(2, 2, android.graphics.Bitmap.Config.ARGB_8888);
+        check(image.getWidth() == 2 && image.getHeight() == 2 && image.getByteCount() == 16,
+                "reconfigure changes logical shape and byte count");
+        check(image.getAllocationByteCount() == 48, "shrink retains allocation capacity");
+        image.reconfigure(6, 2, android.graphics.Bitmap.Config.ARGB_8888);
+        BufferedImage reshaped = view(image);
+        check(reshaped.getWidth() == 6 && reshaped.getHeight() == 2, "new marshal view reflects shape");
+        check(((java.awt.image.DataBufferInt) reshaped.getRaster().getDataBuffer()).getData() == allocation,
+                "aspect-ratio change retains the exact pixel allocation");
+        check(oldView.getWidth() == 4 && oldView.getHeight() == 3, "previous view retains its Java2D dimensions");
+        check(image.getPixel(5, 1) == 0xff123456, "reconfiguration does not clear retained pixel storage");
+        image.setPixel(0, 0, 0xffabcdef);
+        check(oldView.getRGB(0, 0) == 0xffabcdef, "old view continues sharing allocation");
+        raises(IllegalArgumentException.class, () -> image.reconfigure(7, 2, android.graphics.Bitmap.Config.ARGB_8888));
+        raises(IllegalArgumentException.class, () -> image.reconfigure(Integer.MAX_VALUE, 2, android.graphics.Bitmap.Config.ARGB_8888));
+        raises(IllegalArgumentException.class, () -> image.reconfigure(0, 1, android.graphics.Bitmap.Config.ARGB_8888));
+        raises(NullPointerException.class, () -> image.reconfigure(1, 1, null));
+        check(image.getWidth() == 6 && image.getHeight() == 2 && view(image) == reshaped
+                && image.getPixel(0, 0) == 0xffabcdef, "failed reconfiguration leaves shape, view and pixels unchanged");
+
+        byte[] encoded = png(3, 2, 0x80123456);
+        android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+        com.atakmap.util.ResourcePool<android.graphics.Bitmap> pool = new com.atakmap.util.ResourcePool<>(1);
+        check(pool.put(image), "official ResourcePool accepts owned bitmap");
+        opts.inBitmap = pool.get();
+        android.graphics.Bitmap reused = android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts);
+        check(pool.put(reused) && pool.get() == image, "official ResourcePool retains reused object identity");
+        check(reused == image && reused.isMutable(), "reuse returns the same mutable object even without inMutable");
+        check(reused.getWidth() == 3 && reused.getHeight() == 2 && reused.getPixel(2, 1) == 0x80123459,
+                "reuse decodes real alpha and color pixels into the new shape");
+        check(reused.getByteCount() == 24 && reused.getAllocationByteCount() == 48,
+                "decode reuse preserves original capacity");
+        check(((java.awt.image.DataBufferInt) view(reused).getRaster().getDataBuffer()).getData() == allocation,
+                "decode reuse keeps exact destination allocation");
+        byte[] wider = png(6, 2, 0xff332211);
+        check(android.graphics.BitmapFactory.decodeByteArray(wider, 0, wider.length, opts) == image
+                && image.getPixel(5, 1) == 0xff332217, "repeated decode reuses recovered capacity");
+        byte[] oversized = png(7, 2, 0xff001122);
+        raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(oversized, 0, oversized.length, opts));
+        check(image.getWidth() == 6 && image.getHeight() == 2 && image.getPixel(5, 1) == 0xff332217,
+                "failed oversized reuse does not modify destination");
+        raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(new byte[0], 0, 0, opts));
+        check(image.getPixel(5, 1) == 0xff332217, "malformed reuse leaves destination pixels unchanged");
+        opts.inJustDecodeBounds = true;
+        raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts));
+        check(opts.outWidth == 3 && opts.outHeight == 2 && image.getWidth() == 6,
+                "AOSP bounds plus inBitmap reports bounds but raises instead of mutating destination");
+        opts.inJustDecodeBounds = false;
+        Path path = Files.createTempFile("bitmap-reuse", ".png");
+        try {
+            Files.write(path, oversized);
+            check(android.graphics.BitmapFactory.decodeFile(path.toString(), opts) == null,
+                    "AOSP file decoder converts incompatible reuse failure to null");
+        } finally { Files.delete(path); }
+        android.graphics.Bitmap immutable = android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
+        opts.inBitmap = immutable;
+        raises(IllegalStateException.class, () -> immutable.reconfigure(1, 1, android.graphics.Bitmap.Config.ARGB_8888));
+        raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts));
+        check(!immutable.isMutable() && immutable.getWidth() == 3, "immutable reuse input stays unchanged");
+        opts.inBitmap = image;
+        image.recycle();
+        check(image.getByteCount() == 0 && image.getAllocationByteCount() == 0, "AOSP recycled byte counts are zero");
+        raises(IllegalStateException.class, () -> image.reconfigure(1, 1, android.graphics.Bitmap.Config.ARGB_8888));
+        raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts));
+        check(oldView.getRGB(0, 0) == 0xff332211, "recycling retains separately borrowed shared storage");
+        check(android.graphics.BitmapFactory.decodeStream(null, null, opts) == null,
+                "AOSP null stream returns before recycled reuse validation");
+    }
+
+    private static void borrowedReuse() throws Exception {
+        byte[] encoded = png(1, 1, 0xff123456);
+        BufferedImage[] sources = {
+            new BufferedImage(3, 2, BufferedImage.TYPE_INT_RGB),
+            new BufferedImage(3, 2, BufferedImage.TYPE_BYTE_INDEXED),
+            new BufferedImage(3, 2, BufferedImage.TYPE_INT_ARGB_PRE),
+            new BufferedImage(5, 4, BufferedImage.TYPE_INT_ARGB).getSubimage(1, 1, 3, 2)
+        };
+        for (BufferedImage source : sources) {
+            Bitmap portable = MarshalManager.marshal(source, BufferedImage.class, Bitmap.class);
+            android.graphics.Bitmap borrowed = MarshalManager.marshal(portable, Bitmap.class, android.graphics.Bitmap.class);
+            check(view(borrowed) == source, "borrowed raster keeps exact backing identity");
+            borrowed.setPixel(0, 0, 0xff000000);
+            check(source.getRGB(0, 0) == borrowed.getPixel(0, 0), "borrowed writes retain actual color model");
+            source.setRGB(1, 0, 0xffffffff);
+            check(borrowed.getPixel(1, 0) == source.getRGB(1, 0), "external writes stay visible");
+            raises(UnsupportedOperationException.class, () -> borrowed.reconfigure(1, 1, android.graphics.Bitmap.Config.ARGB_8888));
+            raises(UnsupportedOperationException.class, borrowed::getAllocationByteCount);
+            raises(UnsupportedOperationException.class, borrowed::getByteCount);
+            android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+            opts.inBitmap = borrowed;
+            raises(IllegalArgumentException.class, () -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, opts));
+            check(view(borrowed) == source && borrowed.getWidth() == 3 && borrowed.getHeight() == 2
+                    && source.getRGB(1, 0) == 0xffffffff, "unsupported borrowed reuse neither detaches nor mutates");
+            borrowed.recycle();
+            check(source.getRGB(1, 0) == 0xffffffff, "borrowed storage survives recycle");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        pixels(); decode(); marshal(); lifecycleAndBounds();
+        pixels(); decode(); marshal(); lifecycleAndBounds(); ownedReuse(); borrowedReuse();
         System.out.println("PASS " + checks + " bitmap/decoder/upstream-marshal checks");
     }
 }

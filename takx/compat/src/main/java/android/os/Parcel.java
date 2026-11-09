@@ -70,6 +70,61 @@ public final class Parcel {
     public long readLong() { return readBits(8); }
     public void writeDouble(double value) { writeLong(Double.doubleToRawLongBits(value)); }
     public double readDouble() { return Double.longBitsToDouble(readLong()); }
+    /** JNI modified UTF-8, as used by Android nativeWriteString8. */
+    public void writeString8(String value) {
+        if (value == null) { writeInt(-1); return; }
+        int length = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            length = Math.addExact(length, c >= 1 && c <= 127 ? 1 : c <= 2047 ? 2 : 3);
+        }
+        int count = padded(Math.addExact(length, 1));
+        reserve(Math.addExact(count, 4));
+        writeInt(length);
+        int end = position + count;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c >= 1 && c <= 127) data[position++] = (byte) c;
+            else if (c <= 2047) {
+                data[position++] = (byte) (0xc0 | c >> 6);
+                data[position++] = (byte) (0x80 | c & 63);
+            } else {
+                data[position++] = (byte) (0xe0 | c >> 12);
+                data[position++] = (byte) (0x80 | c >> 6 & 63);
+                data[position++] = (byte) (0x80 | c & 63);
+            }
+        }
+        Arrays.fill(data, position, end, (byte) 0);
+        position = end;
+    }
+    public String readString8() {
+        int length = readInt();
+        if (length == -1) return null;
+        int count = padded(Math.addExact(length, 1));
+        require(count);
+        int end = position + length;
+        int paddedEnd = position + count;
+        StringBuilder result = new StringBuilder();
+        while (position < end) {
+            int c = data[position++] & 255;
+            if (c > 0 && c < 128) result.append((char) c);
+            else {
+                int remaining = c >= 0xc0 && c <= 0xdf ? 1 : c >= 0xe0 && c <= 0xef ? 2 : -1;
+                if (remaining < 0 || remaining > end - position)
+                    throw new IllegalStateException("Invalid modified UTF-8");
+                int value = c & (remaining == 1 ? 31 : 15);
+                for (int i = 0; i < remaining; i++) {
+                    int next = data[position++] & 255;
+                    if ((next & 0xc0) != 0x80) throw new IllegalStateException("Invalid modified UTF-8");
+                    value = value << 6 | next & 63;
+                }
+                result.append((char) value);
+            }
+        }
+        if (data[end] != 0) throw new IllegalStateException("Missing string terminator");
+        position = paddedEnd;
+        return result.toString();
+    }
     public void writeString(String value) {
         if (value == null) { writeInt(-1); return; }
         int count = padded(Math.multiplyExact(Math.addExact(value.length(), 1), 2));

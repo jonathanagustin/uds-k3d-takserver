@@ -1,7 +1,7 @@
 // Copyright 2026 uds-takserver authors
 // SPDX-License-Identifier: Apache-2.0
 // Adapted from AOSP frameworks/base 299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368.
-// Removed Android parcel, storage/exposure policy APIs, annotations and logging.
+// Removed Android storage/exposure policy APIs, annotations and logging.
 /*
  * Copyright (C) 2007 The Android Open Source Project
  *
@@ -20,6 +20,8 @@
 
 package android.net;
 
+import android.os.Parcel;
+import android.os.Parcelable;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +49,7 @@ import java.util.Set;
  * forgiving--in the face of invalid input, it will return garbage
  * rather than throw an exception unless otherwise specified.
  */
-public abstract class Uri implements Comparable<Uri> {
+public abstract class Uri implements Parcelable, Comparable<Uri> {
 
     /*
 
@@ -486,11 +488,18 @@ public abstract class Uri implements Comparable<Uri> {
             this.uriString = uriString;
         }
 
+        static Uri readFrom(Parcel parcel) {
+            return new StringUri(parcel.readString8());
+        }
 
+        public int describeContents() {
+            return 0;
+        }
 
-
-
-
+        public void writeToParcel(Parcel parcel, int flags) {
+            parcel.writeInt(TYPE_ID);
+            parcel.writeString8(uriString);
+        }
 
         /** Cached scheme separator index. */
         private volatile int cachedSsi = NOT_CALCULATED;
@@ -853,11 +862,23 @@ public abstract class Uri implements Comparable<Uri> {
             this.fragment = fragment == null ? Part.NULL : fragment;
         }
 
+        static Uri readFrom(Parcel parcel) {
+            final StringUri stringUri = new StringUri(parcel.readString8());
+            return new OpaqueUri(
+                stringUri.parseScheme(),
+                stringUri.getSsp(),
+                stringUri.getFragmentPart()
+            );
+        }
 
+        public int describeContents() {
+            return 0;
+        }
 
-
-
-
+        public void writeToParcel(Parcel parcel, int flags) {
+            parcel.writeInt(TYPE_ID);
+            parcel.writeString8(toString());
+        }
 
         public boolean isHierarchical() {
             return false;
@@ -1170,11 +1191,20 @@ public abstract class Uri implements Comparable<Uri> {
             return newPath == null ? PathPart.NULL : newPath;
         }
 
+        static Uri readFrom(Parcel parcel) {
+            final StringUri stringUri = new StringUri(parcel.readString8());
+            return new HierarchicalUri(stringUri.getScheme(), stringUri.getAuthorityPart(),
+                    stringUri.getPathPart(), stringUri.getQueryPart(), stringUri.getFragmentPart());
+        }
 
+        public int describeContents() {
+            return 0;
+        }
 
-
-
-
+        public void writeToParcel(Parcel parcel, int flags) {
+            parcel.writeInt(TYPE_ID);
+            parcel.writeString8(toString());
+        }
 
         public boolean isHierarchical() {
             return true;
@@ -1762,7 +1792,25 @@ public abstract class Uri implements Comparable<Uri> {
     /**
      * Reads Uris from Parcels.
      */
+    public static final Parcelable.Creator<Uri> CREATOR
+            = new Parcelable.Creator<Uri>() {
+        public Uri createFromParcel(Parcel in) {
+            int type = in.readInt();
+            switch (type) {
+                case NULL_TYPE_ID: return null;
+                case StringUri.TYPE_ID: return StringUri.readFrom(in);
+                case OpaqueUri.TYPE_ID: return OpaqueUri.readFrom(in);
+                case HierarchicalUri.TYPE_ID:
+                    return HierarchicalUri.readFrom(in);
+            }
 
+            throw new IllegalArgumentException("Unknown URI type: " + type);
+        }
+
+        public Uri[] newArray(int size) {
+            return new Uri[size];
+        }
+    };
 
     /**
      * Writes a Uri to a Parcel.
@@ -1770,7 +1818,13 @@ public abstract class Uri implements Comparable<Uri> {
      * @param out parcel to write to
      * @param uri to write, can be null
      */
-
+    public static void writeToParcel(Parcel out, Uri uri) {
+        if (uri == null) {
+            out.writeInt(NULL_TYPE_ID);
+        } else {
+            uri.writeToParcel(out, 0);
+        }
+    }
 
     private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
 
@@ -1948,7 +2002,23 @@ public abstract class Uri implements Comparable<Uri> {
             return hasDecoded ? decoded : (decoded = decode(encoded));
         }
 
-
+        final void writeTo(Parcel parcel) {
+            final String canonicalValue;
+            if (mCanonicalRepresentation == REPRESENTATION_ENCODED) {
+                canonicalValue = encoded;
+            } else if (mCanonicalRepresentation == REPRESENTATION_DECODED) {
+                canonicalValue = decoded;
+            } else {
+                throw new IllegalArgumentException("Unknown representation: "
+                    + mCanonicalRepresentation);
+            }
+            if (canonicalValue == NotCachedHolder.NOT_CACHED) {
+                throw new AssertionError("Canonical value not cached ("
+                    + mCanonicalRepresentation + ")");
+            }
+            parcel.writeInt(mCanonicalRepresentation);
+            parcel.writeString8(canonicalValue);
+        }
     }
 
     /**
@@ -1977,7 +2047,19 @@ public abstract class Uri implements Comparable<Uri> {
             return hasEncoded ? encoded : (encoded = encode(decoded));
         }
 
-
+        static Part readFrom(Parcel parcel) {
+            int representation = parcel.readInt();
+            String value = parcel.readString8();
+            switch (representation) {
+                case REPRESENTATION_ENCODED:
+                    return fromEncoded(value);
+                case REPRESENTATION_DECODED:
+                    return fromDecoded(value);
+                default:
+                    throw new IllegalArgumentException("Unknown representation: "
+                            + representation);
+            }
+        }
 
         /**
          * Returns given part or {@link #NULL} if the given part is null.
@@ -2154,9 +2236,22 @@ public abstract class Uri implements Comparable<Uri> {
             return appendEncodedSegment(oldPart, encoded);
         }
 
+        static PathPart readFrom(Parcel parcel) {
+            int representation = parcel.readInt();
+            switch (representation) {
+                case REPRESENTATION_ENCODED:
+                    return fromEncoded(parcel.readString8());
+                case REPRESENTATION_DECODED:
+                    return fromDecoded(parcel.readString8());
+                default:
+                    throw new IllegalArgumentException("Unknown representation: " + representation);
+            }
+        }
 
-
-
+        static PathPart readFrom(boolean hasSchemeOrAuthority, Parcel parcel) {
+            final PathPart path = readFrom(parcel);
+            return hasSchemeOrAuthority ? makeAbsolute(path) : path;
+        }
 
         /**
          * Creates a path from the encoded string.

@@ -41,3 +41,15 @@ engine dependencies have not been substituted or executed. Full engine/client
 and Android IPC acceptance remain unproven.
 
 The copied Parcelable interface also normalizes trailing comment whitespace.
+
+## JNI string8 values
+
+`writeString8` and `readString8` use JNI modified UTF-8, not standard UTF-8.
+The exact source is frameworks/base at the revision above,
+`core/jni/android_os_Parcel.cpp` (`nativeWriteString8`/`nativeReadString8`):
+GetStringUTFLength/GetStringUTFRegion, a byte-count prefix, terminal NUL and
+four-byte padding, then NewStringUTF. Tests compare payloads against JDK
+DataOutputStream.writeUTF as an independent modified UTF-8 oracle, discarding
+that oracle's unrelated two-byte length prefix. Embedded NUL, supplementary
+characters and unpaired UTF-16 surrogates are covered. This does not use Java
+object serialization or promise Android malformed-input recovery behavior.

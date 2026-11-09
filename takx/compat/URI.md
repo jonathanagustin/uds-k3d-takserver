@@ -6,19 +6,20 @@ The parser, builder and codec come from Apache-2.0 AOSP frameworks/base
 This preserves Android's forgiving parsing and percent-encoding behavior;
 `java.net.URI` is not used as a substitute.
 
-Two upstream comment spelling errors are corrected. Desktop changes remove annotations, Android logging, the Parcelable interface,
-parcel serialization/deserialization methods and creator, and Android-only
+Two upstream comment spelling errors are corrected. Desktop changes remove annotations, Android logging, and Android-only
 `getCanonicalUri`, `checkFileUriExposed` and
 `checkContentUriWithoutPermission`. Those APIs are absent, not no-op adapters.
-`UriCodec` has no executable changes. No ContentResolver, Android storage
-policy, permission checks or parcel implementation is supplied.
+`UriCodec` has no executable changes. The original Parcelable implementation and creator now use the bounded in-memory
+Parcel codec. No ContentResolver, Android storage policy, permission checks or
+Binder transport is supplied.
 
 Run `./takx/compat/test-uri.sh` with JDK 17 (Java 11 target). Forty unchanged
 AOSP `UriTest.java` test bodies run in a standalone assertion harness, covering
 opaque/hierarchical parsing, file paths, encoded paths, builder copying,
 percent encoding/decoding, repeated/empty/escaped query keys, plus handling,
-identity and hash semantics. Android IPC tests and tests requiring unrelated
-ContentUris APIs are excluded explicitly. This is parser acceptance, not
+identity and hash semantics. Original Android IPC tests and tests requiring unrelated
+ContentUris APIs are excluded explicitly. Direct typed-URI memory parcel tests
+cover string, opaque, hierarchical and null values without claiming IPC. This is parser acceptance, not
 Android IPC or full-client acceptance.
 
 Original source SHA-256 values:

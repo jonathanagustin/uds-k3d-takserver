@@ -7,5 +7,8 @@ work="$(mktemp -d)"
 trap 'rm -rf -- "${work}"' EXIT
 javac --release 11 -Xlint:all -d "${work}" \
   "${here}"/src/main/java/android/net/*.java \
-  "${here}/src/test/java/UriCompatibilityTest.java"
+  "${here}"/src/main/java/android/os/*.java \
+  "${here}/src/test/java/UriCompatibilityTest.java" \
+  "${here}/src/test/java/UriParcelCompatibilityTest.java"
 java -ea -cp "${work}" android.net.UriCompatibilityTest
+java -ea -cp "${work}" android.net.UriParcelCompatibilityTest

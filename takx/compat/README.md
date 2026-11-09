@@ -49,3 +49,5 @@ Both official TAKX 5.7 and 5.8 remain candidates; prefer 5.8 after actual full-c
 No live map rendering, GL recovery, enrollment, CoT exchange or TAKX desktop session is established by the port-module checks. Follow [issue 376](https://github.com/jonathanagustin/uds-takserver/issues/376) for the prototype and its remaining runtime gates. The normal server CI does not download or compile this opt-in component.
 
 [Pair compatibility and source provenance](PAIR.md) covers the small AOSP tuple API.
+
+[URI parser compatibility and source provenance](URI.md) describes the desktop AOSP parser and its explicit Android-only API exclusions. Run `./takx/compat/test-uri.sh` for its pinned source behavior checks.

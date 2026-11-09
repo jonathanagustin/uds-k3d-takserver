@@ -109,6 +109,52 @@ public final class Bitmap {
         return result;
     }
 
+    public static Bitmap createBitmap(Bitmap source, int x, int y, int width, int height,
+            Matrix matrix, boolean filter) {
+        Objects.requireNonNull(source, "source");
+        if (x < 0 || y < 0 || width <= 0 || height <= 0
+                || (long) x + width > source.width || (long) y + height > source.height) {
+            throw new IllegalArgumentException("invalid source subset");
+        }
+        if (source.recycled) { throw new IllegalArgumentException("cannot transform a recycled source"); }
+        boolean identity = matrix == null || matrix.isIdentity();
+        if (!source.mutable && x == 0 && y == 0 && width == source.width && height == source.height && identity) {
+            return source;
+        }
+        RectF bounds = new RectF(0, 0, width, height);
+        java.awt.geom.AffineTransform transform = new java.awt.geom.AffineTransform();
+        boolean rectilinear = true;
+        if (!identity) {
+            rectilinear = matrix.mapRect(bounds);
+            transform = matrix.toAffineTransform();
+        }
+        if (!Float.isFinite(bounds.left) || !Float.isFinite(bounds.top)
+                || !Float.isFinite(bounds.right) || !Float.isFinite(bounds.bottom)) {
+            throw new IllegalArgumentException("transformed bounds are not finite");
+        }
+        int targetWidth = Math.round(bounds.width());
+        int targetHeight = Math.round(bounds.height());
+        pixelCount(targetWidth, targetHeight);
+        Bitmap result = new Bitmap(targetWidth, targetHeight, true);
+        // AOSP's source-derived createBitmap path restores the source alpha flag
+        // after choosing the transformed allocation, including non-rectilinear cases.
+        result.alpha = source.alpha;
+        result.reshape(targetWidth, targetHeight);
+        java.awt.Graphics2D graphics = result.image.createGraphics();
+        try {
+            graphics.setComposite(java.awt.AlphaComposite.Src);
+            graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, filter
+                    ? java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR
+                    : java.awt.RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            graphics.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, rectilinear
+                    ? java.awt.RenderingHints.VALUE_ANTIALIAS_OFF : java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics.translate(-bounds.left, -bounds.top);
+            graphics.transform(transform);
+            graphics.drawImage(source.image.getSubimage(x, y, width, height), 0, 0, null);
+        } finally { graphics.dispose(); }
+        return result;
+    }
+
     public boolean compress(CompressFormat format, int quality, java.io.OutputStream stream) {
         checkLive();
         Objects.requireNonNull(stream, "stream");

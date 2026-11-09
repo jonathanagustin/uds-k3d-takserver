@@ -436,8 +436,100 @@ public final class BitmapCompatibilityTest {
         }
     }
 
+    private static void cropAndTransform() throws Exception {
+        android.graphics.Bitmap source = bitmap(3, 2);
+        int[] colors = {0xffff0000, 0xff00ff00, 0xff0000ff, 0xffffff00, 0xff00ffff, 0xffff00ff};
+        source.setPixels(colors, 0, 3, 0, 0, 3, 2);
+        android.graphics.Bitmap crop = android.graphics.Bitmap.createBitmap(source, 1, 0, 2, 2, null, false);
+        check(crop.isMutable() && crop.getWidth() == 2 && crop.getHeight() == 2
+                && crop.getPixel(0, 0) == colors[1] && crop.getPixel(1, 1) == colors[5], "untransformed subset copies real pixels");
+        crop.setPixel(0, 0, 0);
+        check(source.getPixel(1, 0) == colors[1], "cropped image has independent owned storage");
+        android.graphics.Matrix flip = new android.graphics.Matrix(); flip.setScale(1f, -1f);
+        // Exact operation used by the pinned GLImageCache before recycling its input.
+        android.graphics.Bitmap flipped = android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, flip, false);
+        for (int y = 0; y < 2; y++) {
+            for (int x = 0; x < 3; x++) { check(flipped.getPixel(x, y) == colors[(1 - y) * 3 + x], "GLImageCache vertical-flip pixel pattern"); }
+        }
+        android.graphics.Bitmap restored = android.graphics.Bitmap.createBitmap(flipped, 0, 0, 3, 2, flip, false);
+        int[] pixels = new int[6]; restored.getPixels(pixels, 0, 3, 0, 0, 3, 2);
+        check(Arrays.equals(colors, pixels), "two negative-scale flips restore all pixels");
+        android.graphics.Matrix move = new android.graphics.Matrix(); move.setTranslate(17, -9);
+        android.graphics.Bitmap translated = android.graphics.Bitmap.createBitmap(source, 1, 0, 2, 2, move, false);
+        check(translated.getWidth() == 2 && translated.getHeight() == 2 && translated.getPixel(0, 0) == colors[1]
+                && translated.getPixel(1, 1) == colors[5], "mapped-bounds origin is removed without translation padding");
+        android.graphics.Matrix turn = new android.graphics.Matrix();
+        turn.setValues(new float[]{0,-1,0, 1,0,0, 0,0,1});
+        android.graphics.Bitmap rotated = android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, turn, false);
+        check(rotated.getWidth() == 2 && rotated.getHeight() == 3, "quarter-turn swaps transformed bounds");
+        int[] expected = {colors[3], colors[0], colors[4], colors[1], colors[5], colors[2]};
+        pixels = new int[6]; rotated.getPixels(pixels, 0, 2, 0, 0, 2, 3);
+        check(Arrays.equals(expected, pixels), "quarter-turn pixel orientation");
+        android.graphics.Matrix stretch = new android.graphics.Matrix(); stretch.setScale(1.5f, 1);
+        android.graphics.Bitmap interpolated = android.graphics.Bitmap.createBitmap(source, 0, 0, 2, 1, stretch, true);
+        int center = interpolated.getPixel(1, 0);
+        check(interpolated.getWidth() == 3 && ((center >> 16) & 255) > 100 && ((center >> 8) & 255) > 100,
+                "filtered transformed subset bilinearly combines source colors");
+        android.graphics.Bitmap unfiltered = android.graphics.Bitmap.createBitmap(source, 0, 0, 2, 1, stretch, false);
+        check(unfiltered.getPixel(1, 0) == colors[0] || unfiltered.getPixel(1, 0) == colors[1],
+                "unfiltered transformed subset retains nearest source color");
+        android.graphics.Matrix shear = new android.graphics.Matrix();
+        shear.setValues(new float[]{1,.5f,0, 0,1,0, 0,0,1});
+        android.graphics.Bitmap sheared = android.graphics.Bitmap.createBitmap(source, 0, 0, 2, 2, shear, false);
+        check(sheared.getWidth() == 3 && sheared.getHeight() == 2 && sheared.hasAlpha(),
+                "non-rectilinear transform uses rounded mapped bounds and preserves source alpha flag");
+        int filled = 0, empty = 0;
+        for (int y = 0; y < 2; y++) {
+            for (int x = 0; x < 3; x++) {
+                if ((sheared.getPixel(x, y) >>> 24) == 0) { empty++; } else { filled++; }
+            }
+        }
+        check(filled > 0 && empty > 0, "sheared image has real polygon coverage and unpainted corners");
+        android.graphics.Matrix identity = new android.graphics.Matrix();
+        android.graphics.Bitmap mutableCopy = android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, identity, true);
+        check(mutableCopy != source && mutableCopy.isMutable(), "mutable full-source identity creates independent mutable result");
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        source.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, png);
+        byte[] encoded = png.toByteArray();
+        android.graphics.Bitmap immutable = android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
+        check(android.graphics.Bitmap.createBitmap(immutable, 0, 0, 3, 2, null, false) == immutable
+                && android.graphics.Bitmap.createBitmap(immutable, 0, 0, 3, 2, identity, true) == immutable,
+                "immutable full-source null or identity Matrix preserves instance");
+        check(android.graphics.Bitmap.createBitmap(immutable, 1, 0, 2, 2, identity, false) != immutable,
+                "immutable partial subset cannot take identity instance shortcut");
+        android.graphics.Bitmap movedImmutable = android.graphics.Bitmap.createBitmap(immutable, 0, 0, 3, 2, move, false);
+        check(movedImmutable != immutable && movedImmutable.isMutable(), "nonidentity translation creates mutable result even when output pixels match");
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, -1, 0, 1, 1, null, false));
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, 0, 0, 0, 1, null, false));
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, 1, 0, Integer.MAX_VALUE, 1, null, false));
+        raises(NullPointerException.class, () -> android.graphics.Bitmap.createBitmap(null, 0, 0, 1, 1, null, false));
+        android.graphics.Matrix singular = new android.graphics.Matrix(); singular.setScale(0, 1);
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, singular, false));
+        android.graphics.Matrix overflow = new android.graphics.Matrix(); overflow.setScale(Float.MAX_VALUE, 1);
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, overflow, false));
+        check(source.getPixel(0, 0) == colors[0] && source.getWidth() == 3, "invalid transforms do not change source pixels or shape");
+        source.recycle();
+        check(flipped.getPixel(0, 0) == colors[3], "transformed pixels survive original source recycling");
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createBitmap(source, 0, 0, 3, 2, flip, false));
+
+        for (int type : new int[]{BufferedImage.TYPE_INT_RGB, BufferedImage.TYPE_BYTE_INDEXED, BufferedImage.TYPE_INT_ARGB_PRE}) {
+            BufferedImage backing = new BufferedImage(3, 2, type);
+            backing.setRGB(1, 0, 0xff000000); backing.setRGB(1, 1, 0xffffffff);
+            Bitmap portable = MarshalManager.marshal(backing, BufferedImage.class, Bitmap.class);
+            android.graphics.Bitmap borrowed = MarshalManager.marshal(portable, Bitmap.class, android.graphics.Bitmap.class);
+            android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(borrowed, 1, 0, 1, 2, flip, false);
+            check(result.getPixel(0, 0) == backing.getRGB(1, 1) && result.getPixel(0, 1) == backing.getRGB(1, 0),
+                    "borrowed layout crop/flip converts actual pixel colors");
+            check(result.getConfig() == android.graphics.Bitmap.Config.ARGB_8888
+                    && result.hasAlpha() == borrowed.hasAlpha(), "transformed borrowed result owns ARGB and preserves alpha metadata");
+            check(view(borrowed) == backing && borrowed.getWidth() == 3, "borrowed source backing identity and shape survive transform");
+            android.graphics.Bitmap opaqueShear = android.graphics.Bitmap.createBitmap(borrowed, 0, 0, 3, 2, shear, true);
+            check(opaqueShear.hasAlpha() == borrowed.hasAlpha(), "AOSP final source alpha flag applies even to non-rectilinear transform");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        pixels(); decode(); marshal(); lifecycleAndBounds(); ownedReuse(); borrowedReuse(); metadataScalingAndCodecs();
+        pixels(); decode(); marshal(); lifecycleAndBounds(); ownedReuse(); borrowedReuse(); metadataScalingAndCodecs(); cropAndTransform();
         System.out.println("PASS " + checks + " bitmap/decoder/upstream-marshal checks");
     }
 }

@@ -6,6 +6,7 @@ The implementation uses JDK `BufferedImage`, ImageIO, Java2D fonts, classpath st
 
 - [Bitmap pixels, decoding and upstream marshaling](BITMAP.md)
 - [Bitmap metadata, scaling and PNG/JPEG encoding](CODECS.md)
+- [Bitmap subsets and affine transforms](TRANSFORMS.md)
 - [Software bitmap composition, shapes and glyphs](CANVAS.md)
 - [Coordinate and rectangle primitives](GEOMETRY.md)
 - [Packed integer colors and integer rectangles](COLOR-RECT.md)

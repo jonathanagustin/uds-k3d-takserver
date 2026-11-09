@@ -233,12 +233,12 @@ def redacted_text(text, tail=None):
 
 
 def start_phases():
-    """Pull, init, JVM, and Ready for messaging and the API. Missing stays None."""
+    """Pull, init, container start, and Ready for messaging and the API. Missing stays None."""
     found = {}
     errors = []
     for app in ("takserver-messaging", "takserver-api"):
         try:
-            raw = kubectl("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json").stdout
+            raw = kubectl("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json", timeout=30).stdout
             pods = json.loads(raw).get("items", [])
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             found[app] = None
@@ -255,8 +255,8 @@ def start_phases():
         try:
             event_raw = kubectl(
                 "get", "events", "-n", "takserver",
-                "--field-selector", f"involvedObject.name={name}",
-                "-o", "json",
+                "--field-selector", f"involvedObject.uid={pod.get('metadata', {}).get('uid', '')}",
+                "-o", "json", timeout=30,
             ).stdout
             events = json.loads(event_raw).get("items", [])
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError):
@@ -265,8 +265,7 @@ def start_phases():
         container = containers[0]["name"] if containers else app
         try:
             log_text = redacted_text(
-                kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps").stdout,
-                tail=400,
+                kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps", timeout=30).stdout,
             )
         except (RuntimeError, subprocess.CalledProcessError):
             log_text = ""

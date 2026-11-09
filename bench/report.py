@@ -181,8 +181,8 @@ def measurement_lines(records):
 
 def startup_lines(records):
     lines = ["### Observed pod startup phases", "",
-             "These are the pods observed at each config's collection time. A database-only rollout can reuse an earlier TAK pod; these rows are not proof that each config independently measured both a cold and a warm TAK start. Negative timings are invalid observations, not durations.", "",
-             "| Architecture | Config | App | Image pull (s) | Init containers (s) | JVM to first startup log (s) | Startup log to Ready (s) |",
+             "These are the pods observed at each config's collection time. A database-only rollout can reuse an earlier TAK pod; these rows are not proof that each config independently measured both a cold and a warm TAK start. Container start includes entrypoint work and does not measure JVM start or class loading. Legacy jvm_to_log_s values also used container timestamps. Negative timings are invalid observations, not durations.", "",
+             "| Architecture | Config | App | Image pull (s) | Init containers (s) | Container start to first startup log (s) | Startup log to Ready (s) |",
              "| --- | --- | --- | --- | --- | --- | --- |"]
     for record in records:
         phases = record.get("start_phases") or {}
@@ -192,7 +192,7 @@ def startup_lines(records):
             init_text = "; ".join(f"{cell(item.get('name'))}: {measured(item.get('seconds'))}" for item in inits) if inits else "not measured"
             values = [cell(record.get("arch")), cell(record.get("config")), app,
                       measured(phase.get("image_pull_s")), init_text,
-                      measured(phase.get("jvm_to_log_s")), measured(phase.get("log_to_ready_s"))]
+                      measured(phase.get("container_to_log_s", phase.get("jvm_to_log_s"))), measured(phase.get("log_to_ready_s"))]
             lines.append("| " + " | ".join(values) + " |")
     return [*lines, ""]
 

@@ -26,8 +26,10 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `package_bytes` | bytes | `stat` of the `zarf-package-takserver-*.tar.zst` just built |
 | `start_phases.<app>.image_pull_s` | seconds | Sum over the pod's containers of kubelet `Pulling` to the next `Pulled` for the same container (`involvedObject.fieldPath`). Null when every image was already present, so there was no `Pulling` |
 | `start_phases.<app>.inits` | list | each init container's `name` and `seconds` from its state timestamps |
-| `start_phases.<app>.jvm_to_log_s` | seconds | main container `startedAt` to the first `Started TAK Server` or `Tomcat started on port` log line |
-| `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition. This is the probe lag |
+| `start_phases.<app>.container_to_log_s` | seconds | main container `startedAt` to the first timestamped `Started TAK Server` or `Tomcat started on port` log line; includes entrypoint work, not JVM start/class-loading time |
+| `start_phases.<app>.jvm_to_log_s` | seconds | Deprecated: null in new records because JVM start is not observed. Historical records used container start and must not be interpreted as JVM duration |
+| `start_phases.<app>.evidence` | object | Pod UID/name, selected container ID/name/restart count, source container/init/Ready timestamps and pull event IDs/timestamps; startup marker name and timestamp only, no log contents. `jvm_started_at` stays null |
+| `start_phases.<app>.log_to_ready_s` | seconds | that log line to the Ready condition; an observed interval, not isolated probe overhead |
 | `time_to_ready.cold_s` | seconds | Ready condition minus pod creation, for the install's pods. Null when a pod has restarted |
 | `time_to_ready.warm_s` | seconds | rollout restart of the TAK Deployments until Ready. Null for the baseline, which keeps the cold pods |
 | `startup.max_generation` | count | highest `metadata.generation` on the TAK Deployments. 1 is a single rollout |
@@ -94,7 +96,7 @@ inside each matched cohort. Missing cohort metadata isolates a record. Missing
 or invalid axes are not plotted; the markdown labels negative startup timings
 invalid while preserving their original JSON values.
 
-`<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s, so Ready can lag the process by at most one period, about 8% of those restarts. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. If `jvm_to_log_s` is most of the start on a later run, that archive is the next change.
+`<app>` is `takserver-messaging` or `takserver-api`. Run 39556568533 restarted messaging in 2m12s and the API in 1m52s on amd64. The probes poll every 10s. A startup log marker does not establish that the service meets readiness requirements; probe duration and scheduling also affect the interval. Isolated probe overhead remains unmeasured. `periodSeconds` stays 10. A class-data-sharing archive was not added: the class-loading share of that time is not in this record yet, and the archive would add bytes to both images for each arch. Container-to-log duration alone cannot justify that archive: exact JVM start and class-loading time remain unmeasured.
 
 Run 39556568533 measured the old scale-down on validate-install. amd64 job 119079081806 spent 103s in Helm and then 5m21s restarting config, messaging, api, and plugins. arm64 job 119079081713 spent 98s in Helm and then 5m08s. `startup.max_generation` and `startup.max_restart_count` are how a later run shows that second rollout is gone. This file does not store that later run.
 

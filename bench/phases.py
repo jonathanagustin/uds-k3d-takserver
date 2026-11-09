@@ -1,7 +1,7 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Split one TAK pod start into pull, init, JVM, and Ready.
+"""Split one TAK pod start into pull, init, container start, and Ready.
 
 Times come from the pod status, kubelet events, and a timestamped log line.
 A missing input stays None. This module does not read the cluster.
@@ -22,7 +22,8 @@ def parse_time(value):
 def elapsed(start, end):
     if start is None or end is None:
         return None
-    return round((end - start).total_seconds(), 3)
+    seconds = (end - start).total_seconds()
+    return round(seconds, 3) if seconds >= 0 else None
 
 
 def first_log_time(text, needles):
@@ -103,13 +104,44 @@ def pod_phases(pod, events, log_text):
             "seconds": elapsed(started, finished),
         })
     containers = (pod.get("status") or {}).get("containerStatuses") or []
+    expected = ((pod.get("spec") or {}).get("containers") or [{}])[0].get("name")
+    if expected:
+        containers = [status for status in containers if status.get("name") == expected]
     main_started = None
     if containers:
         main_started, _finished = _status_times(containers[0])
     log_at = first_log_time(log_text, ("Started TAK Server", "Tomcat started on port"))
+    marker = next((needle for needle in ("Started TAK Server", "Tomcat started on port")
+                   if first_log_time(log_text, (needle,)) == log_at), None) if log_at else None
+    if main_started is None or (log_at and log_at < main_started):
+        log_at = None
+        marker = None
+    metadata = pod.get("metadata") or {}
+    def stamp(value):
+        return value.isoformat() if value else None
     return {
+        "evidence": {
+            "pod_name": metadata.get("name"), "pod_uid": metadata.get("uid"),
+            "container_name": containers[0].get("name") if containers else None,
+            "container_id": containers[0].get("containerID") if containers else None,
+            "restart_count": containers[0].get("restartCount") if containers else None,
+            "container_started_at": stamp(main_started), "startup_log_at": stamp(log_at),
+            "startup_log_marker": marker, "ready_at": stamp(ready_at),
+            "jvm_started_at": None,
+            "jvm_start_limit": "Kubernetes container startedAt is not a JVM start timestamp",
+            "init_intervals": [{"name": status.get("name"),
+                                "started_at": stamp(_status_times(status)[0]),
+                                "finished_at": stamp(_status_times(status)[1])}
+                               for status in (pod.get("status") or {}).get("initContainerStatuses") or []],
+            "pull_events": [{"uid": event.get("metadata", {}).get("uid"),
+                             "reason": event.get("reason"),
+                             "container": (event.get("involvedObject") or {}).get("fieldPath"),
+                             "at": stamp(_event_time(event))}
+                            for event in events or [] if event.get("reason") in ("Pulling", "Pulled")],
+        },
         "image_pull_s": _pull_seconds(events),
         "inits": inits,
-        "jvm_to_log_s": elapsed(main_started, log_at),
+        "jvm_to_log_s": None,
+        "container_to_log_s": elapsed(main_started, log_at),
         "log_to_ready_s": elapsed(log_at, ready_at),
     }

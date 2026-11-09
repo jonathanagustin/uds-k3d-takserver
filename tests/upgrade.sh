@@ -64,6 +64,12 @@ version="$(read_baseline version)"
 
 # Use the released bundle and test values, without checking out or executing old code.
 git archive "${tag}" bundle values | tar -x -C "${work}"
+# Inspect the verified release's metadata as data, never execute its code.
+uds zarf tools yq -o=json '[.packages[] | select(.name == "core-base") | .ref]' \
+  "${work}/bundle/uds-bundle.yaml" > "${work}/bootstrap-core-refs.json"
+git show "${tag}:pepr/package.json" > "${work}/bootstrap-pepr-package.json"
+bootstrap_core="$(python3 tests/upgrade-bootstrap.py "${work}/bootstrap-core-refs.json" "${work}/bootstrap-pepr-package.json")"
+echo "Released baseline bootstrap checkpoint: ${bootstrap_core}"
 export UPGRADE_PACKAGE_REF="${version}-upstream"
 # Releases from v0.3.0 on are signed keylessly by release.yaml, and uds create
 # refuses a signed package without the identity to verify it against.
@@ -99,24 +105,38 @@ if ! grep -q 'failed to verify certificate identity' <<<"${wrong}"; then
   exit 1
 fi
 rm -rf "${work}/bundle-wrong-signer"
+# A local, actions-only barrier leaves the signed released packages unchanged.
+uds zarf package create tests/upgrade-agent-gate --architecture="${arch}" --confirm --skip-sbom -o "${work}"
+uds zarf tools yq -e '
+  .packages[0].name == "core-base" and
+  ([.packages[] | select(.name == "core-base")] | length) == 1 and
+  ([.packages[] | select(.name == "upgrade-agent-gate")] | length) == 0
+' "${work}/bundle/uds-bundle.yaml" >/dev/null
+uds zarf tools yq -i '
+  .packages = (.packages[:1] +
+    [{"name": "upgrade-agent-gate", "path": "../", "ref": "0.0.0"}] + .packages[1:])
+' "${work}/bundle/uds-bundle.yaml"
 uds create "${work}/bundle" --architecture="${arch}" --confirm --no-progress
-# The baseline cluster starts from slim core 1.15.0 on purpose. Release
-# 0.6.0's admission chart asks for Pepr controller v2.0.3, which the 1.15.0
-# checkpoint has and the 1.15.2 one does not. The pinned PostgreSQL 15 job
-# (UPGRADE_BASELINE_TAG=v0.6.0) needs that. A 0.7.x baseline's own bundle
-# deploys core 1.16.0 first, which pushes the Pepr v2.0.7 its module runs, so
-# it works from the same start. This branch's bundle then deploys its own core.
-SLIM_CORE_VERSION=1.15.0 uds run deploy-slim-core --no-progress
+# Preserve v0.6's controller 2.0.3 preload for the PostgreSQL 15 upgrade. Recent
+# releases start at their matching Core instead of an unnecessary older Core.
+SLIM_CORE_VERSION="${bootstrap_core}" uds run deploy-slim-core --no-progress
 # The cluster now exists, and nothing below deploys the checkpoint again.
-# On CI, delete its 5.5 GB package. Locally it stays as the cache for the
+# On CI, delete the checkpoint archive. Locally it stays as the cache for the
 # next run.
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  rm -f "${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"/zarf-package-k3d-core-slim-dev-*-1.15.0.tar.zst
+  rm -f "${SLIM_PACKAGE_DIR:-${root}/.cache/k3d-core-slim-dev}"/zarf-package-k3d-core-slim-dev-*-"${bootstrap_core}".tar.zst
 fi
 uds run fit-runner --no-progress
+if ! uds zarf package deploy "${work}/zarf-package-upgrade-agent-gate-${arch}-0.0.0.tar.zst" --confirm; then
+  ./tests/upgrade-agent-diagnostics.sh checkpoint
+  exit 1
+fi
 mapfile -t bundles < <(find "${work}/bundle" -maxdepth 1 -name 'uds-bundle-*.tar.zst')
 [[ "${#bundles[@]}" -eq 1 ]]
-UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts
+if ! UDS_CONFIG="${work}/bundle/uds-config.yaml" uds deploy "${bundles[0]}" --confirm --no-progress --force-conflicts; then
+  ./tests/upgrade-agent-diagnostics.sh released-bundle
+  exit 1
+fi
 # The released package and bundle files are not used again. The bundle's
 # uds-bundle.yaml stays: the core-base comparison below reads it.
 rm -f "${bundles[0]}" "${released}"

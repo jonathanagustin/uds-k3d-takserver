@@ -241,3 +241,35 @@ Pull request previews retain their separate ref groups and cancellation policy.
 Docs errors surface in the Release Please workflow's `docs` job; they do not
 silently count as a successful dispatch. Only that job requests Pages and OIDC
 permissions for documentation; it cannot publish packages or modify releases.
+
+## Released upgrade bootstrap compatibility
+
+The upgrade test reads the exact verified release's `core-base` reference and
+Pepr dependency and controller version as data. Both Pepr pins must match.
+Known Core/Pepr pairs select a pinned checkpoint;
+missing, duplicate or unknown metadata fails before deployment. Known releases
+0.7, 0.10 and 0.11 use Core 1.16.0 and Pepr 2.0.7, so they bootstrap directly
+on 1.16.0.
+This removes only an unnecessary Core transition before the released app baseline.
+It is not a kernel or runner-stall fix.
+
+The pinned 0.6 PostgreSQL 15 test still starts on 1.15.0 to preload its required
+Pepr 2.0.3 controller before its own Core 1.15.2 bundle. It retains the real older
+Core and PostgreSQL 15-to-18 upgrade path. Checkpoint archive cleanup uses the
+same selected version. The published package selection and upgrade assertions
+remain unchanged.
+
+The upgrade test also builds a local actions-only Zarf package as an admission
+readiness barrier. It runs after checkpoint restoration and again between the
+released Core and TAK packages in the same bundle deployment. Native Zarf waits
+require the agent Deployment to be Available, a ready Endpoint address referencing
+a Pod, and the HTTPS target port 8443. Their successive deadlines total at most
+360 seconds; a failed wait stops deployment without restarting the agent or
+weakening its webhook. Failure diagnostics use bounded requests and redact the
+current and previous agent logs. This gate reports infrastructure readiness; it
+does not establish the cause of a runner kernel failure.
+
+The local barrier leaves the released signed package bytes and verification rules
+unchanged. Keeping one baseline bundle deployment preserves package order and
+cross-package imports and exports. Normal deployment runs the barrier even after
+its standalone deployment; `--resume` is deliberately not used.

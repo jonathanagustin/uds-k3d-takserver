@@ -16,7 +16,10 @@ public class PointF {
     public final void offset(float dx, float dy) { x += dx; y += dy; }
     public final boolean equals(float x, float y) { return this.x == x && this.y == y; }
     @Override public boolean equals(Object other) {
-        return other instanceof PointF && equals(((PointF) other).x, ((PointF) other).y);
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        PointF point = (PointF) other;
+        return Float.compare(x, point.x) == 0 && Float.compare(y, point.y) == 0;
     }
     @Override public int hashCode() { return Float.hashCode(x == 0f ? 0f : x) * 31 + Float.hashCode(y == 0f ? 0f : y); }
     @Override public String toString() { return "PointF(" + x + ", " + y + ")"; }

@@ -15,7 +15,10 @@ public class Point {
     public final void offset(int dx, int dy) { x += dx; y += dy; }
     public final boolean equals(int x, int y) { return this.x == x && this.y == y; }
     @Override public boolean equals(Object other) {
-        return other instanceof Point && equals(((Point) other).x, ((Point) other).y);
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        Point point = (Point) other;
+        return x == point.x && y == point.y;
     }
     @Override public int hashCode() { return Integer.hashCode(x) * 31 + Integer.hashCode(y); }
     @Override public String toString() { return "Point(" + x + ", " + y + ")"; }

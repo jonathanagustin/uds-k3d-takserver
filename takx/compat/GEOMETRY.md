@@ -31,8 +31,31 @@ useful behavior, but do not satisfy engine imports of `android.graphics`.
 Rectangles retain caller coordinates, including inverted rectangles. Point
 containment includes left/top and excludes right/bottom; intersection requires
 positive overlap and leaves the receiver unchanged on failure. Sorting is
-explicit. Floating-point signed zeros compare equal and have equal hashes.
+explicit. RectF numeric equality treats signed zeros as equal, with equal hashes.
 These are geometry values, not implicit coordinate-system conversions.
+
+## Point equality and length reference
+
+The additional Point/PointF methods follow official AOSP
+[Point](https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Point.java) and
+[PointF](https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/PointF.java)
+at Android 14 tag `android-14.0.0_r1`, commit
+`299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368`. Reviewed source SHA256 values are
+`df644b622a632a981299c5979cd23be85bf0b740c756ae1f3383782db92cab3c` and
+`2a3c5c9c032d81c405d36bc6821dcfdeb0b68ab9e7554ff772387f5fde9797ec`, respectively.
+These are behavioral references for original implementations, not copied Android
+Parcelable classes or a claim to implement the entire Android 14 SDK.
+
+Object equality accepts identity and requires the same runtime class. PointF
+object equality uses Float.compare: NaN coordinates compare equal, while signed
+zeros differ. Its coordinate `equals(float,float)` overload instead uses numeric
+`==`, so NaN coordinates differ and signed zeros compare equal. PointF hashing
+normalizes zeros as that reference does; unequal values may share a hash.
+Length uses Math.hypot, as the official reference does (also verified in Android
+8.1, 10 and 12), preserving very large and subnormal magnitudes instead of
+introducing float multiplication overflow/underflow. Infinity/NaN handling is
+tested explicitly. Earlier Android releases are not asserted to have identical
+behavior.
 
 ## Real consumer acceptance
 

@@ -50,16 +50,15 @@ final class DesktopSharedPreferences implements SharedPreferences {
     private static Object parse(String text) {
         if (text.length() < 2 || text.charAt(1) != ':') throw new IllegalArgumentException("Missing preference type");
         String value = text.substring(2);
-        return switch (text.charAt(0)) {
-            case 'S' -> decode(value);
-            case 'I' -> Integer.valueOf(value);
-            case 'L' -> Long.valueOf(value);
-            case 'F' -> Float.valueOf(value);
-            case 'B' -> {
+        switch (text.charAt(0)) {
+            case 'S': return decode(value);
+            case 'I': return Integer.valueOf(value);
+            case 'L': return Long.valueOf(value);
+            case 'F': return Float.valueOf(value);
+            case 'B':
                 if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("Invalid boolean");
-                yield Boolean.valueOf(value);
-            }
-            case 'T' -> {
+                return Boolean.valueOf(value);
+            case 'T':
                 // A count distinguishes an empty set from a set containing "".
                 int colon = value.indexOf(':');
                 int count = Integer.parseInt(value.substring(0, colon));
@@ -67,18 +66,19 @@ final class DesktopSharedPreferences implements SharedPreferences {
                 if (count < 0 || items.length != count) throw new IllegalArgumentException("Invalid set");
                 Set<String> set = new HashSet<>();
                 for (String item : items) set.add(decode(item));
-                yield Collections.unmodifiableSet(set);
-            }
-            default -> throw new IllegalArgumentException("Unknown preference type");
-        };
+                return Collections.unmodifiableSet(set);
+            default: throw new IllegalArgumentException("Unknown preference type");
+        }
     }
+
     private static String serialize(Object value) {
-        if (value instanceof String text) return "S:" + encode(text);
+        if (value instanceof String) return "S:" + encode((String) value);
         if (value instanceof Integer) return "I:" + value;
         if (value instanceof Long) return "L:" + value;
         if (value instanceof Float) return "F:" + value;
         if (value instanceof Boolean) return "B:" + value;
-        if (value instanceof Set<?> set) {
+        if (value instanceof Set<?>) {
+            Set<?> set = (Set<?>) value;
             List<String> encoded = new ArrayList<>();
             for (Object item : set) encoded.add(encode((String) item));
             Collections.sort(encoded);

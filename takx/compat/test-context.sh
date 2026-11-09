@@ -5,7 +5,7 @@ set -euo pipefail
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf -- "${work}"' EXIT
-javac --release 17 -Xlint:all -d "${work}" \
+javac --release 11 -Xlint:all -d "${work}" \
   "${here}"/src/main/java/android/content/*.java \
   "${here}"/src/main/java/android/content/res/*.java \
   "${here}"/src/main/java/android/preference/*.java \

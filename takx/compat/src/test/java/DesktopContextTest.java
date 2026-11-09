@@ -70,6 +70,26 @@ public final class DesktopContextTest {
             for (Process process : writers) check(finish(process) == 0, "concurrent writer");
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(two);
             for (int i = 0; i < 4; i++) check(preferences.getInt("writer" + i, -1) == 9, "no lost concurrent keys");
+            // Context caches preferences by their canonical path. Distinct
+            // Context objects must therefore share one synchronized instance,
+            // before taking OS locks that cannot overlap within a JVM.
+            check(preferences == PreferenceManager.getDefaultSharedPreferences(one), "same canonical preference instance");
+            java.util.concurrent.ExecutorService threads = java.util.concurrent.Executors.newFixedThreadPool(4);
+            try {
+                List<java.util.concurrent.Future<?>> writes = new ArrayList<>();
+                for (int i = 0; i < 4; i++) {
+                    final int writer = i;
+                    writes.add(threads.submit(() -> {
+                        SharedPreferences shared = PreferenceManager.getDefaultSharedPreferences(new Context());
+                        for (int j = 0; j < 10; j++) {
+                            if (!shared.edit().putInt("thread" + writer, j).commit())
+                                throw new AssertionError("Same-JVM commit failed");
+                        }
+                    }));
+                }
+                for (java.util.concurrent.Future<?> write : writes) write.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            } finally { threads.shutdownNow(); }
+            for (int i = 0; i < 4; i++) check(preferences.getInt("thread" + i, -1) == 9, "same-JVM writers preserved");
             fails(ClassCastException.class, () -> preferences.getString("int", ""));
             fails(UnsupportedOperationException.class, () -> preferences.getAll().clear());
             fails(UnsupportedOperationException.class, () -> preferences.getStringSet("set", Set.of()).clear());
@@ -108,7 +128,7 @@ public final class DesktopContextTest {
             System.out.println("Desktop context checks passed: " + checks);
         } finally {
             try (var paths = Files.walk(data)) {
-                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+                for (Path path : paths.sorted(Comparator.reverseOrder()).collect(java.util.stream.Collectors.toList())) Files.deleteIfExists(path);
             }
         }
     }

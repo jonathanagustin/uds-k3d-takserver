@@ -14,7 +14,11 @@ public class Resources {
     private final AssetManager assets;
     private final Map<String, Integer> identifiers = new HashMap<>();
     private final Map<Integer, Entry> entries = new HashMap<>();
-    private record Entry(String type, String path) {}
+    private static final class Entry {
+        final String type;
+        final String path;
+        Entry(String type, String path) { this.type = type; this.path = path; }
+    }
     public static class NotFoundException extends RuntimeException {
         private static final long serialVersionUID = 1L;
         public NotFoundException(String message) { super(message); }

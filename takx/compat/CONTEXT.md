@@ -89,17 +89,18 @@ requesting unsupported types or APIs need further real implementations.
 
 ## Verification
 
-Run with a JDK 17 or newer:
+Run with a JDK 11 or newer:
 
 ```sh
 bash takx/compat/test-context.sh
 ```
 
-The runner uses `javac --release 17` and temporary output only. It checks real
+The runner uses `javac --release 11` and temporary output only. It checks real
 resource bytes, identifier consistency, UTF-8 strings/arrays/colors, stream
 reads, malformed resources, traversal, canonical directories, typed preferences,
 immutable snapshots, clear/remove/listeners, corruption, separate reader/writer
-JVMs and four concurrent writer JVMs. Each child JVM has a 30-second timeout.
+JVMs, four concurrent writer JVMs and four concurrent threads using distinct
+Context objects for the same canonical preference path. Each child JVM has a 30-second timeout.
 
 The resource interfaces and eight public wrapper/interface source files also
 compiled locally against this implementation at the pinned ATAK revision.

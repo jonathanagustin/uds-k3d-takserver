@@ -67,6 +67,7 @@ export interface VolumeDoc {
 
 export interface WorkloadPodSpec {
   automountServiceAccountToken?: boolean;
+  serviceAccountName?: string;
   hostAliases?: unknown;
   initContainers?: ContainerDoc[];
   containers?: ContainerDoc[];
@@ -285,7 +286,17 @@ function setProbe(container: ContainerDoc, field: "startupProbe" | "livenessProb
   return true;
 }
 
+export function workloadIdentityPhase(env: NodeJS.ProcessEnv): "shared" | "transition" | "strict" | "rollback" {
+  const phase = env.TAK_WORKLOAD_IDENTITY_PHASE ?? "shared";
+  if (phase !== "shared" && phase !== "transition" && phase !== "strict" && phase !== "rollback") {
+    throw new Error("TAK_WORKLOAD_IDENTITY_PHASE must be shared, transition, strict or rollback");
+  }
+  return phase;
+}
+
 export interface StartupContext {
+  manageIdentity?: boolean;
+  identityPhase?: "shared" | "transition" | "strict" | "rollback";
   image: string;
   issuerHost?: string;
   pluginsMemory?: PluginsMemory;
@@ -368,6 +379,12 @@ function placeInits(current: ContainerDoc[], desired: ContainerDoc[]): { inits: 
 // Mutates spec. Returns true when a field the script owned was wrong.
 export function shapePodSpec(spec: WorkloadPodSpec, app: TakDeploy, ctx: StartupContext): boolean {
   let changed = false;
+  const identity = ctx.identityPhase === "transition" || ctx.identityPhase === "strict" ? app :
+    ctx.identityPhase === "rollback" ? "takserver-ignite" : undefined;
+  if (identity !== undefined && ctx.manageIdentity !== false && spec.serviceAccountName !== identity) {
+    spec.serviceAccountName = identity;
+    changed = true;
+  }
   if (spec.automountServiceAccountToken !== true) {
     spec.automountServiceAccountToken = true;
     changed = true;
@@ -502,6 +519,7 @@ export async function prepareDeployment(
     image: env.RENDER_IMAGE ?? "",
     issuerHost: issuer,
     pluginsMemory: pluginsMemory(env),
+    identityPhase: workloadIdentityPhase(env),
   });
   deploy.spec = next.spec;
 }
@@ -699,6 +717,7 @@ function specOps(before: WorkloadDeploy["spec"], after: WorkloadDeploy["spec"]):
     return [{ op: "add", path: "/spec/template/spec", value: next }];
   }
   const ops: JsonOp[] = [];
+  pushValue(ops, "/spec/template/spec/serviceAccountName", current.serviceAccountName, next.serviceAccountName);
   pushValue(ops, "/spec/template/spec/automountServiceAccountToken", current.automountServiceAccountToken, next.automountServiceAccountToken);
   pushValue(ops, "/spec/template/spec/hostAliases", current.hostAliases, next.hostAliases);
   ops.push(...volumeOps(current.volumes, next.volumes));
@@ -792,7 +811,7 @@ export async function reconcileDeployment(
   }
   const image = env.RENDER_IMAGE ?? "";
   const issuer = name === "takserver-config" || name === "takserver-plugins" ? undefined : await readIssuer(cluster);
-  const { next, changed } = shapeDeployment(deploy, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env) });
+  const { next, changed } = shapeDeployment(deploy, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env), identityPhase: workloadIdentityPhase(env) });
   if (!changed) {
     return;
   }
@@ -812,7 +831,8 @@ export async function preparePod(pod: PodLike, env: NodeJS.ProcessEnv, cluster: 
   }
   const issuer = app === "takserver-config" || app === "takserver-plugins" ? undefined : await readIssuer(cluster);
   const spec = (pod.spec ??= {}) as WorkloadPodSpec;
-  shapePodSpec(spec, app, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env) });
+  // Pod labels are not proof of controller ownership; preserve standalone negative controls.
+  shapePodSpec(spec, app, { image, issuerHost: issuer, pluginsMemory: pluginsMemory(env), identityPhase: workloadIdentityPhase(env), manageIdentity: false });
   addRender(pod, image);
 }
 

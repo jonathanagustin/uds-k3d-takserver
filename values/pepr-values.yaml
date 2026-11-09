@@ -12,6 +12,8 @@ admission:
       value: "info"
     # Image for the init container that renders the OIDC client secret. The
     # config image has bash and envsubst.
+    - name: TAK_WORKLOAD_IDENTITY_PHASE
+      value: "{{ .Values.tak.workloadIdentityPhase }}"
     - name: RENDER_IMAGE
       value: "ghcr.io/jonathanagustin/uds-takserver/takserver-config:{{ .Values.tak.imageTag }}"
     # Admission and the watcher both set the plugins memory, so both read
@@ -37,6 +39,8 @@ watcher:
       value: "false"
     - name: LOG_LEVEL
       value: "info"
+    - name: TAK_WORKLOAD_IDENTITY_PHASE
+      value: "{{ .Values.tak.workloadIdentityPhase }}"
     - name: RENDER_IMAGE
       value: "ghcr.io/jonathanagustin/uds-takserver/takserver-config:{{ .Values.tak.imageTag }}"
     - name: IN_CLUSTER_DNS

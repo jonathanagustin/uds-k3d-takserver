@@ -1129,3 +1129,35 @@ test("waitIgniteEmpty gives up after the timeout or on an unreadable log", async
   } as unknown as Cluster;
   assert.equal(await waitIgniteEmpty(recovers, 60_000), true);
 });
+
+test("dedicated identities stage each known workload and repair drift", async () => {
+  const { workloadIdentityPhase } = await import("./workload.ts");
+  assert.equal(workloadIdentityPhase({}), "shared");
+  assert.equal(workloadIdentityPhase({ TAK_WORKLOAD_IDENTITY_PHASE: "shared" }), "shared");
+  assert.equal(workloadIdentityPhase({ TAK_WORKLOAD_IDENTITY_PHASE: "transition" }), "transition");
+  assert.equal(workloadIdentityPhase({ TAK_WORKLOAD_IDENTITY_PHASE: "strict" }), "strict");
+  assert.equal(workloadIdentityPhase({ TAK_WORKLOAD_IDENTITY_PHASE: "rollback" }), "rollback");
+  assert.throws(() => workloadIdentityPhase({ TAK_WORKLOAD_IDENTITY_PHASE: "typo" }), /must be/);
+  for (const name of ["takserver-api", "takserver-config", "takserver-messaging", "takserver-plugins"] as const) {
+    for (const identityPhase of ["shared", "transition", "strict", "rollback"] as const) {
+      const original = deploy(name, { containers: [{ name }], serviceAccountName: "foreign" });
+      const context = { image: IMAGE, issuerHost: "sso.uds.dev", identityPhase };
+      const first = shapeDeployment(original, context);
+      assert.equal(first.next.spec?.template?.spec?.serviceAccountName,
+        identityPhase === "shared" ? "foreign" : identityPhase === "rollback" ? "takserver-ignite" : name);
+      assert.equal(deploymentOps(original, first.next).some(op => op.path === "/spec/template/spec/serviceAccountName"), identityPhase !== "shared");
+      assert.equal(shapeDeployment(first.next, context).changed, false);
+    }
+  }
+  const unrelated = deploy("foreign", { serviceAccountName: "foreign" });
+  assert.equal(shapeDeployment(unrelated, { image: IMAGE, identityPhase: "strict" }).next.spec?.template?.spec?.serviceAccountName, "foreign");
+});
+
+
+test("a same-label standalone Pod keeps its distinct identity for negative controls", async () => {
+  const pod: PodLike = { metadata: { labels: { app: "takserver-plugins" } }, spec: {
+    containers: [{ name: "plugins" }], serviceAccountName: "negative-control",
+  } };
+  await preparePod(pod, { RENDER_IMAGE: IMAGE, TAK_WORKLOAD_IDENTITY_PHASE: "strict" }, recordedCluster().cluster);
+  assert.equal(pod.spec?.serviceAccountName, "negative-control");
+});

@@ -45,3 +45,25 @@ Every Ingress rule from other pods now also sets `remoteServiceAccount`. The UDS
 - In Core 1.16.0, `serviceAccount` scopes ambient waypoint egress for both `remoteHost` and `remoteGenerated: Anywhere` ([rule translation](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/operator/controllers/istio/egress.ts#L148-L176), [ServiceAccount principals](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/operator/controllers/istio/egress-ambient.ts#L85-L159)). Ordinary in-cluster egress still uses [label selectors](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/operator/controllers/network/generators/egress.ts), so the Keycloak tenant gateway and Kubernetes API rules stay label-based.
 - `tests/flows.py --check` fails when an Ingress rule from other pods has no `remoteServiceAccount`. It also fails when a generated ALLOW AuthorizationPolicy admits the namespace or a peer namespace with no principal.
 - The cloudtak test fetches a tile as ServiceAccount `cloudtak`, then runs a second pod as ServiceAccount `basemap-denied` against the same host. Both pods carry `app: cloudtak`, so the negative test passes the same label selector and exercises the identity check at the egress waypoint. A readiness probe that always fails keeps the temporary pod out of the CloudTAK Service's ready endpoints. That pod has to fail its fetch. Reaching the host from the other account means the egress rule is not limited to CloudTAK.
+
+## Dedicated TAK identities (opt-in migration)
+
+The pinned upstream chart hardcodes `takserver-ignite` on four TAK Deployments.
+The existing fail-closed workload admission adapter can assign dedicated
+ServiceAccounts without forking that chart. Package value
+`tak.workloadIdentityPhase` coordinates policy and admission: `shared` preserves
+the default/custom accounts; `transition` admits both old and dedicated
+principals while rotating the Deployments; `strict` removes the transitional
+legacy principal; `rollback` admits both while restoring the legacy identity.
+The config chart creates namespaced discovery Roles and bindings, restricting
+the Ignite log permission to config. No new cluster-wide permission is granted.
+Pod admission preserves a standalone pod's chosen account, so copying an app
+label does not automatically acquire that workload's identity.
+
+Policy generation is asynchronous. Migration therefore requires a config-first
+stage and observed dual-principal convergence before admission changes, followed
+by inspection of every live Pod identity before strict enforcement. Rollback
+uses the same dual-policy stage before restoring legacy identities. The exact
+procedure is in [networking.md](../docs/networking.md#opt-in-tak-workload-identity-migration).
+Defaults remain shared until live migration and negative traffic checks pass on
+both architectures. Rendered manifests alone do not satisfy issue #32.

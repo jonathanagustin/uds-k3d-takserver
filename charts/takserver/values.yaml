@@ -252,3 +252,6 @@ backup:
     # chart's <fullname>-server). There is no ServiceAccount named velero.
     serviceAccount: velero-server
     credentialSecret: velero-bucket-credentials
+
+# Opt-in migration: shared -> transition -> strict. See docs/networking.md.
+workloadIdentityPhase: shared

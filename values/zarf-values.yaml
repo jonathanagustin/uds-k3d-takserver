@@ -12,6 +12,7 @@
 global:
   domain: "###ZARF_VAR_DOMAIN###"
 tak:
+  workloadIdentityPhase: shared
   imageTag: "###ZARF_VAR_TAK_IMAGE_TAG###"
   # Memory for the plugins Deployment. The takserver-oidc module sets it,
   # not the chart, so a values profile cannot.

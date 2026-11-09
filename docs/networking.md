@@ -256,3 +256,53 @@ Pods in an ambient namespace can get a different, equally correct answer. The UD
 The reconcile does nothing when `coredns-custom` does not exist, which is the case on a cluster with real DNS, or when `IN_CLUSTER_DNS` is not `true`.
 
 `uds run test:dns` checks the answers from inside the API pod and that the API Deployment has no `hostAliases`. It accepts the gateway ClusterIP, or a `240.240.0.0/16` address when the name's ServiceEntry points at the expected gateway Service. Earlier versions of this package gave the API pod a hostAlias for `sso.<domain>`. An upgrade removes it.
+
+## Opt-in TAK workload identity migration
+
+The default `tak.workloadIdentityPhase: shared` retains the upstream chart's
+shared `takserver-ignite` account. Dedicated identities are opt-in and have not
+yet passed a live upgrade on both architectures; this does not close issue #32.
+The existing admission adapter assigns the API, messaging, config and plugins
+Deployments their corresponding `takserver-*` ServiceAccounts. Ignite keeps its
+upstream account, and the database setup Job remains unchanged. Standalone pods
+keep their chosen account even if they copy a TAK app label.
+
+Migration requires a deliberate config-first stage. A Package CR being stored
+is not proof that the operator has generated its policies. Before changing the
+admission phase, render/apply the config chart with the same deployed values and
+`workloadIdentityPhase=transition` using its existing `uds-takserver-config` Helm
+release. Wait for Package Ready and inspect the generated AuthorizationPolicies:
+every affected ingress flow must admit both its new account and
+`takserver-ignite`. Preserve app labels and all existing values. Do not proceed
+on a timeout, stale condition, or missing principal. This manual staging step is
+required until an automated convergence gate has live validation.
+
+1. After that verified policy stage, deploy with `--set-values tak.workloadIdentityPhase=transition`. The config
+   chart first admits both the old and new principal for each existing labeled
+   ingress flow, then admission and reconciliation rotate the four Deployments
+   to their dedicated identities. The temporary legacy rules preserve the
+   existing access during this handoff; they are not strict isolation.
+2. Wait for all four Deployments to complete rollout. Inspect **every live Pod's
+   `spec.serviceAccountName`**, including old terminating replicas, using
+   `uds zarf tools kubectl get pods -n takserver -o custom-columns=NAME:.metadata.name,APP:.metadata.labels.app,SA:.spec.serviceAccountName`.
+   Each of the four workloads must use its matching account, with no remaining
+   shared-account replicas. Verify positive traffic and same-label,
+   different-account negative controls before continuing.
+3. Deploy with `--set-values tak.workloadIdentityPhase=strict`. This removes only
+   those transitional legacy ingress rules. Verify generated principals and
+   repeat live traffic tests on both architectures before declaring migration
+   complete. Never switch directly from shared to strict on an existing install.
+
+For rollback, first stage the config chart in `rollback` and observe the same
+dual-principal policy convergence **before** changing admission. Then deploy
+`rollback`. It retains both principal sets while
+admission restores the four Deployments to `takserver-ignite`. Wait for rollout
+and inspect every Pod identity again; only then deploy `shared`. A direct
+strict-to-shared switch could remove the dedicated principals before the old
+identities are restored. Unknown phase values fail closed.
+
+Dedicated discovery permissions are namespace Roles for pods/endpoints and
+Deployments; only the config account can read the single Ignite Pod's log.
+No new ClusterRoleBinding is granted. The upstream Ignite permissions remain
+unchanged. Ordinary package deployment and these opt-in changes still require
+live migration validation; rendered policies alone do not prove continuity.

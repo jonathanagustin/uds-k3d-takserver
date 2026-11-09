@@ -1,6 +1,7 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
+{{- define "takserver.package" -}}
 apiVersion: uds.dev/v1alpha1
 kind: Package
 metadata:
@@ -401,3 +402,23 @@ spec:
       {{- toYaml . | nindent 6 }}
       {{- end }}
   # @lulaEnd 79a96dd2-7dec-5a42-b67e-282471df87e3
+
+{{- end }}
+{{- $phase := include "takserver.identityPhase" . -}}
+{{- $rendered := include "takserver.package" . -}}
+{{- if has $phase (list "transition" "rollback") -}}
+{{- $package := fromYaml $rendered -}}
+{{- $rules := $package.spec.network.allow -}}
+{{- range $rule := $rules -}}
+{{- if has ($rule.remoteServiceAccount | default "") (list "takserver-api" "takserver-messaging" "takserver-config" "takserver-plugins") -}}
+{{- $legacy := deepCopy $rule -}}
+{{- $_ := set $legacy "remoteServiceAccount" "takserver-ignite" -}}
+{{- $_ := set $legacy "description" (printf "%s (legacy identity during migration)" $legacy.description) -}}
+{{- $rules = append $rules $legacy -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set $package.spec.network "allow" $rules -}}
+{{ printf "\n%s" (toYaml $package) }}
+{{- else -}}
+{{ printf "\n%s" $rendered }}
+{{- end }}

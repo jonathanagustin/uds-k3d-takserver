@@ -51,6 +51,9 @@ Usage: include "takserver.remoteServiceAccount" (list $ "takserver-api")
 {{- if not $sa -}}
 {{- fail (printf "workloadServiceAccounts has no entry for %s" $app) -}}
 {{- end -}}
+{{- if and (ne (include "takserver.identityPhase" $root) "shared") (has $app (list "takserver-api" "takserver-messaging" "takserver-config" "takserver-plugins")) -}}
+{{- $sa = $app -}}
+{{- end -}}
 remoteServiceAccount: {{ $sa | quote }}
 {{- end -}}
 
@@ -61,4 +64,12 @@ which Helm treats as true, so compare the text.
 */}}
 {{- define "takserver.healthEnabled" -}}
 {{- if eq (toString .Values.health.enabled) "true" }}true{{ end }}
+{{- end -}}
+
+{{- define "takserver.identityPhase" -}}
+{{- $phase := .Values.workloadIdentityPhase -}}
+{{- if not (has $phase (list "shared" "transition" "strict" "rollback")) -}}
+{{- fail "workloadIdentityPhase must be shared, transition, strict or rollback" -}}
+{{- end -}}
+{{- $phase -}}
 {{- end -}}

@@ -90,7 +90,7 @@ require_expr() {
   fi
 }
 
-for name in test package container cloudtak-image postgis-image atak atak-vm atak-e2e; do
+for name in test package container cloudtak-image postgis-image atak-vm atak-e2e; do
   require_expr "${wf}/${name}.yaml" "${gate_group}" "${name} group"
   require_expr "${wf}/${name}.yaml" "${gate_cancel}" "${name} cancel"
 done

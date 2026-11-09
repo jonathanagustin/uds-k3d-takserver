@@ -32,6 +32,24 @@ class ProducerQueues(unittest.TestCase):
         self.assertTrue(any("device-images.sh missing" in step.get("run", "")
                             for step in device["steps"]))
 
+    def test_immutable_apk_producers_are_outside_workflow_cancellation(self):
+        workflows = {name: yaml.safe_load((ROOT / f".github/workflows/{name}.yaml").read_text())
+                     for name in ("atak", "atak-e2e")}
+        for name, workflow in workflows.items():
+            with self.subTest(workflow=name):
+                self.assertNotIn("concurrency", workflow,
+                                 "A workflow cancellation can kill a productive immutable APK producer")
+        consumer = workflows["atak-e2e"]["jobs"]["e2e"]["concurrency"]
+        self.assertEqual(consumer["cancel-in-progress"],
+                         "${{ github.event_name == 'pull_request' || github.event_name == 'push' }}")
+        self.assertEqual(consumer["group"],
+                         "${{ github.workflow }}-${{ github.event_name }}-"
+                         "${{ github.event.pull_request.number || github.ref }}-"
+                         "${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') "
+                         "&& github.run_id || 'gate' }}-consumer")
+        self.assertNotEqual(consumer["group"],
+                            workflows["atak-e2e"]["jobs"]["images"]["concurrency"]["group"])
+
     def test_same_key_and_arch_share_fifo_groups_across_workflows(self):
         workflows = {name: yaml.safe_load((ROOT / f".github/workflows/{name}.yaml").read_text())
                      for name in ["test", "cloudtak-image", "postgis-image"]}

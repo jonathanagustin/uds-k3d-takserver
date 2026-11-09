@@ -27,14 +27,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # A newer pull request push or main push cancels the older run of this
-  # workflow on that ref. Schedule and workflow_dispatch each get their own
-  # run id: they are not cancelled, and they do not wait behind a push.
-  # Release and Demo Video are not in this group. A finished run is kept.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
-
 env:
   CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
   # The tests use local "dev" images. They come from GHCR under a tag made of
@@ -100,6 +92,11 @@ jobs:
         run: ./atak/ci/device-images.sh build
 
   e2e:
+    # Supersede only consumers. A workflow-level gate would also cancel the
+    # immutable image producer while it is warming the shared APK cache.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'gate' }}-consumer
+      cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
     # Pinned like the other cluster jobs (#219). On the ubuntu-26.04 image that
     # ubuntu-latest is moving to, virt-handler exits with 'Failed to create an
     # inotify watcher: too many open files', so KubeVirt never becomes Available.

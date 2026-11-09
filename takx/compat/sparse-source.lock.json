@@ -1,0 +1,19 @@
+{
+  "revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "license": "Apache-2.0",
+  "bounds_policy": "Android Q+ upper-index bounds checks; no legacy target-SDK switch",
+  "sources": {
+    "SparseArray": {
+      "url": "https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/util/SparseArray.java?format=TEXT",
+      "sha256": "68f12a1d84a5c6e5b60ba43533e55767d2a739552677d0ae4dd047c14470f5bd"
+    },
+    "SparseBooleanArray": {
+      "url": "https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/util/SparseBooleanArray.java?format=TEXT",
+      "sha256": "72382346dcb8d36d84a79f88260221091906b74ea2edb9ae03c439667afe434d"
+    },
+    "GrowingArrayUtils": {
+      "url": "https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/com/android/internal/util/GrowingArrayUtils.java?format=TEXT",
+      "sha256": "61a9ba91a67fabdc78534849a07d398930e2770273da5d7297f5206feab984c0"
+    }
+  }
+}

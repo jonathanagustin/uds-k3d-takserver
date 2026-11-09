@@ -28,7 +28,7 @@ def main():
     local = implementation.read_text()
     marker = '/*\n * Copyright (C) 2011 The Android Open Source Project'
     if marker not in local or local[local.index(marker):] != adapted:
-        parser.error('LruCache differs from the reviewed reviewed desktop AOSP adaptation')
+        parser.error('LruCache differs from the reviewed desktop AOSP adaptation')
     test = ROOT / 'src/test/java/cache/LruCacheCompatibilityTest.java'
     with tempfile.TemporaryDirectory(prefix='takx-lru-') as temporary:
         build = Path(temporary)

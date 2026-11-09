@@ -1,0 +1,292 @@
+diff --git a/commoncommo/core/impl/commo.cpp b/commoncommo/core/impl/commo.cpp
+index 659d783..d0f6a58 100644
+--- a/commoncommo/core/impl/commo.cpp
++++ b/commoncommo/core/impl/commo.cpp
+@@ -956,6 +956,12 @@ void Commo::freeContactList(const ContactList *contactList)
+     ContactManager::freeContactList(contactList);
+ }
+ 
++CommoResult Commo::configKnownEndpointForContact(const ContactUID *contact,
++        const char *callsign, const char *streamId)
++{
++    return impl->contactMgmt->configKnownEndpointForContact(contact, callsign, streamId);
++}
++
+ CommoResult Commo::configKnownEndpointContact(const ContactUID *contact,
+                                               const char *callsign,
+                                               const char *ipAddr,
+diff --git a/commoncommo/core/impl/contactmanager.cpp b/commoncommo/core/impl/contactmanager.cpp
+index bac2e24..5cb3d9a 100644
+--- a/commoncommo/core/impl/contactmanager.cpp
++++ b/commoncommo/core/impl/contactmanager.cpp
+@@ -562,7 +562,8 @@ void ContactManager::removeStream(const std::string &epString)
+                 thread::Lock sLock(state->mutex);
+                 if (state->streamEndpoint &&
+                             state->streamEndpoint->getEndpointString() == epString) {
+-                    if (!state->datagramEndpoint && !state->tcpEndpoint) {
++                    if (!state->datagramEndpoint && !state->tcpEndpoint &&
++                            !state->quicEndpoint && !state->configuredStreamEndpoint) {
+                         queueContactPresenceChange(curIter->first, false);
+                         delete (const InternalContactUID *)curIter->first;
+                         contacts.erase(curIter);
+@@ -695,11 +696,11 @@ CommoResult ContactManager::sendCoT(
+ 
+                         smIter = streamMap.find(epString);
+                         if (smIter != streamMap.end()) {
+-                            smIter->second.first.push_back(state->callsign);
++                            smIter->second.first.push_back(ep == state->configuredStreamEndpoint ? state->configuredCallsign : state->callsign);
+                             smIter->second.second.push_back(*iter);
+                         } else {
+                             CallContactPair ccp;
+-                            ccp.first.push_back(state->callsign);
++                            ccp.first.push_back(ep == state->configuredStreamEndpoint ? state->configuredCallsign : state->callsign);
+                             ccp.second.push_back(*iter);
+                             streamMap.insert(std::pair<std::string, CallContactPair>(epString, ccp));
+                         }
+@@ -850,6 +851,46 @@ void ContactManager::freeContactList(const ContactList *list)
+ }
+ 
+ 
++CommoResult ContactManager::configKnownEndpointForContact(
++        const ContactUID *contact, const char *callsign, const char *streamId)
++{
++    if (!contact || !contact->contactUID || !contact->contactUIDLen ||
++            ((callsign == NULL) != (streamId == NULL)))
++        return COMMO_ILLEGAL_ARGUMENT;
++    if (streamId) {
++        if (!*callsign || !*streamId) return COMMO_ILLEGAL_ARGUMENT;
++        try {
++            // Validates the configured stream even before DNS/connect succeeds.
++            streamMgmt->isEndpointSSL(streamId);
++        } catch (std::invalid_argument &) { return COMMO_ILLEGAL_ARGUMENT; }
++    }
++    thread::WriteLock lock(contactMapMutex);
++    ContactMap::iterator iter = contacts.find(contact);
++    if (iter == contacts.end()) {
++        if (!streamId) return COMMO_ILLEGAL_ARGUMENT;
++        ContactUID *uid = new InternalContactUID(contact);
++        iter = contacts.insert(std::make_pair(uid, new ContactState(false))).first;
++        queueContactPresenceChange(uid, true);
++    }
++    ContactState *state = iter->second;
++    bool remove = false;
++    {
++        thread::Lock stateLock(state->mutex);
++        delete state->configuredStreamEndpoint;
++        state->configuredStreamEndpoint = streamId ? new StreamingCoTEndpoint(streamId) : NULL;
++        state->configuredCallsign = callsign ? callsign : "";
++        remove = !streamId && !state->streamEndpoint && !state->datagramEndpoint &&
++                 !state->tcpEndpoint && !state->quicEndpoint;
++    }
++    if (remove) {
++        queueContactPresenceChange(iter->first, false);
++        delete (const InternalContactUID *)iter->first;
++        contacts.erase(iter);
++        delete state;
++    }
++    return COMMO_SUCCESS;
++}
++
+ CommoResult ContactManager::configKnownEndpointContact(
+                                        const ContactUID *contact,
+                                        const char *callsign,
+@@ -948,7 +989,7 @@ bool ContactManager::hasStreamingEndpoint(const ContactUID *contact)
+ 
+     {
+         thread::Lock lock2(iter->second->mutex);
+-        return iter->second->streamEndpoint != NULL;
++        return iter->second->streamEndpoint != NULL || iter->second->configuredStreamEndpoint != NULL;
+     }
+ }
+ 
+@@ -961,10 +1002,13 @@ std::string ContactManager::getStreamEndpointIdentifier(const ContactUID *contac
+ 
+     {
+         thread::Lock lock2(iter->second->mutex);
+-        if (iter->second->streamEndpoint == NULL)
++        ContactState *state = iter->second;
++        CoTEndpoint *endpoint = ifActive ? getCurrentEndpoint(state) :
++            (state->streamEndpoint ? state->streamEndpoint : state->configuredStreamEndpoint);
++        if (endpoint && endpoint->getType() == CoTEndpoint::STREAMING)
++            return ((StreamingCoTEndpoint *)endpoint)->getEndpointString();
++        if (!state->streamEndpoint && !state->configuredStreamEndpoint)
+             throw std::invalid_argument("Specified contact has no streaming endpoint");
+-        else if (!ifActive || getCurrentEndpoint(iter->second) == iter->second->streamEndpoint)
+-            return iter->second->streamEndpoint->getEndpointString();
+         else
+             throw std::invalid_argument("Specified contact has no active streaming endpoint");
+     }
+@@ -1024,7 +1068,7 @@ CoTEndpoint* ContactManager::getCurrentEndpoint(ContactState *state, CoTSendMeth
+             nearestTime = state->datagramEndpoint->getLastRxTime();
+             meshEp = state->datagramEndpoint;
+         }
+-        if (meshEp && streamEp &&
++        if (meshEp && (streamEp || (!state->knownEndpoint && (sendMethod & SEND_TAK_SERVER) && state->configuredStreamEndpoint)) &&
+                     CommoTime::now().minus(nearestTime) > CONTACT_DIRECT_TIMEOUT)
+             // Force fallback to streaming ep below, if exists
+             meshEp = NULL;
+@@ -1036,6 +1080,8 @@ CoTEndpoint* ContactManager::getCurrentEndpoint(ContactState *state, CoTSendMeth
+         ret = meshEp ? meshEp : streamEp;
+     }
+ 
++    if (!ret && (sendMethod & SEND_TAK_SERVER))
++        ret = state->configuredStreamEndpoint;
+     return ret;
+ }
+ 
+@@ -1305,13 +1351,14 @@ ContactState::ContactState(bool knownEP) :
+         protoInf(0, 0),
+         meshEndpointExpireTime(CommoTime::ZERO_TIME),
+         lastMeshEndpointProto(0),
+-        streamEndpoint(NULL),
++        streamEndpoint(NULL), configuredStreamEndpoint(NULL), configuredCallsign(),
+         datagramEndpoint(NULL), tcpEndpoint(NULL), quicEndpoint(NULL),
+         callsign(), knownEndpoint(knownEP), mutex() {
+ }
+ 
+ ContactState::~ContactState() {
+     delete streamEndpoint;
++    delete configuredStreamEndpoint;
+     delete datagramEndpoint;
+     delete tcpEndpoint;
+     delete quicEndpoint;
+diff --git a/commoncommo/core/impl/contactmanager.h b/commoncommo/core/impl/contactmanager.h
+index 0ce317f..6dc7625 100644
+--- a/commoncommo/core/impl/contactmanager.h
++++ b/commoncommo/core/impl/contactmanager.h
+@@ -154,6 +154,9 @@ struct ContactState
+ 
+     // Will always have one endpoint, maybe multiple.
+     StreamingCoTEndpoint *streamEndpoint;
++    // Explicit fallback, independent from discovered endpoints and fixed UDP.
++    StreamingCoTEndpoint *configuredStreamEndpoint;
++    std::string configuredCallsign;
+     DatagramCoTEndpoint *datagramEndpoint;
+     PeerCoTEndpoint *tcpEndpoint;
+     PeerCoTEndpoint *quicEndpoint;
+@@ -270,6 +273,10 @@ public:
+     // via this call, or an unparsable ipAddr 
+     // results in ILLEGAL_ARGUMENT. SUCCESS is returned
+     // if the contact is added, changed, or removed as specified.
++    CommoResult configKnownEndpointForContact(const ContactUID *contact,
++                                              const char *callsign,
++                                              const char *streamId);
++
+     CommoResult configKnownEndpointContact(const ContactUID *contact,
+                                            const char *callsign,
+                                            const char *ipAddr,
+diff --git a/commoncommo/core/include/commo.h b/commoncommo/core/include/commo.h
+index a04ea9e..4c125ca 100644
+--- a/commoncommo/core/include/commo.h
++++ b/commoncommo/core/include/commo.h
+@@ -1576,6 +1576,16 @@ public:
+     static void freeContactList(const ContactList *contactList);
+ 
+ 
++    /**
++     * Configure a fallback contact route through an existing streaming
++     * interface. Active discovered endpoints take precedence. Pass NULL for
++     * both optional values to remove only this fallback. Unknown stream IDs
++     * and partial NULL configurations return ILLEGAL_ARGUMENT.
++     */
++    CommoResult configKnownEndpointForContact(const ContactUID *contact,
++                                              const char *callsign,
++                                              const char *streamId);
++
+     /**
+      * Configure and create a "known endpoint" contact. 
+      * This is a non-discoverable contact for whom we already know
+diff --git a/commoncommo/jni/com/atakmap/commoncommo/Commo.java b/commoncommo/jni/com/atakmap/commoncommo/Commo.java
+index 54c8ca8..514d48b 100644
+--- a/commoncommo/jni/com/atakmap/commoncommo/Commo.java
++++ b/commoncommo/jni/com/atakmap/commoncommo/Commo.java
+@@ -2288,6 +2288,22 @@ public class Commo {
+         return c;
+     }
+     
++    /**
++     * Configure a fallback through an existing streaming interface. Discovered
++     * active endpoints take precedence. Both optional arguments must be null
++     * to remove the fallback; this does not remove a discovered contact.
++     * Invalid or removed stream IDs are rejected, never interpreted as UDP.
++     */
++    public Contact configKnownEndpointForContact(String uid, String callsign,
++                                                String streamId) throws CommoException
++    {
++        if (uid == null || uid.isEmpty() || ((callsign == null) != (streamId == null)))
++            throw new CommoException("Invalid streaming contact configuration");
++        if (!configKnownEndpointForContactNative(nativePtr, uid, callsign, streamId))
++            throw new CommoException("Failed to configure streaming contact fallback");
++        return new Contact(uid);
++    }
++
+     /**
+      * Configure and create a "known endpoint" contact. 
+      * This is a non-discoverable contact for whom we already know
+@@ -2671,6 +2687,8 @@ public class Commo {
+                                               String xferFileName);
+     static native boolean startMPSendNative(long nativePtr, int id);
+     static native String[] getContactsNative(long nativePtr);
++    static native boolean configKnownEndpointForContactNative(long nativePtr,
++                                              String uid, String callsign, String streamId);
+     static native boolean configKnownEndpointContactNative(long nativePtr,
+                                               String uid,
+                                               String callsign,
+diff --git a/commoncommo/jni/native/jcommo.cpp b/commoncommo/jni/native/jcommo.cpp
+index cb8249f..148ad2a 100644
+--- a/commoncommo/jni/native/jcommo.cpp
++++ b/commoncommo/jni/native/jcommo.cpp
+@@ -4117,6 +4117,53 @@ Java_com_atakmap_commoncommo_Commo_getContactsNative
+ 
+ 
+ 
++JNIEXPORT jboolean JNICALL
++Java_com_atakmap_commoncommo_Commo_configKnownEndpointForContactNative
++    (JNIEnv *env, jclass selfCls, jlong nativePtr, jstring juid,
++     jstring jcallsign, jstring jstreamId)
++{
++    CommoJNI *c = JLONG_TO_PTR(CommoJNI, nativePtr);
++    
++    const char *callsign = NULL;
++    const char *streamId = NULL;
++    if (jcallsign && jstreamId) {
++        callsign = env->GetStringUTFChars(jcallsign, NULL);
++        if (!callsign)
++            return JNI_FALSE;
++        streamId = env->GetStringUTFChars(jstreamId, NULL);
++        if (!streamId) {
++            env->ReleaseStringUTFChars(jcallsign, callsign);
++            return JNI_FALSE;
++        }
++    } else if (jcallsign || jstreamId) {
++        // Specifying one or the other is not ok
++        return JNI_FALSE;
++    } // else both NULL which is ok to pass on
++    
++    const char *uid = env->GetStringUTFChars(juid, NULL);
++    if (!uid) {
++        if (jcallsign) {
++            env->ReleaseStringUTFChars(jcallsign, callsign);
++            env->ReleaseStringUTFChars(jstreamId, streamId);
++        }
++        return JNI_FALSE;
++    }
++
++    ContactUID uidobj((const uint8_t *)uid, env->GetStringUTFLength(juid));
++    CommoResult r = c->commo->configKnownEndpointForContact(&uidobj,
++                                                         callsign,
++                                                         streamId);
++
++    env->ReleaseStringUTFChars(juid, uid);
++    if (jcallsign) {
++        env->ReleaseStringUTFChars(jcallsign, callsign);
++        env->ReleaseStringUTFChars(jstreamId, streamId);
++    }
++    
++    return r == COMMO_SUCCESS ? JNI_TRUE : JNI_FALSE;
++}
++
++
+ JNIEXPORT jboolean JNICALL
+ Java_com_atakmap_commoncommo_Commo_configKnownEndpointContactNative
+     (JNIEnv *env, jclass selfCls, jlong nativePtr, jstring juid,

@@ -83,6 +83,29 @@ public final class Bitmap {
         System.arraycopy(pixels, 0, allocation, 0, count);
     }
 
+    /** Desktop region reuse: retain shape/capacity and preserve untouched visible colors. */
+    void replaceDecodedRegion(int[] pixels, int stride, int copyWidth, int copyHeight, boolean alpha) {
+        checkWritable();
+        requireOwned();
+        Objects.requireNonNull(pixels, "pixels");
+        if (copyWidth <= 0 || copyHeight <= 0 || copyWidth > width || copyHeight > height
+                || stride < copyWidth || (long) (copyHeight - 1) * stride + copyWidth > pixels.length) {
+            throw new IllegalArgumentException("invalid decoded region rows");
+        }
+        if (!this.alpha && alpha) {
+            // RGB raster views need not store alpha bytes. Preserve their visible
+            // opaque colors when changing the interpretation of untouched pixels.
+            for (int i = 0; i < width * height; i++) { allocation[i] |= 0xff000000; }
+        }
+        if (this.alpha != alpha) {
+            this.alpha = alpha;
+            reshape(width, height);
+        }
+        for (int row = 0; row < copyHeight; row++) {
+            System.arraycopy(pixels, row * stride, allocation, row * width, copyWidth);
+        }
+    }
+
     public Config getConfig() {
         checkLive();
         return owned ? Config.ARGB_8888 : null;

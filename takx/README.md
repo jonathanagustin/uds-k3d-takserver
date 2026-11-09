@@ -8,6 +8,8 @@ Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after fu
 
 The optional [desktop compatibility prototype](compat/README.md) supplies real bitmap, font, Context/resource and preference behavior. Its tests compile the complete public Kernel port module, but the engine and full clients remain unbuilt. This independently implemented slice is not the upstream AndroidPort artifact and is not installed by the server package.
 
+The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
+
 ## Run locally
 
 Use Linux amd64, JDK 17 (`JAVA_HOME`), Python 3, Git, GNU make, GCC/G++, Perl, Ant, dos2unix, patch, tar, pkg-config, coreutils and the usual C/C++ build headers. The source archive configure scripts are already generated. These are optional local prerequisites; no default task or GitHub workflow installs or runs this component.

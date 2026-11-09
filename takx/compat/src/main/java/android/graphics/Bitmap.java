@@ -12,6 +12,7 @@ import java.util.Objects;
 /** ARGB pixel slice of uds-desktop-android-compat 0.1.0; not an Android SDK. */
 public final class Bitmap {
     public enum Config { ARGB_8888 }
+    public enum CompressFormat { PNG, JPEG }
 
     private BufferedImage image;
     private int width;
@@ -19,6 +20,8 @@ public final class Bitmap {
     private int[] allocation;
     private final boolean mutable;
     private boolean recycled;
+    private boolean alpha = true;
+    private final boolean owned;
 
     // Pinned Kernel BitmapMarshal reflects this exact constructor and method.
     // Retain the caller's backing image, including its actual color model.
@@ -32,11 +35,14 @@ public final class Bitmap {
         this.height = image.getHeight();
         this.mutable = mutable;
         this.allocation = null;
+        this.owned = false;
+        this.alpha = image.getColorModel().hasAlpha();
     }
 
     private Bitmap(int width, int height, boolean mutable) {
         int count = pixelCount(width, height);
         this.allocation = new int[count];
+        this.owned = true;
         this.mutable = mutable;
         reshape(width, height);
     }
@@ -49,19 +55,66 @@ public final class Bitmap {
     }
 
     private void reshape(int width, int height) {
-        int[] masks = {0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000};
+        int[] masks = alpha ? new int[]{0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000}
+                : new int[]{0x00ff0000, 0x0000ff00, 0x000000ff};
         DataBufferInt buffer = new DataBufferInt(allocation, allocation.length);
         WritableRaster raster = Raster.createPackedRaster(buffer, width, height, width, masks, null);
-        image = new BufferedImage(new DirectColorModel(32, masks[0], masks[1], masks[2], masks[3]),
+        image = new BufferedImage(new DirectColorModel(alpha ? 32 : 24, masks[0], masks[1], masks[2], alpha ? masks[3] : 0),
                 raster, false, null);
         this.width = width;
         this.height = height;
     }
 
-    static Bitmap decoded(int width, int height, int[] pixels, boolean mutable) {
+    static Bitmap decoded(int width, int height, int[] pixels, boolean mutable, boolean alpha) {
         Bitmap result = new Bitmap(width, height, mutable);
+        result.alpha = alpha;
+        result.reshape(width, height);
         System.arraycopy(pixels, 0, result.allocation, 0, pixels.length);
         return result;
+    }
+
+    void replaceDecoded(int width, int height, int[] pixels, boolean alpha) {
+        checkWritable();
+        int count = pixelCount(width, height);
+        requireOwned();
+        if (count > allocation.length) { throw new IllegalArgumentException("bitmap allocation is too small"); }
+        this.alpha = alpha;
+        reshape(width, height);
+        System.arraycopy(pixels, 0, allocation, 0, count);
+    }
+
+    public Config getConfig() {
+        checkLive();
+        return owned ? Config.ARGB_8888 : null;
+    }
+
+    public boolean hasAlpha() { checkLive(); return alpha; }
+
+    public static Bitmap createScaledBitmap(Bitmap source, int width, int height, boolean filter) {
+        Objects.requireNonNull(source, "source");
+        pixelCount(width, height);
+        if (source.recycled) { throw new IllegalArgumentException("cannot scale a recycled bitmap"); }
+        if (!source.mutable && source.width == width && source.height == height) { return source; }
+        Bitmap result = new Bitmap(width, height, true);
+        result.alpha = source.alpha;
+        result.reshape(width, height);
+        java.awt.Graphics2D graphics = result.image.createGraphics();
+        try {
+            graphics.setComposite(java.awt.AlphaComposite.Src);
+            graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, filter
+                    ? java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR
+                    : java.awt.RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            graphics.drawImage(source.image, 0, 0, width, height, null);
+        } finally { graphics.dispose(); }
+        return result;
+    }
+
+    public boolean compress(CompressFormat format, int quality, java.io.OutputStream stream) {
+        checkLive();
+        Objects.requireNonNull(stream, "stream");
+        if (quality < 0 || quality > 100) { throw new IllegalArgumentException("quality must be 0..100"); }
+        Objects.requireNonNull(format, "format");
+        return BitmapEncoder.write(image, format, quality, stream);
     }
 
     boolean hasOwnedAllocation() { return allocation != null; }

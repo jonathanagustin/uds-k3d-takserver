@@ -324,8 +324,120 @@ public final class BitmapCompatibilityTest {
         }
     }
 
+    private static void metadataScalingAndCodecs() throws Exception {
+        android.graphics.Bitmap image = bitmap(2, 1);
+        image.setPixel(0, 0, 0xffff0000); image.setPixel(1, 0, 0xff0000ff);
+        check(image.getConfig() == android.graphics.Bitmap.Config.ARGB_8888 && image.hasAlpha(),
+                "owned ARGB configuration includes alpha even when current pixels are opaque");
+        android.graphics.Bitmap nearest = android.graphics.Bitmap.createScaledBitmap(image, 3, 1, false);
+        check(nearest.isMutable() && nearest.getWidth() == 3 && nearest.getHeight() == 1,
+                "scaled destination is a real mutable owned image");
+        for (int x = 0; x < 3; x++) {
+            int color = nearest.getPixel(x, 0);
+            check(color == 0xffff0000 || color == 0xff0000ff, "nearest scaling retains source colors");
+        }
+        android.graphics.Bitmap smooth = android.graphics.Bitmap.createScaledBitmap(image, 3, 1, true);
+        int middle = smooth.getPixel(1, 0);
+        check(((middle >> 16) & 255) >= 120 && ((middle >> 16) & 255) <= 135
+                && (middle & 255) >= 120 && (middle & 255) <= 135, "bilinear scaling interpolates color");
+        android.graphics.Bitmap copy = android.graphics.Bitmap.createScaledBitmap(image, 2, 1, false);
+        check(copy != image && copy.isMutable() && copy.getPixel(0, 0) == image.getPixel(0, 0),
+                "same-size mutable scaling makes an independent mutable copy");
+        copy.setPixel(0, 0, 0xff00ff00);
+        check(image.getPixel(0, 0) == 0xffff0000, "scaled destination does not replace source allocation");
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createScaledBitmap(image, 0, 1, false));
+        raises(NullPointerException.class, () -> android.graphics.Bitmap.createScaledBitmap(null, 1, 1, false));
+
+        image.setPixel(0, 0, 0x00123456); image.setPixel(1, 0, 0x80123456);
+        class Output extends ByteArrayOutputStream {
+            boolean closed;
+            @Override public void close() { closed = true; }
+        }
+        Output png0 = new Output(), png100 = new Output();
+        check(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 0, png0)
+                && image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png100), "real PNG encoding succeeds");
+        check(!png0.closed && !png100.closed, "encoder does not close caller stream");
+        check(Arrays.equals(png0.toByteArray(), png100.toByteArray()), "PNG quality hint is ignored by lossless encoder");
+        byte[] png = png0.toByteArray();
+        android.graphics.Bitmap decoded = android.graphics.BitmapFactory.decodeByteArray(png, 0, png.length);
+        check(decoded.hasAlpha() && decoded.getPixel(0, 0) == 0x00123456 && decoded.getPixel(1, 0) == 0x80123456,
+                "PNG round trip preserves transparent RGB and partial alpha");
+        check(android.graphics.Bitmap.createScaledBitmap(decoded, 2, 1, true) == decoded,
+                "same-size immutable scaling returns original per AOSP identity fast path");
+        raises(IllegalArgumentException.class, () -> image.compress(android.graphics.Bitmap.CompressFormat.PNG, -1, png0));
+        raises(IllegalArgumentException.class, () -> image.compress(android.graphics.Bitmap.CompressFormat.PNG, 101, png0));
+        raises(NullPointerException.class, () -> image.compress(null, 80, png0));
+        raises(NullPointerException.class, () -> image.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, null));
+        check(!image.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, new java.io.OutputStream() {
+            @Override public void write(int value) throws IOException { throw new IOException("failed output"); }
+        }), "real output failure returns false");
+
+        android.graphics.Bitmap photograph = bitmap(16, 16);
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) { photograph.setPixel(x, y, 0xff000000 | (x * 17 << 16) | (y * 17 << 8) | ((x + y) % 16 * 17)); }
+        }
+        Output low = new Output(), high = new Output();
+        check(photograph.compress(android.graphics.Bitmap.CompressFormat.JPEG, 0, low)
+                && photograph.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, high), "JPEG encodes both quality extremes");
+        check(!Arrays.equals(low.toByteArray(), high.toByteArray()), "JPEG quality affects actual encoded output");
+        byte[] jpeg = high.toByteArray();
+        BufferedImage independentlyDecoded = ImageIO.read(new ByteArrayInputStream(jpeg));
+        check(independentlyDecoded != null && independentlyDecoded.getWidth() == 16
+                && !independentlyDecoded.getColorModel().hasAlpha(), "independent JDK JPEG reader accepts opaque output");
+        check(!high.closed, "JPEG writer retains caller stream ownership");
+        android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+        options.inMutable = true;
+        android.graphics.Bitmap opaque = android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length, options);
+        check(!opaque.hasAlpha() && opaque.getConfig() == android.graphics.Bitmap.Config.ARGB_8888,
+                "JPEG decoded ARGB configuration retains opaque metadata");
+        opaque.setPixel(0, 0, 0x00123456);
+        check(opaque.getPixel(0, 0) == 0xff123456, "opaque destination treats pixel writes as opaque");
+        android.graphics.Bitmap scaledOpaque = android.graphics.Bitmap.createScaledBitmap(opaque, 4, 4, true);
+        check(!scaledOpaque.hasAlpha() && scaledOpaque.getAllocationByteCount() == 64,
+                "scaling preserves opaque metadata and creates bounded owned storage");
+        Object allocation = ((java.awt.image.DataBufferInt) view(opaque).getRaster().getDataBuffer()).getData();
+        options.inBitmap = opaque;
+        check(android.graphics.BitmapFactory.decodeByteArray(png, 0, png.length, options) == opaque
+                && opaque.hasAlpha() && opaque.getPixel(1, 0) == 0x80123456,
+                "pooled opaque-to-alpha decode updates actual destination color model");
+        check(((java.awt.image.DataBufferInt) view(opaque).getRaster().getDataBuffer()).getData() == allocation
+                && opaque.getAllocationByteCount() == 1024, "alpha metadata transition retains exact owned allocation");
+        check(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length, options) == opaque && !opaque.hasAlpha(),
+                "pooled alpha-to-opaque decode restores opaque metadata");
+
+        android.graphics.Bitmap transparentRed = bitmap(8, 8);
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) { transparentRed.setPixel(x, y, 0x00ff0000); }
+        }
+        Output rgbOnly = new Output();
+        check(transparentRed.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, rgbOnly), "JPEG accepts alpha source");
+        BufferedImage rgbDecoded = ImageIO.read(new ByteArrayInputStream(rgbOnly.toByteArray()));
+        int red = rgbDecoded.getRGB(4, 4);
+        check(((red >> 16) & 255) > 250 && (red & 255) < 5 && ((red >> 8) & 255) < 5,
+                "desktop JPEG codec discards alpha rather than compositing transparent pixels over black");
+        transparentRed.recycle();
+        raises(IllegalStateException.class, () -> transparentRed.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, rgbOnly));
+        raises(IllegalArgumentException.class, () -> android.graphics.Bitmap.createScaledBitmap(transparentRed, 1, 1, false));
+
+        for (int type : new int[]{BufferedImage.TYPE_INT_RGB, BufferedImage.TYPE_BYTE_INDEXED, BufferedImage.TYPE_INT_ARGB_PRE}) {
+            BufferedImage backing = new BufferedImage(2, 2, type);
+            backing.setRGB(0, 0, 0xffabcdef);
+            Bitmap portable = MarshalManager.marshal(backing, BufferedImage.class, Bitmap.class);
+            android.graphics.Bitmap borrowed = MarshalManager.marshal(portable, Bitmap.class, android.graphics.Bitmap.class);
+            check(borrowed.getConfig() == null && borrowed.hasAlpha() == backing.getColorModel().hasAlpha(),
+                    "borrowed metadata reports actual alpha model without inventing Android config");
+            android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(borrowed, 4, 4, false);
+            check(scaled.getConfig() == android.graphics.Bitmap.Config.ARGB_8888
+                    && scaled.getPixel(0, 0) == borrowed.getPixel(0, 0), "borrowed scaling converts real source colors into owned ARGB");
+            check(view(borrowed) == backing, "borrowed scaling preserves original backing identity");
+            Output encoded = new Output();
+            check(borrowed.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, encoded)
+                    && ImageIO.read(new ByteArrayInputStream(encoded.toByteArray())) != null, "borrowed storage can encode without detaching");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        pixels(); decode(); marshal(); lifecycleAndBounds(); ownedReuse(); borrowedReuse();
+        pixels(); decode(); marshal(); lifecycleAndBounds(); ownedReuse(); borrowedReuse(); metadataScalingAndCodecs();
         System.out.println("PASS " + checks + " bitmap/decoder/upstream-marshal checks");
     }
 }

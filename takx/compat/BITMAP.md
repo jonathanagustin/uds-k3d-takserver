@@ -48,7 +48,7 @@ The only declared configuration is `ARGB_8888`. Options expose
 method accepts a null padding argument (typed `Object`) as used by the pinned
 portable factory; non-null padding is explicitly rejected. It is not a binary
 replacement for Android's `Rect`-typed method. Scaling, region decoding,
-buffer copying, compression, canvas operations, native bitmap handles and other
+buffer copying, native bitmap handles and other
 Android APIs are outside this slice. Fatal JVM resource errors are not converted
 to a successful or fabricated image. Untrusted-image memory budgets are not
 implemented here.
@@ -162,7 +162,7 @@ Recycling drops the wrapper's references without destroying separately held
 views. The adapter's raster storage is an implementation detail, not a claim
 about Android native memory order or a raw-buffer API.
 
-The 152-check harness compiles the unchanged official `ResourcePool` used by
+The 198-check harness compiles the unchanged official `ResourcePool` used by
 TerrainRGB and the real marshal chain. It exercises pooled return identity,
 repeated real PNG decoding, equal-capacity aspect-ratio changes, recovered
 capacity after shrink, allocation-array identity, retained storage, invalid
@@ -179,3 +179,5 @@ returned object identity before recycling or returning an unused candidate.
 `SQLiteSingleTileReader` also retries after an incompatible-reuse exception.
 Only the actual ResourcePool and graphics/marshal chain run in this harness;
 those complete tile-reader classes retain other engine/database/native gaps.
+
+Metadata, filtered scaling and PNG/JPEG encoding are documented in [CODECS.md](CODECS.md).

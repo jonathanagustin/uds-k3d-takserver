@@ -5,7 +5,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 build=$(mktemp -d)
 trap 'rm -rf -- "${build}"' EXIT
-sources=(Bitmap BitmapFactory Canvas Paint Typeface Rect RectF)
+sources=(Bitmap BitmapEncoder BitmapFactory Canvas Paint Typeface Rect RectF)
 inputs=()
 for source in "${sources[@]}"; do
   inputs+=("${root}/takx/compat/src/main/java/android/graphics/${source}.java")

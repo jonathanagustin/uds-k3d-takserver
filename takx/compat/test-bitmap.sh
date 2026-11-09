@@ -43,7 +43,8 @@ done
 # Apply the reviewed unused-import patch only to the disposable source copy.
 patch --batch --fuzz=0 --dry-run -d "${build}/source" -p1 < "${patch_file}"
 patch --batch --fuzz=0 -d "${build}/source" -p1 < "${patch_file}"
-compat=("${root}/takx/compat/src/main/java/android/graphics/Bitmap.java"
+compat=("${root}/takx/compat/src/main/java/android/graphics/BitmapEncoder.java"
+        "${root}/takx/compat/src/main/java/android/graphics/Bitmap.java"
         "${root}/takx/compat/src/main/java/android/graphics/BitmapFactory.java"
         "${root}/takx/compat/src/main/java/android/graphics/Canvas.java"
         "${root}/takx/compat/src/main/java/android/graphics/Paint.java"

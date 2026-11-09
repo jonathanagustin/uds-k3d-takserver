@@ -37,17 +37,16 @@ public final class BitmapFactory {
         int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
         Bitmap reused = options == null ? null : options.inBitmap;
         if (reused == null) {
-            return Bitmap.decoded(width, height, pixels, options != null && options.inMutable);
+            return Bitmap.decoded(width, height, pixels, options != null && options.inMutable, image.getColorModel().hasAlpha());
         }
         if (!reused.isMutable() || !reused.hasOwnedAllocation()) {
             throw new ReuseException("reuse requires a mutable owned ARGB allocation");
         }
         try {
-            reused.reconfigure(width, height, Bitmap.Config.ARGB_8888);
+            reused.replaceDecoded(width, height, pixels, image.getColorModel().hasAlpha());
         } catch (IllegalArgumentException exception) {
             throw new ReuseException("bitmap allocation is too small");
         }
-        reused.setPixels(pixels, 0, width, 0, 0, width, height);
         return reused;
     }
 

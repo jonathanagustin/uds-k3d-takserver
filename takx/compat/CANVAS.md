@@ -64,7 +64,7 @@ interiors/edges, fill-and-stroke alpha, glyph ink/outline coverage, text alignme
 reconfiguration, recycled sources/targets and immutable destinations.
 
 The bitmap harness additionally compiles the unchanged official marshal chain
-and ResourcePool. Its 152 checks include drawing into actual borrowed RGB,
+and ResourcePool. Its 198 checks include drawing into actual borrowed RGB,
 indexed, premultiplied and subimage storage, plus the previous 148 bitmap/reuse
 contracts. Neither harness substitutes dummy engine consumers. Complete tile
 readers and MapTextFormat retain other engine/native dependencies and are not

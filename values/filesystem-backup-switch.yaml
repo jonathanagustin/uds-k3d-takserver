@@ -9,3 +9,4 @@
 backup:
   filesystem:
     enabled: "###ZARF_VAR_FILESYSTEM_BACKUP###"
+    owner: "###ZARF_VAR_FILESYSTEM_BACKUP_OWNER###"

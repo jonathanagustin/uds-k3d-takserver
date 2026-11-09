@@ -6,9 +6,12 @@
 
 import argparse
 import hashlib
+import io
 import json
 from pathlib import Path
 import re
+import shutil
+import tarfile
 import subprocess
 import sys
 import tempfile
@@ -56,6 +59,52 @@ def verify_source(source, lock):
     version = ".".join(re.findall(r"#define COMMO_(?:MAJOR|MINOR|PATCH)\s+(\d+)", header))
     if version != lock["commoncommo_version"]:
         raise ValueError("CommonCommo source version does not match the lock")
+
+
+def verify_patches(lock_path, lock):
+    patches = []
+    for entry in lock.get("patches", []):
+        relative = Path(entry["path"])
+        if relative.is_absolute() or ".." in relative.parts or relative.parts[:1] != ("patches",):
+            raise ValueError("Unexpected patch path in lock")
+        path = lock_path.parent / relative
+        if (entry["source_revision"] != lock["atak_source"]["revision"]
+                or entry["commoncommo_version"] != lock["commoncommo_version"]):
+            raise ValueError("Patch is not pinned to the selected upstream source")
+        if path.is_symlink() or digest(path) != entry["sha256"]:
+            raise ValueError("Patch hash does not match lock")
+        patches.append(path)
+    return patches
+
+
+def stage_patches(source, output, lock_path, lock):
+    patches = verify_patches(lock_path, lock)
+    archive = subprocess.check_output(["git", "-C", str(source), "archive", "HEAD", "commoncommo"])
+    with tempfile.TemporaryDirectory(prefix="patch-stage-", dir=output) as temporary:
+        stage = Path(temporary)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as files:
+            for member in files:
+                relative = Path(member.name)
+                if relative.is_absolute() or ".." in relative.parts or relative.parts[:1] != ("commoncommo",):
+                    raise ValueError("Unexpected path in pinned source archive")
+                target = stage / relative
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with files.extractfile(member) as original, target.open("wb") as copied:
+                        shutil.copyfileobj(original, copied)
+                    target.chmod(member.mode & 0o777)
+                else:
+                    raise ValueError("Source archive contains a link or special file")
+        for patch in patches:
+            subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch.resolve())],
+                           cwd=stage, check=True)
+        destination = output / "patched-source"
+        if destination.exists():
+            shutil.rmtree(destination)
+        stage.rename(destination)
+    return destination / "commoncommo"
 
 
 def materialize(source, cache, lock, offline=False):
@@ -109,10 +158,12 @@ def materialize(source, cache, lock, offline=False):
 
 def cache_key(lock_path, source, output, toolchain):
     lock = json.loads(lock_path.read_text())
+    verify_patches(lock_path, lock)
     native_inputs = {field: lock[field] for field in ("atak_source", "commoncommo_version", "archives")}
+    native_inputs["patches"] = lock.get("patches", [])
     recipe = Path(__file__).with_name("build-commoncommo.sh")
     payload = {
-        "native_inputs": native_inputs, "recipe": digest(recipe),
+        "native_inputs": native_inputs, "recipe": digest(recipe), "source_tools": digest(Path(__file__)),
         "source": str(source.resolve()), "output": str(output.resolve()), "toolchain": toolchain,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -195,7 +246,7 @@ def complete_cache(output, key):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("verify", "cache-check", "cache-start", "cache-write"))
+    parser.add_argument("command", choices=("verify", "cache-check", "cache-start", "cache-write", "stage-patches"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--lock", type=Path, default=Path(__file__).with_name("sources.lock.json"))
     parser.add_argument("--cache", type=Path)
@@ -205,6 +256,7 @@ def main():
     args = parser.parse_args()
     lock = json.loads(args.lock.read_text())
     verify_source(args.source, lock)
+    verify_patches(args.lock, lock)
     if args.command == "verify":
         if args.cache is None:
             parser.error("verify requires --cache")
@@ -213,6 +265,9 @@ def main():
         return
     if args.output is None:
         parser.error("cache commands require --output")
+    if args.command == "stage-patches":
+        stage_patches(args.source, args.output, args.lock, lock)
+        return
     key = cache_key(args.lock, args.source, args.output, args.toolchain)
     if args.command == "cache-check":
         sys.exit(0 if cache_status(args.output, key) == "complete" else 1)

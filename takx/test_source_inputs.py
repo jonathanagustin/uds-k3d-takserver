@@ -144,6 +144,76 @@ class SourceGuards(unittest.TestCase):
             network.assert_not_called()
 
 
+    def patch_fixture(self):
+        root = Path(self.temporary.name) / "recipe"
+        (root / "patches").mkdir(parents=True)
+        self.lock_path = root / "sources.lock.json"
+        patch_file = root / "patches/0001.patch"
+        patch_file.write_text("--- a/commoncommo/source.cpp\n+++ b/commoncommo/source.cpp\n@@ -1 +1 @@\n-// tracked source fixture\n+// patched source fixture\n")
+        self.lock["patches"] = [{"path": "patches/0001.patch", "sha256": source_inputs.digest(patch_file),
+                                 "source_revision": self.revision, "commoncommo_version": "1.17.2"}]
+        self.lock_path.write_text(json.dumps(self.lock))
+        return patch_file
+
+    def test_patches_are_isolated_and_restage_uses_git_not_ignored_files(self):
+        self.patch_fixture()
+        output = Path(self.temporary.name) / "output"
+        output.mkdir()
+        (self.source / ".git/info/exclude").write_text("commoncommo/ignored.java\n")
+        (self.source / "commoncommo/ignored.java").write_text("not a source input")
+        for _ in range(2):
+            staged = source_inputs.stage_patches(self.source, output, self.lock_path, self.lock)
+            self.assertEqual((staged / "source.cpp").read_text(), "// patched source fixture\n")
+            self.assertFalse((staged / "ignored.java").exists())
+            self.assertEqual(self.code.read_text(), "// tracked source fixture\n")
+        source_inputs.verify_source(self.source, self.lock)
+
+    def test_patch_hash_changes_native_cache_key_and_corruption_is_rejected(self):
+        patch_file = self.patch_fixture()
+        key = source_inputs.cache_key(self.lock_path, self.source, self.cache, "compiler")
+        patch_file.write_text(patch_file.read_text().replace("patched source", "changed source"))
+        with self.assertRaisesRegex(ValueError, "Patch hash"):
+            source_inputs.cache_key(self.lock_path, self.source, self.cache, "compiler")
+        self.lock["patches"][0]["sha256"] = source_inputs.digest(patch_file)
+        self.lock_path.write_text(json.dumps(self.lock))
+        self.assertNotEqual(key, source_inputs.cache_key(self.lock_path, self.source, self.cache, "compiler"))
+
+    def test_patch_order_is_enforced(self):
+        self.patch_fixture()
+        second = self.lock_path.parent / "patches/0002.patch"
+        second.write_text("--- a/commoncommo/source.cpp\n+++ b/commoncommo/source.cpp\n@@ -1 +1 @@\n-// patched source fixture\n+// ordered source fixture\n")
+        self.lock["patches"].append({"path": "patches/0002.patch", "sha256": source_inputs.digest(second),
+                                     "source_revision": self.revision, "commoncommo_version": "1.17.2"})
+        output = Path(self.temporary.name) / "output"
+        output.mkdir()
+        staged = source_inputs.stage_patches(self.source, output, self.lock_path, self.lock)
+        self.assertEqual((staged / "source.cpp").read_text(), "// ordered source fixture\n")
+        self.lock["patches"].reverse()
+        with self.assertRaises(subprocess.CalledProcessError):
+            source_inputs.stage_patches(self.source, output, self.lock_path, self.lock)
+
+    def test_changed_patch_or_wrong_revision_is_rejected(self):
+        patch_file = self.patch_fixture()
+        patch_file.write_text(patch_file.read_text() + "\n")
+        with self.assertRaisesRegex(ValueError, "Patch hash"):
+            source_inputs.verify_patches(self.lock_path, self.lock)
+        self.lock["patches"][0]["sha256"] = source_inputs.digest(patch_file)
+        self.lock["patches"][0]["source_revision"] = "0" * 40
+        with self.assertRaisesRegex(ValueError, "pinned"):
+            source_inputs.verify_patches(self.lock_path, self.lock)
+
+    def test_inapplicable_patch_fails_without_changing_source(self):
+        patch_file = self.patch_fixture()
+        patch_file.write_text(patch_file.read_text().replace("-// tracked", "-// absent"))
+        self.lock["patches"][0]["sha256"] = source_inputs.digest(patch_file)
+        output = Path(self.temporary.name) / "output"
+        output.mkdir()
+        with self.assertRaises(subprocess.CalledProcessError):
+            source_inputs.stage_patches(self.source, output, self.lock_path, self.lock)
+        self.assertFalse((output / "patched-source").exists())
+        self.assertEqual(self.code.read_text(), "// tracked source fixture\n")
+
+
 class BuildCacheLifecycle(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

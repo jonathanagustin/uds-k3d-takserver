@@ -43,12 +43,13 @@ if [[ "${mode}" != --smoke-only ]]; then
     cache_status=$?
     if [[ "${cache_status}" != 1 ]]; then exit "${cache_status}"; fi
     "${state[@]}" cache-start
+    "${state[@]}" stage-patches
     # The upstream core buildstamp runs git from the copied sources. Keep its
     # identity tied to ATAK even when the output is outside that checkout.
     export GIT_DIR
     GIT_DIR="$(git -C "${source_dir}" rev-parse --absolute-git-dir)"
     export GIT_WORK_TREE="${source_dir}"
-    make_source=(make -C "${source_dir}/takthirdparty" TARGET=linux-amd64 BUILD_TYPE=release "TARGET_OUTDIR=${output}")
+    make_source=(make -C "${source_dir}/takthirdparty" TARGET=linux-amd64 BUILD_TYPE=release "TARGET_OUTDIR=${output}" "commoncommo_src=${output}/patched-source/commoncommo")
     : > "${output}/build.log"
     run() {
       if ! "$@" >> "${output}/build.log" 2>&1; then
@@ -89,9 +90,12 @@ fi
 # reenter initialization; constructing Commo follows the intended contract.
 mkdir -p "${output}/smoke-classes"
 "${JAVA_HOME}/bin/javac" --release 17 -classpath "${output}/java/jcommoncommo.jar" \
-  -d "${output}/smoke-classes" "${here}/CommonCommoSmoke.java"
+  -d "${output}/smoke-classes" "${here}/CommonCommoSmoke.java" "${here}/CommonCommoRoutingSmoke.java"
 LD_LIBRARY_PATH="${output}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
   timeout 30 "${JAVA_HOME}/bin/java" "-Djava.library.path=${output}/lib" \
   -cp "${output}/java/jcommoncommo.jar:${output}/smoke-classes" CommonCommoSmoke
+LD_LIBRARY_PATH="${output}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+  timeout 60 "${JAVA_HOME}/bin/java" "-Djava.library.path=${output}/lib" \
+  -cp "${output}/java/jcommoncommo.jar:${output}/smoke-classes" CommonCommoRoutingSmoke
 if [[ "${mode}" != --smoke-only ]]; then "${state[@]}" cache-write; fi
 printf 'CommonCommo 1.17.2 artifacts: %s/{java,lib}\n' "${output}"

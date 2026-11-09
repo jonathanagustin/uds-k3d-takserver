@@ -76,5 +76,13 @@
     "develop": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
     "release_5_7": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
     "note": "Official upstream/takx checkout reference; full application is not built and no compatible SDK is supplied."
-  }
+  },
+  "patches": [
+    {
+      "path": "patches/0100-commoncommo-stream-contact-fallback.patch",
+      "sha256": "abf2b271bee6b2eadea9262e209642d3751b7d26186042f24e05a5b95fea21b0",
+      "source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+      "commoncommo_version": "1.17.2"
+    }
+  ]
 }

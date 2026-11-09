@@ -1,6 +1,12 @@
 # Upstream patches
 
-The CommonCommo foundation currently builds the pinned official 1.17.2 source without Java/C++ API changes. The optional Kernel port test applies `0001-kernel-remove-unused-colorfilter-import.patch` to a temporary copy of official ATAK revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. It removes only an unused import, allowing the real marshal registry to compile without supplying a placeholder Android ColorFilter. The test pins the patch hash and exercises all 18 blend-mode round trips; no drawing behavior is removed. This patch is not an input to the native CommonCommo build.
+The optional Kernel port test applies `0001-kernel-remove-unused-colorfilter-import.patch` to a temporary copy of official ATAK revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. It removes only an unused import, allowing the real marshal registry to compile without supplying a placeholder Android ColorFilter. The test pins the patch hash and exercises all 18 blend-mode round trips; no drawing behavior is removed. This patch is not an input to the native CommonCommo build.
+
+`0100-commoncommo-stream-contact-fallback.patch` applies only to official ATAK revision `9f6893dd657feacc35ec5de03dad721c2e44170e`, CommonCommo 1.17.2. The explicit `patches` list in `sources.lock.json` records order, upstream identity and SHA256. Unlisted patches are not applied by the native build.
+
+The patch adds the Java/JNI/C++ streaming-contact fallback needed by both pinned TAKX profiles. It validates an existing stream ID, keeps configured and discovered endpoints separate, retains direct/discovered routing priority, and preserves discovery when the configured fallback is removed. It uses the normal streaming send path and recipient callsign, not the older fixed-UDP API. The library remains identified as patched public 1.17.2, never 1.22.3.
+
+`CommonCommoRoutingSmoke.java` exercises actual loopback TCP and UDP delivery through native code. Run it with the built JNI/JAR as part of `build-commoncommo.sh`. Source guard tests check patch hashes, revision restrictions, failed application and staging isolation. Retire this patch only after a matching official source API passes the same transport tests.
 
 Future changes belong here as small, ordered diffs against a recorded upstream revision. Each patch must state the concrete incompatibility, intended behavior, applicable version and tests. Apply patches deterministically and include their hashes in build inputs before enabling them. Keep substantial upstream code in its upstream checkout rather than copying it into an untracked compatibility SDK.
 

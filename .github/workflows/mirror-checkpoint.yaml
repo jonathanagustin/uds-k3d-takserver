@@ -73,7 +73,17 @@ jobs:
             sed -n 's/^slim_core_version=\([0-9.]*\).*/\1/p' "${s}"
             sed -n 's/^ *\[\([0-9.]*\)\]=sha256:.*/\1/p' "${s}"
             grep -ho 'SLIM_CORE_VERSION=[0-9.]*' tasks.yaml tests/upgrade.sh | cut -d= -f2
-          } | sort -uV)
+          } | sed '/^$/d' | sort -uV)
+          if [[ "${#versions[@]}" -eq 0 ]]; then
+            echo "No checkpoint versions found." >&2
+            exit 1
+          fi
+          for v in "${versions[@]}"; do
+            if [[ ! "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Invalid checkpoint version: ${v}" >&2
+              exit 1
+            fi
+          done
           echo "Versions: ${versions[*]}"
           for v in "${versions[@]}"; do
             up="$(uds zarf tools registry digest "${UPSTREAM}:${v}")"

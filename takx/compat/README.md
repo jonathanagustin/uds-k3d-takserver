@@ -21,6 +21,7 @@ export ATAK_SOURCE_DIR=/path/to/atak-civ
 ./takx/compat/test-font.sh
 ./takx/compat/test-bitmap.sh
 ./takx/compat/test-context.sh
+./takx/compat/test-pair.sh
 python3 takx/compat/test-geometry.py --source "$ATAK_SOURCE_DIR"
 python3 takx/compat/test-color-rect.py --source "$ATAK_SOURCE_DIR"
 ```
@@ -46,3 +47,5 @@ The runner verifies the upstream revision and clean consumed sources, copies onl
 Both official TAKX 5.7 and 5.8 remain candidates; prefer 5.8 after actual full-client acceptance. Full Kernel engine compilation, SQLite, broader graphics/Canvas/Matrix/URI APIs, native GIS/GL dependencies and TAKX resource catalogs still need implementation or compatible public inputs. These limited APIs deliberately do not pretend to support Android services, binary resources or the complete graphics surface.
 
 No live map rendering, GL recovery, enrollment, CoT exchange or TAKX desktop session is established by the port-module checks. Follow [issue 376](https://github.com/jonathanagustin/uds-takserver/issues/376) for the prototype and its remaining runtime gates. The normal server CI does not download or compile this opt-in component.
+
+[Pair compatibility and source provenance](PAIR.md) covers the small AOSP tuple API.

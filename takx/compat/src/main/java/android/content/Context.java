@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package android.content;
 
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import java.io.File;
@@ -15,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Context {
     public static final int MODE_PRIVATE = 0;
     private static final ConcurrentHashMap<Path, SharedPreferences> PREFERENCES = new ConcurrentHashMap<>();
+    private final Path appRoot;
+    private final PackageManager packageManager;
     private final Path files;
     private final Path cache;
     private final String packageName;
@@ -33,6 +36,15 @@ public class Context {
             Path root = appDataPath.toAbsolutePath().normalize();
             Files.createDirectories(root);
             root = root.toRealPath();
+            appRoot = root;
+            String configuredLibrary = System.getProperty("uds.desktop.nativeLibraryPath");
+            Path library;
+            if (configuredLibrary == null || configuredLibrary.isBlank()) library = directory(root, "lib");
+            else {
+                library = Path.of(configuredLibrary);
+                if (!library.isAbsolute()) throw new IllegalArgumentException("Native library path must be absolute");
+            }
+            packageManager = new PackageManager(packageName, library);
             files = directory(root, "files");
             cache = directory(root, "cache");
         } catch (IOException error) {
@@ -62,6 +74,23 @@ public class Context {
         path = path.toRealPath();
         if (!path.startsWith(root)) throw new IOException("App data directory escapes its root");
         return path;
+    }
+
+    public PackageManager getPackageManager() { return packageManager; }
+    public ContentResolver getContentResolver() { return new ContentResolver(resources); }
+    public File getDatabasePath(String name) {
+        if (name == null || !name.matches("[A-Za-z0-9_][A-Za-z0-9_.-]*") || name.contains(".."))
+            throw new IllegalArgumentException("Database name must be a single private filename");
+        try {
+            Path root = directory(appRoot, "databases");
+            Path file = root.resolve(name);
+            if (Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                file = file.toRealPath();
+                if (!file.startsWith(root) || Files.isDirectory(file))
+                    throw new IOException("Database path escapes private directory or is a directory");
+            }
+            return file.toFile();
+        } catch (IOException error) { throw new UncheckedIOException(error); }
     }
 
     public File getFilesDir() { return files.toFile(); }

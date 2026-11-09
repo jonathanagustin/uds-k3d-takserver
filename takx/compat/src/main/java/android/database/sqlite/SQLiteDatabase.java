@@ -79,7 +79,6 @@ public final class SQLiteDatabase implements AutoCloseable {
     }
     public void execSQL(String sql,Object[] args){
         Objects.requireNonNull(args,"bind arguments");
-        supportedSQL(sql);
         try(SQLiteStatement statement=compileStatement(sql)){
             statement.bindAll(args);
             statement.execute();
@@ -87,7 +86,31 @@ public final class SQLiteDatabase implements AutoCloseable {
     }
     private static void supportedSQL(String sql){
         Objects.requireNonNull(sql,"sql");
-        if(sql.matches("(?is)\\s*PRAGMA\\s+(?:\\w+\\.)?(?:key|rekey|cipher_\\w*)\\b.*"))throw new UnsupportedOperationException("SQLCipher is not provided");
+        String checked=leadingStatement(sql);
+        if(checked.matches("(?is)\\s*(?:BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\\b.*"))throw new UnsupportedOperationException("use scoped transaction methods");
+        if(checked.matches("(?is)\\s*PRAGMA\\s+(?:\\w+\\.)?(?:key|rekey|cipher_\\w*)\\b.*"))throw new UnsupportedOperationException("SQLCipher is not provided");
+    }
+    private static String leadingStatement(String sql){
+        int offset=0;
+        while(offset<sql.length()){
+            if(Character.isWhitespace(sql.charAt(offset))||sql.charAt(offset)==';'){
+                offset++;
+                continue;
+            }
+            if(sql.startsWith("--",offset)){
+                int end=sql.indexOf('\n',offset+2);
+                offset=end<0?sql.length():end+1;
+                continue;
+            }
+            if(sql.startsWith("/*",offset)){
+                int end=sql.indexOf("*/",offset+2);
+                if(end<0)throw new IllegalArgumentException("unterminated SQL comment");
+                offset=end+2;
+                continue;
+            }
+            break;
+        }
+        return sql.substring(offset);
     }
     public SQLiteStatement compileStatement(String sql){
         supportedSQL(sql);

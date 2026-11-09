@@ -26,7 +26,8 @@ All facade sources are original repository GPL-3.0-only code.
 - A transaction owns the connection lock until its outermost end. Nested
   unsuccessful scopes force outer rollback; nested success cannot commit early.
   Marking success twice, nesting after success and ending without an owned
-  transaction fail. Other threads cannot execute on that connection mid-scope.
+  transaction fail. Direct transaction-control SQL is rejected; use scoped
+  methods rather than bypassing their owner/rollback state. Other threads cannot execute on that connection mid-scope.
 - SQLiteOpenHelper performs actual create/upgrade/downgrade/open lifecycle.
   Schema changes, data and user_version roll back together after failed upgrade.
   Readable fallback opens a real read-only connection when writable policy

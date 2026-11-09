@@ -82,7 +82,7 @@ public final class CursorWindow implements AutoCloseable {
     public boolean putBlob(byte[] value,int row,int column){
         return put(value,row,column);
     }
-    public Object value(int row,int column){
+    private Object value(int row,int column){
         return row(row,column)[column];
     }
     public int getType(int row,int column){

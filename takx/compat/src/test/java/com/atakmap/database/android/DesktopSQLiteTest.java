@@ -149,6 +149,9 @@ public final class DesktopSQLiteTest {
             }
             failure(IllegalArgumentException.class,()->SQLiteQueryBuilder.buildQueryString(false,"sample",null,null,null,null,null,"1; DROP TABLE sample"));
             failure(UnsupportedOperationException.class,()->db.execSQL("PRAGMA key='not-supported'"));
+            failure(UnsupportedOperationException.class,()->db.execSQL("BEGIN"));
+            failure(UnsupportedOperationException.class,()->db.execSQL("/* comment */ ; BEGIN"));
+            failure(UnsupportedOperationException.class,()->db.execSQL("-- comment\nSAVEPOINT hidden"));
             Cursor cursor=db.rawQuery("SELECT 1",null);
             cursor.close();
             cursor.close();

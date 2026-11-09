@@ -6,10 +6,11 @@ The implementation uses JDK `BufferedImage`, ImageIO, Java2D fonts, classpath st
 
 - [Bitmap pixels, decoding and upstream marshaling](BITMAP.md)
 - [Coordinate and rectangle primitives](GEOMETRY.md)
+- [Packed integer colors and integer rectangles](COLOR-RECT.md)
 - [Font selection and text measurement](FONT.md)
 - [Context, resource catalogs and persistent preferences](CONTEXT.md)
 
-Most sources are original repository code under the root GPL-3.0-only license. RectF adapts the same pinned official public port implementation, retaining its Apache-2.0 notice and license; see [geometry provenance](GEOMETRY.md). The tests compile upstream code from the separately checked-out official `TAK-Product-Center/atak-civ` revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. Upstream code remains in that checkout; no private SDK JAR is included.
+Most sources are original repository code under the root GPL-3.0-only license. RectF and Rect adapt the same pinned official public port implementations, retaining its Apache-2.0 notice and license; see [geometry provenance](GEOMETRY.md). The tests compile upstream code from the separately checked-out official `TAK-Product-Center/atak-civ` revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. Upstream code remains in that checkout; no private SDK JAR is included.
 
 ## Run the behavioral checks
 
@@ -21,6 +22,7 @@ export ATAK_SOURCE_DIR=/path/to/atak-civ
 ./takx/compat/test-bitmap.sh
 ./takx/compat/test-context.sh
 python3 takx/compat/test-geometry.py --source "$ATAK_SOURCE_DIR"
+python3 takx/compat/test-color-rect.py --source "$ATAK_SOURCE_DIR"
 ```
 
 The font and bitmap tests exercise real upstream wrappers and the marshal registry. Context tests include separate JVM restarts, concurrent JVM writers and concurrent threads using different Context objects. Tests use temporary directories and do not download inputs, change upstream files, load native graphics or start clusters.

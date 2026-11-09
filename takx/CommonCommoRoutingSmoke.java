@@ -29,8 +29,12 @@ public final class CommonCommoRoutingSmoke {
             reader.setDaemon(true); reader.start();
         }
         void ready() throws Exception { require(accepted.await(10, TimeUnit.SECONDS), "stream did not connect"); }
-        void discover() throws Exception {
-            socket.getOutputStream().write(String.format(EVENT, PEER, "Discovered").getBytes(StandardCharsets.UTF_8));
+        void discover(String barrierUid) throws Exception {
+            // Both events use one ordered TCP stream. The sentinel's contact
+            // callback comes from ContactManager after it processes PEER.
+            String events = String.format(EVENT, PEER, "Discovered")
+                    + String.format(EVENT, barrierUid, "Discovery barrier");
+            socket.getOutputStream().write(events.getBytes(StandardCharsets.UTF_8));
             socket.getOutputStream().flush();
         }
         public void close() throws IOException { server.close(); if (socket != null) socket.close(); }
@@ -54,13 +58,29 @@ public final class CommonCommoRoutingSmoke {
         String callsign = phase.equals("discovery-wins") || phase.equals("remove-keeps-discovery") ? "Discovered" : "Configured";
         require(sent.contains("callsign=\"" + callsign + "\""), phase + ": wrong TAK server recipient callsign");
     }
+    private static void awaitDiscovery(Commo commo, Peer server) throws Exception {
+        String barrierUid = "discovery-barrier-" + UUID.randomUUID();
+        CountDownLatch processed = new CountDownLatch(1);
+        ContactPresenceListener listener = new ContactPresenceListener() {
+            public void contactAdded(Contact contact) {
+                if (barrierUid.equals(contact.contactUID)) processed.countDown();
+            }
+            public void contactRemoved(Contact contact) { }
+        };
+        commo.addContactPresenceListener(listener);
+        try {
+            server.discover(barrierUid);
+            require(processed.await(10, TimeUnit.SECONDS), "native contact discovery did not complete");
+        } finally { commo.removeContactPresenceListener(listener); }
+    }
     public static void main(String[] args) throws Exception {
         Commo commo = new Commo((level, type, message, detail) -> {}, "routing-smoke", "Routing smoke");
-        try (Peer a = new Peer(); Peer b = new Peer()) {
+        try (Peer a = new Peer(); Peer b = new Peer(); Peer control = new Peer()) {
             CoTMessageType[] types = { CoTMessageType.SITUATIONAL_AWARENESS };
             StreamingNetInterface ia = commo.addStreamingInterface(StreamingTransport.TCP, "127.0.0.1", a.server.getLocalPort(), types, null, null, null, null, null, null);
             StreamingNetInterface ib = commo.addStreamingInterface(StreamingTransport.TCP, "127.0.0.1", b.server.getLocalPort(), types, null, null, null, null, null, null);
-            a.ready(); b.ready();
+            StreamingNetInterface ic = commo.addStreamingInterface(StreamingTransport.TCP, "127.0.0.1", control.server.getLocalPort(), types, null, null, null, null, null, null);
+            a.ready(); b.ready(); control.ready();
             Contact peer = commo.configKnownEndpointForContact(PEER, "Configured", ia.streamId);
             try { commo.configKnownEndpointForContact(PEER, "Wrong", "not-a-stream"); throw new AssertionError("unknown stream accepted"); }
             catch (CommoException expected) { }
@@ -93,20 +113,34 @@ public final class CommonCommoRoutingSmoke {
             }
             commo.configKnownEndpointForContact(PEER, "Configured", ib.streamId);
             arrives(commo, peer, b, a, "replaced-b");
-            a.discover(); Thread.sleep(200);
+            awaitDiscovery(commo, a);
             arrives(commo, peer, a, b, "discovery-wins");
             commo.configKnownEndpointForContact(PEER, null, null);
             arrives(commo, peer, a, b, "remove-keeps-discovery");
             commo.configKnownEndpointForContact(PEER, "Configured", ib.streamId);
             commo.removeStreamingInterface(ia); a.close();
             arrives(commo, peer, b, a, "lost-discovery-falls-back");
+            // Removing the configured interface does not silently retarget its
+            // contact to a different live stream. The stored config remains
+            // until explicitly cleared, but sends through the removed ID fail.
+            commo.removeStreamingInterface(ib);
+            String removedMarker = "removed-stream-" + UUID.randomUUID();
+            try { commo.sendCoT(peer, String.format(EVENT, removedMarker, "Sender")); throw new AssertionError("removed interface still routes"); }
+            catch (CommoException expected) { }
+            Contact controlPeer = commo.configKnownEndpointForContact("control-peer", "Configured", ic.streamId);
+            arrives(commo, controlPeer, control, b, "control-barrier");
+            require(!control.received.toString().contains(removedMarker), "removed interface leaked CoT to another stream");
             commo.configKnownEndpointForContact(PEER, null, null);
             try { commo.sendCoT(peer, String.format(EVENT, "removed", "Sender")); throw new AssertionError("removed fallback still routes"); }
             catch (CommoException expected) { }
-            commo.removeStreamingInterface(ib);
+            // A second clear is rejected like the existing fixed-endpoint API;
+            // it must not recreate a contact or any route.
+            try { commo.configKnownEndpointForContact(PEER, null, null); throw new AssertionError("absent contact clear accepted"); }
+            catch (CommoException expected) { }
             try { commo.configKnownEndpointForContact(PEER, "Wrong", ib.streamId); throw new AssertionError("removed stream accepted"); }
             catch (CommoException expected) { }
-            System.out.println("PASS real TCP fallback, recipient callsigns, UDP priority, replacement, discovery priority, removal, disconnect fallback and unknown-stream rejection");
+            commo.removeStreamingInterface(ic);
+            System.out.println("PASS real TCP fallback, recipient callsigns, UDP priority, replacement, discovery priority, removal, disconnect fallback, removed-interface isolation and unknown-stream rejection");
         } finally { commo.shutdown(); }
     }
 }

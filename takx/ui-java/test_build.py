@@ -149,6 +149,39 @@ class OfflineGuardTests(unittest.TestCase):
                                            product / 'logs', 'fixture', 0.05)
                         raise BUILD.BuildFailure('fixture compile failed')
                 self.assertEqual(list(root.iterdir()), [])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output, report = root / 'output', root / 'failure.json'
+
+            def timeout_build(source, classpath, destination, java, profile, timeout):
+                with BUILD.workspace(destination) as (_, product):
+                    (product / 'partial.jar').write_bytes(b'not accepted')
+                    child = ("import sys,time; "
+                             "sys.stdout.write('x'*70000+'\\nretained stdout diagnostic\\n'); sys.stdout.flush(); "
+                             "sys.stderr.write('y'*70000+'\\nretained stderr diagnostic\\n'); sys.stderr.flush(); "
+                             "time.sleep(10)")
+                    BUILD.run_tool([sys.executable, '-c', child], product / 'logs', 'fixture', timeout)
+
+            args = [str(BUILD.HERE / 'build.py'), '--sources-dir', str(root), '--classpath-dir', str(root),
+                    '--output', str(output), '--java-home', str(root), '--timeout-seconds', '1',
+                    '--failure-report', str(report)]
+            # Exercise the real child deadline, workspace cleanup and CLI report
+            # writer without requiring third-party sources or a Java compiler.
+            stderr = io.StringIO()
+            with patch.object(BUILD, 'build', side_effect=timeout_build), patch.object(sys, 'argv', args), \
+                    patch.object(sys, 'stderr', stderr):
+                with self.assertRaises(SystemExit) as exited:
+                    BUILD.main()
+            self.assertEqual(exited.exception.code, 1)
+            self.assertIn('fixture timed out', stderr.getvalue())
+            failure = json.loads(report.read_text())
+            self.assertIn('timed out', failure['error'])
+            for stream in ('stdout', 'stderr'):
+                tail = failure['details'][stream + '_tail']
+                self.assertLessEqual(len(tail), 65536)
+                self.assertTrue(tail.endswith('retained ' + stream + ' diagnostic\n'))
+            self.assertFalse(output.exists())
+            self.assertEqual(list(root.iterdir()), [report])
 
     def test_existing_or_concurrently_created_output_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:

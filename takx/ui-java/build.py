@@ -169,7 +169,11 @@ def run_tool(command, directory, label, timeout):
             except ProcessLookupError:
                 pass
             process.wait()
-            raise BuildFailure(label + ' timed out', {'command': [str(x) for x in command]}) from None
+            raise BuildFailure(label + ' timed out', {
+                'command': [str(x) for x in command],
+                'stdout_tail': stdout.read_bytes()[-65536:].decode('utf-8', errors='replace'),
+                'stderr_tail': stderr.read_bytes()[-65536:].decode('utf-8', errors='replace'),
+            }) from None
     if code:
         raise BuildFailure(label + ' failed', {
             'exit_code': code, 'command': [str(x) for x in command],

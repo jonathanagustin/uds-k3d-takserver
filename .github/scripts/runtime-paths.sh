@@ -65,6 +65,7 @@ upstream/takx
 .github/workflows/scan.yaml
 .github/scripts/full-core-paths.sh
 .github/scripts/runtime-paths.sh
+.github/scripts/install-reuse-shadow.py
 .github/scripts/ci-concurrency.sh
 .gitignore
 .gitleaks.toml

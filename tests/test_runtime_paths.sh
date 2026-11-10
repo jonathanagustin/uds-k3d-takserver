@@ -87,6 +87,14 @@ done
 check_match "pepr/package-lock.json" relevant
 check_match ".github/workflows/charts.yaml" ignore
 check_match ".github/scripts/publish-charts.py" ignore
+# Only this standalone read-only checker is excluded, not its producer inputs.
+check_match ".github/scripts/install-reuse-shadow.py" ignore
+check_match ".github/scripts/install-reuse-shadow.py.bak" relevant
+check_match ".github/scripts/install-reuse-shadow-other.py" relevant
+for receipt_helper in install-receipt.py collect-install-receipt.py install-artifact-inputs.py checkpoint-identity.py; do
+  check_match ".github/scripts/${receipt_helper}" relevant
+  check_decide true $'.github/scripts/install-reuse-shadow.py\n'".github/scripts/${receipt_helper}"
+done
 check_match ".github/workflows/full-core.yaml" ignore
 check_match ".github/workflows/scan.yaml" ignore
 check_match ".github/test-infra/aws/eks/main.tf" ignore
@@ -142,6 +150,12 @@ check_match "upstream/cloudtak" relevant
 check_match "mise.toml" relevant
 
 check_decide false "docs/ci.md"
+check_decide false '.github/scripts/install-reuse-shadow.py'
+check_decide false $'.github/scripts/install-reuse-shadow.py\ndocs/ci-install-receipts.md\ntests/test_install_reuse_shadow.py'
+check_decide true $'.github/scripts/install-reuse-shadow.py\n.github/scripts/dev-package.sh'
+check_decide true $'.github/scripts/install-reuse-shadow.py\n.github/scripts/pin-image-tags.sh'
+check_decide true $'.github/scripts/install-reuse-shadow.py\n.github/scripts/stage-sanitized-logs.sh'
+check_decide true $'.github/scripts/install-reuse-shadow.py\n.github/workflows/test.yaml'
 check_decide false $'README.md\nhk.pkl\n.github/workflows/lint.yaml'
 check_decide false '.github/workflows/scorecard-analysis.yaml'
 check_decide false "atak/ci/build-apk.sh"

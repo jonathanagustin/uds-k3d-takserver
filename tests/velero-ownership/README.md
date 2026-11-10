@@ -189,17 +189,39 @@ It records `recoveryOnly: true` and never sets acceptance true. Helpers are
 idempotent only after checking current API objects; the full trial deliberately
 refuses reusing an evidence directory or an existing fresh-install agent.
 
-The hosted workflow is still a review prerequisite. A focused manual selector
-should default to native AMD; ARM-only completes the other architecture later.
+The manual-only `Staged migrations` workflow is implemented for review but has
+not been dispatched. Its default selects Velero on native AMD; ARM-only
+completes the other architecture later without repeating AMD. Main is required;
+there are no automatic PR, push or scheduled triggers. The `identities` and
+`all` selections also require the separately reviewed identity driver in the
+same source commit. Missing driver/package/phase evidence fails before claiming
+acceptance.
 Use the same run's slim Core 1.16 bootstrap, local-path-local StorageClass and
 warm published package, then this exact driver. Do not run the ordinary
 install/upgrade matrix or unrelated monitoring/portal/Falco checks. If identity
 is also selected, require owner acceptance plus the restored local/shared
-baseline before its separate driver and keep separate scenario results. Budget
-up to 180 minutes per selected architecture for bootstrap, staged deployments
+baseline before its separate driver and keep separate scenario results. The owner driver wall is 180 minutes per selected architecture for bootstrap, staged deployments
 and three 35-minute bounded backup/restore/API calls. This is a **ceiling, not
 a measured runtime**; AMD pilot evidence must establish actual cost before
 running ARM. Missing package/credentials, admission conflicts, bootstrap
 failures or missing scenario proofs fail the job; no blanket retry or skipped
 green summary. Both architectures' live acceptance remains required before any
 default change or issue closure.
+
+The workflow always publishes a newly generated public evidence directory,
+including an explicit `accepted: false` receipt and allowlisted stage progress
+on failure. It deeply filters observer JSON (numeric agent counters, fixed
+owners/selectors, IDs, hashes and completed volume-copy identities), strips raw
+controller messages and never recursively uploads a private trial directory.
+The summary requires every selected architecture's accepted receipt to match
+this exact source SHA, run and attempt. Owner acceptance requires the complete
+ordered phase sequence and all three backup proofs, including positive evidence
+that the old Core config is absent from both live API and stored manifest.
+Recovery and baseline-only runs cannot count. Optional passive-watch output is
+a separate diagnostic artifact, never a required-health or acceptance signal.
+
+No-cluster format proof used UDS0.41 to create and inspect a 646-byte file-only
+Zarf package and a 1.8-KiB OCI-layout bundle, verifying relative local-package
+resolution, actual archive names and the OCI manifest digest. It pulled no
+images/packages and deployed nothing. It does not validate the large Core
+candidate's admission, SSA ownership behavior or actual restore paths.

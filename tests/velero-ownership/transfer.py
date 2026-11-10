@@ -63,6 +63,8 @@ def ownership_patch(ds, expected_uid, source, target):
     """JSON Patch CAS: any concurrent controller/owner update rejects the write."""
     validate_agent(ds, expected_uid, source)
     meta = ds['metadata']
+    require(meta.get('annotations', {}).get('helm.sh/resource-policy') in (None, 'keep'),
+            'unexpected preexisting agent resource policy')
     patch = [
         {'op': 'test', 'path': '/metadata/uid', 'value': expected_uid},
         {'op': 'test', 'path': '/metadata/resourceVersion', 'value': meta['resourceVersion']},
@@ -168,7 +170,8 @@ class Transfer:
                              '-n', 'velero', '--ignore-not-found', '-o', 'json'])
         if text.strip():
             obj = json.loads(text)
-            require(ownership(obj) == LOCAL and not obj['metadata'].get('deletionTimestamp')
+            require(obj['metadata'].get('uid') and obj['metadata'].get('resourceVersion')
+                    and ownership(obj) == LOCAL and not obj['metadata'].get('deletionTimestamp')
                     and obj['metadata'].get('labels', {}).get('app.kubernetes.io/managed-by') == 'Helm'
                     and json.loads(obj.get('data', {}).get('node-agent-config.json', 'null')) == PAYLOAD,
                     'existing local config is not the expected nonterminating Helm object')
@@ -180,7 +183,9 @@ class Transfer:
             'data': {'node-agent-config.json': json.dumps(PAYLOAD, separators=(',', ':'))}}
         require(self.guard(self.context, self.command) == self.identity, 'ephemeral cluster receipt changed')
         result = json.loads(self.command(['kubectl', '--context', self.context, 'create', '-f', '-', '-o', 'json'], json.dumps(obj)))
-        require(result.get('metadata', {}).get('uid'), 'API did not return created config identity')
+        require(result.get('metadata', {}).get('uid') and result['metadata'].get('resourceVersion')
+                and ownership(result) == LOCAL and result.get('data') == obj['data']
+                and not result['metadata'].get('deletionTimestamp'), 'API did not return the exact created config identity/data')
         return {'changed': True, 'uid': result['metadata']['uid']}
 
 

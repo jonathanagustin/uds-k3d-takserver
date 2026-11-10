@@ -57,6 +57,28 @@ class TrialTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'source'):
                     D.load_plan(plan)
 
+    def test_changed_api_smoke_dependency_is_rejected_by_real_source_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in D.REVIEWED_HELPERS:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('reviewed bytes\n')
+            calls = []
+            def command(argv):
+                self.assertEqual(argv[:2], ['git', 'show'])
+                self.assertTrue(argv[2].startswith('HEAD:'))
+                calls.append(argv[2][5:])
+                return 'reviewed bytes\n'
+            with patch.object(D, 'ROOT', root):
+                D.verify_helpers(command)
+                self.assertIn('tests/api-smoke.sh', calls)
+                self.assertIn('.github/scripts/checked-pipe.sh', calls)
+                self.assertIn('.github/scripts/redact-logs.py', calls)
+                (root / 'tests/api-smoke.sh').write_text('changed acceptance behavior')
+                with self.assertRaisesRegex(ValueError, 'differs from reviewed'):
+                    D.verify_helpers(command)
+
     def test_deploy_set_key_matches_real_package_variable_declaration(self):
         import yaml
         package = yaml.safe_load((ROOT / 'zarf.yaml').read_text())
@@ -158,6 +180,7 @@ class TrialTests(unittest.TestCase):
                 driver.transfer = Transfer()
                 driver.read_command = lambda _: ''
                 driver.deploy = lambda *args, **kwargs: calls.append(('deploy', args, kwargs))
+                driver.execute = lambda *args, **kwargs: calls.append(('setup', args))
                 driver.wait = lambda: calls.append(('wait',))
                 driver.observe = lambda *args: calls.append(('observe', *args))
                 def accept(stage, group, suffix):
@@ -165,7 +188,12 @@ class TrialTests(unittest.TestCase):
                     if stage == fail_stage:
                         raise ValueError('failed real acceptance')
                 driver.accept = accept
-                driver.reverse = lambda: calls.append(('reverse',))
+                def reverse():
+                    calls.append(('reverse',))
+                    for name in ('prepare-local-config', 'detach-core-agent-retain-config', 'transfer-to-local',
+                                 'deploy-local-agent', 'wait-local-agent', 'retire-core-config'):
+                        driver.step(name, lambda: None)
+                driver.reverse = reverse
                 if fail_stage:
                     with self.assertRaises(ValueError):
                         driver.round_trip()
@@ -180,6 +208,10 @@ class TrialTests(unittest.TestCase):
                     self.assertLess(calls.index(('observe', 'local-before', 'handoff')),
                                     calls.index(('transfer', D.T.LOCAL, D.T.CORE)))
                     self.assertEqual(driver.state['daemonsetUID'], 'same-agent')
+                    spec = importlib.util.spec_from_file_location('staged_receipt', ROOT / '.github/scripts/staged-migrations.py')
+                    receipt = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(receipt)
+                    self.assertEqual([step['name'] for step in driver.state['steps']], receipt.OWNER_STEPS)
 
     def test_reversal_order_and_no_cleanup_after_failure(self):
         for fail_at in (None, 'detach-core-agent-retain-config'):

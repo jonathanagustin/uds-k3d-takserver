@@ -26,6 +26,20 @@ T = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(T)
 require = T.require
 
+REVIEWED_HELPERS = ('tests/ephemeral-cluster.py', 'tests/velero-ownership/drive.py',
+                         'tests/velero-ownership/transfer.py', 'tests/velero-ownership/observe.py',
+                         'tests/backup-restore.sh', 'tests/backup-names.sh', 'tests/api-smoke.sh',
+                         'tests/extract-certs.sh', 'tests/keystore-pass.sh', 'tests/db-dump-secret.sh',
+                         'tests/ensure-tak-group.py', 'tasks.yaml', 'tasks/test.yaml',
+                         '.github/scripts/checked-pipe.sh', '.github/scripts/redact-then-filter.sh',
+                         '.github/scripts/redact-logs.py', '.github/scripts/node-agent-ready.sh')
+
+
+def verify_helpers(command):
+    for relative in REVIEWED_HELPERS:
+        reviewed = command(['git', 'show', 'HEAD:' + relative])
+        require(reviewed.encode() == (ROOT / relative).read_bytes(), 'trial helper differs from reviewed source')
+
 
 def digest(path):
     value = hashlib.sha256()
@@ -65,6 +79,7 @@ def load_plan(path):
 class Driver:
     def __init__(self, files, directory, execute, context=T.GUARD.CONTEXT):
         self.files, self.directory, self.execute, self.context = files, directory, execute, context
+        verify_helpers(self.read_command)
         self.identity = T.GUARD.verify(context, self.read_command)
         self.transfer = T.Transfer(context, '', self.read_command)
         self.state = {'schema': 1, 'cluster': self.identity, 'driverSHA256': digest(Path(__file__)),
@@ -164,6 +179,23 @@ class Driver:
         self.step('wait-local-agent', self.wait)
         self.step('retire-core-config', lambda: self.deploy('clean', 'core-backup-restore'))
 
+    def local_baseline(self):
+        existing = self.read_command(['kubectl', '--context', self.context, 'get', 'daemonset', 'node-agent',
+                                      '-n', 'velero', '--ignore-not-found', '-o', 'json'])
+        require(not existing.strip(), 'local baseline requires no existing agent')
+        server = self.read_command(['kubectl', '--context', self.context, 'get', 'deployment', 'velero',
+                                    '-n', 'velero', '--ignore-not-found', '-o', 'json'])
+        require(not server.strip(), 'local baseline requires no existing Velero server')
+        self.state['baselineOnly'] = True
+        self.step('baseline-bootstrap-exemption', lambda: self.deploy('core', 'core-base', bootstrap=True))
+        self.step('baseline-backup-server', lambda: self.deploy('clean', 'core-backup-restore', bootstrap=True))
+        self.step('baseline-local-app', lambda: self.deploy('core', 'takserver', 'local'))
+        ds = self.transfer.read('daemonset', 'node-agent')
+        self.transfer.uid = ds['metadata']['uid']
+        self.state['daemonsetUID'] = self.transfer.uid
+        self.step('wait-baseline-agent', self.wait)
+        self.step('baseline-ready', lambda: self.observe('local-before', 'baseline'))
+
     def round_trip(self):
         # A truly fresh Core-owner installation, not a local agent renamed Core.
         existing = self.read_command(['kubectl', '--context', self.context, 'get', 'daemonset', 'node-agent',
@@ -180,6 +212,9 @@ class Driver:
         self.journal()
         self.step('fresh-core-app', lambda: self.deploy('core', 'takserver', 'core'))
         self.step('wait-fresh-agent', self.wait)
+        self.step('prepare-api-user', lambda: self.execute(['uds', 'run', 'setup:keycloak-user', '--with', 'group=/UDS Core/Admin', '--no-progress'], timeout=300))
+        self.step('prepare-api-group', lambda: self.execute([sys.executable, str(ROOT / 'tests/ensure-tak-group.py')], timeout=180))
+        self.step('prepare-api-gateway', lambda: self.execute(['uds', 'run', 'test:gateway', '--no-progress'], timeout=420))
         self.step('fresh-ready', lambda: self.observe('fresh-ready', 'fresh'))
         self.step('fresh-acceptance', lambda: self.accept('fresh-core', 'fresh', 'fresh'))
         # Establish a known local baseline on the same owned cluster; this
@@ -224,7 +259,10 @@ def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
         while streams.get_map():
             if failure is None and time.monotonic() >= deadline:
                 failure = 'staged command timed out'
-                os.killpg(child.pid, signal.SIGKILL)
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             for key, _ in streams.select(0.1):
                 if key.data == 'stdin':
                     try:
@@ -245,7 +283,10 @@ def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
                 if key.data == 'stdout' and failure is None:
                     if len(stdout) + len(chunk) > OUTPUT_LIMIT:
                         failure = 'staged command stdout exceeds bounded capture limit'
-                        os.killpg(child.pid, signal.SIGKILL)
+                        try:
+                            os.killpg(child.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
                     else:
                         stdout.extend(chunk)
         child.wait(timeout=5)
@@ -265,7 +306,7 @@ def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('round-trip', 'recover-local'))
+    parser.add_argument('operation', choices=('round-trip', 'local-baseline', 'recover-local'))
     parser.add_argument('--plan', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--daemonset-uid', help='required only for explicit recovery; take from the original journal')
@@ -285,7 +326,10 @@ def main():
         driver.journal()
     else:
         require(not args.daemonset_uid, 'fresh trial must discover its own agent UID')
-        driver.round_trip()
+        if args.operation == 'local-baseline':
+            driver.local_baseline()
+        else:
+            driver.round_trip()
     print(json.dumps({'accepted': driver.state['accepted'], 'journal': str(args.evidence / 'journal.json')}))
 
 

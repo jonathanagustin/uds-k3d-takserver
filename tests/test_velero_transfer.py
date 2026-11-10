@@ -62,7 +62,7 @@ class API:
             self.ds['metadata']['resourceVersion'] = '13'
             return json.dumps(self.ds)
         self.config = json.loads(input_text)
-        self.config['metadata']['uid'] = 'config-uid'
+        self.config['metadata'].update(uid='config-uid', resourceVersion='1')
         return json.dumps(self.config)
 
     def driver(self):
@@ -116,6 +116,7 @@ class TransferTests(unittest.TestCase):
         for mutation in (
             lambda ds: ds['metadata'].update(uid='other'),
             lambda ds: ds['metadata'].update(deletionTimestamp='now'),
+            lambda ds: ds['metadata']['annotations'].update({'helm.sh/resource-policy': 'unknown'}),
             lambda ds: ds['status'].update(numberReady=0),
             lambda ds: ds['metadata']['annotations'].update({'meta.helm.sh/release-name': 'unknown'}),
         ):

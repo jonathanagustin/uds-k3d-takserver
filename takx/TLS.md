@@ -5,12 +5,13 @@ This standalone opt-in smoke uses the actual source-built public CommonCommo
 patches. It does
 not invoke a native build, change the build recipe or modify cache metadata.
 No private SDK or unofficial binary is downloaded. Existing crypto and TCP/UDP
-routing smokes run first and remain unchanged.
+routing smokes remain unchanged; the read-only signal regression also runs.
 
 ## Run against trusted existing outputs
 
 Use trusted JDK 17 on JAVA_HOME, OpenSSL 3 on PATH, and the existing materialized
-locked public archives. Set the prefix and its actual compiled source directory:
+locked public archives. The prefix must contain the patched curl source as well
+as its built static library. Set the prefix and its actual compiled source directory:
 
 ```bash
 export JAVA_HOME=/path/to/trusted/jdk17
@@ -39,7 +40,7 @@ build-state is written or relabeled. A fresh full recipe/cache acceptance
 remains separate from this source/runtime proof. The earlier checkpoint is
 preserved and cannot pass the new exact staged-source check.
 
-The runner compiles the three real smoke classes into a new temporary directory.
+The runner compiles the four real smoke classes into a new temporary directory.
 It generates two independent ephemeral RSA CAs and signed server/client
 certificates using the installed OpenSSL executable. Server/client identities
 have appropriate EKUs. The positive server SAN includes 127.0.0.1 and localhost;

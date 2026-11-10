@@ -114,11 +114,14 @@ against the server certificate, and keep certificate validation enabled.
 3. In your installed TAKX build, configure a certificate-based SSL connection to
    the streaming address. Use `client.p12` as the client credential and
    `truststore.p12` as the CA store, with the exported package password. Keep
-   server trust enabled, and require hostname validation as well. The inspected
-   public CommonCommo candidate validates certificate trust but does not perform
-   server hostname verification. It cannot pass that acceptance check yet; do
-   not assume a checkbox supplies the missing behavior. Record the actual
-   behavior and import steps of the installed version.
+   server trust enabled, and require hostname validation as well. The original
+   public CommonCommo 1.17.2 candidate lacks server hostname verification. The
+   [project transport profile](../../takx/TLS.md) now adds configured DNS/IP SAN
+   validation and DNS SNI, with real loopback acceptance and a separately pinned
+   curl shutdown fix. It rejects CN-only certificates. This does not establish
+   that an installed TAKX build contains these patches or passes TAK Server
+   interoperability. Record its actual library identity, behavior and import
+   steps; verify trusted-CA wrong-name rejection in the installed client.
 
    The inspected upstream connection editor accepts `.p12` files and defaults to
    streaming port 8089. Its source also has an ATAK-style preference importer,

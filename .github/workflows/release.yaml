@@ -121,7 +121,8 @@ jobs:
           RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
           READINESS_MODE: check
         run: |
-          export CHECKED_SOURCE_SHA="$(git rev-parse HEAD)"
+          CHECKED_SOURCE_SHA="$(git rev-parse HEAD)"
+          export CHECKED_SOURCE_SHA
           python3 .release-publisher/.github/test-infra/release-readiness.py
 
       - name: Install UDS CLI

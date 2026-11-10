@@ -16,7 +16,12 @@ eight-line local tail. The final wrapper retains all individually bounded
 streams, so its former 120-line tail cannot discard the first/newest CRI log.
 
 Pod metadata includes image, explicitly configured command/args, restart count,
-container IDs, termination reason, exit code and lifecycle timestamps. An
+container IDs, termination reason, exit code and lifecycle timestamps. Live
+startup/liveness/readiness timing integers and standard CPU/memory quantities
+are allowlisted separately. Only the known header-free `/healthz` action on
+8443 is shown; custom actions, exec commands, hosts, headers, URLs/query strings
+and custom resource names are omitted. Missing timings stay missing rather
+than being filled from chart defaults. An
 unfamiliar invocation is omitted wholesale because positional arguments can be
 credentials. Empty command/args mean the image defaults apply; they do not prove
 an empty process invocation. Zarf v0.88.0's published Dockerfile declares

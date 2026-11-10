@@ -106,6 +106,65 @@ else:
         self.assertIn('omitted unfamiliar invocation', output)
         self.assertNotIn('opaque-argument', output)
 
+    def test_live_probe_timings_and_standard_resources_are_reported(self):
+        healthz = {'httpGet': {'path': '/healthz', 'scheme': 'HTTPS', 'port': 8443},
+                   'periodSeconds': 10, 'timeoutSeconds': 1, 'failureThreshold': 3}
+        container = {'name': 'server', 'livenessProbe': healthz,
+                     'readinessProbe': {**healthz, 'periodSeconds': 3, 'timeoutSeconds': 2,
+                                        'failureThreshold': 2},
+                     'resources': {'requests': {'cpu': '100m', 'memory': '32Mi'},
+                                   'limits': {'cpu': '500m', 'memory': '128Mi'}}}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        resources = next(row['resources'] for row in rows if 'resources' in row)
+        probes = next(row for row in rows if 'startupProbe' in row)
+        self.assertEqual(resources, container['resources'])
+        self.assertEqual(probes['startupProbe'], {'configured': False})
+        self.assertEqual(probes['livenessProbe'], {'configured': True, **healthz})
+        self.assertEqual(probes['readinessProbe']['timeoutSeconds'], 2)
+        container['startupProbe'] = {**healthz, 'initialDelaySeconds': 0,
+                                     'failureThreshold': 30, 'terminationGracePeriodSeconds': 5}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        startup = next(row['startupProbe'] for row in rows if 'startupProbe' in row)
+        self.assertEqual(startup, {'configured': True, **container['startupProbe']})
+        # Missing timings stay missing; source defaults are not live evidence.
+        container['livenessProbe'] = {'httpGet': healthz['httpGet']}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        self.assertNotIn('timeoutSeconds', next(row['livenessProbe'] for row in rows
+                                               if 'livenessProbe' in row))
+
+    def test_probe_actions_and_custom_resources_cannot_disclose_secrets(self):
+        probes = [
+            {'exec': {'command': ['sh', '-c', 'opaque-exec-secret']}},
+            {'httpGet': {'path': '/healthz?token=opaque-query-secret', 'port': 8443,
+                         'scheme': 'HTTPS'}},
+            {'httpGet': {'path': '/healthz', 'port': 8443, 'scheme': 'HTTPS',
+                         'httpHeaders': [{'name': 'Authorization', 'value': 'opaque-header-secret'}]}},
+            {'httpGet': {'path': '/healthz', 'port': 8443, 'scheme': 'HTTPS',
+                         'host': 'opaque-host-secret'}},
+            {'tcpSocket': {'host': 'opaque-tcp-secret', 'port': 8443}},
+            {'grpc': {'service': 'opaque-grpc-secret', 'port': 8443}},
+        ]
+        for probe in probes:
+            with self.subTest(probe=probe):
+                container = {'name': 'server', 'startupProbe': {
+                    **probe, 'initialDelaySeconds': 4, 'periodSeconds': 'opaque-timing-secret',
+                    'timeoutSeconds': True, 'failureThreshold': -1},
+                    'resources': {'requests': {'cpu': '100m', 'memory': 'opaque-resource-secret',
+                                               'custom.example/opaque-custom-key': 'opaque-custom-value'},
+                                  'limits': {'cpu': '500m'}}}
+                output = self.helper('pod', {'spec': {'containers': [container]}})
+                self.assertNotIn('opaque-', output)
+                self.assertNotIn('custom.example', output)
+                metadata = next(json.loads(line)['startupProbe'] for line in output.splitlines()
+                                if 'startupProbe' in line)
+                self.assertEqual(metadata['initialDelaySeconds'], 4)
+                self.assertNotIn('timeoutSeconds', metadata)
+                self.assertNotIn('failureThreshold', metadata)
+                self.assertIn('omitted unfamiliar or custom action', metadata['action'])
+
     def test_cri_selects_only_agent_current_and_predecessor(self):
         containers = []
         for number, namespace, name in [(1, 'zarf', 'agent-hook-abc'),

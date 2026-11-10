@@ -6,6 +6,44 @@ import json
 import re
 import sys
 
+
+def probe_metadata(probe):
+    if not isinstance(probe, dict):
+        return {'configured': False}
+    result = {'configured': True}
+    for key in ('initialDelaySeconds', 'periodSeconds', 'timeoutSeconds',
+                'successThreshold', 'failureThreshold', 'terminationGracePeriodSeconds'):
+        value = probe.get(key)
+        if type(value) is int and value >= 0:
+            result[key] = value
+    action = probe.get('httpGet', {})
+    if (isinstance(action, dict) and action.get('path') == '/healthz'
+            and action.get('scheme') in ('HTTP', 'HTTPS')
+            and type(action.get('port')) is int and action['port'] == 8443
+            and not action.get('host') and not action.get('httpHeaders')
+            and not any(key in probe for key in ('exec', 'tcpSocket', 'grpc'))):
+        result['httpGet'] = {'path': '/healthz', 'scheme': action['scheme'], 'port': 8443}
+    else:
+        result['action'] = '[omitted unfamiliar or custom action]'
+    return result
+
+
+def resource_metadata(resources):
+    result = {}
+    if not isinstance(resources, dict):
+        return result
+    # Quantities contain only numeric syntax and Kubernetes unit suffixes.
+    # Never print custom resource keys or arbitrary string values.
+    quantity = r'[0-9]+(?:\.[0-9]+)?(?:[EPTGMK]i|[EPTGMkKmun]|[eE][+-]?[0-9]+)?'
+    for kind in ('requests', 'limits'):
+        values = resources.get(kind, {})
+        if not isinstance(values, dict):
+            continue
+        result[kind] = {key: values[key] for key in ('cpu', 'memory')
+                        if isinstance(values.get(key), str) and re.fullmatch(quantity, values[key])}
+    return result
+
+
 value = json.load(sys.stdin)
 if sys.argv[1] == 'pod':
     spec = value.get('spec', {})
@@ -22,6 +60,9 @@ if sys.argv[1] == 'pod':
             print(json.dumps({'image': container.get('image'),
                               'command': command if allowed else '[omitted unfamiliar invocation]',
                               'args': args if allowed else '[omitted unfamiliar invocation]'}))
+            print(json.dumps({'resources': resource_metadata(container.get('resources'))}))
+            print(json.dumps({key: probe_metadata(container.get(key)) for key in
+                              ('startupProbe', 'livenessProbe', 'readinessProbe')}))
     for status in value.get('status', {}).get('containerStatuses', []):
         if status.get('name') != 'server':
             continue

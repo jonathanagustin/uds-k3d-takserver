@@ -214,7 +214,7 @@ After deployment, use the [Access](#access) table to choose a browser or certifi
 
 ## Demo
 
-[Watch the 26-second UI preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4): CloudTAK mapping, marker creation, sharing and TAK Server status. This is an edit of historical footage, not a new deployment recording or a TAKX demo. Its [source manifest](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/edit-manifest.json) retains capture provenance.
+[Watch the 26-second UI preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4): CloudTAK mapping, marker creation, sharing and TAK Server status, edited from recorded demos. The [source manifest](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/edit-manifest.json) lists the clips and checksums.
 
 ### Deploy
 

@@ -165,6 +165,14 @@ interval-printer records omit unprinted tails and are not counter-equivalent.
 
 ## Optional exact JVM-start snapshot
 
+Manual Benchmark dispatches can select `jvm_start_metadata=true` to enable the
+existing observer with fixed context `k3d-uds`. It defaults off; PR, scheduled
+and unselected runs make no new observer reads. Collection precedes load and
+warmup, with no observer polling during measurement. It does not change the
+50-client, five-minute warmup, twenty-minute measurement, three-repeat baseline.
+The added pre-warmup work is not evidence of zero overhead or independent
+cold/warm startup, class-loading duration or tuning benefit.
+
 `BENCH_JVM_START_METADATA=1 BENCH_JVM_CONTEXT=k3d-uds` adds read-only JVM metadata
 to the existing phase collector. Its explicit context must match kubectl's
 current context, because the rest of the benchmark uses that context. Defaults

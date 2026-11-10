@@ -37,6 +37,8 @@ class MigrationError(RuntimeError):
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, message, headers, url):
         result = super().redirect_request(request, fp, code, message, headers, url)
+        if result and request.get_method() == 'HEAD':
+            result.method = 'HEAD'
         if result and urllib.parse.urlsplit(url).netloc != urllib.parse.urlsplit(request.full_url).netloc:
             result.remove_header('Authorization')
         return result

@@ -4,11 +4,14 @@
 """Bind staged acceptance to this job's local, disposable k3d cluster."""
 
 import argparse
+import importlib.util
 import ipaddress
 import json
 import os
 import re
 import subprocess
+import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 CONTEXT = 'k3d-uds'
@@ -19,6 +22,59 @@ NODE = 'k3d-uds-server-0'
 GATEWAY = 'k3d-uds-serverlb'
 FORMAT = ('{"id":{{json .Id}},"running":{{json .State.Running}},'
           '"labels":{{json .Config.Labels}},"ports":{{json .NetworkSettings.Ports}}}')
+# The selected Core v1.16.0 checkpoint uses this direct node-local binary:
+# packages/checkpoint-dev/checkpoint.sh (not a k3s subcommand).
+NODE_UID_COMMAND = ['docker', 'exec', NODE, 'kubectl', 'get', 'namespace', NAMESPACE,
+                    '-o', 'jsonpath={.metadata.uid}']
+
+
+def node_uid_failure(returncode, stderr):
+    """Classify bounded, whole-stream-redacted stderr; never publish its text."""
+    classification = 'stderr-unavailable-or-oversized'
+    if isinstance(stderr, bytes) and len(stderr) <= 65536:
+        try:
+            spec = importlib.util.spec_from_file_location(
+                'ephemeral_redaction', Path(__file__).resolve().parents[1] / '.github/scripts/redact-logs.py')
+            redactor = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(redactor)
+            safe, _ = redactor.redact_text(redactor.decode_log(stderr))
+            # Registry authentication, signed URLs and authorization streams are
+            # omitted as a whole, including any multiline continuation.
+            if re.search(r'authorization|bearer|registry.*(?:auth|credential|token)|dockerconfigjson|'
+                         r'\bauths\b|identitytoken|[?&](?:sig|signature|token|access_token)=|'
+                         r'://[^\s/@]+:[^\s/@]+@', safe, re.IGNORECASE):
+                classification = 'stderr-credential-bearing'
+            else:
+                classification = 'unclassified'
+                for label, pattern in (
+                    ('kubectl-unavailable', r'no help topic for [\"\']?kubectl|(?:exec:|executable file).*kubectl.*(?:not found|no such file)'),
+                    ('kubeconfig-unavailable', r'(?:kubeconfig|k3s\.yaml).*(?:no such file|permission denied)|no configuration has been provided'),
+                    ('tls-error', r'x509:|tls handshake|certificate.*(?:expired|unknown authority)'),
+                    ('api-authentication-error', r'you must be logged in|unauthorized|forbidden'),
+                    ('api-connection-error', r'connection refused|unable to connect to the server|i/o timeout|context deadline exceeded'),
+                ):
+                    if re.search(pattern, safe, re.IGNORECASE):
+                        classification = label
+                        break
+        except Exception:
+            classification = 'stderr-unsanitizable'
+    print(json.dumps({'stage': 'node-namespace-uid', 'exit': returncode,
+                      'stderr_bytes': len(stderr) if isinstance(stderr, bytes) else None,
+                      'classification': classification}), file=sys.stderr)
+
+
+def command(argv, input_text=None):
+    try:
+        result = subprocess.run(argv, input=input_text.encode() if input_text is not None else None,
+                                capture_output=True, timeout=45)
+    except subprocess.TimeoutExpired as error:
+        if argv == NODE_UID_COMMAND:
+            node_uid_failure('timeout', error.stderr)
+        raise ValueError('ephemeral cluster identity command timed out') from None
+    if result.returncode != 0 and argv == NODE_UID_COMMAND:
+        node_uid_failure(result.returncode, result.stderr)
+    require(result.returncode == 0, 'ephemeral cluster identity command failed')
+    return result.stdout.decode('utf-8')
 
 
 def require(value, message):
@@ -102,8 +158,7 @@ def _local_identity(context, command):
     cluster = json.loads(command(k(context, 'get', 'namespace', NAMESPACE, '-o', 'json')))
     uid = cluster.get('metadata', {}).get('uid', '')
     require(re.fullmatch('[a-f0-9-]{36}', uid), 'missing cluster namespace UID')
-    node_uid = command(['docker', 'exec', NODE, 'k3s', 'kubectl', 'get', 'namespace', NAMESPACE,
-                        '-o', 'jsonpath={.metadata.uid}']).strip()
+    node_uid = command(NODE_UID_COMMAND).strip()
     require(node_uid == uid, 'context is not the cluster inside the local k3d node')
     return {'schema': '1', 'purpose': 'staged-acceptance', 'repository': REPOSITORY,
             'runID': run, 'runAttempt': attempt, 'sourceSHA': sha, 'context': context,
@@ -150,11 +205,6 @@ def main():
     parser.add_argument('operation', choices=('docker', 'bootstrap', 'mark', 'verify'))
     parser.add_argument('--context', choices=(CONTEXT,), required=True)
     args = parser.parse_args()
-
-    def command(argv, input_text=None):
-        result = subprocess.run(argv, input=input_text, text=True, capture_output=True, timeout=45)
-        require(result.returncode == 0, 'ephemeral cluster identity command failed')
-        return result.stdout
 
     result = (verify_local_docker(command) if args.operation == 'docker'
               else {'bootstrap': verify_bootstrap, 'mark': mark, 'verify': verify}[args.operation](args.context, command))

@@ -59,6 +59,18 @@ def git(root, *args):
     return result.stdout
 
 
+def checkout_identity(root):
+    commit = git(root, 'rev-parse', '--verify', 'HEAD^{commit}').decode().strip()
+    tree = git(root, 'rev-parse', '--verify', 'HEAD^{tree}').decode().strip()
+    require(all(re.fullmatch(r'[a-f0-9]{40}', item) for item in (commit, tree)),
+            'unsupported checkout identity')
+    size = git(root, 'cat-file', '-s', f'HEAD:{WORKFLOW}').strip()
+    require(size.isdigit() and int(size) <= MAX_WORKFLOW_BYTES, 'workflow identity unavailable')
+    workflow = git(root, 'show', f'HEAD:{WORKFLOW}')
+    return {'source': {'checkout_commit': commit, 'checkout_tree': tree},
+            'workflow': {'path': WORKFLOW, 'sha256': hashlib.sha256(workflow).hexdigest()}}
+
+
 def receipt(root, repository, event, run_id, attempt, arch, scenario, result, inputs, mode='ordinary'):
     require(isinstance(repository, str) and
             re.fullmatch(r'[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}', repository), 'invalid repository')
@@ -71,19 +83,13 @@ def receipt(root, repository, event, run_id, attempt, arch, scenario, result, in
             (scenario != 'install-airgap' or arch == 'amd64'), 'unsupported install scenario')
     require(result == 'success', 'install execution did not succeed')
     inputs = validate_inputs(inputs, arch)
-    commit = git(root, 'rev-parse', '--verify', 'HEAD^{commit}').decode().strip()
-    tree = git(root, 'rev-parse', '--verify', 'HEAD^{tree}').decode().strip()
-    require(all(re.fullmatch(r'[a-f0-9]{40}', item) for item in (commit, tree)),
-            'unsupported checkout identity')
-    size = git(root, 'cat-file', '-s', f'HEAD:{WORKFLOW}').strip()
-    require(size.isdigit() and int(size) <= MAX_WORKFLOW_BYTES, 'workflow identity unavailable')
-    workflow = git(root, 'show', f'HEAD:{WORKFLOW}')
+    source_identity = checkout_identity(root)
     return {
         'schema_version': 1,
         'kind': 'install-execution',
         'reuse_authorized': False,
-        'source': {'repository': repository, 'checkout_commit': commit, 'checkout_tree': tree},
-        'workflow': {'path': WORKFLOW, 'sha256': hashlib.sha256(workflow).hexdigest()},
+        'source': {'repository': repository, **source_identity['source']},
+        'workflow': source_identity['workflow'],
         'run': {'id': run_id, 'attempt': attempt, 'event': event, 'job': 'validate-install'},
         'scenario': {'name': scenario, 'architecture': arch, 'mode': mode},
         'execution': {'step': 'Test' if scenario == 'install' else

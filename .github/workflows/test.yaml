@@ -444,6 +444,7 @@ jobs:
       packages: read
       pull-requests: read
       id-token: write
+      attestations: write
     env:
       TEST_TYPE: install
       AIRGAP_TEST: ${{ matrix.airgap && 'true' || 'false' }}
@@ -467,6 +468,16 @@ jobs:
 
       - name: Verify test Python before cluster work
         run: python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version; print(sys.version)'
+
+      # Capture the real synthetic/branch checkout before image pinning edits files.
+      # Forks, trust and focused diagnostics omit this optional evidence.
+      - name: Capture install receipt source
+        if: env.TEST_TYPE == 'install' && needs.check-flavor.outputs.diagnostic-case == 'none' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          RECEIPT_DIAGNOSTIC: ${{ needs.check-flavor.outputs.diagnostic-case }}
+        run: timeout --kill-after=2s 20s python3 -B .github/scripts/collect-install-receipt.py capture
 
       - name: Record the runner image
         run: echo "::notice::runner arch=$(uname -m) kernel=$(uname -r) ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
@@ -554,6 +565,14 @@ jobs:
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true')
         run: ./.github/scripts/pin-image-tags.sh
 
+      - name: Capture pinned install inputs
+        if: env.TEST_TYPE == 'install' && env.INSTALL_RECEIPT_METADATA == 'true'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          RECEIPT_DIAGNOSTIC: ${{ needs.check-flavor.outputs.diagnostic-case }}
+        run: timeout --kill-after=2s 40s python3 -B .github/scripts/collect-install-receipt.py pinned
+
       - name: Prepare private gateway baseline
         id: trust-fixture
         if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'
@@ -572,6 +591,7 @@ jobs:
         run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TEST_BUNDLE_CONFIG="${PRIVATE_CONFIG}" --no-progress
 
       - name: Test
+        id: install-execution
         if: (env.TEST_TYPE == 'install' || steps.baseline.outputs.available == 'true') && (env.TEST_TYPE == 'install') && env.AIRGAP_TEST != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle)
         run: uds run actions:test-deploy --set FLAVOR="${{ env.TEST_FLAVOR }}" --set TYPE="${{ env.TEST_TYPE }}" --set OPTIONS="" --set LICENSE_KEY="${{ secrets.LICENSE_KEY }}"
         shell: bash
@@ -580,6 +600,7 @@ jobs:
         timeout-minutes: 40
 
       - name: Install and test without node internet egress
+        id: airgap-execution
         if: env.TEST_TYPE == 'install' && env.AIRGAP_TEST == 'true'
         run: uds run test-airgap --set FLAVOR=upstream --no-progress
         timeout-minutes: 50
@@ -587,6 +608,7 @@ jobs:
       # A killed shell cannot run its EXIT trap. The runner's Docker access
       # is unaffected, so this retries namespace-scoped cleanup on cancellation.
       - name: Restore airgap node egress
+        id: airgap-restore
         if: always() && env.AIRGAP_TEST == 'true'
         run: python3 .github/scripts/node-airgap.py restore --state "${RUNNER_TEMP}/tak-airgap-state.json"
         timeout-minutes: 2
@@ -695,6 +717,40 @@ jobs:
         timeout-minutes: 3
         shell: bash
         run: ./.github/scripts/print-logs.sh "${{ steps.sanitize.outputs.dir }}/payload"
+
+      # Evidence production/upload is best effort and cannot change app acceptance.
+      - name: Collect optional install receipt
+        id: install-receipt
+        if: success() && env.TEST_TYPE == 'install' && needs.check-flavor.outputs.diagnostic-case == 'none' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.sanitize.outputs.ok == 'true'
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          RECEIPT_DIAGNOSTIC: ${{ needs.check-flavor.outputs.diagnostic-case }}
+          INSTALL_OUTCOME: ${{ steps.install-execution.outcome }}
+          AIRGAP_OUTCOME: ${{ steps.airgap-execution.outcome }}
+          AIRGAP_RESTORE_OUTCOME: ${{ steps.airgap-restore.outcome }}
+          SANITIZE_OK: ${{ steps.sanitize.outputs.ok }}
+        run: timeout --kill-after=2s 150s python3 -B .github/scripts/collect-install-receipt.py collect
+
+      - name: Authenticate optional install receipt
+        id: attest-install-receipt
+        if: success() && env.TEST_TYPE == 'install' && steps.install-receipt.outputs.ready == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.install-receipt.outputs.path }}
+
+      - name: Upload authenticated install receipt
+        if: success() && env.TEST_TYPE == 'install' && steps.install-receipt.outputs.ready == 'true' && steps.attest-install-receipt.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: install-receipt-${{ runner.arch }}-${{ env.AIRGAP_TEST == 'true' && 'airgap' || 'online' }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.install-receipt.outputs.path }}
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Generate unique suffix
         id: uniq

@@ -72,7 +72,7 @@ def capture(root, env, directory):
         output.write('\n')
     # This option only records acquisition metadata. It cannot skip work.
     with Path(env['GITHUB_ENV']).open('a') as output:
-        output.write('INSTALL_RECEIPT_METADATA=true\n')
+        output.write('INSTALL_RECEIPT_METADATA=true\nINSTALL_RECEIPT_CHECKPOINT_VALIDATED=false\n')
     return value
 
 
@@ -87,12 +87,12 @@ def execution(env, scenario):
     require(env.get('SANITIZE_OK') == 'true', 'sanitization incomplete')
 
 
-def command(root, args, env):
+def command(root, args, env, seconds=15):
     def limit_output():
         resource.setrlimit(resource.RLIMIT_FSIZE, (1024, 1024))
     with tempfile.TemporaryFile() as output:
-        result = subprocess.run(['timeout', '--kill-after=2s', '15s', *args], cwd=root,
-                                stdout=output, stderr=subprocess.DEVNULL, timeout=20,
+        result = subprocess.run(['timeout', '--kill-after=2s', f'{seconds}s', *args], cwd=root,
+                                stdout=output, stderr=subprocess.DEVNULL, timeout=seconds + 5,
                                 stdin=subprocess.DEVNULL, check=False, preexec_fn=limit_output,
                                 env={**env, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0',
                                      'FLAVOR': 'upstream'})
@@ -129,11 +129,15 @@ def collect(root, env, directory):
     arch = ctx['arch']
     pinned = read_json(directory / 'install-pinned.json', 1024)
     require(pinned == pinned_inputs(root, env, arch), 'pinned inputs changed')
-    archives = list((root / '.cache/k3d-core-slim-dev').glob(
-        f'zarf-package-k3d-core-slim-dev-{arch}-*.tar.zst'))
-    require(len(archives) == 1, 'ambiguous checkpoint')
-    archive = archives[0]
-    acquisition = read_json(Path(str(archive) + '.receipt.json'), 4096)
+    require(env.get('INSTALL_RECEIPT_CHECKPOINT_VALIDATED') == 'true', 'checkpoint not validated')
+    selected = read_json(directory / 'install-checkpoint-selection.json', 8192)
+    require(isinstance(selected, dict) and set(selected) == {'archive', 'acquisition', 'run_id', 'attempt'} and
+            selected['run_id'] == ctx['run_id'] and selected['attempt'] == ctx['attempt'],
+            'checkpoint validation not from this run')
+    archive = Path(selected['archive'])
+    require(archive.resolve().parent == (root / '.cache/k3d-core-slim-dev').resolve(),
+            'unsupported checkpoint path')
+    acquisition = selected['acquisition']
     checkpoint.validate(acquisition, archive, acquisition.get('source'), acquisition.get('version'), arch)
     # This is the flavored archive actually built or pulled by create-dev-package.
     package = root / f'zarf-package-takserver-{arch}-dev-upstream.tar.zst'
@@ -143,7 +147,14 @@ def collect(root, env, directory):
     bundles = [*root.glob(f'uds-bundle-takserver-dev-{arch}-dev.tar.zst'),
                *(root / 'bundle').glob(f'uds-bundle-takserver-dev-{arch}-dev.tar.zst')]
     require(len(bundles) == 1, 'ambiguous generated bundle')
-    derived = artifacts.identities(artifacts.metadata(bundles[0]), arch)
+    # Use the official SDK's deterministic local archive digest. Never resolve
+    # an OCI tag or a cluster package as a substitute for these exact bytes.
+    with tempfile.TemporaryDirectory(prefix='install-receipt-digest-', dir=directory) as temp:
+        package_digest = command(root, ['uds', 'zarf', 'package', 'inspect', 'digest', str(package),
+                                        '--tmpdir', temp], env, seconds=45)
+    require(foundation.digest(package_digest), 'local package identity unavailable')
+    derived = artifacts.identities(artifacts.metadata(bundles[0]), arch, package_digest)
+    require(checkpoint.archive_hash(package) == package_hash, 'package changed during collection')
     inputs = {**pinned, 'package_archive_sha256': package_hash,
               'checkpoint_oci_digest': acquisition['index_digest'],
               **derived}

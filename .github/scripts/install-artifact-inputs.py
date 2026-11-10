@@ -98,7 +98,7 @@ def manifest(objects, descriptor, package=False):
     return value
 
 
-def identities(objects, arch):
+def identities(objects, arch, package_digest):
     index = json.loads(objects['index.json'])
     require(isinstance(index, dict) and index.get('schemaVersion') == 2 and
             index.get('mediaType') == checkpoint.INDEX and
@@ -127,6 +127,7 @@ def identities(objects, arch):
                 config['metadata'].get('architecture') == arch)
         packages[name] = (layer['digest'], package)
     require(set(packages) == {'core-base', 'takserver'})
+    require(packages['takserver'][0] == package_digest)
     app = packages['takserver'][1]
     image_indexes = [layer for layer in app['layers']
                      if layer.get('annotations', {}).get(TITLE) == 'images/index.json']

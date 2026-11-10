@@ -6,6 +6,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import resource
@@ -132,6 +133,7 @@ def main():
     parser.add_argument('--version', required=True)
     parser.add_argument('--architecture', required=True)
     parser.add_argument('--digest')
+    parser.add_argument('--selection-output', type=Path)
     parser.add_argument('--registry-command', nargs='+')
     args = parser.parse_args()
     sidecar = Path(str(args.archive) + '.receipt.json')
@@ -150,6 +152,16 @@ def main():
             value = validate(json.loads(sidecar.read_bytes()), args.archive,
                              args.source, args.version, args.architecture)
             require(args.digest is None or value['index_digest'] == args.digest)
+        if args.selection_output:
+            run_id, attempt = os.environ.get('GITHUB_RUN_ID', ''), os.environ.get('GITHUB_RUN_ATTEMPT', '')
+            require(all(re.fullmatch(r'[1-9][0-9]*', item) for item in (run_id, attempt)))
+            selection = {'archive': str(args.archive.resolve()), 'acquisition': value,
+                         'run_id': int(run_id), 'attempt': int(attempt)}
+            with args.selection_output.open('x') as output:
+                json.dump(selection, output, sort_keys=True)
+                output.write('\n')
+            with Path(os.environ['GITHUB_ENV']).open('a') as output:
+                output.write('INSTALL_RECEIPT_CHECKPOINT_VALIDATED=true\n')
         print('Checkpoint acquisition identity recorded' if args.registry_command else
               'Checkpoint acquisition identity validated')
         return 0

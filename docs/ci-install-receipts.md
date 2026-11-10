@@ -35,6 +35,9 @@ derives them from controlled install inputs; workflow inputs cannot supply them:
 | `image_digests` | Exactly the six TAK image names, `cloudtak` and `postgis`, each mapped to its packaged image-manifest SHA-256 digest. |
 | `uds_version` | The UDS CLI semantic version used by the scenario. |
 
+These eight image roles are a curated identity set, not the complete transitive
+dependency closure or proof of equivalent acceptance.
+
 All digests use `sha256:` followed by 64 lowercase hexadecimal characters.
 The encoder validates shape. The collector reads the real generated OCI-layout
 bundle, checks digest-addressed Core/app manifests and package configuration,
@@ -114,3 +117,20 @@ tests.test_collect_install_receipt -v`. They use actual local Git repositories,
 small zstd OCI fixtures, and malformed/security cases. A local UDS 0.41
 actions-only package/bundle creation also confirmed the real archive schema;
 it did not deploy or run a cluster and is not application acceptance.
+
+Current acquisition validation also emits a small run/attempt-bound selected
+checkpoint record and marks validation successful for the current task step.
+The deployment helper clears prior proof before attempting validation. The
+collector requires this current proof and rehashes that exact archive; it
+cannot reconstruct successful validation from a stale cache sidecar after a
+current digest check rejected it.
+
+The collector additionally runs the pinned CLI's local-only
+`uds zarf package inspect digest <absolute-archive>` and requires its canonical
+OCI manifest digest to equal the generated bundle's selected `takserver`
+manifest. Matching flavored/plain archive hashes alone is insufficient. This
+SDK command validates the local package and uses a dedicated temporary
+directory which is removed after the bounded 45-second command. It does not
+resolve a registry tag or query the cluster. A second archive hash detects
+changes during collection. Local UDS 0.41 actions-only format proof confirmed
+that its canonical archive digest equals the selected bundle manifest.

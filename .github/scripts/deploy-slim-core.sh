@@ -34,6 +34,16 @@ upstream_repo="ghcr.io/defenseunicorns/dev/uds/checkpoints"
 mirror_repo="${SLIM_CORE_MIRROR-ghcr.io/jonathanagustin/uds-takserver/checkpoints}"
 want_digest="${slim_core_digests[${version}]:-}"
 
+# A rejected current validation must not leave proof from an earlier invocation.
+selection_args=()
+if [[ "${INSTALL_RECEIPT_METADATA:-false}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "INSTALL_RECEIPT_CHECKPOINT_VALIDATED=false" >> "${GITHUB_ENV}" || true
+  fi
+  rm -f -- "${RUNNER_TEMP}/install-checkpoint-selection.json" || true
+  selection_args=(--selection-output "${RUNNER_TEMP}/install-checkpoint-selection.json")
+fi
+
 mkdir -p "${out}"
 # uds bundles zarf and does not leave ./zarf in the repo until a zarf
 # command has already run. `uds zarf` is that command.
@@ -102,15 +112,15 @@ if [[ "${INSTALL_RECEIPT_METADATA:-false}" == "true" ]]; then
   identity_args=(--archive "${files[0]}" --version "${version}" --architecture "${archive_arch}")
   if [[ -n "${acquired_source}" ]]; then
     timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
-      "${identity_args[@]}" --source "${acquired_source}" --digest "${acquired_digest}" \
+      "${identity_args[@]}" "${selection_args[@]}" --source "${acquired_source}" --digest "${acquired_digest}" \
       --registry-command "${zarf[@]}" || echo "Checkpoint acquisition identity omitted"
   else
     # No lookup of a mutable tag: retained evidence must match the cached bytes.
     timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
-      "${identity_args[@]}" --source "${upstream_repo}/k3d-core-slim-dev" \
+      "${identity_args[@]}" "${selection_args[@]}" --source "${upstream_repo}/k3d-core-slim-dev" \
       --digest "${want_digest}" || \
       timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
-        "${identity_args[@]}" --source "${mirror_repo}/k3d-core-slim-dev" \
+        "${identity_args[@]}" "${selection_args[@]}" --source "${mirror_repo}/k3d-core-slim-dev" \
         --digest "${want_digest}" || echo "Checkpoint acquisition identity omitted"
   fi
 fi

@@ -42,6 +42,7 @@ class ArtifactInputsTests(unittest.TestCase):
                           'manifests': image_descriptors}, self.blob_layer)
         index['annotations'] = {inputs.TITLE: 'images/index.json'}
         app = self.package('takserver', [index, *image_layers])
+        self.expected_app = app['digest']
         config = self.add({'architecture': 'amd64',
                            'annotations': {inputs.TITLE: 'takserver-dev'}}, self.blob_layer)
         # The actual bundle's YAML layer is deliberately not parsed or emitted.
@@ -70,30 +71,34 @@ class ArtifactInputsTests(unittest.TestCase):
                             'layers': layers}, self.blob_layer)}
 
     def test_reads_actual_core_and_all_eight_packaged_images(self):
-        value = inputs.identities(self.objects, 'amd64')
+        value = inputs.identities(self.objects, 'amd64', self.expected_app)
         self.assertEqual(value, {'core_oci_digest': self.expected_core,
                                  'image_digests': self.expected_images})
         self.assertEqual(set(value), {'core_oci_digest', 'image_digests'})
 
     def test_wrong_architecture_and_missing_or_corrupt_descriptor_omit(self):
         with self.assertRaises(ValueError):
-            inputs.identities(self.objects, 'arm64')
+            inputs.identities(self.objects, 'arm64', self.expected_app)
         for name in ('index.json', 'blobs/sha256/' + self.expected_core.split(':')[1]):
             objects = copy.deepcopy(self.objects)
             del objects[name]
             with self.subTest(name=name), self.assertRaises((ValueError, KeyError)):
-                inputs.identities(objects, 'amd64')
+                inputs.identities(objects, 'amd64', self.expected_app)
         objects = copy.deepcopy(self.objects)
         objects['blobs/sha256/' + self.expected_core.split(':')[1]] += b' '
         with self.assertRaises(ValueError):
-            inputs.identities(objects, 'amd64')
+            inputs.identities(objects, 'amd64', self.expected_app)
+
+    def test_unrelated_package_manifest_digest_rejected(self):
+        with self.assertRaises(ValueError):
+            inputs.identities(self.objects, 'amd64', 'sha256:' + 'a' * 64)
 
     def test_forged_image_digest_does_not_match_actual_bytes(self):
         objects = copy.deepcopy(self.objects)
         digest = next(iter(self.expected_images.values()))
         objects['blobs/sha256/' + digest.split(':')[1]] = b'{"secret":"DO_NOT_EMIT"}'
         with self.assertRaises(ValueError):
-            inputs.identities(objects, 'amd64')
+            inputs.identities(objects, 'amd64', self.expected_app)
 
     def archive(self, directory, members):
         raw = directory / 'bundle.tar'
@@ -113,7 +118,7 @@ class ArtifactInputsTests(unittest.TestCase):
                                               ('../../outside', b'sensitive'),
                                               ('config.yaml', b'password: DO_NOT_EMIT')])
             objects = inputs.metadata(archive)
-            self.assertEqual(inputs.identities(objects, 'amd64')['image_digests'], self.expected_images)
+            self.assertEqual(inputs.identities(objects, 'amd64', self.expected_app)['image_digests'], self.expected_images)
             self.assertEqual(set(directory.iterdir()), {archive, directory / 'bundle.tar'})
             self.assertNotIn('config.yaml', objects)
 

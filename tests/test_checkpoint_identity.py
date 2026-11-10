@@ -73,6 +73,22 @@ class CheckpointIdentityTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 identity.validate({**value, field: replacement}, self.archive, SOURCE, '1.16.0', 'amd64')
 
+    def test_validated_cache_emits_exact_run_bound_selected_archive(self):
+        value = self.acquire()
+        Path(str(self.archive) + '.receipt.json').write_text(json.dumps(value))
+        selected = Path(self.temp.name) / 'selected.json'
+        github_env = Path(self.temp.name) / 'github-env'
+        result = subprocess.run(['python3', str(SPEC.origin), '--archive', str(self.archive),
+                                 '--source', SOURCE, '--version', '1.16.0', '--architecture', 'amd64',
+                                 '--digest', self.digest, '--selection-output', str(selected)],
+                                env={**os.environ, 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2',
+                                     'GITHUB_ENV': str(github_env)},
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(selected.read_text()), {
+            'archive': str(self.archive.resolve()), 'acquisition': value, 'run_id': 123, 'attempt': 2})
+        self.assertEqual(github_env.read_text(), 'INSTALL_RECEIPT_CHECKPOINT_VALIDATED=true\n')
+
     def test_descriptor_and_exact_bytes_are_required(self):
         for index, manifest, digest in [(self.index + b' ', self.manifest, self.digest),
                                        (self.index, self.manifest + b' ', self.digest)]:

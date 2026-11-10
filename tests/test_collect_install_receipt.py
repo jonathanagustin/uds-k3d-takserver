@@ -43,7 +43,7 @@ class CollectorTests(unittest.TestCase):
                     'RECEIPT_DIAGNOSTIC': 'none', 'GITHUB_ENV': str(self.directory / 'env'),
                     'GITHUB_OUTPUT': str(self.directory / 'output'), 'INSTALL_OUTCOME': 'success',
                     'AIRGAP_OUTCOME': 'skipped', 'AIRGAP_RESTORE_OUTCOME': 'skipped',
-                    'SANITIZE_OK': 'true'}
+                    'SANITIZE_OK': 'true', 'INSTALL_RECEIPT_CHECKPOINT_VALIDATED': 'true'}
         self.arch = patch.object(collector.platform, 'machine', return_value='x86_64')
         self.arch.start()
         self.addCleanup(self.arch.stop)
@@ -56,11 +56,15 @@ class CollectorTests(unittest.TestCase):
         checkpoint = self.root / '.cache/k3d-core-slim-dev/zarf-package-k3d-core-slim-dev-amd64-1.16.0.tar.zst'
         checkpoint.parent.mkdir(parents=True)
         checkpoint.write_bytes(b'checkpoint acquisition bytes')
-        Path(str(checkpoint) + '.receipt.json').write_text(json.dumps({
+        acquisition = {
             'schema_version': 1, 'source': sorted(collector.checkpoint.REPOSITORIES)[0],
             'version': '1.16.0', 'architecture': 'amd64',
             'archive_sha256': collector.checkpoint.archive_hash(checkpoint),
-            'index_digest': 'sha256:' + 'a' * 64, 'manifest_digest': 'sha256:' + 'b' * 64}))
+            'index_digest': 'sha256:' + 'a' * 64, 'manifest_digest': 'sha256:' + 'b' * 64}
+        Path(str(checkpoint) + '.receipt.json').write_text(json.dumps(acquisition))
+        (self.directory / 'install-checkpoint-selection.json').write_text(json.dumps({
+            'archive': str(checkpoint), 'acquisition': acquisition, 'run_id': 123, 'attempt': 2}))
+        self.fixture = fixture
         for suffix in ('-upstream', ''):
             (self.root / f'zarf-package-takserver-amd64-dev{suffix}.tar.zst').write_bytes(b'package bytes')
         return fixture
@@ -70,8 +74,13 @@ class CollectorTests(unittest.TestCase):
         if not pinned.exists():
             with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
                 collector.pinned(self.root, self.env, self.directory)
-        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
-            return collector.collect(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0',
+                                                           self.fixture.expected_app]) as command:
+            result = collector.collect(self.root, self.env, self.directory)
+        digest_call = command.call_args_list[-1]
+        self.assertEqual(digest_call.args[1][:5], ['uds', 'zarf', 'package', 'inspect', 'digest'])
+        self.assertEqual(digest_call.args[1][5], str(self.root / 'zarf-package-takserver-amd64-dev-upstream.tar.zst'))
+        return result
 
     def test_ordinary_producer_uses_early_checkout_and_real_archive_metadata(self):
         fixture = self.inputs()
@@ -128,13 +137,61 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.collect()
         plain.write_bytes(b'package bytes')
-        next((self.root / '.cache/k3d-core-slim-dev').glob('*.receipt.json')).unlink()
+        (self.directory / 'install-checkpoint-selection.json').unlink()
         with self.assertRaises(OSError):
             self.collect()
         subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Fixture', '-c',
                         'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'new checkout'],
                        check=True, capture_output=True, timeout=5)
         with self.assertRaises(ValueError):
+            self.collect()
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+
+    def test_rejected_current_validation_cannot_use_stale_marker(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        self.env['INSTALL_RECEIPT_CHECKPOINT_VALIDATED'] = 'false'
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            with self.assertRaises(ValueError):
+                collector.collect(self.root, self.env, self.directory)
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+
+    def test_unrelated_package_digest_never_authenticates_bundle_inputs(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0',
+                                                           'sha256:' + 'f' * 64]):
+            with self.assertRaises(ValueError):
+                collector.collect(self.root, self.env, self.directory)
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+
+    def test_failed_current_cache_validation_removes_stale_selection_and_omits(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        scripts = self.root / '.github/scripts'
+        scripts.mkdir(parents=True, exist_ok=True)
+        for name in ('deploy-slim-core.sh', 'checkpoint-identity.py'):
+            (scripts / name).write_bytes((ROOT / '.github/scripts' / name).read_bytes())
+        zarf = self.root / 'zarf'
+        zarf.write_text('#!/bin/sh\n[ "$1 $2" = "package deploy" ] || exit 91\nexit 0\n')
+        zarf.chmod(0o755)
+        import os
+        env = {**os.environ, **self.env, 'INSTALL_RECEIPT_METADATA': 'true',
+               'RUNNER_TEMP': str(self.directory), 'SLIM_K3D_EXTRA_ARGS': ''}
+        result = subprocess.run(['bash', str(scripts / 'deploy-slim-core.sh')], env=env,
+                                capture_output=True, text=True, check=False, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('identity omitted', result.stdout)
+        self.assertTrue(Path(self.env['GITHUB_ENV']).read_text().rstrip().endswith(
+            'INSTALL_RECEIPT_CHECKPOINT_VALIDATED=false'))
+        # The bytes/sidecar remain valid locally, but current pinned digest validation failed.
+        self.assertTrue(next((self.root / '.cache/k3d-core-slim-dev').glob('*.receipt.json')).exists())
+        self.assertFalse((self.directory / 'install-checkpoint-selection.json').exists())
+        with self.assertRaises(OSError):
             self.collect()
         self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
 

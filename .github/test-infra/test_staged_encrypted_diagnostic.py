@@ -244,7 +244,7 @@ class GenuineAgeProof(unittest.TestCase):
             fd = AGE.regular_descriptor(private, AGE.INPUT_LIMIT)
             try:
                 with self.assertRaises(ValueError), patch.object(AGE, 'bounded_process', side_effect=AssertionError('execute')):
-                    AGE.encrypt_private(binary, pin, fd, recipient, tools)
+                    AGE.encrypt_private(binary, pin, fd, recipient)
             finally:
                 os.close(fd)
 

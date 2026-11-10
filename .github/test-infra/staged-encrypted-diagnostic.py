@@ -55,9 +55,9 @@ def regular_descriptor(path, limit):
     return descriptor
 
 
-def bounded_process(argv, stdin=None, limit=4096, seconds=15, home=None):
+def bounded_process(argv, stdin=None, limit=4096, seconds=15):
     # X25519 age needs no network, plugins, credentials or inherited loader flags.
-    environment = {'PATH': os.defpath, 'HOME': str(home), 'LANG': 'C', 'LC_ALL': 'C'}
+    environment = {'PATH': os.defpath, 'LANG': 'C', 'LC_ALL': 'C'}
     child = subprocess.Popen(argv, stdin=stdin if stdin is not None else subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              start_new_session=True, env=environment)
@@ -136,7 +136,7 @@ def acquire_age(directory):
     return extract_age(bytes(archive), pin, directory), pin
 
 
-def encrypt_private(binary, pin, descriptor, recipient, home):
+def encrypt_private(binary, pin, descriptor, recipient):
     def verified_binary():
         fd = regular_descriptor(binary, pin[3])
         try:
@@ -145,14 +145,14 @@ def encrypt_private(binary, pin, descriptor, recipient, home):
         finally:
             os.close(fd)
     require(RECIPIENT.fullmatch(recipient) and verified_binary())
-    require(bounded_process([str(binary), '--version'], home=home).strip() == VERSION.encode())
+    require(bounded_process([str(binary), '--version']).strip() == VERSION.encode())
     require(verified_binary())
     os.lseek(descriptor, 0, os.SEEK_SET)
     before = os.read(descriptor, INPUT_LIMIT + 1)
     require(len(before) <= INPUT_LIMIT)
     os.lseek(descriptor, 0, os.SEEK_SET)
     ciphertext = bounded_process([str(binary), '--encrypt', '--recipient', recipient],
-                                 stdin=descriptor, limit=CIPHER_LIMIT, home=home)
+                                 stdin=descriptor, limit=CIPHER_LIMIT)
     os.lseek(descriptor, 0, os.SEEK_SET)
     require(os.read(descriptor, INPUT_LIMIT + 1) == before and verified_binary())
     require(ciphertext.startswith(b'age-encryption.org/v1\n') and len(ciphertext) <= CIPHER_LIMIT)
@@ -213,7 +213,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='staged-age-tool-', dir=temporary) as tools:
             binary, pin = acquire_age(Path(tools))
             stage = 'encryption'
-            ciphertext = encrypt_private(binary, pin, descriptor, recipient, Path(tools))
+            ciphertext = encrypt_private(binary, pin, descriptor, recipient)
         os.close(descriptor)
         descriptor = None
         context()

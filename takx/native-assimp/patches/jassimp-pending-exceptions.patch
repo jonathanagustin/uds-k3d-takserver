@@ -1,0 +1,142 @@
+--- a/jassimp.cpp
++++ b/jassimp.cpp
+@@ -232,6 +232,7 @@
+ static bool call(JNIEnv *env, jobject object, const char* typeName, const char* methodName, 
+ 	const char* signature,/* const*/ jvalue* params)
+ {
++    if (env->ExceptionCheck()) return false;
+ 	jclass clazz = env->FindClass(typeName);
+ 	SmartLocalRef clazzRef(env, clazz);
+ 
+@@ -251,11 +252,13 @@
+ 
+     lprintf("calling %s", methodName);
+ 	jboolean jReturnValue = env->CallBooleanMethod(object, mid, params[0].l);
++    if (env->ExceptionCheck()) return false;
+ 
+ 	return (bool)jReturnValue;
+ }
+ static bool callv(JNIEnv *env, jobject object, const char* typeName,
+ 		const char* methodName, const char* signature,/* const*/ jvalue* params) {
++    if (env->ExceptionCheck()) return false;
+ 	jclass clazz = env->FindClass(typeName);
+ 	SmartLocalRef clazzRef(env, clazz);
+ 
+@@ -273,6 +276,7 @@
+ 
+     lprintf("calling %s", methodName);
+ 	env->CallVoidMethodA(object, mid, params);
++    if (env->ExceptionCheck()) return false;
+ 
+ 	return true;
+ }
+@@ -431,6 +435,7 @@
+ static bool callStaticObject(JNIEnv *env, const char* typeName, const char* methodName, 
+ 	const char* signature,/* const*/ jvalue* params, jobject& returnValue)
+ {
++    if (env->ExceptionCheck()) return false;
+ 	jclass clazz = env->FindClass(typeName);
+ 	SmartLocalRef clazzRef(env, clazz);
+ 
+@@ -450,6 +455,7 @@
+ 
+     lprintf("calling %s", methodName);
+ 	returnValue = env->CallStaticObjectMethodA(clazz, mid, params);
++    if (env->ExceptionCheck()) return false;
+ 
+ 	return true;
+ }
+@@ -1219,6 +1225,7 @@
+ 
+ static bool loadMetadata(JNIEnv *env, const aiNode* cNode, jobject& jNode)
+ {
++    // Failure returns leave any Java exception pending for the import boundary.
+     aiMetadata *cMetadata = cNode->mMetaData;
+ 
+ 	for(unsigned i = 0; i<cMetadata->mNumProperties; i++) {
+@@ -1245,7 +1252,6 @@
+ 
+ 		jvalue boxingMethodArgument[1];
+ 
+-        jboolean exceptionThrown;
+ 
+ 		switch (cMetadataType) {
+ 
+@@ -1305,35 +1311,18 @@
+             }
+         }
+ 
+-        exceptionThrown = env->ExceptionCheck();
+ 
+         if(!getMetadataTypeSuccess || !getMetadataDataSuccess) {
+-            if(exceptionThrown)
+-            {
+-                env->ExceptionDescribe();
+-            }
+ 
+             return false;
+         }
+ 
+         if(!setObjectField(env, jAiMetadataEntry, "mType", "Ljassimp/AiMetadataEntry$AiMetadataType;", jAiMetadataTypeEnumValue)) {
+-            exceptionThrown = env->ExceptionCheck();
+-
+-            if(exceptionThrown)
+-            {
+-                env->ExceptionDescribe();
+-            }
+ 
+             return false;
+         }
+ 
+         if(!setObjectField(env, jAiMetadataEntry, "mData", "Ljava/lang/Object;", jMetadataData)) {
+-            exceptionThrown = env->ExceptionCheck();
+-
+-            if(exceptionThrown)
+-            {
+-                env->ExceptionDescribe();
+-            }
+ 
+             return false;
+         }
+@@ -1342,12 +1331,6 @@
+         SmartLocalRef refMetadata(env, jNodeMetadata);
+ 
+         if(!getField(env, jNode, "m_metaData", "Ljava/util/Map;", jNodeMetadata)) {
+-            exceptionThrown = env->ExceptionCheck();
+-
+-            if(exceptionThrown)
+-            {
+-                env->ExceptionDescribe();
+-            }
+ 
+             return false;
+         }
+@@ -1362,10 +1345,7 @@
+         // null on success if they did not overwrite an existing mapping for the given key.
+         env->CallObjectMethod(jNodeMetadata, jHashMapPutMethod, jKey, jAiMetadataEntry);
+ 
+-        exceptionThrown = env->ExceptionCheck();
+-
+-        if(exceptionThrown) {
+-            env->ExceptionDescribe();
++        if (env->ExceptionCheck()) {
+             return false;
+         }
+ 
+@@ -2112,6 +2092,7 @@
+ 
+ 	/* do import */
+ 	const aiScene *cScene = imp.ReadFile(cFilename, (unsigned int) postProcess);
++    if (env->ExceptionCheck()) goto error;
+ 
+ 	if (!cScene)
+ 	{
+@@ -2158,6 +2139,8 @@
+ 	goto end;
+ 
+ error:
++    jScene = NULL;
++    if (!env->ExceptionCheck())
+ 	{
+ 	jclass exception = env->FindClass("java/io/IOException");
+ 

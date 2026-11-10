@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "archives": {
+    "assimp": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/assimp-4.0.1-mod.tar.gz",
+      "sha256": "459eadafbb84251a93f94c70f2fd8922c169911ff89fe526f1529bac6f699ae0",
+      "bytes": 45185943,
+      "members": 2149,
+      "regular_files": 1905,
+      "expanded_bytes": 120685648
+    },
+    "zlib-1.3.1": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/zlib.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "bytes": 1512791,
+      "members": 290,
+      "regular_files": 253,
+      "expanded_bytes": 4390808
+    }
+  },
+  "patches": {
+    "patches/assimp-public-static-core.patch": {
+      "source": "assimp/CMakeLists.txt",
+      "before_sha256": "10909ba5c6e2403e26df14cd4c545a747ce28bce7d72af880b9faa2479b109e1",
+      "after_sha256": "6977829e6a31f5d34f9fe7f885fe062deaea26de428c65fe6590008d578dae0f",
+      "sha256": "c88ef5c5ce28bc7304ad585ec5b9d9257b6ca82a4cb99dbbe45f2c31874ebed0"
+    },
+    "patches/jassimp-pending-exceptions.patch": {
+      "source": "assimp/port/jassimp/jassimp-native/src/jassimp.cpp",
+      "before_sha256": "4779b6cd1d25dbd180a99c44b2d899dede8df1c58815734da7844f70ac90295d",
+      "after_sha256": "735b3f5485a8427c0aa712b7cb293e3ae3f3bec30778fcd0089ffb4f4025d1a5",
+      "sha256": "4c9433c13011ae6172525205e0643b84232450d0fc9d764b16b97073be517714"
+    }
+  },
+  "licenses": {
+    "assimp": {
+      "source": "assimp/LICENSE",
+      "sha256": "a26ccc3dbf2f58ea99c100945a8a126fa0f9f4d7fd2b49aa8bdb8e09355864d8"
+    },
+    "zlib": {
+      "source": "zlib-1.3.1/LICENSE",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    },
+    "IrrXML.txt": {
+      "source": "assimp/contrib/irrXML/irrXML.h",
+      "sha256": "323d576b9248b058ef3bfa42bf4f0976ea814420de880bb5157eccb6e2ac924d"
+    },
+    "Open3DGC.txt": {
+      "source": "assimp/contrib/Open3DGC/o3dgcTools.cpp",
+      "sha256": "9af25d729673dc839d308b131e1d08048baba4cc550331002392bfa1d28a9fd9"
+    },
+    "OpenDDL.txt": {
+      "source": "assimp/contrib/openddlparser/LICENSE",
+      "sha256": "656597ef86119e4a526fb8621e0112b95051cf9d63a311b09b3a73346da00ead"
+    },
+    "RapidJSON.txt": {
+      "source": "assimp/contrib/rapidjson/license.txt",
+      "sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32"
+    },
+    "Clipper.txt": {
+      "source": "assimp/contrib/clipper/License.txt",
+      "sha256": "710f22ccbfde6bef1898116376c7e32030c2940c72e1eaa0a89b980c9552a541"
+    },
+    "Poly2Tri.txt": {
+      "source": "assimp/contrib/poly2tri/LICENSE",
+      "sha256": "a4d34b9e99a7f11d095ba330da5a4723ec00b019ae1ba42cba46ad1d89902c4e"
+    },
+    "minizip.txt": {
+      "source": "assimp/contrib/unzip/unzip.h",
+      "sha256": "ddad0b271ab2ee40ffaf9a3496a67fffda00b82c0e93688fb640a2ec3bac4150"
+    }
+  },
+  "tools": {
+    "gcc": "14.2.0",
+    "cmake": "3.31.6",
+    "ninja": "1.11.1.git.kitware.jobserver-1",
+    "jdk_release": "17.0.21+9",
+    "java_release": 11
+  },
+  "provided_jdk_reference": {
+    "vendor": "Eclipse Temurin",
+    "official_release": "https://github.com/adoptium/temurin17-binaries/releases/tag/jdk-17.0.21%2B9",
+    "asset_name": "OpenJDK17U-jdk_x64_linux_hotspot_17.0.21_9.tar.gz",
+    "asset_sha256": "8b9b611d917e3dfd8419d3566b5949226f69b052fed7e109c1368add1dfe8711",
+    "note": "Tool installation is separate. The entrypoint fingerprints the supplied complete SDK before and after building; it does not download or authenticate an SDK archive."
+  }
+}

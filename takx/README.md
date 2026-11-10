@@ -14,6 +14,8 @@ PIC probes cover that dependency only; it does not supply a Kernel SDK, JNI,
 map rendering or either TAKX client.
 The separate [LAS native profile](native-las/README.md) builds public libLAS,
 LASzip and Boost sources with real LAS/LAZ, seek/reset, error and PIC probes.
+The [Assimp native profile](native-assimp/README.md) builds the official core and
+matching Java/JNI bindings, with ordinary model-data and zero-warning JNI checks.
 
 The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
 

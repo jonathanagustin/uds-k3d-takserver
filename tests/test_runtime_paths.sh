@@ -91,6 +91,26 @@ check_match ".github/scripts/publish-charts.py" ignore
 check_match ".github/scripts/install-reuse-shadow.py" ignore
 check_match ".github/scripts/install-reuse-shadow.py.bak" relevant
 check_match ".github/scripts/install-reuse-shadow-other.py" relevant
+# Manual-only orchestration is distinct from shared backup/runtime helpers.
+for staged_path in .github/workflows/staged-migrations.yaml .github/scripts/staged-migrations.py .github/scripts/staged-migrations.sh; do
+  check_match "${staged_path}" ignore
+  check_decide false "${staged_path}"
+done
+check_match ".github/workflows/staged-migrations.yaml.bak" relevant
+check_match ".github/scripts/staged-migrations-extra.py" relevant
+check_match ".github/scripts/staged-migrations.sh.bak" relevant
+for shared_path in tests/backup-restore.sh tests/backup-names.sh tests/ephemeral-cluster.py tests/upgrade-agent-watch.py .github/scripts/node-agent-ready.sh tasks/test.yaml bundle/full/uds-bundle.yaml; do
+  check_match "${shared_path}" relevant
+  check_decide true $'.github/scripts/staged-migrations.sh\n'"${shared_path}"
+done
+# Deeper drivers stay sensitive; no migration directory wildcard is excluded.
+for driver_path in tests/velero-ownership/drive.py tests/velero-ownership/candidate.py tests/workload-identities/drive.py tests/workload-identities/ProtocolProbe.java tests/velero-ownership/new-helper.py; do
+  check_match "${driver_path}" relevant
+  check_decide true $'.github/scripts/staged-migrations.py\n'"${driver_path}"
+done
+check_decide false $'.github/workflows/staged-migrations.yaml\n.github/scripts/staged-migrations.py\n.github/scripts/staged-migrations.sh\ndocs/ci.md\ntests/test_staged_migrations.py'
+check_decide true $'.github/scripts/staged-migrations.sh\n.github/workflows/test.yaml'
+check_decide true $'.github/scripts/staged-migrations.py\n.github/workflows/package.yaml'
 for receipt_helper in install-receipt.py collect-install-receipt.py install-artifact-inputs.py checkpoint-identity.py; do
   check_match ".github/scripts/${receipt_helper}" relevant
   check_decide true $'.github/scripts/install-reuse-shadow.py\n'".github/scripts/${receipt_helper}"

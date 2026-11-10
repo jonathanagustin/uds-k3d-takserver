@@ -125,6 +125,7 @@ jobs:
         run: |
           python3 -B -m unittest discover -s takx -p 'test_source_inputs.py' -v
           python3 -B -m unittest discover -s takx -p 'test_tls_guards.py' -v
+          python3 -B -m unittest tests.test_ghcr_migration -v
           python3 -B -m unittest discover -s takx/gis-java -p 'test_build.py' -v
 
   # Renders the package without a cluster and checks that the package values

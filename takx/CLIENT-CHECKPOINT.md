@@ -19,6 +19,44 @@ Our public candidate is Kernel 8.30.5 / CommonCommo 1.17.2 at official ATAK
 and streaming-contact patch. These artifacts have not been renamed to either
 client's required versions.
 
+## Current production compiler checkpoint
+
+The public WorldWind [source recipe](worldwind-java/README.md) builds the complete
+NASA Java tree under an explicit standard-GDAL-RGB project profile. All 189
+resources and required licenses are retained. A renderer-import patch lets a
+20-source consumer slice compile for both TAKX profiles; it does not establish
+complete client compatibility or provide the private TAKX-4 artifact.
+
+Local production probes additionally use six genuine source-built UI candidates,
+verified Kernel public dependencies, 70 real XJC sources, two generated templates
+and the actual AutoValue/EventBus processor graph. The UI candidates retain their
+own identities: colorchooser is the original author's 1.5 rather than requested
+1.1; the wizard is a preserved-source reference rather than an established match
+for `rev-28122010`. They are not accepted as equivalent runtime replacements.
+
+| Actual compiler scope | 5.7 | 5.8 |
+| --- | --- | --- |
+| Complete Bootstrap main/preferences and ProcessManager Java | 18 sources, 22 classes, pass | 18 sources, 22 classes, pass |
+| Platform main plus real generated inputs | 1,811 supplied sources, fail | 1,877 supplied sources, fail |
+| Initial Platform type-resolution diagnostics | 1: `TextureFillStyle` | 18: texture, contour and vehicle APIs |
+
+The failing Platform runs emit no accepted classes. Their 17 AutoValue-generated
+sources are retained only as diagnostic output. Initial diagnostics are not
+full-client error totals; later member/API differences can remain. Client,
+AspectJ/checker instrumentation, packaging and runtime acceptance have not passed.
+
+[`TextureFillStyle` needs real native rendering support](https://github.com/jonathanagustin/uds-takserver/issues/424):
+the inspected public Kernel lacks its native style/JNI factory and polygon
+UV/shader integration. Published-shape crosshatching cannot be supplied by an
+empty wrapper or a solid-fill alias. Repeat values, rotation/dimension units and
+serialization need an authentic contract or explicit project semantics.
+
+The source-built CommonCommo transport proof validates mutual-TLS certificate
+trust against a loopback peer; it does not verify server hostnames or demonstrate
+TAK Server interoperability. A complete native Kernel/GIS/GL runtime, map
+rendering, application resources, identity checks and live client acceptance
+remain open. Neither TAKX desktop nor Kasm/offline packaging is ready to ship.
+
 ## What the earlier numbers mean
 
 The earlier “two missing types for 5.7 / eighteen for 5.8” findings were explicit
@@ -85,9 +123,9 @@ two/eighteen source-absent imports. It still does not test all members or compil
 either client. Both clients still require their full dependency
 closure, including custom WorldWind `2.2.1-TAKX-4`, full source/API
 compatibility checks, resources/packaging, native GIS/GL/Kernel
-linkage, map rendering/recovery, enrollment and CoT interoperability. No frozen,
-complete client compiler recipe/classpath was available to rerun in this
-checkpoint; the older artifacts were inventories and module probes. The current
+linkage, map rendering/recovery, enrollment and CoT interoperability. The earlier shared-module checkpoint did not include a full client compiler
+recipe/classpath; its artifacts were inventories and module probes. The newer
+Platform probes above remain bounded failed compilations, not accepted clients. The current
 foundation work does not establish a functioning TAKX application.
 
 CDI Blacksmith `1.1.3` remains an upstream **test-suite** dependency, not an

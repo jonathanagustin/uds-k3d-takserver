@@ -16,10 +16,20 @@ Record the results in [the compatibility issue](https://github.com/jonathanagust
   and permission to create `TakClient` resources and read their device Secrets.
 - An approved TAKX installation on a test workstation. Record its version,
   source, operating system and plugins. This repository supplies no installer.
-  Upstream source builds require TAK.gov Artifactory credentials; follow the
+  The original upstream build requires TAK.gov Artifactory credentials; follow the
   [upstream instructions](https://github.com/TAK-Product-Center/TAKX#build-and-development-instructions).
 - Workstation DNS and routes to the passthrough gateway, and a CloudTAK test user
   in `Operators`. Use synthetic markers and a separate unrelated group for tests.
+
+## Current build status
+
+The public-source work compiles Kernel Java foundations and a WorldWind project
+variant, but does not supply a launchable TAKX desktop or Kasm session. Real
+Platform compiler probes still stop at missing native texture-rendering APIs;
+5.8 also has contour and vehicle-model gaps. See the
+[build checkpoint](../../takx/CLIENT-CHECKPOINT.md) and
+[native rendering work](https://github.com/jonathanagustin/uds-takserver/issues/424).
+Use an approved, working installation for the connection checks below.
 
 ## Before you begin
 
@@ -104,8 +114,11 @@ against the server certificate, and keep certificate validation enabled.
 3. In your installed TAKX build, configure a certificate-based SSL connection to
    the streaming address. Use `client.p12` as the client credential and
    `truststore.p12` as the CA store, with the exported package password. Keep
-   server trust and hostname checks enabled. Record the exact import steps that
-   work for that version rather than assuming a menu layout.
+   server trust enabled, and require hostname validation as well. The inspected
+   public CommonCommo candidate validates certificate trust but does not perform
+   server hostname verification. It cannot pass that acceptance check yet; do
+   not assume a checkbox supplies the missing behavior. Record the actual
+   behavior and import steps of the installed version.
 
    The inspected upstream connection editor accepts `.p12` files and defaults to
    streaming port 8089. Its source also has an ATAK-style preference importer,
@@ -136,6 +149,7 @@ is a limitation to record, not a passing check.
 | Installation and identity | TAKX version/commit or installer checksum, OS/architecture, plugin versions; TAK Server, package and Core versions; test date |
 | Streaming TLS | Actual host/port, successful connection with the dedicated certificate, server trust and hostname validation enabled |
 | Negative trust | An unrelated CA is rejected without disabling certificate validation |
+| Server identity | A certificate from a trusted CA for a different hostname is rejected |
 | HTTPS reachability | The host/port TAKX requests for missions/files and the result, tested separately from streaming |
 | Shared group | A clearly labeled synthetic marker travels TAKX to CloudTAK and back within `Operators` |
 | Group isolation | A user in the unrelated group cannot see those test events or restricted content |

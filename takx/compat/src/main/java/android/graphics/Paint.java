@@ -11,6 +11,21 @@ import java.util.Objects;
 
 /** Java2D text measurement surface consumed by the public Kernel port module. */
 public class Paint {
+    public static final int UNDERLINE_TEXT_FLAG = 0x08;
+    public static final int STRIKE_THRU_TEXT_FLAG = 0x10;
+
+    public Paint() {}
+    public Paint(Paint source) {
+        Objects.requireNonNull(source, "source");
+        typeface = source.typeface;
+        textSize = source.textSize;
+        antiAlias = source.antiAlias;
+        style = source.style;
+        align = source.align;
+        color = source.color;
+        strokeWidth = source.strokeWidth;
+    }
+
     public enum Style { FILL, STROKE, FILL_AND_STROKE }
     public enum Align { LEFT, CENTER, RIGHT }
 
@@ -28,6 +43,7 @@ public class Paint {
     private Style style = Style.FILL;
     private Align align = Align.LEFT;
     private int color = 0xff000000;
+    private float strokeWidth;
 
     public void setStyle(Style value) { style = Objects.requireNonNull(value); }
     public Style getStyle() { return style; }
@@ -51,6 +67,19 @@ public class Paint {
         color = ((a & 255) << 24) | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255);
     }
     public int getColor() { return color; }
+    public void setColor(int value) { color = value; }
+    public int getAlpha() { return color >>> 24; }
+    public void setAlpha(int value) {
+        if (value < 0 || value > 255) { throw new IllegalArgumentException("alpha must be in 0..255"); }
+        color = (color & 0x00ffffff) | (value << 24);
+    }
+    public float getStrokeWidth() { return strokeWidth; }
+    public void setStrokeWidth(float value) {
+        if (!Float.isFinite(value) || value < 0f) { throw new IllegalArgumentException("invalid stroke width"); }
+        strokeWidth = value;
+    }
+    Font awtFont() { return font(); }
+    FontRenderContext fontContext() { return context(); }
 
     private Font font() { return typeface.atSize(textSize); }
     private FontRenderContext context() { return new FontRenderContext(null, antiAlias, true); }

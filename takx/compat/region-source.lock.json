@@ -1,0 +1,61 @@
+{
+  "aosp_revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "skia_revision": "1145116447a46710a65e3a5deabb7d7c752af5ea",
+  "sources": {
+    "BitmapRegionDecoder.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/BitmapRegionDecoder.java",
+      "sha256": "039f859bc319650170bbe96fae594075ae2d9502f0f7d627e647bbe2e5b82270",
+      "license": "Apache-2.0"
+    },
+    "BitmapRegionDecoder.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/BitmapRegionDecoder.cpp",
+      "sha256": "5ea52e76ee441fdf8608c88461f899c5a958e8535dadabd0734477288e939683",
+      "license": "Apache-2.0"
+    },
+    "BitmapFactory.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/BitmapFactory.cpp",
+      "sha256": "970db884b9fab8b32bd02755090503273b1f5a2289882cd3ebdb4feafa6ae1f8",
+      "license": "Apache-2.0"
+    },
+    "SkiaBitmapRegionDecoder.cpp": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/client_utils/android/BitmapRegionDecoder.cpp?format=TEXT",
+      "sha256": "fd2ca16bf85b50d057bd508056ccc504b97a019e71a2edff2e6d9ba3f4445ee3",
+      "license": "BSD-3-Clause"
+    },
+    "SkCodecPriv.h": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/src/codec/SkCodecPriv.h?format=TEXT",
+      "sha256": "cf3b69e6e6163f9f674599bcaac2dda7bfaa9a2f875a2518e3443e5e3ee59113",
+      "license": "BSD-3-Clause"
+    },
+    "SkAndroidCodec.cpp": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/src/codec/SkAndroidCodec.cpp?format=TEXT",
+      "sha256": "eee4a913e8ee85ed4f51058c7d865187e7fd6c0d0ccfb0b362a586e423c4b3ee",
+      "license": "BSD-3-Clause"
+    },
+    "SkSampledCodec.cpp": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/src/codec/SkSampledCodec.cpp?format=TEXT",
+      "sha256": "021bc1a0ca063e73d6ecc3d3408d69af3a972b9d9f82e1dbe883149aee80d6b4",
+      "license": "BSD-3-Clause"
+    },
+    "SkJpegCodec.cpp": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/src/codec/SkJpegCodec.cpp?format=TEXT",
+      "sha256": "c1a90df9506c7a8b005412d200e59f8508a2c6c3ec9fdc34041bcdfec1c3291c",
+      "license": "BSD-3-Clause"
+    },
+    "Skia-LICENSE": {
+      "url": "https://android.googlesource.com/platform/external/skia/+/1145116447a46710a65e3a5deabb7d7c752af5ea/LICENSE?format=TEXT",
+      "sha256": "5f787c1dee3c56547f09ccc2906ab5f5293c4d8dd6c8654e573216c38e908dbd",
+      "license": "BSD-3-Clause"
+    },
+    "Graphics.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/Graphics.cpp",
+      "sha256": "37acaa4a58fc003999765230c8f6cabac698f197dbbcc82ee2535325947cba6b",
+      "license": "Apache-2.0"
+    },
+    "Bitmap.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/Bitmap.cpp",
+      "sha256": "7bcb7148d6333f5f89b35f761de8ccecc24a4ec6ae0408a4539f3c4fbec40877",
+      "license": "Apache-2.0"
+    }
+  }
+}

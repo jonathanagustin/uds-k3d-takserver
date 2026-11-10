@@ -44,12 +44,18 @@ actual generator/resources are part of the build input fingerprint.
 
 Local acceptance used real SWIG interfaces to generate all 58 GDAL Java wrappers,
 then Temurin 17 with `--release 11 -proc:none` to compile those and all 42 jassimp
-classes. The actual consumer probe compiles, without executing JNI. A complete
-public desktop engine attempt with those source-built JARs, the real compat slice
-and declared public Java dependencies still failed with 1,303 diagnostics.
-The specific GIS Java package/fork gaps disappeared; broader Android graphics,
-SQLite, Uri, Parcel and utility behavior remains missing. Diagnostics include
-cascades and are not counts of independent APIs.
+classes. The actual consumer probe compiles, without executing JNI. The initial complete
+public desktop engine attempt with those source-built JARs, the then-current
+compatibility slice and declared public Java dependencies failed with 1,303
+diagnostics. The specific GIS Java package/fork gaps disappeared; graphics,
+SQLite, Uri, Parcel and utility APIs still needed implementation at that point.
+Diagnostics included cascades and were not counts of independent APIs.
+
+The later integrated [desktop foundation investigation](../compat/FINAL-APIS.md)
+compiled all 862 engine sources with zero errors. That evidence uses a local
+frozen compile probe; a portable full-engine recipe is not yet shipped. It does
+not change this GIS recipe's Java-only acceptance or establish native GIS runtime
+behavior.
 
 For comparison, the small official Maven Central `org.gdal:gdal:3.13.0` Java JAR
 was available, but lacked the custom interrupt APIs and returned `java.awt.Color`

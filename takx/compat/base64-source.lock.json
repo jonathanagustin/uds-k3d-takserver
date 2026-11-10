@@ -1,0 +1,7 @@
+{
+  "url": "https://android.googlesource.com/platform/frameworks/base/+/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/util/Base64.java?format=TEXT",
+  "revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "sha256": "bd7b1e83953dda51fda1b96b5211cf43e375105db8f7f5a6dd678efb57fb3364",
+  "license": "Apache-2.0",
+  "adaptation": "Remove UnsupportedAppUsage annotation/import and explicitly use UTF-8 for String decoding, matching Android default charset independently of desktop locale."
+}

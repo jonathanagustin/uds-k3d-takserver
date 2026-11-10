@@ -8,5 +8,9 @@ ignore:
   - "**/*.jar"
   - "LICENSE"
   - "upstream/**"
+  # Generated mutation reports and rewritten test sandboxes, never source inputs.
+  - "takx/compat/mutation/target/**"
+  - "pepr/mutation/reports/**"
+  - "pepr/mutation/.stryker-tmp/**"
   # Upstream method body. The patch test matches these bytes from the first character.
   - "tests/fixtures/distributed-configuration-init.java"

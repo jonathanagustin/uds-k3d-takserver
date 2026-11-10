@@ -15,9 +15,10 @@ public class Resources {
     private final Map<String, Integer> identifiers = new HashMap<>();
     private final Map<Integer, Entry> entries = new HashMap<>();
     private static final class Entry {
+        final String owner;
         final String type;
         final String path;
-        Entry(String type, String path) { this.type = type; this.path = path; }
+        Entry(String owner, String type, String path) { this.owner = owner; this.type = type; this.path = path; }
     }
     public static class NotFoundException extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -46,7 +47,7 @@ public class Resources {
                 String path = AssetManager.safePath(catalog.getProperty(key));
                 if (loader.getResource(path) == null) throw new IOException("Catalog resource file is missing: " + path);
                 identifiers.put(key, id);
-                entries.put(id++, new Entry(parts[1], path));
+                entries.put(id++, new Entry(parts[0], parts[1], path));
             }
         } catch (IOException | IllegalArgumentException error) {
             throw new NotFoundException("Cannot load desktop resource catalog", error);
@@ -80,11 +81,16 @@ public class Resources {
             throw new NotFoundException("Resource identifier is absent or has the wrong type: " + id);
         return value;
     }
+    public InputStream openRawResourceForPackage(String owner, int id) {
+        Entry value = entry(id, "raw");
+        if (!value.owner.equals(owner)) throw new NotFoundException("Resource does not belong to URI package");
+        return openRawResource(id);
+    }
+
     public InputStream openRawResource(int id) {
         Entry value = entry(id, null);
-        InputStream stream = loader.getResourceAsStream(value.path);
-        if (stream == null) throw new NotFoundException("Catalog resource file is missing");
-        return stream;
+        try { return assets.openResource(value.path); }
+        catch (IOException error) { throw new NotFoundException("Cannot open bounded catalog resource", error); }
     }
     private String text(int id, String type) {
         entry(id, type);

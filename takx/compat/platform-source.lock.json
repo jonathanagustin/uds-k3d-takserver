@@ -1,0 +1,15 @@
+{
+  "revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "sources": {
+    "Patterns": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/util/Patterns.java",
+      "sha256": "51d66d1131e575597129801a7a1affab9a7032ea05d27d85dac584160c9985c9",
+      "license": "Apache-2.0"
+    },
+    "SuppressLint": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/core/java/android/annotation/SuppressLint.java",
+      "sha256": "9ce42c55385758f7f37029b1726e1c5b076894ef262b8e4680f05570678d9b6e",
+      "license": "Apache-2.0"
+    }
+  }
+}

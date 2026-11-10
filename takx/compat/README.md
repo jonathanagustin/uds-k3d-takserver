@@ -5,10 +5,16 @@
 The implementation uses JDK `BufferedImage`, ImageIO, Java2D fonts, classpath streams and real filesystem persistence. Its supported surfaces are documented separately:
 
 - [Bitmap pixels, decoding and upstream marshaling](BITMAP.md)
+- [Bitmap metadata, scaling and PNG/JPEG encoding](CODECS.md)
+- [Bitmap subsets and affine transforms](TRANSFORMS.md)
+- [Owned formats and raw ByteBuffer copies](NATIVE-PIXELS.md)
+- [Software bitmap composition, shapes and glyphs](CANVAS.md)
 - [Coordinate and rectangle primitives](GEOMETRY.md)
 - [Packed integer colors and integer rectangles](COLOR-RECT.md)
 - [Font selection and text measurement](FONT.md)
 - [Context, resource catalogs and persistent preferences](CONTEXT.md)
+- [Real SQLite bindings, cursors and transactions](SQLITE.md)
+- [Final graphics API contracts, Unix metadata and unchanged Kernel VSI checks](FINAL-APIS.md)
 
 Most sources are original repository code under the root GPL-3.0-only license. RectF and Rect adapt the same pinned official public port implementations, retaining its Apache-2.0 notice and license; see [geometry provenance](GEOMETRY.md). The tests compile upstream code from the separately checked-out official `TAK-Product-Center/atak-civ` revision `9f6893dd657feacc35ec5de03dad721c2e44170e`. Upstream code remains in that checkout; no private SDK JAR is included.
 
@@ -20,6 +26,7 @@ Put JDK 17's `java` and `javac` on `PATH`; tests compile with `--release 11` to 
 export ATAK_SOURCE_DIR=/path/to/atak-civ
 ./takx/compat/test-font.sh
 ./takx/compat/test-bitmap.sh
+./takx/compat/test-canvas.sh
 ./takx/compat/test-context.sh
 ./takx/compat/test-pair.sh
 python3 takx/compat/test-geometry.py --source "$ATAK_SOURCE_DIR"
@@ -30,9 +37,9 @@ The font and bitmap tests exercise real upstream wrappers and the marshal regist
 
 ## Compile the complete public port module
 
-The combined prototype compiles all 77 public port sources and six annotation sources with Java 11 compatibility. This resolves that module's earlier 97 compiler errors. It does not compile the engine or either TAKX application.
+The combined prototype compiles all 77 public port sources and six annotation sources with Java 11 compatibility. This resolves that module's earlier 97 compiler errors. That runner is scoped to the port module. A separate frozen full-Kernel compile also passed with 862 engine, 77 port, six annotation and 59 adapter sources; see [final API validation](FINAL-APIS.md). Neither result establishes a runnable TAKX application.
 
-Download the five public JARs from the exact official URLs in [port-classpath.lock.json](port-classpath.lock.json), placing their named files in one directory. The runner checks every SHA-256 and uses only those files, even if the directory contains other JARs. It uses JOGL/gluegen 2.5.0 and SLF4J 1.7.30, plus Commons Text 1.15.0 with its Commons Lang 3.20.0 runtime dependency. The newer Commons Text replaces the earlier investigation's 1.9 compile-only coordinate; the actual upstream HTML utility is exercised with the complete transitive pair.
+Download the locked public JARs from the exact official URLs in [port-classpath.lock.json](port-classpath.lock.json), placing their named files in one directory. The runner checks every SHA-256 and uses only those files, even if the directory contains other JARs. It uses JOGL/gluegen 2.5.0 and SLF4J 1.7.30, plus Commons Text 1.15.0 with its Commons Lang 3.20.0 runtime dependency. kXML2 2.3.0 supplies the scoped XML pull-parser backend. The newer Commons Text replaces the earlier investigation's 1.9 compile-only coordinate; the actual upstream HTML utility is exercised with the complete transitive pair.
 
 ```bash
 python3 takx/compat/test-port.py \
@@ -44,8 +51,10 @@ The runner verifies the upstream revision and clean consumed sources, copies onl
 
 ## Remaining acceptance
 
-Both official TAKX 5.7 and 5.8 remain candidates; prefer 5.8 after actual full-client acceptance. Full Kernel engine compilation, SQLite, broader graphics/Canvas/Matrix/URI APIs, native GIS/GL dependencies and TAKX resource catalogs still need implementation or compatible public inputs. These limited APIs deliberately do not pretend to support Android services, binary resources or the complete graphics surface.
+Both official TAKX 5.7 and 5.8 remain candidates; prefer 5.8 after actual full-client acceptance. Full Kernel engine runtime acceptance, complete database/native interop, broader graphics/Canvas/Matrix/URI APIs, native GIS/GL dependencies and TAKX resource catalogs still need implementation or compatible public inputs. These limited APIs deliberately do not pretend to support Android services, binary resources or the complete graphics surface.
 
 No live map rendering, GL recovery, enrollment, CoT exchange or TAKX desktop session is established by the port-module checks. Follow [issue 376](https://github.com/jonathanagustin/uds-takserver/issues/376) for the prototype and its remaining runtime gates. The normal server CI does not download or compile this opt-in component.
 
 [Pair compatibility and source provenance](PAIR.md) covers the small AOSP tuple API.
+
+[URI parser compatibility and source provenance](URI.md) describes the desktop AOSP parser and its explicit Android-only API exclusions. Run `./takx/compat/test-uri.sh` for its pinned source behavior checks.

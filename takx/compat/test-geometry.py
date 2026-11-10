@@ -39,7 +39,7 @@ def main():
             target.write_bytes(subprocess.check_output(['git', '-C', str(source), 'show', REVISION + ':' + name]))
             inputs.append(str(target))
         graphics = ROOT / 'takx/compat/src/main/java/android/graphics'
-        inputs += [str(graphics / (name + '.java')) for name in ['Point', 'PointF', 'RectF', 'Bitmap']]
+        inputs += [str(graphics / (name + '.java')) for name in ['Point', 'PointF', 'RectF', 'Bitmap', 'BitmapStorage', 'BitmapEncoder', 'Matrix']]
         inputs += [str(ROOT / 'takx/compat/src/test/java/geometry/GeometryCompatibilityTest.java')]
         subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-d', str(build / 'classes'), *inputs], check=True)
         subprocess.run(['java', '-Djava.awt.headless=true', '-cp', str(build / 'classes'), 'geometry.GeometryCompatibilityTest'], check=True)

@@ -1,0 +1,6 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+# Unified patch context includes the upstream Makefile's leading tabs.
+patches/*.patch -whitespace
+# Preserve the copied upstream license's final blank line byte for byte.
+SLF4J-LICENSE.txt whitespace=-blank-at-eof

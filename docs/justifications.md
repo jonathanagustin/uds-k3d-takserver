@@ -187,6 +187,25 @@ addresses so cleanup does not wait for reverse DNS while DNS egress is blocked.
 A killed or unreachable runner may
 prevent cleanup; GitHub then destroys that job's ephemeral cluster.
 
+The node guard binds each address family once to a validated canonical
+`xtables-legacy-multi` or `xtables-nft-multi` executable with an explicit
+`iptables` or `ip6tables` applet. It verifies the selected version and saves the
+backend, family, executable and exact Docker container ID before mutation.
+Creation, appends and restoration use that binding even if generic command
+links change. Restoration refuses legacy state without these fields, a replaced
+container, host/shared networking, or a changed executable/version.
+
+This provides backend consistency; it does not establish the cause of the
+November 10 chain-append failure. The official
+[K3s detector and link setter](https://github.com/k3s-io/k3s-root/tree/1031ce26d1a575a7e073685c3f3341c20da27efc/iptables-detect)
+select a backend and rewrite generic links, rather than necessarily detecting
+again on every command. The failed checkpoint's backend was not observed.
+On the first command failure per container/family, a single ten-second diagnostic
+budget records parsed versions, exact-chain existence statuses and whether the
+container ID still matches. Rule contents, raw inspection and raw version/error
+payloads are omitted. Commands have remote timeouts, bounded complete output,
+and local process-group cleanup; diagnostic failure never accepts the trial.
+
 Run it on Linux with Docker and a fresh test cluster using `uds run test-airgap`.
 The node image must provide `wget`, `iptables`, and, when IPv6 is enabled,
 `ip6tables`. The job fails instead of silently leaving an address family open.

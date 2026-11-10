@@ -32,6 +32,18 @@ artifacts = module('artifact_inputs', 'install-artifact-inputs.py')
 checkpoint = artifacts.checkpoint
 require = foundation.require
 REPOSITORY = 'jonathanagustin/uds-takserver'
+OMISSION_STAGES = frozenset({'operation', 'context', 'source-checkout', 'source-snapshot',
+                             'pinned-key', 'cli-version', 'pinned-snapshot', 'execution',
+                             'checkpoint-validation', 'checkpoint-archive', 'app-archive',
+                             'bundle-selection', 'local-package-oci', 'bundle-oci',
+                             'app-archive-stability', 'receipt-write'})
+_omission_stage = 'operation'
+
+
+def stage(value):
+    global _omission_stage
+    require(value in OMISSION_STAGES, 'unsupported stage')
+    _omission_stage = value
 
 
 def read_json(path, limit):
@@ -40,6 +52,7 @@ def read_json(path, limit):
 
 
 def context(env):
+    stage('context')
     require(env.get('GITHUB_REPOSITORY') == REPOSITORY, 'unsupported repository')
     event = env.get('GITHUB_EVENT_NAME')
     require(event in ('push', 'pull_request', 'workflow_dispatch'), 'unsupported event')
@@ -64,11 +77,14 @@ def context(env):
 
 
 def snapshot(root, env):
-    return {'context': context(env), 'checkout': foundation.checkout_identity(root)}
+    ctx = context(env)
+    stage('source-checkout')
+    return {'context': ctx, 'checkout': foundation.checkout_identity(root)}
 
 
 def capture(root, env, directory):
     value = snapshot(root, env)
+    stage('source-snapshot')
     with (directory / 'install-source.json').open('x') as output:
         json.dump(value, output, sort_keys=True)
         output.write('\n')
@@ -127,8 +143,10 @@ def command(root, args, env, seconds=15):
 
 
 def pinned_inputs(root, env, arch):
+    stage('pinned-key')
     key = command(root, ['bash', '.github/scripts/dev-package.sh', 'key'], env)
     require(re.fullmatch(arch + r'-[a-f0-9]{16}', key), 'invalid package key')
+    stage('cli-version')
     version = command(root, ['uds', 'version'], env)
     # Read the actual CLI output, not a source pin or user-supplied version.
     match = re.fullmatch(r'v([0-9]+\.[0-9]+\.[0-9]+)', version)
@@ -137,9 +155,11 @@ def pinned_inputs(root, env, arch):
 
 
 def pinned(root, env, directory):
+    stage('source-snapshot')
     saved = read_json(directory / 'install-source.json', 4096)
     require(saved == snapshot(root, env), 'checkout or run identity changed')
     value = pinned_inputs(root, env, saved['context']['arch'])
+    stage('pinned-snapshot')
     with (directory / 'install-pinned.json').open('x') as output:
         json.dump(value, output, sort_keys=True)
         output.write('\n')
@@ -147,13 +167,19 @@ def pinned(root, env, directory):
 
 
 def collect(root, env, directory):
+    stage('source-snapshot')
     saved = read_json(directory / 'install-source.json', 4096)
     require(saved == snapshot(root, env), 'checkout or run identity changed')
     ctx = saved['context']
+    stage('execution')
     execution(env, ctx['scenario'])
     arch = ctx['arch']
+    stage('pinned-snapshot')
     pinned = read_json(directory / 'install-pinned.json', 1024)
-    require(pinned == pinned_inputs(root, env, arch), 'pinned inputs changed')
+    actual_pinned = pinned_inputs(root, env, arch)
+    stage('pinned-snapshot')
+    require(pinned == actual_pinned, 'pinned inputs changed')
+    stage('checkpoint-validation')
     require(env.get('INSTALL_RECEIPT_CHECKPOINT_VALIDATED') == 'true', 'checkpoint not validated')
     selected = read_json(directory / 'install-checkpoint-selection.json', 8192)
     require(isinstance(selected, dict) and set(selected) == {'archive', 'acquisition', 'run_id', 'attempt'} and
@@ -163,26 +189,33 @@ def collect(root, env, directory):
     require(archive.resolve().parent == (root / '.cache/k3d-core-slim-dev').resolve(),
             'unsupported checkpoint path')
     acquisition = selected['acquisition']
+    stage('checkpoint-archive')
     checkpoint.validate(acquisition, archive, acquisition.get('source'), acquisition.get('version'), arch)
     # This is the flavored archive actually built or pulled by create-dev-package.
     package = root / f'zarf-package-takserver-{arch}-dev-upstream.tar.zst'
     plain = root / f'zarf-package-takserver-{arch}-dev.tar.zst'
+    stage('app-archive')
     package_hash = checkpoint.archive_hash(package)
     require(checkpoint.archive_hash(plain) == package_hash, 'bundled archive differs')
+    stage('bundle-selection')
     bundles = [*root.glob(f'uds-bundle-takserver-dev-{arch}-dev.tar.zst'),
                *(root / 'bundle').glob(f'uds-bundle-takserver-dev-{arch}-dev.tar.zst')]
     require(len(bundles) == 1, 'ambiguous generated bundle')
     # Use the official SDK's deterministic local archive digest. Never resolve
     # an OCI tag or a cluster package as a substitute for these exact bytes.
+    stage('local-package-oci')
     with tempfile.TemporaryDirectory(prefix='install-receipt-digest-', dir=directory) as temp:
         package_digest = command(root, ['uds', 'zarf', 'package', 'inspect', 'digest', str(package),
                                         '--tmpdir', temp], env, seconds=45)
     require(foundation.digest(package_digest), 'local package identity unavailable')
+    stage('bundle-oci')
     derived = artifacts.identities(artifacts.metadata(bundles[0]), arch, package_digest)
+    stage('app-archive-stability')
     require(checkpoint.archive_hash(package) == package_hash, 'package changed during collection')
     inputs = {**pinned, 'package_archive_sha256': package_hash,
               'checkpoint_oci_digest': acquisition['index_digest'],
               **derived}
+    stage('receipt-write')
     result = foundation.receipt(root, REPOSITORY, ctx['event'], ctx['run_id'], ctx['attempt'],
                                 arch, ctx['scenario'], 'success', inputs)
     require(result['source'] == {'repository': REPOSITORY, **saved['checkout']['source']} and
@@ -197,6 +230,7 @@ def collect(root, env, directory):
 
 
 def main():
+    stage('operation')
     try:
         require(sys.argv[1:] in (['capture'], ['pinned'], ['collect']), 'invalid operation')
         directory = Path(os.environ['RUNNER_TEMP'])
@@ -210,7 +244,8 @@ def main():
     except (OSError, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError,
             subprocess.SubprocessError, tarfile.TarError):
         # Never echo arbitrary metadata, CLI stderr, paths, arguments or payloads.
-        print('Optional install receipt omitted: complete evidence unavailable')
+        safe_stage = _omission_stage if _omission_stage in OMISSION_STAGES else 'operation'
+        print('Optional install receipt omitted: stage=' + safe_stage)
     return 0
 
 

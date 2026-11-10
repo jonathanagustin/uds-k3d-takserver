@@ -142,3 +142,9 @@ package digest command must unpack legitimate SDK files larger than 1 KiB.
 A real actions-only package with a 4 KiB definition reproduced the former
 limit failure and succeeded with the pipe bound, producing the same canonical
 digest as direct official CLI inspection.
+
+Omission logging reports only a fixed allowlisted stage (for example
+`checkpoint-archive`, `local-package-oci` or `bundle-oci`). Exception text,
+environment values, payloads and filesystem paths are never printed. A stage
+identifies where collection stopped; it does not prove a root cause or turn
+missing evidence into a successful receipt.

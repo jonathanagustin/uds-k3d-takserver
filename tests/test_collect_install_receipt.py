@@ -3,6 +3,8 @@
 
 """Actual checkout/OCI fixtures exercise the optional producer as a whole."""
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import sys
@@ -124,6 +126,7 @@ class CollectorTests(unittest.TestCase):
                   {'pull_request': {'head': {'repo': {'full_name': 'fork/project'}}}}),
                  ({'GITHUB_EVENT_NAME': 'workflow_dispatch'}, {'inputs': {'trust_bundle': 'true'}}),
                  ({'GITHUB_EVENT_NAME': 'workflow_dispatch'}, {'inputs': {'diagnostic_case': 'pg15-both'}}),
+                 ({'GITHUB_EVENT_NAME': 'workflow_dispatch'}, {'inputs': {'diagnostic_case': 'airgap-amd64'}}),
                  ({'RECEIPT_DIAGNOSTIC': 'upgrade-amd64'}, {}),
                  ({'TEST_TYPE': 'upgrade'}, {}), ({'TEST_FLAVOR': 'registry1'}, {})]
         for updates, event in cases:
@@ -211,6 +214,27 @@ class CollectorTests(unittest.TestCase):
         for field in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 collector.collect(self.root, {**self.env, field: '999'}, self.directory)
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+
+    def test_omission_stage_never_echoes_exception_payload_or_environment(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        for error in (ValueError('registryAuth=DO_NOT_EMIT'), OSError('/private/DO_NOT_EMIT')):
+            output = io.StringIO()
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(collector, 'ROOT', self.root), \
+                    patch.dict(os.environ, {**self.env, 'RUNNER_TEMP': str(self.directory),
+                                            'SECRET_MARKER': 'DO_NOT_EMIT'}), \
+                    patch.object(sys, 'argv', ['collector', 'collect']), \
+                    patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0',
+                                                                   self.fixture.expected_app]), \
+                    patch.object(collector.artifacts, 'metadata', side_effect=error), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                self.assertEqual(collector.main(), 0)
+            self.assertEqual(output.getvalue(), 'Optional install receipt omitted: stage=bundle-oci\n')
+            self.assertNotIn('DO_NOT_EMIT', output.getvalue())
         self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
 
     def test_output_bound_does_not_limit_sdk_filesystem_writes(self):

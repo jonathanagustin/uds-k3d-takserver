@@ -12,12 +12,12 @@ contained in this concept directory; deployed branding is unchanged.
 
 ## Directions
 
-**Relay stack** is the recommended platform identity. Three substantial service
+**Relay stack** is the literal platform alternative. Three substantial service
 layers share a single relay, ending in a navigation heading. It connects the
 Unified Defense Stack's integrated platform to TAK's field purpose. The mark
 remains compact without miniature server ports, map grids or lettering.
 
-**Unified route** is the simpler favicon alternative. A teammate node connects
+**Unified route** is the recommended identity, particularly for favicons. A teammate node connects
 through a U-shaped route to a navigation heading. This expresses shared field
 awareness with fewer elements, while the accompanying wordmark provides the
 platform context. Its U also offers a simple mnemonic for Unified Defense Stack.

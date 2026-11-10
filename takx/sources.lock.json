@@ -83,6 +83,12 @@
       "sha256": "abf2b271bee6b2eadea9262e209642d3751b7d26186042f24e05a5b95fea21b0",
       "source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
       "commoncommo_version": "1.17.2"
+    },
+    {
+      "path": "patches/0101-commoncommo-stream-server-identity.patch",
+      "sha256": "5a43b986451b3986a563b30b065a371d58e89446091907c7cb9a6937bb9ee9af",
+      "source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+      "commoncommo_version": "1.17.2"
     }
   ]
 }

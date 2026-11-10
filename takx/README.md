@@ -45,7 +45,7 @@ Source/output paths must not contain whitespace because the upstream Makefiles d
 
 ## What is built and tested
 
-The pinned native inputs are zlib, libiconv, libxml2, quictls/OpenSSL, nghttp2, curl, ngtcp2, protobuf and libmicrohttpd. Dependency installs are ordered because upstream's parallel multi-output OpenSSL install can race. The exact host protoc is built once; only the actual same-version PIC protobuf-lite library and headers are built for the target. CommonCommo's real static core is linked into its JNI shared library, and upstream Ant produces the auto-initializing Java JAR. The ordered, hash-locked CommonCommo patch is applied to an isolated copy exported from the pinned Git revision. It adds a streaming-contact fallback without changing the upstream checkout or the reported upstream version.
+The pinned native inputs are zlib, libiconv, libxml2, quictls/OpenSSL, nghttp2, curl, ngtcp2, protobuf and libmicrohttpd. Dependency installs are ordered because upstream's parallel multi-output OpenSSL install can race. The exact host protoc is built once; only the actual same-version PIC protobuf-lite library and headers are built for the target. CommonCommo's real static core is linked into its JNI shared library, and upstream Ant produces the auto-initializing Java JAR. The ordered, hash-locked CommonCommo patches are applied to an isolated copy exported from the pinned Git revision. They add a streaming-contact fallback and configured TLS endpoint verification without changing the upstream checkout or the reported upstream version.
 
 The crypto smoke constructs a real native Commo instance, generates an ephemeral PKCS12, parses it with Java KeyStore and shuts down. It saves no certificate/private key.
 
@@ -54,9 +54,11 @@ The routing smoke uses real loopback TCP server sockets and a UDP receiver throu
 The successful native investigation used the isolated quictls `libssl.so.81.3` / `libcrypto.so.81.3`. Curl also detected host libraries for IDN2, RTMP, PSL, Zstandard and Brotli; the JNI runtime additionally needs the usual C/C++ runtime and loader. This recipe is **not yet a hermetic runtime package**: a future container must capture/audit that closure or deliberately configure dependency features and retest. The cache fingerprint does not pin every host library.
 
 The separate [mutual TLS loopback smoke](TLS.md) exercises real source-built
-transport with ephemeral certificates, CoT delivery and wrong-CA rejection.
-It does not change the native build recipe or establish hostname validation,
-TAK Server interoperability or full client compatibility.
+transport with ephemeral certificates, configured DNS/IP SAN matching, DNS SNI,
+CoT delivery and wrong-name/wrong-CA/client-certificate rejection. It also
+records an independent pinned-curl SIGPIPE disposition defect after shutdown.
+Loopback identity acceptance does not establish TAK Server interoperability,
+dependency security or full client compatibility.
 
 ## Compatibility boundary
 

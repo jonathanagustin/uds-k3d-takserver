@@ -1,0 +1,81 @@
+--- a/commoncommo/core/impl/streamingsocketmanagement.cpp
++++ b/commoncommo/core/impl/streamingsocketmanagement.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include "openssl/pkcs12.h"
+ #include "openssl/err.h"
++#include "openssl/x509v3.h"
+ 
+ using namespace atakmap::commoncommo;
+ using namespace atakmap::commoncommo::netinterfaceenums;
+@@ -1878,6 +1879,8 @@
+                                      epString, epAddrString,
+                                      port, ep, TRANSPORT_SSL),
+                 sslCtx(sslCtx),
++                expectedPeerName(epAddrString),
++                expectedPeerIsIp(ep != NULL),
+                 ssl(NULL),
+                 writeState(WANT_NONE),
+                 readState(WANT_NONE),
+@@ -1953,6 +1956,12 @@
+         SSL_use_certificate(ssl, sslConfig->cert);
+         SSL_use_PrivateKey(ssl, sslConfig->key);
+ 
++        // SNI identifies the configured DNS endpoint, never its resolved IP.
++        if (!expectedPeerIsIp &&
++                SSL_set_tlsext_host_name(ssl, expectedPeerName.c_str()) != 1)
++            throw SocketException(netinterfaceenums::ERR_INTERNAL,
++                                  "configuring TLS server name failed");
++
+         if (SSL_set_fd(ssl, (int)socket->getFD()) != 1)
+             throw SocketException(netinterfaceenums::ERR_INTERNAL,
+                                   "associating fd with ssl context failed");
+@@ -1965,15 +1974,21 @@
+         // to use an in-memory certificate (only files, and even then seems
+         // only globally on SSL_CTX and not per-connection like we need).
+         // So instead we verify ourselves here
+-        // NOTE: we *intentionally* do not check authenticity of peer
+-        // certificate by CN v. hostname comparison or the like (per
+-        // ATAK sources at time of writing)
++        // Keep per-stream CA verification and additionally bind the leaf
++        // certificate to the original configured DNS name or literal IP.
+         X509 *cert = SSL_get_peer_certificate(ssl);
+         if (!cert)
+             throw SocketException(netinterfaceenums::ERR_CONN_SSL_NO_PEER_CERT,
+                                   "server did not provide a certificate");
+ 
+         bool certOk = sslConfig->certChecker->checkCert(cert);
++        // Require the matching SAN type; no common-name or resolved-IP fallback.
++        // Only a complete leftmost DNS wildcard may match, never a partial label.
++        bool identityOk = certOk && (expectedPeerIsIp ?
++                X509_check_ip_asc(cert, expectedPeerName.c_str(), 0) == 1 :
++                X509_check_host(cert, expectedPeerName.c_str(), expectedPeerName.size(),
++                        X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS |
++                        X509_CHECK_FLAG_NEVER_CHECK_SUBJECT, NULL) == 1);
+         X509_free(cert);
+ 
+         if (!certOk) {
+@@ -1982,6 +1997,10 @@
+             throw SocketException(netinterfaceenums::ERR_CONN_SSL_PEER_CERT_NOT_TRUSTED,
+                                   "server certificate failed verification - check truststore");
+         }
++
++        if (!identityOk)
++            throw SocketException(netinterfaceenums::ERR_CONN_SSL_PEER_CERT_NOT_TRUSTED,
++                                  "server certificate does not match configured endpoint");
+ 
+         // Clear writeState now that we are connected!
+         writeState = SSLConnectionContext::WANT_NONE;
+--- a/commoncommo/core/impl/streamingsocketmanagement.h
++++ b/commoncommo/core/impl/streamingsocketmanagement.h
+@@ -398,6 +398,10 @@
+         // Shared across all SSLConnectionContext's in owning object
+         SSL_CTX *sslCtx;
+ 
++        // Immutable caller-supplied identity, independent of DNS resolution/retries.
++        const std::string expectedPeerName;
++        const bool expectedPeerIsIp;
++
+         // Initialized as needed
+         SSL *ssl;
+ 

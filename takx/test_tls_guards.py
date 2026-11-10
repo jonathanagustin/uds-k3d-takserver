@@ -48,6 +48,31 @@ class TlsRunnerGuards(unittest.TestCase):
                 self.assertNotIn(sentinel, traceback.format_exc())
             else: self.fail('failed command was accepted')
 
+    def test_mismatch_certificates_share_trusted_ca_and_use_distinct_san_types(self):
+        calls = []
+        extensions = {}
+        def record(label, args, env=None, timeout=30):
+            calls.append(args)
+            if "-extfile" in args:
+                extension = Path(args[args.index("-extfile") + 1])
+                extensions[extension.stem] = extension.read_text()
+            return ""
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(TLS, "run", side_effect=record):
+            root = Path(temporary)
+            TLS.credentials(root, {"TAKX_TLS_PASSWORD": "fixture-password"})
+            signings = [args for args in calls if args[1:3] == ["x509", "-req"]]
+            self.assertEqual(len(signings), 6)
+            self.assertTrue(all(args[args.index("-CA") + 1] == str(root / "ca.crt") for args in signings))
+        self.assertIn("subjectAltName=IP:127.0.0.1,DNS:localhost", extensions["server"])
+        self.assertIn("subjectAltName=IP:127.0.0.1,DNS:wrong.example", extensions["wrong-dns"])
+        self.assertIn("subjectAltName=IP:127.0.0.2,DNS:localhost", extensions["wrong-ip"])
+        self.assertIn("subjectAltName=DNS:127.0.0.1", extensions["dns-ip"])
+        self.assertNotIn("subjectAltName", extensions["cn-only"])
+        self.assertTrue(all("extendedKeyUsage=serverAuth" in extensions[name]
+                            for name in ("server", "wrong-dns", "wrong-ip", "dns-ip", "cn-only")))
+        self.assertIn("extendedKeyUsage=clientAuth", extensions["client"])
+        self.assertFalse(any("fixture-password" in arg for args in calls for arg in args))
+
     def test_success_preserves_actual_stdout_and_enforces_bounded_timeout(self):
         result = subprocess.CompletedProcess(['tool'], 0, stdout='actual output', stderr='')
         with mock.patch.object(TLS.subprocess, 'run', return_value=result) as command:

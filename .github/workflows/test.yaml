@@ -807,4 +807,5 @@ jobs:
           INSTALL_RESULT: ${{ needs.validate-install.result }}
           UPGRADE_RESULT: ${{ needs.validate-upgrade.result }}
           PG15_RESULT: ${{ needs.validate-upgrade-pg15.result }}
+          PG15_REQUIRED: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15') }}
         run: python3 .github/scripts/test-validation-mode.py verify

@@ -45,9 +45,50 @@ class TestValidationMode(unittest.TestCase):
 
     def test_normal_runs_reject_a_skipped_upgrade_even_if_input_was_set(self):
         for event, requested in (("pull_request", "true"), ("push", "true"), ("workflow_dispatch", "false")):
-            MODE.verify(event, requested, "success", "success", "skipped")
+            MODE.verify(event, requested, "success", "success", "success" if event == "push" else "skipped")
             with self.assertRaisesRegex(ValueError, "expected success"):
                 MODE.verify(event, requested, "success", "skipped", "skipped")
+
+    def test_pg15_push_and_selected_pr_cannot_pass_with_missing_work(self):
+        for event, required in (("push", "false"), ("push", "true"), ("pull_request", "true")):
+            MODE.verify(event, "false", "success", "success", "success", pg15_required=required)
+            for result in ("skipped", "failure", "cancelled", ""):
+                with self.subTest(event=event, required=required, result=result):
+                    with self.assertRaisesRegex(ValueError, "PostgreSQL 15"):
+                        MODE.verify(event, "false", "success", "success", result, pg15_required=required)
+        for result in ("success", "skipped"):
+            MODE.verify("pull_request", "false", "success", "success", result)
+
+    def test_pg15_expectation_does_not_override_explicit_manual_modes(self):
+        for required in ("true", "false"):
+            MODE.verify("workflow_dispatch", "true", "success", "skipped", "skipped", pg15_required=required)
+            MODE.verify("workflow_dispatch", "false", "skipped", "success", "skipped",
+                        "upgrade-amd64", required)
+            MODE.verify("workflow_dispatch", "false", "skipped", "skipped", "success",
+                        "pg15-amd64", required)
+
+    def test_cli_pg15_policy_and_invalid_expectations_fail_closed(self):
+        base = {**os.environ, "EVENT_NAME": "push", "TRUST_BUNDLE": "false", "DIAGNOSTIC_CASE": "none",
+                "INSTALL_RESULT": "success", "UPGRADE_RESULT": "success", "PG15_RESULT": "skipped"}
+        base.pop("PG15_REQUIRED", None)
+        for event, required, pg15, expected in (
+                ("push", None, "skipped", False), ("push", "false", "skipped", False),
+                ("push", "false", "success", True), ("pull_request", "true", "skipped", False),
+                ("pull_request", "true", "success", True), ("pull_request", "false", "skipped", True)):
+            env = {**base, "EVENT_NAME": event, "PG15_RESULT": pg15}
+            if required is not None:
+                env["PG15_REQUIRED"] = required
+            result = subprocess.run(["python3", str(SCRIPT), "verify"], env=env, capture_output=True, text=True)
+            with self.subTest(event=event, required=required, pg15=pg15):
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+        for event in ("push", "pull_request", "workflow_dispatch"):
+            for invalid in ("", "True", "0", "yes"):
+                env = {**base, "EVENT_NAME": event, "PG15_RESULT": "success", "PG15_REQUIRED": invalid}
+                result = subprocess.run(["python3", str(SCRIPT), "verify"], env=env,
+                                        capture_output=True, text=True)
+                with self.subTest(event=event, invalid=invalid):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Unknown PostgreSQL 15 expectation", result.stderr)
 
     def test_trust_trial_accepts_only_its_intentional_skips(self):
         MODE.verify("workflow_dispatch", "true", "success", "skipped", "skipped")
@@ -142,6 +183,8 @@ class TestValidationMode(unittest.TestCase):
         self.assertIn("contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')", pg15)
         verifier = workflow.split("  verify-test:", 1)[1]
         self.assertIn("DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}", verifier)
+        self.assertIn("PG15_REQUIRED: ${{ github.event_name == 'push' || "
+                      "contains(github.event.pull_request.labels.*.name, 'upgrade-pg15') }}", verifier)
 
     def test_cli_diagnostic_output_never_claims_full_acceptance(self):
         env = {**os.environ, "EVENT_NAME": "workflow_dispatch", "TRUST_BUNDLE": "false",

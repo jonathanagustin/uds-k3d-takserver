@@ -32,3 +32,11 @@ Fixtures: `python3 -m unittest discover -s tests -p test_upgrade_agent_diagnosti
 These establish capture behavior and redaction; they do not reproduce the agent
 crash or establish its cause. The outer deadline may truncate evidence when
 multiple commands are slow. No unchanged CI retry is implied.
+
+A manually dispatched Test workflow can select `diagnostic_case=upgrade-amd64`
+(or `pg15-amd64` for the retained PostgreSQL 15 path). The selected case runs
+one AMD row using the existing `TEST_RUNNER` repository variable. It skips
+installs and the unselected upgrade family. This mode cannot be combined with
+`trust_bundle`, is ignored for PR/push events, and reports only diagnostic
+success. Default `none` preserves all ordinary matrix entries and PG15 trigger
+rules. Dispatch is deliberate; no automatic retry or scheduling is added.

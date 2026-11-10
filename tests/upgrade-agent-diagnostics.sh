@@ -12,7 +12,7 @@ redact() {
   python3 -c '
 import re, sys
 text = sys.stdin.read()
-if re.search(r"authorization|bearer|basic|registry.?auth|dockerconfigjson|\bauth\b", text, re.IGNORECASE):
+if re.search(r"authorization|bearer|basic|registry[_. -]?(?:auth|password|credential|token|secret)|dockerconfigjson|\bauths?\b|identitytoken|accesstoken|://[^\s/@]+:[^\s/@]+@", text, re.IGNORECASE):
     print("Omitted authentication-bearing agent diagnostic")
 else:
     sys.stdout.write(text)

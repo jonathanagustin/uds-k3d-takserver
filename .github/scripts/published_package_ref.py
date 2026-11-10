@@ -2,7 +2,7 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Locate immutable published packages across the repository rename."""
+"""Locate published packages in the canonical, migrated registry namespace."""
 import re
 import sys
 
@@ -11,10 +11,8 @@ def published_package_ref(version):
     match = re.fullmatch(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version)
     if not match:
         raise ValueError('Expected a stable semantic version, optionally prefixed with v')
-    parsed = tuple(map(int, match.groups()))
-    namespace = "uds-k3d-takserver" if parsed < (0, 11, 0) else "uds-takserver"
     normalized = '.'.join(match.groups())
-    return f'oci://ghcr.io/jonathanagustin/{namespace}/takserver:{normalized}-upstream'
+    return f'oci://ghcr.io/jonathanagustin/uds-takserver/takserver:{normalized}-upstream'
 
 
 if __name__ == '__main__':

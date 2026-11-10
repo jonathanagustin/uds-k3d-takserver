@@ -1,5 +1,5 @@
 <!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
-<svg xmlns="http://www.w3.org/2000/svg" width="770" height="192" viewBox="0 0 770 192" role="img"><title>TAK on UDS — Trail relay concept</title><g transform="translate(0 8) scale(2.75)">  <path d="M14 16V40Q14 51 25 51H33Q44 51 44 40V24" fill="none" stroke="#F8FAFC" stroke-width="10" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="770" height="192" viewBox="0 0 770 192" role="img"><title>TAK on UDS — Unified route concept</title><g transform="translate(0 8) scale(2.75)">  <path d="M14 16V40Q14 51 25 51H33Q44 51 44 40V24" fill="none" stroke="#F8FAFC" stroke-width="10" stroke-linecap="round"/>
   <circle cx="14" cy="15" r="8" fill="#F8FAFC"/>
   <path fill="#22D3EE" d="m59 5-8 28-8-10-10-8Z"/></g><g xmlns="http://www.w3.org/2000/svg" id="tak" fill="#F8FAFC" transform="translate(180 140) scale(0.0625 -0.0625)"><path d="M10 1493H1386V1202H891V0H506V1202H10ZM2491 272H1889L1794 0H1407L1960 1493H2419L2972 0H2585ZM1985 549H2394L2190 1143ZM3170 1493H3555V948L4110 1493H4557L3838 786L4631 0H4149L3555 588V0H3170Z" /></g>
   <path xmlns="http://www.w3.org/2000/svg" d="M493.5625 44v100" stroke="#F8FAFC" stroke-opacity=".4" stroke-width="2" />

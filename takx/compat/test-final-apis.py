@@ -83,12 +83,13 @@ def main():
         candidates = [file, fixtures / 'directory', fixtures / 'symlink', fixtures / 'hardlink', Path('/dev/null')]
         manifest = work / 'stat.tsv'
         manifest.write_text(''.join(str(p) + '\t' + '\t'.join(map(str, identity(p))) + '\n' for p in candidates))
-        tests = [HERE / 'src/test/java/android/graphics/FinalGraphicsApiTest.java', HERE / 'src/test/java/android/system/UnixStatTest.java']
+        tests = [HERE / 'src/test/java/android/graphics/PaintRangeTest.java', HERE / 'src/test/java/android/graphics/FinalGraphicsApiTest.java', HERE / 'src/test/java/android/system/UnixStatTest.java']
         classes = work / 'classes'
         try:
             subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-sourcepath', str(HERE / 'src/main/java'),
                             '-d', str(classes), *map(str, tests)], check=True, timeout=60)
             subprocess.run(['java', '-Djava.awt.headless=true', '-cp', str(classes), 'android.graphics.FinalGraphicsApiTest'], check=True, timeout=30)
+            subprocess.run(['java', '-Djava.awt.headless=true', '-cp', str(classes), 'android.graphics.PaintRangeTest'], check=True, timeout=30)
             subprocess.run(['java', '-cp', str(classes), 'android.system.UnixStatTest', str(manifest), str(fixtures), str(permission_test).lower()], check=True, timeout=30)
             if cp:
                 test = HERE / 'src/test/java/com/atakmap/map/gdal/VsiFileHandlerTest.java'

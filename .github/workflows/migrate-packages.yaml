@@ -66,7 +66,7 @@ jobs:
           while IFS=$'\t' read -r tag digest; do
             gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver@${digest}" \
               --owner jonathanagustin \
-              --signer-workflow jonathanagustin/uds-k3d-takserver/.github/workflows/release.yaml \
+              --cert-identity-regex '^https://github[.]com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/[.]github/workflows/release[.]yaml@refs/(heads/main|tags/v[0-9]+[.][0-9]+[.][0-9]+)$' \
               --format json > "out/migration/provenance-source/${tag}.json"
           done < "${RUNNER_TEMP}/migration-releases.tsv"
 
@@ -85,7 +85,7 @@ jobs:
           while IFS=$'\t' read -r tag digest; do
             gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver@${digest}" \
               --owner jonathanagustin \
-              --signer-workflow jonathanagustin/uds-k3d-takserver/.github/workflows/release.yaml \
+              --cert-identity-regex '^https://github[.]com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/[.]github/workflows/release[.]yaml@refs/(heads/main|tags/v[0-9]+[.][0-9]+[.][0-9]+)$' \
               --format json > "out/migration/provenance-destination/${tag}.json"
           done < "${RUNNER_TEMP}/migration-releases.tsv"
 

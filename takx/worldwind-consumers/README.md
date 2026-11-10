@@ -42,6 +42,8 @@ python3 takx/worldwind-consumers/stage.py \
 The output must be absent. The tool verifies the exact HEAD, committed source
 hashes and consumed worktree bytes, rejects symlinked inputs, checks the patch hash,
 applies the actual patch to temporary copies and verifies every resulting hash.
+Every Git read and patch application has a 30-second timeout and disables lazy
+fetching (`GIT_NO_LAZY_FETCH=1`); missing local objects fail without fetching them.
 Unrelated worktree files do not cause rejection. The original checkout is untouched;
 failure does not publish a partial output. `staging-receipt.json` records all consumed
 and staged hashes. Nothing downloads, compiles or loads native code during staging.

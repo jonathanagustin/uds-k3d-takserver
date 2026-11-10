@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("consumer_stage", HERE / "stage.py")
@@ -47,6 +48,22 @@ class StagingGuards(unittest.TestCase):
         self.assertEqual((self.output / self.path).read_bytes(), b"new\n")
         self.assertEqual((self.repo / self.path).read_bytes(), b"old\n")
         self.assertEqual(receipt["sources"], self.lock["profiles"]["fixture"]["sources"])
+
+    def test_actual_git_calls_are_bounded_and_cannot_lazy_fetch(self):
+        original_env = os.environ.get("GIT_NO_LAZY_FETCH")
+        with patch.dict(os.environ, {"GIT_NO_LAZY_FETCH": "0"}):
+            with patch.object(MODULE.subprocess, "check_output",
+                              wraps=subprocess.check_output) as reads:
+                with patch.object(MODULE.subprocess, "run", wraps=subprocess.run) as runs:
+                    self.run_stage()
+            self.assertGreaterEqual(len(reads.call_args_list), 2)
+            self.assertGreaterEqual(len(runs.call_args_list), 2)
+            for call in [*reads.call_args_list, *runs.call_args_list]:
+                self.assertEqual(call.kwargs["timeout"], 30)
+                self.assertEqual(call.kwargs["env"]["GIT_NO_LAZY_FETCH"], "1")
+            self.assertEqual(os.environ["GIT_NO_LAZY_FETCH"], "0")
+        self.assertEqual(os.environ.get("GIT_NO_LAZY_FETCH"), original_env)
+        self.assertEqual((self.output / self.path).read_bytes(), b"new\n")
 
     def test_modified_consumed_source_rejected(self):
         (self.repo / self.path).write_bytes(b"changed\n")

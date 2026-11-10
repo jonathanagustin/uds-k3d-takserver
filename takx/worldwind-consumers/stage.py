@@ -5,6 +5,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,7 +18,8 @@ def digest(data):
 
 
 def git(repo, *args):
-    return subprocess.check_output(["git", "-C", str(repo), *args], stderr=subprocess.PIPE)
+    return subprocess.check_output(["git", "-C", str(repo), *args], stderr=subprocess.PIPE,
+                                   env=dict(os.environ, GIT_NO_LAZY_FETCH="1"), timeout=30)
 
 
 def stage(source, output, lock, patch):
@@ -57,7 +59,8 @@ def stage(source, output, lock, patch):
             path.write_bytes(data)
         for flags in (["--check"], []):
             subprocess.run(["git", "apply", *flags, str(frozen_patch)], cwd=staged,
-                           check=True, capture_output=True)
+                           check=True, capture_output=True, timeout=30,
+                           env=dict(os.environ, GIT_NO_LAZY_FETCH="1"))
         for entry in definition["sources"]:
             if digest((staged / entry["path"]).read_bytes()) != entry["staged_sha256"]:
                 raise ValueError("patched source hash mismatch")

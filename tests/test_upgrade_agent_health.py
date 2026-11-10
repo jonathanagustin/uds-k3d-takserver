@@ -39,6 +39,77 @@ class AgentHealthTests(unittest.TestCase):
             return json.dumps(objects[args[1]]).encode()
         return get, calls
 
+    def two_fixture(self):
+        objects = fixture()
+        original = objects['pod']
+        original['metadata']['ownerReferences'] = [{'kind': 'ReplicaSet', 'uid': 'set-uid', 'controller': True}]
+        second = copy.deepcopy(original)
+        second['metadata'].update(name='agent-hook-b', uid='second-uid')
+        second['status']['podIP'] = '10.42.0.4'
+        objects['podmap'] = {pod['metadata']['name']: pod for pod in (original, second)}
+        objects['pods'] = {'items': [original, second]}
+        objects['deployment'] = {'metadata': {'namespace': 'zarf', 'name': 'agent-hook', 'uid': 'deployment-uid', 'generation': 3},
+                                 'spec': {'replicas': 2}, 'status': {'replicas': 2, 'updatedReplicas': 2,
+                                 'readyReplicas': 2, 'availableReplicas': 2, 'observedGeneration': 3}}
+        objects['replicasets'] = {'items': [{'metadata': {'namespace': 'zarf', 'uid': 'set-uid',
+                                    'ownerReferences': [{'kind': 'Deployment', 'uid': 'deployment-uid', 'controller': True}]}}]}
+        objects['endpoints']['subsets'][0]['addresses'].append({'ip': '10.42.0.4', 'targetRef': {
+            'kind': 'Pod', 'namespace': 'zarf', 'name': 'agent-hook-b', 'uid': 'second-uid'}})
+        return objects
+
+    def strict_request(self, objects, response=None):
+        calls = []
+        def get(args, deadline):
+            calls.append(args)
+            if args[1].startswith('--raw='):
+                return response(args) if response else b'ok'
+            if args[1] == 'pod':
+                return json.dumps(objects['podmap'][args[2]]).encode()
+            return json.dumps(objects[args[1]]).encode()
+        return get, calls
+
+    def test_strict_two_requires_both_live_responses_and_owned_current_pods(self):
+        objects = self.two_fixture()
+        request, calls = self.strict_request(objects)
+        self.assertEqual(HEALTH.probe_once(100, request, require_two=True), 2)
+        raw = [args[1] for args in calls if args[1].startswith('--raw=')]
+        self.assertEqual(len(raw), 2)
+        self.assertTrue(any('agent-hook-a:' in value for value in raw))
+        self.assertTrue(any('agent-hook-b:' in value for value in raw))
+        self.assertTrue(any(args[1] == 'replicasets' for args in calls))
+
+    def test_strict_two_refuses_partial_old_terminating_or_foreign_replicas(self):
+        for case in ('one-desired', 'one-ready', 'missing-endpoint', 'second-unready', 'terminating', 'old-generation', 'foreign-owner'):
+            with self.subTest(case=case):
+                objects = self.two_fixture()
+                if case == 'one-desired': objects['deployment']['spec']['replicas'] = 1
+                elif case == 'one-ready': objects['deployment']['status']['readyReplicas'] = 1
+                elif case == 'missing-endpoint': objects['endpoints']['subsets'][0]['addresses'].pop()
+                elif case == 'second-unready': objects['podmap']['agent-hook-b']['status']['conditions'] = []
+                elif case == 'terminating': objects['podmap']['agent-hook-b']['metadata']['deletionTimestamp'] = 'now'
+                elif case == 'old-generation': objects['deployment']['status']['observedGeneration'] = 2
+                else: objects['replicasets']['items'][0]['metadata']['ownerReferences'][0]['uid'] = 'foreign-deployment'
+                request, _ = self.strict_request(objects)
+                with self.assertRaises(HEALTH.Unavailable):
+                    HEALTH.probe_once(100, request, require_two=True)
+
+    def test_strict_two_refuses_second_live_failure_or_endpoint_drift(self):
+        for mode in ('bad-second-response', 'changed-endpoints'):
+            objects = self.two_fixture()
+            def response(args):
+                if 'agent-hook-b:' in args[1]:
+                    if mode == 'bad-second-response': return b'not-ok'
+                    objects['endpoints']['subsets'][0]['addresses'].pop()
+                return b'ok'
+            request, _ = self.strict_request(objects, response)
+            with self.assertRaises(HEALTH.Unavailable):
+                HEALTH.probe_once(100, request, require_two=True)
+
+    def test_explicit_strict_cli_selects_two_replica_contract(self):
+        with patch.object(HEALTH, 'probe_once', return_value=2) as probe, patch('sys.stdout'):
+            self.assertEqual(HEALTH.main(['--require-two-replicas']), 0)
+            self.assertTrue(probe.call_args.kwargs['require_two'])
+
     def test_live_request_uses_validated_pod_and_fixed_https_path(self):
         get, calls = self.request(fixture())
         self.assertEqual(HEALTH.probe_once(100, get), 1)

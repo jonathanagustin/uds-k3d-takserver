@@ -6,7 +6,7 @@ bounded Deployment/ready-Endpoints/port metadata waits, then performs a live
 HTTPS availability request. Restored readiness objects alone can describe old
 state; the port assertion only checks metadata and does not send HTTP.
 
-`live-health.py` reads only `zarf/agent-hook` Service and Endpoints, resolves the
+By default, `live-health.py` reads only `zarf/agent-hook` Service and Endpoints, resolves the
 ready Pod references, and checks their namespace, name, UID, IP, Service labels,
 Running/Ready state and target port 8443. It checks every ready target (at most
 eight), ignores `notReadyAddresses`, and rereads Pod identity after each request.
@@ -76,3 +76,36 @@ wrong namespaces/ports/labels/IPs, readiness, exact bodies, API failures,
 timeouts, total retry bounds and original bundle insertion contracts. Unit CI
 already discovers `test_upgrade_*.py`. Package creation and archived-helper bytes
 can be checked without a cluster. These fixtures are not a live-cluster proof.
+
+## Focused two-replica diagnostic
+
+The focused manual airgap experiment can select `CI_AGENT_REPLICAS=2` when
+running `fit-runner.sh`. Only `1` and `2` are accepted, before cluster commands;
+unset keeps the ordinary default of `1`. Two is the upstream agent chart
+replica count. This experiment preserves per-container requests, limits and
+Kubernetes probes. It tests resilience to losing one admission Pod on the
+current four-CPU runners; both Pods still share one node.
+
+After the selected airgap application checks and successful firewall restore,
+run:
+
+```bash
+python3 tests/upgrade-agent-gate/live-health.py --require-two-replicas
+```
+
+This stricter opt-in mode requires desired/current/updated/Ready/available
+replicas all equal two, current observed generation, two selected
+nonterminating Ready Pods owned through ReplicaSets by that Deployment, and
+exactly those ready endpoints. Both current Pods must return exactly `ok` over
+HTTPS; Pod, Deployment and endpoint identities must survive the checks. A
+missing or unhealthy second Pod fails. Requests retain the existing bounded
+read-only deadline; no rollout restart, blind retry, probe relaxation or health
+simulation is added.
+
+The ordinary CI path stays at one replica until the focused experiment supplies
+live evidence. Passing the application and two-replica gate would support a
+separately reviewed canonical default change; it would not identify the cause
+of exit code 2 or protect against a node-wide failure.
+
+The strict mode additionally needs get access to the Deployment and list access
+to Pods and ReplicaSets in `zarf`. It grants no permissions.

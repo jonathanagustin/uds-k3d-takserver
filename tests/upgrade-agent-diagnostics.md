@@ -7,6 +7,13 @@ It reads at most two k3d nodes and two agent container attempts per node, newest
 first, including exited containers. Both API logs and CRI logs use source-side
 80-line limits; each returned stream is sanitized before any local tail/output.
 No cluster mutation, Docker inspection, environment dump or Secret read occurs.
+Docker discovery, CRI listing and CRI log retrieval report their exit status.
+Successful discovery with no eligible nodes, invalid CRI JSON/schema, no matching
+agent attempts, and a successful empty log stream are distinct outcomes. CRI
+selection reports only aggregate label-presence/match counts; it does not dump
+container labels. Failed command output is sanitized as a whole before an
+eight-line local tail. The final wrapper retains all individually bounded
+streams, so its former 120-line tail cannot discard the first/newest CRI log.
 
 Pod metadata includes image, explicitly configured command/args, restart count,
 container IDs, termination reason, exit code and lifecycle timestamps. An
@@ -30,7 +37,7 @@ rotated log layout. Source contracts:
 
 Fixtures: `python3 -m unittest discover -s tests -p test_upgrade_agent_diagnostics.py`.
 These establish capture behavior and redaction; they do not reproduce the agent
-crash or establish its cause. The outer deadline may truncate evidence when
+failure or establish its cause. The outer deadline may truncate evidence when
 multiple commands are slow. No unchanged CI retry is implied.
 
 A manually dispatched Test workflow can select `diagnostic_case=upgrade-amd64`

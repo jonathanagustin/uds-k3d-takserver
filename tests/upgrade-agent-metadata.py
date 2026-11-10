@@ -33,7 +33,8 @@ if sys.argv[1] == 'pod':
                 print(json.dumps({field: {kind: {key: state[key] for key in
                     ('containerID', 'exitCode', 'signal', 'reason', 'startedAt', 'finishedAt')
                     if key in state}}}))
-elif sys.argv[1] == 'cri':
+elif sys.argv[1] in ('cri', 'cri-summary'):
+    assert isinstance(value.get('containers'), list), 'missing CRI containers array'
     matches = []
     for container in value.get('containers', []):
         labels = container.get('labels', {})
@@ -42,6 +43,16 @@ elif sys.argv[1] == 'cri':
                 and 'agent-hook' in labels.get('io.kubernetes.pod.name', '')
                 and re.fullmatch('[a-f0-9]{12,64}', container.get('id', ''))):
             matches.append(container)
+    if sys.argv[1] == 'cri-summary':
+        containers = value['containers']
+        counts = {name: sum(key in container.get('labels', {}) for container in containers)
+                  for name, key in (('namespace_labels', 'io.kubernetes.pod.namespace'),
+                                    ('container_labels', 'io.kubernetes.container.name'),
+                                    ('pod_labels', 'io.kubernetes.pod.name'))}
+        print('Node CRI candidate selection:', json.dumps({
+            'containers': len(containers), **counts, 'agent_matches': len(matches),
+            'selected': min(len(matches), 2)}))
+        sys.exit(0)
     # Include exited predecessors, newest first, with a strict per-node cap.
     for container in sorted(matches, key=lambda item: int(item.get('createdAt', 0)), reverse=True)[:2]:
         print(container['id'], json.dumps({

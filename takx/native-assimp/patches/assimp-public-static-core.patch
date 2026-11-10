@@ -1,0 +1,75 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -308,34 +308,29 @@
+     find_package( IrrXML REQUIRED )
+ ENDIF( SYSTEM_IRRXML )
+ 
+-# Search for external dependencies, and build them from source if not found
+-# Search for zlib
+-IF ( NOT ASSIMP_BUILD_ZLIB )
+-    find_package(ZLIB)
+-ENDIF( NOT ASSIMP_BUILD_ZLIB )
+-
+-IF( NOT ZLIB_FOUND )
+-  message(STATUS "compiling zlib from souces")
+-  INCLUDE(CheckIncludeFile)
+-  INCLUDE(CheckTypeSize)
+-  INCLUDE(CheckFunctionExists)
+-  # compile from sources
+-  add_subdirectory(contrib/zlib)
+-  SET(ZLIB_FOUND 1)
+-  SET(ZLIB_LIBRARIES zlibstatic)
+-  SET(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contrib/zlib ${CMAKE_CURRENT_BINARY_DIR}/contrib/zlib)
+-else(NOT ZLIB_FOUND)
+-  ADD_DEFINITIONS(-DASSIMP_BUILD_NO_OWN_ZLIB)
+-if(WIN32)
+-  SET(ZLIB_LIBRARIES_LINKED -lzlibwapi)
+-else(WIN32)
+-  SET(ZLIB_LIBRARIES_LINKED -lz)
+-ENDIF(WIN32)
+-ENDIF(NOT ZLIB_FOUND)
+-INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR})
+-
+-# Search for unzip
+-use_pkgconfig(UNZIP minizip)
++# Public Linux source profile: use only the separately verified static zlib.
++if(NOT PUBLIC_ZLIB_PREFIX)
++  message(FATAL_ERROR "PUBLIC_ZLIB_PREFIX must name the source-built zlib prefix")
++endif()
++get_filename_component(_public_zlib_prefix "${PUBLIC_ZLIB_PREFIX}" REALPATH)
++find_path(PUBLIC_ZLIB_INCLUDE NAMES zlib.h
++  PATHS "${_public_zlib_prefix}/include" NO_DEFAULT_PATH REQUIRED)
++find_file(PUBLIC_ZLIB_LIBRARY NAMES libz.a
++  PATHS "${_public_zlib_prefix}/lib" NO_DEFAULT_PATH REQUIRED)
++get_filename_component(_public_zlib_include "${PUBLIC_ZLIB_INCLUDE}" REALPATH)
++get_filename_component(_public_zlib_library "${PUBLIC_ZLIB_LIBRARY}" REALPATH)
++if(NOT _public_zlib_include STREQUAL "${_public_zlib_prefix}/include" OR
++   NOT _public_zlib_library STREQUAL "${_public_zlib_prefix}/lib/libz.a")
++  message(FATAL_ERROR "zlib headers/library must remain inside the verified prefix")
++endif()
++set(ZLIB_INCLUDE_DIR "${_public_zlib_include}")
++set(ZLIB_LIBRARIES "${_public_zlib_library}")
++set(ZLIB_LIBRARIES_LINKED "${_public_zlib_library}")
++add_definitions(-DASSIMP_BUILD_NO_OWN_ZLIB)
++include_directories(${ZLIB_INCLUDE_DIR})
++
++# Build the genuine bundled unzip implementation, without host minizip discovery.
++set(UNZIP_FOUND FALSE)
+ 
+ IF ( ASSIMP_NO_EXPORT )
+   ADD_DEFINITIONS( -DASSIMP_BUILD_NO_EXPORT)
+@@ -550,6 +545,8 @@
+   ENDIF(MSVC12 OR MSVC14)
+ ENDIF (WIN32)
+ 
++option(ASSIMP_BUILD_JASSIMP "Build the real jassimp JNI library" ON)
++if(ASSIMP_BUILD_JASSIMP)
+ add_library (jassimp SHARED port/jassimp/jassimp-native/src/jassimp.cpp)
+ target_link_libraries (jassimp assimp)
+ if(NOT ANDROID AND DEFINED ENV{JAVA_HOME})
+@@ -570,3 +567,5 @@
+   find_library(log-lib log)
+   target_link_libraries(jassimp ${log-lib})
+ endif(ANDROID)
++
++endif(ASSIMP_BUILD_JASSIMP)

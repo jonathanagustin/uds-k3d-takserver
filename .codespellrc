@@ -1,3 +1,4 @@
 [codespell]
-skip = ./bench/fixtures/tester/tak_tester.py.txt,*.tar,*.tar.zst,pnpm-lock.yaml,build,node_modules,.git,zarf-sbom,tests/.playwright,dist,package-lock.json,LICENSE,./upstream,docs-site/dist,docs-site/.astro,docs-site/src/content/docs,docs-site/test-results,docs-site/playwright-report,docs-site/blob-report,./pepr/mutation/reports/*,./pepr/mutation/.stryker-tmp/*,./takx/compat/mutation/target/*
+# Preserve the original spelling in this checksum-pinned upstream patch context.
+skip = ./bench/fixtures/tester/tak_tester.py.txt,*.tar,*.tar.zst,pnpm-lock.yaml,build,node_modules,.git,zarf-sbom,tests/.playwright,dist,package-lock.json,LICENSE,./upstream,docs-site/dist,docs-site/.astro,docs-site/src/content/docs,docs-site/test-results,docs-site/playwright-report,docs-site/blob-report,./pepr/mutation/reports/*,./pepr/mutation/.stryker-tmp/*,./takx/compat/mutation/target/*,./takx/native-assimp/patches/assimp-public-static-core.patch
 ignore-words-list = AKS,aks,intoto,thirdparty,inMutable

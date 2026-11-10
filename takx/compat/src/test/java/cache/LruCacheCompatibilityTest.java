@@ -64,6 +64,19 @@ public final class LruCacheCompatibilityTest {
         check(computed.createCount() == 1 && computed.hitCount() == 1 && computed.missCount() == 1);
     }
 
+    private static void creationAndReplacementContracts() {
+        LruCache<String, String> cache = new LruCache<String, String>(1) {
+            @Override protected String create(String key) { return key; }
+        };
+        check(cache.get("a").equals("a"));
+        check(cache.get("b").equals("b"));
+        check(cache.size() == 1 && cache.snapshot().keySet().equals(java.util.Collections.singleton("b")));
+        check(cache.createCount() == 2 && cache.evictionCount() == 1);
+        check(cache.put("b", "replacement").equals("b"));
+        check(cache.get("b").equals("replacement") && cache.get("b").equals("replacement"));
+        check(cache.toString().equals("LruCache[maxSize=1,hits=2,misses=2,hitRate=50%]"));
+    }
+
     private static void invalidAndWeighted() {
         throwsType(IllegalArgumentException.class, () -> new LruCache<>(0));
         throwsType(IllegalArgumentException.class, () -> new LruCache<>(-1));
@@ -199,7 +212,7 @@ public final class LruCacheCompatibilityTest {
     }
 
     public static void main(String[] args) throws Exception {
-        orderingAndStats(); invalidAndWeighted(); resourceLifetime(); createRaceAndCallbacks();
+        orderingAndStats(); creationAndReplacementContracts(); invalidAndWeighted(); resourceLifetime(); createRaceAndCallbacks();
         System.out.println("PASS LruCache compatibility and real file-channel lifetime: " + checks + " checks");
     }
 }

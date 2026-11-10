@@ -51,6 +51,7 @@ upstream/takx
 .github/workflows/benchmark.yaml
 .github/workflows/full-core.yaml
 .github/workflows/unit-tests.yaml
+.github/workflows/mutation.yaml
 .github/workflows/atak.yaml
 .github/workflows/atak-vm.yaml
 .github/workflows/atak-e2e.yaml
@@ -86,6 +87,7 @@ tests/demo/**
 tests/test_*
 tests/playwright.demo.config.ts
 pepr/capabilities/*.test.ts
+pepr/mutation/**
 pepr/scripts/coverage-summary.mjs
 EOF
 }

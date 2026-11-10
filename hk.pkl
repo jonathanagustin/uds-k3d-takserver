@@ -23,7 +23,8 @@ steps {
     glob = List("**/Dockerfile", ".hadolint.yaml")
   }
   ["shell"] {
-    check = "uds run lint:shell --no-progress --with exclusion=build"
+    // Dependency trees and mutation sandboxes contain third-party shell sources.
+    check = "uds run lint:shell --no-progress --with 'exclusion=build pepr/node_modules pepr/mutation/node_modules pepr/mutation/.stryker-tmp takx/compat/mutation/target'"
     glob = List("tasks.yaml", "tasks/**/*.yaml", ".github/workflows/**/*.yaml", "zarf.yaml", "common/zarf.yaml")
   }
   ["actionlint"] {

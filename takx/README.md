@@ -56,7 +56,8 @@ The successful native investigation used the isolated quictls `libssl.so.81.3` /
 The separate [mutual TLS loopback smoke](TLS.md) exercises real source-built
 transport with ephemeral certificates, configured DNS/IP SAN matching, DNS SNI,
 CoT delivery and wrong-name/wrong-CA/client-certificate rejection. It also
-records an independent pinned-curl SIGPIPE disposition defect after shutdown.
+checks SIGPIPE disposition preservation through shutdown using a separately
+pinned upstream curl 8.9.1 correction. See [dependency patch provenance](dependency-patches/README.md).
 Loopback identity acceptance does not establish TAK Server interoperability,
 dependency security or full client compatibility.
 

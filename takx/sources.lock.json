@@ -90,5 +90,19 @@
       "source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
       "commoncommo_version": "1.17.2"
     }
+  ],
+  "dependency_patches": [
+    {
+      "path": "dependency-patches/curl-8.9.1-sigpipe-init.patch",
+      "sha256": "e8fd1edee44adda7bba1ca7c43ec0b4e1c8dc978ab0e560d4d0109541f7cdbf0",
+      "archive": "takthirdparty/distfiles/curl.tar.bz2",
+      "archive_sha256": "b57285d9e18bf12a5f2309fc45244f6cf9cb14734e7454121099dd0a83d669a3",
+      "version": "8.9.1",
+      "source": "curl/lib/sigpipe.h",
+      "before_sha256": "462368e14434d51297a2e68385f3c66b6d62aca263021c91fef566242f0707fd",
+      "after_sha256": "814a113a63f560c743de1349efdb3ce30ab11efcaa95521831593410a5cf12ce",
+      "upstream_commit": "3eec5afbd0b6377eca893c392569b2faf094d970",
+      "upstream_url": "https://github.com/curl/curl/commit/3eec5afbd0b6377eca893c392569b2faf094d970"
+    }
   ]
 }

@@ -60,6 +60,10 @@ if [[ "${mode}" != --smoke-only ]]; then
     # Serial package installs avoid the upstream multi-output OpenSSL install
     # race. No more than two compiler jobs run in any following stage.
     for package in zlib libiconv libxml2 openssl nghttp2 curl ngtcp2 libmicrohttpd; do
+      if [[ "${package}" == curl ]]; then
+        run "${make_source[@]}" -j1 "${output}/curl/.unpacked"
+        "${state[@]}" stage-dependency-patches
+      fi
       echo "Building ${package}"
       run "${make_source[@]}" -j1 "${package}"
     done
@@ -90,7 +94,10 @@ fi
 # reenter initialization; constructing Commo follows the intended contract.
 mkdir -p "${output}/smoke-classes"
 "${JAVA_HOME}/bin/javac" --release 17 -classpath "${output}/java/jcommoncommo.jar" \
-  -d "${output}/smoke-classes" "${here}/CommonCommoSmoke.java" "${here}/CommonCommoRoutingSmoke.java"
+  -d "${output}/smoke-classes" "${here}/CommonCommoSmoke.java" "${here}/CommonCommoRoutingSmoke.java" "${here}/CommonCommoSignalSmoke.java"
+LD_LIBRARY_PATH="${output}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+  timeout 30 "${JAVA_HOME}/bin/java" "-Djava.library.path=${output}/lib" \
+  -cp "${output}/java/jcommoncommo.jar:${output}/smoke-classes" CommonCommoSignalSmoke
 LD_LIBRARY_PATH="${output}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
   timeout 30 "${JAVA_HOME}/bin/java" "-Djava.library.path=${output}/lib" \
   -cp "${output}/java/jcommoncommo.jar:${output}/smoke-classes" CommonCommoSmoke

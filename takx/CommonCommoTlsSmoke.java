@@ -94,6 +94,12 @@ public final class CommonCommoTlsSmoke {
     }
     private static void positive(Path directory, String password, String host) throws Exception {
         Commo commo = commo();
+        CountDownLatch down = new CountDownLatch(1);
+        commo.addInterfaceStatusListener(new InterfaceStatusListener() {
+            public void interfaceUp(NetInterface iface) { }
+            public void interfaceDown(NetInterface iface) { down.countDown(); }
+            public void interfaceError(NetInterface iface, NetInterfaceErrorCode code) { }
+        });
         try {
             String incoming = "tls-peer-" + UUID.randomUUID();
             CountDownLatch discovered = new CountDownLatch(1);
@@ -121,7 +127,11 @@ public final class CommonCommoTlsSmoke {
                     require(peer.received.toString().contains(outgoing), "CoT did not traverse the authenticated TLS stream");
                     require(peer.received.toString().contains("tls-smoke-user"), "verified stream did not send its authentication document");
                     require(peer.failure.get() == null, "TLS peer failed unexpectedly");
-                    System.out.println("PASS " + host + " identity, exact client authentication, SNI policy and received/discovered/routed CoT");
+                    peer.closing = true;
+                    peer.transport.setSoLinger(true, 0);
+                    peer.transport.close();
+                    require(down.await(10, TimeUnit.SECONDS), "native TLS interface did not report abrupt peer close");
+                    System.out.println("PASS " + host + " identity, exact client authentication, SNI policy, received/discovered/routed CoT and abrupt peer close");
                 } finally { commo.removeStreamingInterface(stream); }
             }
         } finally { commo.shutdown(); }

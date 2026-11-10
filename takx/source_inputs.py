@@ -77,6 +77,50 @@ def verify_patches(lock_path, lock):
     return patches
 
 
+def verify_dependency_patches(lock_path, lock):
+    result = []
+    for entry in lock.get("dependency_patches", []):
+        relative = Path(entry["path"])
+        if relative.is_absolute() or ".." in relative.parts or relative.parts[:1] != ("dependency-patches",):
+            raise ValueError("Unexpected dependency patch path")
+        archive = next((item for item in lock["archives"] if item["path"] == entry["archive"]), None)
+        if (archive is None or archive["version"] != entry["version"]
+                or archive["sha256"] != entry["archive_sha256"]):
+            raise ValueError("Dependency patch archive/version mismatch")
+        # This intentionally bounded mechanism currently supports only curl's
+        # one-file upstream signal-state fix, after the official TAK patch.
+        if entry["source"] != "curl/lib/sigpipe.h":
+            raise ValueError("Unexpected dependency patch source")
+        path = lock_path.parent / relative
+        if path.is_symlink() or path.parent.is_symlink() or digest(path) != entry["sha256"]:
+            raise ValueError("Dependency patch hash mismatch")
+        result.append((entry, path))
+    return result
+
+
+def dependency_source_state(output, entry):
+    relative = Path(entry["source"])
+    path = output / relative
+    if any((output / Path(*relative.parts[:index])).is_symlink()
+           for index in range(1, len(relative.parts) + 1)) or not path.is_file():
+        raise ValueError("Dependency source is missing or symlinked")
+    return digest(path)
+
+
+def stage_dependency_patches(output, lock_path, lock, apply=False):
+    records = {}
+    for entry, patch in verify_dependency_patches(lock_path, lock):
+        current = dependency_source_state(output, entry)
+        if apply and current == entry["before_sha256"]:
+            subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch.resolve())],
+                           cwd=output / "curl", check=True, timeout=30)
+            current = dependency_source_state(output, entry)
+        if current != entry["after_sha256"]:
+            raise ValueError("Dependency source does not match the locked patched bytes")
+        records[entry["source"]] = current
+    return records
+
+
 def stage_patches(source, output, lock_path, lock):
     patches = verify_patches(lock_path, lock)
     archive = subprocess.check_output(["git", "-C", str(source), "archive", "HEAD", "commoncommo"])
@@ -161,6 +205,8 @@ def cache_key(lock_path, source, output, toolchain):
     verify_patches(lock_path, lock)
     native_inputs = {field: lock[field] for field in ("atak_source", "commoncommo_version", "archives")}
     native_inputs["patches"] = lock.get("patches", [])
+    verify_dependency_patches(lock_path, lock)
+    native_inputs["dependency_patches"] = lock.get("dependency_patches", [])
     recipe = Path(__file__).with_name("build-commoncommo.sh")
     payload = {
         "native_inputs": native_inputs, "recipe": digest(recipe), "source_tools": digest(Path(__file__)),
@@ -246,7 +292,7 @@ def complete_cache(output, key):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("verify", "cache-check", "cache-start", "cache-write", "stage-patches"))
+    parser.add_argument("command", choices=("verify", "cache-check", "cache-start", "cache-write", "stage-patches", "stage-dependency-patches"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--lock", type=Path, default=Path(__file__).with_name("sources.lock.json"))
     parser.add_argument("--cache", type=Path)
@@ -257,6 +303,7 @@ def main():
     lock = json.loads(args.lock.read_text())
     verify_source(args.source, lock)
     verify_patches(args.lock, lock)
+    verify_dependency_patches(args.lock, lock)
     if args.command == "verify":
         if args.cache is None:
             parser.error("verify requires --cache")
@@ -267,6 +314,9 @@ def main():
         parser.error("cache commands require --output")
     if args.command == "stage-patches":
         stage_patches(args.source, args.output, args.lock, lock)
+        return
+    if args.command == "stage-dependency-patches":
+        stage_dependency_patches(args.output, args.lock, lock, apply=True)
         return
     key = cache_key(args.lock, args.source, args.output, args.toolchain)
     if args.command == "cache-check":

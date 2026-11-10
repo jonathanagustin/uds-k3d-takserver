@@ -99,19 +99,40 @@ and [SNI documentation](https://docs.openssl.org/3.0/man3/SSL_CTX_set_tlsext_ser
 No permissive trust manager, validation-disable flag, resolved-IP substitution,
 plaintext fallback or process-wide signal-ignore wrapper is added.
 
-## Separate native dependency blocker
+## Separately pinned curl signal fix
 
-The source investigation also found a pre-existing signal-handling defect in
-pinned curl 8.9.1. In both the original routing-only library and the hostname
-patch build, Commo.shutdown reaches curl_multi_cleanup/connc_close_all and
-replaces the JVM's caught SIGPIPE disposition with SIG_DFL. `/proc/self/status`
-observations and a raw-argument strace identify that transition; the observed
-crash is a later JSSE close-notify write through libnio, not the hostname check.
-The owned transport makes rejected-peer cleanup deterministic; it does not fix
-this library-wide defect or establish that other post-shutdown writes are safe.
-A separately pinned dependency fix and signal-preservation regression remain
-necessary before accepting a desktop runtime. The hostname patch changes no
-signal policy and no earlier native checkpoint is rewritten.
+The source investigation found a pre-existing signal-handling defect in curl
+8.9.1. Both the original routing-only library and the hostname-only build let
+Commo.shutdown reach curl_multi_cleanup/connc_close_all and replace the JVM's
+caught SIGPIPE disposition with SIG_DFL. Read-only `/proc/self/status`
+observations and raw-argument strace identified that transition; the observed
+crash was a later JSSE close-notify write through libnio.
+
+The separate dependency patch backports the exact one-line upstream correction
+[3eec5afbd0b6377eca893c392569b2faf094d970](https://github.com/curl/curl/commit/3eec5afbd0b6377eca893c392569b2faf094d970):
+initialize `sigpipe_ignore.no_signal` to TRUE. This makes the first apply save
+and temporarily ignore the existing handler, so restore reinstates the real
+JVM handler instead of a zero-initialized default. No Java or application signal
+handler is installed. This remains **curl 8.9.1 plus an explicit upstream patch**,
+not a current curl release or acceptance of its other security properties.
+
+The lock binds the patch to the exact curl archive/version and before/after
+`lib/sigpipe.h` hashes. The native recipe applies it after the official TAK
+unpack/patch step and before curl configuration/compilation. Resumption accepts
+only the exact original or already-patched file; altered or symlinked files fail.
+The dependency patch participates in the build-cache fingerprint. The standalone
+runner verifies patched source bytes and records the actual static curl archive,
+JNI, runtime closure and patch hashes. As with other local smoke receipts, this
+is a trusted-local incremental build proof, not a hermetic build attestation.
+
+`CommonCommoSignalSmoke` reads the Linux SIGPIPE caught/ignored/blocked masks
+before native initialization and after three construction/shutdown cycles. It
+requires the ordinary JVM caught, unblocked disposition to remain unchanged,
+then checks a real reset-peer Java write fails with SocketException instead of
+terminating the JVM. The TLS smoke also checks abrupt peer closure is reported
+by the native interface after authenticated bidirectional traffic. All chain,
+client-certificate, identity, SNI and routing checks still run. Earlier failing
+prefixes and receipts remain separate; they are not rewritten as successful.
 
 ## Compatibility boundary
 

@@ -89,6 +89,7 @@ def main():
     lock = json.loads(lock_path.read_text())
     INPUTS.verify_source(source, lock)
     INPUTS.verify_patches(lock_path, lock)
+    dependency_source = INPUTS.stage_dependency_patches(prefix, lock_path, lock)
     for entry in lock['archives']:
         INPUTS.check_archive(source / entry['path'], entry)
     java_home = Path(os.environ['JAVA_HOME'])
@@ -107,14 +108,14 @@ def main():
             if 'not found' in closure:
                 raise ValueError('native runtime dependency is missing')
             dependency_files = sorted(set(re.findall(r'=> (/\S+)', closure)))
-            artifact_files = [prefix / name for name in INPUTS.ARTIFACTS]
+            artifact_files = [prefix / name for name in (*INPUTS.ARTIFACTS, 'lib/libcurl.a')]
             artifact_records = {str(path): INPUTS.digest(path) for path in artifact_files}
             runtime_records = {name: INPUTS.digest(Path(name).resolve()) for name in dependency_files}
             classes = work / 'classes'
             run('compile real transport smokes', [str(java_home / 'bin/javac'), '--release', '17', '-cp', str(prefix / 'java/jcommoncommo.jar'),
-                 '-d', str(classes), *[str(HERE / (name + '.java')) for name in ('CommonCommoSmoke', 'CommonCommoRoutingSmoke', 'CommonCommoTlsSmoke')]])
+                 '-d', str(classes), *[str(HERE / (name + '.java')) for name in ('CommonCommoSmoke', 'CommonCommoRoutingSmoke', 'CommonCommoTlsSmoke', 'CommonCommoSignalSmoke')]])
             outcomes = {}
-            for name, limit in [('CommonCommoSmoke', 30), ('CommonCommoRoutingSmoke', 60)]:
+            for name, limit in [('CommonCommoSignalSmoke', 30), ('CommonCommoSmoke', 30), ('CommonCommoRoutingSmoke', 60)]:
                 outcomes[name] = run(name, [str(java_home / 'bin/java'), '-Djava.library.path=' + str(prefix / 'lib'),
                                            '-cp', str(prefix / 'java/jcommoncommo.jar') + ':' + str(classes), name], env, limit)
                 print(outcomes[name], end='')
@@ -125,11 +126,11 @@ def main():
             # Detect output replacement during this bounded experiment.
             if any(INPUTS.digest(Path(name)) != value for name, value in artifact_records.items()):
                 raise ValueError('native artifact changed during the smoke')
-            report = {'sourceRevision': lock['atak_source']['revision'], 'sourceLockSHA256': INPUTS.digest(lock_path), 'patches': lock['patches'], 'compiledSourceSHA256': source_records,
-                      'smokeSourceSHA256': {name: INPUTS.digest(HERE / (name + '.java')) for name in ('CommonCommoSmoke', 'CommonCommoRoutingSmoke', 'CommonCommoTlsSmoke')}, 'runnerSHA256': INPUTS.digest(Path(__file__)), 'nativeArtifactsSHA256': artifact_records, 'runtimeClosureSHA256': runtime_records, 'java': require_version.strip(),
+            report = {'sourceRevision': lock['atak_source']['revision'], 'sourceLockSHA256': INPUTS.digest(lock_path), 'patches': lock['patches'], 'dependencyPatches': lock.get('dependency_patches', []), 'compiledDependencySourceSHA256': dependency_source, 'compiledSourceSHA256': source_records,
+                      'smokeSourceSHA256': {name: INPUTS.digest(HERE / (name + '.java')) for name in ('CommonCommoSmoke', 'CommonCommoRoutingSmoke', 'CommonCommoTlsSmoke', 'CommonCommoSignalSmoke')}, 'runnerSHA256': INPUTS.digest(Path(__file__)), 'nativeArtifactsSHA256': artifact_records, 'runtimeClosureSHA256': runtime_records, 'java': require_version.strip(),
                       'openssl': run('OpenSSL version', ['openssl', 'version']).strip(), 'outcomes': outcomes,
                       'scope': 'incremental source/runtime proof, not completed-cache attestation; chain and endpoint-identity verified SSL streaming mTLS on loopback',
-                      'hostnameVerification': True, 'dnsSni': True, 'identityScope': 'SSL streaming only; configured DNS SAN or literal IPv4 SAN; no CN fallback', 'takServerInteroperability': False, 'fullTakxAcceptance': False}
+                      'sigpipeDispositionPreserved': True, 'hostnameVerification': True, 'dnsSni': True, 'identityScope': 'SSL streaming only; configured DNS SAN or literal IPv4 SAN; no CN fallback', 'takServerInteroperability': False, 'fullTakxAcceptance': False}
             with args.report.open('x') as output:
                 json.dump(report, output, indent=2)
                 output.write('\n')

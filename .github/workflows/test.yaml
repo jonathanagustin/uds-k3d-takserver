@@ -105,7 +105,6 @@ permissions:
   contents: read
   packages: read
   pull-requests: read
-  id-token: write
 
 concurrency:
   # A newer pull request push or main push cancels the older run of this

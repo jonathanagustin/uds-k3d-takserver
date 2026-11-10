@@ -79,11 +79,11 @@ class BaselineTests(unittest.TestCase):
             [release("v0.6.0"), release("v0.7.0"), release("v0.7.1")], pin="v0.6.0",
         )
         self.assertEqual(result["tag"], "v0.6.0")
-        self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver:0.6.0-upstream")
+        self.assertEqual(result["package"], "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:0.6.0-upstream")
 
-    def test_registry_namespace_tracks_the_first_renamed_release(self):
+    def test_registry_namespace_uses_migrated_historical_packages(self):
         self.git.side_effect = self.valid_git
-        for version, namespace in (("0.10.0", "uds-k3d-takserver"),
+        for version, namespace in (("0.10.0", "uds-takserver"),
                                    ("0.11.0", "uds-takserver"),
                                    ("1.10.0", "uds-takserver")):
             with self.subTest(version=version):

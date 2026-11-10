@@ -1,7 +1,7 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Published demo and upgrade consumers share numeric registry selection."""
+"""Published demo and upgrade consumers share canonical registry selection."""
 import importlib.util
 import os
 from pathlib import Path
@@ -14,12 +14,11 @@ SCRIPT = ROOT / '.github/scripts/published_package_ref.py'
 SPEC = importlib.util.spec_from_file_location('published_ref', SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
-OLD = 'uds-' + 'k3d-takserver'
 
 
 class PublishedPackageTests(unittest.TestCase):
-    def test_numeric_boundary_and_cli_use_real_published_namespaces(self):
-        for version, namespace in [('0.9.1', OLD), ('0.10.0', OLD), ('v0.10.0', OLD),
+    def test_stable_versions_and_cli_use_the_migrated_namespace(self):
+        for version, namespace in [('0.9.1', 'uds-takserver'), ('0.10.0', 'uds-takserver'), ('v0.10.0', 'uds-takserver'),
                                    ('0.11.0', 'uds-takserver'), ('1.10.0', 'uds-takserver')]:
             with self.subTest(version=version):
                 expected = f'oci://ghcr.io/jonathanagustin/{namespace}/takserver:{version.removeprefix("v")}-upstream'

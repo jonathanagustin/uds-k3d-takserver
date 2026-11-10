@@ -53,6 +53,8 @@ upstream/takx
 .github/workflows/atak-vm.yaml
 .github/workflows/atak-e2e.yaml
 .github/workflows/mirror-checkpoint.yaml
+.github/workflows/migrate-packages.yaml
+.github/scripts/migrate-ghcr.py
 .github/workflows/test-aks.yaml
 .github/workflows/test-eks.yaml
 .github/workflows/test-rke2.yaml

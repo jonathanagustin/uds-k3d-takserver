@@ -1,0 +1,99 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Migrate legacy GHCR packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Copy the reviewed legacy inventory; never overwrite or delete packages
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-legacy-ghcr
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+      attestations: read
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install UDS CLI
+        uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
+        with:
+          version: v0.41.0
+
+      - name: Log in to GHCR
+        if: inputs.apply
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Inventory legacy and current tags
+        run: python3 .github/scripts/migrate-ghcr.py plan --plan out/migration/plan.json
+
+      - name: Verify historical release provenance before copying
+        if: inputs.apply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/migration-releases.tsv"
+          import json, re
+          plan = json.load(open('out/migration/plan.json'))
+          family = next(f for f in plan['families'] if f['family'] == 'takserver')
+          for item in family['entries']:
+              if re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+-upstream', item['source_tag']):
+                  print(item['source_tag'] + '\t' + item['digest'])
+          PY
+          mkdir -p out/migration/provenance-source
+          while IFS=$'\t' read -r tag digest; do
+            gh attestation verify "oci://ghcr.io/jonathanagustin/uds-k3d-takserver/takserver@${digest}" \
+              --owner jonathanagustin \
+              --signer-workflow jonathanagustin/uds-k3d-takserver/.github/workflows/release.yaml \
+              --format json > "out/migration/provenance-source/${tag}.json"
+          done < "${RUNNER_TEMP}/migration-releases.tsv"
+
+      - name: Copy and anonymously verify all OCI graphs
+        if: inputs.apply
+        run: python3 .github/scripts/migrate-ghcr.py copy --plan out/migration/plan.json --receipts out/migration/receipts
+
+      - name: Verify migrated release provenance
+        if: inputs.apply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/migration/provenance-destination
+          while IFS=$'\t' read -r tag digest; do
+            gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver@${digest}" \
+              --owner jonathanagustin \
+              --signer-workflow jonathanagustin/uds-k3d-takserver/.github/workflows/release.yaml \
+              --format json > "out/migration/provenance-destination/${tag}.json"
+          done < "${RUNNER_TEMP}/migration-releases.tsv"
+
+      - name: Retain migration evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghcr-migration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/migration
+          if-no-files-found: warn
+          retention-days: 30

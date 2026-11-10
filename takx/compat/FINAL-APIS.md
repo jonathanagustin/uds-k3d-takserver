@@ -85,7 +85,7 @@ skipped if the test process is root.
 
 The optional integration check loads the actual, unchanged
 `VSIFileFileSystemHandler`, `VSIJFileFilesystemHandler`, `VSIStatBuf`,
-`FileSystemUtils` and default IO provider from the frozen complete Kernel build
+`FileSystemUtils` and default IO provider from the frozen engine/port/annotation build
 at official revision `9f6893dd657feacc35ec5de03dad721c2e44170e`.
 It calls the public `FileSystemUtils.setMountPoint` with a temporary directory,
 which limits discovery and migration to that mount. No upstream method, class
@@ -108,8 +108,10 @@ python3 takx/compat/test-final-apis.py --source-dir /path/to/pinned-api-referenc
   --kernel-proof /path/to/fresh-frozen-kernel-compile
 ```
 
-The opt-in [complete compiler recipe](../kernel-java/README.md) now reproduces
-the desktop Java source compilation. It verifies 23 locked public JARs and two
+The opt-in [engine-profile compiler recipe](../kernel-java/README.md) now
+reproduces the engine, port and annotation desktop Java source compilation.
+It excludes the separate `takkernel/shared` module and does not build a complete
+Kernel SDK or either client; see the [client checkpoint](../CLIENT-CHECKPOINT.md). It verifies 23 locked public JARs and two
 GIS source-built JARs with all 107 original class entries unchanged; rebuilt
 GIS container hashes differ. Its default profile updates six public JARs to
 address [recorded advisories](../kernel-java/DEPENDENCIES.md); the historical

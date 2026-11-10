@@ -1,11 +1,14 @@
-# Public desktop Kernel Java compilation
+# Public Kernel engine, port and annotation compilation
 
-This opt-in recipe compiles the complete pinned public desktop Kernel Java
-profile from official `TAK-Product-Center/atak-civ` revision
+This opt-in recipe compiles the pinned public desktop **engine, port and
+annotation** Java profile from official `TAK-Product-Center/atak-civ` revision
 `9f6893dd657feacc35ec5de03dad721c2e44170e`, together with the repository's desktop
 compatibility adapters. It produces frozen sources, compiler output and a
 verifiable input/output manifest. It does not package TAKX, build or load JNI,
-start a renderer or claim full client compatibility.
+start a renderer or claim full client compatibility. It does not compile the
+separate `takkernel/shared` module or assemble a complete Kernel SDK. The
+[client feasibility checkpoint](../CLIENT-CHECKPOINT.md) distinguishes these
+module boundaries from the earlier source-import inventories.
 
 **The default profile uses patched dependency versions.** The explicit
 `--profile baseline` option retains the historical inputs with known advisories.

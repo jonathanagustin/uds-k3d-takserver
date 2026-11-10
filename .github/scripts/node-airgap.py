@@ -10,14 +10,17 @@ before mutation so a later always() CI step can restore after shell timeout.
 
 import argparse
 import ipaddress
+import importlib.util
 import json
 import os
 import re
 from pathlib import Path
 import subprocess
+import sys
 from urllib.parse import urlparse
 
 CHAIN = "UDS_AIRGAP"
+DEFAULT_PROBE_URL = "http://1.1.1.1/cdn-cgi/trace"
 
 
 def run(args, check=True):
@@ -28,8 +31,40 @@ def docker(*args, check=True):
     return run(["docker", *args], check=check)
 
 
+def firewall_error_detail(stderr):
+    """Sanitize the whole captured stream before bounding published detail."""
+    try:
+        raw = stderr.encode('utf-8') if isinstance(stderr, str) else (stderr or b'')
+        if len(raw) > 65536:
+            return 'omitted: oversized firewall stderr'
+        spec = importlib.util.spec_from_file_location(
+            'airgap_log_redactor', Path(__file__).with_name('redact-logs.py'))
+        redactor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(redactor)
+        text = redactor.decode_log(raw)
+        # Authentication-bearing diagnostics are omitted in their entirety.
+        if re.search(r'authorization|bearer|basic|registry[_. -]?(?:auth|password|credential|token|secret)|'
+                     r'dockerconfigjson|\bauths?\b|identitytoken|accesstoken|_state=|'
+                     r'[?&](?:sig|signature|token|access_token)=|://[^\s/@]+:[^\s/@]+@',
+                     text, re.IGNORECASE):
+            return 'omitted: authentication-bearing firewall stderr'
+        safe = redactor.redact_text(text)[0]
+        safe = ''.join(character if character.isprintable() else ' ' for character in safe)
+        return ' '.join(safe.split())[:1024] or 'no stderr'
+    except (OSError, UnicodeError, ValueError, AttributeError, ImportError):
+        return 'omitted: unsanitizable firewall stderr'
+    except Exception:
+        # Includes the redactor's own Unsanitizable type: never fall back to raw.
+        return 'omitted: unsanitizable firewall stderr'
+
+
 def firewall(node, tool, *args, check=True):
-    return docker("exec", node, tool, "-w", "5", *args, check=check)
+    try:
+        return docker("exec", node, tool, "-w", "5", *args, check=check)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print('Node firewall command failed; sanitized stderr: ' +
+              firewall_error_detail(error.stderr), file=sys.stderr)
+        raise
 
 
 
@@ -61,14 +96,15 @@ def block_node(node, tool, networks):
     require_private_network(node)
     # Refuse to replace an unrelated chain or another test's active guard.
     firewall(node, tool, "-N", CHAIN)
+    # DROP is built in; denial does not depend on a REJECT target extension.
     # Docker's embedded resolver can forward through the host. Refuse that
     # route as well; Kubernetes DNS serves internal names independently.
     if tool == "iptables":
-        firewall(node, tool, "-A", CHAIN, "-d", "127.0.0.11/32", "-j", "REJECT")
+        firewall(node, tool, "-A", CHAIN, "-d", "127.0.0.11/32", "-j", "DROP")
     firewall(node, tool, "-A", CHAIN, "-o", "lo", "-j", "RETURN")
     for network in networks:
         firewall(node, tool, "-A", CHAIN, "-d", str(ipaddress.ip_network(network)), "-j", "RETURN")
-    firewall(node, tool, "-A", CHAIN, "-j", "REJECT")
+    firewall(node, tool, "-A", CHAIN, "-j", "DROP")
     for parent in ("OUTPUT", "FORWARD"):
         firewall(node, tool, "-I", parent, "1", "-j", CHAIN)
 
@@ -131,10 +167,25 @@ def probe_failure(node, blocked, result):
     return RuntimeError(message + ")")
 
 
+def validate_probe_url(url):
+    message = 'AIRGAP_PROBE_URL requires HTTP(S) and a public IP literal without credentials, query or fragment'
+    try:
+        if (not isinstance(url, str) or len(url) > 2048 or
+                any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in url)):
+            raise ValueError(message)
+        parsed = urlparse(url)
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname or '%' in parsed.hostname or
+                parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or
+                (parsed.port is not None and not 0 < parsed.port <= 65535) or
+                not ipaddress.ip_address(parsed.hostname).is_global):
+            raise ValueError(message)
+    except (TypeError, ValueError):
+        raise ValueError(message) from None
+    return url
+
+
 def probe(nodes, url, blocked):
-    host = urlparse(url).hostname
-    if not host or not ipaddress.ip_address(host).is_global:
-        raise ValueError("AIRGAP_PROBE_URL must use a public IP literal, not DNS or a local address")
+    validate_probe_url(url)
     # Test direct transport reachability, not resource health. A redirect or
     # HTTP error proves egress even when wget later fails (for example on TLS).
     # Disable proxies so an allowed local proxy cannot stand in for the IP.
@@ -147,13 +198,35 @@ def probe(nodes, url, blocked):
         print(f"{node['name']}: external IP control {'denied' if blocked else 'reachable'}")
 
 
+def probe_host(url):
+    """Prove direct host transport to the same node control, not service health."""
+    validate_probe_url(url)
+    try:
+        result = run(['curl', '--disable', '--globoff', '--noproxy', '*', '--proxy', '',
+                      '--silent', '--show-error', '--head', '--connect-timeout', '5', '--max-time', '10',
+                      '--output', '/dev/null', '--write-out', '%{http_code}', url], check=False)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError('Host external IP control timed out: ' +
+                           firewall_error_detail(error.stderr)) from None
+    except OSError:
+        raise RuntimeError('Host external IP control unavailable: curl could not start') from None
+    status = (result.stdout or '').strip()
+    if result.returncode != 0 or not re.fullmatch(r'[1-5][0-9]{2}', status):
+        raise RuntimeError(f'Host external IP control failed (exit {result.returncode}): ' +
+                           firewall_error_detail(result.stderr)) from None
+    print(f'Host external IP control reachable (HTTP {status})')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("block", "check", "restore"))
+    parser.add_argument("action", choices=("block", "check", "restore", "host-check"))
     parser.add_argument("--cluster", default="uds")
     parser.add_argument("--state", required=True, type=Path)
     args = parser.parse_args()
-    url = os.environ.get("AIRGAP_PROBE_URL", "http://1.1.1.1/cdn-cgi/trace")
+    url = os.environ.get("AIRGAP_PROBE_URL", DEFAULT_PROBE_URL)
+    if args.action == "host-check":
+        probe_host(url)
+        return
     if args.action == "block":
         if args.state.exists():
             raise RuntimeError("airgap state already exists; restore it before starting another test")

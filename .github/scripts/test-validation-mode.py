@@ -18,7 +18,7 @@ def diagnostic_case(event, requested, selected="none"):
     if event != "workflow_dispatch":
         return "none"
     selected = selected or "none"
-    if selected not in {"none", "upgrade-amd64", "pg15-amd64", "pg15-both"}:
+    if selected not in {"none", "upgrade-amd64", "pg15-amd64", "pg15-both", "airgap-amd64"}:
         raise ValueError("Unknown diagnostic case")
     if selected != "none" and trust_only(event, requested):
         raise ValueError("Diagnostic case and trust_bundle cannot be combined")
@@ -30,13 +30,16 @@ def plan(event, requested, amd64_runner, selected="none"):
     upgrades = {"include": [{"arch": "amd64", "runner": amd64_runner},
                              {"arch": "arm64", "runner": "ubuntu-22.04-arm"}]}
     single = {"include": [{"arch": "amd64", "runner": amd64_runner}]}
-    return {"install-matrix": install_matrix(event, requested, amd64_runner),
+    return {"install-matrix": install_matrix(event, requested, amd64_runner, selected),
             "upgrade-matrix": single if selected == "upgrade-amd64" else upgrades,
             "pg15-matrix": single if selected == "pg15-amd64" else upgrades,
             "diagnostic-case": selected}
 
 
-def install_matrix(event, requested, amd64_runner):
+def install_matrix(event, requested, amd64_runner, selected="none"):
+    selected = diagnostic_case(event, requested, selected)
+    if selected == "airgap-amd64":
+        return {"include": [{"arch": "amd64", "runner": amd64_runner, "airgap": True}]}
     include = [{"arch": "amd64", "runner": amd64_runner},
                {"arch": "arm64", "runner": "ubuntu-22.04-arm"}]
     if not trust_only(event, requested):
@@ -49,7 +52,8 @@ def verify(event, requested, install, upgrade, pg15, selected="none", pg15_requi
         raise ValueError("Unknown PostgreSQL 15 expectation")
     selected = diagnostic_case(event, requested, selected)
     if selected != "none":
-        expected = (("skipped", "success", "skipped") if selected == "upgrade-amd64"
+        expected = (("success", "skipped", "skipped") if selected == "airgap-amd64"
+                    else ("skipped", "success", "skipped") if selected == "upgrade-amd64"
                     else ("skipped", "skipped", "success"))
         if (install, upgrade, pg15) != expected:
             raise ValueError(f"Diagnostic results {(install, upgrade, pg15)}; expected {expected}")
@@ -91,7 +95,14 @@ def main():
     verify(event, requested, os.environ["INSTALL_RESULT"], os.environ["UPGRADE_RESULT"], os.environ["PG15_RESULT"],
            selected, os.environ.get("PG15_REQUIRED", "false"))
     if selected != "none":
-        print("Selected diagnostic case passed—not full acceptance")
+        message = "Selected diagnostic case passed—not full acceptance"
+        print(message)
+        if selected == "airgap-amd64" and (path := os.environ.get("GITHUB_STEP_SUMMARY")):
+            with open(path, "a", encoding="utf-8") as stream:
+                stream.write("## Focused airgap diagnostic\n\n"
+                             "`airgap-amd64`: only the AMD airgap install row passed. "
+                             "Ordinary installs and both upgrade families were intentionally skipped.\n\n"
+                             + message + ".\n")
         return
     print("Trust-only acceptance passed." if trust_only(event, requested) else "All tests passed successfully!")
 

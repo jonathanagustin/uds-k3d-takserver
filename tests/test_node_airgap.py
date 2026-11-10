@@ -9,11 +9,17 @@ Docker networks, not an Internet server, so endpoint outages cannot pass it.
 """
 
 import importlib.util
+import contextlib
+import io
+import http.server
 import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import socket
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from urllib.request import ProxyHandler, build_opener
@@ -78,6 +84,57 @@ def assert_native_plus_one_airgap(test, rows):
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_drop_denial_preserves_docker_dns_and_internal_rule_order(self):
+        with patch.object(AIRGAP, 'require_private_network') as private, \
+                patch.object(AIRGAP, 'firewall') as command:
+            AIRGAP.block_node('k3d-node', 'iptables', ['172.18.0.0/16', '10.42.0.0/16'])
+        private.assert_called_once_with('k3d-node')
+        self.assertEqual([call.args[2:] for call in command.call_args_list], [
+            ('-N', AIRGAP.CHAIN),
+            ('-A', AIRGAP.CHAIN, '-d', '127.0.0.11/32', '-j', 'DROP'),
+            ('-A', AIRGAP.CHAIN, '-o', 'lo', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-d', '172.18.0.0/16', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-d', '10.42.0.0/16', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-j', 'DROP'),
+            ('-I', 'OUTPUT', '1', '-j', AIRGAP.CHAIN),
+            ('-I', 'FORWARD', '1', '-j', AIRGAP.CHAIN)])
+        with patch.object(AIRGAP, 'require_private_network'), patch.object(AIRGAP, 'firewall') as command:
+            AIRGAP.block_node('k3d-node', 'ip6tables', ['fe80::/10'])
+        self.assertEqual(command.call_args_list[1].args[2:],
+                         ('-A', AIRGAP.CHAIN, '-o', 'lo', '-j', 'RETURN'))
+        self.assertIn(('-A', AIRGAP.CHAIN, '-j', 'DROP'),
+                      [call.args[2:] for call in command.call_args_list])
+        self.assertFalse(any('REJECT' in call.args for call in command.call_args_list))
+
+    def test_firewall_failure_reports_sanitized_stderr_and_still_raises(self):
+        stderr = 'iptables v1.8.11: lock timeout; password=DO_NOT_EMIT\n'
+        for error in (subprocess.CalledProcessError(1, ['docker', 'exec'], stderr=stderr),
+                      subprocess.TimeoutExpired(['docker', 'exec'], 30, stderr=stderr.encode())):
+            output = io.StringIO()
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(AIRGAP, 'docker', side_effect=error), contextlib.redirect_stderr(output):
+                with self.assertRaises(type(error)):
+                    AIRGAP.firewall('k3d-node', 'iptables', '-A', AIRGAP.CHAIN, '-j', 'DROP')
+            self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
+            self.assertNotIn('DO_NOT_EMIT', output.getvalue())
+            self.assertIn('[REDACTED]', output.getvalue())
+
+    def test_firewall_stderr_is_redacted_before_truncation_and_auth_is_omitted_whole(self):
+        detail = AIRGAP.firewall_error_detail('-----BEGIN PRIVATE KEY-----\n' +
+                                              'sensitive' * 500 + '\n-----END PRIVATE KEY-----\nbackend error')
+        self.assertNotIn('sensitive', detail)
+        self.assertIn('backend error', detail)
+        self.assertLessEqual(len(detail), 1024)
+        detail = AIRGAP.firewall_error_detail('public-prefix ' * 200 +
+                                              '{"auths":{"registry":{"auth":"DO_NOT_EMIT"}}}')
+        self.assertEqual(detail, 'omitted: authentication-bearing firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail('upload failed http://registry/v2/blobs?_state=DO_NOT_EMIT'),
+                         'omitted: authentication-bearing firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail(b'\xffprivate'),
+                         'omitted: unsanitizable firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail('x' * 65537),
+                         'omitted: oversized firewall stderr')
+
     def test_unreachable_precontrol_fails_closed_and_reports_wget(self):
         failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out\n")
         with patch.object(AIRGAP, "docker", return_value=failed) as command:
@@ -129,6 +186,110 @@ class AirgapContracts(unittest.TestCase):
                     AIRGAP.main()
             block.assert_not_called()
             self.assertFalse(state.exists())
+
+    def test_host_control_accepts_http500_without_proxy_or_tls_bypass(self):
+        output = io.StringIO()
+        with patch.object(AIRGAP, 'run', return_value=subprocess.CompletedProcess([], 0, '500', '')) as command, \
+                contextlib.redirect_stdout(output):
+            AIRGAP.probe_host(AIRGAP.DEFAULT_PROBE_URL)
+        self.assertIn('reachable (HTTP 500)', output.getvalue())
+        args = command.call_args.args[0]
+        self.assertEqual(args[:2], ['curl', '--disable'])
+        self.assertEqual(args[args.index('--noproxy') + 1], '*')
+        self.assertEqual(args[args.index('--proxy') + 1], '')
+        self.assertEqual(args[args.index('--max-time') + 1], '10')
+        self.assertEqual(args[-1], AIRGAP.DEFAULT_PROBE_URL)
+        self.assertIn('--head', args)
+        for forbidden in ('--fail', '--insecure', '-k', '--retry'):
+            self.assertNotIn(forbidden, args)
+        self.assertFalse(command.call_args.kwargs['check'])
+
+    def test_host_control_eof_nonhttp_and_timeout_fail_without_secret_output(self):
+        for result in (subprocess.CompletedProcess([], 35, '000', 'curl: unexpected EOF password=DO_NOT_EMIT'),
+                       subprocess.CompletedProcess([], 0, 'nonHTTP-DO_NOT_EMIT', '')):
+            with self.subTest(code=result.returncode), patch.object(AIRGAP, 'run', return_value=result):
+                with self.assertRaises(RuntimeError) as raised:
+                    AIRGAP.probe_host(AIRGAP.DEFAULT_PROBE_URL)
+                self.assertNotIn('DO_NOT_EMIT', str(raised.exception))
+        with patch.object(AIRGAP, 'run', side_effect=subprocess.TimeoutExpired(['curl'], 30,
+                          stderr=b'password=DO_NOT_EMIT')):
+            with self.assertRaises(RuntimeError) as raised:
+                AIRGAP.probe_host(AIRGAP.DEFAULT_PROBE_URL)
+            self.assertIn('timed out', str(raised.exception))
+            self.assertNotIn('DO_NOT_EMIT', str(raised.exception))
+
+    def test_host_and_node_share_validated_url_and_invalid_values_are_not_logged(self):
+        for url in ('file:///private/DO_NOT_EMIT', 'http://u:DO_NOT_EMIT@1.1.1.1/',
+                    'http://1.1.1.1/?token=DO_NOT_EMIT', 'http://1.1.1.1/#DO_NOT_EMIT',
+                    'http://1.1.1.1:DO_NOT_EMIT/', 'http://127.0.0.1/',
+                    'http://example.com/DO_NOT_EMIT', 'http://1.1.1.1/\nDO_NOT_EMIT'):
+            for call in (lambda: AIRGAP.probe_host(url), lambda: AIRGAP.probe([], url, blocked=False)):
+                with self.subTest(url_kind=url.split(':', 1)[0]), patch.object(AIRGAP, 'run') as command:
+                    with self.assertRaises(ValueError) as raised:
+                        call()
+                    self.assertNotIn('DO_NOT_EMIT', str(raised.exception))
+                    command.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'not-created.json'
+            url = 'http://8.8.8.8/transport'
+            with patch.dict(os.environ, {'AIRGAP_PROBE_URL': url}), \
+                    patch('sys.argv', ['node-airgap.py', 'host-check', '--state', str(state)]), \
+                    patch.object(AIRGAP, 'probe_host') as host, patch.object(AIRGAP, 'discover') as discover:
+                AIRGAP.main()
+            host.assert_called_once_with(url)
+            discover.assert_not_called()
+            self.assertFalse(state.exists())
+        script = (ROOT / '.github/scripts/test-airgap.sh').read_text()
+        self.assertNotIn('api.github.com/zen', script)
+        self.assertEqual(script.count('"${firewall[@]}" host-check'), 1)
+        self.assertLess(script.index('"${firewall[@]}" block'), script.index('"${firewall[@]}" host-check'))
+        self.assertLess(script.index('"${firewall[@]}" host-check'), script.index('uds run deploy:test-bundle'))
+
+    @unittest.skipUnless(shutil.which('curl'), 'curl is required for the owned-loopback proxy fixture')
+    def test_real_host_control_proxy_environment_cannot_stand_in_for_direct_transport(self):
+        class Proxy(http.server.BaseHTTPRequestHandler):
+            requests = 0
+
+            def do_HEAD(self):
+                type(self).requests += 1
+                self.send_response(500)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Proxy)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        unavailable = socket.socket()
+        unavailable.bind(('127.0.0.1', 0))
+        target = f'http://127.0.0.1:{unavailable.getsockname()[1]}/transport'
+        proxy = f'http://127.0.0.1:{server.server_port}'
+        env = {name: proxy for name in ('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY',
+                                       'all_proxy', 'ALL_PROXY')}
+        env.update(no_proxy='', NO_PROXY='')
+        try:
+            with patch.dict(os.environ, env):
+                # Positive fixture: a proxy can manufacture an HTTP response
+                # while this reserved, non-listening destination is unreachable.
+                result = subprocess.run([shutil.which('curl'), '--disable', '--proxy', proxy,
+                                         '--noproxy', '', '--head', '--max-time', '2', '--output',
+                                         '/dev/null', '--write-out', '%{http_code}', target],
+                                        capture_output=True, text=True, check=False, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, '500')
+                before = Proxy.requests
+                # Fixture only: production validation rejects this loopback URL.
+                with patch.object(AIRGAP, 'validate_probe_url', return_value=target):
+                    with self.assertRaises(RuntimeError):
+                        AIRGAP.probe_host(target)
+                self.assertEqual(Proxy.requests, before)
+        finally:
+            unavailable.close()
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
     def test_external_control_requires_a_public_ip_literal(self):
         for url in ("http://localhost", "http://127.0.0.1", "http://172.18.0.1", "http://example.com"):
@@ -340,8 +501,8 @@ class AirgapNetworkIntegration(unittest.TestCase):
             self.assertEqual(gets(addresses[0]).returncode, 0)
             self.assertNotEqual(gets(addresses[1]).returncode, 0)
             counters = AIRGAP.firewall(node, tool, "-L", AIRGAP.CHAIN, "-n", "-v", "-x").stdout
-            rejected = [line.split() for line in counters.splitlines() if "REJECT" in line]
-            self.assertTrue(any(int(fields[0]) > 0 for fields in rejected))
+            dropped = [line.split() for line in counters.splitlines() if "DROP" in line]
+            self.assertTrue(any(int(fields[0]) > 0 for fields in dropped))
             # A host-side connection to the same denied peer still succeeds.
             # A published loopback port also works with rootless Docker, where
             # the agent host cannot route directly to the bridge's subnet.

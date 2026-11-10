@@ -61,6 +61,7 @@ jobs:
           python3 -B -m unittest discover -s tests -p 'test_move_ca_key.py' -v
           python3 -B -m unittest discover -s tests -p 'test_issue_health_cert.py' -v
           python3 -B -m unittest discover -s tests -p 'test_nats_roundtrip.py' -v
+          python3 -B -m unittest tests.test_fit_runner -v
           coverage run --branch --source=tests -m unittest discover -s tests -p 'test_upgrade_*.py' -v
           coverage report --include='tests/upgrade-*.py,tests/upgrade-agent-gate/live-health.py' --show-missing
           {
@@ -71,6 +72,9 @@ jobs:
 
       - name: Trust bundle live-test restoration contracts
         run: python3 -B -m unittest tests.test_trust_bundle_live tests.test_validation_mode tests.test_trust_fixture -v
+
+      - name: Install execution receipt producers
+        run: python3 -B -m unittest tests.test_install_receipt tests.test_checkpoint_identity tests.test_install_artifact_inputs tests.test_collect_install_receipt -v
 
       - name: TakClient revocation endpoint contract
         run: python3 -B -m unittest tests.test_takclient_revocation -v

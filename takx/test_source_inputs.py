@@ -49,6 +49,72 @@ class SourceGuards(unittest.TestCase):
         self.destination.parent.mkdir(parents=True, exist_ok=True)
         self.destination.write_text(f"version https://git-lfs.github.com/spec/v1\noid sha256:{self.entry['sha256']}\nsize {self.entry['bytes']}\n")
 
+    def dependency_fixture(self):
+        root = Path(self.temporary.name)
+        recipe = root / "recipe"
+        patch_file = recipe / "dependency-patches/fix.patch"
+        patch_file.parent.mkdir(parents=True)
+        patch_file.write_text("--- a/lib/sigpipe.h\n+++ b/lib/sigpipe.h\n@@ -1 +1 @@\n-before\n+after\n")
+        output = root / "output"
+        source = output / "curl/lib/sigpipe.h"
+        source.parent.mkdir(parents=True)
+        source.write_text("before\n")
+        self.lock["archives"][0]["version"] = "fixture"
+        entry = {"path": "dependency-patches/fix.patch", "sha256": source_inputs.digest(patch_file),
+                 "archive": self.entry["path"], "archive_sha256": self.entry["sha256"], "version": "fixture",
+                 "source": "curl/lib/sigpipe.h", "before_sha256": source_inputs.digest(source),
+                 "after_sha256": hashlib.sha256(b"after\n").hexdigest()}
+        self.lock["dependency_patches"] = [entry]
+        return recipe / "lock.json", output, source, patch_file, entry
+
+    def test_dependency_patch_exact_apply_resume_and_unpatched_refusal(self):
+        lock_path, output, source, _, entry = self.dependency_fixture()
+        with self.assertRaisesRegex(ValueError, "locked patched"):
+            source_inputs.stage_dependency_patches(output, lock_path, self.lock)
+        for _ in range(2):
+            result = source_inputs.stage_dependency_patches(output, lock_path, self.lock, apply=True)
+            self.assertEqual(result, {entry["source"]: entry["after_sha256"]})
+        self.assertEqual(source.read_text(), "after\n")
+        source.write_text("unreviewed\n")
+        with self.assertRaisesRegex(ValueError, "locked patched"):
+            source_inputs.stage_dependency_patches(output, lock_path, self.lock, apply=True)
+
+    def test_dependency_patch_archive_hash_version_path_and_bytes_refusal(self):
+        lock_path, _, _, patch_file, entry = self.dependency_fixture()
+        for field, value in (("archive_sha256", "0" * 64), ("version", "other"),
+                             ("path", "../escape.patch"), ("source", "other/file")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(self.lock)
+                changed["dependency_patches"][0][field] = value
+                with self.assertRaises(ValueError):
+                    source_inputs.verify_dependency_patches(lock_path, changed)
+        patch_file.write_text("changed patch")
+        with self.assertRaisesRegex(ValueError, "hash"):
+            source_inputs.verify_dependency_patches(lock_path, self.lock)
+
+    def test_dependency_patch_changes_native_cache_fingerprint(self):
+        lock_path, output, _, _, entry = self.dependency_fixture()
+        lock_path.write_text(json.dumps(self.lock))
+        before = source_inputs.cache_key(lock_path, self.source, output, "fixture-toolchain")
+        entry["after_sha256"] = "0" * 64
+        lock_path.write_text(json.dumps(self.lock))
+        after = source_inputs.cache_key(lock_path, self.source, output, "fixture-toolchain")
+        self.assertNotEqual(before, after)
+
+    def test_dependency_source_missing_and_symlinked_parent_refusal(self):
+        lock_path, output, source, _, _ = self.dependency_fixture()
+        source.unlink()
+        with self.assertRaisesRegex(ValueError, "missing or symlinked"):
+            source_inputs.stage_dependency_patches(output, lock_path, self.lock, apply=True)
+        source.parent.rmdir()
+        external = output / "external"
+        external.mkdir()
+        (external / "sigpipe.h").write_text("before\n")
+        source.parent.symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "missing or symlinked"):
+            source_inputs.stage_dependency_patches(output, lock_path, self.lock, apply=True)
+        self.assertEqual((external / "sigpipe.h").read_text(), "before\n")
+
     def test_wrong_revision_is_rejected(self):
         lock = copy.deepcopy(self.lock)
         lock["atak_source"]["revision"] = "0" * 40

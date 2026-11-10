@@ -8,6 +8,15 @@ The patch adds the Java/JNI/C++ streaming-contact fallback needed by both pinned
 
 `CommonCommoRoutingSmoke.java` exercises actual loopback TCP and UDP delivery through native code. Run it with the built JNI/JAR as part of `build-commoncommo.sh`. Source guard tests check patch hashes, revision restrictions, failed application and staging isolation. Discovery readiness uses an ordered sentinel contact callback, not a fixed sleep. Tests also keep another stream live when the configured interface is removed and verify failed sends do not leak there. An already absent contact rejects repeated clearing. Retire this patch only after a matching official source API passes the same transport tests.
 
+`0101-commoncommo-stream-server-identity.patch` follows the routing patch on the
+same public 1.17.2 source. It retains the caller's original endpoint as immutable
+identity, sends DNS SNI, and requires the matching DNS/IP SAN after the existing
+CA-chain check and before Up/authentication/CoT. OpenSSL rejects mismatches,
+CN-only fallback and partial-label DNS wildcards. No client-certificate or CA
+checks are removed. [Real loopback tests and remaining dependency limits](../TLS.md)
+cover DNS/IP positives, DNS SNI, trusted-CA wrong-name leaves, wrong SAN types,
+CN-only leaves, wrong CA/client trust and missing client certificates.
+
 Future changes belong here as small, ordered diffs against a recorded upstream revision. Each patch must state the concrete incompatibility, intended behavior, applicable version and tests. Apply patches deterministically and include their hashes in build inputs before enabling them. Keep substantial upstream code in its upstream checkout rather than copying it into an untracked compatibility SDK.
 
 A repository-local adapter is appropriate only when it implements real, tested behavior at an integration boundary. Do not add placeholder SDK classes, rename an old artifact to satisfy a newer dependency, treat a fixed-UDP endpoint as a TLS streaming route, or silently remove features. Unsupported capabilities must be visible and covered by tests; upstream fixes should remain easy to review and retire when a matching source release becomes available.

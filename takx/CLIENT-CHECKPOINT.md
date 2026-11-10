@@ -51,11 +51,24 @@ UV/shader integration. Published-shape crosshatching cannot be supplied by an
 empty wrapper or a solid-fill alias. Repeat values, rotation/dimension units and
 serialization need an authentic contract or explicit project semantics.
 
-The source-built CommonCommo transport proof validates mutual-TLS certificate
-trust against a loopback peer; it does not verify server hostnames or demonstrate
-TAK Server interoperability. A complete native Kernel/GIS/GL runtime, map
-rendering, application resources, identity checks and live client acceptance
-remain open. Neither TAKX desktop nor Kasm/offline packaging is ready to ship.
+The [source-built CommonCommo project transport profile](TLS.md) now validates
+mutual-TLS trust and configured DNS/IP SAN identity, sends DNS SNI, and rejects
+valid-CA wrong-name certificates before Up/authentication/CoT. Real loopback
+checks also cover wrong CA, missing/untrusted client authentication and abrupt
+peer closure. The unchanged public version identity remains 1.17.2 with explicit
+project patches, not the clients' required 1.22.3.
+
+The earlier routing-only and hostname-only prefixes exposed curl 8.9.1 replacing
+the JVM's SIGPIPE handler during shutdown. A separately pinned, exact upstream
+one-line backport preserves that handler; the real regression rejects both old
+builds and passes the rebuilt curl/JNI profile. This is curl 8.9.1 plus the stated
+patch, not full curl/native dependency security acceptance. Original receipts
+remain preserved.
+
+TAK Server interoperability, IPv6/other-transport identity policy, native
+Kernel/GIS/GL runtime, map rendering, application resources and live client
+acceptance remain open. Neither TAKX desktop nor Kasm/offline packaging is ready
+to ship.
 
 ## What the earlier numbers mean
 

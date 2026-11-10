@@ -130,7 +130,7 @@ physical_logs() {
     # shellcheck disable=SC2016
     timeout --kill-after=1s 3s docker exec "${node}" sh -c '
         directory="$1"; file="$2"
-        for path in /var/log/pods "/var/log/pods/${directory}" "/var/log/pods/${directory}/server"; do
+        for path in /var /var/log /var/log/pods "/var/log/pods/${directory}" "/var/log/pods/${directory}/server"; do
           [ -d "${path}" ] && [ ! -L "${path}" ] || exit 66
         done
         [ -f "${file}" ] && [ ! -L "${file}" ] || exit 66

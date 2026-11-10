@@ -119,6 +119,53 @@ elif 'sh' in sys.argv:
                 self.assertIn(expected, output)
                 self.assertNotIn(forbidden, output)
 
+    def test_actual_physical_reader_refuses_symlinks_without_host_access(self):
+        for mode in ('regular', 'file-link', 'pod-link', 'prefix-link'):
+            body = f"""import pathlib, subprocess, sys
+mode = {mode!r}
+if sys.argv[1] == 'ps': print('k3d-fixture-server-0')
+elif 'crictl' in sys.argv: sys.exit(3)
+elif 'sh' in sys.argv:
+    base = pathlib.Path(__file__).parent / 'fake-node'
+    base.mkdir(exist_ok=True)
+    secret = base / 'private-file'
+    secret.write_text('should-never-read-this')
+    var = base / 'var'
+    var.mkdir(exist_ok=True)
+    log = base / 'private-log' if mode == 'prefix-link' else var / 'log'
+    log.mkdir(exist_ok=True)
+    if mode == 'prefix-link' and not (var / 'log').exists():
+        (var / 'log').symlink_to(log, target_is_directory=True)
+    pods = log / 'pods'
+    pods.mkdir(exist_ok=True)
+    directory = sys.argv[-2]
+    pod = base / 'private-pod' if mode == 'pod-link' else pods / directory
+    pod.mkdir(exist_ok=True)
+    if mode == 'pod-link' and not (pods / directory).exists():
+        (pods / directory).symlink_to(pod, target_is_directory=True)
+    server = pod / 'server'
+    server.mkdir(exist_ok=True)
+    for number in range(3):
+        file = server / (str(number) + '.log')
+        if not file.exists():
+            if mode == 'file-link': file.symlink_to(secret)
+            else: file.write_text('actual-owned-log' if mode == 'regular' else 'should-never-read-this')
+    script = sys.argv[-4].replace('/var', str(var))
+    file = sys.argv[-1].replace('/var', str(var))
+    result = subprocess.run(['sh', '-c', script, 'sh', directory, file], capture_output=True)
+    sys.stdout.buffer.write(result.stdout)
+    sys.stderr.buffer.write(result.stderr)
+    sys.exit(result.returncode)
+"""
+            with self.subTest(mode=mode):
+                output = self.capture_fixture(body, self.physical_api(self.physical_pod()))
+                self.assertNotIn('should-never-read-this', output)
+                if mode == 'regular':
+                    self.assertIn('actual-owned-log', output)
+                else:
+                    self.assertIn('exit=66 captured_bytes=0', output)
+                    self.assertNotIn('actual-owned-log', output)
+
     def test_physical_fallback_requires_live_api_and_discovered_node(self):
         body = """import sys
 if sys.argv[1] == 'ps': print('k3d-fixture-server-0')

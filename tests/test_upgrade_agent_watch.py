@@ -110,7 +110,12 @@ class WatchTests(unittest.TestCase):
             pid = int(pidfile.read_text())
             for _ in range(50):
                 proc = Path('/proc') / str(pid) / 'stat'
-                if not proc.exists() or proc.read_text().split()[2] == 'Z':
+                try:
+                    state = proc.read_text().split()[2]
+                except (FileNotFoundError, ProcessLookupError):
+                    # Reaping may occur while procfs opens/reads the stat file.
+                    break
+                if state == 'Z':
                     break
                 time.sleep(0.01)
             else:

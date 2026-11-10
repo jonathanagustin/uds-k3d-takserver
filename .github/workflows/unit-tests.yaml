@@ -96,6 +96,11 @@ jobs:
       - name: Runtime path filter
         run: bash tests/test_runtime_paths.sh
 
+      - name: Package rendering evidence and wiring
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s .github/test-infra/package-render -p 'test_*.py' -v
+
       - name: CI concurrency groups
         run: bash tests/test_ci_concurrency.sh
 
@@ -154,6 +159,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # PR merge parents and the usual push predecessor; missing objects render.
+          fetch-depth: 2
+
+      - name: Decide package rendering from verified Git evidence
+        id: package_render
+        continue-on-error: true
+        run: python3 -B .github/test-infra/package-render/decide.py
 
       - name: Install Node, uv, Helm, and UDS CLI
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
@@ -164,12 +177,19 @@ jobs:
       - name: Native upgrade admission gate contracts
         run: python3 -B -m unittest tests.test_agent_gate -v
 
+      - name: Package policy and safety contracts
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_workflow_permissions tests.test_scorecard_permissions tests.test_package_values.RenderFailureTests tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff tests.test_ephemeral_cluster tests.test_velero_transfer tests.test_velero_trial tests.test_staged_migrations tests.test_upgrade_agent_watch tests.test_identity_rollout_driver -v
+
       - name: Build the Pepr chart
+        if: steps.package_render.outcome != 'success' || steps.package_render.outputs.render != 'false'
         run: bash pepr/build.sh
 
       - name: Package values follow the variables
+        if: steps.package_render.outcome != 'success' || steps.package_render.outputs.render != 'false'
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_workflow_permissions tests.test_scorecard_permissions tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff tests.test_ephemeral_cluster tests.test_velero_transfer tests.test_velero_trial tests.test_staged_migrations tests.test_upgrade_agent_watch tests.test_identity_rollout_driver -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values.PackageValuesTests -v
       - name: Encrypted staged diagnostic guards
         run: python3 -B -m unittest discover -s .github/test-infra -p test_staged_encrypted_diagnostic.py -v

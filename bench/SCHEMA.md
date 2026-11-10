@@ -162,3 +162,53 @@ a time with a shared two-second snapshot budget, so this is not one atomic
 cross-client instant; no counters from the later termination/join period are
 intentionally included. A lock timeout invalidates the counters. Historical
 interval-printer records omit unprinted tails and are not counter-equivalent.
+
+## Optional exact JVM-start snapshot
+
+`BENCH_JVM_START_METADATA=1 BENCH_JVM_CONTEXT=k3d-uds` adds read-only JVM metadata
+to the existing phase collector. Its explicit context must match kubectl's
+current context, because the rest of the benchmark uses that context. Defaults
+make no new reads and keep unobserved JVM timing null. The same bounded observer
+is usable independently as `python3 -m bench.jvm_metrics --context k3d-uds
+--app takserver-api` (or `takserver-messaging`). It does not create clusters,
+restart workloads, alter probes/policies, attach to a JVM or install an agent.
+
+The existing Java agent exports four numeric metrics: official
+RuntimeMXBean-backed `process_start_time_seconds` and current/total/unloaded
+class counts. Only these values survive parsing; other metric names, labels,
+comments, complete payloads and command stderr are not returned. Duplicate
+singleton series, unexpected labels, missing/nonfinite/nonintegral counts,
+counter regression and malformed data are unavailable. The current-loaded
+gauge may decrease normally. Epoch seconds preserve the received decimal;
+derived epoch milliseconds round floating exposition to the MXBean resolution.
+
+One exact Pod and named app container are required; a sidecar's position in the
+Pod spec is irrelevant. Two immediate exact-Pod API-proxy reads are bracketed
+by Pod identity reads. Pod UID, container ID, exact image-reference hash/image
+digest, restart count and running-start timestamp must stay unchanged, as must
+the official JVM start value. Only the fixed Pod proxy path on port 9100 is
+used; denied/unsupported transport stays unavailable, with no remote endpoint
+or port-forward fallback. Each app has a 15-second total command/cleanup budget,
+a 2-second API request timeout, at most 2.9 seconds per command, a complete
+64 KiB metrics stream cap and 1 MiB Pod JSON cap. Nonblocking stdout reads bound
+memory; child process groups are killed/reaped without restricting legitimate
+kubectl/UDS cache-file writes. Errors use fixed reason codes only.
+
+`jvm_observation` retains this identity, both actual Unix/monotonic sample
+brackets, the numeric samples, collector source SHA-256 and curated caller
+source/run fields when present. Caller fields are supplied context, not an
+independent attestation of checkout ownership or run success. Image references
+are represented by their digest and exact-reference hash, not arbitrary URLs.
+The same identity must match the phase's marker/init/Ready evidence before
+`jvm_started_at` and `jvm_to_log_s` are filled. Changed/ambiguous identities and
+negative/reordered timing leave them null. Historical records remain unchanged.
+
+This is an existing-incarnation snapshot. JVM start is retrospective, but class
+counts are from the actual scrape times after startup, not from the earlier
+startup marker or Ready transition. No class evolution or loading-duration
+claim follows, and no accumulated processing time is collected. A snapshot
+of an existing Ready Pod is not a new cold/warm experiment or a capacity pass.
+Both native-image metric/transport capability, genuine fresh/new cold/warm
+incarnations, clock/overhead checks and repeated measurements remain empirical
+gates for issue #48. Missing metadata never changes application readiness or
+authorizes reuse. No startup pilot or tuning is dispatched by this option.

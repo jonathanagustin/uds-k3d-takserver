@@ -7,7 +7,10 @@ Times come from the pod status, kubelet events, and a timestamped log line.
 A missing input stays None. This module does not read the cluster.
 """
 
+import hashlib
 from datetime import datetime
+
+from bench.jvm_metrics import image_digest, Unavailable
 
 
 def parse_time(value):
@@ -90,7 +93,7 @@ def _pull_seconds(events):
     return total
 
 
-def pod_phases(pod, events, log_text):
+def pod_phases(pod, events, log_text, container_name=None):
     """Phase seconds for one pod. None where the status does not say."""
     ready_at = None
     for condition in (pod.get("status") or {}).get("conditions") or []:
@@ -104,7 +107,7 @@ def pod_phases(pod, events, log_text):
             "seconds": elapsed(started, finished),
         })
     containers = (pod.get("status") or {}).get("containerStatuses") or []
-    expected = ((pod.get("spec") or {}).get("containers") or [{}])[0].get("name")
+    expected = container_name or ((pod.get("spec") or {}).get("containers") or [{}])[0].get("name")
     if expected:
         containers = [status for status in containers if status.get("name") == expected]
     main_started = None
@@ -119,7 +122,7 @@ def pod_phases(pod, events, log_text):
     metadata = pod.get("metadata") or {}
     def stamp(value):
         return value.isoformat() if value else None
-    return {
+    result = {
         "evidence": {
             "pod_name": metadata.get("name"), "pod_uid": metadata.get("uid"),
             "container_name": containers[0].get("name") if containers else None,
@@ -145,3 +148,10 @@ def pod_phases(pod, events, log_text):
         "container_to_log_s": elapsed(main_started, log_at),
         "log_to_ready_s": elapsed(log_at, ready_at),
     }
+    if container_name:
+        try:
+            result['evidence']['image_id'] = image_digest(containers[0].get('imageID')) if containers else None
+            result['evidence']['image_reference_sha256'] = hashlib.sha256(containers[0]['imageID'].encode()).hexdigest() if containers else None
+        except Unavailable:
+            result['evidence']['image_id'] = None
+    return result

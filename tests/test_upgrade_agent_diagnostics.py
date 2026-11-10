@@ -17,6 +17,75 @@ class AgentDiagnosticsTests(unittest.TestCase):
         return subprocess.check_output(['python3', str(HELPER), mode],
                                        input=json.dumps(value), text=True)
 
+    def capture_fixture(self, docker_body):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            for name, body in {'uds': '#!/bin/sh\nexit 1\n',
+                               'docker': '#!/usr/bin/env python3\n' + docker_body}.items():
+                path = directory / name
+                path.write_text(body)
+                path.chmod(0o755)
+            result = subprocess.run(['bash', str(ROOT / 'tests/upgrade-agent-diagnostics.sh'), 'fixture'],
+                                    env={**os.environ, 'PATH': str(directory) + ':' + os.environ['PATH']},
+                                    capture_output=True, text=True, check=True, timeout=35)
+            return result.stdout + result.stderr
+
+    def test_discovery_failure_and_successful_zero_nodes_are_distinct(self):
+        output = self.capture_fixture("import sys\nprint('Authorization: Bearer unique-marker')\nsys.exit(7)\n")
+        self.assertIn('Docker node discovery: exit=7', output)
+        self.assertIn('Omitted authentication-bearing', output)
+        self.assertNotIn('unique-marker', output)
+        self.assertIn('eligible=0', output)
+        output = self.capture_fixture("pass\n")
+        self.assertIn('Docker node discovery: exit=0', output)
+        self.assertIn('eligible=0', output)
+
+    def test_cri_failure_invalid_json_and_zero_matches_are_observable(self):
+        prefix = "import sys\nif sys.argv[1] == 'ps':\n print('k3d-fixture-server-0')\nelse:\n "
+        for body, expected in (
+                ("print('registryAuth: never-print-this'); sys.exit(9)", 'exit=9'),
+                ("print('not-json')", 'invalid or unavailable JSON/schema'),
+                ("print('{\"containers\": []}')", '\"agent_matches\": 0')):
+            with self.subTest(body=body):
+                output = self.capture_fixture(prefix + body + '\n')
+                self.assertIn(expected, output)
+                self.assertNotIn('never-print-this', output)
+
+    def test_empty_cri_logs_are_distinct_from_successful_content(self):
+        body = """import json, sys
+if sys.argv[1] == 'ps':
+    print('k3d-fixture-server-0')
+elif 'ps' in sys.argv:
+    print(json.dumps({'containers': [{'id': 'a'*64, 'createdAt': 1, 'labels': {
+        'io.kubernetes.pod.namespace': 'zarf', 'io.kubernetes.pod.name': 'agent-hook-abc',
+        'io.kubernetes.container.name': 'server'}}]}))
+"""
+        output = self.capture_fixture(body)
+        self.assertIn('Node CRI log retrieval: exit=0', output)
+        self.assertIn('successful empty stream', output)
+        self.assertIn('"agent_matches": 1', output)
+
+    def test_newest_cri_evidence_survives_complete_bounded_output(self):
+        body = """import json, sys
+if sys.argv[1] == 'ps':
+    print('k3d-fixture-server-0')
+    print('k3d-fixture-agent-0')
+elif 'ps' in sys.argv:
+    print(json.dumps({'containers': [{'id': str(i)*64, 'createdAt': i, 'labels': {
+        'io.kubernetes.pod.namespace': 'zarf', 'io.kubernetes.pod.name': 'agent-hook-abc',
+        'io.kubernetes.container.name': 'server'}} for i in (1, 2)]}))
+else:
+    print('newest-first-evidence' if sys.argv[-1].startswith('2') else 'older-evidence')
+    for i in range(79):
+        print('bounded fixture log line', i)
+"""
+        output = self.capture_fixture(body)
+        self.assertGreater(len(output.splitlines()), 300)
+        self.assertIn('Docker node discovery: exit=0', output)
+        self.assertEqual(output.count('newest-first-evidence'), 2)
+        self.assertEqual(output.count('older-evidence'), 2)
+        self.assertIn('Agent Service selector unavailable', output)
+
     def test_lifecycle_and_invocation_allowlist(self):
         pod = {'spec': {'nodeName': 'k3d-ci-server-0', 'containers': [
             {'name': 'server', 'image': 'agent:v0.88.0',
@@ -36,6 +105,65 @@ class AgentDiagnosticsTests(unittest.TestCase):
         output = self.helper('pod', pod)
         self.assertIn('omitted unfamiliar invocation', output)
         self.assertNotIn('opaque-argument', output)
+
+    def test_live_probe_timings_and_standard_resources_are_reported(self):
+        healthz = {'httpGet': {'path': '/healthz', 'scheme': 'HTTPS', 'port': 8443},
+                   'periodSeconds': 10, 'timeoutSeconds': 1, 'failureThreshold': 3}
+        container = {'name': 'server', 'livenessProbe': healthz,
+                     'readinessProbe': {**healthz, 'periodSeconds': 3, 'timeoutSeconds': 2,
+                                        'failureThreshold': 2},
+                     'resources': {'requests': {'cpu': '100m', 'memory': '32Mi'},
+                                   'limits': {'cpu': '500m', 'memory': '128Mi'}}}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        resources = next(row['resources'] for row in rows if 'resources' in row)
+        probes = next(row for row in rows if 'startupProbe' in row)
+        self.assertEqual(resources, container['resources'])
+        self.assertEqual(probes['startupProbe'], {'configured': False})
+        self.assertEqual(probes['livenessProbe'], {'configured': True, **healthz})
+        self.assertEqual(probes['readinessProbe']['timeoutSeconds'], 2)
+        container['startupProbe'] = {**healthz, 'initialDelaySeconds': 0,
+                                     'failureThreshold': 30, 'terminationGracePeriodSeconds': 5}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        startup = next(row['startupProbe'] for row in rows if 'startupProbe' in row)
+        self.assertEqual(startup, {'configured': True, **container['startupProbe']})
+        # Missing timings stay missing; source defaults are not live evidence.
+        container['livenessProbe'] = {'httpGet': healthz['httpGet']}
+        rows = [json.loads(line) for line in self.helper('pod', {
+            'spec': {'containers': [container]}}).splitlines()]
+        self.assertNotIn('timeoutSeconds', next(row['livenessProbe'] for row in rows
+                                               if 'livenessProbe' in row))
+
+    def test_probe_actions_and_custom_resources_cannot_disclose_secrets(self):
+        probes = [
+            {'exec': {'command': ['sh', '-c', 'opaque-exec-secret']}},
+            {'httpGet': {'path': '/healthz?token=opaque-query-secret', 'port': 8443,
+                         'scheme': 'HTTPS'}},
+            {'httpGet': {'path': '/healthz', 'port': 8443, 'scheme': 'HTTPS',
+                         'httpHeaders': [{'name': 'Authorization', 'value': 'opaque-header-secret'}]}},
+            {'httpGet': {'path': '/healthz', 'port': 8443, 'scheme': 'HTTPS',
+                         'host': 'opaque-host-secret'}},
+            {'tcpSocket': {'host': 'opaque-tcp-secret', 'port': 8443}},
+            {'grpc': {'service': 'opaque-grpc-secret', 'port': 8443}},
+        ]
+        for probe in probes:
+            with self.subTest(probe=probe):
+                container = {'name': 'server', 'startupProbe': {
+                    **probe, 'initialDelaySeconds': 4, 'periodSeconds': 'opaque-timing-secret',
+                    'timeoutSeconds': True, 'failureThreshold': -1},
+                    'resources': {'requests': {'cpu': '100m', 'memory': 'opaque-resource-secret',
+                                               'custom.example/opaque-custom-key': 'opaque-custom-value'},
+                                  'limits': {'cpu': '500m'}}}
+                output = self.helper('pod', {'spec': {'containers': [container]}})
+                self.assertNotIn('opaque-', output)
+                self.assertNotIn('custom.example', output)
+                metadata = next(json.loads(line)['startupProbe'] for line in output.splitlines()
+                                if 'startupProbe' in line)
+                self.assertEqual(metadata['initialDelaySeconds'], 4)
+                self.assertNotIn('timeoutSeconds', metadata)
+                self.assertNotIn('failureThreshold', metadata)
+                self.assertIn('omitted unfamiliar or custom action', metadata['action'])
 
     def test_cri_selects_only_agent_current_and_predecessor(self):
         containers = []

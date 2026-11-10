@@ -1,0 +1,73 @@
+{
+  "run_id": 42875811480,
+  "run_attempt": 1,
+  "run_url": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42875811480",
+  "source_git_sha": "ceb901e139688b2258de1362a105ac5a569e94a9",
+  "reporter_git_sha": "2eb72ee6ddb5759b14aa9413c6ed445056bdb35b",
+  "reporter_sha256": "2fb020c9033cb5c903388ee2cf5918af6c1ceaa2bb6c33e046305b34b2065afb",
+  "protocol": "synthetic-baseline-v1",
+  "requested_clients": 50,
+  "warmup_s": 300,
+  "measurement_s": 1200,
+  "repeats_per_architecture": 3,
+  "independent_clusters_per_architecture": 1,
+  "source_job_conclusions": {
+    "amd64": "success",
+    "arm64": "success"
+  },
+  "artifacts": {
+    "amd64": {
+      "id": 13797669942,
+      "sha256": "34f3f8904a0fd730e55a6c656dee03cb2766c2bdd206a0de9bc2d1e0c29c0557",
+      "bytes": 126146,
+      "job_id": 130038719372,
+      "url": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42875811480/artifacts/13797669942"
+    },
+    "arm64": {
+      "id": 13797399881,
+      "sha256": "cd663b67ab128cb674a7ab9b1596e0556ab94b83e29839b29676ae73f1601822",
+      "bytes": 127054,
+      "job_id": 130038720247,
+      "url": "https://github.com/jonathanagustin/uds-takserver/actions/runs/42875811480/artifacts/13797399881"
+    }
+  },
+  "verification": "Authenticated GitHub artifact metadata and downloaded ZIP SHA-256 checked before extraction. Raw records copied byte-for-byte; counters, PostgreSQL deltas, container sample aggregates and available JVM joins independently recomputed.",
+  "files": [
+    {
+      "path": "records/amd64/baseline-r1.json",
+      "bytes": 1095726,
+      "sha256": "ef98a3157a5d4f251f0071100c1bb2694c98320cdd0da23382ec6dfe436aae69",
+      "artifact_id": 13797669942
+    },
+    {
+      "path": "records/amd64/baseline-r2.json",
+      "bytes": 1091080,
+      "sha256": "46627ba99d0be419a299fbec3391810a0304a366838e26d6011ca2e5c66ba0d1",
+      "artifact_id": 13797669942
+    },
+    {
+      "path": "records/amd64/baseline-r3.json",
+      "bytes": 1090265,
+      "sha256": "c8a5c9e55c1ac285cb56ef8d72b2df49c87d4f1378028a0ab473a3b33018c501",
+      "artifact_id": 13797669942
+    },
+    {
+      "path": "records/arm64/baseline-r1.json",
+      "bytes": 1116061,
+      "sha256": "135039937fbc3abde3a0230746f9b73758f0989475b99967484c54c22e43af73",
+      "artifact_id": 13797399881
+    },
+    {
+      "path": "records/arm64/baseline-r2.json",
+      "bytes": 1115900,
+      "sha256": "291404eb785fe54bcb24deddede2959ea225ce61bf9ff3bf5deb36c0e373c29a",
+      "artifact_id": 13797399881
+    },
+    {
+      "path": "records/arm64/baseline-r3.json",
+      "bytes": 1116158,
+      "sha256": "929efff56dbcec9589cf9656fecaaec5adc561ceffcef5351b176e56d7f36c79",
+      "artifact_id": 13797399881
+    }
+  ]
+}

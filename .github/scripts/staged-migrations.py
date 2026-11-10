@@ -12,6 +12,7 @@ import re
 import datetime
 import subprocess
 import tempfile
+import stat
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = {'velero': ['velero'], 'identities': ['identities'], 'all': ['velero', 'identities']}
@@ -282,6 +283,59 @@ def sanitize_observer(proof, stage):
     return result
 
 
+# Classifications are signatures in an already-retained tail, never causal proof.
+# Neither matches nor surrounding text may leave the private evidence directory.
+FAILURE_PATTERNS = {
+    'package-unavailable': r'manifest unknown|name unknown|package.{0,80}not found|failed to (?:pull|fetch) package',
+    'package-integrity': r'checksum mismatch|invalid archive|invalid tar|not a tar archive|failed to extract|unexpected eof',
+    'cli-arguments': r'unknown flag|unknown command|invalid argument|accepts [0-9]+ arg',
+    'signature-verification': r'failed to verify (?:certificate|signature)|signature verification failed|no matching signatures',
+    'authentication': r'unauthorized|\bforbidden\b|authentication required|access denied|denied: requested access|status(?: code)?[ :]+40[13]|http/[0-9.]+\s+403',
+    'helm-operation': r'helm upgrade failed|helm install failed|upgrade failed:|installation failed:|another operation .{0,80}in progress',
+    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional propert(?:y|ies)|values don.t meet the specifications',
+    'cluster-connectivity': r'kubernetes cluster unreachable|connection refused|unable to connect to the server|no route to host',
+    'tls-certificate': r'x509:|certificate has expired|certificate signed by unknown authority|unknown ca|tls handshake timeout',
+    'admission-webhook': r'failed calling webhook|admission webhook.{0,160}denied|no endpoints available for service',
+    'timeout': r'context deadline exceeded|timed out waiting|i/o timeout|operation timed out',
+}
+
+
+def failure_categories(directory, progress):
+    """Read one bounded regular private file; publish only fixed IDs/counts."""
+    source, run, attempt = (os.environ.get(key, '') for key in
+                            ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'))
+    require(re.fullmatch('[a-f0-9]{40}', source) and re.fullmatch('[1-9][0-9]*', run)
+            and re.fullmatch('[1-9][0-9]*', attempt), 'invalid diagnostic source/run identity')
+    failed = [entry['name'] for entry in progress['ownerSteps']
+              if entry.get('status') == 'failed' and entry.get('name') in OWNER_STEPS]
+    result = {'schema': 1, 'sourceSHA': source, 'runID': run, 'runAttempt': attempt,
+              'failedStep': failed[-1] if failed else 'unavailable',
+              'scope': 'retained-tail-signatures-only', 'status': 'unavailable', 'categories': []}
+    path = directory / 'owner/PRIVATE-command-failure.txt'
+    try:
+        regular_file(path)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+                result['status'] = 'unavailable-oversized-or-nonregular'
+                return result
+            raw = stream.read(65537)
+        if len(raw) > 65536 or b'\0' in raw:
+            result['status'] = 'unavailable-oversized-or-invalid-text'
+            return result
+        text = raw.decode('utf-8', errors='strict')
+        # Entire retained stream is classified before any selection or output.
+        for identifier, pattern in FAILURE_PATTERNS.items():
+            count = len(re.findall(pattern, text, re.IGNORECASE))
+            if count:
+                result['categories'].append({'patternID': identifier, 'count': min(count, 32)})
+        result['status'] = 'classified' if result['categories'] else 'unclassified'
+    except (OSError, ValueError, UnicodeError):
+        pass  # Never publish exception text or captured private content.
+    return result
+
+
 def publish(directory, output, arch):
     """Always publish a small allowlist; never recursively copy private evidence."""
     scenarios, arches = selection()
@@ -322,6 +376,9 @@ def publish(directory, output, arch):
             (public / (stage + '.json')).write_text(json.dumps(allowed, indent=2) + '\n')
         except (ValueError, OSError, KeyError, TypeError, AttributeError):
             continue
+    if not value['accepted']:
+        diagnostic = failure_categories(directory, progress)
+        (public / 'failure-categories.json').write_text(json.dumps(diagnostic, indent=2) + '\n')
     value['publishedProofHashes'] = {path.stem: sha(path) for path in public.glob('*.json')}
     if value['accepted']:
         try:

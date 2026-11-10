@@ -352,5 +352,7 @@ Already-public releases can be verified again without changing their metadata.
 Prefer rerunning the original Release Please caller after a failed stage.
 Manual draft recovery must supply the exact trusted `release_id` and `source_sha`
 as well as `tag`; incomplete, mismatched or unavailable identity fails before
-building. No tag is moved. This lifecycle has offline contract tests; a future
+building. If Release Please returns a branch name instead of a commit SHA,
+publication stops and requires explicit recovery. No tag is moved. This lifecycle
+has offline contract tests; a future
 real release still needs its actual publication and promotion evidence.

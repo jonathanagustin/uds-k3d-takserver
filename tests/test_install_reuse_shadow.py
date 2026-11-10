@@ -40,7 +40,7 @@ class PolicyTests(unittest.TestCase):
                    'base': {'ref': 'main', 'sha': self.base, 'repo': {'full_name': SHADOW.REPO}},
                    'head': {'sha': self.head, 'repo': {'full_name': SHADOW.REPO}}}
         self.run = {'id': 100, 'workflow_id': 20, 'path': SHADOW.WORKFLOW, 'event': 'pull_request',
-                    'head_sha': self.head, 'head_repository': {'full_name': SHADOW.REPO},
+                    'head_sha': self.head, 'head_repository': {'full_name': SHADOW.REPO, 'id': 1427088300},
                     'status': 'completed', 'conclusion': 'success', 'run_attempt': 2,
                     'pull_requests': [{'number': 5}]}
         self.job = {'id': 30, 'name': 'validate-install (amd64)', 'status': 'completed',
@@ -200,6 +200,46 @@ class PolicyTests(unittest.TestCase):
         self.runs.pop()
         self.run['run_attempt'] = 3
         self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_postmerge_empty_pr_array_keeps_signed_selected_run(self):
+        self.run['pull_requests'] = []
+        self.assertTrue(self.result()['evidence_qualified'])
+
+    def test_newer_failed_cancelled_or_queued_empty_pr_array_invalidates_old_green(self):
+        self.run['pull_requests'] = []
+        for status, conclusion in (('completed', 'failure'), ('completed', 'cancelled'), ('queued', None)):
+            self.runs.append({**self.run, 'id': 101, 'status': status, 'conclusion': conclusion,
+                              'pull_requests': []})
+            self.assertIn('not-latest-applicable-run', self.result()['blockers'])
+            self.runs.pop()
+
+    def test_run_list_identity_must_match_query_even_for_older_rows(self):
+        for change in ({'event': 'push'}, {'head_sha': 'a' * 40}, {'workflow_id': 21},
+                       {'head_repository': {}}, {'head_repository': {'full_name': SHADOW.REPO}},
+                       {'head_repository': {'full_name': 'other/fork', 'id': 1427088300}},
+                       {'head_repository': {'full_name': SHADOW.REPO, 'id': 99}},
+                       {'run_attempt': None}):
+            self.runs.append({**self.run, 'id': 99, **change})
+            self.assertIn('run-list-identity-missing-contradictory-or-ambiguous', self.result()['blockers'])
+            self.runs.pop()
+
+    def test_positively_identified_foreign_fork_does_not_supersede_same_repo_run(self):
+        self.runs.append({**self.run, 'id': 101,
+                          'head_repository': {'full_name': 'other/fork', 'id': 99}})
+        self.assertTrue(self.result()['evidence_qualified'])
+
+    def test_missing_selected_run_and_duplicate_run_ids_fail_fresh(self):
+        self.runs[:] = [{**self.run, 'id': 99}]
+        self.assertFalse(self.result()['evidence_qualified'])
+        self.runs[:] = [self.run, copy.deepcopy(self.run)]
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_selected_run_listing_cannot_mask_changed_attempt_or_result(self):
+        for change in ({'run_attempt': 3}, {'status': 'queued', 'conclusion': None},
+                       {'conclusion': 'failure'}):
+            self.runs[:] = [{**self.run, **change}]
+            self.assertIn('selected-run-list-attempt-or-result-changed', self.result()['blockers'])
+        self.runs[:] = [self.run]
 
     def test_actual_execution_failure_skip_missing_or_duplicate_rejected(self):
         for state in ('failure', 'skipped', 'missing', 'duplicate'):

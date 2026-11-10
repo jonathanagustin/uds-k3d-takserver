@@ -185,7 +185,14 @@ when their trees happen to match. Same-repository, merged-main and exact PR merg
 commit bindings remain required. It reads all
 bounded run/job/artifact pages, rejects superseded attempts and newer applicable
 runs, requires the whole job and real execution steps to pass, and requires offline
-egress restoration. It verifies the signed receipt subject, workflow, GitHub issuer,
+egress restoration. GitHub may clear run `pull_requests` arrays after merge, so
+selected-run affiliation comes from the verified signed PR merge ref and exact
+source/head/merged-target bindings. The latest-run check conservatively includes
+all same-repository PR runs for that exact workflow and head SHA, even with empty
+association arrays. Returned rows must match those identities; missing or
+contradictory identities require fresh execution. A newer failed, cancelled or
+queued run invalidates older green evidence. Positively identified foreign forks
+remain ineligible. It verifies the signed receipt subject, workflow, GitHub issuer,
 numeric repository identity and exact run/attempt invocation. It also downloads the
 unique unexpired artifact and compares its bytes to the signed receipt. Archives
 must contain one small regular receipt file; paths, symlinks and extra entries are

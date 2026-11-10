@@ -39,6 +39,7 @@ def resources(text):
 
 def validate(snapshot, stage, baseline=None):
     ds = snapshot['daemonset']
+    require(not ds['metadata'].get('deletionTimestamp'), 'agent DaemonSet is terminating')
     require(ds['spec']['selector'] == {'matchLabels': {'name': 'node-agent'}}, 'unexpected immutable selector')
     uid = ds['metadata']['uid']
     if baseline:
@@ -56,11 +57,13 @@ def validate(snapshot, stage, baseline=None):
     require(len(pods) == desired, 'agent pod count differs from desired nodes')
     config = 'node-agent-config' if expected == LOCAL else 'velero-node-agent-config'
     for pod in pods:
+        require(not pod['metadata'].get('deletionTimestamp'), 'agent pod is terminating')
         require(any(o.get('uid') == uid and o.get('controller') is True for o in pod['metadata'].get('ownerReferences', [])), 'pod is not controlled by this DaemonSet')
         require(pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True' for c in pod['status'].get('conditions', [])), 'agent pod not Ready')
         container = next(c for c in pod['spec']['containers'] if c['name'] == 'node-agent')
         require('--node-agent-configmap=' + config in container.get('args', []), 'pod uses wrong agent configuration')
     require(snapshot['agentConfig']['metadata']['name'] == config and owner(snapshot['agentConfig'], expected), 'configuration has wrong name/owner')
+    require(not snapshot['agentConfig']['metadata'].get('deletionTimestamp'), 'agent configuration is terminating')
     payload = json.loads(snapshot['agentConfig']['data']['node-agent-config.json'])
     require(payload == {'privilegedFsBackup': True, 'podLabels': {'app.kubernetes.io/name': 'velero', 'app.kubernetes.io/component': 'velero-data-mover'}}, 'unexpected data-mover configuration')
     require(snapshot['bootstrap']['metadata']['name'] == 'velero-node-agent-bootstrap' and snapshot['localExemption']['metadata']['name'] == 'velero-node-agent', 'unexpected exemption identities')
@@ -76,6 +79,8 @@ def validate(snapshot, stage, baseline=None):
     else:
         require(has('localManifest', 'DaemonSet', 'node-agent') and has('localManifest', 'ConfigMap', config), 'local manifest lacks agent/config')
         require(not has('coreManifest', 'DaemonSet', 'node-agent'), 'Core still records the agent')
+        require(not has('coreManifest', 'ConfigMap', 'velero-node-agent-config'), 'Core still records retired agent configuration')
+        require('retiredCoreConfig' in snapshot and snapshot['retiredCoreConfig'] is None, 'retired Core configuration still exists or absence was not observed')
     acceptance = stage in ('core-after', 'local-after', 'fresh-core')
     if acceptance:
         backup, restore = snapshot['backup'], snapshot['restore']
@@ -92,7 +97,7 @@ def validate(snapshot, stage, baseline=None):
                 require(any(v['metadata'].get('labels', {}).get(label) == name and v['spec']['pod']['namespace'] == namespace and v['spec']['volume'] == 'data' for v in items), 'missing completed database data volume for ' + namespace)
     return {'schema': 1, 'observerSHA256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'clusterUID': snapshot['clusterUID'], 'daemonsetUID': uid, 'stage': stage,
             'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            'backupRestore': acceptance, 'postRestoreApiSmoke': 'separate required full-core test; not asserted here'}
+            'backupRestore': acceptance, 'retiredCoreConfigAbsent': expected == LOCAL, 'postRestoreApiSmoke': 'separate required full-core test; not asserted here'}
 
 
 def main():
@@ -129,6 +134,10 @@ def main():
                 'agentConfig': get('configmap', 'node-agent-config' if local else 'velero-node-agent-config'),
                 'bootstrap': get('exemption', 'velero-node-agent-bootstrap', 'uds-policy-exemptions'),
                 'localExemption': get('exemption', 'velero-node-agent', 'uds-policy-exemptions')}
+    if local:
+        retired = command(['kubectl', '--context', args.context, 'get', 'configmap', 'velero-node-agent-config',
+                           '-n', 'velero', '--ignore-not-found', '-o', 'json'])
+        snapshot['retiredCoreConfig'] = json.loads(retired) if retired.strip() else None
     for key, release in [('localManifest', LOCAL), ('coreManifest', CORE)]:
         snapshot[key] = resources(command(['helm', '--kube-context', args.context, 'get', 'manifest', release[0], '-n', release[1]]))
     if acceptance:

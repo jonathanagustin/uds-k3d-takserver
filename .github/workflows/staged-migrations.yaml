@@ -1,0 +1,160 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Reviewed opt-in experiments only. No automatic Test/Package/Full Core triggers.
+name: Staged migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Required staged acceptance (all runs owner then identity)
+        type: choice
+        options: [velero, identities, all]
+        default: velero
+      architecture:
+        description: Native architecture (pilot AMD first; ARM later without repeating AMD)
+        type: choice
+        options: [amd64, arm64, both]
+        default: amd64
+      passive_watch:
+        description: Optional diagnostic-only agent watcher (does not prove health)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      SCENARIO: ${{ inputs.scenario }}
+      ARCHITECTURE: ${{ inputs.architecture }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: plan
+        run: |
+          set -euo pipefail
+          matrix="$(python3 .github/scripts/staged-migrations.py plan)"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  trial:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    # Owner pilot ceiling180m; identity adds a separate45m wall budget.
+    timeout-minutes: 230
+    concurrency:
+      group: staged-migrations-${{ matrix.arch }}-${{ github.run_id }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    env:
+      SCENARIO: ${{ inputs.scenario }}
+      ARCHITECTURE: ${{ inputs.architecture }}
+      PASSIVE_WATCH: ${{ inputs.passive_watch }}
+      FLAVOR: upstream
+      DEV_PACKAGE_WAIT_SECONDS: "0"
+      DEV_PACKAGE_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned client tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: uv helm k3d aqua:defenseunicorns/uds-cli
+          cache: true
+      - name: Install identity probe compiler
+        if: inputs.scenario != 'velero'
+        run: |
+          mise install java
+          echo "$(mise where java)/bin" >> "$GITHUB_PATH"
+      - name: Expose the pinned embedded Kubernetes client
+        run: |
+          mkdir -p "$RUNNER_TEMP/staged-client-bin"
+          printf '#!/usr/bin/env bash\nexec uds zarf tools kubectl "$@"\n' > "$RUNNER_TEMP/staged-client-bin/kubectl"
+          chmod 755 "$RUNNER_TEMP/staged-client-bin/kubectl"
+          echo "$RUNNER_TEMP/staged-client-bin" >> "$GITHUB_PATH"
+      - name: Refuse a remote daemon before runner or cluster work
+        run: python3 tests/ephemeral-cluster.py bootstrap --context k3d-uds
+      - name: Install Docker Compose
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.7.0
+      - name: Prepare the disposable runner
+        env:
+          TRIM_SKIP_ABOVE_GB: "60"
+        run: |
+          set -euo pipefail
+          sudo sysctl -w fs.inotify.max_user_instances=1280 fs.inotify.max_user_watches=655360
+          ./.github/scripts/trim-runner.sh
+          ./.github/scripts/add-runner-swap.sh
+          printf '%s\n' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          ./.github/scripts/pin-image-tags.sh
+      - name: Run only the selected staged acceptance
+        timeout-minutes: 225
+        run: uv run --no-project --with pyyaml==6.0.3 bash .github/scripts/staged-migrations.sh
+      - name: Publish only allowlisted stage evidence, including failures
+        if: always()
+        env:
+          TRIAL_ARCH: ${{ matrix.arch }}
+        run: |
+          python3 .github/scripts/staged-migrations.py publish \
+            --directory "$RUNNER_TEMP/staged-migrations" \
+            --output "out/staged-public-${TRIAL_ARCH}" --arch "$TRIAL_ARCH"
+      - name: Upload exact-run sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged-migrations-${{ matrix.arch }}
+          path: out/staged-public-${{ matrix.arch }}/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload optional passive diagnostic evidence
+        if: always() && inputs.passive_watch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged-agent-watch-${{ matrix.arch }}
+          path: ${{ runner.temp }}/staged-migrations/passive-watch.jsonl
+          if-no-files-found: ignore
+          retention-days: 14
+
+  summary:
+    if: always()
+    needs: [plan, trial]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PLAN_RESULT: ${{ needs.plan.result }}
+      TRIAL_RESULT: ${{ needs.trial.result }}
+      SCENARIO: ${{ inputs.scenario }}
+      ARCHITECTURE: ${{ inputs.architecture }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require every selected trial to finish successfully
+        run: test "$PLAN_RESULT" = success && test "$TRIAL_RESULT" = success
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: staged-migrations-*
+          merge-multiple: true
+          path: staged-evidence
+      - name: Verify all exact-source architecture and scenario receipts
+        run: python3 .github/scripts/staged-migrations.py verify --directory staged-evidence/receipts

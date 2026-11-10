@@ -23,6 +23,18 @@ say() {
 }
 
 k() {
+  local trial_context="${BACKUP_TRIAL_CONTEXT:-}"
+  if [[ -n "${trial_context}" ]]; then
+    [[ "${trial_context}" == k3d-uds ]] || return 1
+    case "$1" in
+      apply | create | delete | scale | patch | exec | cp)
+        python3 "${root}/tests/ephemeral-cluster.py" verify --context "${trial_context}" >/dev/null || return 1
+        ;;
+      *) ;;
+    esac
+    command kubectl --context "${trial_context}" "$@"
+    return
+  fi
   if [[ -x ./zarf ]]; then
     ./zarf tools kubectl "$@"
   elif command -v uds >/dev/null 2>&1; then
@@ -50,9 +62,8 @@ fi
 attempt="${GITHUB_RUN_ATTEMPT:-1}"
 run_id="$(printf '%s' "${run_id}" | tr -cd 'a-zA-Z0-9')"
 attempt="$(printf '%s' "${attempt}" | tr -cd '0-9')"
-note="run-${run_id}-${attempt}"
-backup_name="tak-ci-${run_id}-${attempt}"
-restore_name="${backup_name}-r"
+# shellcheck source=tests/backup-names.sh
+source "${root}/tests/backup-names.sh"
 
 work="$(mktemp -d)"
 cleanup() {

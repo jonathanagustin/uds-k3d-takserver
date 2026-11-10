@@ -5,17 +5,43 @@ name: UI reel preview
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing stable release tag (pair with source_run_id); empty renders only"
+        type: string
+        default: ""
+      source_run_id:
+        description: "Successful main UI reel run to publish without rerendering"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
-concurrency:
-  group: ui-reel-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
+  mode:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 2
+    outputs:
+      mode: ${{ steps.validate.outputs.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate main-only render or paired publish inputs
+        id: validate
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: python3 demo/ui-reel/publish.py --mode-only
+
   render:
-    if: github.ref == 'refs/heads/main'
+    needs: mode
+    if: github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'render'
+    concurrency:
+      group: ui-reel-render-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
@@ -55,3 +81,41 @@ jobs:
           path: demo/out/ui-reel/
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    needs: mode
+    if: github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    # Serialize all release edits, including retries; never cancel active uploads.
+    concurrency:
+      group: ui-reel-publish
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the verified GitHub CLI version
+        env:
+          GH_VERSION: 2.103.3
+          GH_ARCHIVE_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location --max-time 120 \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}" -o "${archive}"
+          echo "${GH_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --status
+          tar -xzf "${archive}"
+          echo "${RUNNER_TEMP}/gh_${GH_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
+      - name: Verify and publish the existing signed artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: python3 demo/ui-reel/publish.py

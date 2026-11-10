@@ -121,6 +121,11 @@ jobs:
           PYYAML_VERSION: 6.0.3
         run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_profiles tests.test_bench tests.test_bench_capacity tests.test_full_core_top tests.test_basemap_probe tests.test_runner_wedge_probe tests.test_node_airgap tests.test_image_producers tests.test_helm_oci tests.test_mirror_checkpoint tests.test_app_image_consumers tests.test_published_package_ref tests.test_repository_name tests.test_ca_propagation tests.test_pin_image_tags -v
 
+      - name: UI reel publisher contracts
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s demo/ui-reel -p 'test_publish.py' -v
+
       - name: Optional native source and cache guards
         run: |
           python3 -B -m unittest discover -s takx -p 'test_source_inputs.py' -v

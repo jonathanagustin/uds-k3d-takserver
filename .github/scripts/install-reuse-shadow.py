@@ -252,9 +252,15 @@ def qualify(api, receipt, raw, verified, pr_number, target, policy_ref):
             pr['merge_commit_sha'] == target, 'not-unambiguous-same-repository-main-merge')
     source = api.get(f'git/commits/{receipt["source"]["checkout_commit"]}')
     pushed = api.get(f'git/commits/{target}')
+    source_parents = [parent['sha'] for parent in source['parents']]
+    target_parents = [parent['sha'] for parent in pushed['parents']]
+    # PR base.sha can retain an older fork-point snapshot after main advances.
+    # The immutable commits must prove that the ACTUAL tested/merged bases match.
     require(source['sha'] == receipt['source']['checkout_commit'] and pushed['sha'] == target and
-            [p['sha'] for p in source['parents']] == [pr['base']['sha'], pr['head']['sha']] and
-            [p['sha'] for p in pushed['parents']] == [pr['base']['sha']],
+            len(source_parents) == 2 and len(target_parents) == 1 and
+            all(isinstance(parent, str) and SHA.fullmatch(parent)
+                for parent in source_parents + target_parents) and
+            source_parents[0] == target_parents[0] and source_parents[1] == pr['head']['sha'],
             'synthetic-merge-or-squash-ancestry-mismatch')
     require(source['tree']['sha'] == receipt['source']['checkout_tree'] == pushed['tree']['sha'],
             'tested-and-pushed-trees-differ')
@@ -273,10 +279,38 @@ def qualify(api, receipt, raw, verified, pr_number, target, policy_ref):
             'run-identity-attempt-or-result-mismatch')
     runs = api.pages(f'actions/workflows/{workflow["id"]}/runs?event=pull_request&head_sha={pr["head"]["sha"]}',
                      'workflow_runs')
-    applicable = [item for item in runs if item.get('head_repository', {}).get('full_name') == REPO and
-                  any(p.get('number') == pr_number for p in item.get('pull_requests', []))]
+    # GitHub clears pull_requests after merge. The signed PR merge ref already
+    # binds the selected run; conservatively consider EVERY same-repo PR run for
+    # this exact workflow/head, including newer failed/queued unassociated rows.
+    applicable = []
+    seen = set()
+    for item in runs:
+        repository = item.get('head_repository')
+        require(type(item.get('id')) is int and item['id'] > 0 and item['id'] not in seen and
+                type(item.get('workflow_id')) is int and item['workflow_id'] == workflow['id'] and
+                item.get('event') == 'pull_request' and item.get('head_sha') == pr['head']['sha'] and
+                type(item.get('run_attempt')) is int and item['run_attempt'] > 0 and
+                isinstance(repository, dict) and type(repository.get('id')) is int and
+                repository['id'] > 0 and isinstance(repository.get('full_name'), str) and
+                re.fullmatch(r'[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}', repository['full_name']) and
+                (repository['full_name'] == REPO) == (repository['id'] == 1427088300),
+                'run-list-identity-missing-contradictory-or-ambiguous')
+        seen.add(item['id'])
+        if repository['full_name'] != REPO:
+            continue  # A positively identified foreign fork is not same-repo evidence.
+        applicable.append(item)
     require(applicable and max(item['id'] for item in applicable) == run['id'],
             'not-latest-applicable-run')
+    # IDs order run creation, not subsequent attempts. Do not let an older-ID
+    # rerun or still-active run be masked by a newer-ID green result.
+    require(all(item['id'] == run['id'] or
+                (item['run_attempt'] == 1 and item.get('status') == 'completed')
+                for item in applicable), 'other-applicable-run-unsettled-or-rerun-order-unproven')
+    selected_run = next(item for item in applicable if item['id'] == run['id'])
+    require(selected_run['run_attempt'] == run['run_attempt'] and
+            selected_run.get('status') == run['status'] and
+            selected_run.get('conclusion') == run['conclusion'],
+            'selected-run-list-attempt-or-result-changed')
     jobs = api.pages(f'actions/runs/{run["id"]}/attempts/{run["run_attempt"]}/jobs', 'jobs')
     scenario = receipt['scenario']
     offline = scenario['name'] == 'install-airgap'

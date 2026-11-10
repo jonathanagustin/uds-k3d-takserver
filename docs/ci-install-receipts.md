@@ -176,10 +176,27 @@ is performed. Authenticated read access to the repository's Actions metadata,
 artifacts and attestations is needed.
 
 The checker enforces actual synthetic-merge parents, a same-repository merged PR,
-a single-parent squash target and exact tested/pushed tree equality. It reads all
+a single-parent squash target and exact tested/pushed tree equality. The tested
+synthetic merge's first parent must equal the squash target's only parent; its
+second parent must equal the PR's current head. The PR base SHA can retain an older
+fork-point snapshot after main advances, so it is not the authority for the tested
+base. Different actual tested/merged parents still require fresh execution even
+when their trees happen to match. Same-repository, merged-main and exact PR merge
+commit bindings remain required. It reads all
 bounded run/job/artifact pages, rejects superseded attempts and newer applicable
 runs, requires the whole job and real execution steps to pass, and requires offline
-egress restoration. It verifies the signed receipt subject, workflow, GitHub issuer,
+egress restoration. GitHub may clear run `pull_requests` arrays after merge, so
+selected-run affiliation comes from the verified signed PR merge ref and exact
+source/head/merged-target bindings. The latest-run check conservatively includes
+all same-repository PR runs for that exact workflow and head SHA, even with empty
+association arrays. Returned rows must match those identities; missing or
+contradictory identities require fresh execution. A newer failed, cancelled or
+queued run invalidates older green evidence. Other applicable runs must be completed
+first attempts: an older run ID can have a later rerun, whose order is unproven.
+An older settled first-attempt failure or cancellation may be superseded by the
+newer successful run. The checker does not infer rerun order from timestamps.
+Positively identified foreign forks
+remain ineligible. It verifies the signed receipt subject, workflow, GitHub issuer,
 numeric repository identity and exact run/attempt invocation. It also downloads the
 unique unexpired artifact and compares its bytes to the signed receipt. Archives
 must contain one small regular receipt file; paths, symlinks and extra entries are

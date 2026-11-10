@@ -40,7 +40,7 @@ class PolicyTests(unittest.TestCase):
                    'base': {'ref': 'main', 'sha': self.base, 'repo': {'full_name': SHADOW.REPO}},
                    'head': {'sha': self.head, 'repo': {'full_name': SHADOW.REPO}}}
         self.run = {'id': 100, 'workflow_id': 20, 'path': SHADOW.WORKFLOW, 'event': 'pull_request',
-                    'head_sha': self.head, 'head_repository': {'full_name': SHADOW.REPO},
+                    'head_sha': self.head, 'head_repository': {'full_name': SHADOW.REPO, 'id': 1427088300},
                     'status': 'completed', 'conclusion': 'success', 'run_attempt': 2,
                     'pull_requests': [{'number': 5}]}
         self.job = {'id': 30, 'name': 'validate-install (amd64)', 'status': 'completed',
@@ -131,6 +131,56 @@ class PolicyTests(unittest.TestCase):
                 self.assertFalse(self.result()['evidence_qualified'])
                 self.gets = saved
 
+    def test_pr423_stale_snapshot_uses_actual_tested_base_not_metadata(self):
+        # Actual observed PR423 base/head/synthetic/tree values. The target
+        # commit and crypto object are STRUCTURAL fixtures, not a real squash
+        # or signature claim. Authentic qualification is a separate live probe.
+        stale_snapshot = '904905f0a88dca238e9a283280e13f1017e8ed5d'
+        tested_base = '8691a11b0db743923cbe99f8c3f486a9bfa3b04d'
+        tested_head = '2a5afcf2244de21271ba688bd348b9f10c3188d3'
+        tested_merge = '0109e4ac6bb05801fb6460b0c4274afbff3e0078'
+        tested_tree = 'f8b066fe58de38ed2547bb0b9de7534684d48a46'
+        self.gets[f'git/commits/{tested_merge}'] = {
+            'sha': tested_merge, 'tree': {'sha': tested_tree},
+            'parents': [{'sha': tested_base}, {'sha': tested_head}]}
+        self.merge = tested_merge
+        self.pr['base']['sha'] = stale_snapshot
+        self.pr['head']['sha'] = tested_head
+        self.run['head_sha'] = tested_head
+        self.receipt['source'].update(checkout_commit=tested_merge, checkout_tree=tested_tree)
+        self.gets[f'git/commits/{self.target}'].update(
+            tree={'sha': tested_tree}, parents=[{'sha': tested_base}])
+        result = self.result()
+        self.assertTrue(result['evidence_qualified'])
+        self.assertFalse(result['reuse_authorized'])
+        for blocker in ('prospective-input-equivalence-not-proven',
+                        'execution-class-policy-not-established',
+                        'complete-producer-dependency-policy-not-established',
+                        'consumer-enforcement-not-enabled'):
+            self.assertIn(blocker, result['blockers'])
+
+    def test_actual_base_change_is_rejected_even_when_pr_snapshot_matches_target(self):
+        # Equal trees do not excuse a different actual main base after testing.
+        advanced = 'a' * 40
+        self.pr['base']['sha'] = advanced
+        self.gets[f'git/commits/{self.target}']['parents'] = [{'sha': advanced}]
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_changed_current_pr_head_is_not_the_tested_head(self):
+        self.pr['head']['sha'] = 'a' * 40
+        self.run['head_sha'] = self.pr['head']['sha']
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_missing_extra_or_malformed_parents_fail_closed(self):
+        for source_parents, target_parents in (([], [{'sha': self.base}]),
+                                                ([{'sha': self.base}], [{'sha': self.base}]),
+                                                ([{'sha': self.base}, {'sha': self.head}], []),
+                                                ([{'sha': 'invalid'}, {'sha': self.head}],
+                                                 [{'sha': 'invalid'}])):
+            self.gets[f'git/commits/{self.merge}']['parents'] = source_parents
+            self.gets[f'git/commits/{self.target}']['parents'] = target_parents
+            self.assertFalse(self.result()['evidence_qualified'])
+
     def test_open_or_fork_pr_is_not_same_repository_squash(self):
         for change in ('open', 'fork', 'wrong-merge'):
             saved = copy.deepcopy(self.pr)
@@ -150,6 +200,79 @@ class PolicyTests(unittest.TestCase):
         self.runs.pop()
         self.run['run_attempt'] = 3
         self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_postmerge_empty_pr_array_keeps_signed_selected_run(self):
+        self.run['pull_requests'] = []
+        self.assertTrue(self.result()['evidence_qualified'])
+
+    def test_newer_failed_cancelled_or_queued_empty_pr_array_invalidates_old_green(self):
+        self.run['pull_requests'] = []
+        for status, conclusion in (('completed', 'failure'), ('completed', 'cancelled'), ('queued', None)):
+            self.runs.append({**self.run, 'id': 101, 'status': status, 'conclusion': conclusion,
+                              'pull_requests': []})
+            self.assertIn('not-latest-applicable-run', self.result()['blockers'])
+            self.runs.pop()
+
+    def older_run(self, status, conclusion, attempt):
+        self.runs.append({**self.run, 'id': 99, 'run_attempt': attempt, 'status': status,
+                          'conclusion': conclusion, 'pull_requests': []})
+        return self.result()
+
+    def test_older_id_queued_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('queued', None, 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_running_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('in_progress', None, 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_failed_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('completed', 'failure', 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_cancelled_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('completed', 'cancelled', 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_unsettled_first_attempt_also_requires_fresh(self):
+        for status in ('queued', 'in_progress'):
+            result = self.older_run(status, None, 1)
+            self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+            self.runs.pop()
+
+    def test_known_older_completed_first_attempt_can_be_superseded(self):
+        for conclusion in ('failure', 'cancelled'):
+            result = self.older_run('completed', conclusion, 1)
+            self.assertTrue(result['evidence_qualified'])
+            self.runs.pop()
+
+    def test_run_list_identity_must_match_query_even_for_older_rows(self):
+        for change in ({'event': 'push'}, {'head_sha': 'a' * 40}, {'workflow_id': 21},
+                       {'head_repository': {}}, {'head_repository': {'full_name': SHADOW.REPO}},
+                       {'head_repository': {'full_name': 'other/fork', 'id': 1427088300}},
+                       {'head_repository': {'full_name': SHADOW.REPO, 'id': 99}},
+                       {'run_attempt': None}):
+            self.runs.append({**self.run, 'id': 99, **change})
+            self.assertIn('run-list-identity-missing-contradictory-or-ambiguous', self.result()['blockers'])
+            self.runs.pop()
+
+    def test_positively_identified_foreign_fork_does_not_supersede_same_repo_run(self):
+        self.runs.append({**self.run, 'id': 101,
+                          'head_repository': {'full_name': 'other/fork', 'id': 99}})
+        self.assertTrue(self.result()['evidence_qualified'])
+
+    def test_missing_selected_run_and_duplicate_run_ids_fail_fresh(self):
+        self.runs[:] = [{**self.run, 'id': 99}]
+        self.assertFalse(self.result()['evidence_qualified'])
+        self.runs[:] = [self.run, copy.deepcopy(self.run)]
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_selected_run_listing_cannot_mask_changed_attempt_or_result(self):
+        for change in ({'run_attempt': 3}, {'status': 'queued', 'conclusion': None},
+                       {'conclusion': 'failure'}):
+            self.runs[:] = [{**self.run, **change}]
+            self.assertIn('selected-run-list-attempt-or-result-changed', self.result()['blockers'])
+        self.runs[:] = [self.run]
 
     def test_actual_execution_failure_skip_missing_or_duplicate_rejected(self):
         for state in ('failure', 'skipped', 'missing', 'duplicate'):

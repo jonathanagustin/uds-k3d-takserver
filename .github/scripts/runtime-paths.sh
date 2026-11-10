@@ -52,6 +52,7 @@ upstream/takx
 .github/workflows/full-core.yaml
 .github/workflows/unit-tests.yaml
 .github/workflows/mutation.yaml
+.github/workflows/ui-reel.yaml
 .github/workflows/atak.yaml
 .github/workflows/atak-vm.yaml
 .github/workflows/atak-e2e.yaml

@@ -37,3 +37,7 @@ Published-release consumers share `.github/scripts/published_package_ref.py`.
 The upgrade chapter resolves its previous release separately from the current
 recording's package; the rendered provenance command uses that same resolved
 current package URI. Publication defaults stay in the renamed namespace.
+
+For a short edit of existing UI footage without deploying a cluster, use the
+[manual UI reel recipe](ui-reel/README.md). It retains historical source hashes
+and does not replace published media.

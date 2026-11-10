@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "description": "Historical demo footage edited into a UI preview; not a new capture or TAKX footage",
+  "sources": [
+    {
+      "file": "demo-clip-cloudtak-user.mp4",
+      "sha256": "22f3f36df4b655c81401b15412fc1b12a7fd5856ee88b1ec25e8c0243e088ee4",
+      "release_id": 421514832,
+      "asset_id": 710164200,
+      "url": "https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-cloudtak-user.mp4",
+      "updated_at": "2026-11-04T16:37:33Z"
+    },
+    {
+      "file": "demo-clip-sso.mp4",
+      "sha256": "4e01c292d67a3c506da554e0acbf9af87422fbd83965b867d9dfa6572e3646ec",
+      "release_id": 421514832,
+      "asset_id": 710164314,
+      "url": "https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sso.mp4",
+      "updated_at": "2026-11-04T16:37:35Z"
+    },
+    {
+      "file": "demo-clip-sync.mp4",
+      "sha256": "deb66503050b91a27cd9215f94938484d5cd7e1ab7dc2179bd9a96fe28103aac",
+      "release_id": 421514832,
+      "asset_id": 710164345,
+      "url": "https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sync.mp4",
+      "updated_at": "2026-11-04T16:37:35Z"
+    }
+  ],
+  "font": {
+    "file": "Inter-4.1.zip",
+    "url": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+    "sha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e",
+    "license": "SIL Open Font License 1.1",
+    "members": {
+      "font-title.ttf": "extras/ttf/Inter-SemiBold.ttf",
+      "font-label.ttf": "extras/ttf/Inter-Medium.ttf",
+      "Inter-LICENSE.txt": "LICENSE.txt"
+    }
+  }
+}

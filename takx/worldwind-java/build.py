@@ -83,6 +83,32 @@ def write_jar(path, entries):
             jar.writestr(info, data)
 
 
+def compile_checked(command, out, dependency_hashes, state):
+    """Retain bounded compiler failures and reject inputs changed during compilation."""
+    try:
+        result = subprocess.run(command, cwd=out, capture_output=True, timeout=240)
+        code, stdout, stderr = result.returncode, result.stdout, result.stderr
+        failure = None if code == 0 else 'javac failed'
+    except subprocess.TimeoutExpired as error:
+        code, stdout, stderr = 124, error.stdout or b'', error.stderr or b''
+        failure = 'javac timed out after 240 seconds'
+    for path, expected in dependency_hashes.items():
+        if not path.is_file() or digest(path) != expected:
+            code, failure = 1, 'dependency changed during compilation: ' + path.name
+            break
+    (out / 'javac.stdout.log').write_bytes(stdout)
+    (out / 'javac.stderr.log').write_bytes(stderr)
+    state.update(exit_code=code, failure=failure,
+                 compiled_classes=len(list((out / 'classes').rglob('*.class'))),
+                 diagnostics_sha256=digest(out / 'javac.stderr.log'),
+                 dependencies_rechecked=True)
+    if code != 0:
+        shutil.rmtree(out / 'classes', ignore_errors=True)
+        (out / 'uds-takserver-worldwind-java.jar').unlink(missing_ok=True)
+    (out / 'build-state.json').write_text(json.dumps(state, indent=2, sort_keys=True) + '\n')
+    return code
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
@@ -105,7 +131,8 @@ def main():
         if not p.is_file() or p.stat().st_size != expected['bytes'] or digest(p) != expected['sha256']:
             raise ValueError('public Java dependency integrity mismatch: ' + name)
         jars.append(p)
-    version = subprocess.check_output(['javac', '-version'], stderr=subprocess.STDOUT).decode().strip()
+    javac = Path(shutil.which('javac') or '').resolve()
+    version = subprocess.check_output([str(javac), '-version'], stderr=subprocess.STDOUT).decode().strip()
     if not version.startswith('javac 17.'):
         raise ValueError('JDK 17 required')
     out = args.output.resolve()
@@ -128,25 +155,23 @@ def main():
     sources.sort()
     # Quoted javac response entries support paths containing spaces.
     (out / 'sources.args').write_text(''.join('"' + p + '"\n' for p in sources))
-    command = ['javac', '-J-Xmx768m', '--release', '17', '-encoding', 'UTF-8', '-proc:none',
+    command = [str(javac), '-J-Xmx768m', '--release', '17', '-encoding', 'UTF-8', '-proc:none',
                '-Xmaxerrs', '100', '-cp', __import__('os').pathsep.join(map(str, jars)),
                '-d', 'classes', '@sources.args']
     inputs = {'lock': lock, 'recipe_sha256': digest(Path(__file__)), 'javac': version,
+              'javac_binary': {'path': str(javac), 'sha256': digest(javac)},
+              'command': command,
               'gis_receipt': gis_receipt, 'native_built_or_loaded': False,
               'artifact_identity': 'uds-takserver-worldwind-java',
               'dependency_hashes': {p.name: digest(p) for p in jars}}
     (out / 'build-inputs.json').write_text(json.dumps(inputs, indent=2, sort_keys=True) + '\n')
-    result = subprocess.run(command, cwd=out, capture_output=True, timeout=240)
-    (out / 'javac.stdout.log').write_bytes(result.stdout)
-    (out / 'javac.stderr.log').write_bytes(result.stderr)
-    state = {'exit_code': result.returncode, 'java_sources': len(sources),
-             'compiled_classes': len(list(classes.rglob('*.class'))),
+    state = {'java_sources': len(sources),
              'source_scope': {'upstream_total': 1726, 'upstream_unchanged': 1725,
                               'upstream_patched': 1, 'project_helpers': 1},
              'native_built_or_loaded': False,
-             'inputs_sha256': digest(out / 'build-inputs.json'),
-             'diagnostics_sha256': digest(out / 'javac.stderr.log')}
-    if result.returncode == 0:
+             'inputs_sha256': digest(out / 'build-inputs.json')}
+    code = compile_checked(command, out, {p: inputs['dependency_hashes'][p.name] for p in jars}, state)
+    if code == 0:
         entries = {p.relative_to(classes).as_posix(): p.read_bytes() for p in classes.rglob('*.class')}
         for p, value in data.items():
             if p.startswith('src/') and not p.endswith('.java'):
@@ -163,11 +188,8 @@ def main():
         artifact = out / 'uds-takserver-worldwind-java.jar'
         write_jar(artifact, entries)
         state['artifact'] = {'name': artifact.name, 'sha256': digest(artifact), 'entries': len(entries)}
-    else:
-        # Diagnostics remain inspectable; partial classes never become an artifact.
-        shutil.rmtree(classes)
     (out / 'build-state.json').write_text(json.dumps(state, indent=2, sort_keys=True) + '\n')
-    raise SystemExit(result.returncode)
+    raise SystemExit(code)
 
 
 if __name__ == '__main__':

@@ -61,7 +61,9 @@ Outputs include copied verified source, compiler diagnostics, input/output
 receipts and, only on complete compiler success,
 `uds-takserver-worldwind-java.jar`. JAR entries are sorted with fixed timestamps
 and permissions. The receipt captures source, recipe, project patch, dependency,
-compiler and GIS receipt identities. Failed builds retain diagnostics and remove
+compiler binary path/hash, exact command and GIS receipt identities. Dependencies
+are rehashed after compilation before packaging. Compiler timeout (240 seconds)
+retains stdout/stderr and an explicit failure receipt while removing partial output. Failed builds retain diagnostics and remove
 partial class output; they never produce a JAR. Output directories must be new.
 
 ## Checks and limits

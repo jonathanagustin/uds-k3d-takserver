@@ -59,6 +59,40 @@ class IntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'complete examples'):
             recipe.validate(bad)
 
+    def test_timeout_retains_diagnostics_and_removes_partial_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'classes').mkdir()
+            (root / 'classes/Partial.class').write_bytes(b'partial')
+            (root / 'uds-takserver-worldwind-java.jar').write_bytes(b'partial')
+            error = subprocess.TimeoutExpired(['javac'], 240, output=b'compiler output', stderr=b'compiler error')
+            with patch.object(recipe.subprocess, 'run', side_effect=error):
+                self.assertEqual(recipe.compile_checked(['javac'], root, {}, {}), 124)
+            state = json.loads((root / 'build-state.json').read_text())
+            self.assertIn('timed out', state['failure'])
+            self.assertEqual((root / 'javac.stdout.log').read_bytes(), b'compiler output')
+            self.assertEqual((root / 'javac.stderr.log').read_bytes(), b'compiler error')
+            self.assertFalse((root / 'classes').exists())
+            self.assertFalse((root / 'uds-takserver-worldwind-java.jar').exists())
+
+    def test_dependency_mutation_rejected_after_successful_compiler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'classes').mkdir()
+            jar = root / 'dependency.jar'
+            jar.write_bytes(b'original')
+            expected = recipe.digest(jar)
+            def compile_and_mutate(*args, **kwargs):
+                (root / 'classes/Partial.class').write_bytes(b'class')
+                jar.write_bytes(b'mutation')
+                return subprocess.CompletedProcess(args[0], 0, b'', b'')
+            with patch.object(recipe.subprocess, 'run', side_effect=compile_and_mutate):
+                self.assertEqual(recipe.compile_checked(['javac'], root, {jar: expected}, {}), 1)
+            state = json.loads((root / 'build-state.json').read_text())
+            self.assertIn('dependency changed', state['failure'])
+            self.assertFalse((root / 'classes').exists())
+            self.assertFalse((root / 'uds-takserver-worldwind-java.jar').exists())
+
     def test_source_hash_mismatch_before_compilation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -152,13 +152,28 @@ def select_backend(cid, family):
     deadline = time.monotonic() + 15
     version, backend = parse_version(bounded_exec(cid, [family, "--version"], deadline), family)
     candidate = "xtables-" + backend + "-multi"
-    found = bounded_exec(cid, ["which", candidate], deadline)
+    # The generic link may expose bin/aux even when that directory is not on
+    # Docker exec PATH. Resolve it after version selection, never for rules.
+    found = bounded_exec(cid, ["which", family], deadline)
     if found.returncode != 0 or not found.stdout.startswith("/") or len(found.stdout) > 1024:
         raise RuntimeError("fixed iptables backend unavailable")
     resolved = bounded_exec(cid, ["readlink", "-f", found.stdout.strip()], deadline)
     if resolved.returncode != 0:
         raise RuntimeError("fixed iptables backend unresolved")
-    binding = validate_binding(dict(family=family, backend=backend, path=resolved.stdout.strip(),
+    path = resolved.stdout.strip()
+    if Path(path).name == "iptables-detect.sh":
+        # Some wrappers remain scripts after --version. Only a known packaged
+        # wrapper directory may trigger a same-backend fixed-name lookup.
+        validate_binding(dict(family=family, backend=backend,
+                              path=str(Path(path).with_name(candidate)), version=version, cid=cid))
+        found = bounded_exec(cid, ["which", candidate], deadline)
+        if found.returncode != 0 or not found.stdout.startswith("/") or len(found.stdout) > 1024:
+            raise RuntimeError("fixed iptables backend unavailable")
+        resolved = bounded_exec(cid, ["readlink", "-f", found.stdout.strip()], deadline)
+        if resolved.returncode != 0:
+            raise RuntimeError("fixed iptables backend unresolved")
+        path = resolved.stdout.strip()
+    binding = validate_binding(dict(family=family, backend=backend, path=path,
                                     version=version, cid=cid))
     for flag in ("-f", "-x"):
         if bounded_exec(cid, ["test", flag, binding["path"]], deadline).returncode != 0:

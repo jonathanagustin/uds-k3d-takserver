@@ -102,8 +102,10 @@ root = pathlib.Path(os.environ["AIRGAP_FIXTURE_ROOT"])
 a = sys.argv[1:]
 with (root / "calls").open("a") as stream: stream.write(json.dumps(a) + "\\n")
 c = a[6:]  # exec CID timeout -s KILL 3 COMMAND...
-if c[0] == "which": print("/bin/" + c[1])
-elif c[0] == "readlink": print(c[-1])
+if c[0] == "which":
+    if c[1].startswith("xtables-"): sys.exit(1)  # aux is deliberately absent from PATH
+    print("/bin/" + c[1])
+elif c[0] == "readlink": print("/bin/aux/xtables-legacy-multi")
 elif c[0] == "test": pass
 elif "--version" in c:
     family = c[1] if c[0].startswith("/") else c[0]
@@ -127,8 +129,9 @@ else:
             self.assertGreater(len(mutations), 6)
             for args in mutations:
                 self.assertEqual(args[:2], ["exec", "a" * 64])
-                self.assertEqual(args[6:8], ["/bin/xtables-legacy-multi", "iptables"])
+                self.assertEqual(args[6:8], ["/bin/aux/xtables-legacy-multi", "iptables"])
             self.assertTrue(any("127.0.0.11/32" in a for a in mutations))
+            self.assertFalse(any(a[6:8] == ["which", "xtables-legacy-multi"] for a in calls))
 
     def test_source_packaged_aux_and_extracted_data_paths_are_supported(self):
         for path in ("/bin/aux/xtables-legacy-multi", "/var/lib/rancher/k3s/data/" + "a" * 64 +
@@ -155,6 +158,19 @@ else:
         with patch.object(AIRGAP, "bounded_exec", side_effect=values):
             with self.assertRaisesRegex(RuntimeError, "mismatch"):
                 AIRGAP.select_backend("a" * 64, "iptables")
+
+    def test_known_wrapper_falls_back_only_to_same_validated_fixed_backend(self):
+        def completed(text="", code=0):
+            return subprocess.CompletedProcess([], code, text, "")
+        values = [completed("ip6tables v1.8.11 (nf_tables)\n"), completed("/bin/aux/ip6tables\n"),
+                  completed("/bin/aux/iptables-detect.sh\n"), completed("/bin/aux/xtables-nft-multi\n"),
+                  completed("/bin/aux/xtables-nft-multi\n"), completed(), completed(),
+                  completed("ip6tables v1.8.11 (nf_tables)\n")]
+        with patch.object(AIRGAP, "bounded_exec", side_effect=values) as command:
+            selected = AIRGAP.select_backend("a" * 64, "ip6tables")
+        self.assertEqual(selected, dict(binding("ip6tables", "nft"), path="/bin/aux/xtables-nft-multi"))
+        self.assertIn(["which", "xtables-nft-multi"], [call.args[1] for call in command.call_args_list])
+        self.assertFalse(any("legacy" in str(call.args[1]) for call in command.call_args_list))
 
     def test_legacy_state_and_replaced_container_fail_closed(self):
         with self.assertRaisesRegex(RuntimeError, "legacy state"):

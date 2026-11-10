@@ -54,6 +54,7 @@ def inventory(pods, quantity, errors):
                 "pod_phase": phase,
                 "memory_limit_bytes": limit_bytes,
                 "restart_count": status.get("restartCount"),
+                "container_id": status.get("containerID"), "image_id": status.get("imageID"),
                 "ready": status.get("ready"),
                 "termination_reason": ((status.get("state") or {}).get("terminated") or {}).get("reason"),
                 "last_termination_reason": ((status.get("lastState") or {}).get("terminated") or {}).get("reason"),
@@ -111,6 +112,8 @@ def assemble(before, after, samples, errors):
         if old is None or new is None:
             note(errors, f"{label} was not present in both boundary inventories; inspect pod replacement")
         if old and new:
+            if old.get('container_id') != new.get('container_id') or old.get('image_id') != new.get('image_id'):
+                note(errors, f"{label} container/image identity changed during the sampling window")
             if old["restart_count"] != new["restart_count"]:
                 note(errors, f"{label} restart count changed during the sampling window")
             if old["memory_limit_bytes"] != new["memory_limit_bytes"]:

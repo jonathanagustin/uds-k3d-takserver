@@ -9,6 +9,14 @@ name: Benchmark
 on:
   workflow_dispatch:
     inputs:
+      study:
+        description: "Short sweep or opt-in baseline: 50 clients, 5min warmup +20min measured, 3 repeats"
+        default: short
+        required: false
+        type: choice
+        options:
+          - short
+          - synthetic-baseline
       profile:
         description: "Profiles to measure; baseline avoids tuning rollouts"
         default: all
@@ -66,8 +74,9 @@ jobs:
       id-token: write
     env:
       TEST_FLAVOR: upstream
-      BENCH_PROFILE: ${{ github.event.inputs.profile || 'all' }}
-      BENCH_CLIENTS: ${{ github.event.inputs.clients || '10' }}
+      BENCH_STUDY: ${{ github.event.inputs.study || 'short' }}
+      BENCH_PROFILE: ${{ github.event.inputs.study == 'synthetic-baseline' && 'baseline' || github.event.inputs.profile || 'all' }}
+      BENCH_CLIENTS: ${{ github.event.inputs.study == 'synthetic-baseline' && '50' || github.event.inputs.clients || '10' }}
       # Test's package job publishes the dev package for these inputs; pull
       # it instead of creating it (.github/scripts/dev-package.sh).
       DEV_PACKAGE_WAIT_SECONDS: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '900' || '0' }}
@@ -120,9 +129,19 @@ jobs:
       - name: Use this commit's TAK, CloudTAK and PostGIS images
         run: ./.github/scripts/pin-image-tags.sh
 
+      - name: Refuse an existing cluster before the optional study
+        if: env.BENCH_STUDY == 'synthetic-baseline'
+        timeout-minutes: 1
+        run: python3 tests/ephemeral-cluster.py bootstrap --context k3d-uds
+
       - name: Install the current branch
         run: uds run test-install --set FLAVOR="${{ env.TEST_FLAVOR }}" --no-progress
         timeout-minutes: 110
+
+      - name: Bind the optional study to this job's disposable cluster
+        if: env.BENCH_STUDY == 'synthetic-baseline'
+        timeout-minutes: 2
+        run: python3 tests/ephemeral-cluster.py mark --context k3d-uds
 
       - name: Fetch the upstream load tester
         run: |

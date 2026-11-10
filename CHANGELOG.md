@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.1...v0.12.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **deps:** update ATAK viewer node-forge to 1.4.3 ([#450](https://github.com/jonathanagustin/uds-takserver/issues/450)) ([c671ccd](https://github.com/jonathanagustin/uds-takserver/commit/c671ccdf303f3b0303cab0f4947973e94babade9))
+
 ## [0.12.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.0...v0.12.1) (2026-11-10)
 
 

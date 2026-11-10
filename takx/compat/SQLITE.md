@@ -85,6 +85,7 @@ then supply its **completed** prefix and source cache:
 
 ```bash
 python3 takx/compat/test-sqlite.py \
+  --classpath-dir /tmp/tak-public-classpath \
   --source /path/to/clean/pinned/atak-civ \
   --backend /external/sqlite-prefix \
   --cache /external/sqlite-source-cache

@@ -26,11 +26,19 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
+    parser.add_argument('--classpath-dir', type=Path, required=True, help='The locked public port JARs')
     parser.add_argument('--backend', type=Path, required=True, help='Verified opt-in sqlite-jdbc source recipe prefix')
     parser.add_argument('--cache', type=Path, required=True, help='The verified source recipe cache; offline reuse only')
     parser.add_argument('--recipe', type=Path, default=ROOT / 'takx/sqlite-jdbc/build.py')
     args = parser.parse_args()
     source, backend = args.source.resolve(), args.backend.resolve()
+    jars = []
+    lock = json.loads((ROOT / 'takx/compat/port-classpath.lock.json').read_text())
+    for name, entry in lock.items():
+        jar = args.classpath_dir.resolve() / name
+        if not jar.is_file() or digest(jar) != entry['sha256']:
+            parser.error('Missing or mismatched locked classpath input: ' + name)
+        jars.append(str(jar))
     receipt = json.loads((backend / 'complete.json').read_text())
     expected = {'sqlite-jdbc-host-source.jar', 'native/libsqlitejdbc.so', 'slf4j-api.jar'}
     if set(receipt['artifacts']) != expected:
@@ -68,8 +76,8 @@ def main():
         inputs += [str(p) for p in sorted((ROOT / 'takx/compat/src/main/java').rglob('*.java'))]
         inputs.append(str(ROOT / 'takx/compat/src/test/java/com/atakmap/database/android/DesktopSQLiteTest.java'))
         classes = build / 'classes'
-        subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-d', str(classes), *inputs], check=True, timeout=60)
-        classpath = os.pathsep.join([str(classes), str(backend / 'sqlite-jdbc-host-source.jar'), str(backend / 'slf4j-api.jar')])
+        subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-cp', os.pathsep.join(jars), '-d', str(classes), *inputs], check=True, timeout=60)
+        classpath = os.pathsep.join([str(classes), str(backend / 'sqlite-jdbc-host-source.jar'), str(backend / 'slf4j-api.jar'), *jars])
         subprocess.run(['java', '-Djava.awt.headless=true', '-Dorg.sqlite.lib.path=' + str(backend / 'native'),
                         '-Dorg.sqlite.lib.name=libsqlitejdbc.so', '-Djava.library.path=' + str(backend / 'native'),
                         '-cp', classpath, 'com.atakmap.database.android.DesktopSQLiteTest'], check=True, timeout=60)

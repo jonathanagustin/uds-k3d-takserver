@@ -79,10 +79,13 @@ not present merely because Java compilation passes.
 
 [PROVENANCE.md](PROVENANCE.md) records the official source hits, license and tool
 review, public alternative distinction, and actual full-engine compiler result.
-The source-built Java artifacts remove the specific GDAL fork and jassimp Java
-API errors; the experiment still emitted 1,303 engine diagnostics, chiefly
-missing Android desktop APIs and cascades. Both TAKX 5.7 and 5.8 remain candidates;
-these counts neither select the older one nor prove a full engine build.
+The source-built Java artifacts removed the specific GDAL fork and jassimp Java
+API errors. That initial GIS-only experiment emitted 1,303 engine diagnostics,
+chiefly missing Android desktop APIs and cascades. The later integrated
+[desktop compatibility investigation](../compat/FINAL-APIS.md) reached zero Java
+compiler errors. Its full-engine compile recipe remains local research, while
+this GIS Java recipe is checked in. Both TAKX 5.7 and 5.8 remain candidates;
+compiler results neither select the older one nor establish a working client.
 Native interruption behavior, JNI lifetimes, driver/data coverage, map rendering,
 and client interoperability remain untested here. The full native recipe includes
 libkml, PROJ, OGDI, SQLite, PDFium and optional proprietary integrations; this

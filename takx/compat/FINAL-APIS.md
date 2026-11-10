@@ -108,6 +108,13 @@ python3 takx/compat/test-final-apis.py --source-dir /path/to/pinned-api-referenc
   --kernel-proof /path/to/fresh-frozen-kernel-compile
 ```
 
+**The full-engine compile result is local investigation evidence.** This
+repository does not yet provide its complete compiler recipe or a portable
+25-JAR input recipe. The checked-in port runner and individual API/source
+recipes remain independently runnable. Supplying `--kernel-proof` consumes an
+existing local compile proof; it does not rebuild or independently reproduce
+the complete engine.
+
 The optional proof directory contains `inputs.json`, `result.json`, compiled
 `classes/` and frozen `stage/` sources from the complete engine compile probe.
 The runner checks the upstream revision, every frozen source and original JAR
@@ -117,7 +124,10 @@ that Kernel VSI integration was not run.
 
 The reviewed complete compile retained all 862 engine, 77 port and six annotation
 sources (945 upstream), plus 59 adapters, with all 25 original classpath JAR hashes:
-1,004 source files, zero compiler errors and four warnings. The original port
+1,004 source files, zero compiler errors and four warnings. Of the 945 upstream
+files, 944 match the pinned revision byte-for-byte; `ColorBlendModeMarshal.java`
+has only the existing, hash-checked unused-import removal patch. All 862 engine
+files remain byte-for-byte unchanged. The original port
 runner remains available separately. This is compilation evidence, not full
 Kernel, TAKX, GL, GIS or native runtime acceptance.
 

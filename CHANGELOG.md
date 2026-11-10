@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.0...v0.12.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **bench:** report collected PostgreSQL metrics with correct units ([20a2f51](https://github.com/jonathanagustin/uds-takserver/commit/20a2f51522299147a6f4941646c6ceacd9edd59d))
+* **ci:** verify chart attestations against reusable signer ([#422](https://github.com/jonathanagustin/uds-takserver/issues/422)) ([0a07e59](https://github.com/jonathanagustin/uds-takserver/commit/0a07e594c34999b7e961a733e8f73b12b2afff64))
+* **docs:** refresh README status badges and track release versions ([#436](https://github.com/jonathanagustin/uds-takserver/issues/436)) ([904905f](https://github.com/jonathanagustin/uds-takserver/commit/904905f0a88dca238e9a283280e13f1017e8ed5d))
+* **takx:** validate streaming TLS identity and preserve JVM SIGPIPE handling ([979b84d](https://github.com/jonathanagustin/uds-takserver/commit/979b84dadda70d55a1bb8932fe8cc7eb28814d1d))
+
+
+### Documentation
+
+* clarify TAKX acceptance gates and link the UI preview ([a0a11ea](https://github.com/jonathanagustin/uds-takserver/commit/a0a11eab7c03d4b54e35849c35f6519f2ed6d6fc))
+
 ## [0.12.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.11.0...v0.12.0) (2026-11-10)
 
 

@@ -14,6 +14,8 @@ import json
 import os
 from pathlib import Path
 import signal
+import selectors
+import time
 import subprocess
 import sys
 import yaml
@@ -119,7 +121,7 @@ class Driver:
         args = ['uds', 'deploy', str(self.files[bundle]), '--packages', package,
                 '--confirm', '--retries', '1', '--no-progress', '--no-log-file']
         if owner:
-            args += ['--set', 'takserver.FILESSYSTEM_BACKUP_OWNER=' + owner]
+            args += ['--set', 'takserver.FILESYSTEM_BACKUP_OWNER=' + owner]
         self.guarded()
         self.execute(args, timeout=1500, env={'UDS_CONFIG': str(self.files['config'])})
 
@@ -198,28 +200,67 @@ class Driver:
         self.journal()
 
 
+OUTPUT_LIMIT = 8 * 1024 * 1024
+TAIL_LIMIT = 65536
+
+
 def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
-    child = subprocess.Popen(argv, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+    # kubectl JSON reads need complete stdout; oversized responses fail closed.
+    # Deployment logs cannot grow memory or the retained private diagnostic.
+    payload = input_text.encode() if input_text is not None else None
+    require(payload is None or len(payload) <= 1024 * 1024, 'staged command input exceeds limit')
+    child = subprocess.Popen(argv, stdin=subprocess.PIPE if payload is not None else subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
                              cwd=ROOT, env={**os.environ, **(env or {})})
+    streams = selectors.DefaultSelector()
+    streams.register(child.stdout, selectors.EVENT_READ, 'stdout')
+    streams.register(child.stderr, selectors.EVENT_READ, 'stderr')
+    if payload is not None:
+        os.set_blocking(child.stdin.fileno(), False)
+        streams.register(child.stdin, selectors.EVENT_WRITE, 'stdin')
+    stdout, tail, offset = bytearray(), bytearray(), 0
+    deadline, failure = time.monotonic() + timeout, None
     try:
-        stdout, stderr = child.communicate(input=input_text, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(child.pid, signal.SIGTERM)
-        try:
-            stdout, stderr = child.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
+        while streams.get_map():
+            if failure is None and time.monotonic() >= deadline:
+                failure = 'staged command timed out'
+                os.killpg(child.pid, signal.SIGKILL)
+            for key, _ in streams.select(0.1):
+                if key.data == 'stdin':
+                    try:
+                        offset += os.write(key.fd, payload[offset:offset + 65536])
+                    except BrokenPipeError:
+                        offset = len(payload)
+                    if offset == len(payload):
+                        streams.unregister(key.fileobj)
+                        key.fileobj.close()
+                    continue
+                chunk = os.read(key.fd, 65536)
+                if not chunk:
+                    streams.unregister(key.fileobj)
+                    key.fileobj.close()
+                    continue
+                tail.extend(chunk)
+                del tail[:-TAIL_LIMIT]
+                if key.data == 'stdout' and failure is None:
+                    if len(stdout) + len(chunk) > OUTPUT_LIMIT:
+                        failure = 'staged command stdout exceeds bounded capture limit'
+                        os.killpg(child.pid, signal.SIGKILL)
+                    else:
+                        stdout.extend(chunk)
+        child.wait(timeout=5)
+    finally:
+        streams.close()
+        if child.poll() is None:
             os.killpg(child.pid, signal.SIGKILL)
-            stdout, stderr = child.communicate()
-        if diagnostics:
-            diagnostics.write_text((stdout + '\n' + stderr)[-65536:])
-            diagnostics.chmod(0o600)
-        raise ValueError('staged command timed out; inspect private stage evidence before recovery') from None
-    if child.returncode and diagnostics:
-        diagnostics.write_text((stdout + '\n' + stderr)[-65536:])
-        diagnostics.chmod(0o600)
+            child.wait(timeout=5)
+    if (failure or child.returncode) and diagnostics:
+        descriptor = os.open(diagnostics, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(tail)
+    require(failure is None, failure or 'staged command failed')
     require(child.returncode == 0, 'staged command failed; no automatic rollback attempted')
-    return stdout
+    return stdout.decode(errors='replace')
 
 
 def main():

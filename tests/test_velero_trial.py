@@ -57,6 +57,41 @@ class TrialTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'source'):
                     D.load_plan(plan)
 
+    def test_deploy_set_key_matches_real_package_variable_declaration(self):
+        import yaml
+        package = yaml.safe_load((ROOT / 'zarf.yaml').read_text())
+        variables = {item['name'] for item in package['variables']}
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = self.driver(tmp)
+            target = Path(tmp) / 'input'
+            target.write_text('fixture')
+            driver.files = {'core': target, 'config': target}
+            driver.state['inputs'] = {'core': D.digest(target), 'config': D.digest(target)}
+            driver.idle = lambda: None
+            calls = []
+            driver.execute = lambda args, **kwargs: calls.append((args, kwargs))
+            for owner in ('local', 'core'):
+                driver.deploy('core', 'takserver', owner)
+                args, options = calls[-1]
+                key, value = args[args.index('--set') + 1].split('=')
+                prefix, variable = key.split('.')
+                self.assertEqual(prefix, package['metadata']['name'])
+                self.assertIn(variable, variables)
+                self.assertEqual(variable, 'FILESYSTEM_BACKUP_OWNER')
+                self.assertEqual(value, owner)
+                self.assertEqual(args[args.index('--packages') + 1], prefix)
+                self.assertEqual(options['env']['UDS_CONFIG'], str(target))
+                self.assertNotIn('--force-conflicts', args)
+
+    def test_excessive_child_stdout_is_killed_without_unbounded_diagnostic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            diagnostic = Path(tmp) / 'private.txt'
+            with self.assertRaisesRegex(ValueError, 'bounded capture limit'):
+                D.runner(['python3', '-c', 'import sys; sys.stdout.buffer.write(b"x" * (12 * 1024 * 1024))'],
+                         timeout=5, diagnostics=diagnostic)
+            self.assertLessEqual(diagnostic.stat().st_size, D.TAIL_LIMIT)
+            self.assertEqual(diagnostic.stat().st_mode & 0o777, 0o600)
+
     def test_timeout_retains_private_diagnostic_and_kills_child(self):
         with tempfile.TemporaryDirectory() as tmp:
             diagnostic = Path(tmp) / 'private.txt'

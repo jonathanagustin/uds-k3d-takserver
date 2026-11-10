@@ -1,6 +1,13 @@
 # Agent failure evidence
 
-`upgrade-agent-diagnostics.sh` runs only on an already failed upgrade boundary.
+`upgrade-agent-diagnostics.sh` runs only after failure: upgrade boundary checks
+invoke it in `tests/upgrade.sh`, ordinary Test installs invoke it immediately
+after their runner-wedge check, and Full Core invokes it immediately after its
+runner-wedge check with constant phase `full-core`. The workflow callers skip
+capture when a runner network stall was detected and have a two-minute step
+limit around the helper's own deadline. The shared Test upgrade steps do not
+invoke the install-only caller, so existing upgrade boundary capture is not
+duplicated. Capturing evidence cannot turn a failed validation into success.
 It retains the 30-second process-group deadline and three-second command limits.
 CRI capture runs first so unavailable API calls cannot consume the entire budget.
 It reads at most two k3d nodes and two agent container attempts per node, newest

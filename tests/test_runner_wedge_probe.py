@@ -110,6 +110,30 @@ class RunnerWedgeProbeTests(unittest.TestCase):
             self.assertIn("did not finish within 1s", result.stdout)
             self.assertEqual(output.read_text().strip(), "network-stalled=false")
 
+    def test_install_and_full_core_agent_capture_is_failure_only_after_wedge(self):
+        cases = [('.github/workflows/test.yaml', 'validate-install', 'install',
+                  "failure() && env.TEST_TYPE == 'install' && steps.runner-wedge.outputs.network-stalled != 'true'"),
+                 ('.github/workflows/full-core.yaml', 'validate-full-core', 'full-core',
+                  "failure() && steps.runner-wedge.outputs.network-stalled != 'true'")]
+        for file, job, phase, condition in cases:
+            steps = yaml.safe_load((ROOT / file).read_text())['jobs'][job]['steps']
+            wedge = next(index for index, step in enumerate(steps) if step.get('id') == 'runner-wedge')
+            selected = [index for index, step in enumerate(steps)
+                        if 'upgrade-agent-diagnostics.sh' in step.get('run', '')]
+            self.assertEqual(selected, [wedge + 1])
+            capture = steps[selected[0]]
+            self.assertEqual(capture['if'], condition)
+            self.assertEqual(capture['run'], './tests/upgrade-agent-diagnostics.sh ' + phase)
+            self.assertEqual(capture['timeout-minutes'], 2)
+            self.assertIs(capture['continue-on-error'], True)
+        test = yaml.safe_load((ROOT / '.github/workflows/test.yaml').read_text())['jobs']
+        # Shared upgrade steps must not duplicate their existing boundary capture.
+        for job in ('validate-upgrade', 'validate-upgrade-pg15'):
+            captures = [step for step in test[job]['steps']
+                        if 'upgrade-agent-diagnostics.sh' in step.get('run', '')]
+            self.assertEqual(len(captures), 1)
+            self.assertIn("env.TEST_TYPE == 'install'", captures[0]['if'])
+
     def test_cluster_runner_fallback_keeps_overrides_and_native_arm(self):
         test = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())["jobs"]
         full = yaml.safe_load((ROOT / ".github/workflows/full-core.yaml").read_text())["jobs"]

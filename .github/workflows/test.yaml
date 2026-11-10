@@ -640,6 +640,12 @@ jobs:
         timeout-minutes: 2
         run: ./.github/scripts/runner-wedge-probe.sh || true
 
+      - name: Capture agent availability after failed install
+        if: failure() && env.TEST_TYPE == 'install' && steps.runner-wedge.outputs.network-stalled != 'true'
+        timeout-minutes: 2
+        continue-on-error: true
+        run: ./tests/upgrade-agent-diagnostics.sh install
+
       # The trim step deletes toolchains to keep disk headroom. This is the other
       # half of that number: how much of the disk the test used by its end.
       # A wedged Docker daemon after a failed cluster start can make

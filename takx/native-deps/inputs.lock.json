@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "platform": "Linux-x86_64",
+  "draco": {
+    "path": "draco",
+    "version": "1.5.7",
+    "tree": "cdb45ced759d4f6bf697cb3885830bfc47ec6996",
+    "files": 984,
+    "bytes": 84642797,
+    "fixture": "testdata/cube_att.obj",
+    "fixture_sha256": "72194f6d1e948c898dfa9056d473af012a3705c15015ac8282e33405aab9a738"
+  },
+  "tools": {
+    "cmake": "3.31.6",
+    "ninja": "1.11.1.git.kitware.jobserver-1",
+    "gcc": "14.2.0"
+  },
+  "headers": [
+    {
+      "path": "khronos/EGL/api/EGL/egl.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/EGL/api/EGL/egl.h",
+      "destination": "EGL/egl.h",
+      "bytes": 19286,
+      "sha256": "793779fefd83bb0e2a469a712efca01890d83c5ea5b596653c3cb6cdd669e200",
+      "git_blob": "97d0878cc7a29cb5ed7d9ebc546e2b8e3cd05b83"
+    },
+    {
+      "path": "khronos/EGL/api/EGL/eglext.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/EGL/api/EGL/eglext.h",
+      "destination": "EGL/eglext.h",
+      "bytes": 72051,
+      "sha256": "eb58fcc3fc07e2770fb6ea68297fa5e453e6ae3f44b8a41d60716785efd06866",
+      "git_blob": "d58da70e6b3beb9dbc67e32986690dea19346b3a"
+    },
+    {
+      "path": "khronos/EGL/api/EGL/eglplatform.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/EGL/api/EGL/eglplatform.h",
+      "destination": "EGL/eglplatform.h",
+      "bytes": 5011,
+      "sha256": "1081d0dd1099f5f0367d21c2949e3be344d3fe37c41e7cab907b12ef71f95703",
+      "git_blob": "99362a23deeace9de3f9fb80f63995c175d4d472"
+    },
+    {
+      "path": "khronos/EGL/api/KHR/khrplatform.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/EGL/api/KHR/khrplatform.h",
+      "destination": "KHR/khrplatform.h",
+      "bytes": 11131,
+      "sha256": "7b1e01aaa7ad8f6fc34b5c7bdf79ebf5189bb09e2c4d2e79fc5d350623d11e83",
+      "git_blob": "01646449caedc958effc3b450360aefd260671ab"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES2/gl2.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES2/gl2.h",
+      "destination": "GLES2/gl2.h",
+      "bytes": 42930,
+      "sha256": "12b68cd454156211ce9a8f835e21fd72005324ab05b372ce6d22d58d48bb5932",
+      "git_blob": "af244a70c1f7f9357fab2375f06e1395a0c443ef"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES2/gl2ext.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES2/gl2ext.h",
+      "destination": "GLES2/gl2ext.h",
+      "bytes": 241221,
+      "sha256": "4fc5b0034dcde9c125922e3e70d01489a6b335076856ee660294e1a6305a3719",
+      "git_blob": "9448ce09fc705784b8da023633daeaf99ef2fa1b"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES2/gl2platform.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES2/gl2platform.h",
+      "destination": "GLES2/gl2platform.h",
+      "bytes": 642,
+      "sha256": "f5da0747540a50be5f44aad264aae45bdf157a192c40f17487dd9a2f99c71b6c",
+      "git_blob": "5bcce6d89e0992419294ce95a269427a2811e2f7"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES3/gl3.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES3/gl3.h",
+      "destination": "GLES3/gl3.h",
+      "bytes": 81600,
+      "sha256": "cb0c9d09a19ced327f457a6c2a1e5d5d418703978cae9efe9664c60640edae04",
+      "git_blob": "eaf5efdfeb0ad12ad83b9fd06b187168b0b96f28"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES3/gl31.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES3/gl31.h",
+      "destination": "GLES3/gl31.h",
+      "bytes": 106404,
+      "sha256": "612fc3a3c483baa3b04dfa6be3cb44217ad5ebb92c3af05531dcac2c159b177a",
+      "git_blob": "502d6feec852a7b5c8fefaabe5cf1f5accb5dc7d"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES3/gl32.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES3/gl32.h",
+      "destination": "GLES3/gl32.h",
+      "bytes": 127284,
+      "sha256": "e580e7db6bfc6b86860ae6b02fa27eb9acfe6726bab71f9c268568cdbf80baea",
+      "git_blob": "ae56b0e95f24bc9005dcb0da01b6eb7163aaa801"
+    },
+    {
+      "path": "khronos/OpenGL/api/GLES3/gl3platform.h",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/khronos/OpenGL/api/GLES3/gl3platform.h",
+      "destination": "GLES3/gl3platform.h",
+      "bytes": 642,
+      "sha256": "a9e060dae5a2b11c5a889b679692b7089a10a7e03ebfbb6cf28217f6e322fb08",
+      "git_blob": "8699212de64d4050ed97edd548e6c7cee6f56c0e"
+    }
+  ],
+  "archives": {
+    "tinygltf": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/tinygltf-2.4.1-mod.tar.gz",
+      "bytes": 5758009,
+      "sha256": "fa32ead8ec963f96ae6bd4a65d5b8b8361740d25e8915f3f226303d1ac2e6f85",
+      "files": [
+        {
+          "path": "./tinygltf/json.hpp",
+          "destination": "include/tinygltf/json.hpp",
+          "bytes": 709997,
+          "sha256": "8a6dbf3bf01156f438d0ca7e78c2971bca50eec4ca6f0cf59adf3464c43bb9d5"
+        },
+        {
+          "path": "./tinygltf/stb_image.h",
+          "destination": "include/tinygltf/stb_image.h",
+          "bytes": 262586,
+          "sha256": "599c64066c333d9b125d65f3394de642a42cf4888c3626535dcf62fcfaee1227"
+        },
+        {
+          "path": "./tinygltf/stb_image_write.h",
+          "destination": "include/tinygltf/stb_image_write.h",
+          "bytes": 66523,
+          "sha256": "6b0113727bc3b5c3e343c2dd65c507e3af0705354eef1e77b880e67ddd8e1b27"
+        },
+        {
+          "path": "./tinygltf/tiny_gltf.h",
+          "destination": "include/tinygltf/tiny_gltf.h",
+          "bytes": 226454,
+          "sha256": "9c53d04d06d1f7c0ac99cd11551e4746ce53003d6874a6e2f9362fe989bd1488"
+        },
+        {
+          "path": "./tinygltf/README.md",
+          "destination": "licenses/tinygltf/README.md",
+          "bytes": 9055,
+          "sha256": "bd1afaf28d88f21016754a303b15aea1eb5de6de83d3199003ba2885f1cc6740"
+        },
+        {
+          "path": "./tinygltf/LICENSE",
+          "destination": "licenses/tinygltf/LICENSE",
+          "bytes": 1112,
+          "sha256": "2ae461f8c8b78ed77c14e9c3b7e353ba277e44cb3dbfb5a6d380f76f2ae081a2"
+        },
+        {
+          "path": "./tinygltf/conanfile.py",
+          "destination": "licenses/tinygltf/conanfile.py",
+          "bytes": 565,
+          "sha256": "132c102e20cb667cf5b29304ad90380ccf1ede41e3d090c5718854043501efed"
+        }
+      ]
+    },
+    "tinygltfloader": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/tinygltfloader-0.9.5-mod.tar.gz",
+      "bytes": 708667,
+      "sha256": "2d9a0196d5346a955f3bbb08f890bb808e92b9980dd79d112611501500d68c43",
+      "files": [
+        {
+          "path": "./tinygltfloader/json.hpp",
+          "destination": "include/tinygltfloader/json.hpp",
+          "bytes": 709997,
+          "sha256": "8a6dbf3bf01156f438d0ca7e78c2971bca50eec4ca6f0cf59adf3464c43bb9d5"
+        },
+        {
+          "path": "./tinygltfloader/stb_image.h",
+          "destination": "include/tinygltfloader/stb_image.h",
+          "bytes": 222898,
+          "sha256": "3e08556d97b2e07881df61b72aceb1e89d8c43f70354155749da4c37bde62a6a"
+        },
+        {
+          "path": "./tinygltfloader/tiny_gltf_loader.h",
+          "destination": "include/tinygltfloader/tiny_gltf_loader.h",
+          "bytes": 75320,
+          "sha256": "2e2956b363caf90c7425e945b1cb760af268716d5a9c1bf57af1c493aa4a54b6"
+        },
+        {
+          "path": "./tinygltfloader/README.md",
+          "destination": "licenses/tinygltfloader/README.md",
+          "bytes": 2871,
+          "sha256": "207277d0e5a672f94531d4827d98f96e6e45aec55f389f21255f1fcfe2fca57a"
+        },
+        {
+          "path": "./tinygltfloader/conanfile.py",
+          "destination": "licenses/tinygltfloader/conanfile.py",
+          "bytes": 471,
+          "sha256": "920a59c3163aab61ffb67c4e861086174a0a16edd62e581afc0b988ff9d670c0"
+        }
+      ]
+    }
+  }
+}

@@ -163,7 +163,7 @@ publish() {
     return
   fi
   [[ -f "${file}" ]] || { echo "dev-package: ${file} missing" >&2; exit 1; }
-  zarf package publish "${file}" "oci://${repo}" --tag "$(key)" --confirm --no-progress
+  python3 "${root}/.github/scripts/publish-dev-package.py" "${file}" "oci://${repo}" "$(key)"
   echo "dev-package: published ${r}"
 }
 

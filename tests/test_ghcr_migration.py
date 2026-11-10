@@ -98,10 +98,11 @@ class MigrationTests(unittest.TestCase):
 
     def test_signed_storage_redirect_drops_registry_authorization(self):
         request = urllib.request.Request('https://ghcr.io/v2/fixture/blobs/' + A,
-                                         headers={'Authorization': 'Bearer private-test-token'})
+                                         headers={'Authorization': 'Bearer private-test-token'}, method='HEAD')
         redirected = M.SafeRedirect().redirect_request(request, None, 302, 'redirect', {},
                                                         'https://storage.blob.core.windows.net/public')
         self.assertIsNone(redirected.get_header('Authorization'))
+        self.assertEqual(redirected.get_method(), 'HEAD')
 
     def test_copy_refuses_changed_destination_and_never_runs_a_command(self):
         family = M.plan_family(FakeRegistry({(M.OLD + 'takserver', 'version'): A}), 'takserver')

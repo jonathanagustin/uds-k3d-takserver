@@ -72,6 +72,7 @@ jobs:
         with:
           subject-checksums: ${{ runner.temp }}/helm-charts/subjects.txt
 
+      # Reusable calls retain the caller workflow ref; the signer is this workflow.
       - name: Verify chart attestations
         shell: bash
         env:
@@ -81,5 +82,5 @@ jobs:
           while read -r digest name; do
             gh attestation verify "oci://${name}@sha256:${digest}" \
               --owner "${GITHUB_REPOSITORY_OWNER}" \
-              --signer-workflow "${GITHUB_WORKFLOW_REF%@*}"
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/charts.yaml"
           done < "${RUNNER_TEMP}/helm-charts/subjects.txt"

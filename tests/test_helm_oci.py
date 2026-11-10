@@ -6,9 +6,11 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -78,6 +80,78 @@ class ChartTests(unittest.TestCase):
                 archive.addfile(info, io.BytesIO(b'content'))
             charts.normalize(executable, 1234)
             self.assertNotEqual(paths[0], executable.read_bytes())
+
+    def run_attestation_step(self, caller, overrides=None, reject_subject=None):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/charts.yaml').read_text())
+        steps = [step for job in workflow['jobs'].values() for step in job['steps']
+                 if step.get('name') == 'Verify chart attestations']
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0]['shell'], 'bash')
+        expected = [
+            ['attestation', 'verify', 'oci://ghcr.io/fixture-org/charts/uds-takserver@sha256:' + 'a' * 64,
+             '--owner', 'fixture-org', '--signer-workflow',
+             'fixture-org/uds-takserver/.github/workflows/charts.yaml'],
+            ['attestation', 'verify', 'oci://ghcr.io/fixture-org/charts/uds-cloudtak@sha256:' + 'b' * 64,
+             '--owner', 'fixture-org', '--signer-workflow',
+             'fixture-org/uds-takserver/.github/workflows/charts.yaml'],
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'helm-charts').mkdir()
+            (root / 'helm-charts/subjects.txt').write_text(
+                'a' * 64 + ' ghcr.io/fixture-org/charts/uds-takserver\n'
+                + 'b' * 64 + ' ghcr.io/fixture-org/charts/uds-cloudtak\n')
+            (root / 'expected.json').write_text(json.dumps(expected))
+            executable = root / 'gh'
+            executable.write_text(f'#!{sys.executable}\n' + r"""
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ['RUNNER_TEMP'])
+args = sys.argv[1:]
+with (root / 'calls.jsonl').open('a') as out:
+    out.write(json.dumps(args) + '\n')
+expected = json.loads((root / 'expected.json').read_text())
+if args not in expected:
+    sys.exit(41)
+if args[2] == os.environ.get('REJECT_SUBJECT'):
+    sys.exit(42)
+""")
+            executable.chmod(0o755)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                       RUNNER_TEMP=temp, GITHUB_REPOSITORY='fixture-org/uds-takserver',
+                       GITHUB_REPOSITORY_OWNER='fixture-org', GITHUB_WORKFLOW_REF=caller,
+                       GH_TOKEN='fixture-no-network')
+            env.update(overrides or {})
+            env['REJECT_SUBJECT'] = reject_subject or ''
+            result = subprocess.run(['bash', '-c', steps[0]['run']], env=env,
+                                    capture_output=True, text=True, timeout=10)
+            log = root / 'calls.jsonl'
+            calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+            return result, calls, expected
+
+    def test_attestation_signer_is_chart_workflow_for_direct_and_reusable_callers(self):
+        for caller in ('fixture-org/uds-takserver/.github/workflows/charts.yaml@refs/tags/v0.1.2',
+                       'fixture-org/uds-takserver/.github/workflows/release-please.yaml@refs/heads/main'):
+            with self.subTest(caller=caller):
+                result, calls, expected = self.run_attestation_step(caller)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, expected)
+
+    def test_attestation_owner_and_signer_repository_are_fail_closed(self):
+        for overrides in ({'GITHUB_REPOSITORY_OWNER': 'wrong-owner'},
+                          {'GITHUB_REPOSITORY': 'fixture-org/wrong-repository'}):
+            with self.subTest(overrides=overrides):
+                result, calls, _ = self.run_attestation_step(
+                    'fixture-org/uds-takserver/.github/workflows/charts.yaml@refs/heads/main', overrides)
+                self.assertEqual(result.returncode, 41)
+                self.assertEqual(len(calls), 1)
+
+    def test_attestation_failure_stops_before_next_immutable_subject(self):
+        result, calls, expected = self.run_attestation_step(
+            'fixture-org/uds-takserver/.github/workflows/release-please.yaml@refs/heads/main',
+            reject_subject='oci://ghcr.io/fixture-org/charts/uds-takserver@sha256:' + 'a' * 64)
+        self.assertEqual(result.returncode, 42)
+        self.assertEqual(calls, expected[:1])
 
     @unittest.skipUnless(shutil.which('helm'), 'requires the repository-pinned Helm')
     def test_real_tag_packaging_preserves_render_and_app_version(self):

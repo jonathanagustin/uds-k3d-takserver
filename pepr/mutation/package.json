@@ -1,0 +1,19 @@
+{
+  "name": "uds-takserver-pepr-mutation-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "cd .. && mutation/node_modules/.bin/stryker run mutation/stryker.config.mjs && node mutation/check-report.mjs"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.1.1"
+  },
+  "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "overrides": {
+    "minimatch": "11.0.1",
+    "qs": "6.16.1"
+  }
+}

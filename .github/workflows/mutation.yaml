@@ -1,0 +1,99 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Mutation tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Mutation suite to run
+        type: choice
+        options: [all, java, pepr]
+        default: all
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  java:
+    name: TAKX Java contracts (PIT)
+    if: inputs.suite == 'all' || inputs.suite == 'java'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Java and Maven
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          working_directory: takx/compat/mutation
+          install_args: java maven
+          cache: true
+      - name: Cache Maven artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: mutation-maven-${{ runner.os }}-${{ hashFiles('takx/compat/mutation/pom.xml') }}
+          restore-keys: mutation-maven-${{ runner.os }}-
+      - name: Baseline contracts and mutation gate
+        working-directory: takx/compat/mutation
+        run: mvn -B -ntp clean test org.pitest:pitest-maven:mutationCoverage
+      - name: Save PIT and baseline reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: java-mutations-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            takx/compat/mutation/target/pit-reports
+            takx/compat/mutation/target/surefire-reports
+          if-no-files-found: warn
+          retention-days: 14
+
+  pepr:
+    name: Admission scope (Stryker)
+    if: inputs.suite == 'all' || inputs.suite == 'pepr'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Node
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: node
+          cache: true
+      - name: Cache npm downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: mutation-npm-${{ runner.os }}-${{ hashFiles('pepr/package-lock.json', 'pepr/mutation/package-lock.json') }}
+          restore-keys: mutation-npm-${{ runner.os }}-
+      - name: Install application and isolated test tooling
+        working-directory: pepr
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix mutation ci --ignore-scripts --no-audit --no-fund
+      - name: Baseline coverage and mutation gate
+        working-directory: pepr
+        run: |
+          mkdir -p coverage
+          npm run test:coverage
+          npm --prefix mutation test
+      - name: Save Stryker reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pepr-mutations-${{ github.run_id }}-${{ github.run_attempt }}
+          path: pepr/mutation/reports
+          if-no-files-found: warn
+          retention-days: 14

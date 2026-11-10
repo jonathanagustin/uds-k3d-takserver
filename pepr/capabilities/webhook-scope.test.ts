@@ -80,6 +80,10 @@ test("the match expression names every object the capabilities mutate", () => {
   assert.ok(expression.includes("request.kind.kind == 'StatefulSet'"));
   assert.ok(expression.includes("has(object.metadata.labels)"));
   assert.ok(!expression.includes('"'), "the expression must not need YAML escaping");
+  // CEL list literals must retain separators and the final application allowlist.
+  const lists = [...expression.matchAll(/\bin \[('[^']+'(?:, '[^']+')*)\]/g)]
+    .map(match => match[1].split(", ").map(value => value.slice(1, -1)));
+  assert.deepEqual(lists, [TAK_DEPLOYS, TAK_APPS]);
 });
 
 test("scopeWebhook keeps one namespace, matches by name and label, and drops the object selector", () => {
@@ -95,6 +99,12 @@ test("scopeWebhook keeps one namespace, matches by name and label, and drops the
 test("scopeWebhook throws when the generated template changes", () => {
   assert.throws(() => scopeWebhook(generated.replace("    namespaceSelector:\n", "")), /namespaceSelector anchor/);
   assert.throws(() => scopeWebhook(generated.replace("    rules:\n", "")), /namespaceSelector anchor/);
+});
+
+test("scopeWebhook accepts an anchor at the start of a generated fragment", () => {
+  const scoped = scopeWebhook("    namespaceSelector:\n    rules:\n");
+  assert.ok(scoped.startsWith("    namespaceSelector:\n      matchLabels:\n"));
+  assert.ok(scoped.endsWith("    rules:\n"));
 });
 
 test("pinLiterals keeps the chart values out of the path and the CA bundle", () => {
@@ -159,4 +169,46 @@ test("splitTakClientWebhook moves TakClients to their own entry without the TAK 
 
 test("splitTakClientWebhook throws when the TakClient rule is missing", () => {
   assert.throws(() => splitTakClientWebhook(scopeWebhook(generated)), /TakClient rule anchor/);
+});
+
+
+test("pinLiterals leaves field-like text inside annotations as literal data", () => {
+  const input = generated.replace("metadata:\n", [
+    "metadata:", "  annotations:",
+    `    timeout-note: ' timeoutSeconds: ${TIMEOUT_VALUE}'`,
+    `    policy-note: ' failurePolicy: ${FAILURE_VALUE}'`, "",
+  ].join("\n"));
+  const doc = render(pinLiterals(input, 10, "Fail"));
+  assert.equal(doc.metadata.annotations["timeout-note"], " timeoutSeconds: 10");
+  assert.equal(doc.metadata.annotations["policy-note"], " failurePolicy: Fail");
+});
+
+test("pinLiterals rejects malformed multi-token field values", () => {
+  assert.throws(() => pinLiterals("  timeoutSeconds: 10 invalid\n  failurePolicy: Fail\n", 10, "Fail"), /no timeoutSeconds/);
+  assert.throws(() => pinLiterals("  timeoutSeconds: 10\n  failurePolicy: Fail invalid\n", 10, "Fail"), /no timeoutSeconds/);
+});
+
+test("splitTakClientWebhook rejects missing side-effect and entry anchors", () => {
+  const scoped = scopeWebhook(withTakClients);
+  assert.throws(() => splitTakClientWebhook(scoped.replace(/^ +sideEffects:.*$/gm, "")), /TakClient rule anchor/);
+  assert.throws(() => splitTakClientWebhook(scoped.replace("  - admissionReviewVersions:", "  - invalid:")), /TakClient rule anchor/);
+});
+
+test("splitTakClientWebhook emits two valid entries with any trailing newline count", () => {
+  const scoped = scopeWebhook(withTakClients).trimEnd();
+  for (const ending of ["", "\n", "\n\n\n"]) {
+    const doc = render(splitTakClientWebhook(scoped + ending));
+    assert.equal(doc.webhooks.length, 2);
+    assert.deepEqual(doc.webhooks[1].rules[0].resources, ["takclients"]);
+    assert.equal(doc.webhooks[1].sideEffects, "None");
+  }
+});
+
+test("splitTakClientWebhook accepts a webhook-entry fragment starting at offset zero", () => {
+  const scoped = scopeWebhook(withTakClients);
+  const fragment = scoped.slice(scoped.indexOf("  - admissionReviewVersions:"));
+  const doc = render(`webhooks:\n${splitTakClientWebhook(fragment)}`);
+  assert.equal(doc.webhooks.length, 2);
+  assert.equal(doc.webhooks[1].name, "takclients.uuid.pepr.dev");
+  assert.deepEqual(doc.webhooks[1].rules[0].resources, ["takclients"]);
 });

@@ -78,6 +78,9 @@ check_match ".github/workflows/scorecard-analysis.yaml" ignore
 check_match ".github/workflows/benchmark.yaml" ignore
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
+check_match ".github/workflows/mutation.yaml" ignore
+check_match "pepr/mutation/package-lock.json" ignore
+check_match "pepr/package-lock.json" relevant
 check_match ".github/workflows/charts.yaml" ignore
 check_match ".github/scripts/publish-charts.py" ignore
 check_match ".github/workflows/full-core.yaml" ignore

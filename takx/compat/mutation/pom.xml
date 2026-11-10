@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 uds-takserver authors -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>dev.uds-takserver</groupId>
+  <artifactId>compat-mutation-tests</artifactId>
+  <version>0.1.0</version>
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.14.4</version><scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <sourceDirectory>${project.basedir}/../src/main/java</sourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.16.0</version>
+        <configuration>
+          <includes><include>android/util/Pair.java</include><include>android/util/LruCache.java</include></includes>
+          <testIncludes>
+            <testInclude>MutationContractsTest.java</testInclude><testInclude>PairCompatibilityTest.java</testInclude>
+            <testInclude>cache/LruCacheCompatibilityTest.java</testInclude>
+          </testIncludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><version>3.8.0</version>
+        <executions>
+          <execution>
+            <id>existing-contract-tests</id><phase>generate-test-sources</phase><goals><goal>add-test-source</goal></goals>
+            <configuration><sources><source>${project.basedir}/../src/test/java</source></sources></configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.6.1</version>
+        <configuration><failIfNoTests>true</failIfNoTests></configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.pitest</groupId><artifactId>pitest-maven</artifactId><version>1.30.2</version>
+        <dependencies>
+          <dependency><groupId>org.pitest</groupId><artifactId>pitest-junit5-plugin</artifactId><version>1.2.3</version></dependency>
+        </dependencies>
+        <configuration>
+          <targetClasses><param>android.util.Pair</param><param>android.util.LruCache</param></targetClasses>
+          <targetTests><param>MutationContractsTest</param></targetTests>
+          <threads>2</threads><timeoutConstant>5000</timeoutConstant>
+          <mutationThreshold>100</mutationThreshold><coverageThreshold>100</coverageThreshold><failWhenNoMutations>true</failWhenNoMutations>
+          <outputFormats><param>HTML</param><param>XML</param></outputFormats><timestampedReports>false</timestampedReports>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

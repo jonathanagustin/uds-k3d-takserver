@@ -6,6 +6,11 @@ name: Migrate legacy GHCR packages
 on:
   workflow_dispatch:
     inputs:
+      family:
+        description: Package family to inventory or resume, or all
+        type: string
+        default: all
+        required: true
       apply:
         description: Copy the reviewed legacy inventory; never overwrite or delete packages
         type: boolean
@@ -45,10 +50,18 @@ jobs:
           password: ${{ github.token }}
 
       - name: Inventory legacy and current tags
-        run: python3 .github/scripts/migrate-ghcr.py plan --plan out/migration/plan.json
+        env:
+          MIGRATION_FAMILY: ${{ inputs.family }}
+        shell: bash
+        run: |
+          args=()
+          if [[ "${MIGRATION_FAMILY}" != all ]]; then
+            args+=(--family "${MIGRATION_FAMILY}")
+          fi
+          python3 .github/scripts/migrate-ghcr.py plan --plan out/migration/plan.json "${args[@]}"
 
       - name: Verify historical release provenance before copying
-        if: inputs.apply
+        if: inputs.apply && (inputs.family == 'all' || inputs.family == 'takserver')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -75,7 +88,7 @@ jobs:
         run: python3 .github/scripts/migrate-ghcr.py copy --plan out/migration/plan.json --receipts out/migration/receipts
 
       - name: Verify migrated release provenance
-        if: inputs.apply
+        if: inputs.apply && (inputs.family == 'all' || inputs.family == 'takserver')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

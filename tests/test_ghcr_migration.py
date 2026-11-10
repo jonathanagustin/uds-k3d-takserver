@@ -19,6 +19,7 @@ A, B, C = ['sha256:' + char * 64 for char in 'abc']
 
 
 class FakeRegistry:
+    host = 'ghcr.io'
     def __init__(self, values): self.values = values
     def tags(self, repository):
         return sorted(tag for repo, tag in self.values if repo == repository)
@@ -95,6 +96,36 @@ class MigrationTests(unittest.TestCase):
         registry.manifests['fixture', A] = {'layers': [{'digest': '../outside', 'size': 4}]}
         with self.assertRaisesRegex(M.MigrationError, 'descriptor'):
             registry.closure('fixture', A)
+
+    def test_copy_family_selector_never_touches_other_repositories(self):
+        families = [M.plan_family(FakeRegistry({(M.OLD + name, 'stable'): A}), name)
+                    for name in ('takserver', 'postgis')]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan = root / 'plan.json'
+            plan.write_text(json.dumps({'schema': 1, 'families': families}))
+            args = ['migrate-ghcr.py', 'copy', '--plan', str(plan), '--receipts',
+                    str(root / 'receipts'), '--family', 'postgis']
+            with patch('sys.argv', args), patch.object(M, 'copy_family',
+                       side_effect=lambda family, receipts: {'family': family['family']}) as copy_family:
+                M.main()
+            self.assertEqual(copy_family.call_count, 1)
+            self.assertEqual(copy_family.call_args.args[0]['family'], 'postgis')
+            complete = json.loads((root / 'receipts' / 'complete.json').read_text())
+            self.assertEqual(complete['families'], [{'family': 'postgis'}])
+
+    def test_copy_failure_receipt_contains_codes_without_storage_credentials(self):
+        family = M.plan_family(FakeRegistry({(M.OLD + 'takserver', 'stable'): A}), 'takserver')
+        registry = FakeRegistry({(M.OLD + 'takserver', 'stable'): A})
+        failure = M.subprocess.CompletedProcess([], 1, '', 'HTTP 403 https://storage.invalid/?sig=private-test')
+        with tempfile.TemporaryDirectory() as directory, patch.object(M, 'Registry', return_value=registry), \
+                patch.object(M.subprocess, 'run', return_value=failure):
+            with self.assertRaisesRegex(M.MigrationError, 'Registry copy failed'):
+                M.copy_family(family, Path(directory))
+            receipt = (Path(directory) / 'takserver-error.json').read_text()
+            self.assertEqual(json.loads(receipt)['registry_errors'], ['HTTP 403'])
+            self.assertNotIn('storage.invalid', receipt)
+            self.assertNotIn('private-test', receipt)
 
     def test_signed_storage_redirect_drops_registry_authorization(self):
         request = urllib.request.Request('https://ghcr.io/v2/fixture/blobs/' + A,

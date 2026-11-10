@@ -234,6 +234,12 @@ def copy_family(family, receipt_dir):
                        registry.host + '/' + destination + ':' + tag]
             result = subprocess.run(command, text=True, capture_output=True, timeout=900)
             if result.returncode:
+                codes = sorted(set(re.findall(r'BLOB_UNKNOWN|MANIFEST_UNKNOWN|UNAUTHORIZED|DENIED|TOOMANYREQUESTS|(?:HTTP|status code) [0-9]{3}', result.stderr)))
+                failure = {'family': family['family'], 'source_tag': entry['source_tag'],
+                           'destination_tag': tag, 'returncode': result.returncode,
+                           'registry_errors': codes}
+                error_path = receipt_dir / (family['family'].replace('/', '_') + '-error.json')
+                error_path.write_text(json.dumps(failure, indent=2) + '\n')
                 raise MigrationError('Registry copy failed for ' + family['family'] + ':' + tag)
         if registry.manifest(destination, tag) != digest:
             raise MigrationError('Copied manifest differs from source')
@@ -278,6 +284,11 @@ def main():
     else:
         plan = json.loads(args.plan.read_text())
         validate_plan(plan)
+        if args.family:
+            selected = set(args.family)
+            if not selected.issubset({family['family'] for family in plan['families']}):
+                raise MigrationError('Requested family is absent from the plan')
+            plan['families'] = [family for family in plan['families'] if family['family'] in selected]
         if not args.receipts:
             parser.error('--receipts is required for copying')
         args.receipts.mkdir(parents=True, exist_ok=True)

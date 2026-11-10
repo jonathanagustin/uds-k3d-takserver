@@ -11,6 +11,10 @@ on:
       tag:
         required: true
         type: string
+      source_sha:
+        description: Optional expected Release Please source SHA
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       tag:
@@ -61,9 +65,10 @@ jobs:
       - name: Publish and verify both immutable charts
         env:
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           uv run --no-project --with pyyaml==6.0.3 python -B .github/scripts/publish-charts.py \
-            --tag "${RELEASE_TAG}" --output "${RUNNER_TEMP}/helm-charts" --publish
+            --tag "${RELEASE_TAG}" --source-sha "${RELEASE_SOURCE_SHA}" --output "${RUNNER_TEMP}/helm-charts" --publish
 
       # This attests the publisher job and resulting immutable digest. The
       # packaged chart and OCI annotations separately identify the source tag.

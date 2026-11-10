@@ -193,3 +193,7 @@ jobs:
         run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values.PackageValuesTests -v
       - name: Encrypted staged diagnostic guards
         run: python3 -B -m unittest discover -s .github/test-infra -p test_staged_encrypted_diagnostic.py -v
+      - name: Draft release readiness guards
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s .github/test-infra -p test_release_readiness.py -v

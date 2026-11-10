@@ -1,0 +1,278 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+"""Offline real helper/API and workflow contracts; never create a release."""
+import copy
+import importlib.util
+import json
+import os
+import contextlib
+import io
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+import urllib.error
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location('readiness', Path(__file__).with_name('release-readiness.py'))
+R = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(R)
+SOURCE, OTHER, ANNOTATED = 'a' * 40, 'b' * 40, 'c' * 40
+
+
+class API:
+    def __init__(self, public=False):
+        self.release = {'id': 123, 'url': R.BASE + '/releases/123', 'tag_name': 'v0.12.3',
+                        'target_commitish': SOURCE, 'draft': not public, 'prerelease': False}
+        self.calls = []
+        self.annotated = False
+        self.mutate = None
+
+    def __call__(self, path, payload=None):
+        self.calls.append((path, payload))
+        if self.mutate:
+            self.mutate(self, path, payload)
+        if path.startswith('/git/ref/'):
+            return {'ref': 'refs/tags/v0.12.3', 'object': {
+                'type': 'tag' if self.annotated else 'commit', 'sha': ANNOTATED if self.annotated else SOURCE}}
+        if path.startswith('/git/tags/'):
+            return {'sha': ANNOTATED, 'object': {'type': 'commit', 'sha': SOURCE}}
+        if payload is not None:
+            self.release['draft'] = False
+        return copy.deepcopy(self.release)
+
+
+class PromotionTests(unittest.TestCase):
+    def test_draft_exact_identity_patches_only_draft_and_rechecks(self):
+        api = API()
+        self.assertEqual(R.promote(api, 'v0.12.3', '123', SOURCE), 'published')
+        self.assertEqual([(p, v) for p, v in api.calls if v is not None],
+                         [('/releases/123', {'draft': False})])
+        self.assertEqual(api.calls[-1][0], '/git/ref/tags/v0.12.3')
+
+    def test_existing_tag_branch_metadata_is_not_commit_authority(self):
+        api = API(); api.release['target_commitish'] = 'main'
+        self.assertEqual(R.promote(api, 'v0.12.3', '123', SOURCE), 'published')
+
+    def test_annotated_tag_is_peeled_to_real_commit(self):
+        api = API(); api.annotated = True
+        self.assertEqual(R.promote(api, 'v0.12.3', '123', SOURCE), 'published')
+        self.assertTrue(any(p.startswith('/git/tags/') for p, _ in api.calls))
+
+    def test_wrong_release_or_source_never_patches(self):
+        for field, value in [('id', 124), ('tag_name', 'v0.12.4'),
+                             ('url', 'https://api.github.com/repos/foreign/repo/releases/123'),
+                             ('draft', 'false'), ('prerelease', True)]:
+            with self.subTest(field=field):
+                api = API(); api.release[field] = value
+                with self.assertRaises((ValueError, TypeError)):
+                    R.promote(api, 'v0.12.3', '123', SOURCE)
+                self.assertFalse(any(v is not None for _, v in api.calls))
+
+    def test_wrong_peeled_commit_and_tag_cycles_never_patch(self):
+        for cycle in (False, True):
+            api = API(); original = api.__call__
+            def call(path, payload=None):
+                if path.startswith('/git/ref/'):
+                    return {'ref': 'refs/tags/v0.12.3', 'object': {'type': 'tag' if cycle else 'commit', 'sha': OTHER}}
+                if path.startswith('/git/tags/'):
+                    return {'sha': OTHER, 'object': {'type': 'tag', 'sha': OTHER}}
+                return original(path, payload)
+            with self.assertRaises(ValueError):
+                R.promote(call, 'v0.12.3', '123', SOURCE)
+            self.assertFalse(any(v is not None for _, v in api.calls))
+
+    def test_identity_change_on_final_read_prevents_patch(self):
+        for field, value in [('id', 124), ('tag_name', 'v0.12.4'), ('draft', False)]:
+            api = API()
+            def change(current, path, payload):
+                if path == '/releases/123' and payload is None:
+                    current.release[field] = value
+            api.mutate = change
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                R.promote(api, 'v0.12.3', '123', SOURCE)
+            self.assertFalse(any(v is not None for _, v in api.calls))
+
+    def test_api_failure_is_not_a_success_or_mutation(self):
+        def failure(_path, _payload=None):
+            raise urllib.error.URLError('private details')
+        with self.assertRaises(urllib.error.URLError):
+            R.promote(failure, 'v0.12.3', '123', SOURCE)
+
+    def test_public_backfill_and_exact_replay_do_not_patch(self):
+        for identity in [('', ''), ('123', SOURCE)]:
+            api = API(public=True)
+            self.assertEqual(R.promote(api, 'v0.12.3', *identity), 'already-public')
+            self.assertFalse(any(v is not None for _, v in api.calls))
+
+    def test_draft_manual_recovery_requires_both_trusted_inputs(self):
+        for identity in [('', ''), ('123', ''), ('', SOURCE), ('123', OTHER)]:
+            api = API()
+            with self.assertRaises(ValueError):
+                R.promote(api, 'v0.12.3', *identity)
+            self.assertFalse(any(v is not None for _, v in api.calls))
+
+    def test_read_only_preflight_binds_native_checkout_and_refuses_unbound_draft(self):
+        for public, identity, checkout, success in [
+                (False, ('123', SOURCE), SOURCE, True),
+                (False, ('', ''), SOURCE, False),
+                (False, ('123', SOURCE), OTHER, False),
+                (True, ('', ''), SOURCE, True),
+                (True, ('', ''), OTHER, False)]:
+            api = API(public=public)
+            if success:
+                R.check_release(api, 'v0.12.3', *identity, checked_source=checkout)
+            else:
+                with self.assertRaises(ValueError):
+                    R.check_release(api, 'v0.12.3', *identity, checked_source=checkout)
+            self.assertFalse(any(payload is not None for _, payload in api.calls))
+
+    def test_api_bounds_status_malformed_duplicate_and_nonobject_responses(self):
+        class Response:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                pass
+            def read(self, limit):
+                self.limit = limit
+                return self.data[:limit]
+        api = R.API('fixture')
+        for data in (b'x' * 262145, b'not json', b'[]', b'{"id":1,"id":2}'):
+            response = Response(); response.data = data
+            with patch.object(api.opener, 'open', return_value=response), self.assertRaises(ValueError):
+                api('/releases/123')
+            self.assertEqual(response.limit, 262145)
+        response = Response(); response.status = 503; response.data = b'{}'
+        with patch.object(api.opener, 'open', return_value=response), self.assertRaises(ValueError):
+            api('/releases/123')
+
+    def test_main_context_and_api_failures_are_fixed_diagnostics(self):
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'DO_NOT_ECHO',
+               'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE}
+        for key, value in [('WORKFLOW_SHA', OTHER), ('GITHUB_REPOSITORY', 'foreign/repo'),
+                           ('GITHUB_REF', 'refs/heads/unreviewed'), ('GITHUB_EVENT_NAME', 'pull_request')]:
+            output = io.StringIO()
+            with patch.dict(os.environ, {**env, key: value}, clear=True), \
+                    patch.object(R, 'API', side_effect=AssertionError('must not access API')), \
+                    contextlib.redirect_stderr(output):
+                self.assertEqual(R.main(), 1)
+            self.assertNotIn('DO_NOT_ECHO', output.getvalue())
+        output = io.StringIO()
+        with patch.dict(os.environ, env, clear=True), \
+                patch.object(R, 'API', side_effect=urllib.error.URLError('DO_NOT_ECHO')), \
+                contextlib.redirect_stderr(output):
+            self.assertEqual(R.main(), 1)
+        self.assertNotIn('DO_NOT_ECHO', output.getvalue())
+
+    def test_bad_patch_response_never_reports_completed_promotion(self):
+        api = API()
+        def corrupt(current, _path, payload):
+            if payload is not None:
+                current.release['id'] = 124
+        api.mutate = corrupt
+        with self.assertRaises(ValueError):
+            R.promote(api, 'v0.12.3', '123', SOURCE)
+
+    def test_static_endpoint_and_payload_restrictions_precede_network(self):
+        api = R.API('fixture-token')
+        with patch.object(api.opener, 'open', side_effect=AssertionError('network')):
+            for path, payload in [('https://foreign.example', None), ('/releases/123', {'draft': True}),
+                                  ('/git/ref/tags/v0.12.3', {'draft': False}), ('/releases/0', None)]:
+                with self.assertRaises(ValueError):
+                    api(path, payload)
+        with self.assertRaises(ValueError):
+            R.NoRedirect().redirect_request(None)
+        with self.assertRaises(ValueError):
+            json.loads('{"draft":true,"draft":false}', object_pairs_hook=R.unique)
+
+
+class ChartSourceTests(unittest.TestCase):
+    def test_expected_source_checked_at_resolved_tag_before_other_work(self):
+        spec = importlib.util.spec_from_file_location('chart_source', ROOT / '.github/scripts/publish-charts.py')
+        charts = importlib.util.module_from_spec(spec); spec.loader.exec_module(charts)
+        for expected in ('main', 'a' * 39, '--help'):
+            with patch.object(charts, 'run', side_effect=AssertionError('git must not run')), self.assertRaises(ValueError):
+                charts.release(ROOT, 'v0.12.3', 'origin/main', expected)
+        with patch.object(charts, 'run', return_value=subprocess.CompletedProcess([], 0, OTHER, '')) as command:
+            with self.assertRaises(ValueError):
+                charts.release(ROOT, 'v0.12.3', 'origin/main', SOURCE)
+            self.assertEqual(command.call_count, 1)
+        outputs = [SOURCE, '', '{".":"0.12.3"}', '123']
+        for expected in ('', SOURCE):
+            def run(_args, _repo):
+                return subprocess.CompletedProcess([], 0, outputs.pop(0), '')
+            outputs = [SOURCE, '', '{".":"0.12.3"}', '123']
+            with patch.object(charts, 'run', side_effect=run):
+                self.assertEqual(charts.release(ROOT, 'v0.12.3', 'origin/main', expected), (SOURCE, 123))
+
+
+class WiringTests(unittest.TestCase):
+    def workflow(self, name):
+        return yaml.safe_load((ROOT / '.github/workflows' / name).read_text())
+
+    def test_official_pinned_contract_supports_drafts_with_immediate_tags(self):
+        contract = json.loads(Path(__file__).with_name('release-please-contract.json').read_text())
+        config = json.loads((ROOT / 'release-please-config.json').read_text())['packages']['.']
+        self.assertEqual(contract['releasePleaseVersion'], '17.6.0')
+        for name in ('draft', 'force-tag-creation'):
+            self.assertEqual(contract['properties'][name]['type'], 'boolean')
+            self.assertIs(config[name], True)
+        self.assertIn('does not create a Git tag for draft releases',
+                      contract['properties']['force-tag-creation']['description'])
+        step = self.workflow('release-please.yaml')['jobs']['release-please']['steps'][0]
+        self.assertEqual(step['uses'].split('@')[1].split()[0], contract['actionRef'])
+
+    def test_charts_before_packages_and_docs_after_verified_promotion(self):
+        jobs = self.workflow('release-please.yaml')['jobs']
+        self.assertEqual(jobs['publish']['needs'], ['release-please', 'charts'])
+        self.assertEqual(jobs['charts']['needs'], 'release-please')
+        self.assertEqual(jobs['charts']['with']['source_sha'], '${{ needs.release-please.outputs.source-sha }}')
+        chart_steps = self.workflow('charts.yaml')['jobs']['publish']['steps']
+        chart = next(step for step in chart_steps if step['name'] == 'Publish and verify both immutable charts')
+        self.assertEqual(chart['env']['RELEASE_SOURCE_SHA'], '${{ inputs.source_sha }}')
+        self.assertIn('--source-sha \"${RELEASE_SOURCE_SHA}\"', chart['run'])
+        self.assertEqual(jobs['docs']['needs'], ['release-please', 'publish'])
+        self.assertIn("needs.publish.result == 'success'", jobs['docs']['if'])
+        self.assertEqual(jobs['publish']['with']['release_id'], '${{ needs.release-please.outputs.release-id }}')
+        self.assertEqual(jobs['release-please']['outputs']['source-sha'], '${{ steps.release.outputs.sha }}')
+        release = self.workflow('release.yaml')['jobs']
+        self.assertEqual(release['provenance']['needs'], 'publish')
+        steps = release['provenance']['steps']
+        self.assertEqual(steps[-2]['name'], 'Verify the provenance')
+        self.assertEqual(steps[-1]['run'], 'python3 .github/test-infra/release-readiness.py')
+        self.assertNotIn('if', steps[-1]); self.assertNotIn('continue-on-error', steps[-1])
+        self.assertEqual(steps[0]['with']['ref'], '${{ github.workflow_sha }}')
+        self.assertFalse(steps[0]['with']['persist-credentials'])
+        native = release['publish']['steps']
+        names = [step['name'] for step in native]
+        self.assertLess(names.index('Verify release availability identity before building'),
+                        names.index('Free runner disk space'))
+        checker = native[names.index('Checkout trusted readiness checker')]
+        self.assertEqual(checker['with']['ref'], '${{ github.workflow_sha }}')
+        self.assertEqual(checker['with']['path'], '.release-publisher')
+        self.assertFalse(checker['with']['persist-credentials'])
+        check = native[names.index('Verify release availability identity before building')]
+        self.assertEqual(check['env']['READINESS_MODE'], 'check')
+        self.assertIn('git rev-parse HEAD', check['run'])
+        self.assertEqual(release['publish']['strategy']['max-parallel'], 1)
+        self.assertEqual([x['arch'] for x in release['publish']['strategy']['matrix']['include']], ['amd64', 'arm64'])
+        self.assertEqual(release['provenance']['permissions'], {
+            'contents': 'write', 'packages': 'write', 'id-token': 'write', 'attestations': 'write'})
+        self.assertEqual(release['publish']['permissions'], {'contents': 'read', 'packages': 'write', 'id-token': 'write'})
+
+    def test_actual_prebuild_script_refuses_wrong_or_partial_draft_source(self):
+        step = self.workflow('release.yaml')['jobs']['publish']['steps'][1]
+        script = step['run'].split("python3 - <<'PY_CHECK'\n", 1)[1].split('\nPY_CHECK', 1)[0]
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        for identity, source, success in [('123', head, True), ('123', OTHER, False), ('123', '', False), ('', head, False), ('', '', True)]:
+            with self.subTest(identity=identity, source=source):
+                result = subprocess.run(['python3', '-c', script], cwd=ROOT,
+                    env={**os.environ, 'RELEASE_ID': identity, 'RELEASE_SOURCE_SHA': source}, capture_output=True)
+                self.assertEqual(result.returncode == 0, success)
+        self.assertEqual(step['env']['RELEASE_SOURCE_SHA'], '${{ inputs.source_sha }}')

@@ -10,6 +10,8 @@ from pathlib import Path
 import platform
 import re
 import datetime
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = {'velero': ['velero'], 'identities': ['identities'], 'all': ['velero', 'identities']}
@@ -38,7 +40,103 @@ def selection():
 
 
 def sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def reviewed_bytes(relative):
+    result = subprocess.run(['git', '-c', 'protocol.allow=never', 'show', 'HEAD:' + relative],
+                            cwd=ROOT, capture_output=True, timeout=5,
+                            env={**os.environ, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0'})
+    require(result.returncode == 0 and len(result.stdout) <= 1024 * 1024, 'reviewed source unavailable')
+    return result.stdout
+
+
+def regular_file(path):
+    require(path.is_file() and not any(p.is_symlink() for p in (path, *path.parents)),
+            'staged input must be a regular non-symlink file')
+
+
+def regular(path, limit=1024 * 1024):
+    regular_file(path)
+    require(path.stat().st_size <= limit, 'staged text input exceeds bound')
+    return path.read_bytes()
+
+
+def restore_task_default(directory):
+    """Restore only the exact trusted pin transform after archive/config binding."""
+    import yaml  # Only the dependency-installed manual trial uses this operation.
+
+    selection()
+    head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, timeout=5)
+    require(head.returncode == 0 and head.stdout.decode().strip() == os.environ.get('GITHUB_SHA'),
+            'staged restoration source differs from checkout')
+    plan = json.loads(regular(directory / 'plan.json', 65536))
+    require(set(plan) == {'schema', 'sourceSHA', 'files'} and plan['schema'] == 1
+            and plan['sourceSHA'] == os.environ['GITHUB_SHA']
+            and set(plan['files']) == {'core', 'detach', 'clean', 'config'}, 'valid bound candidate required')
+    bound = {}
+    for key, entry in plan['files'].items():
+        require(set(entry) == {'path', 'sha256'} and re.fullmatch('[a-f0-9]{64}', entry['sha256']),
+                'invalid bound input')
+        relative = Path(entry['path'])
+        require(not relative.is_absolute() and '..' not in relative.parts, 'bound input escapes candidate')
+        path = directory / relative
+        regular_file(path)
+        require(sha(path) == entry['sha256'], 'bound input changed')
+        bound[key] = (path, entry['sha256'])
+    task = ROOT / 'tasks.yaml'
+    actual, reviewed = regular(task), reviewed_bytes('tasks.yaml')
+    helpers = ('.github/container-and-chart/docker/build.sh', '.github/container-and-chart/docker/version.txt',
+               '.github/scripts/pin-image-tags.sh')
+    trusted = {name: reviewed_bytes(name) for name in helpers}
+    require(all(regular(ROOT / name) == data for name, data in trusted.items()), 'unreviewed tag helper')
+    version = trusted[helpers[1]].decode().strip()
+    require(re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', version), 'invalid reviewed image version')
+    env = {key: value for key, value in os.environ.items() if key not in ('BASH_ENV', 'ENV')
+           and not key.startswith('BASH_FUNC_')}
+    result = subprocess.run(['bash', '--noprofile', '--norc', str(ROOT / helpers[0]), '--tag'],
+                            cwd=ROOT, capture_output=True, timeout=10, env=env)
+    require(result.returncode == 0 and len(result.stdout) <= 256, 'trusted image tag unavailable')
+    tag = result.stdout.decode().strip()
+    require(re.fullmatch(re.escape(version) + '-[a-f0-9]{12}', tag), 'unexpected trusted image tag')
+    require(all(regular(ROOT / name) == data for name, data in trusted.items()), 'tag helper changed')
+    old = ('  - name: TAK_IMAGE_TAG\n    default: ' + version + '\n').encode()
+    new = ('  - name: TAK_IMAGE_TAG\n    default: ' + tag + '\n').encode()
+    require(reviewed.count(old) == 1 and actual in (reviewed, reviewed.replace(old, new)),
+            'tasks differ beyond the exact reviewed pin transform')
+    try:
+        config = yaml.safe_load(regular(bound['config'][0], 65536))
+    except yaml.YAMLError:
+        raise ValueError('bound trial config is not valid YAML') from None
+    require(isinstance(config, dict) and set(config) == {'variables'}
+            and isinstance(config['variables'], dict) and set(config['variables']) == {'takserver'},
+            'bound config must contain only reviewed TAK variables')
+    values = config['variables']['takserver']
+    require(isinstance(values, dict) and set(values) == {'DOMAIN', 'TAK_IMAGE_TAG', 'FILESYSTEM_BACKUP',
+                                                       'POSTGRES_STORAGE_CLASS', 'CLOUDTAK_STORAGE_CLASS'}
+            and values['DOMAIN'] == 'uds.dev' and str(values['FILESYSTEM_BACKUP']).lower() == 'true'
+            and values['POSTGRES_STORAGE_CLASS'] == values['CLOUDTAK_STORAGE_CLASS'] == 'local-path-local'
+            and values['TAK_IMAGE_TAG'] == tag, 'bound config differs from reviewed pinned trial contract')
+    require(all(sha(path) == digest for path, digest in bound.values()) and regular(task) == actual,
+            'staged inputs changed before restoration')
+    current = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, timeout=5)
+    require(current.returncode == 0 and current.stdout == head.stdout, 'checkout changed before restoration')
+    if actual != reviewed:
+        descriptor, temporary = tempfile.mkstemp(prefix='.staged-task-', dir=ROOT)
+        try:
+            with os.fdopen(descriptor, 'wb') as output:
+                output.write(reviewed)
+            os.chmod(temporary, task.stat().st_mode & 0o777)
+            os.replace(temporary, task)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+    require(regular(task) == reviewed and all(sha(path) == digest for path, digest in bound.values()),
+            'staged inputs changed during restoration')
+    print('Reviewed task defaults restored; bound archives and pinned config unchanged')
 
 
 def receipt(directory, arch):
@@ -241,12 +339,15 @@ def publish(directory, output, arch):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('plan', 'receipt', 'verify', 'publish'))
+    parser.add_argument('operation', choices=('plan', 'receipt', 'verify', 'publish', 'restore-task-default'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--arch', choices=('amd64', 'arm64'))
     args = parser.parse_args()
-    if args.operation == 'plan':
+    if args.operation == 'restore-task-default':
+        require(args.directory is not None, 'bound candidate directory required')
+        restore_task_default(args.directory)
+    elif args.operation == 'plan':
         scenarios, arches = selection()
         print(json.dumps({'include': [{'arch': arch, 'runner': 'ubuntu-22.04' + ('-arm' if arch == 'arm64' else '')}
                                      for arch in arches]}))

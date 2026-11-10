@@ -68,6 +68,10 @@ for variant in core detach clean; do
     --output "${trial}/candidate/${variant}" --no-progress --no-log-file
 done
 python3 tests/velero-ownership/candidate.py bind --directory "${trial}/candidate"
+# The trusted pin helper changes the task default only for package creation.
+# Deployment now uses the bound archives and copied pinned config; later tasks
+# only prepare the API user/gateway. Restore exactly reviewed helper bytes.
+python3 .github/scripts/staged-migrations.py restore-task-default --directory "${trial}/candidate"
 if [[ "${SCENARIO}" == identities ]]; then
   python3 tests/velero-ownership/drive.py local-baseline --plan "${trial}/candidate/plan.json" --evidence "${trial}/baseline"
 else

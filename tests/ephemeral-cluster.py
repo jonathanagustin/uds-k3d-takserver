@@ -60,8 +60,10 @@ def verify_bootstrap(context, command):
     names = command(['docker', 'ps', '--all', '--filter', 'label=app=k3d',
                      '--filter', 'label=k3d.cluster=uds', '--format', '{{.Names}}']).strip()
     require(not names, 'staged bootstrap refuses an existing uds k3d container, including stopped containers')
-    contexts = command(['kubectl', 'config', 'get-contexts', CONTEXT, '-o', 'name']).strip()
-    require(not contexts, 'staged bootstrap refuses an existing k3d-uds kubeconfig context')
+    named = command(['docker', 'ps', '--all', '--filter', 'name=k3d-uds-', '--format', '{{.Names}}']).strip()
+    require(not named, 'staged bootstrap refuses an existing named uds k3d container')
+    contexts = command(['kubectl', 'config', 'get-contexts', '-o', 'name']).splitlines()
+    require(CONTEXT not in contexts, 'staged bootstrap refuses an existing k3d-uds kubeconfig context')
     return {'schema': '1', 'purpose': 'staged-bootstrap', 'repository': REPOSITORY,
             'runID': run, 'runAttempt': attempt, 'sourceSHA': sha, 'context': context, **endpoint}
 

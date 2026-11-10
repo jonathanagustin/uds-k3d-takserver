@@ -108,21 +108,22 @@ python3 takx/compat/test-final-apis.py --source-dir /path/to/pinned-api-referenc
   --kernel-proof /path/to/fresh-frozen-kernel-compile
 ```
 
-**The full-engine compile result is local investigation evidence.** This
-repository does not yet provide its complete compiler recipe or a portable
-25-JAR input recipe. The checked-in port runner and individual API/source
-recipes remain independently runnable. Supplying `--kernel-proof` consumes an
-existing local compile proof; it does not rebuild or independently reproduce
-the complete engine.
+The opt-in [complete compiler recipe](../kernel-java/README.md) now reproduces
+the desktop Java source compilation. It verifies 23 locked public JARs and two
+GIS source-built JARs with all 107 original class entries unchanged; rebuilt
+GIS container hashes differ. Its default profile updates six public JARs to
+address [recorded advisories](../kernel-java/DEPENDENCIES.md); the historical
+baseline remains an explicit option. Neither is a runtime recommendation. Supplying `--kernel-proof` consumes the resulting
+frozen compile proof; the API test itself does not rebuild the engine.
 
 The optional proof directory contains `inputs.json`, `result.json`, compiled
 `classes/` and frozen `stage/` sources from the complete engine compile probe.
-The runner checks the upstream revision, every frozen source and original JAR
+The runner checks the upstream revision, every frozen source and recorded JAR
 hash, and an exact match between frozen and current adapter source inventories
 before using those compiled classes. Without that argument it explicitly reports
 that Kernel VSI integration was not run.
 
-The reviewed complete compile retained all 862 engine, 77 port and six annotation
+The original local investigation retained all 862 engine, 77 port and six annotation
 sources (945 upstream), plus 59 adapters, with all 25 original classpath JAR hashes:
 1,004 source files, zero compiler errors and four warnings. Of the 945 upstream
 files, 944 match the pinned revision byte-for-byte; `ColorBlendModeMarshal.java`

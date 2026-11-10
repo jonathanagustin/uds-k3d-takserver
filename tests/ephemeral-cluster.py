@@ -30,6 +30,18 @@ def k(context, *args):
     return ['kubectl', '--context', context, *args]
 
 
+def verify_local_docker(command):
+    """Check endpoint configuration before any daemon call or cluster bootstrap."""
+    require(not os.environ.get('DOCKER_HOST') and not os.environ.get('DOCKER_CONTEXT'),
+            'Docker host/context overrides are not allowed for staged acceptance')
+    require(command(['docker', 'context', 'show']).strip() == 'default',
+            'current Docker context must be default')
+    endpoint = json.loads(command(['docker', 'context', 'inspect', 'default', '--format',
+                                   '{{json .Endpoints.docker.Host}}']))
+    require(endpoint == 'unix:///var/run/docker.sock', 'Docker daemon endpoint must be the local Unix socket')
+    return {'dockerContext': 'default', 'dockerEndpoint': endpoint}
+
+
 def _local_identity(context, command):
     require(context == CONTEXT, 'only the explicit k3d-uds test context is allowed')
     require(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('GITHUB_REPOSITORY') == REPOSITORY,
@@ -38,6 +50,7 @@ def _local_identity(context, command):
     require(re.fullmatch('[1-9][0-9]*', run) and re.fullmatch('[1-9][0-9]*', attempt)
             and re.fullmatch('[a-f0-9]{40}', sha), 'missing run, attempt or source identity')
     require(command(['git', 'rev-parse', 'HEAD']).strip() == sha, 'checkout differs from the reviewed workflow source')
+    verify_local_docker(command)
     require(command(['kubectl', 'config', 'current-context']).strip() == context,
             'current context differs; refusing tools that use the current context')
     endpoint = command(['kubectl', '--context', context, 'config', 'view', '--minify',
@@ -113,7 +126,7 @@ def mark(context, command):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('mark', 'verify'))
+    parser.add_argument('operation', choices=('docker', 'mark', 'verify'))
     parser.add_argument('--context', choices=(CONTEXT,), required=True)
     args = parser.parse_args()
 
@@ -122,7 +135,9 @@ def main():
         require(result.returncode == 0, 'ephemeral cluster identity command failed')
         return result.stdout
 
-    print(json.dumps((mark if args.operation == 'mark' else verify)(args.context, command), indent=2))
+    result = (verify_local_docker(command) if args.operation == 'docker'
+              else (mark if args.operation == 'mark' else verify)(args.context, command))
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == '__main__':

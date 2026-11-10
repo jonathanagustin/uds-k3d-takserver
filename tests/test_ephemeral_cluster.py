@@ -5,7 +5,11 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +25,7 @@ class Fixture:
     def __init__(self):
         self.context, self.server, self.uid = GUARD.CONTEXT, 'https://127.0.0.1:6444', UID
         self.local_uid, self.sha = UID, ENV['GITHUB_SHA']
+        self.docker_context, self.docker_endpoint = 'default', 'unix:///var/run/docker.sock'
         self.nodes = {GUARD.NODE: {'id': 'b' * 64, 'running': True,
                      'labels': {'app': 'k3d', 'k3d.cluster': 'uds'}, 'ports': {}},
                       GUARD.GATEWAY: {'id': 'c' * 64, 'running': True,
@@ -33,6 +38,10 @@ class Fixture:
         if argv == ['kubectl', 'config', 'current-context']:
             return self.context
         if argv[:1] == ['docker']:
+            if argv[1:3] == ['context', 'show']:
+                return self.docker_context
+            if argv[1:3] == ['context', 'inspect']:
+                return json.dumps(self.docker_endpoint)
             if argv[1] == 'ps':
                 return '\n'.join(self.nodes)
             if argv[1] == 'inspect':
@@ -62,6 +71,48 @@ class Fixture:
 
 
 class EphemeralClusterTests(unittest.TestCase):
+    def test_remote_docker_configuration_is_rejected_before_cluster_observation(self):
+        for changed in ({'DOCKER_HOST': 'tcp://remote.example:2376'}, {'DOCKER_CONTEXT': 'remote'}):
+            fixture = Fixture()
+            with patch.dict('os.environ', {**ENV, **changed}, clear=True), self.assertRaises(ValueError):
+                GUARD.mark(GUARD.CONTEXT, fixture.command)
+            self.assertFalse(fixture.writes)
+        for field, value in [('docker_context', 'remote'), ('docker_endpoint', 'tcp://remote.example:2376')]:
+            fixture = Fixture()
+            setattr(fixture, field, value)
+            with patch.dict('os.environ', ENV, clear=True), self.assertRaises(ValueError):
+                GUARD.mark(GUARD.CONTEXT, fixture.command)
+            self.assertFalse(fixture.writes)
+
+    def test_prebootstrap_wrapper_refuses_remote_host_and_current_context(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            log = root / 'calls.jsonl'
+            docker = root / 'docker'
+            docker.write_text('#!' + sys.executable + '\n'
+                'import json,os,sys\n'
+                'with open(os.environ["GUARD_FIXTURE_LOG"],"a") as stream: stream.write(json.dumps(sys.argv[1:])+"\\n")\n'
+                'if sys.argv[1:]==["context","show"]: print(os.environ.get("GUARD_FIXTURE_CONTEXT","default"))\n'
+                'elif sys.argv[1:3]==["context","inspect"]: print(json.dumps("unix:///var/run/docker.sock"))\n'
+                'else: raise SystemExit("unexpected daemon operation")\n')
+            docker.chmod(0o755)
+            env = {**os.environ, 'PATH': str(root) + os.pathsep + os.defpath, 'GUARD_FIXTURE_LOG': str(log)}
+            env.pop('DOCKER_HOST', None)
+            env.pop('DOCKER_CONTEXT', None)
+            argv = [sys.executable, str(Path(GUARD.__file__)), 'docker', '--context', GUARD.CONTEXT]
+            remote = subprocess.run(argv, env={**env, 'DOCKER_HOST': 'tcp://remote.example:2376'},
+                                    capture_output=True, text=True)
+            self.assertNotEqual(remote.returncode, 0)
+            self.assertFalse(log.exists())
+            current = subprocess.run(argv, env={**env, 'GUARD_FIXTURE_CONTEXT': 'remote'},
+                                     capture_output=True, text=True)
+            self.assertNotEqual(current.returncode, 0)
+            self.assertEqual([json.loads(line) for line in log.read_text().splitlines()], [['context', 'show']])
+            log.unlink()
+            local = subprocess.run(argv, env=env, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(local.stdout)['dockerEndpoint'], 'unix:///var/run/docker.sock')
+            self.assertEqual(len(log.read_text().splitlines()), 2)
+
     def test_explicit_marker_creation_is_idempotent_and_verification_is_read_only(self):
         fixture = Fixture()
         with patch.dict('os.environ', ENV, clear=True):

@@ -23,6 +23,8 @@ public final class BitmapFactory {
     public static final class Options {
         public Bitmap.Config inPreferredConfig = Bitmap.Config.ARGB_8888;
         public boolean inMutable;
+        public int inSampleSize;
+        public boolean inScaled = true;
         public Bitmap inBitmap;
         public boolean inJustDecodeBounds;
         public int outWidth;
@@ -34,20 +36,89 @@ public final class BitmapFactory {
         // Decode into a real straight-alpha ARGB buffer, including RGB inputs.
         int width = image.getWidth();
         int height = image.getHeight();
-        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        Bitmap.Config config = outputConfig(image, options);
+        int[] pixels = decodedPixels(image, config);
         Bitmap reused = options == null ? null : options.inBitmap;
         if (reused == null) {
-            return Bitmap.decoded(width, height, pixels, options != null && options.inMutable, image.getColorModel().hasAlpha());
+            return Bitmap.decoded(width, height, pixels, options != null && options.inMutable, image.getColorModel().hasAlpha(), config);
         }
         if (!reused.isMutable() || !reused.hasOwnedAllocation()) {
             throw new ReuseException("reuse requires a mutable owned ARGB allocation");
         }
         try {
-            reused.replaceDecoded(width, height, pixels, image.getColorModel().hasAlpha());
+            reused.replaceDecoded(width, height, pixels, image.getColorModel().hasAlpha(), config);
         } catch (IllegalArgumentException exception) {
             throw new ReuseException("bitmap allocation is too small");
         }
         return reused;
+    }
+
+    static Bitmap.Config outputConfig(BufferedImage image, Options options) {
+        Bitmap.Config preferred = options == null ? null : options.inPreferredConfig;
+        if (preferred == Bitmap.Config.RGB_565 && !image.getColorModel().hasAlpha()) {
+            return Bitmap.Config.RGB_565;
+        }
+        if (preferred == Bitmap.Config.ALPHA_8 && isGray8(image)) { return Bitmap.Config.ALPHA_8; }
+        return Bitmap.Config.ARGB_8888;
+    }
+
+    static boolean isGray8(BufferedImage image) {
+        return !image.getColorModel().hasAlpha() && image.getColorModel().getNumColorComponents() == 1
+                && image.getColorModel().getColorSpace().getType() == java.awt.color.ColorSpace.TYPE_GRAY
+                && image.getSampleModel().getSampleSize(0) == 8;
+    }
+
+    static int[] decodedPixels(BufferedImage image, Bitmap.Config config) {
+        int width = image.getWidth(), height = image.getHeight();
+        if (config != Bitmap.Config.ALPHA_8) { return image.getRGB(0, 0, width, height, null, 0, width); }
+        int[] pixels = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                pixels[y * width + x] = image.getRaster().getSample(x, y, 0) << 24;
+            }
+        }
+        return pixels;
+    }
+
+    // Android 14 SkSampledCodec: JPEG first uses a supported native 1/2, 1/4,
+    // or 1/8 scale when divisible; the remaining sample is integer division.
+    static int sampledDimension(int dimension, int sample, boolean jpeg) {
+        sample = Math.max(1, sample);
+        int nativeSample = 1;
+        if (jpeg) {
+            for (int candidate : new int[] {8, 4, 2}) {
+                if (sample % candidate == 0) { nativeSample = candidate; break; }
+            }
+        }
+        int nativeSize = (int) (((long) dimension + nativeSample - 1) / nativeSample);
+        return Math.max(1, nativeSize / (sample / nativeSample));
+    }
+
+    static BufferedImage sampledImage(BufferedImage image, int width, int height) {
+        return sampledImage(image, width, height, false);
+    }
+
+    static BufferedImage sampledImage(BufferedImage image, int width, int height, boolean proportional) {
+        if (image.getWidth() == width && image.getHeight() == height) { return image; }
+        boolean gray = isGray8(image);
+        BufferedImage sampled = new BufferedImage(width, height, gray ? BufferedImage.TYPE_BYTE_GRAY
+                : image.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+        // Real pixel sampling at cell centers. JPEG color/native DCT rounding
+        // remains ImageIO's, not a claim of bit-identical Skia decoding.
+        int stepX = image.getWidth() / width;
+        int stepY = image.getHeight() / height;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int sourceX = proportional ? (int) (((2L * x + 1) * image.getWidth()) / (2L * width)) : stepX / 2 + x * stepX;
+                int sourceY = proportional ? (int) (((2L * y + 1) * image.getHeight()) / (2L * height)) : stepY / 2 + y * stepY;
+                if (gray) {
+                    sampled.getRaster().setSample(x, y, 0, image.getRaster().getSample(sourceX, sourceY, 0));
+                } else {
+                    sampled.setRGB(x, y, image.getRGB(sourceX, sourceY));
+                }
+            }
+        }
+        return sampled;
     }
 
     private static final class ReuseException extends IllegalArgumentException {
@@ -116,12 +187,16 @@ public final class BitmapFactory {
                 reader.setInput(input, true, true);
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
+                int sample = options == null ? 1 : Math.max(1, options.inSampleSize);
+                boolean jpeg = "JPEG".equalsIgnoreCase(reader.getFormatName()) || "JPG".equalsIgnoreCase(reader.getFormatName());
+                int sampledWidth = sampledDimension(width, sample, jpeg);
+                int sampledHeight = sampledDimension(height, sample, jpeg);
                 if (options != null) {
-                    options.outWidth = width;
-                    options.outHeight = height;
+                    options.outWidth = sampledWidth;
+                    options.outHeight = sampledHeight;
                     if (options.inJustDecodeBounds) { return failed(options); }
                 }
-                return decoded(reader.read(0), options);
+                return decoded(sampledImage(reader.read(0), sampledWidth, sampledHeight, jpeg && sample > 1 && sample % 2 == 0), options);
             } finally {
                 reader.dispose();
             }

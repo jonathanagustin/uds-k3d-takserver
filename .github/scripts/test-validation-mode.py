@@ -18,7 +18,7 @@ def diagnostic_case(event, requested, selected="none"):
     if event != "workflow_dispatch":
         return "none"
     selected = selected or "none"
-    if selected not in {"none", "upgrade-amd64", "pg15-amd64"}:
+    if selected not in {"none", "upgrade-amd64", "pg15-amd64", "pg15-both"}:
         raise ValueError("Unknown diagnostic case")
     if selected != "none" and trust_only(event, requested):
         raise ValueError("Diagnostic case and trust_bundle cannot be combined")

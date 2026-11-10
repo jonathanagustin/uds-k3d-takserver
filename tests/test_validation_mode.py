@@ -66,6 +66,8 @@ class TestValidationMode(unittest.TestCase):
                         "upgrade-amd64", required)
             MODE.verify("workflow_dispatch", "false", "skipped", "skipped", "success",
                         "pg15-amd64", required)
+            MODE.verify("workflow_dispatch", "false", "skipped", "skipped", "success",
+                        "pg15-both", required)
 
     def test_cli_pg15_policy_and_invalid_expectations_fail_closed(self):
         base = {**os.environ, "EVENT_NAME": "push", "TRUST_BUNDLE": "false", "DIAGNOSTIC_CASE": "none",
@@ -118,7 +120,7 @@ class TestValidationMode(unittest.TestCase):
     def test_normal_seven_paths_and_forged_inputs_preserve_coverage(self):
         for event in ("pull_request", "push", "workflow_dispatch"):
             for selected in (("none",) if event == "workflow_dispatch" else
-                             ("none", "upgrade-amd64", "pg15-amd64", "invalid")):
+                             ("none", "upgrade-amd64", "pg15-amd64", "pg15-both", "invalid")):
                 with self.subTest(event=event, selected=selected):
                     outputs = MODE.plan(event, "false", "custom", selected)
                     self.assertEqual(outputs["diagnostic-case"], "none")
@@ -154,7 +156,7 @@ class TestValidationMode(unittest.TestCase):
                             MODE.verify("workflow_dispatch", "false", *actual, selected)
 
     def test_mixed_and_unknown_manual_modes_fail_plan_and_verify(self):
-        for trust, selected in (("true", "upgrade-amd64"), ("true", "pg15-amd64"),
+        for trust, selected in (("true", "upgrade-amd64"), ("true", "pg15-amd64"), ("true", "pg15-both"),
                                 ("false", "unknown")):
             with self.assertRaises(ValueError):
                 MODE.plan("workflow_dispatch", trust, "custom", selected)
@@ -163,6 +165,7 @@ class TestValidationMode(unittest.TestCase):
 
     def test_workflow_consumes_planned_matrices_and_preserves_pg15_trigger(self):
         workflow = (SCRIPT.parents[1] / "workflows/test.yaml").read_text()
+        self.assertIn("options: [none, upgrade-amd64, pg15-amd64, pg15-both]", workflow)
         planner = workflow.split("  check-flavor:", 1)[1].split("  validate-install:", 1)[0]
         self.assertIn("DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}", planner)
         for key in ("install-matrix", "upgrade-matrix", "pg15-matrix", "diagnostic-case"):
@@ -177,14 +180,62 @@ class TestValidationMode(unittest.TestCase):
             self.assertIn(f"matrix: ${{{{ fromJSON(needs.check-flavor.outputs.{key}) }}}}", sections[name])
         self.assertIn("diagnostic-case == 'none'", sections["validate-install"])
         self.assertIn("diagnostic-case != 'pg15-amd64'", sections["validate-upgrade"])
+        self.assertIn("diagnostic-case != 'pg15-amd64' && "
+                      "needs.check-flavor.outputs.diagnostic-case != 'pg15-both'", sections["validate-upgrade"])
         pg15 = sections["validate-upgrade-pg15"]
         self.assertIn("diagnostic-case == 'pg15-amd64'", pg15)
+        self.assertIn("diagnostic-case == 'pg15-amd64' || "
+                      "needs.check-flavor.outputs.diagnostic-case == 'pg15-both'", pg15)
         self.assertIn("github.event_name == 'push'", pg15)
         self.assertIn("contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')", pg15)
         verifier = workflow.split("  verify-test:", 1)[1]
         self.assertIn("DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}", verifier)
         self.assertIn("PG15_REQUIRED: ${{ github.event_name == 'push' || "
                       "contains(github.event.pull_request.labels.*.name, 'upgrade-pg15') }}", verifier)
+
+    def test_manual_pg15_both_uses_two_native_rows_and_exact_family_results(self):
+        outputs = MODE.plan("workflow_dispatch", "false", "custom-amd64", "pg15-both")
+        self.assertEqual(outputs["diagnostic-case"], "pg15-both")
+        self.assertEqual(outputs["pg15-matrix"]["include"], [
+            {"arch": "amd64", "runner": "custom-amd64"},
+            {"arch": "arm64", "runner": "ubuntu-22.04-arm"}])
+        MODE.verify("workflow_dispatch", "false", "skipped", "skipped", "success", "pg15-both")
+        for index in range(3):
+            for result in ("success", "failure", "skipped", "cancelled", ""):
+                actual = ["skipped", "skipped", "success"]
+                actual[index] = result
+                if actual == ["skipped", "skipped", "success"]:
+                    continue
+                with self.subTest(actual=actual):
+                    with self.assertRaises(ValueError):
+                        MODE.verify("workflow_dispatch", "false", *actual, "pg15-both")
+
+    def test_cli_pg15_both_plan_and_diagnostic_only_success(self):
+        env = {**os.environ, "EVENT_NAME": "workflow_dispatch", "TRUST_BUNDLE": "false",
+               "TEST_RUNNER": "custom-amd64", "DIAGNOSTIC_CASE": "pg15-both",
+               "INSTALL_RESULT": "skipped", "UPGRADE_RESULT": "skipped", "PG15_RESULT": "success",
+               "PG15_REQUIRED": "false"}
+        env.pop("GITHUB_OUTPUT", None)
+        result = subprocess.run(["python3", str(SCRIPT), "plan"], env=env,
+                                capture_output=True, text=True, check=True)
+        planned = dict(line.split("=", 1) for line in result.stdout.splitlines())
+        self.assertEqual(planned["diagnostic-case"], "pg15-both")
+        self.assertEqual([row["arch"] for row in json.loads(planned["pg15-matrix"])["include"]],
+                         ["amd64", "arm64"])
+        result = subprocess.run(["python3", str(SCRIPT), "verify"], env=env,
+                                capture_output=True, text=True, check=True)
+        self.assertIn("Selected diagnostic case passed—not full acceptance", result.stdout)
+        self.assertNotIn("All tests passed", result.stdout)
+        env["PG15_RESULT"] = "skipped"
+        result = subprocess.run(["python3", str(SCRIPT), "verify"], env=env,
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        env.update(TRUST_BUNDLE="true", PG15_RESULT="success")
+        for command in ("plan", "verify"):
+            result = subprocess.run(["python3", str(SCRIPT), command], env=env,
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cannot be combined", result.stderr)
 
     def test_cli_diagnostic_output_never_claims_full_acceptance(self):
         env = {**os.environ, "EVENT_NAME": "workflow_dispatch", "TRUST_BUNDLE": "false",

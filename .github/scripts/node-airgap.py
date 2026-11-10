@@ -279,18 +279,27 @@ def read_state(path):
     return validate_nodes(json.loads(path.read_text()))
 
 
+def require_base_filter(node, tool):
+    # Exit 1 from a chain lookup or jump check can also mean backend failure.
+    # Prove both base filter chains readable before treating it as absence.
+    for parent in ("OUTPUT", "FORWARD"):
+        firewall(node, tool, "-L", parent, "-n")
+
+
 def restore_node(node, tool):
     require_binding_node(node, tool)
     # DNS is intentionally unavailable while guarded. Listing without -n can
     # block on reverse lookups before any rule is removed.
     found = firewall(node, tool, "-L", CHAIN, "-n", check=False)
     if found.returncode == 1:
+        require_base_filter(node, tool)
         return
     found.check_returncode()
     for parent in ("OUTPUT", "FORWARD"):
         for _ in range(8):
             found = firewall(node, tool, "-C", parent, "-j", CHAIN, check=False)
             if found.returncode == 1:
+                require_base_filter(node, tool)
                 break
             found.check_returncode()
             firewall(node, tool, "-D", parent, "-j", CHAIN)

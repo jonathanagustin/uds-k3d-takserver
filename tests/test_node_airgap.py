@@ -426,6 +426,40 @@ else:
                     self.assertEqual(command.call_args.args,
                                      ("inspect", "--format", "{{json .HostConfig.NetworkMode}}", "a" * 64))
 
+    def test_restore_backend_failure_keeps_state_and_never_reports_success(self):
+        for failed_check in ("chain", "jump"):
+            def result(_node, _tool, *args, check=True):
+                missing = (args[:2] == ("-L", AIRGAP.CHAIN) and failed_check == "chain") or "-C" in args
+                backend_failure = args[:2] == ("-L", "FORWARD")
+                completed = subprocess.CompletedProcess([], 1 if missing or backend_failure else 0, "", "")
+                if check:
+                    completed.check_returncode()
+                return completed
+            with self.subTest(failed_check=failed_check), tempfile.TemporaryDirectory() as directory:
+                state = Path(directory) / "state.json"
+                state.write_text("retained original state")
+                nodes = [dict(name="node", tools=[binding()], networks={})]
+                output = io.StringIO()
+                with patch.object(AIRGAP, "read_state", return_value=nodes), \
+                        patch.object(AIRGAP, "require_binding_node"), \
+                        patch.object(AIRGAP, "firewall", side_effect=result) as command, \
+                        patch("sys.argv", ["node-airgap.py", "restore", "--state", str(state)]), \
+                        contextlib.redirect_stdout(output):
+                    with self.assertRaises(RuntimeError):
+                        AIRGAP.main()
+                self.assertEqual(state.read_text(), "retained original state")
+                self.assertNotIn("Restored", output.getvalue())
+                self.assertFalse(any(flag in call.args for call in command.call_args_list for flag in ("-D", "-F", "-X")))
+
+    def test_genuine_absent_chain_is_idempotent_after_base_filter_proof(self):
+        def result(_node, _tool, *args, **_kwargs):
+            return subprocess.CompletedProcess([], 1 if args[1] == AIRGAP.CHAIN else 0, "", "")
+        with patch.object(AIRGAP, "require_binding_node"), \
+                patch.object(AIRGAP, "firewall", side_effect=result) as command:
+            AIRGAP.restore_node("node", binding())
+        self.assertEqual([call.args[2:] for call in command.call_args_list], [
+            ("-L", AIRGAP.CHAIN, "-n"), ("-L", "OUTPUT", "-n"), ("-L", "FORWARD", "-n")])
+
     def test_restore_does_not_request_dns_lookups_for_either_family(self):
         for tool in ("iptables", "ip6tables"):
             def result(_node, _tool, *args, **_kwargs):
@@ -434,7 +468,8 @@ else:
                     patch.object(AIRGAP, "firewall", side_effect=result) as command:
                 AIRGAP.restore_node("node", binding(tool))
                 listings = [call.args for call in command.call_args_list if "-L" in call.args]
-                self.assertEqual(listings, [("node", binding(tool), "-L", AIRGAP.CHAIN, "-n")])
+                self.assertEqual(listings, [("node", binding(tool), "-L", chain, "-n")
+                                            for chain in (AIRGAP.CHAIN, "OUTPUT", "FORWARD", "OUTPUT", "FORWARD")])
 
     def test_ci_always_restores_and_offline_ui_keeps_the_core_flow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())

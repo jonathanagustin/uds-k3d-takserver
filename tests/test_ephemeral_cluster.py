@@ -71,6 +71,31 @@ class Fixture:
 
 
 class EphemeralClusterTests(unittest.TestCase):
+    def test_bootstrap_refuses_existing_or_stopped_cluster_and_context(self):
+        for nodes, context, accepted in [('k3d-uds-server-0', '', False), ('', 'k3d-uds', False), ('', '', True)]:
+            calls = []
+            def command(argv, input_text=None):
+                calls.append(argv)
+                if argv == ['git', 'rev-parse', 'HEAD']:
+                    return ENV['GITHUB_SHA']
+                if argv == ['docker', 'context', 'show']:
+                    return 'default'
+                if argv[:3] == ['docker', 'context', 'inspect']:
+                    return json.dumps('unix:///var/run/docker.sock')
+                if argv[:3] == ['docker', 'ps', '--all']:
+                    return nodes
+                if argv[:3] == ['kubectl', 'config', 'get-contexts']:
+                    return context
+                raise AssertionError('unexpected bootstrap command: ' + repr(argv))
+            with patch.dict('os.environ', ENV, clear=True):
+                if accepted:
+                    self.assertEqual(GUARD.verify_bootstrap(GUARD.CONTEXT, command)['purpose'], 'staged-bootstrap')
+                else:
+                    with self.assertRaises(ValueError):
+                        GUARD.verify_bootstrap(GUARD.CONTEXT, command)
+            self.assertTrue(any('--all' in args for args in calls))
+            self.assertTrue(all('create' not in args and 'delete' not in args for args in calls))
+
     def test_remote_docker_configuration_is_rejected_before_cluster_observation(self):
         for changed in ({'DOCKER_HOST': 'tcp://remote.example:2376'}, {'DOCKER_CONTEXT': 'remote'}):
             fixture = Fixture()

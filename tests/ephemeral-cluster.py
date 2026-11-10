@@ -42,14 +42,33 @@ def verify_local_docker(command):
     return {'dockerContext': 'default', 'dockerEndpoint': endpoint}
 
 
-def _local_identity(context, command):
-    require(context == CONTEXT, 'only the explicit k3d-uds test context is allowed')
+def _run_identity(command):
     require(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('GITHUB_REPOSITORY') == REPOSITORY,
             'staged mutation requires this repository GitHub Actions job')
     run, attempt, sha = (os.environ.get(key, '') for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA'))
     require(re.fullmatch('[1-9][0-9]*', run) and re.fullmatch('[1-9][0-9]*', attempt)
             and re.fullmatch('[a-f0-9]{40}', sha), 'missing run, attempt or source identity')
     require(command(['git', 'rev-parse', 'HEAD']).strip() == sha, 'checkout differs from the reviewed workflow source')
+    return run, attempt, sha
+
+
+def verify_bootstrap(context, command):
+    """Refuse reuse before any checkpoint bootstrap mutation."""
+    require(context == CONTEXT, 'only the explicit k3d-uds test context is allowed')
+    run, attempt, sha = _run_identity(command)
+    endpoint = verify_local_docker(command)
+    names = command(['docker', 'ps', '--all', '--filter', 'label=app=k3d',
+                     '--filter', 'label=k3d.cluster=uds', '--format', '{{.Names}}']).strip()
+    require(not names, 'staged bootstrap refuses an existing uds k3d container, including stopped containers')
+    contexts = command(['kubectl', 'config', 'get-contexts', CONTEXT, '-o', 'name']).strip()
+    require(not contexts, 'staged bootstrap refuses an existing k3d-uds kubeconfig context')
+    return {'schema': '1', 'purpose': 'staged-bootstrap', 'repository': REPOSITORY,
+            'runID': run, 'runAttempt': attempt, 'sourceSHA': sha, 'context': context, **endpoint}
+
+
+def _local_identity(context, command):
+    require(context == CONTEXT, 'only the explicit k3d-uds test context is allowed')
+    run, attempt, sha = _run_identity(command)
     verify_local_docker(command)
     require(command(['kubectl', 'config', 'current-context']).strip() == context,
             'current context differs; refusing tools that use the current context')
@@ -126,7 +145,7 @@ def mark(context, command):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('docker', 'mark', 'verify'))
+    parser.add_argument('operation', choices=('docker', 'bootstrap', 'mark', 'verify'))
     parser.add_argument('--context', choices=(CONTEXT,), required=True)
     args = parser.parse_args()
 
@@ -136,7 +155,7 @@ def main():
         return result.stdout
 
     result = (verify_local_docker(command) if args.operation == 'docker'
-              else (mark if args.operation == 'mark' else verify)(args.context, command))
+              else {'bootstrap': verify_bootstrap, 'mark': mark, 'verify': verify}[args.operation](args.context, command))
     print(json.dumps(result, indent=2))
 
 

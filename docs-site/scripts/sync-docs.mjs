@@ -338,7 +338,8 @@ function titleLinkLabels(markdown, fromSrc, headings) {
 // README status badges that GitHub camo cannot fetch reliably are committed under
 // docs-site/public/badges/ and linked with relative paths. Relative README images
 // skip camo; sync-docs already maps docs-site/public/ onto the Pages root.
-// Refresh release.svg when the version changes; scorecard.svg when the score changes.
+// Release Please updates release.svg with each release PR. Refresh scorecard.svg
+// when the score changes.
 
 // GitHub's workflow badge.svg is reliable on github.com (camo can fetch it).
 // On the docs site it has shown as a broken image in Chrome, so the site build

@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
-from bench import capacity
+from bench import capacity, jvm_metrics
 from bench.phases import pod_phases
 from bench.startup import max_generation, max_restarts
 from bench.tester_exit import bind_tester, reap
@@ -234,11 +234,26 @@ def redacted_text(text, tail=None):
 
 def start_phases():
     """Pull, init, container start, and Ready for messaging and the API. Missing stays None."""
+    enabled = os.environ.get('BENCH_JVM_START_METADATA') == '1'
+    context = os.environ.get('BENCH_JVM_CONTEXT', '')
+    def read(*args, **kwargs):
+        if not enabled:
+            return kubectl(*args, **kwargs)
+        try:
+            return kubectl('--context', context, *args, **kwargs)
+        except (RuntimeError, subprocess.SubprocessError, OSError):
+            raise RuntimeError('optional phase read unavailable') from None
+    if enabled and not jvm_metrics.matches(context, r'[A-Za-z0-9_.-]{1,100}'):
+        return {app: jvm_metrics.unavailable_phase('context_required')
+                for app in ('takserver-messaging', 'takserver-api')}, ['JVM observation: context_required']
+    if enabled and not jvm_metrics.current_context_matches(context):
+        return {app: jvm_metrics.unavailable_phase('benchmark_context_mismatch')
+                for app in ('takserver-messaging', 'takserver-api')}, ['JVM observation: benchmark_context_mismatch']
     found = {}
     errors = []
     for app in ("takserver-messaging", "takserver-api"):
         try:
-            raw = kubectl("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json", timeout=30).stdout
+            raw = read("get", "pods", "-n", "takserver", "-l", f"app={app}", "-o", "json", timeout=30).stdout
             pods = json.loads(raw).get("items", [])
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             found[app] = None
@@ -248,12 +263,15 @@ def start_phases():
             found[app] = None
             errors.append(f"{app} phases: no pod")
             continue
+        if enabled and len(pods) != 1:
+            found[app] = jvm_metrics.unavailable_phase('phase_pod_ambiguous')
+            continue
         pod = pods[0]
         name = pod.get("metadata", {}).get("name", "")
         events = []
         log_text = ""
         try:
-            event_raw = kubectl(
+            event_raw = read(
                 "get", "events", "-n", "takserver",
                 "--field-selector", f"involvedObject.uid={pod.get('metadata', {}).get('uid', '')}",
                 "-o", "json", timeout=30,
@@ -262,14 +280,19 @@ def start_phases():
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError):
             events = []
         containers = pod.get("spec", {}).get("containers") or []
-        container = containers[0]["name"] if containers else app
+        container = app if enabled else containers[0]["name"] if containers else app
         try:
             log_text = redacted_text(
-                kubectl("logs", "-n", "takserver", name, "-c", container, "--timestamps", timeout=30).stdout,
+                read("logs", "-n", "takserver", name, "-c", container, "--timestamps", timeout=30).stdout,
             )
         except (RuntimeError, subprocess.CalledProcessError):
             log_text = ""
-        found[app] = pod_phases(pod, events, log_text)
+        if enabled:
+            phase = pod_phases(pod, events, log_text, container_name=app)
+            observation = jvm_metrics.observe(app, context)
+            found[app] = jvm_metrics.join_phase(phase, observation)
+        else:
+            found[app] = pod_phases(pod, events, log_text)
     return found, errors
 
 

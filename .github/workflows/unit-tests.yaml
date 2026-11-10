@@ -73,7 +73,7 @@ jobs:
         run: python3 -B -m unittest tests.test_trust_bundle_live tests.test_validation_mode tests.test_trust_fixture -v
 
       - name: Install execution receipt foundation
-        run: python3 -B -m unittest tests.test_install_receipt -v
+        run: python3 -B -m unittest tests.test_install_receipt tests.test_checkpoint_identity -v
 
       - name: TakClient revocation endpoint contract
         run: python3 -B -m unittest tests.test_takclient_revocation -v

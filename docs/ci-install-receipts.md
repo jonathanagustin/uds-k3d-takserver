@@ -70,3 +70,19 @@ never describe reused or skipped scenarios as newly executed acceptance.
 Local proof uses synthetic git histories and malformed/secret-bearing fixture
 manifests: `python3 -B -m unittest tests.test_install_receipt -v`. These tests need
 no cluster, credentials, registry calls or hosted acceptance run.
+
+Checkpoint acquisition evidence is an optional prerequisite, enabled by
+`INSTALL_RECEIPT_METADATA=true`; it does not enable receipts or reuse. Fresh
+pulls use the verified immutable index digest and can retain a small adjacent
+`.receipt.json` sidecar containing the public source, architecture, version,
+verified OCI index/platform-manifest digests, and exact archive hash. Registry
+metadata is bounded to 1 MiB and eight seconds per request; the optional helper
+is bounded to 30 seconds. The official Zarf checkpoint uses the `multi` OS
+platform, not a Linux image platform. The helper validates the Zarf config and
+layer descriptor schema and digest-addressed manifest bytes.
+
+Cached archives are never repulled or looked up by a mutable tag for evidence.
+A missing sidecar, different archive bytes/source/version/architecture/digest,
+or unavailable metadata omits this optional identity while deployment continues.
+A sidecar is local acquisition metadata, not an authenticated execution receipt
+or proof of application acceptance. No workflow currently enables this option.

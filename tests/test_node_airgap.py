@@ -9,6 +9,8 @@ Docker networks, not an Internet server, so endpoint outages cannot pass it.
 """
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -78,6 +80,55 @@ def assert_native_plus_one_airgap(test, rows):
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_drop_denial_preserves_docker_dns_and_internal_rule_order(self):
+        with patch.object(AIRGAP, 'require_private_network') as private, \
+                patch.object(AIRGAP, 'firewall') as command:
+            AIRGAP.block_node('k3d-node', 'iptables', ['172.18.0.0/16', '10.42.0.0/16'])
+        private.assert_called_once_with('k3d-node')
+        self.assertEqual([call.args[2:] for call in command.call_args_list], [
+            ('-N', AIRGAP.CHAIN),
+            ('-A', AIRGAP.CHAIN, '-d', '127.0.0.11/32', '-j', 'DROP'),
+            ('-A', AIRGAP.CHAIN, '-o', 'lo', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-d', '172.18.0.0/16', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-d', '10.42.0.0/16', '-j', 'RETURN'),
+            ('-A', AIRGAP.CHAIN, '-j', 'DROP'),
+            ('-I', 'OUTPUT', '1', '-j', AIRGAP.CHAIN),
+            ('-I', 'FORWARD', '1', '-j', AIRGAP.CHAIN)])
+        with patch.object(AIRGAP, 'require_private_network'), patch.object(AIRGAP, 'firewall') as command:
+            AIRGAP.block_node('k3d-node', 'ip6tables', ['fe80::/10'])
+        self.assertEqual(command.call_args_list[1].args[2:],
+                         ('-A', AIRGAP.CHAIN, '-o', 'lo', '-j', 'RETURN'))
+        self.assertIn(('-A', AIRGAP.CHAIN, '-j', 'DROP'),
+                      [call.args[2:] for call in command.call_args_list])
+        self.assertFalse(any('REJECT' in call.args for call in command.call_args_list))
+
+    def test_firewall_failure_reports_sanitized_stderr_and_still_raises(self):
+        error = subprocess.CalledProcessError(1, ['docker', 'exec'], stderr=
+                                               'iptables v1.8.11: lock timeout; password=DO_NOT_EMIT\n')
+        output = io.StringIO()
+        with patch.object(AIRGAP, 'docker', side_effect=error), contextlib.redirect_stderr(output):
+            with self.assertRaises(subprocess.CalledProcessError):
+                AIRGAP.firewall('k3d-node', 'iptables', '-A', AIRGAP.CHAIN, '-j', 'DROP')
+        self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
+        self.assertNotIn('DO_NOT_EMIT', output.getvalue())
+        self.assertIn('[REDACTED]', output.getvalue())
+
+    def test_firewall_stderr_is_redacted_before_truncation_and_auth_is_omitted_whole(self):
+        detail = AIRGAP.firewall_error_detail('-----BEGIN PRIVATE KEY-----\n' +
+                                              'sensitive' * 500 + '\n-----END PRIVATE KEY-----\nbackend error')
+        self.assertNotIn('sensitive', detail)
+        self.assertIn('backend error', detail)
+        self.assertLessEqual(len(detail), 1024)
+        detail = AIRGAP.firewall_error_detail('public-prefix ' * 200 +
+                                              '{"auths":{"registry":{"auth":"DO_NOT_EMIT"}}}')
+        self.assertEqual(detail, 'omitted: authentication-bearing firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail('upload failed http://registry/v2/blobs?_state=DO_NOT_EMIT'),
+                         'omitted: authentication-bearing firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail(b'\xffprivate'),
+                         'omitted: unsanitizable firewall stderr')
+        self.assertEqual(AIRGAP.firewall_error_detail('x' * 65537),
+                         'omitted: oversized firewall stderr')
+
     def test_unreachable_precontrol_fails_closed_and_reports_wget(self):
         failed = subprocess.CompletedProcess([], 1, "", "wget: download timed out\n")
         with patch.object(AIRGAP, "docker", return_value=failed) as command:
@@ -340,8 +391,8 @@ class AirgapNetworkIntegration(unittest.TestCase):
             self.assertEqual(gets(addresses[0]).returncode, 0)
             self.assertNotEqual(gets(addresses[1]).returncode, 0)
             counters = AIRGAP.firewall(node, tool, "-L", AIRGAP.CHAIN, "-n", "-v", "-x").stdout
-            rejected = [line.split() for line in counters.splitlines() if "REJECT" in line]
-            self.assertTrue(any(int(fields[0]) > 0 for fields in rejected))
+            dropped = [line.split() for line in counters.splitlines() if "DROP" in line]
+            self.assertTrue(any(int(fields[0]) > 0 for fields in dropped))
             # A host-side connection to the same denied peer still succeeds.
             # A published loopback port also works with rootless Docker, where
             # the agent host cannot route directly to the bridge's subnet.

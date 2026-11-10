@@ -20,6 +20,53 @@ ENV = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'
 
 
 class StagedMigrationTests(unittest.TestCase):
+    def test_two_real_failed_children_preserve_first_private_capture_and_only_publish_ids(self):
+        spec = importlib.util.spec_from_file_location('first_failure_driver',
+                                                      ROOT / 'tests/velero-ownership/drive.py')
+        driver = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(driver)
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, ENV, clear=True):
+            root = Path(temporary)
+            (root / 'owner').mkdir()
+            private = root / 'owner/PRIVATE-command-failure.txt'
+            first = 'unknown flag: --fixture-secret https://private.example/?sig=fixture-secret\n'
+            second = 'connection refused secondary-secret\n'
+            for payload in (first, second):
+                child = 'import sys;sys.stderr.write(' + repr(payload) + ');sys.exit(23)'
+                with self.assertRaisesRegex(ValueError, 'staged command failed'):
+                    driver.runner(['python3', '-c', child], timeout=5, diagnostics=private)
+                self.assertEqual(private.read_bytes(), first.encode())
+                self.assertEqual(private.stat().st_mode & 0o777, 0o600)
+                self.assertLessEqual(private.stat().st_size, driver.TAIL_LIMIT)
+            (root / 'owner/journal.json').write_text(json.dumps({'steps': [
+                {'name': 'bootstrap-exemption', 'status': 'failed'}]}))
+            output = root / 'public'
+            S.publish(root, output, 'amd64')
+            diagnostic = json.loads((output / 'proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual(diagnostic['categories'], [{'patternID': 'cli-arguments', 'count': 1}])
+            published = ''.join(path.read_text() for path in output.rglob('*.json'))
+            for forbidden in ('fixture-secret', 'secondary-secret', 'private.example', 'unknown flag', 'connection refused'):
+                self.assertNotIn(forbidden, published)
+
+    def test_first_failure_capture_never_follows_existing_or_parent_symlink(self):
+        spec = importlib.util.spec_from_file_location('symlink_failure_driver',
+                                                      ROOT / 'tests/velero-ownership/drive.py')
+        driver = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(driver)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / 'keep'; target.write_bytes(b'preserved')
+            link = root / 'link'; link.symlink_to(target)
+            outside = root / 'outside'; outside.mkdir()
+            parent = root / 'parent'; parent.symlink_to(outside, target_is_directory=True)
+            for destination in (link, parent / 'capture'):
+                with self.assertRaisesRegex(ValueError, 'staged command failed'):
+                    driver.runner(['python3', '-c', 'import sys;sys.stderr.write("private");sys.exit(1)'],
+                                  timeout=5, diagnostics=destination)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(target.read_bytes(), b'preserved')
+            self.assertFalse((outside / 'capture').exists())
+
     def test_failure_categories_publish_only_fixed_ids_and_capped_counts(self):
         with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, ENV, clear=True):
             root = Path(temporary)

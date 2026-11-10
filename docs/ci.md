@@ -294,6 +294,7 @@ category cannot count as acceptance or authorize retries, rollback, bypasses or
 changes to ownership. The structured progress journal remains authoritative
 only for the stage and its recorded result.
 
-The private file records the last failing command, so a failed observation
-after a deployment error can replace that error. A category must not be
-attributed to the first failing operation without separate evidence.
+The runner creates its first private failure capture exclusively with mode
+0600. Existing files and symlinks are never followed or overwritten, so later
+failed observations cannot replace that retained tail. This still does not
+recover discarded output or establish a causal explanation for that failure.

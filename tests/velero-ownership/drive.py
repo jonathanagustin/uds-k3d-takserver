@@ -296,9 +296,16 @@ def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
             os.killpg(child.pid, signal.SIGKILL)
             child.wait(timeout=5)
     if (failure or child.returncode) and diagnostics:
-        descriptor = os.open(diagnostics, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, 'wb') as stream:
-            stream.write(tail)
+        # A secondary failed observation must not replace the first failure.
+        # Never follow an existing file/symlink or a symlinked parent directory.
+        if not any(parent.is_symlink() for parent in Path(diagnostics).parents):
+            try:
+                descriptor = os.open(diagnostics, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(descriptor, 'wb') as stream:
+                    stream.write(tail)
     require(failure is None, failure or 'staged command failed')
     require(child.returncode == 0, 'staged command failed; no automatic rollback attempted')
     return stdout.decode(errors='replace')

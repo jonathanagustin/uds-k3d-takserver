@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 import sys
@@ -13,6 +14,8 @@ import tempfile
 import time
 import unittest
 from unittest.mock import Mock, patch
+
+import yaml
 
 from bench import jvm_metrics as jvm
 from bench import run, phases
@@ -264,6 +267,60 @@ class CommandBoundsTests(unittest.TestCase):
             else:
                 os.kill(pid, 9)
                 self.fail('descendant survived owned session cleanup')
+
+
+class WorkflowWiringTests(unittest.TestCase):
+    def setUp(self):
+        self.workflow = yaml.safe_load((run.ROOT / '.github/workflows/benchmark.yaml').read_text())
+        self.events = self.workflow.get('on', self.workflow.get(True))
+
+    def selected(self, key, event, requested=None):
+        # Evaluate only the actual workflow's small typed boolean expression;
+        # unknown fields/operators fail rather than silently assuming a guard.
+        expression = self.workflow['jobs']['benchmark']['env'][key]
+        match = re.fullmatch(r"\$\{\{ (.+) && '([^']*)' \|\| '([^']*)' \}\}", expression)
+        self.assertIsNotNone(match)
+        values = {'github.event_name': event, 'inputs.jvm_start_metadata': requested}
+        enabled = True
+        seen = set()
+        for term in match[1].split(' && '):
+            condition = re.fullmatch(r"(github\.event_name|inputs\.jvm_start_metadata) == ('workflow_dispatch'|true)", term)
+            self.assertIsNotNone(condition)
+            expected = True if condition[2] == 'true' else 'workflow_dispatch'
+            value = values[condition[1]]
+            enabled = enabled and type(value) is type(expected) and value == expected
+            seen.add(condition[1])
+        self.assertEqual(seen, set(values))
+        return match[2] if enabled else match[3]
+
+    def test_typed_manual_input_defaults_off_without_freeform_context(self):
+        inputs = self.events['workflow_dispatch']['inputs']
+        self.assertEqual(inputs['jvm_start_metadata']['type'], 'boolean')
+        self.assertIs(inputs['jvm_start_metadata']['default'], False)
+        self.assertNotIn('jvm_context', inputs)
+        self.assertEqual(self.selected('BENCH_JVM_START_METADATA', 'workflow_dispatch'), '0')
+        self.assertEqual(self.selected('BENCH_JVM_CONTEXT', 'workflow_dispatch'), '')
+
+    def test_only_explicit_manual_true_enables_fixed_context(self):
+        self.assertEqual(self.selected('BENCH_JVM_START_METADATA', 'workflow_dispatch', True), '1')
+        self.assertEqual(self.selected('BENCH_JVM_CONTEXT', 'workflow_dispatch', True), 'k3d-uds')
+        self.assertEqual(self.selected('BENCH_JVM_START_METADATA', 'workflow_dispatch', False), '0')
+        self.assertEqual(self.selected('BENCH_JVM_CONTEXT', 'workflow_dispatch', False), '')
+
+    def test_pr_schedule_and_other_events_cannot_enable_even_with_true_input(self):
+        for event in ('pull_request', 'schedule', 'push', 'workflow_call'):
+            for requested in (None, False, True):
+                with self.subTest(event=event, requested=requested):
+                    self.assertEqual(self.selected('BENCH_JVM_START_METADATA', event, requested), '0')
+                    self.assertEqual(self.selected('BENCH_JVM_CONTEXT', event, requested), '')
+
+    def test_sweep_receives_metadata_only_through_existing_environment(self):
+        job = self.workflow['jobs']['benchmark']
+        self.assertEqual(len(job['strategy']['matrix']['include']), 2)
+        sweep = next(step for step in job['steps'] if step.get('name') == 'Run the sweep')
+        self.assertNotIn('BENCH_JVM_START_METADATA', sweep.get('env', {}))
+        self.assertNotIn('BENCH_JVM_CONTEXT', sweep.get('env', {}))
+        self.assertIn('bench/run.py', sweep['run'])
 
 
 if __name__ == '__main__':

@@ -79,6 +79,7 @@ check_match ".github/workflows/benchmark.yaml" ignore
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
 check_match ".github/workflows/mutation.yaml" ignore
+check_match ".github/workflows/ui-reel.yaml" ignore
 # Mutation tooling is isolated from the Pepr package used by cluster jobs.
 for mutation_path in .gitignore check-report.mjs package-lock.json package.json stryker.config.mjs; do
   check_match "pepr/mutation/${mutation_path}" ignore

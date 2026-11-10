@@ -171,3 +171,5 @@ jobs:
         env:
           PYYAML_VERSION: 6.0.3
         run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_workflow_permissions tests.test_scorecard_permissions tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff tests.test_ephemeral_cluster tests.test_velero_transfer tests.test_velero_trial tests.test_staged_migrations tests.test_upgrade_agent_watch tests.test_identity_rollout_driver -v
+      - name: Encrypted staged diagnostic guards
+        run: python3 -B -m unittest discover -s .github/test-infra -p test_staged_encrypted_diagnostic.py -v

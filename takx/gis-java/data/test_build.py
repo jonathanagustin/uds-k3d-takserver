@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("gdal_data_build", ROOT / "build.py")
@@ -27,6 +28,22 @@ class IntegrityGuardTests(unittest.TestCase):
             source.write_bytes(b"not the locked source archive")
             with self.assertRaisesRegex(ValueError, "source archive size mismatch"):
                 BUILD.build(source, output)
+            self.assertFalse(output.exists())
+
+    def test_same_size_dummy_fails_hash_check_before_tar_parsing_or_output(self):
+        lock = json.loads(BUILD.LOCK.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / "same-size.tar.gz", root / "output"
+            # A sparse zero-filled file exercises the real hash over exactly the
+            # locked input size without allocating or downloading archive bytes.
+            with source.open("wb") as stream:
+                stream.truncate(lock["archive"]["bytes"])
+            self.assertEqual(source.stat().st_size, lock["archive"]["bytes"])
+            with patch.object(BUILD.tarfile, "open") as parse:
+                with self.assertRaisesRegex(ValueError, "source archive SHA-256 mismatch"):
+                    BUILD.build(source, output)
+                parse.assert_not_called()
             self.assertFalse(output.exists())
 
 

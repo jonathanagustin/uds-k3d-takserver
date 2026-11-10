@@ -7,7 +7,8 @@ a native GDAL runtime, a Kernel SDK or a working TAKX client.
 
 ## Build
 
-Use Python 3.11 or later. Reuse the GDAL archive acquired for the
+Use Python 3.11 or later (`hashlib.file_digest` requires it). Reuse the GDAL
+archive acquired for the
 [GIS Java source recipe](../README.md), or download that same public
 source input:
 
@@ -47,9 +48,14 @@ JAR is deterministic and has no machine paths or build timestamps.
 
 ## Verify
 
-The integrity guard runs without downloaded inputs. Set `GDAL_DATA_ARCHIVE` to
-exercise real deterministic builds and all 93 resource lookups with JDK 17
-(`java` and `javac` on `PATH`):
+Normal PR CI runs two offline integrity tests: a wrong-size input and a dummy
+input with the exact locked size but the wrong SHA-256. Both must fail before
+tar parsing or output creation. Neither test downloads anything.
+
+Three real-source tests are opt-in and skipped in normal CI: source-byte
+tampering, deterministic clean builds, and all 93 JDK resource lookups. They
+passed locally against the locked public archive. To run them, set
+`GDAL_DATA_ARCHIVE` and put JDK 17's `java` and `javac` on `PATH`:
 
 ```sh
 GDAL_DATA_ARCHIVE=/tmp/gdal-2.4.4-mod.tar.gz \

@@ -51,7 +51,7 @@ a field stores `null` and an entry in `errors`. It does not store zero.
 | `postgres.temp_files`, `postgres.temp_bytes` | count, bytes | `pg_stat_database` for `cot` |
 | `postgres.checkpoints_timed`, `postgres.checkpoints_req` | count | `num_timed` and `num_requested` from `pg_stat_checkpointer` (PostgreSQL 17 and later) |
 | `postgres.checkpoint_write_ms`, `postgres.checkpoint_sync_ms` | milliseconds | `write_time` and `sync_time` from `pg_stat_checkpointer` |
-| `postgres.buffers_backend` | count | blocks written by client backends: the sum of `writes` in `pg_stat_io` for `client backend` |
+| `postgres.buffers_backend` | operations | legacy field name for the sum of `writes` in `pg_stat_io` for `client backend`; write operations, not blocks or bytes |
 | `postgres.peak_rss_bytes`, `postgres.steady_rss_bytes` | bytes | working set of container `postgresql` in pod `takserver-postgresql-*`, from the same kubelet Summary samples as `kubelet` |
 | `postgres.settings` | text | `current_setting` for `shared_buffers`, `work_mem`, `effective_cache_size`, `max_wal_size`, `checkpoint_timeout` |
 | `errors` | strings | why a null field was not measured |
@@ -109,9 +109,20 @@ circle can be compared across architectures. Dominance is still decided
 inside one architecture. Dominated configs are marked in the job summary and
 drawn as open circles in the SVG.
 
-Counters are cleared with `pg_stat_reset()` and `pg_stat_reset_shared('bgwriter')`
-just before the load, so they cover that run and not the install. A config
-may set `postgres:` with those five parameters. The harness runs
+Counters are cleared with `pg_stat_reset()` in `cot`, plus
+`pg_stat_reset_shared('bgwriter')`, `pg_stat_reset_shared('checkpointer')` and
+`pg_stat_reset_shared('io')`, just before the load. A reset failure is retained
+in `errors`; the subsequent counter snapshot then has no verified load window.
+Database hit/temp counters describe `cot`; checkpoint and I/O counters are
+cluster-wide and can include background or other-database activity. On
+PostgreSQL 18, [`pg_stat_io.writes`](https://www.postgresql.org/docs/18/monitoring-stats.html#MONITORING-PG-STAT-IO-VIEW)
+counts write operations, while `write_bytes` is a separate, uncollected field.
+The historical JSON key `buffers_backend` is retained without converting it
+to blocks or bytes. The report shows the collected timed/requested checkpoints,
+write/sync times, backend write operations, cache/temp counters and both working
+set samples alongside throughput, mean latency and all five observed settings.
+
+A config may set `postgres:` with those five parameters. The harness runs
 `ALTER SYSTEM` inside `takserver-postgresql-0` and restarts the StatefulSet.
 The next config in the same process resets them first, so a sweep does not
 stack. The package does not copy a winning set into values: no load report

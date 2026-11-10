@@ -603,6 +603,8 @@ jobs:
       - name: Install and test without node internet egress
         id: airgap-execution
         if: env.TEST_TYPE == 'install' && env.AIRGAP_TEST == 'true'
+        env:
+          CI_AGENT_REPLICAS: ${{ github.event_name == 'workflow_dispatch' && needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' && '2' || '1' }}
         run: uds run test-airgap --set FLAVOR=upstream --no-progress
         timeout-minutes: 50
 
@@ -613,6 +615,11 @@ jobs:
         if: always() && env.AIRGAP_TEST == 'true'
         run: python3 .github/scripts/node-airgap.py restore --state "${RUNNER_TEMP}/tak-airgap-state.json"
         timeout-minutes: 2
+
+      - name: Verify both current agent replicas after focused airgap
+        if: github.event_name == 'workflow_dispatch' && needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' && steps.airgap-execution.outcome == 'success' && steps.airgap-restore.outcome == 'success'
+        timeout-minutes: 2
+        run: python3 tests/upgrade-agent-gate/live-health.py --require-two-replicas
 
       - name: Verify CA bundle rotation and live SSO
         if: github.event_name == 'workflow_dispatch' && inputs.trust_bundle && env.TEST_TYPE == 'install' && env.AIRGAP_TEST != 'true'

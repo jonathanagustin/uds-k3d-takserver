@@ -134,6 +134,23 @@ class RunnerWedgeProbeTests(unittest.TestCase):
             self.assertEqual(len(captures), 1)
             self.assertIn("env.TEST_TYPE == 'install'", captures[0]['if'])
 
+    def test_two_replica_pilot_is_scoped_to_actual_focused_airgap_execution(self):
+        jobs = yaml.safe_load((ROOT / '.github/workflows/test.yaml').read_text())['jobs']
+        steps = jobs['validate-install']['steps']
+        airgap = next(step for step in steps if step.get('id') == 'airgap-execution')
+        self.assertEqual(airgap['env']['CI_AGENT_REPLICAS'],
+                         "${{ github.event_name == 'workflow_dispatch' && needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' && '2' || '1' }}")
+        self.assertNotIn('CI_AGENT_REPLICAS', jobs['validate-install']['env'])
+        for step in steps:
+            if step.get('id') != 'airgap-execution':
+                self.assertNotIn('CI_AGENT_REPLICAS', step.get('env', {}))
+        restore = next(index for index, step in enumerate(steps) if step.get('id') == 'airgap-restore')
+        gate = steps[restore + 1]
+        self.assertEqual(gate['run'], 'python3 tests/upgrade-agent-gate/live-health.py --require-two-replicas')
+        self.assertEqual(gate['if'], "github.event_name == 'workflow_dispatch' && needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' && steps.airgap-execution.outcome == 'success' && steps.airgap-restore.outcome == 'success'")
+        self.assertEqual(gate['timeout-minutes'], 2)
+        self.assertFalse(gate.get('continue-on-error', False))
+
     def test_cluster_runner_fallback_keeps_overrides_and_native_arm(self):
         test = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())["jobs"]
         full = yaml.safe_load((ROOT / ".github/workflows/full-core.yaml").read_text())["jobs"]

@@ -37,14 +37,33 @@ CRI metadata adds attempt number, state and creation timestamp when the API is
 unavailable. Authentication-bearing streams, including registry auth JSON, are
 omitted as a whole before other redaction and local filtering.
 
-The fallback uses the runtime API instead of hardcoding containerd's on-disk
-rotated log layout. Source contracts:
+CRI remains the preferred runtime path. If its wrapper/list/log call is
+unavailable, invalid, unmatched or empty, a physical fallback requires a current
+API Pod identity: namespace `zarf`, canonical agent Pod name, UID, discovered
+k3d node, server container ID and integer restart count. It reads only
+`/var/log/pods/<namespace>_<name>_<uid>/server/<attempt>.log` for that API-selected
+attempt and at most two predecessors. Missing API identity or an undiscovered
+node omits this fallback; no directory glob, Docker inspection, environment
+read, Secret read or arbitrary file selection occurs.
+
+Each physical read has the existing three-second command limit and a
+65,537-byte ceiling. Over 65,536 bytes are omitted wholesale, incomplete
+stdout is discarded, and symlink path components are refused. Complete streams
+are sanitized before a local 80-line bound. Explicit exit status and captured
+byte count distinguish a successful empty read from a missing/unreadable path
+or failed/partial command. The same global 30-second process-group deadline
+still applies and can truncate later evidence. On the observed hosted node,
+`k3s crictl` returned `No help topic for 'crictl'`; this is not a claim that all
+K3s 1.37 distributions removed the wrapper.
+
+Source contracts:
 
 - [Zarf v0.88.0 deployment](https://github.com/zarf-dev/zarf/blob/v0.88.0/packages/zarf-agent/chart/templates/deployment.yaml): `server` container and `agent-hook` pod label.
 - [Zarf v0.88.0 Dockerfile](https://github.com/zarf-dev/zarf/blob/v0.88.0/Dockerfile): image process defaults.
 - [k3d default labels](https://github.com/k3d-io/k3d/blob/main/pkg/types/defaults.go): `app=k3d`; [node roles](https://github.com/k3d-io/k3d/blob/main/pkg/types/types.go): server and agent.
 - [k3s multicall dispatch](https://github.com/k3s-io/k3s/blob/main/cmd/k3s/main.go): `k3s crictl` locates its configured CRI endpoint via `findCriConfig`.
 - [containerd CRI container listing](https://github.com/containerd/containerd/blob/main/internal/cri/server/container_list.go): exposes CRI metadata, labels, creation time and state.
+- [Kubernetes v1.37.1 log paths](https://github.com/kubernetes/kubernetes/blob/v1.37.1/pkg/kubelet/kuberuntime/helpers.go): `BuildPodLogsDirectory` and `buildContainerLogsPath` bind namespace/name/UID/container/restart count.
 - [CRI tools logs](https://github.com/kubernetes-sigs/cri-tools/blob/master/cmd/crictl/logs.go): bounded runtime log retrieval, including terminated container IDs.
 
 Fixtures: `python3 -m unittest discover -s tests -p test_upgrade_agent_diagnostics.py`.
@@ -81,3 +100,11 @@ restore node egress. Their stderr is sanitized as a whole, authentication-bearin
 streams are omitted, and only a bounded single-line detail is printed. The
 Docker packet fixtures assert DROP counters but remain opt-in; fixture edits
 and offline rule-order tests do not establish live airgap acceptance.
+
+Only the explicit manual `airgap-amd64` pilot sets `CI_AGENT_REPLICAS=2`, on its
+airgap execution step. Ordinary installs/upgrades retain the default of one.
+After successful airgap execution and successful egress restoration, that
+pilot requires two current agent replicas through the existing bounded live
+health helper. One unhealthy replica, stale ownership, duplicate endpoints or
+failed direct health prevents diagnostic success. This is an opt-in availability
+pilot, not a startup/liveness root-cause fix or full acceptance.

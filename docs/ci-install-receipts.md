@@ -191,7 +191,11 @@ source/head/merged-target bindings. The latest-run check conservatively includes
 all same-repository PR runs for that exact workflow and head SHA, even with empty
 association arrays. Returned rows must match those identities; missing or
 contradictory identities require fresh execution. A newer failed, cancelled or
-queued run invalidates older green evidence. Positively identified foreign forks
+queued run invalidates older green evidence. Other applicable runs must be completed
+first attempts: an older run ID can have a later rerun, whose order is unproven.
+An older settled first-attempt failure or cancellation may be superseded by the
+newer successful run. The checker does not infer rerun order from timestamps.
+Positively identified foreign forks
 remain ineligible. It verifies the signed receipt subject, workflow, GitHub issuer,
 numeric repository identity and exact run/attempt invocation. It also downloads the
 unique unexpired artifact and compares its bytes to the signed receipt. Archives

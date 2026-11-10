@@ -213,6 +213,39 @@ class PolicyTests(unittest.TestCase):
             self.assertIn('not-latest-applicable-run', self.result()['blockers'])
             self.runs.pop()
 
+    def older_run(self, status, conclusion, attempt):
+        self.runs.append({**self.run, 'id': 99, 'run_attempt': attempt, 'status': status,
+                          'conclusion': conclusion, 'pull_requests': []})
+        return self.result()
+
+    def test_older_id_queued_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('queued', None, 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_running_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('in_progress', None, 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_failed_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('completed', 'failure', 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_cancelled_rerun_cannot_be_masked_by_newer_green(self):
+        result = self.older_run('completed', 'cancelled', 2)
+        self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+
+    def test_older_id_unsettled_first_attempt_also_requires_fresh(self):
+        for status in ('queued', 'in_progress'):
+            result = self.older_run(status, None, 1)
+            self.assertIn('other-applicable-run-unsettled-or-rerun-order-unproven', result['blockers'])
+            self.runs.pop()
+
+    def test_known_older_completed_first_attempt_can_be_superseded(self):
+        for conclusion in ('failure', 'cancelled'):
+            result = self.older_run('completed', conclusion, 1)
+            self.assertTrue(result['evidence_qualified'])
+            self.runs.pop()
+
     def test_run_list_identity_must_match_query_even_for_older_rows(self):
         for change in ({'event': 'push'}, {'head_sha': 'a' * 40}, {'workflow_id': 21},
                        {'head_repository': {}}, {'head_repository': {'full_name': SHADOW.REPO}},

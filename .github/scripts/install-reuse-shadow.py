@@ -301,6 +301,11 @@ def qualify(api, receipt, raw, verified, pr_number, target, policy_ref):
         applicable.append(item)
     require(applicable and max(item['id'] for item in applicable) == run['id'],
             'not-latest-applicable-run')
+    # IDs order run creation, not subsequent attempts. Do not let an older-ID
+    # rerun or still-active run be masked by a newer-ID green result.
+    require(all(item['id'] == run['id'] or
+                (item['run_attempt'] == 1 and item.get('status') == 'completed')
+                for item in applicable), 'other-applicable-run-unsettled-or-rerun-order-unproven')
     selected_run = next(item for item in applicable if item['id'] == run['id'])
     require(selected_run['run_attempt'] == run['run_attempt'] and
             selected_run.get('status') == run['status'] and

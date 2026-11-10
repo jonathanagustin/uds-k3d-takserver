@@ -21,31 +21,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check whether dependency review is enabled
-        id: feature
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          code="$(curl -sS -o /tmp/dep-review.json -w "%{http_code}" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/dependency-graph/compare/${base}...${head}")"
-          echo "Dependency graph compare returned HTTP ${code}"
-          if [ "${code}" = "200" ]; then
-            echo "enabled=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice title=Dependency review skipped::The dependency graph is not available for this repository, so dependency review cannot run. Enable it under Settings, Code security."
-          fi
+        with:
+          persist-credentials: false
 
       - name: Dependency review
-        if: steps.feature.outputs.enabled == 'true'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           # Findings go to the check summary; this job cannot modify PR comments.

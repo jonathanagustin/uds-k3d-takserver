@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Permission boundaries for read-only planning and explicit publishing jobs."""
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,22 @@ def workflow(name):
 
 def write_scopes(permissions):
     return {name for name, level in permissions.items() if level == 'write'}
+
+
+def require_dependency_review(document):
+    """The official checker, rather than a feature probe, owns API failures."""
+    job = document['jobs']['dependency-review']
+    actions = [step for step in job['steps']
+               if step.get('uses', '').startswith('actions/dependency-review-action@')]
+    if len(actions) != 1:
+        raise ValueError('one official dependency review action is required')
+    action = actions[0]
+    if job.get('if') is not None or action.get('if') is not None:
+        raise ValueError('dependency review must not be conditionally skipped')
+    if any(item.get('continue-on-error', False) is not False for item in (job, action)):
+        raise ValueError('dependency review failures must fail the check')
+    if any(step.get('id') == 'feature' for step in job['steps']):
+        raise ValueError('a feature probe must not replace dependency review')
 
 
 class WorkflowPermissionTests(unittest.TestCase):
@@ -80,6 +97,32 @@ class WorkflowPermissionTests(unittest.TestCase):
         action = next(step for step in job['steps']
                       if step.get('uses', '').startswith('actions/dependency-review-action@'))
         self.assertEqual(action['with']['comment-summary-in-pr'], 'never')
+
+    def test_dependency_review_cannot_succeed_by_skipping_its_checker(self):
+        document = workflow('dependency-review.yaml')
+        require_dependency_review(document)
+        job = document['jobs']['dependency-review']
+        self.assertEqual(job['timeout-minutes'], 15)
+        checkout = next(step for step in job['steps']
+                        if step.get('uses', '').startswith('actions/checkout@'))
+        self.assertIs(checkout['with']['persist-credentials'], False)
+        action = next(step for step in job['steps']
+                      if step.get('uses', '').startswith('actions/dependency-review-action@'))
+        self.assertEqual(action['uses'], 'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294')
+        for target, key, value in (('job', 'if', 'false'), ('action', 'if', "steps.feature.outputs.enabled == 'true'"),
+                                   ('job', 'continue-on-error', True), ('action', 'continue-on-error', True),
+                                   ('action', 'uses', './unchecked-local-wrapper')):
+            changed = copy.deepcopy(document)
+            changed_job = changed['jobs']['dependency-review']
+            item = changed_job if target == 'job' else next(step for step in changed_job['steps']
+                       if step.get('uses', '').startswith('actions/dependency-review-action@'))
+            item[key] = value
+            with self.subTest(target=target, bypass=key), self.assertRaises(ValueError):
+                require_dependency_review(changed)
+        changed = copy.deepcopy(document)
+        changed['jobs']['dependency-review']['steps'].insert(1, {'id': 'feature', 'run': 'exit 0'})
+        with self.assertRaises(ValueError):
+            require_dependency_review(changed)
 
     def test_real_identity_and_publishing_consumers_keep_explicit_grants(self):
         # Configured Chainguard identities use the GitHub OIDC login in the

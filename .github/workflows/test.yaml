@@ -11,10 +11,10 @@ on:
         type: boolean
         default: false
       diagnostic_case:
-        description: Select focused upgrade evidence (not full acceptance)
+        description: Select focused runtime evidence (not full acceptance)
         type: choice
         default: none
-        options: [none, upgrade-amd64, pg15-amd64, pg15-both]
+        options: [none, upgrade-amd64, pg15-amd64, pg15-both, airgap-amd64]
   pull_request:
     types: [opened, reopened, synchronize]
     # Anything not listed is relevant and starts the install and upgrade
@@ -427,11 +427,12 @@ jobs:
   # and arm64.
   validate-install:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
-    if: ${{ needs.check-flavor.outputs.diagnostic-case == 'none' }}
+    if: ${{ needs.check-flavor.outputs.diagnostic-case == 'none' || needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' }}
     strategy:
       fail-fast: false
       # A trust-only manual trial needs both native installs, not another
-      # airgap acceptance. All ordinary events retain the three-entry matrix.
+      # airgap acceptance. A focused airgap diagnostic selects only that AMD
+      # offline row. All ordinary events retain the three-entry matrix.
       matrix: ${{ fromJSON(needs.check-flavor.outputs.install-matrix) }}
     name: validate-install (${{ matrix.arch }}${{ matrix.airgap && ', airgap' || '' }})
     runs-on: ${{ matrix.runner }}
@@ -790,7 +791,7 @@ jobs:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
     # Preserve baseline discovery after image-prep failures for normal runs.
     # Explicit manual modes omit only the unselected validation work.
-    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && needs.check-flavor.outputs.diagnostic-case != 'pg15-amd64' && needs.check-flavor.outputs.diagnostic-case != 'pg15-both' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
+    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && needs.check-flavor.outputs.diagnostic-case != 'pg15-amd64' && needs.check-flavor.outputs.diagnostic-case != 'pg15-both' && needs.check-flavor.outputs.diagnostic-case != 'airgap-amd64' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.check-flavor.outputs.upgrade-matrix) }}

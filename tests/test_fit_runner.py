@@ -39,8 +39,8 @@ if args[:2]==['describe','node']: print('Allocated resources:\\nEvents:')
             recorded = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
             return result, recorded
 
-    def test_default_stays_one_and_explicit_two_preserves_rollout_checks(self):
-        for choice, expected in ((None, '1'), ('1', '1'), ('2', '2')):
+    def test_default_two_and_explicit_choices_preserve_rollout_checks(self):
+        for choice, expected in ((None, '2'), ('1', '1'), ('2', '2')):
             result, calls = self.run_fit(choice)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(['scale', 'deploy/agent-hook', '-n', 'zarf', '--replicas=' + expected], calls)
@@ -52,7 +52,7 @@ if args[:2]==['describe','node']: print('Allocated resources:\\nEvents:')
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(calls)
 
-    def test_two_replica_diagnostic_requires_existing_agent_deployment(self):
+    def test_two_replica_selection_requires_existing_agent_deployment(self):
         result, calls = self.run_fit('2', agent_missing=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(args[:2] == ['describe', 'node'] for args in calls))

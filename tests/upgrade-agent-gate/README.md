@@ -79,12 +79,18 @@ can be checked without a cluster. These fixtures are not a live-cluster proof.
 
 ## Focused two-replica diagnostic
 
-The focused manual airgap experiment can select `CI_AGENT_REPLICAS=2` when
-running `fit-runner.sh`. Only `1` and `2` are accepted, before cluster commands;
-unset keeps the ordinary default of `1`. Two is the upstream agent chart
-replica count. This experiment preserves per-container requests, limits and
-Kubernetes probes. It tests resilience to losing one admission Pod on the
-current four-CPU runners; both Pods still share one node.
+`fit-runner.sh` now preserves the upstream agent chart's default of two
+replicas on ordinary and focused CI paths. `CI_AGENT_REPLICAS` accepts only
+`1` or `2` before cluster commands; an explicit override remains available.
+Per-container requests, limits and Kubernetes probes are unchanged. Both Pods
+still share one node.
+
+[Focused run 42800551477](https://github.com/jonathanagustin/uds-takserver/actions/runs/42800551477)
+at source `1deaaec331aac79a67544655d911ae111ad320af` passed one native AMD
+offline profile: application/API/browser/QUIC checks, egress restoration and
+the strict health gate for both current replicas. This supports the CI
+availability baseline; it does not establish the cause of intermittent exit 2
+or replace the combined canonical runtime matrix and other architecture checks.
 
 After the selected airgap application checks and successful firewall restore,
 run:
@@ -102,10 +108,8 @@ missing or unhealthy second Pod fails. Requests retain the existing bounded
 read-only deadline; no rollout restart, blind retry, probe relaxation or health
 simulation is added.
 
-The ordinary CI path stays at one replica until the focused experiment supplies
-live evidence. Passing the application and two-replica gate would support a
-separately reviewed canonical default change; it would not identify the cause
-of exit code 2 or protect against a node-wide failure.
+The cause of exit code 2 remains unknown. Two replicas reduce a single-Pod
+endpoint gap; they do not protect against a node-wide failure.
 
 The strict mode additionally needs get access to the Deployment and list access
 to Pods and ReplicaSets in `zarf`. It grants no permissions.

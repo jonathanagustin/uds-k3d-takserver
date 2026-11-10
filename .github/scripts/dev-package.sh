@@ -42,11 +42,11 @@ zarf() {
   uds zarf "$@"
 }
 
-# Everything tracked except what cannot reach the package: docs, tests, CI
-# definitions, the bundles, and the ATAK/demo/bench trees.
+# Runtime reuse inputs omit docs, tests, CI definitions, bundles, and the
+# ATAK/demo/bench trees. The standalone docs site is not a package input.
 inputs() {
   git ls-files -s -z -- . \
-    ':(exclude)docs/**' ':(exclude)adr/**' ':(exclude)tests/**' \
+    ':(exclude)docs/**' ':(exclude)docs-site/**' ':(exclude)adr/**' ':(exclude)tests/**' \
     ':(exclude).github/**' ':(exclude)bundle/**' ':(exclude)atak/**' \
     ':(exclude)demo/**' ':(exclude)bench/**' ':(exclude)*.md' \
     ':(exclude)renovate.json' ':(exclude).release-please-manifest.json' \

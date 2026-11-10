@@ -79,7 +79,7 @@ class AgentHealthTests(unittest.TestCase):
         self.assertTrue(any(args[1] == 'replicasets' for args in calls))
 
     def test_strict_two_refuses_partial_old_terminating_or_foreign_replicas(self):
-        for case in ('one-desired', 'one-ready', 'missing-endpoint', 'second-unready', 'terminating', 'old-generation', 'foreign-owner'):
+        for case in ('one-desired', 'one-ready', 'missing-endpoint', 'second-unready', 'terminating', 'old-generation', 'foreign-owner', 'missing-rs-uid'):
             with self.subTest(case=case):
                 objects = self.two_fixture()
                 if case == 'one-desired': objects['deployment']['spec']['replicas'] = 1
@@ -88,7 +88,11 @@ class AgentHealthTests(unittest.TestCase):
                 elif case == 'second-unready': objects['podmap']['agent-hook-b']['status']['conditions'] = []
                 elif case == 'terminating': objects['podmap']['agent-hook-b']['metadata']['deletionTimestamp'] = 'now'
                 elif case == 'old-generation': objects['deployment']['status']['observedGeneration'] = 2
-                else: objects['replicasets']['items'][0]['metadata']['ownerReferences'][0]['uid'] = 'foreign-deployment'
+                elif case == 'foreign-owner': objects['replicasets']['items'][0]['metadata']['ownerReferences'][0]['uid'] = 'foreign-deployment'
+                else:
+                    del objects['replicasets']['items'][0]['metadata']['uid']
+                    objects['podmap']['agent-hook-a']['metadata']['ownerReferences'][0].pop('uid')
+                    objects['podmap']['agent-hook-b']['metadata']['ownerReferences'][0].pop('uid')
                 request, _ = self.strict_request(objects)
                 with self.assertRaises(HEALTH.Unavailable):
                     HEALTH.probe_once(100, request, require_two=True)

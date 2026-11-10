@@ -113,7 +113,8 @@ def two_replica_targets(get, selector, ready):
     owned_sets = set()
     for replica_set in sets:
         meta = replica_set.get('metadata', {})
-        if (not meta.get('deletionTimestamp') and meta.get('namespace') == NAMESPACE
+        if (isinstance(meta.get('uid'), str) and meta['uid']
+                and not meta.get('deletionTimestamp') and meta.get('namespace') == NAMESPACE
                 and any(owner.get('kind') == 'Deployment' and owner.get('controller') is True
                         and owner.get('uid') == identity[0] for owner in meta.get('ownerReferences', []))):
             owned_sets.add(meta.get('uid'))

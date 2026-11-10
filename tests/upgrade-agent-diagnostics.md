@@ -101,13 +101,15 @@ streams are omitted, and only a bounded single-line detail is printed. The
 Docker packet fixtures assert DROP counters but remain opt-in; fixture edits
 and offline rule-order tests do not establish live airgap acceptance.
 
-Only the explicit manual `airgap-amd64` pilot sets `CI_AGENT_REPLICAS=2`, on its
-airgap execution step. Ordinary installs/upgrades retain the default of one.
-After successful airgap execution and successful egress restoration, that
-pilot requires two current agent replicas through the existing bounded live
-health helper. One unhealthy replica, stale ownership, duplicate endpoints or
-failed direct health prevents diagnostic success. This is an opt-in availability
-pilot, not a startup/liveness root-cause fix or full acceptance.
+Ordinary and focused CI now inherit `fit-runner.sh`'s upstream two-replica
+agent baseline. The explicit manual `airgap-amd64` case additionally requires
+two current replicas through the bounded live health helper after successful
+application checks and egress restoration. One unhealthy replica, stale
+ownership, duplicate endpoint or failed direct health prevents diagnostic
+success. [Run 42800551477](https://github.com/jonathanagustin/uds-takserver/actions/runs/42800551477)
+validated one native AMD offline profile and both current replicas. It is not
+a startup/liveness root-cause finding or full cross-profile acceptance; the
+intermittent exit-2 cause remains unknown. Probes and limits are unchanged.
 
 The post-block host transport check uses the same validated public-IP
 `AIRGAP_PROBE_URL` as the node checks (default `http://1.1.1.1/cdn-cgi/trace`).

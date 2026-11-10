@@ -7,9 +7,10 @@
 # Pepr and the Istio CNI stay up: the bundle webhook and pod sandbox depend on them.
 set -euo pipefail
 
-# Two replicas are an opt-in CI availability experiment until validated live.
-# Keep the ordinary path unchanged; refuse malformed choices before any writes.
-agent_replicas="${CI_AGENT_REPLICAS-1}"
+# Preserve the upstream two-replica admission baseline. One focused AMD
+# offline profile passed both live replicas; the exit-2 cause remains unknown.
+# Refuse malformed choices before any writes.
+agent_replicas="${CI_AGENT_REPLICAS-2}"
 case "${agent_replicas}" in
   1 | 2) ;;
   *) echo "CI_AGENT_REPLICAS must be 1 or 2" >&2; exit 1 ;;
@@ -48,14 +49,14 @@ scale_to() {
     k scale "deploy/${name}" -n "${namespace}" --replicas="${replicas}"
     k rollout status "deploy/${name}" -n "${namespace}" --timeout=180s
   elif [[ "${namespace}/${name}" == zarf/agent-hook && "${agent_replicas}" == 2 ]]; then
-    echo "two-replica diagnostic requires the existing agent deployment" >&2
+    echo "two-replica availability requires the existing agent deployment" >&2
     return 1
   fi
 }
 
 # MinIO is part of the dev stack and is not used by the TAK tests.
 scale_to uds-dev-stack minio 0
-# The focused manual diagnostic can preserve upstream two-replica admission.
+# Keep two admission replicas on ordinary and focused CI paths.
 # This mitigates one-Pod endpoint loss; it does not fix unexplained exit 2.
 scale_to zarf agent-hook "${agent_replicas}"
 

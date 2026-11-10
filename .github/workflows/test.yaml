@@ -603,8 +603,6 @@ jobs:
       - name: Install and test without node internet egress
         id: airgap-execution
         if: env.TEST_TYPE == 'install' && env.AIRGAP_TEST == 'true'
-        env:
-          CI_AGENT_REPLICAS: ${{ github.event_name == 'workflow_dispatch' && needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64' && '2' || '1' }}
         run: uds run test-airgap --set FLAVOR=upstream --no-progress
         timeout-minutes: 50
 

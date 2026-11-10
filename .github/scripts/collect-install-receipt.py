@@ -9,11 +9,13 @@ import os
 from pathlib import Path
 import platform
 import re
-import resource
+import selectors
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -88,17 +90,40 @@ def execution(env, scenario):
 
 
 def command(root, args, env, seconds=15):
-    def limit_output():
-        resource.setrlimit(resource.RLIMIT_FSIZE, (1024, 1024))
-    with tempfile.TemporaryFile() as output:
-        result = subprocess.run(['timeout', '--kill-after=2s', f'{seconds}s', *args], cwd=root,
-                                stdout=output, stderr=subprocess.DEVNULL, timeout=seconds + 5,
-                                stdin=subprocess.DEVNULL, check=False, preexec_fn=limit_output,
-                                env={**env, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0',
-                                     'FLAVOR': 'upstream'})
-        require(result.returncode == 0, 'input command unavailable')
-        output.seek(0)
-        return output.read(1024).decode().strip()
+    # Limit only the output stream. RLIMIT_FSIZE would also cap legitimate
+    # files unpacked by the SDK's local package inspection.
+    process = subprocess.Popen(['timeout', '--kill-after=2s', f'{seconds}s', *args], cwd=root,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               stdin=subprocess.DEVNULL, start_new_session=True,
+                               env={**env, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0',
+                                    'FLAVOR': 'upstream'})
+    deadline = time.monotonic() + seconds + 5
+    output = bytearray()
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                require(remaining > 0, 'input command unavailable')
+                if not selector.select(min(remaining, 1)):
+                    continue
+                chunk = os.read(process.stdout.fileno(), 1025 - len(output))
+                if not chunk:
+                    break
+                output.extend(chunk)
+                require(len(output) <= 1024, 'oversized input command output')
+        require(process.wait(timeout=max(1, deadline - time.monotonic())) == 0,
+                'input command unavailable')
+        return output.decode().strip()
+    finally:
+        # The session is owned by this invocation; stop children too on timeout
+        # or output overflow rather than leaving an inspection process running.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+        process.stdout.close()
 
 
 def pinned_inputs(root, env, arch):

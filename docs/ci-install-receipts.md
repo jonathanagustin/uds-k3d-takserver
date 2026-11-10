@@ -134,3 +134,11 @@ directory which is removed after the bounded 45-second command. It does not
 resolve a registry tag or query the cluster. A second archive hash detects
 changes during collection. Local UDS 0.41 actions-only format proof confirmed
 that its canonical archive digest equals the selected bundle manifest.
+
+Local command output is read through a bounded pipe (at most 1025 bytes held,
+1024 bytes accepted), with a deadline and cleanup of the owned process group.
+It deliberately does not inherit a file-size resource limit: the official local
+package digest command must unpack legitimate SDK files larger than 1 KiB.
+A real actions-only package with a 4 KiB definition reproduced the former
+limit failure and succeeded with the pipe bound, producing the same canonical
+digest as direct official CLI inspection.

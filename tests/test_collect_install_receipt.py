@@ -4,6 +4,9 @@
 """Actual checkout/OCI fixtures exercise the optional producer as a whole."""
 import importlib.util
 import json
+import os
+import sys
+import time
 from pathlib import Path
 import subprocess
 import tempfile
@@ -179,7 +182,6 @@ class CollectorTests(unittest.TestCase):
         zarf = self.root / 'zarf'
         zarf.write_text('#!/bin/sh\n[ "$1 $2" = "package deploy" ] || exit 91\nexit 0\n')
         zarf.chmod(0o755)
-        import os
         env = {**os.environ, **self.env, 'INSTALL_RECEIPT_METADATA': 'true',
                'RUNNER_TEMP': str(self.directory), 'SLIM_K3D_EXTRA_ARGS': ''}
         result = subprocess.run(['bash', str(scripts / 'deploy-slim-core.sh')], env=env,
@@ -210,6 +212,28 @@ class CollectorTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 collector.collect(self.root, {**self.env, field: '999'}, self.directory)
         self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+
+    def test_output_bound_does_not_limit_sdk_filesystem_writes(self):
+        destination = self.directory / 'sdk-unpacked-file'
+        program = ('import pathlib, sys; '
+                   'pathlib.Path(sys.argv[1]).write_bytes(b"x" * 65536); '
+                   'print("v0.41.0")')
+        result = collector.command(self.root, [sys.executable, '-c', program, str(destination)],
+                                   dict(os.environ))
+        self.assertEqual(result, 'v0.41.0')
+        self.assertEqual(destination.stat().st_size, 65536)
+
+    def test_output_overflow_and_hung_command_are_bounded(self):
+        started = time.monotonic()
+        with self.assertRaises(ValueError):
+            collector.command(self.root, [sys.executable, '-c',
+                                         'import os; os.write(1, b"x" * 65536)'], dict(os.environ))
+        self.assertLess(time.monotonic() - started, 5)
+        started = time.monotonic()
+        with self.assertRaises(ValueError):
+            collector.command(self.root, [sys.executable, '-c', 'import time; time.sleep(60)'],
+                              dict(os.environ), seconds=0.1)
+        self.assertLess(time.monotonic() - started, 5)
 
     def test_workflow_captures_before_pin_and_only_uploads_authenticated_success(self):
         source = (ROOT / '.github/workflows/test.yaml').read_text()

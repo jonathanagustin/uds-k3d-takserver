@@ -200,6 +200,12 @@ jobs:
         timeout-minutes: 2
         run: ./.github/scripts/runner-wedge-probe.sh || true
 
+      - name: Capture agent availability after failed full core
+        if: failure() && steps.runner-wedge.outputs.network-stalled != 'true'
+        timeout-minutes: 2
+        continue-on-error: true
+        run: ./tests/upgrade-agent-diagnostics.sh full-core
+
       # test:full-core writes out/falco-events.txt only when it reaches
       # tests/falco-events.sh, so an earlier failure left the upload below
       # with no file. Collect the events here instead. The script skips when

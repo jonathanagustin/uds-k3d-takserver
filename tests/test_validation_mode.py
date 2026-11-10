@@ -120,7 +120,7 @@ class TestValidationMode(unittest.TestCase):
     def test_normal_seven_paths_and_forged_inputs_preserve_coverage(self):
         for event in ("pull_request", "push", "workflow_dispatch"):
             for selected in (("none",) if event == "workflow_dispatch" else
-                             ("none", "upgrade-amd64", "pg15-amd64", "pg15-both", "invalid")):
+                             ("none", "upgrade-amd64", "pg15-amd64", "pg15-both", "airgap-amd64", "invalid")):
                 with self.subTest(event=event, selected=selected):
                     outputs = MODE.plan(event, "false", "custom", selected)
                     self.assertEqual(outputs["diagnostic-case"], "none")
@@ -156,7 +156,7 @@ class TestValidationMode(unittest.TestCase):
                             MODE.verify("workflow_dispatch", "false", *actual, selected)
 
     def test_mixed_and_unknown_manual_modes_fail_plan_and_verify(self):
-        for trust, selected in (("true", "upgrade-amd64"), ("true", "pg15-amd64"), ("true", "pg15-both"),
+        for trust, selected in (("true", "upgrade-amd64"), ("true", "pg15-amd64"), ("true", "pg15-both"), ("true", "airgap-amd64"),
                                 ("false", "unknown")):
             with self.assertRaises(ValueError):
                 MODE.plan("workflow_dispatch", trust, "custom", selected)
@@ -165,7 +165,7 @@ class TestValidationMode(unittest.TestCase):
 
     def test_workflow_consumes_planned_matrices_and_preserves_pg15_trigger(self):
         workflow = (SCRIPT.parents[1] / "workflows/test.yaml").read_text()
-        self.assertIn("options: [none, upgrade-amd64, pg15-amd64, pg15-both]", workflow)
+        self.assertIn("options: [none, upgrade-amd64, pg15-amd64, pg15-both, airgap-amd64]", workflow)
         planner = workflow.split("  check-flavor:", 1)[1].split("  validate-install:", 1)[0]
         self.assertIn("DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}", planner)
         for key in ("install-matrix", "upgrade-matrix", "pg15-matrix", "diagnostic-case"):
@@ -236,6 +236,53 @@ class TestValidationMode(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("cannot be combined", result.stderr)
+
+    def test_airgap_dispatch_selects_only_actual_offline_amd_row(self):
+        for runner in ('ubuntu-22.04', 'custom-amd64'):
+            outputs = MODE.plan('workflow_dispatch', 'false', runner, 'airgap-amd64')
+            self.assertEqual(outputs['diagnostic-case'], 'airgap-amd64')
+            self.assertEqual(outputs['install-matrix']['include'], [
+                {'arch': 'amd64', 'runner': runner, 'airgap': True}])
+            MODE.verify('workflow_dispatch', 'false', 'success', 'skipped', 'skipped', 'airgap-amd64')
+            for index in range(3):
+                for result in ('success', 'skipped', 'failure', 'cancelled', ''):
+                    actual = ['success', 'skipped', 'skipped']
+                    actual[index] = result
+                    if actual == ['success', 'skipped', 'skipped']:
+                        continue
+                    with self.subTest(actual=actual), self.assertRaises(ValueError):
+                        MODE.verify('workflow_dispatch', 'false', *actual, 'airgap-amd64')
+        workflow = (SCRIPT.parents[1] / 'workflows/test.yaml').read_text()
+        install = workflow.split('  validate-install:', 1)[1].split('    strategy:', 1)[0]
+        self.assertIn("diagnostic-case == 'none' || needs.check-flavor.outputs.diagnostic-case == 'airgap-amd64'", install)
+        upgrade = workflow.split('  validate-upgrade:', 1)[1].split('    strategy:', 1)[0]
+        self.assertIn("diagnostic-case != 'airgap-amd64'", upgrade)
+        # The existing shared step consumes matrix.airgap, so this executes
+        # test-airgap and its egress restore rather than ordinary online Test.
+        self.assertIn("AIRGAP_TEST: ${{ matrix.airgap && 'true' || 'false' }}", workflow)
+        self.assertIn("if: env.TEST_TYPE == 'install' && env.AIRGAP_TEST == 'true'", workflow)
+        self.assertIn('run: uds run test-airgap --set FLAVOR=upstream --no-progress', workflow)
+
+    def test_airgap_cli_summary_never_claims_full_acceptance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / 'summary'
+            env = {**os.environ, 'EVENT_NAME': 'workflow_dispatch', 'TRUST_BUNDLE': 'false',
+                   'DIAGNOSTIC_CASE': 'airgap-amd64', 'INSTALL_RESULT': 'success',
+                   'UPGRADE_RESULT': 'skipped', 'PG15_RESULT': 'skipped',
+                   'GITHUB_STEP_SUMMARY': str(summary)}
+            env.pop('GITHUB_OUTPUT', None)
+            plan = subprocess.run(['python3', str(SCRIPT), 'plan'], env=env, capture_output=True, text=True, check=True)
+            matrix = json.loads(dict(line.split('=', 1) for line in plan.stdout.splitlines())['install-matrix'])
+            self.assertEqual([(r['arch'], r.get('airgap')) for r in matrix['include']], [('amd64', True)])
+            result = subprocess.run(['python3', str(SCRIPT), 'verify'], env=env, capture_output=True, text=True, check=True)
+            self.assertIn('not full acceptance', summary.read_text())
+            self.assertIn('only the AMD airgap install row passed', summary.read_text())
+            self.assertNotIn('All tests passed', result.stdout + summary.read_text())
+            summary.unlink()
+            env['INSTALL_RESULT'] = 'failure'
+            result = subprocess.run(['python3', str(SCRIPT), 'verify'], env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(summary.exists())
 
     def test_cli_diagnostic_output_never_claims_full_acceptance(self):
         env = {**os.environ, "EVENT_NAME": "workflow_dispatch", "TRUST_BUNDLE": "false",

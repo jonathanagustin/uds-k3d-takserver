@@ -6,7 +6,7 @@ bounded Deployment/ready-Endpoints/port metadata waits, then performs a live
 HTTPS availability request. Restored readiness objects alone can describe old
 state; the port assertion only checks metadata and does not send HTTP.
 
-`live-health.py` reads only `zarf/agent-hook` Service and Endpoints, resolves the
+By default, `live-health.py` reads only `zarf/agent-hook` Service and Endpoints, resolves the
 ready Pod references, and checks their namespace, name, UID, IP, Service labels,
 Running/Ready state and target port 8443. It checks every ready target (at most
 eight), ignores `notReadyAddresses`, and rereads Pod identity after each request.
@@ -76,3 +76,40 @@ wrong namespaces/ports/labels/IPs, readiness, exact bodies, API failures,
 timeouts, total retry bounds and original bundle insertion contracts. Unit CI
 already discovers `test_upgrade_*.py`. Package creation and archived-helper bytes
 can be checked without a cluster. These fixtures are not a live-cluster proof.
+
+## Focused two-replica diagnostic
+
+`fit-runner.sh` now preserves the upstream agent chart's default of two
+replicas on ordinary and focused CI paths. `CI_AGENT_REPLICAS` accepts only
+`1` or `2` before cluster commands; an explicit override remains available.
+Per-container requests, limits and Kubernetes probes are unchanged. Both Pods
+still share one node.
+
+[Focused run 42800551477](https://github.com/jonathanagustin/uds-takserver/actions/runs/42800551477)
+at source `1deaaec331aac79a67544655d911ae111ad320af` passed one native AMD
+offline profile: application/API/browser/QUIC checks, egress restoration and
+the strict health gate for both current replicas. This supports the CI
+availability baseline; it does not establish the cause of intermittent exit 2
+or replace the combined canonical runtime matrix and other architecture checks.
+
+After the selected airgap application checks and successful firewall restore,
+run:
+
+```bash
+python3 tests/upgrade-agent-gate/live-health.py --require-two-replicas
+```
+
+This stricter opt-in mode requires desired/current/updated/Ready/available
+replicas all equal two, current observed generation, two selected
+nonterminating Ready Pods owned through ReplicaSets by that Deployment, and
+exactly those ready endpoints. Both current Pods must return exactly `ok` over
+HTTPS; Pod, Deployment and endpoint identities must survive the checks. A
+missing or unhealthy second Pod fails. Requests retain the existing bounded
+read-only deadline; no rollout restart, blind retry, probe relaxation or health
+simulation is added.
+
+The cause of exit code 2 remains unknown. Two replicas reduce a single-Pod
+endpoint gap; they do not protect against a node-wide failure.
+
+The strict mode additionally needs get access to the Deployment and list access
+to Pods and ReplicaSets in `zarf`. It grants no permissions.

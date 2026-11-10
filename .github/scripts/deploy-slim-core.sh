@@ -34,6 +34,16 @@ upstream_repo="ghcr.io/defenseunicorns/dev/uds/checkpoints"
 mirror_repo="${SLIM_CORE_MIRROR-ghcr.io/jonathanagustin/uds-takserver/checkpoints}"
 want_digest="${slim_core_digests[${version}]:-}"
 
+# A rejected current validation must not leave proof from an earlier invocation.
+selection_args=()
+if [[ "${INSTALL_RECEIPT_METADATA:-false}" == "true" && -n "${RUNNER_TEMP:-}" ]]; then
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "INSTALL_RECEIPT_CHECKPOINT_VALIDATED=false" >> "${GITHUB_ENV}" || true
+  fi
+  rm -f -- "${RUNNER_TEMP}/install-checkpoint-selection.json" || true
+  selection_args=(--selection-output "${RUNNER_TEMP}/install-checkpoint-selection.json")
+fi
+
 mkdir -p "${out}"
 # uds bundles zarf and does not leave ./zarf in the repo until a zarf
 # command has already run. `uds zarf` is that command.
@@ -66,9 +76,16 @@ pull_from() {
   fi
   [[ -n "${want_digest}" ]] || echo "::warning::No digest pinned for k3d-core-slim-dev ${version} in $0; pulling ${ref} (${digest}) by tag"
   echo "Pulling oci://${ref} (${digest})"
-  "${zarf[@]}" package pull "oci://${ref}" --output-directory "${out}"
+  # Bind the bytes to the digest checked above, including during a tag update.
+  if ! "${zarf[@]}" package pull "oci://${ref%:*}@${digest}" --output-directory "${out}"; then
+    return 1
+  fi
+  acquired_source="${ref%:*}"
+  acquired_digest="${digest}"
 }
 
+acquired_source=""
+acquired_digest=""
 if [[ "${#files[@]}" -eq 0 ]]; then
   if [[ -z "${mirror_repo}" ]] || ! pull_from "${mirror_repo}"; then
     pull_from "${upstream_repo}"
@@ -85,6 +102,27 @@ if [[ "${#files[@]}" -gt 1 ]]; then
   echo "More than one k3d-core-slim-dev ${version} package in ${out}:" >&2
   printf '  %s\n' "${files[@]}" >&2
   exit 1
+fi
+
+# Optional evidence never changes deployment or repulls an old cache entry.
+# A caller may enable acquisition metadata for future non-authorizing receipts.
+if [[ "${INSTALL_RECEIPT_METADATA:-false}" == "true" ]]; then
+  archive_arch="${files[0]##*/zarf-package-k3d-core-slim-dev-}"
+  archive_arch="${archive_arch%%-*}"
+  identity_args=(--archive "${files[0]}" --version "${version}" --architecture "${archive_arch}")
+  if [[ -n "${acquired_source}" ]]; then
+    timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
+      "${identity_args[@]}" "${selection_args[@]}" --source "${acquired_source}" --digest "${acquired_digest}" \
+      --registry-command "${zarf[@]}" || echo "Checkpoint acquisition identity omitted"
+  else
+    # No lookup of a mutable tag: retained evidence must match the cached bytes.
+    timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
+      "${identity_args[@]}" "${selection_args[@]}" --source "${upstream_repo}/k3d-core-slim-dev" \
+      --digest "${want_digest}" || \
+      timeout 30s python3 "${root}/.github/scripts/checkpoint-identity.py" \
+        "${identity_args[@]}" "${selection_args[@]}" --source "${mirror_repo}/k3d-core-slim-dev" \
+        --digest "${want_digest}" || echo "Checkpoint acquisition identity omitted"
+  fi
 fi
 
 # On a CI runner, turn off the API server's datastore compaction. k3s keeps

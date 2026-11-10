@@ -20,6 +20,81 @@ ENV = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'
 
 
 class StagedMigrationTests(unittest.TestCase):
+    def test_failure_categories_publish_only_fixed_ids_and_capped_counts(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, ENV, clear=True):
+            root = Path(temporary)
+            (root / 'owner').mkdir()
+            private = root / 'owner/PRIVATE-command-failure.txt'
+            private.write_text('orphan-private-key-fragment fixture-secret\nAuthorization: Bearer fixture-secret\n'
+                               'https://private.example/?sig=fixture-secret\n'
+                               'manifest unknown; failed to verify signature; unauthorized; '
+                               'helm upgrade failed; unknown field; connection refused; '
+                               'checksum mismatch; unknown flag; certificate has expired; '
+                               'failed calling webhook; ' + 'context deadline exceeded; ' * 40)
+            progress = {'ownerSteps': [{'name': 'bootstrap-exemption', 'status': 'failed'}]}
+            diagnostic = S.failure_categories(root, progress)
+            self.assertEqual(diagnostic['sourceSHA'], ENV['GITHUB_SHA'])
+            self.assertEqual(diagnostic['failedStep'], 'bootstrap-exemption')
+            self.assertEqual({entry['patternID'] for entry in diagnostic['categories']}, set(S.FAILURE_PATTERNS))
+            self.assertEqual(next(e['count'] for e in diagnostic['categories'] if e['patternID'] == 'timeout'), 32)
+            self.assertEqual(diagnostic['status'], 'classified')
+            (root / 'owner/journal.json').write_text(json.dumps({'steps': progress['ownerSteps'],
+                                                               'private': 'fixture-secret'}))
+            public = root / 'public'
+            S.publish(root, public, 'amd64')
+            published = json.loads((public / 'proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual(published['failedStep'], 'bootstrap-exemption')
+            self.assertEqual(published['categories'], diagnostic['categories'])
+            output = ''.join(path.read_text() for path in public.rglob('*.json'))
+            for forbidden in ('fixture-secret', 'private.example', 'Authorization', 'orphan-private-key-fragment',
+                              'manifest unknown', 'context deadline exceeded'):
+                self.assertNotIn(forbidden, output)
+            self.assertNotIn('PRIVATE-command-failure.txt', [path.name for path in public.rglob('*')])
+            self.assertEqual(private.read_text().count('fixture-secret'), 3)
+
+    def test_specific_failure_signatures_never_publish_their_captured_text(self):
+        fixtures = {'authentication': ['Forbidden fixture-secret', 'HTTP/1.1 403 fixture-secret',
+                                       'status code: 403 fixture-secret'],
+                    'cli-arguments': ['unknown flag: --fixture-secret', 'unknown command fixture-secret'],
+                    'tls-certificate': ['x509: fixture-secret', 'unknown CA fixture-secret',
+                                        'certificate has expired fixture-secret'],
+                    'package-integrity': ['invalid tar fixture-secret', 'unexpected EOF fixture-secret',
+                                          'checksum mismatch fixture-secret']}
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, ENV, clear=True):
+            root = Path(temporary)
+            (root / 'owner').mkdir()
+            for expected, samples in fixtures.items():
+                for text in samples:
+                    with self.subTest(expected=expected, text=text):
+                        (root / 'owner/PRIVATE-command-failure.txt').write_text(text)
+                        result = S.failure_categories(root, {'ownerSteps': []})
+                        self.assertEqual(result['categories'], [{'patternID': expected, 'count': 1}])
+                        self.assertNotIn('fixture-secret', json.dumps(result))
+
+    def test_missing_unclassified_invalid_oversized_and_symlink_tails_never_publish_text(self):
+        for case in ('missing', 'unclassified', 'invalid-utf8', 'nul', 'oversized', 'symlink', 'directory'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary, \
+                    patch.dict(os.environ, ENV, clear=True):
+                root = Path(temporary)
+                (root / 'owner').mkdir()
+                path = root / 'owner/PRIVATE-command-failure.txt'
+                if case == 'symlink':
+                    target = root / 'foreign'; target.write_bytes(b'fixture-secret unauthorized')
+                    path.symlink_to(target)
+                elif case == 'directory':
+                    path.mkdir()
+                elif case != 'missing':
+                    path.write_bytes({'unclassified': b'fixture-secret unknown-error',
+                                      'invalid-utf8': b'fixture-secret\xff', 'nul': b'fixture-secret\x00',
+                                      'oversized': b'fixture-secret' + b'x' * 65536}[case])
+                result = S.failure_categories(root, {'ownerSteps': []})
+                self.assertEqual(result['categories'], [])
+                self.assertEqual(result['failedStep'], 'unavailable')
+                self.assertEqual(result['status'], 'unclassified' if case == 'unclassified' else
+                                 'unavailable-oversized-or-nonregular' if case == 'oversized' else
+                                 'unavailable-oversized-or-invalid-text' if case == 'nul' else 'unavailable')
+                self.assertNotIn('fixture-secret', json.dumps(result))
+
     def pinned_fixture(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -209,7 +284,10 @@ class StagedMigrationTests(unittest.TestCase):
                          'volumeCopies': {key: [{'namespace': 'takserver', 'volume': 'data', 'phase': 'Completed', 'name': key + '-data'}] for key in ('pvb', 'pvr')}}
                 path.write_text(json.dumps(proof))
             public = Path(tmp) / 'public'
-            self.assertTrue(S.publish(directory, public, 'amd64')['accepted'])
+            (directory / 'owner/PRIVATE-command-failure.txt').write_bytes(b'orphan-fixture-secret\xff')
+            with patch.object(S, 'failure_categories', side_effect=AssertionError('inactive diagnostic dependency')):
+                self.assertTrue(S.publish(directory, public, 'amd64')['accepted'])
+            self.assertFalse((public / 'proofs/amd64/failure-categories.json').exists())
             self.assertTrue(S.verify(public / 'receipts')['accepted'])
             (public / 'proofs/amd64/local-after.json').unlink()
             with self.assertRaises((ValueError, OSError, KeyError)):

@@ -273,3 +273,27 @@ The local barrier leaves the released signed package bytes and verification rule
 unchanged. Keeping one baseline bundle deployment preserves package order and
 cross-package imports and exports. Normal deployment runs the barrier even after
 its standalone deployment; `--resume` is deliberately not used.
+
+## Manual staged failure categories
+
+Manual staged failures publish a small `failure-categories.json` alongside
+progress. It contains only source/run identity, an allowlisted failed step,
+fixed diagnostic pattern IDs and counts capped at 32. The publisher reads at
+most the existing 64 KiB private command tail, refuses nonregular files,
+symlinks, oversized files and invalid text, and classifies the entire retained
+stream before selecting output. It never publishes private tail text, matching
+strings, command arguments, URLs, environments or exception messages. Private
+evidence remains excluded from artifact copying.
+
+The command runner retained this tail **before** redaction; it may begin inside
+a credential or omit the original error. It is therefore unsafe to publish even
+a subsequently redacted excerpt. Categories are diagnostic signatures, not
+causal proof: unrelated output can match a pattern, and `unclassified` means
+no approved signature was present in the retained tail. Missing evidence or a
+category cannot count as acceptance or authorize retries, rollback, bypasses or
+changes to ownership. The structured progress journal remains authoritative
+only for the stage and its recorded result.
+
+The private file records the last failing command, so a failed observation
+after a deployment error can replace that error. A category must not be
+attributed to the first failing operation without separate evidence.

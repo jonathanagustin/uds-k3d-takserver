@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
 import importlib.util
+import contextlib
+import io
+import json
 from pathlib import Path
 import unittest
+import os
+import sys
+import tempfile
+import time
 from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location('watch', Path(__file__).with_name('upgrade-agent-watch.py'))
@@ -33,7 +42,7 @@ class WatchTests(unittest.TestCase):
         for text in (CID[:12] + ' 123 RUNNING', CID + ' 0 RUNNING', CID + ' 123 STOPPED'):
             with self.assertRaises(w.Unavailable):
                 w.task_pid(text, CID)
-        pod = {'metadata': {'uid': UID, 'name': 'agent-hook-abcd'}, 'spec': {'nodeName': 'k3d-trial-server-0'},
+        pod = {'metadata': {'uid': UID, 'name': 'agent-hook-abcd'}, 'spec': {'nodeName': 'k3d-uds-server-0'},
                'status': {'containerStatuses': [{'name': 'server', 'containerID': 'containerd://' + CID, 'state': {'running': {'startedAt': '2026-11-10T01:00:00Z'}}}]}}
         self.assertEqual(w.identity(pod)['containerID'], 'containerd://' + CID)
         pod['status']['containerStatuses'][0]['containerID'] = 'docker://' + CID
@@ -53,26 +62,68 @@ class WatchTests(unittest.TestCase):
             with self.assertRaises(w.Unavailable):
                 w.metric(name, text)
 
-    def test_child_deadline_and_no_raw_errors(self):
-        with patch.object(w.time, 'monotonic', return_value=10), patch.object(w.subprocess, 'run') as run:
-            run.return_value.returncode = 1
-            with self.assertRaisesRegex(w.Unavailable, '^command-or-size$'):
-                w.Commands(12).run('mock-only')
-            args, kwargs = run.call_args
-            self.assertEqual(args[0][:3], ['timeout', '--kill-after=0.1s', '1.2s'])
-            self.assertEqual(kwargs['timeout'], 2)
-            self.assertEqual(kwargs['stderr'], w.subprocess.DEVNULL)
-        with patch.object(w.time, 'monotonic', return_value=10):
-            with self.assertRaisesRegex(w.Unavailable, '^deadline$'):
-                w.Commands(9).run('never-executed')
+    def test_explicit_context_and_shared_proof(self):
+        cmd = Mock()
+        cmd.run.return_value = '{}'
+        w.Commands.kube(cmd, 'get', 'events')
+        self.assertIn('--context', cmd.run.call_args.args)
+        self.assertIn('k3d-uds', cmd.run.call_args.args)
+        with patch.object(w.ephemeral, 'verify', return_value={'clusterUID': 'one'}) as verify:
+            self.assertEqual(w.guard(cmd), {'clusterUID': 'one'})
+            verify.assert_called_once()
+            with self.assertRaisesRegex(w.Unavailable, 'proof-changed'):
+                w.guard(cmd, {'clusterUID': 'another'})
+
+    def test_observe_revalidates_proof_and_emits_only_allowlisted_event(self):
+        pod = {'metadata': {'uid': UID, 'name': 'agent-hook-abcd'},
+               'spec': {'nodeName': 'k3d-uds-server-0'},
+               'status': {'containerStatuses': [{'name': 'server', 'restartCount': 0,
+                          'containerID': 'containerd://' + CID,
+                          'state': {'running': {'startedAt': '2026-11-10T01:00:00Z'}}}]}}
+        cmd = Mock()
+        cmd.kube.side_effect = [{'items': []}, {'spec': {'selector': {'app': 'agent-hook'}}},
+                                {'items': [pod]}, {'items': [self.event()]}, pod, pod]
+        output = io.StringIO()
+        with patch.object(w, 'Commands', return_value=cmd), patch.object(w, 'guard', return_value={'proof': 1}) as guard, patch.object(w, 'snapshot', return_value={'metrics': {}}), patch.object(w.time, 'time', return_value=100), contextlib.redirect_stdout(output):
+            self.assertEqual(w.observe(20), 0)
+        self.assertEqual(guard.call_args_list[1].args, (cmd, {'proof': 1}))
+        rows = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(rows[1]['watch'], 'first-live-liveness-failure')
+        self.assertNotIn('SECRET_URL', output.getvalue())
+        self.assertEqual(rows[1]['eventCount'], 3)
+
+    def test_outer_timeout_cleans_actual_ignoring_descendant(self):
+        # Bypass GNU timeout to force the outer deadline path; execute real
+        # Python processes, including a descendant that ignores SIGTERM.
+        actual_popen = w.subprocess.Popen
+        def popen(argv, **kwargs):
+            return actual_popen(argv[4:], **kwargs)
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile = Path(directory) / 'pid'
+            code = ("import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+                    "pid=os.fork(); "
+                    "open(" + repr(str(pidfile)) + ",'w').write(str(os.getpid())) if pid==0 else None; "
+                    "time.sleep(30)")
+            with patch.object(w.subprocess, 'Popen', side_effect=popen):
+                with self.assertRaisesRegex(w.Unavailable, 'command-unavailable'):
+                    w.Commands(time.monotonic() + 0.4).run(sys.executable, '-c', code)
+            pid = int(pidfile.read_text())
+            for _ in range(50):
+                proc = Path('/proc') / str(pid) / 'stat'
+                if not proc.exists() or proc.read_text().split()[2] == 'Z':
+                    break
+                time.sleep(0.01)
+            else:
+                os.kill(pid, 9)
+                self.fail('SIGTERM-ignoring descendant survived group cleanup')
 
     def test_snapshot_exact_commands_and_pid_race(self):
         cmd = Mock()
         cmd.run.side_effect = [CID + ' 12 RUNNING', '0::/' + CID, 'usage_usec 3', 'max 100000', '100', 'max', 'oom 0', CID + ' 13 RUNNING']
         with self.assertRaisesRegex(w.Unavailable, 'identity-changed'):
-            w.snapshot(cmd, {'node': 'k3d-trial-server-0', 'containerID': 'containerd://' + CID})
+            w.snapshot(cmd, {'node': 'k3d-uds-server-0', 'containerID': 'containerd://' + CID})
         args = [c.args for c in cmd.run.call_args_list]
-        self.assertTrue(all(a[:5] == ('docker', 'exec', 'k3d-trial-server-0', 'timeout', '1') for a in args))
+        self.assertTrue(all(a[:5] == ('docker', 'exec', 'k3d-uds-server-0', 'timeout', '1') for a in args))
         self.assertFalse(any('inspect' in a or 'logs' in a for a in args))
 
 

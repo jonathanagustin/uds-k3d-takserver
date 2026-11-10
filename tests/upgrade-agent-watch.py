@@ -5,11 +5,21 @@
 import argparse
 import datetime as dt
 import json
+import importlib.util
+import os
+from pathlib import Path
 import re
 import resource
+import signal
 import subprocess
 import tempfile
 import time
+
+
+_spec = importlib.util.spec_from_file_location('ephemeral_cluster', Path(__file__).with_name('ephemeral-cluster.py'))
+ephemeral = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ephemeral)
+CONTEXT = 'k3d-uds'
 
 
 class Unavailable(Exception):
@@ -39,11 +49,20 @@ class Commands:
         with tempfile.TemporaryFile() as out:
             try:
                 limit = min(1.2, max(0.01, remaining - 0.2))
-                result = subprocess.run(['timeout', '--kill-after=0.1s', str(limit) + 's', *args],
-                                        stdout=out, stderr=subprocess.DEVNULL,
-                                        timeout=remaining, check=False,
-                                        preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (1048576, 1048576)))
-                if result.returncode or out.tell() > 1048576:
+                child = subprocess.Popen(['timeout', '--foreground', '--kill-after=0.1s', str(limit) + 's', *args],
+                                         stdout=out, stderr=subprocess.DEVNULL, start_new_session=True,
+                                         preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (1048576, 1048576)))
+                try:
+                    child.wait(timeout=remaining)
+                finally:
+                    # Own the session, including timeout and any ignoring children.
+                    # Even an exited wrapper may have left descendants behind.
+                    try:
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    child.wait()
+                if child.returncode or out.tell() > 1048576:
                     raise Unavailable('command-or-size')
                 out.seek(0)
                 return out.read().decode('utf-8')
@@ -53,7 +72,7 @@ class Commands:
     def kube(self, *args):
         try:
             return json.loads(self.run('uds', 'zarf', 'tools', 'kubectl',
-                                       '--request-timeout=1s', *args, '-o', 'json'))
+                                       '--context', CONTEXT, '--request-timeout=1s', *args, '-o', 'json'))
         except (ValueError, TypeError):
             raise Unavailable('invalid-json') from None
 
@@ -63,7 +82,7 @@ def identity(pod):
     uid, name = meta.get('uid'), meta.get('name')
     node = pod.get('spec', {}).get('nodeName')
     if not (valid(uid, r'[a-f0-9-]{36}') and valid(name, r'agent-hook-[a-z0-9-]{1,100}')
-            and valid(node, r'k3d-[a-zA-Z0-9_.-]+-(?:server|agent)-[0-9]+')):
+            and node == ephemeral.NODE):
         raise Unavailable('pod-identity')
     statuses = [s for s in pod.get('status', {}).get('containerStatuses', [])
                 if s.get('name') == 'server']
@@ -164,9 +183,20 @@ def snapshot(cmd, current):
     return {'pid': int(first), 'cgroupVersion': 2, 'metrics': result}
 
 
+def guard(cmd, proof=None):
+    try:
+        current = ephemeral.verify(CONTEXT, lambda argv: cmd.run(*argv))
+        if proof is not None and current != proof:
+            raise Unavailable('ephemeral-proof-changed')
+        return current
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise Unavailable('ephemeral-proof-unavailable') from None
+
+
 def observe(seconds):
     deadline = time.monotonic() + seconds
     cmd = Commands(deadline)
+    proof = guard(cmd)
     # Establish baseline BEFORE observation starts. Never accept restored events.
     events = cmd.kube('get', 'events', '-n', 'zarf')
     baseline = {e.get('metadata', {}).get('uid'): count(e) for e in events['items']}
@@ -191,6 +221,7 @@ def observe(seconds):
                     record = {'watch': 'first-live-liveness-failure', 'observedAt': time.time(),
                               'eventAt': stamp(event_at), 'eventCount': count(event), **current}
                     try:
+                        guard(cmd, proof)
                         # Revalidate current UID/container immediately before node access.
                         fresh = identity(cmd.kube('get', 'pod', current['pod'], '-n', 'zarf'))
                         if fresh != current:
@@ -206,7 +237,7 @@ def observe(seconds):
         except (Unavailable, KeyError, TypeError, AttributeError):
             # No raw error strings or API payloads escape this boundary.
             pass
-        time.sleep(min(1, max(0, deadline-time.monotonic())))
+        time.sleep(min(5, max(0, deadline-time.monotonic())))
     print(json.dumps({'watch': 'deadline', 'evidence': 'unavailable-or-no-new-failure', 'observedAt': time.time()}))
     return 0
 
@@ -214,6 +245,7 @@ def observe(seconds):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--enable-ephemeral-trial', action='store_true', required=True)
+    parser.add_argument('--context', choices=(CONTEXT,), required=True)
     parser.add_argument('--seconds', type=int, default=300)
     args = parser.parse_args()
     if not 1 <= args.seconds <= 900:

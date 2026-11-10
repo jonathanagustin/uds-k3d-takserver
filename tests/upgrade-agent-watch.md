@@ -9,13 +9,18 @@ For an explicitly enabled, disposable k3d CI trial, start before the operation
 being observed and redirect its JSON lines into the trial's diagnostic artifact:
 
 ```sh
-python3 tests/upgrade-agent-watch.py --enable-ephemeral-trial --seconds 300 > agent-watch.jsonl &
+python3 tests/upgrade-agent-watch.py --enable-ephemeral-trial --context k3d-uds --seconds 300 > agent-watch.jsonl &
 watch_pid=$!
 # Run the already-authorized operation and its independent acceptance gates.
 # Let the finite watcher finish; its exit status is never application acceptance.
 wait "$watch_pid"
 ```
 
+Before observation, the watcher uses the shared `ephemeral-cluster.py` read-only
+verification: this repository's GitHub Actions run, source SHA, local Docker
+endpoint, local k3d cluster, and existing ephemeral trial marker must agree.
+It never creates a marker or mutates a cluster. The same proof is revalidated
+before a snapshot. Every API read explicitly selects `--context k3d-uds`.
 The watcher baselines namespace event counts before its observation timestamp.
 It follows the agent Service selector (at most two Pods), accepts only a current
 running `server` container with a full `containerd://` ID, and triggers only on
@@ -35,8 +40,10 @@ identity is checked before and after. No paths, raw command errors, logs, proces
 command lines, environments, credentials, or probe URLs are output. There are no
 application probes, signals, restarts, or configuration changes.
 
-Polling sleeps at most one second; each of the three discovery calls has a
-1.2-second child timeout (plus 0.1-second kill grace). Observation is limited to
+Polling sleeps five seconds between discovery attempts; each of the three discovery calls has a
+1.2-second child timeout (plus 0.1-second kill grace). The command wrapper owns a process session and kills the complete process group
+on completion or outer timeout, including SIGTERM-ignoring descendants.
+Observation is limited to
 1–900 seconds, including capture; output per command is capped at 1 MiB.
 Docker node commands also have a one-second timeout inside the node. Missing
 commands (including node `timeout`), unfamiliar schema/runtime, cgroup v1,

@@ -897,20 +897,65 @@ class PostgresTests(unittest.TestCase):
         self.assertIsNone(body["postgres"])
         self.assertEqual(body["schema"], 1)
 
-    def test_the_summary_lists_postgres_next_to_throughput(self):
+    def test_the_summary_exposes_postgres_evidence_units_and_all_settings(self):
         sample = record("postgis-buffers", "amd64", 10, 50, 10, 5, 20)
         sample["postgres"] = {
-            "hit_ratio": 0.9,
-            "temp_bytes": 0,
-            "checkpoints_req": 1,
-            "steady_rss_bytes": 60000000,
-            "settings": {"shared_buffers": "128MB"},
+            "hit_ratio": 0.999999, "temp_files": 2, "temp_bytes": 4096,
+            "checkpoints_timed": 3, "checkpoints_req": 1,
+            "checkpoint_write_ms": 12.5, "checkpoint_sync_ms": 0.25,
+            "buffers_backend": 17, "steady_rss_bytes": 60 * 2**20,
+            "peak_rss_bytes": 80 * 2**20,
+            "settings": {"shared_buffers": "128MB", "work_mem": "4MB",
+                         "effective_cache_size": "384MB", "max_wal_size": "256MB",
+                         "checkpoint_timeout": "5min"},
         }
-        text = report.markdown([sample])
-        self.assertIn("hit_ratio 0.9", text)
-        self.assertIn("throughput 5.0", text)
-        self.assertIn("shared_buffers 128MB", text)
+        before = json.dumps(sample, sort_keys=True)
+        text = "\n".join(report.postgres_lines([sample]))
+        self.assertIn("not process RSS", text)
+        self.assertIn("| Received messages/s | Mean ping-pong (ms) |", text)
+        self.assertIn("| amd64 | postgis-buffers | 0.999999 | 2.000 | 4096.000 | 60.000 | 80.000 | 5.000 | 5.000 |", text)
+        self.assertIn("| Timed checkpoints | Requested checkpoints | Checkpoint write (ms) | Checkpoint sync (ms) | Backend write operations |", text)
+        self.assertIn("| amd64 | postgis-buffers | 3.000 | 1.000 | 12.500 | 0.250 | 17.000 |", text)
+        self.assertIn("| shared_buffers | work_mem | effective_cache_size | max_wal_size | checkpoint_timeout |", text)
+        self.assertIn("| amd64 | postgis-buffers | 128MB | 4MB | 384MB | 256MB | 5min |", text)
+        self.assertEqual(json.dumps(sample, sort_keys=True), before)
         self.assertIn("No Postgres stats.", report.markdown([record("baseline", "amd64", 10, 50, 10, 5, 20)]))
+
+    def test_postgres_report_keeps_missing_and_invalid_observations_distinct(self):
+        sample = record("partial|config", "arm64", 10, 50, 10, 5, 20)
+        sample["postgres"] = {"temp_bytes": 0, "checkpoints_req": -1, "hit_ratio": 1.1,
+                              "settings": {"shared_buffers": "64MB|untrusted\nvalue"}}
+        text = "\n".join(report.postgres_lines([sample]))
+        self.assertIn("invalid (1.1)", text)
+        self.assertIn("invalid (-1)", text)
+        self.assertIn("| not measured | 0.000 | not measured |", text)
+        self.assertIn("partial\\|config", text)
+        self.assertIn("64MB\\|untrusted value", text)
+        self.assertNotIn("None", text)
+
+    def test_postgres_report_uses_the_same_valid_load_rate_as_the_front(self):
+        for field, value in (("duration_s", -10), ("duration_s", "10"), ("duration_s", 0),
+                             ("messages_received", -1), ("messages_received", True),
+                             ("messages_received", float("inf"))):
+            with self.subTest(field=field, value=value):
+                sample = record("invalid-load", "amd64", 10, 50, 10, 5, 20)
+                sample["load"][field] = value
+                sample["postgres"] = {"hit_ratio": 0.5}
+                text = "\n".join(report.postgres_lines([sample]))
+                load_row = next(line for line in text.splitlines() if line.startswith("| amd64 |"))
+                self.assertEqual(load_row.split(" | ")[-3], "not measured")
+                self.assertIsNone(report.point(sample)["throughput"])
+
+    def test_retained_postgres_rows_are_present_without_altering_source_records(self):
+        root = Path(__file__).resolve().parents[1] / "bench/results/42361079121/records"
+        paths = sorted(root.glob("*/*.json"))
+        originals = {path: path.read_bytes() for path in paths}
+        records = report.load_records(paths)
+        text = "\n".join(report.postgres_lines(records))
+        for row in records:
+            self.assertEqual(text.count(f"| {row['arch']} | {row['config']} |"), 3)
+            self.assertIn(row["postgres"]["settings"]["checkpoint_timeout"], text)
+        self.assertEqual(originals, {path: path.read_bytes() for path in paths})
 
 
 class RestoreTests(unittest.TestCase):

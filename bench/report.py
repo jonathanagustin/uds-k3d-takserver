@@ -154,13 +154,13 @@ def cell(value):
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def measured(value, divisor=1):
+def measured(value, divisor=1, precision=3):
     if value is None:
         return "not measured"
     valid = nonnegative(value)
     if valid is None:
         return f"invalid ({cell(value)})"
-    return f"{valid / divisor:.3f}"
+    return f"{valid / divisor:.{precision}f}"
 
 
 def measurement_lines(records):
@@ -198,39 +198,52 @@ def startup_lines(records):
 
 
 def postgres_lines(records):
-    """Hit ratio, temp files, checkpoints, and RSS beside TAK throughput."""
+    """Display collected PostgreSQL evidence with units beside the TAK load."""
     lines = ["### Postgres", ""]
-    found = False
-    for record in records:
-        stats = record.get("postgres")
-        if not stats:
-            continue
-        found = True
-        load = record.get("load") or {}
-        duration = load.get("duration_s")
-        received = load.get("messages_received")
-        throughput = None
-        if duration and received is not None:
-            throughput = round(received / duration, 3)
+    observed = [(record, record.get("postgres")) for record in records if record.get("postgres")]
+    if not observed:
+        return [*lines, "No Postgres stats.", ""]
+    lines.extend([
+        "Memory is sampled container working set, not process RSS. Database counters describe cot; checkpoints and backend writes are cluster-wide. A counter-reset error in the record caveats means the counters are not verified for this load window.",
+        "",
+        "#### Load, cache and memory", "",
+        "| Architecture | Config | Hit ratio | Temp files | Temp bytes | Steady working set (MiB) | Peak working set (MiB) | Received messages/s | Mean ping-pong (ms) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ])
+    for record, stats in observed:
+        sample = point(record)
+        ratio = stats.get("hit_ratio")
+        ratio_text = measured(ratio, precision=6)
+        if nonnegative(ratio) is not None and ratio > 1:
+            ratio_text = f"invalid ({cell(ratio)})"
+        values = [cell(record.get("arch")), cell(record.get("config")), ratio_text,
+                  measured(stats.get("temp_files")), measured(stats.get("temp_bytes")),
+                  measured(stats.get("steady_rss_bytes"), 2**20), measured(stats.get("peak_rss_bytes"), 2**20),
+                  measured(sample["throughput"]), measured(sample["latency_ms"])]
+        lines.append("| " + " | ".join(values) + " |")
+    lines.extend([
+        "", "#### Checkpoints and backend writes", "",
+        "| Architecture | Config | Timed checkpoints | Requested checkpoints | Checkpoint write (ms) | Checkpoint sync (ms) | Backend write operations |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ])
+    for record, stats in observed:
+        values = [cell(record.get("arch")), cell(record.get("config"))]
+        values.extend(measured(stats.get(key)) for key in (
+            "checkpoints_timed", "checkpoints_req", "checkpoint_write_ms",
+            "checkpoint_sync_ms", "buffers_backend"))
+        lines.append("| " + " | ".join(values) + " |")
+    lines.extend([
+        "", "#### Observed settings", "",
+        "| Architecture | Config | shared_buffers | work_mem | effective_cache_size | max_wal_size | checkpoint_timeout |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ])
+    for record, stats in observed:
         settings = stats.get("settings") or {}
-        lines.append(
-            "- {arch} {config}: hit_ratio {hit}, temp_bytes {temp}, "
-            "checkpoints_req {checks}, rss {rss}, throughput {rate}, "
-            "shared_buffers {buffers}".format(
-                arch=record.get("arch"),
-                config=record.get("config"),
-                hit=stats.get("hit_ratio"),
-                temp=stats.get("temp_bytes"),
-                checks=stats.get("checkpoints_req"),
-                rss=stats.get("steady_rss_bytes"),
-                rate=throughput,
-                buffers=settings.get("shared_buffers"),
-            )
-        )
-    if not found:
-        lines.append("No Postgres stats.")
-    lines.append("")
-    return lines
+        values = [cell(record.get("arch")), cell(record.get("config"))]
+        values.extend("not measured" if settings.get(key) is None else cell(settings[key]) for key in (
+            "shared_buffers", "work_mem", "effective_cache_size", "max_wal_size", "checkpoint_timeout"))
+        lines.append("| " + " | ".join(values) + " |")
+    return [*lines, ""]
 
 
 def _scale(values, low, high):

@@ -298,3 +298,40 @@ The runner creates its first private failure capture exclusively with mode
 0600. Existing files and symlinks are never followed or overwritten, so later
 failed observations cannot replace that retained tail. This still does not
 recover discarded output or establish a causal explanation for that failure.
+
+### Optional encrypted private failure capture
+
+The manual Staged migrations workflow accepts `diagnostic_recipient`, an optional
+age X25519 **public** recipient (`age1…`). Its empty default downloads and installs
+nothing. A successful trial also performs no encryption. Only after the selected
+trial fails can the helper encrypt the fixed regular, non-symlink
+`staged-migrations/owner/PRIVATE-command-failure.txt`, bounded to 64 KiB. It cannot
+select another input file, take a private key or invoke an age plugin. The
+existing fixed JSON categories and all acceptance requirements remain unchanged.
+
+The helper requires this repository's manual main run and a matching checkout
+SHA and failed owner-journal source/run/attempt identity. It verifies the official
+age v1.3.2 release archive and extracted executable,
+and checks executable integrity before and after encryption. HTTPS acquisition
+preserves runner proxy/CA trust; the encryption child receives no inherited
+credentials or loader flags. Execution is bounded to 15 seconds, ciphertext to
+72 KiB and private stderr to 4 KiB. No captured stderr or exception text is
+printed. Only successful encryption and postchecks mark the separate ciphertext
+artifact ready; failed/partial output is removed. The uploaded path is exactly
+`staged-encrypted-diagnostic/first-failure.age`, with seven-day retention.
+
+Official [age v1.3.2](https://github.com/FiloSottile/age/releases/tag/v1.3.2) pins:
+
+| Linux architecture | Archive SHA-256 | Executable SHA-256 |
+| --- | --- | --- |
+| amd64 | `cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10` | `eb7dd1b518f0a307c99cd97782623c5321da049154b04acd2d98d21aa7bc9b2c` |
+| arm64 | `6b8dc4333c53a5a57c9e5834e3a48f92605d7154014cd07269ff3327db5d37f4` | `41b072352f4561018949623c674d16ef704019b9108a9bbdbd21292efebfc94f` |
+
+Generate and retain any identity with official `age-keygen` outside repositories,
+with restrictive permissions. Supply only its public recipient to the workflow.
+Keep decrypted evidence private as well: for example, use `umask 077` and redirect
+`age --decrypt --identity /secure/identity.txt downloaded.age` to a private file,
+never the terminal or an issue. Verify the artifact's run, attempt and source
+through GitHub metadata before interpreting its contents. Encryption protects
+confidentiality; it does not turn diagnostics into acceptance, recover discarded
+tail bytes, establish a causal explanation or authorize another trial.

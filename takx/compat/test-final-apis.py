@@ -28,6 +28,10 @@ def kernel_classpath(parser, proof):
     result = json.loads((proof / 'result.json').read_text())
     if inputs.get('upstream_revision') != REVISION or result.get('exit_code') != 0:
         parser.error('successful pinned frozen Kernel compilation required')
+    recorded_classes = json.loads((proof / 'class-hashes.json').read_text())
+    actual_classes = {p.relative_to(proof / 'classes').as_posix(): digest(p) for p in (proof / 'classes').rglob('*.class')}
+    if not recorded_classes or actual_classes != recorded_classes:
+        parser.error('frozen class output inventory changed')
     adapters = set()
     upstream = set()
     for item in inputs['sources']:
@@ -83,12 +87,13 @@ def main():
         candidates = [file, fixtures / 'directory', fixtures / 'symlink', fixtures / 'hardlink', Path('/dev/null')]
         manifest = work / 'stat.tsv'
         manifest.write_text(''.join(str(p) + '\t' + '\t'.join(map(str, identity(p))) + '\n' for p in candidates))
-        tests = [HERE / 'src/test/java/android/graphics/FinalGraphicsApiTest.java', HERE / 'src/test/java/android/system/UnixStatTest.java']
+        tests = [HERE / 'src/test/java/android/graphics/PaintRangeTest.java', HERE / 'src/test/java/android/graphics/FinalGraphicsApiTest.java', HERE / 'src/test/java/android/system/UnixStatTest.java']
         classes = work / 'classes'
         try:
             subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-sourcepath', str(HERE / 'src/main/java'),
                             '-d', str(classes), *map(str, tests)], check=True, timeout=60)
             subprocess.run(['java', '-Djava.awt.headless=true', '-cp', str(classes), 'android.graphics.FinalGraphicsApiTest'], check=True, timeout=30)
+            subprocess.run(['java', '-Djava.awt.headless=true', '-cp', str(classes), 'android.graphics.PaintRangeTest'], check=True, timeout=30)
             subprocess.run(['java', '-cp', str(classes), 'android.system.UnixStatTest', str(manifest), str(fixtures), str(permission_test).lower()], check=True, timeout=30)
             if cp:
                 test = HERE / 'src/test/java/com/atakmap/map/gdal/VsiFileHandlerTest.java'
@@ -102,6 +107,14 @@ def main():
                 # and upstream classes produced by the complete compile proof.
                 subprocess.run(['java', '-Djava.awt.headless=true', '-cp', cp + os.pathsep + str(classes),
                                 'com.atakmap.map.gdal.VsiFileHandlerTest', str(mount)], check=True, timeout=30)
+                if (args.kernel_proof / 'stage/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java').is_file():
+                    test = HERE / 'src/test/java/gov/tak/api/cot/detail/RolesManagerIconTest.java'
+                    subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-cp', cp,
+                                    '-d', str(classes), str(test)], check=True, timeout=30)
+                    subprocess.run(['java', '-Djava.awt.headless=true', '-cp', cp + os.pathsep + str(classes),
+                                    'gov.tak.api.cot.detail.RolesManagerIconTest', str(work / 'roles')], check=True, timeout=30)
+                else:
+                    print('Kernel RolesManager integration: NOT RUN (supply engine-shared proof)')
             else:
                 print('Kernel VSI integration: NOT RUN (supply --kernel-proof)')
         finally:

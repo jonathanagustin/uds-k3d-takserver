@@ -42,15 +42,15 @@ public final class FontCompatibilityTest {
             widths[2] = 123f;
             check(p.getTextWidths(chars, 1, 2, widths) == 2, "Character count");
             check(widths[0] > 0f && widths[1] > 0f && widths[2] == 123f, "Offsets and destination boundary");
-            check(Math.abs(p.measureText(chars, 1, 2) - widths[0] - widths[1]) < 0.01f,
-                    "Glyph advances agree for unshaped Latin pair");
+            check(Math.abs(p.measureText(chars, 1, 2) - Math.ceil(widths[0] + widths[1])) < 0.01f,
+                    "Measured width rounds the real glyph advance upward");
             Paint.FontMetricsInt fm = p.getFontMetricsInt();
             check(fm.top <= fm.ascent && fm.ascent < 0 && fm.descent > 0
                     && fm.bottom >= fm.descent && fm.leading >= 0, "Signed font bounds");
             float original = p.measureText("Measurements");
             p.setTextSize(37f);
-            check(Math.abs(p.measureText("Measurements") / original - 2f) < 0.01f,
-                    "Fractional font size scales");
+            check(Math.abs(p.measureText("Measurements") - original * 2f) <= 1f,
+                    "Fractional font size scales within whole-pixel rounding");
         }
         Paint p = new Paint();
         check(p.measureText("") == 0f, "Empty text");

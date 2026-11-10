@@ -43,6 +43,23 @@ class CompilerGuards(unittest.TestCase):
         with self.assertRaises(ValueError): BUILD.select_profile(wrong, 'patched')
         with self.assertRaises(ValueError): BUILD.select_profile(LOCK, 'unknown')
 
+    def test_shared_scope_includes_all_sources_and_separate_dependency_profile(self):
+        baseline = BUILD.select_profile(LOCK, 'baseline', 'engine-shared')
+        patched = BUILD.select_profile(LOCK, 'patched', 'engine-shared')
+        self.assertEqual(sum(patched['modules'].values()), 1176)
+        self.assertEqual(patched['modules']['takkernel/shared/src/main/java'], 212)
+        self.assertEqual(patched['modules']['takkernel/shared/src/jre/java'], 19)
+        self.assertEqual(len(patched['public_jars']), 33)
+        self.assertEqual(patched['baseline_matching_public_jars'], 24)
+        self.assertIn('jackson-databind-2.13.1.jar', baseline['public_jars'])
+        self.assertNotIn('jackson-databind-2.13.1.jar', patched['public_jars'])
+        self.assertNotEqual(patched['source_inventory_sha256'], LOCK['source_inventory_sha256'])
+        for section in ('modules', 'public_jars', 'patched_replacements'):
+            bad = copy.deepcopy(LOCK); bad['shared_profile'][section].pop(next(iter(bad['shared_profile'][section])))
+            with self.assertRaises(ValueError): BUILD.select_profile(bad, 'patched', 'engine-shared')
+        with self.assertRaises(ValueError): BUILD.select_profile(LOCK, 'patched', 'client')
+        self.assertEqual(BUILD.select_profile(LOCK, 'patched')['modules'], BUILD.MODULES)
+
     def test_dependency_origin_and_size_guards(self):
         for url in ('http://repo.maven.apache.org/a.jar', 'https://example.com/a.jar', 'https://user:password@repo.maven.apache.org/a.jar'):
             wrong = copy.deepcopy(LOCK)

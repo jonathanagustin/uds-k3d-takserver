@@ -85,7 +85,7 @@ skipped if the test process is root.
 
 The optional integration check loads the actual, unchanged
 `VSIFileFileSystemHandler`, `VSIJFileFilesystemHandler`, `VSIStatBuf`,
-`FileSystemUtils` and default IO provider from the frozen complete Kernel build
+`FileSystemUtils` and default IO provider from the frozen engine/port/annotation build
 at official revision `9f6893dd657feacc35ec5de03dad721c2e44170e`.
 It calls the public `FileSystemUtils.setMountPoint` with a temporary directory,
 which limits discovery and migration to that mount. No upstream method, class
@@ -108,8 +108,10 @@ python3 takx/compat/test-final-apis.py --source-dir /path/to/pinned-api-referenc
   --kernel-proof /path/to/fresh-frozen-kernel-compile
 ```
 
-The opt-in [complete compiler recipe](../kernel-java/README.md) now reproduces
-the desktop Java source compilation. It verifies 23 locked public JARs and two
+The opt-in [engine-profile compiler recipe](../kernel-java/README.md) now
+reproduces the engine, port and annotation desktop Java source compilation.
+Its default scope excludes `takkernel/shared`; the explicit `engine-shared`
+scope includes it. Neither builds a complete Kernel SDK or either client; see the [client checkpoint](../CLIENT-CHECKPOINT.md). It verifies 23 locked public JARs and two
 GIS source-built JARs with all 107 original class entries unchanged; rebuilt
 GIS container hashes differ. Its default profile updates six public JARs to
 address [recorded advisories](../kernel-java/DEPENDENCIES.md); the historical
@@ -136,3 +138,25 @@ Remaining gates include runnable TAKX application packaging/resources, compatibl
 native GIS/GL/Kernel linkage, actual map rendering and recovery, enrollment and
 CoT exchange, broader graphics and density behavior, and complete native/database
 interop. SQLite's separate real-JNI checks do not establish those client gates.
+
+## Shared-module text consumer
+
+The pinned Android 14 [Paint.java source](https://github.com/aosp-mirror/platform_frameworks_base/blob/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Paint.java#L2353)
+returns the ceiling of measured advances for both char-array and String ranges;
+the one-String overload delegates to the String range overload (lines 2413–2418).
+The desktop adapter now follows that rounding contract using its existing real
+Java2D measurement. The new String range uses an inclusive start and exclusive
+end, throws `IllegalArgumentException` for null, rejects invalid/reversed ranges
+with `IndexOutOfBoundsException`, and returns zero for a valid empty range.
+Range validation still applies at zero text size. `getTextWidths`, font metrics
+and Canvas behavior are unchanged. Two older font assertions now allow the
+source-required pixel rounding; the independent Java2D advance oracle exercises
+fractional sizes, Unicode, all font styles, null/empty and boundary cases.
+Java2D font selection and shaping are not claimed to match Skia pixel-for-pixel.
+
+With an `engine-shared` proof, the runner also executes the unchanged upstream
+`RolesManager` using a real PNG asset and desktop Context. It verifies decoded
+bitmap/copy behavior, the upstream cache, missing assets, distinct role icons,
+and actual centered glyph placement against an independent Java2D image. The
+complete frozen class-output inventory is verified before these consumer tests.
+No upstream consumer is replaced by a stub or loaded from a partial failed build.

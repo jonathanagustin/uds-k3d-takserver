@@ -1,11 +1,15 @@
-# Public desktop Kernel Java compilation
+# Public Kernel engine, port and annotation compilation
 
-This opt-in recipe compiles the complete pinned public desktop Kernel Java
-profile from official `TAK-Product-Center/atak-civ` revision
+This opt-in recipe compiles the pinned public desktop **engine, port and
+annotation** Java profile from official `TAK-Product-Center/atak-civ` revision
 `9f6893dd657feacc35ec5de03dad721c2e44170e`, together with the repository's desktop
 compatibility adapters. It produces frozen sources, compiler output and a
 verifiable input/output manifest. It does not package TAKX, build or load JNI,
-start a renderer or claim full client compatibility.
+start a renderer or claim full client compatibility. The default scope does not compile the separate `takkernel/shared` module.
+The explicit `--scope engine-shared` option adds all of its desktop sources;
+neither scope assembles a complete Kernel SDK. The
+[client feasibility checkpoint](../CLIENT-CHECKPOINT.md) distinguishes these
+module boundaries from the earlier source-import inventories.
 
 **The default profile uses patched dependency versions.** The explicit
 `--profile baseline` option retains the historical inputs with known advisories.
@@ -63,6 +67,32 @@ original container hashes remain unchanged.
 Both artifact paths and the rebuilt source recipe stay under caller control;
 there is no dependency on this investigation's local cache paths.
 
+## Optional shared module
+
+`--scope engine-shared` retains the entire default profile and adds all 212 main
+and 19 JRE Java sources from `takkernel/shared`. Its combined locked inventory has
+1,176 upstream files (1,175 unchanged, with the same single unused-import patch)
+and 59 desktop adapters. All 231 shared files retain their pinned bytes. The
+source manifest and result explicitly record the scope and shared-source count.
+The default `--scope engine` remains the original engine/port/annotation profile.
+
+The shared scope has 33 public JARs plus the same two source-built GIS JARs.
+Ten additional public inputs come from the pinned shared Gradle declarations
+and POM dependency chain: Jackson's three modules, two military-symbol renderer
+artifacts and five renderer transitives. The patched profile uses Jackson
+`databind`/`core` 2.23.0 and `annotations` 2.23; the historical baseline retains
+2.13.1. The [shared advisory receipt](shared-advisories.json) covers all 33 direct
+classpath coordinates; see [limits and dependency provenance](DEPENDENCIES.md).
+The combined baseline has 33 locked historical public JARs; patched retains 24
+and upgrades nine. These counts do not mean 33 inputs existed in the original
+25-JAR engine investigation. The separate GIS container/class equivalence rules
+remain unchanged.
+
+A fresh patched shared compile produced 2,697 class files from all 1,235 sources,
+with zero errors and four warnings. The earlier 274-diagnostic incomplete
+classpath probe and the later one-error Paint API probe remain failed historical
+evidence; their partial outputs are not dependencies of this recipe.
+
 ## Run
 
 Use Python 3.9+, Git, `patch`, and JDK 17. The GIS source recipe additionally needs
@@ -83,7 +113,8 @@ python3 takx/kernel-java/build.py \
   --fetch-dependencies
 ```
 
-The default is `--profile patched`. Use `--profile baseline` only to reproduce
+Add `--scope engine-shared` to the command above to compile the shared module.
+The default is `--scope engine --profile patched`. Use `--profile baseline` only to reproduce
 the historical compilation comparison, with a separate new output directory.
 Each receipt names its selected profile and records actual input hashes.
 

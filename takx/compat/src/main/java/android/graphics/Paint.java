@@ -104,10 +104,17 @@ public class Paint {
         return measureText(new String(text, index, count));
     }
 
+    public float measureText(String text, int start, int end) {
+        if (text == null) throw new IllegalArgumentException("Text must not be null");
+        if (start < 0 || end < start || end > text.length())
+            throw new IndexOutOfBoundsException("Invalid text range");
+        return measureText(text.substring(start, end));
+    }
+
     public float measureText(String text) {
         if (text == null) throw new IllegalArgumentException("Text must not be null");
         if (text.isEmpty() || textSize == 0f) return 0f;
-        return new TextLayout(text, font(), context()).getAdvance();
+        return (float) Math.ceil(new TextLayout(text, font(), context()).getAdvance());
     }
 
     public int getTextWidths(char[] text, int index, int count, float[] widths) {

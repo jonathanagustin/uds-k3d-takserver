@@ -306,3 +306,9 @@ Deployments; only the config account can read the single Ignite Pod's log.
 No new ClusterRoleBinding is granted. The upstream Ignite permissions remain
 unchanged. Ordinary package deployment and these opt-in changes still require
 live migration validation; rendered policies alone do not prove continuity.
+
+The [disposable identity trial driver](../tests/workload-identities/README.md)
+implements guarded API staging, protocol controls and reversal for a reviewed
+manual Full Core experiment. Its fixtures are not a live migration result; both
+architecture trials and ordinary application acceptance remain required. It does
+not replace Helm release values or provide a production upgrade command.

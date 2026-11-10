@@ -4,6 +4,7 @@
 """Consumers wait for keyed producer outputs and Demo keys identify app HEAD."""
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -47,6 +48,53 @@ class ConsumerWorkflowTests(unittest.TestCase):
                 './.github/container-and-chart/cloudtak/build.sh --wait',
                 './.github/container-and-chart/postgis/build.sh --wait',
                 './.github/scripts/pin-image-tags.sh'])
+
+
+class DemoTriggerTests(unittest.TestCase):
+    def test_reediting_footage_skips_recording_but_live_recorder_changes_do_not(self):
+        # BaseLoader keeps the GitHub "on" key, rather than YAML 1.1's bool True.
+        workflow = yaml.load((ROOT / '.github/workflows/demo.yaml').read_text(), Loader=yaml.BaseLoader)
+        triggers = workflow['on']
+        self.assertIn('workflow_dispatch', triggers)
+        self.assertEqual(triggers['pull_request']['types'], ['opened', 'reopened', 'synchronize'])
+        patterns = triggers['pull_request']['paths']
+
+        def selected(path):
+            included = False
+            for pattern in patterns:
+                positive = not pattern.startswith('!')
+                pattern = pattern.removeprefix('!')
+                # GitHub patterns match the whole path; ** crosses directories,
+                # while a single * cannot. Negative patterns apply in order.
+                self.assertRegex(pattern, r'^[A-Za-z0-9_./*\-]+$')
+                if '**' in pattern:
+                    self.assertTrue(pattern.endswith('/**'))
+                    self.assertNotIn('*', pattern[:-2])
+                regex = ''.join('.*' if token == '**' else '[^/]*' if token == '*'
+                                else re.escape(token) for token in re.split(r'(\*\*|\*)', pattern))
+                if re.fullmatch(regex, path):
+                    included = positive
+            return included
+
+        for path in ('demo/README.md', 'demo/ui-reel/render.py',
+                     'demo/ui-reel/README.md', 'demo/ui-reel/nested/fixture.json',
+                     '.github/workflows/ui-reel.yaml', 'docs/demo.md'):
+            with self.subTest(path=path):
+                self.assertFalse(selected(path))
+        live_changes = ('demo/deploy.sh', 'demo/record-web.sh', 'demo/style.py',
+                        'demo/assemble.sh', 'demo/tapes/02-package-cr.tape',
+                        'demo/ui-reel.py', 'demo/ui-reel-helper/record.sh',
+                        'demo/nested/README.md', 'tests/demo/web.spec.ts',
+                        'tests/demo/nested/web.spec.ts', 'tests/playwright.demo.config.ts',
+                        '.github/workflows/demo.yaml')
+        for path in live_changes:
+            with self.subTest(path=path):
+                self.assertTrue(selected(path))
+        # A documentation-only PR skips; a mixed PR still records its live change.
+        for changed in (['demo/ui-reel/render.py', 'demo/README.md'],
+                        ['demo/ui-reel/render.py', 'demo/record-web.sh']):
+            self.assertEqual(any(selected(path) for path in changed),
+                             'demo/record-web.sh' in changed)
 
 
 class DemoSourceTests(unittest.TestCase):

@@ -38,6 +38,9 @@ on:
     paths:
       - ".github/workflows/demo.yaml"
       - "demo/**"
+      # Editing recorded footage or its instructions does not need a cluster.
+      - "!demo/ui-reel/**"
+      - "!demo/README.md"
       - "tests/demo/**"
       - "tests/playwright.demo.config.ts"
 

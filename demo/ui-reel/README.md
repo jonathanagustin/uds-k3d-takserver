@@ -5,6 +5,11 @@ footage. It shows CloudTAK mapping, marker creation, feature sharing and the
 TAK Server status page. This is an edit of historical recordings, not a new
 deployment recording or a TAKX demo.
 
+The [published v0.12.0 preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4)
+reuses the reviewed render without changing its bytes. Its
+[source manifest](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/edit-manifest.json)
+retains the historical input identities; publication is not a fresh capture.
+
 Run with Python 3.11 or later and FFmpeg/FFprobe with `libx264` and `drawtext`:
 
 ```sh

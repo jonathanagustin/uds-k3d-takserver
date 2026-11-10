@@ -37,7 +37,7 @@ No database settings were tuned. This baseline does not satisfy the default-vers
 
 ## JVM startup metadata is partial
 
-Nine of 12 application/repeat joins are available: API on both architectures and messaging on amd64, with exact Pod/container/image/restart identities, official RuntimeMXBean epoch start and two bounded metric reads. The collector source hash matches the recorded run source. API JVM-to-startup-log time is 73.832 s on amd64 and 52.047 s on arm64; amd64 messaging is 58.507 s. Those values repeat because each architecture reused the SAME application incarnations, not because three independent starts were measured.
+Nine of 12 application/repeat joins are available: API on both architectures and messaging on amd64, with exact Pod/container/image/restart identities, official RuntimeMXBean epoch start and two bounded metric reads. The collector source hash matches the recorded run source. API JVM-to-startup-log time is 73.832 s on amd64 and 52.047 s on arm64; amd64 messaging is 58.507 s. Those values repeat because each architecture reused the same application incarnations, not because three independent starts were measured.
 
 ARM messaging is unavailable in all three records: `marker_after_ready`. Its startup marker is `18:42:51.059396Z`, while the retained whole-second Ready time is `18:42:51Z`. The existing conservative guard rejects that 59 ms ordering; no JVM duration or transport success is inferred from discarded observations, and missing values remain null. No guard was relaxed.
 

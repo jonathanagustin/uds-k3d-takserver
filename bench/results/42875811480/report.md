@@ -1,3 +1,5 @@
+These tables contain three successive client-session repeats of one baseline configuration per runner. Front membership reflects individual observations; it does not compare configurations. See the [study scope and limitations](README.md).
+
 # Benchmark front
 
 Each workload cohort has one scale per view across architectures. Dominance is per architecture within a matched revision, client count and duration.

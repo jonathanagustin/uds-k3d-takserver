@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
 from unittest.mock import patch
 import yaml
 
@@ -19,6 +20,109 @@ ENV = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'
 
 
 class StagedMigrationTests(unittest.TestCase):
+    def pinned_fixture(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name) / 'repo'
+        subprocess.run(['git', 'clone', '--shared', '--quiet', str(S.ROOT), str(root)], check=True,
+                       capture_output=True, timeout=20)
+        subprocess.run(['bash', '.github/scripts/pin-image-tags.sh'], cwd=root, check=True,
+                       capture_output=True, timeout=20, env={k: v for k, v in os.environ.items()
+                                                           if k != 'GITHUB_STEP_SUMMARY'})
+        candidate = Path(temporary.name) / 'candidate'
+        candidate.mkdir()
+        files = {}
+        for name in ('core', 'detach', 'clean', 'config'):
+            path = candidate / (name + ('.yaml' if name == 'config' else '.tar.zst'))
+            path.write_bytes((root / 'bundle/full/uds-config.yaml').read_bytes() if name == 'config'
+                             else ('bound archive ' + name).encode())
+            files[name] = {'path': path.name, 'sha256': S.sha(path)}
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip()
+        (candidate / 'plan.json').write_text(json.dumps({'schema': 1, 'sourceSHA': head, 'files': files}))
+        return root, candidate, {**ENV, 'GITHUB_SHA': head}
+
+    def test_real_pinning_restores_only_reviewed_tasks_after_binding(self):
+        root, candidate, env = self.pinned_fixture()
+        changed = subprocess.check_output(['git', 'diff', '--name-only'], cwd=root).decode().splitlines()
+        self.assertEqual(len(changed), 7)
+        before = {name: (root / name).read_bytes() for name in changed if name != 'tasks.yaml'}
+        bound = {path.name: path.read_bytes() for path in candidate.iterdir()}
+        spec = importlib.util.spec_from_file_location('actual_staged_driver', root / 'tests/velero-ownership/drive.py')
+        driver = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(driver)
+        command = lambda args: subprocess.check_output(args, cwd=root).decode()
+        with self.assertRaisesRegex(ValueError, 'differs from reviewed'):
+            driver.verify_helpers(command)
+        original_read = Path.read_bytes
+        def no_archive_read(path):
+            if path.suffix == '.zst':
+                raise AssertionError('bundle archives must be hashed incrementally')
+            return original_read(path)
+        with patch.object(S, 'ROOT', root), patch.dict(os.environ, env, clear=True), \
+                patch.object(Path, 'read_bytes', no_archive_read):
+            driver.load_plan(candidate / 'plan.json')
+            S.restore_task_default(candidate)
+            driver.verify_helpers(command)
+            S.restore_task_default(candidate)  # Explicit canonical no-op.
+        self.assertEqual(before, {name: (root / name).read_bytes() for name in before})
+        self.assertEqual(bound, {path.name: path.read_bytes() for path in candidate.iterdir()})
+        self.assertEqual(subprocess.check_output(['git', 'diff', '--name-only'], cwd=root).decode().splitlines(),
+                         [name for name in changed if name != 'tasks.yaml'])
+
+    def test_restoration_refuses_unrelated_missing_duplicate_and_symlink_without_writing(self):
+        for failure in ('unrelated', 'missing', 'duplicate', 'symlink', 'helper', 'version', 'pin-helper',
+                        'plan', 'archive', 'config', 'oversized-config', 'oversized-plan'):
+            with self.subTest(failure=failure):
+                root, candidate, env = self.pinned_fixture()
+                task = root / 'tasks.yaml'
+                if failure == 'unrelated':
+                    task.write_bytes(task.read_bytes() + b'\n# unrelated edit\n')
+                elif failure == 'missing':
+                    task.unlink()
+                elif failure == 'duplicate':
+                    task.write_bytes(task.read_bytes() + b'  - name: TAK_IMAGE_TAG\n    default: unexpected\n')
+                elif failure == 'symlink':
+                    real = root / 'tasks-copy'; task.rename(real); task.symlink_to(real)
+                elif failure in ('helper', 'version', 'pin-helper'):
+                    name = {'helper': '.github/container-and-chart/docker/build.sh',
+                            'version': '.github/container-and-chart/docker/version.txt',
+                            'pin-helper': '.github/scripts/pin-image-tags.sh'}[failure]
+                    path = root / name; path.write_bytes(path.read_bytes() + b'\n# unreviewed\n')
+                elif failure == 'plan':
+                    plan = json.loads((candidate / 'plan.json').read_text()); plan['sourceSHA'] = '0' * 40
+                    (candidate / 'plan.json').write_text(json.dumps(plan))
+                elif failure == 'archive':
+                    (candidate / 'core.tar.zst').write_bytes(b'changed archive')
+                else:
+                    plan = json.loads((candidate / 'plan.json').read_text())
+                    if failure == 'oversized-plan':
+                        (candidate / 'plan.json').write_bytes(b' ' * 65537)
+                    else:
+                        path = candidate / 'config.yaml'
+                        if failure == 'oversized-config':
+                            path.write_bytes(b' ' * 65537)
+                        else:
+                            config = yaml.safe_load(path.read_text())
+                            config['variables']['takserver']['UNREVIEWED_OPTION'] = 'same trusted tag remains'
+                            path.write_text(yaml.safe_dump(config))
+                        plan['files']['config']['sha256'] = S.sha(path)
+                        (candidate / 'plan.json').write_text(json.dumps(plan))
+                before = task.read_bytes() if task.exists() else None
+                with patch.object(S, 'ROOT', root), patch.dict(os.environ, env, clear=True), self.assertRaises(ValueError):
+                    S.restore_task_default(candidate)
+                self.assertEqual(task.read_bytes() if task.exists() else None, before)
+                if failure == 'symlink':
+                    self.assertTrue(task.is_symlink())
+
+    def test_restore_call_is_only_after_successful_candidate_binding(self):
+        script = (S.ROOT / '.github/scripts/staged-migrations.sh').read_text()
+        bind = script.index('candidate.py bind --directory')
+        restore = script.index('staged-migrations.py restore-task-default --directory')
+        driver = script.index('drive.py local-baseline')
+        self.assertLess(bind, restore)
+        self.assertLess(restore, driver)
+        self.assertIn('set -euo pipefail', script)
+
     def test_only_explicit_manual_main_selection_is_accepted(self):
         with patch.dict(os.environ, ENV, clear=True):
             self.assertEqual(S.selection(), (['velero'], ['amd64']))

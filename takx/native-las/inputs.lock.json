@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "archives": {
+    "libLAS": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/libLAS-1.8.2-mod.tar.gz",
+      "bytes": 141083708,
+      "sha256": "8decbf40c5e7690a98a48d53c729f7c7670ff472290c2f46a26c7413ed53e641",
+      "expanded_bytes": 697438218,
+      "regular_files": 69534,
+      "members": 76058
+    },
+    "LASzip": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/LASzip-3.4.3-mod.tar.gz",
+      "bytes": 236749,
+      "sha256": "66336908e17bb92739803c80fe627461860cacb017dcff55e476e131981e7b6d",
+      "expanded_bytes": 1468324,
+      "regular_files": 135,
+      "members": 154
+    }
+  },
+  "patches": {
+    "patches/liblas-public-prefix-explicit-boost.patch": {
+      "sha256": "3d16e566a76c9c52a804a71de1fb6e014f2ba3bb01c0bbacfce0de3882c91536",
+      "root": "libLAS",
+      "source": "libLAS/CMakeLists.txt",
+      "before_sha256": "4cf491055795594d4cffc1f96eabc0b7e0268ed39ced8f9d83652932f74608f2",
+      "after_sha256": "06e0ef7b0c97d1ac22aa3cf3010c5919bcd5d02d345695f90e6ebcbaa4c9bf66"
+    },
+    "patches/laszip-init-failure-upstream-backport.patch": {
+      "sha256": "062dd8f137f92c1d26e271b1dd572ddbebba63e0dda9f3ee98dbc14e4f2d35ef",
+      "root": "LASzip",
+      "source": "LASzip/src/lasreadpoint.cpp",
+      "before_sha256": "f664f28ceef20051f9fdd842ce3592881432ff1d151088ec4267b1b925d1e3aa",
+      "after_sha256": "f7ada5b9b0e583853eee87f309baeabc23cd7f65aea1def92f36fc975c21ed43"
+    },
+    "patches/liblas-zip-cursor-state-project.patch": {
+      "sha256": "cde91bb6d5bc409117fd1907cfba5f9d0f39a0038fa545e8c57e7613bd9e882b",
+      "root": "libLAS",
+      "source": "libLAS/src/detail/reader/zipreader.cpp",
+      "before_sha256": "a31d1e64f8b6251acb28704b5c0c7c9e3b2b997003fecc6dd79ead524bd9d6b3",
+      "after_sha256": "5a656f555471fc11588e29dc3d1fa8f8ac25ab24d70a64f2b739f492b83d5844"
+    },
+    "patches/liblas-c-api-seek-error-project.patch": {
+      "sha256": "47bb155e1ec34742b9ca6aee6b4653be0284376dcc0cc32297beb011762f9caf",
+      "root": "libLAS",
+      "source": "libLAS/src/c_api.cpp",
+      "before_sha256": "f9a64f28bc434f5e716d317a92bbafb5ee7a7deadb5f0d2b3f1b1797778b3d98",
+      "after_sha256": "93d0b14ae7f5807778eb25ffe0f3755214c12cc1e58fc8cdd470ed73316652ba"
+    }
+  },
+  "tools": {
+    "gcc": "14.2.0",
+    "cmake": "3.31.6",
+    "ninja": "1.11.1.git.kitware.jobserver-1"
+  },
+  "licenses": {
+    "libLAS": {
+      "source": "libLAS/LICENSE.txt",
+      "sha256": "255ba531725caaed436a919896e69a1bcadefcc98eaa030b64710e33b4ea3f18"
+    },
+    "Boost": {
+      "source": "libLAS/find_package/boost/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566"
+    },
+    "LASzip": {
+      "source": "LASzip/COPYING",
+      "sha256": "dbc8eab1421212bf7b392ea00619f6b8286df50b702d21f6e7382805828a1cef"
+    }
+  },
+  "malformed_fixture_sha256": "6fa16528773413d4d0d37d3b043c8cd0456261e90563a5b9c57e5fcbe813cc22",
+  "laszip_selected_upstream_commit": "a446a0c01362ed1c642928cff30416217f0468c3"
+}

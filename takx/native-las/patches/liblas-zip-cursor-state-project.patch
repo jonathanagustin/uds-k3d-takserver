@@ -1,0 +1,54 @@
+--- a/src/detail/reader/zipreader.cpp
++++ b/src/detail/reader/zipreader.cpp
+@@ -94,11 +94,6 @@
+ void ZipReaderImpl::Reset()
+ {
+     m_ifs.clear();
+-    m_ifs.seekg(0);
+-
+-    // Reset sizes and set internal cursor to the beginning of file.
+-    m_current = 0;
+-    m_size = m_header->GetPointRecordsCount();
+ 
+ 
+     if (!m_zipPoint)
+@@ -130,6 +125,14 @@
+             throw liblas_error(oss.str());
+         }
+     }
++    else if (!m_unzipper->seek(0))
++    {
++        throw liblas_error("Failed to reset LASzip stream");
++    }
++
++    // Publish the reset cursor only after the decoder operation succeeds.
++    m_current = 0;
++    m_size = m_header->GetPointRecordsCount();
+     return;
+ }
+ 
+@@ -223,12 +226,6 @@
+ 
+ void ZipReaderImpl::ReadNextPoint()
+ {
+-    if (0 == m_current)
+-    {
+-        m_ifs.clear();
+-        m_ifs.seekg(m_zipReadStartPosition, std::ios::beg);
+-    }
+-
+     if (m_current >= m_size ){
+         throw std::out_of_range("ReadNextPoint: file has no more points to read, end of file reached");
+     } 
+@@ -294,7 +291,10 @@
+ 
+     m_ifs.clear();
+ 
+-    m_unzipper->seek(n);
++    if (!m_unzipper->seek(n))
++    {
++        throw liblas_error("Failed to seek LASzip stream");
++    }
+ 
+     m_current = n;
+ }

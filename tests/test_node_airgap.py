@@ -19,6 +19,8 @@ import subprocess
 import shutil
 import socket
 import tempfile
+import time
+import sys
 import threading
 import unittest
 from unittest.mock import patch
@@ -31,6 +33,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("node_airgap", ROOT / ".github/scripts/node-airgap.py")
 AIRGAP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AIRGAP)
+
+
+def binding(family="iptables", backend="legacy"):
+    return dict(family=family, backend=backend, path="/bin/xtables-" + backend + "-multi",
+                version="1.8.11", cid="a" * 64)
 
 # Ordinary Test events keep this producer output. A trust-only manual trial
 # may omit the airgap row, but only through the same function.
@@ -84,11 +91,138 @@ def assert_native_plus_one_airgap(test, rows):
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_real_process_generic_flip_does_not_change_bound_mutations_or_restore(self):
+        # This executable is a protocol fixture, not Docker or a firewall.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake = root / "docker"
+            fake.write_text('''#!/usr/bin/env python3
+import json, os, pathlib, sys
+root = pathlib.Path(os.environ["AIRGAP_FIXTURE_ROOT"])
+a = sys.argv[1:]
+with (root / "calls").open("a") as stream: stream.write(json.dumps(a) + "\\n")
+c = a[6:]  # exec CID timeout -s KILL 3 COMMAND...
+if c[0] == "which":
+    if c[1].startswith("xtables-"): sys.exit(1)  # aux is deliberately absent from PATH
+    print("/bin/" + c[1])
+elif c[0] == "readlink": print("/bin/aux/xtables-legacy-multi")
+elif c[0] == "test": pass
+elif "--version" in c:
+    family = c[1] if c[0].startswith("/") else c[0]
+    mode = "legacy" if c[0].startswith("/") or not (root / "flipped").exists() else "nf_tables"
+    print(f"{family} v1.8.11 ({mode})")
+else:
+    if "-N" in c: (root / "flipped").touch()
+    if "-C" in c: sys.exit(1)
+''')
+            fake.chmod(0o755)
+            with patch.dict(os.environ, {"PATH": str(root) + os.pathsep + os.environ["PATH"],
+                                         "AIRGAP_FIXTURE_ROOT": str(root)}):
+                selected = AIRGAP.select_backend("a" * 64, "iptables")
+                with patch.object(AIRGAP, "require_binding_node"):
+                    AIRGAP.block_node("node", selected, ["10.42.0.0/16"])
+                    AIRGAP.restore_node("node", json.loads(json.dumps(selected)))
+                generic = AIRGAP.bounded_exec("a" * 64, ["iptables", "--version"], AIRGAP.time.monotonic() + 5)
+            self.assertIn("nf_tables", generic.stdout)
+            calls = [json.loads(line) for line in (root / "calls").read_text().splitlines()]
+            mutations = [a for a in calls if any(flag in a for flag in ("-N", "-A", "-I", "-F", "-X"))]
+            self.assertGreater(len(mutations), 6)
+            for args in mutations:
+                self.assertEqual(args[:2], ["exec", "a" * 64])
+                self.assertEqual(args[6:8], ["/bin/aux/xtables-legacy-multi", "iptables"])
+            self.assertTrue(any("127.0.0.11/32" in a for a in mutations))
+            self.assertFalse(any(a[6:8] == ["which", "xtables-legacy-multi"] for a in calls))
+
+    def test_source_packaged_aux_and_extracted_data_paths_are_supported(self):
+        for path in ("/bin/aux/xtables-legacy-multi", "/var/lib/rancher/k3s/data/" + "a" * 64 +
+                     "/bin/aux/xtables-legacy-multi"):
+            self.assertEqual(AIRGAP.validate_binding(dict(binding(), path=path))["path"], path)
+
+    def test_unknown_mismatched_backend_and_unsafe_paths_fail_before_mutation(self):
+        good = subprocess.CompletedProcess([], 0, "iptables v1.8.11 (legacy)\n", "")
+        for output in ("iptables v1.8.11 (unknown)\n", "ip6tables v1.8.11 (legacy)\n", "secret"):
+            with patch.object(AIRGAP, "bounded_exec", return_value=subprocess.CompletedProcess([], 0, output, "")) as command:
+                with self.assertRaises(RuntimeError):
+                    AIRGAP.select_backend("a" * 64, "iptables")
+                self.assertEqual(command.call_count, 1)
+        for path in ("/tmp/xtables-legacy-multi", "/bin/../bin/xtables-legacy-multi", "/bin/iptables"):
+            values = [good, subprocess.CompletedProcess([], 0, "/bin/xtables-legacy-multi\n", ""),
+                      subprocess.CompletedProcess([], 0, path + "\n", "")]
+            with patch.object(AIRGAP, "bounded_exec", side_effect=values):
+                with self.assertRaises(RuntimeError):
+                    AIRGAP.select_backend("a" * 64, "iptables")
+        values = [good, subprocess.CompletedProcess([], 0, "/bin/xtables-legacy-multi\n", "")] * 1
+        values += [subprocess.CompletedProcess([], 0, "/bin/xtables-legacy-multi\n", "")]
+        values += [subprocess.CompletedProcess([], 0, "", "")] * 2
+        values += [subprocess.CompletedProcess([], 0, "iptables v1.8.11 (nf_tables)\n", "")]
+        with patch.object(AIRGAP, "bounded_exec", side_effect=values):
+            with self.assertRaisesRegex(RuntimeError, "mismatch"):
+                AIRGAP.select_backend("a" * 64, "iptables")
+
+    def test_known_wrapper_falls_back_only_to_same_validated_fixed_backend(self):
+        def completed(text="", code=0):
+            return subprocess.CompletedProcess([], code, text, "")
+        values = [completed("ip6tables v1.8.11 (nf_tables)\n"), completed("/bin/aux/ip6tables\n"),
+                  completed("/bin/aux/iptables-detect.sh\n"), completed("/bin/aux/xtables-nft-multi\n"),
+                  completed("/bin/aux/xtables-nft-multi\n"), completed(), completed(),
+                  completed("ip6tables v1.8.11 (nf_tables)\n")]
+        with patch.object(AIRGAP, "bounded_exec", side_effect=values) as command:
+            selected = AIRGAP.select_backend("a" * 64, "ip6tables")
+        self.assertEqual(selected, dict(binding("ip6tables", "nft"), path="/bin/aux/xtables-nft-multi"))
+        self.assertIn(["which", "xtables-nft-multi"], [call.args[1] for call in command.call_args_list])
+        self.assertFalse(any("legacy" in str(call.args[1]) for call in command.call_args_list))
+
+    def test_legacy_state_and_replaced_container_fail_closed(self):
+        with self.assertRaisesRegex(RuntimeError, "legacy state"):
+            AIRGAP.validate_nodes([dict(name="node", tools=["iptables"], networks={})])
+        with patch.object(AIRGAP, "container_id", return_value="b" * 64), \
+                patch.object(AIRGAP, "firewall") as command:
+            with self.assertRaisesRegex(RuntimeError, "replaced"):
+                AIRGAP.restore_node("node", binding())
+            command.assert_not_called()
+
+    def test_diagnostic_is_one_bounded_bundle_without_rules_or_raw_version(self):
+        good = subprocess.CompletedProcess([], 0, "iptables v1.8.11 (legacy)\n", "")
+        values = [good, good, subprocess.CompletedProcess([], 1, "PRIVATE_RULE_PAYLOAD", "PRIVATE_ERROR"),
+                  subprocess.CompletedProcess([], 1, "PRIVATE_PATH", "PRIVATE_ERROR")]
+        output = io.StringIO()
+        with patch.object(AIRGAP, "DIAGNOSED", set()), \
+                patch.object(AIRGAP, "bounded_command", return_value=subprocess.CompletedProcess([], 0, "a" * 64 + "\n", "")), \
+                patch.object(AIRGAP, "bounded_exec", side_effect=values) as command, contextlib.redirect_stderr(output):
+            AIRGAP.backend_diagnostic("node", binding())
+            AIRGAP.backend_diagnostic("node", binding())
+        self.assertEqual(command.call_count, 4)
+        self.assertIn('"selected_chain_status": 1', output.getvalue())
+        self.assertIn('"same_container": true', output.getvalue())
+        self.assertNotIn("PRIVATE", output.getvalue())
+
+    def test_bounded_command_caps_complete_stream_and_kills_ignoring_descendant(self):
+        with self.assertRaisesRegex(RuntimeError, "output exceeded"):
+            AIRGAP.bounded_command([sys.executable, "-c", "print('x' * 70000)"], time.monotonic() + 3)
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile = Path(directory) / "child"
+            child = "import os,signal,time,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(" + repr(str(pidfile)) + ").write_text(str(os.getpid())); time.sleep(60)"
+            parent = "import subprocess,time,sys; subprocess.Popen([sys.executable,'-c'," + repr(child) + "]); time.sleep(60)"
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                AIRGAP.bounded_command([sys.executable, "-c", parent], time.monotonic() + 0.5)
+            self.assertTrue(pidfile.exists())
+            stat = Path('/proc') / pidfile.read_text() / 'stat'
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                try:
+                    if stat.read_text().split(') ', 1)[1].split()[0] == 'Z':
+                        break
+                except (FileNotFoundError, ProcessLookupError):
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail("owned descendant survived timeout")
+
     def test_drop_denial_preserves_docker_dns_and_internal_rule_order(self):
-        with patch.object(AIRGAP, 'require_private_network') as private, \
+        with patch.object(AIRGAP, 'require_binding_node') as private, \
                 patch.object(AIRGAP, 'firewall') as command:
-            AIRGAP.block_node('k3d-node', 'iptables', ['172.18.0.0/16', '10.42.0.0/16'])
-        private.assert_called_once_with('k3d-node')
+            AIRGAP.block_node('k3d-node', binding(), ['172.18.0.0/16', '10.42.0.0/16'])
+        private.assert_called_once_with('k3d-node', binding())
         self.assertEqual([call.args[2:] for call in command.call_args_list], [
             ('-N', AIRGAP.CHAIN),
             ('-A', AIRGAP.CHAIN, '-d', '127.0.0.11/32', '-j', 'DROP'),
@@ -98,8 +232,8 @@ class AirgapContracts(unittest.TestCase):
             ('-A', AIRGAP.CHAIN, '-j', 'DROP'),
             ('-I', 'OUTPUT', '1', '-j', AIRGAP.CHAIN),
             ('-I', 'FORWARD', '1', '-j', AIRGAP.CHAIN)])
-        with patch.object(AIRGAP, 'require_private_network'), patch.object(AIRGAP, 'firewall') as command:
-            AIRGAP.block_node('k3d-node', 'ip6tables', ['fe80::/10'])
+        with patch.object(AIRGAP, 'require_binding_node'), patch.object(AIRGAP, 'firewall') as command:
+            AIRGAP.block_node('k3d-node', binding('ip6tables'), ['fe80::/10'])
         self.assertEqual(command.call_args_list[1].args[2:],
                          ('-A', AIRGAP.CHAIN, '-o', 'lo', '-j', 'RETURN'))
         self.assertIn(('-A', AIRGAP.CHAIN, '-j', 'DROP'),
@@ -112,9 +246,9 @@ class AirgapContracts(unittest.TestCase):
                       subprocess.TimeoutExpired(['docker', 'exec'], 30, stderr=stderr.encode())):
             output = io.StringIO()
             with self.subTest(error=type(error).__name__), \
-                    patch.object(AIRGAP, 'docker', side_effect=error), contextlib.redirect_stderr(output):
-                with self.assertRaises(type(error)):
-                    AIRGAP.firewall('k3d-node', 'iptables', '-A', AIRGAP.CHAIN, '-j', 'DROP')
+                    patch.object(AIRGAP, 'bounded_exec', side_effect=error), patch.object(AIRGAP, 'backend_diagnostic'), contextlib.redirect_stderr(output):
+                with self.assertRaisesRegex(RuntimeError, "node firewall command failed"):
+                    AIRGAP.firewall('k3d-node', binding(), '-A', AIRGAP.CHAIN, '-j', 'DROP')
             self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
             self.assertNotIn('DO_NOT_EMIT', output.getvalue())
             self.assertIn('[REDACTED]', output.getvalue())
@@ -298,25 +432,60 @@ class AirgapContracts(unittest.TestCase):
 
     def test_host_and_shared_namespaces_are_refused_before_any_firewall_command(self):
         for mode in ("host", "container:other-container", "", None):
-            for operation in (lambda: AIRGAP.block_node("tagged-node", "iptables", []),
-                              lambda: AIRGAP.restore_node("tagged-node", "iptables")):
-                with self.subTest(mode=mode), patch.object(AIRGAP, "docker") as command:
+            for operation in (lambda: AIRGAP.block_node("tagged-node", binding(), []),
+                              lambda: AIRGAP.restore_node("tagged-node", binding())):
+                with self.subTest(mode=mode), patch.object(AIRGAP, "container_id", return_value="a" * 64), patch.object(AIRGAP, "docker") as command:
                     command.return_value = subprocess.CompletedProcess([], 0, json.dumps(mode), "")
                     with self.assertRaisesRegex(RuntimeError, "host/shared"):
                         operation()
                     self.assertEqual(command.call_count, 1)
                     self.assertEqual(command.call_args.args,
-                                     ("inspect", "--format", "{{json .HostConfig.NetworkMode}}", "tagged-node"))
+                                     ("inspect", "--format", "{{json .HostConfig.NetworkMode}}", "a" * 64))
+
+    def test_restore_backend_failure_keeps_state_and_never_reports_success(self):
+        for failed_check in ("chain", "jump"):
+            def result(_node, _tool, *args, check=True):
+                missing = (args[:2] == ("-L", AIRGAP.CHAIN) and failed_check == "chain") or "-C" in args
+                backend_failure = args[:2] == ("-L", "FORWARD")
+                completed = subprocess.CompletedProcess([], 1 if missing or backend_failure else 0, "", "")
+                if check:
+                    completed.check_returncode()
+                return completed
+            with self.subTest(failed_check=failed_check), tempfile.TemporaryDirectory() as directory:
+                state = Path(directory) / "state.json"
+                state.write_text("retained original state")
+                nodes = [dict(name="node", tools=[binding()], networks={})]
+                output = io.StringIO()
+                with patch.object(AIRGAP, "read_state", return_value=nodes), \
+                        patch.object(AIRGAP, "require_binding_node"), \
+                        patch.object(AIRGAP, "firewall", side_effect=result) as command, \
+                        patch("sys.argv", ["node-airgap.py", "restore", "--state", str(state)]), \
+                        contextlib.redirect_stdout(output):
+                    with self.assertRaises(RuntimeError):
+                        AIRGAP.main()
+                self.assertEqual(state.read_text(), "retained original state")
+                self.assertNotIn("Restored", output.getvalue())
+                self.assertFalse(any(flag in call.args for call in command.call_args_list for flag in ("-D", "-F", "-X")))
+
+    def test_genuine_absent_chain_is_idempotent_after_base_filter_proof(self):
+        def result(_node, _tool, *args, **_kwargs):
+            return subprocess.CompletedProcess([], 1 if args[1] == AIRGAP.CHAIN else 0, "", "")
+        with patch.object(AIRGAP, "require_binding_node"), \
+                patch.object(AIRGAP, "firewall", side_effect=result) as command:
+            AIRGAP.restore_node("node", binding())
+        self.assertEqual([call.args[2:] for call in command.call_args_list], [
+            ("-L", AIRGAP.CHAIN, "-n"), ("-L", "OUTPUT", "-n"), ("-L", "FORWARD", "-n")])
 
     def test_restore_does_not_request_dns_lookups_for_either_family(self):
         for tool in ("iptables", "ip6tables"):
             def result(_node, _tool, *args, **_kwargs):
                 return subprocess.CompletedProcess([], 1 if "-C" in args else 0, "", "")
-            with self.subTest(tool=tool), patch.object(AIRGAP, "require_private_network"), \
+            with self.subTest(tool=tool), patch.object(AIRGAP, "require_binding_node"), \
                     patch.object(AIRGAP, "firewall", side_effect=result) as command:
-                AIRGAP.restore_node("node", tool)
+                AIRGAP.restore_node("node", binding(tool))
                 listings = [call.args for call in command.call_args_list if "-L" in call.args]
-                self.assertEqual(listings, [("node", tool, "-L", AIRGAP.CHAIN, "-n")])
+                self.assertEqual(listings, [("node", binding(tool), "-L", chain, "-n")
+                                            for chain in (AIRGAP.CHAIN, "OUTPUT", "FORWARD", "OUTPUT", "FORWARD")])
 
     def test_ci_always_restores_and_offline_ui_keeps_the_core_flow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/test.yaml").read_text())
@@ -386,19 +555,20 @@ class AirgapCleanupIntegration(unittest.TestCase):
             # All mutations are inside this disposable private network namespace.
             AIRGAP.docker("exec", name, "sh", "-c",
                           'printf "nameserver 127.0.0.1\\noptions timeout:1 attempts:1\\n" > /etc/resolv.conf')
-            AIRGAP.firewall(name, "iptables", "-N", AIRGAP.CHAIN)
+            selected = AIRGAP.select_backend(AIRGAP.container_id(name), "iptables")
+            AIRGAP.firewall(name, selected, "-N", AIRGAP.CHAIN)
             for address in ("10.43.0.1", "10.43.0.2", "10.43.0.3", "10.43.0.4"):
-                AIRGAP.firewall(name, "iptables", "-A", AIRGAP.CHAIN, "-d", address, "-j", "RETURN")
+                AIRGAP.firewall(name, selected, "-A", AIRGAP.CHAIN, "-d", address, "-j", "RETURN")
             # Bound the old behavior inside the container so its process is
             # terminated too; no hanging child remains after the comparison.
             old = AIRGAP.docker("exec", name, "timeout", "-s", "KILL", "2", "iptables", "-w", "5",
                                 "-L", AIRGAP.CHAIN, check=False)
             self.assertEqual(old.returncode, 137, old.stderr)
-            numeric = AIRGAP.firewall(name, "iptables", "-L", AIRGAP.CHAIN, "-n")
+            numeric = AIRGAP.firewall(name, selected, "-L", AIRGAP.CHAIN, "-n")
             self.assertIn("10.43.0.1", numeric.stdout)
-            AIRGAP.restore_node(name, "iptables")
-            self.assertEqual(AIRGAP.firewall(name, "iptables", "-L", AIRGAP.CHAIN, "-n", check=False).returncode, 1)
-            AIRGAP.restore_node(name, "iptables")
+            AIRGAP.restore_node(name, selected)
+            self.assertEqual(AIRGAP.firewall(name, selected, "-L", AIRGAP.CHAIN, "-n", check=False).returncode, 1)
+            AIRGAP.restore_node(name, selected)
         finally:
             AIRGAP.docker("rm", "-f", name, check=False)
 
@@ -465,6 +635,7 @@ class AirgapNetworkIntegration(unittest.TestCase):
         names = []
         networks = []
         node = tag + "-node"
+        selected = None
         try:
             details = []
             for index, suffix in enumerate(("allowed", "denied"), 1):
@@ -497,10 +668,11 @@ class AirgapNetworkIntegration(unittest.TestCase):
                 result = gets(address)
                 self.assertEqual(result.returncode, 0, result.stderr)
             allowed = [details[0], "fe80::/10", "ff02::/16"] if ipv6 else [details[0]]
-            AIRGAP.block_node(node, tool, allowed)
+            selected = AIRGAP.select_backend(AIRGAP.container_id(node), tool)
+            AIRGAP.block_node(node, selected, allowed)
             self.assertEqual(gets(addresses[0]).returncode, 0)
             self.assertNotEqual(gets(addresses[1]).returncode, 0)
-            counters = AIRGAP.firewall(node, tool, "-L", AIRGAP.CHAIN, "-n", "-v", "-x").stdout
+            counters = AIRGAP.firewall(node, selected, "-L", AIRGAP.CHAIN, "-n", "-v", "-x").stdout
             dropped = [line.split() for line in counters.splitlines() if "DROP" in line]
             self.assertTrue(any(int(fields[0]) > 0 for fields in dropped))
             # A host-side connection to the same denied peer still succeeds.
@@ -510,14 +682,14 @@ class AirgapNetworkIntegration(unittest.TestCase):
             port = peer["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
             host = build_opener(ProxyHandler({}))
             self.assertEqual(host.open(f"http://127.0.0.1:{port}", timeout=3).read().strip(), b"reachable")
-            AIRGAP.restore_node(node, tool)
+            AIRGAP.restore_node(node, selected)
             self.assertEqual(gets(addresses[1]).returncode, 0)
             # Cleanup is idempotent and never flushes another chain.
-            AIRGAP.restore_node(node, tool)
+            AIRGAP.restore_node(node, selected)
         finally:
-            if node in names:
+            if node in names and selected is not None:
                 try:
-                    AIRGAP.restore_node(node, tool)
+                    AIRGAP.restore_node(node, selected)
                 except subprocess.SubprocessError:
                     pass
             for name in reversed(names):

@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 # Keep only the latest validation for each pull request or branch.
 concurrency:
@@ -48,3 +47,6 @@ jobs:
       - name: Dependency review
         if: steps.feature.outputs.enabled == 'true'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # Findings go to the check summary; this job cannot modify PR comments.
+          comment-summary-in-pr: never

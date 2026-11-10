@@ -3,6 +3,8 @@
 """Offline guard fixtures; no Docker, Kubernetes, or cluster mutation is run."""
 
 import copy
+import contextlib
+import io
 import importlib.util
 import json
 import os
@@ -48,6 +50,9 @@ class Fixture:
                 self.assert_safe_format(argv[-1])
                 return json.dumps(self.nodes[argv[2]])
             if argv[1] == 'exec':
+                if argv != ['docker', 'exec', GUARD.NODE, 'kubectl', 'get', 'namespace',
+                            'kube-system', '-o', 'jsonpath={.metadata.uid}']:
+                    raise AssertionError('expected the checkpoint-supported direct node kubectl read')
                 return self.local_uid
         if 'config' in argv and 'view' in argv:
             return self.server
@@ -71,6 +76,70 @@ class Fixture:
 
 
 class EphemeralClusterTests(unittest.TestCase):
+    def test_node_uid_command_success_is_unchanged_and_silent(self):
+        result = subprocess.CompletedProcess(GUARD.NODE_UID_COMMAND, 0, (UID + '\n').encode(), b'')
+        output = io.StringIO()
+        with patch.object(GUARD.subprocess, 'run', return_value=result) as run, contextlib.redirect_stderr(output):
+            self.assertEqual(GUARD.command(GUARD.NODE_UID_COMMAND), UID + '\n')
+        self.assertEqual(output.getvalue(), '')
+        self.assertEqual(run.call_args.kwargs['timeout'], 45)
+
+    def test_node_uid_failure_is_bounded_whole_stream_sanitized_and_fail_closed(self):
+        cases = [
+            (b'No help topic for kubectl\npassword=fixture-secret', 'kubectl-unavailable'),
+            (b'first\nAuthorization: Bearer fixture-secret\ncontinuation', 'stderr-credential-bearing'),
+            (b'{"auths": {"registry.example": "fixture-secret"}}', 'stderr-credential-bearing'),
+            (b'https://example.test/?sig=fixture-secret', 'stderr-credential-bearing'),
+            (b'open /etc/rancher/k3s/k3s.yaml: permission denied', 'kubeconfig-unavailable'),
+            (b'x509: certificate has expired', 'tls-error'),
+            (b'You must be logged in to the server (Unauthorized)', 'api-authentication-error'),
+            (b'Unable to connect to the server: connection refused', 'api-connection-error'),
+            (b'unstructured fixture-secret', 'unclassified'),
+            (b'-----BEGIN PRIVATE KEY-----\nfixture-secret\n-----END PRIVATE KEY-----', 'unclassified'),
+            (b'x' * 1020 + b'\npassword=fixture-secret', 'unclassified'),
+            (b'x' * 65537 + b'fixture-secret', 'stderr-unavailable-or-oversized'),
+            (b'fixture-secret\x00', 'stderr-unsanitizable'),
+            (b'fixture-secret\xff', 'stderr-unsanitizable'),
+        ]
+        for raw, expected in cases:
+            output = io.StringIO()
+            result = subprocess.CompletedProcess(GUARD.NODE_UID_COMMAND, 1, b'not-a-uid', raw)
+            with patch.object(GUARD.subprocess, 'run', return_value=result), contextlib.redirect_stderr(output):
+                with self.assertRaisesRegex(ValueError, 'identity command failed'):
+                    GUARD.command(GUARD.NODE_UID_COMMAND)
+            evidence = json.loads(output.getvalue())
+            self.assertEqual(evidence['stage'], 'node-namespace-uid')
+            self.assertEqual(evidence['exit'], 1)
+            self.assertEqual(evidence['stderr_bytes'], len(raw))
+            self.assertLess(len(output.getvalue()), 250)
+            self.assertEqual(expected, evidence['classification'])
+            self.assertNotIn('fixture-secret', output.getvalue())
+            self.assertNotIn('not-a-uid', output.getvalue())
+
+    def test_node_uid_timeout_is_sanitized_and_other_commands_never_publish(self):
+        output = io.StringIO()
+        error = subprocess.TimeoutExpired(GUARD.NODE_UID_COMMAND, 45, stderr=b'password=fixture-secret')
+        with patch.object(GUARD.subprocess, 'run', side_effect=error), contextlib.redirect_stderr(output):
+            with self.assertRaisesRegex(ValueError, 'timed out'):
+                GUARD.command(GUARD.NODE_UID_COMMAND)
+        self.assertEqual(json.loads(output.getvalue())['exit'], 'timeout')
+        self.assertNotIn('fixture-secret', output.getvalue())
+        output = io.StringIO()
+        with patch.object(GUARD.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, b'', b'fixture-secret')), contextlib.redirect_stderr(output):
+            with self.assertRaises(ValueError):
+                GUARD.command(['kubectl', 'get', 'secret'])
+        self.assertEqual(output.getvalue(), '')
+
+    def test_failed_node_uid_read_never_creates_a_marker(self):
+        fixture = Fixture()
+        def command(argv, input_text=None):
+            if argv == GUARD.NODE_UID_COMMAND:
+                raise ValueError('ephemeral cluster identity command failed')
+            return fixture.command(argv, input_text)
+        with patch.dict('os.environ', ENV, clear=True), self.assertRaises(ValueError):
+            GUARD.mark(GUARD.CONTEXT, command)
+        self.assertEqual(fixture.writes, [])
+
     def test_bootstrap_refuses_existing_or_stopped_cluster_and_context(self):
         for nodes, context, accepted in [('k3d-uds-server-0', '', False), ('', 'k3d-uds', False), ('', '', True)]:
             calls = []

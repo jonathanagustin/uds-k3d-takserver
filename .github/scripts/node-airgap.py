@@ -14,6 +14,9 @@ import importlib.util
 import json
 import os
 import re
+import selectors
+import signal
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -58,14 +61,184 @@ def firewall_error_detail(stderr):
         return 'omitted: unsanitizable firewall stderr'
 
 
-def firewall(node, tool, *args, check=True):
-    try:
-        return docker("exec", node, tool, "-w", "5", *args, check=check)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        print('Node firewall command failed; sanitized stderr: ' +
-              firewall_error_detail(error.stderr), file=sys.stderr)
-        raise
+# Fixed backend invocation bypasses the mutable generic links installed by K3s.
+# Upstream reference (not an assertion about any failed checkpoint filesystem):
+# k3s-io/k3s-root@1031ce26d1a575a7e073685c3f3341c20da27efc/iptables-detect/
+VERSION = re.compile(r"(ip6tables|iptables) v([0-9]{1,4}(?:\.[0-9]{1,4}){1,3}) \((legacy|nf_tables)\)\n?")
+CID = re.compile(r"[0-9a-f]{64}")
+DIAGNOSED = set()
 
+
+def bounded_command(args, deadline):
+    """Own the local client group; bound complete output and remote execution."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("airgap diagnostic deadline exhausted")
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=True)
+    streams = {process.stdout: bytearray(), process.stderr: bytearray()}
+    selector = selectors.DefaultSelector()
+    try:
+        for stream in streams:
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ)
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("airgap bounded command timed out")
+            for key, _ in selector.select(min(remaining, 0.1)):
+                chunk = os.read(key.fileobj.fileno(), 4096)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                else:
+                    streams[key.fileobj].extend(chunk)
+                    if sum(map(len, streams.values())) > 65536:
+                        raise RuntimeError("airgap bounded command output exceeded limit")
+        process.wait(timeout=max(0.001, deadline - time.monotonic()))
+        return subprocess.CompletedProcess(args, process.returncode,
+            streams[process.stdout].decode('utf-8', errors='strict'),
+            streams[process.stderr].decode('utf-8', errors='strict'))
+    finally:
+        # Includes descendants retaining pipes after the client exits.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        selector.close()
+        process.stdout.close()
+        process.stderr.close()
+
+
+def bounded_exec(cid, args, deadline):
+    # The remote timeout owns the command inside the node; killing docker alone
+    # does not terminate a command already started by docker exec.
+    return bounded_command(["docker", "exec", cid, "timeout", "-s", "KILL", "3", *args], deadline)
+
+
+def parse_version(result, family):
+    match = VERSION.fullmatch(result.stdout)
+    if result.returncode != 0 or not match or match[1] != family:
+        raise RuntimeError("unsupported or unavailable iptables version")
+    return match[2], "nft" if match[3] == "nf_tables" else "legacy"
+
+
+def validate_binding(binding):
+    if not isinstance(binding, dict) or set(binding) != {"family", "backend", "path", "version", "cid"}:
+        raise RuntimeError("unsupported airgap backend state; legacy state requires manual review")
+    family, backend, path = binding["family"], binding["backend"], binding["path"]
+    if (family not in ("iptables", "ip6tables") or backend not in ("legacy", "nft") or
+            not isinstance(path, str) or
+            not re.fullmatch(r"/(?:usr/)?s?bin/(?:aux/)?xtables-" + backend + r"-multi|" +
+                             r"/var/lib/rancher/k3s/data/[0-9a-f]+/bin/(?:aux/)?xtables-" + backend + r"-multi", path) or
+            any(part in (".", "..") for part in path.split("/")) or
+            not isinstance(binding["cid"], str) or not CID.fullmatch(binding["cid"]) or
+            not isinstance(binding["version"], str) or
+            not re.fullmatch(r"[0-9]{1,4}(?:\.[0-9]{1,4}){1,3}", binding["version"])):
+        raise RuntimeError("invalid airgap backend state")
+    return binding
+
+
+def container_id(node):
+    value = docker("inspect", "--format", "{{.Id}}", node).stdout.strip()
+    if not CID.fullmatch(value):
+        raise RuntimeError("unavailable node container identity")
+    return value
+
+
+def select_backend(cid, family):
+    if not isinstance(cid, str) or not CID.fullmatch(cid) or family not in ("iptables", "ip6tables"):
+        raise RuntimeError("invalid backend selection identity")
+    deadline = time.monotonic() + 15
+    version, backend = parse_version(bounded_exec(cid, [family, "--version"], deadline), family)
+    candidate = "xtables-" + backend + "-multi"
+    # The generic link may expose bin/aux even when that directory is not on
+    # Docker exec PATH. Resolve it after version selection, never for rules.
+    found = bounded_exec(cid, ["which", family], deadline)
+    if found.returncode != 0 or not found.stdout.startswith("/") or len(found.stdout) > 1024:
+        raise RuntimeError("fixed iptables backend unavailable")
+    resolved = bounded_exec(cid, ["readlink", "-f", found.stdout.strip()], deadline)
+    if resolved.returncode != 0:
+        raise RuntimeError("fixed iptables backend unresolved")
+    path = resolved.stdout.strip()
+    if Path(path).name == "iptables-detect.sh":
+        # Some wrappers remain scripts after --version. Only a known packaged
+        # wrapper directory may trigger a same-backend fixed-name lookup.
+        validate_binding(dict(family=family, backend=backend,
+                              path=str(Path(path).with_name(candidate)), version=version, cid=cid))
+        found = bounded_exec(cid, ["which", candidate], deadline)
+        if found.returncode != 0 or not found.stdout.startswith("/") or len(found.stdout) > 1024:
+            raise RuntimeError("fixed iptables backend unavailable")
+        resolved = bounded_exec(cid, ["readlink", "-f", found.stdout.strip()], deadline)
+        if resolved.returncode != 0:
+            raise RuntimeError("fixed iptables backend unresolved")
+        path = resolved.stdout.strip()
+    binding = validate_binding(dict(family=family, backend=backend, path=path,
+                                    version=version, cid=cid))
+    for flag in ("-f", "-x"):
+        if bounded_exec(cid, ["test", flag, binding["path"]], deadline).returncode != 0:
+            raise RuntimeError("fixed iptables backend is not an executable regular file")
+    # Also verifies this multicall binary supports the explicit family applet.
+    if parse_version(bounded_exec(cid, [binding["path"], family, "--version"], deadline), family) != (version, backend):
+        raise RuntimeError("fixed iptables backend version mismatch")
+    return binding
+
+
+def backend_diagnostic(node, binding):
+    """One bounded bundle; never publish rule output or raw inspect."""
+    key = (binding["cid"], binding["family"])
+    if key in DIAGNOSED:
+        return
+    DIAGNOSED.add(key)
+    deadline = time.monotonic() + 10
+    report = {"family": binding["family"], "backend": binding["backend"], "cid": binding["cid"]}
+    try:
+        result = bounded_command(["docker", "inspect", "--format", "{{.Id}}", node], deadline)
+        report["same_container"] = result.returncode == 0 and result.stdout.strip() == binding["cid"]
+        for label, command in (("generic", [binding["family"]]),
+                               ("selected", [binding["path"], binding["family"]])):
+            try:
+                report[label + "_version"] = parse_version(
+                    bounded_exec(binding["cid"], [*command, "--version"], deadline), binding["family"])
+            except RuntimeError:
+                report[label + "_version"] = "unavailable"
+        # Never publish chain contents; other backend availability is not assumed.
+        result = bounded_exec(binding["cid"], [binding["path"], binding["family"],
+                              "-w", "1", "-L", CHAIN, "-n"], deadline)
+        report["selected_chain_status"] = result.returncode
+        other = "nft" if binding["backend"] == "legacy" else "legacy"
+        found = bounded_exec(binding["cid"], ["which", "xtables-" + other + "-multi"], deadline)
+        report["other_chain_status"] = "unavailable"
+        if found.returncode == 0 and found.stdout.startswith("/") and len(found.stdout) <= 1024:
+            resolved = bounded_exec(binding["cid"], ["readlink", "-f", found.stdout.strip()], deadline)
+            if resolved.returncode == 0:
+                candidate = dict(binding, backend=other, path=resolved.stdout.strip())
+                validate_binding(candidate)
+                version, backend = parse_version(bounded_exec(binding["cid"],
+                    [candidate["path"], binding["family"], "--version"], deadline), binding["family"])
+                if backend == other:
+                    report["other_version"] = (version, backend)
+                    result = bounded_exec(binding["cid"], [candidate["path"], binding["family"],
+                                          "-w", "1", "-L", CHAIN, "-n"], deadline)
+                    report["other_chain_status"] = result.returncode
+    except (OSError, UnicodeError, RuntimeError, subprocess.SubprocessError):
+        report["remaining"] = "unavailable"
+    print("Airgap backend diagnostic: " + json.dumps(report, sort_keys=True), file=sys.stderr)
+
+
+def firewall(node, tool, *args, check=True):
+    binding = validate_binding(tool)
+    try:
+        result = bounded_exec(binding["cid"], [binding["path"], binding["family"], "-w", "1", *args],
+                              time.monotonic() + 5)
+        if check:
+            result.check_returncode()
+        return result
+    except (subprocess.SubprocessError, RuntimeError, OSError, UnicodeError) as error:
+        print('Node firewall command failed; sanitized stderr: ' +
+              firewall_error_detail(getattr(error, 'stderr', None)), file=sys.stderr)
+        backend_diagnostic(node, binding)
+        raise RuntimeError("node firewall command failed") from None
 
 
 def require_private_network(node):
@@ -77,29 +250,88 @@ def require_private_network(node):
         raise RuntimeError(f"{node}: refusing firewall changes in host/shared network mode")
 
 
+def require_binding_node(node, binding):
+    validate_binding(binding)
+    if container_id(node) != binding["cid"]:
+        raise RuntimeError("refusing airgap operation on replaced node container")
+    require_private_network(binding["cid"])
+    deadline = time.monotonic() + 15
+    resolved = bounded_exec(binding["cid"], ["readlink", "-f", binding["path"]], deadline)
+    if resolved.returncode != 0 or resolved.stdout.strip() != binding["path"]:
+        raise RuntimeError("fixed airgap executable identity changed")
+    for flag in ("-f", "-x"):
+        if bounded_exec(binding["cid"], ["test", flag, binding["path"]], deadline).returncode != 0:
+            raise RuntimeError("fixed airgap executable unavailable")
+    if parse_version(bounded_exec(binding["cid"], [binding["path"], binding["family"], "--version"], deadline),
+                     binding["family"]) != (binding["version"], binding["backend"]):
+        raise RuntimeError("fixed airgap executable version changed")
+
+
+def validate_nodes(nodes):
+    if not isinstance(nodes, list) or not 0 < len(nodes) <= 32:
+        raise RuntimeError("unsupported airgap state")
+    for node in nodes:
+        if (not isinstance(node, dict) or set(node) != {"name", "tools", "networks"} or
+                not isinstance(node["tools"], list) or not 0 < len(node["tools"]) <= 2 or
+                not isinstance(node["name"], str) or
+                not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", node["name"])):
+            raise RuntimeError("unsupported airgap node state")
+        families, cids = set(), set()
+        for binding in node["tools"]:
+            validate_binding(binding)
+            families.add(binding["family"])
+            cids.add(binding["cid"])
+        if len(families) != len(node["tools"]) or "iptables" not in families or len(cids) != 1:
+            raise RuntimeError("ambiguous airgap family/container state")
+        for binding in node["tools"]:
+            require_binding_node(node["name"], binding)
+    return nodes
+
+
+def read_state(path):
+    if path.stat().st_size > 65536:
+        raise RuntimeError("oversized airgap state")
+    return validate_nodes(json.loads(path.read_text()))
+
+
+def require_base_filter(node, tool):
+    # Exit 1 from a chain lookup or jump check can also mean backend failure.
+    # Prove both base filter chains readable before treating it as absence.
+    for parent in ("OUTPUT", "FORWARD"):
+        firewall(node, tool, "-L", parent, "-n")
+
+
 def restore_node(node, tool):
-    require_private_network(node)
+    require_binding_node(node, tool)
     # DNS is intentionally unavailable while guarded. Listing without -n can
     # block on reverse lookups before any rule is removed.
     found = firewall(node, tool, "-L", CHAIN, "-n", check=False)
     if found.returncode == 1:
+        require_base_filter(node, tool)
         return
     found.check_returncode()
     for parent in ("OUTPUT", "FORWARD"):
-        while firewall(node, tool, "-C", parent, "-j", CHAIN, check=False).returncode == 0:
+        for _ in range(8):
+            found = firewall(node, tool, "-C", parent, "-j", CHAIN, check=False)
+            if found.returncode == 1:
+                require_base_filter(node, tool)
+                break
+            found.check_returncode()
             firewall(node, tool, "-D", parent, "-j", CHAIN)
+        else:
+            raise RuntimeError("too many airgap jump rules; refusing unbounded cleanup")
     firewall(node, tool, "-F", CHAIN)
     firewall(node, tool, "-X", CHAIN)
 
 
 def block_node(node, tool, networks):
-    require_private_network(node)
+    require_binding_node(node, tool)
     # Refuse to replace an unrelated chain or another test's active guard.
     firewall(node, tool, "-N", CHAIN)
     # DROP is built in; denial does not depend on a REJECT target extension.
     # Docker's embedded resolver can forward through the host. Refuse that
     # route as well; Kubernetes DNS serves internal names independently.
-    if tool == "iptables":
+    if tool["family"] == "iptables":
         firewall(node, tool, "-A", CHAIN, "-d", "127.0.0.11/32", "-j", "DROP")
     firewall(node, tool, "-A", CHAIN, "-o", "lo", "-j", "RETURN")
     for network in networks:
@@ -139,12 +371,14 @@ def discover(cluster):
     for node in nodes:
         name = node["Name"].lstrip("/")
         require_private_network(name)
-        tools = ["iptables"]
+        cid = container_id(name)
+        tools = [select_backend(cid, "iptables")]
         ipv6 = docker("exec", name, "cat", "/proc/sys/net/ipv6/conf/all/disable_ipv6", check=False)
         if ipv6.returncode == 0 and ipv6.stdout.strip() == "0":
             # If IPv6 is enabled but its filter is unavailable, fail closed.
-            firewall(name, "ip6tables", "-L", "-n")
-            tools.append("ip6tables")
+            binding = select_backend(cid, "ip6tables")
+            firewall(name, binding, "-L", "-n")
+            tools.append(binding)
         result.append({"name": name, "tools": tools, "networks": by_family})
     return result
 
@@ -242,14 +476,14 @@ def main():
         args.state.write_text(json.dumps(nodes, indent=2))
         for node in nodes:
             for tool in node["tools"]:
-                family = "4" if tool == "iptables" else "6"
+                family = "4" if tool["family"] == "iptables" else "6"
                 block_node(node["name"], tool, node["networks"][family])
         probe(nodes, url, blocked=True)
     elif args.action == "restore":
         if not args.state.exists():
             print("No active airgap state")
             return
-        nodes = json.loads(args.state.read_text())
+        nodes = read_state(args.state)
         errors = []
         for node in nodes:
             for tool in node["tools"]:
@@ -262,7 +496,7 @@ def main():
         args.state.unlink()
         print("Restored k3d node egress; host firewall was unchanged")
     else:
-        nodes = json.loads(args.state.read_text())
+        nodes = read_state(args.state)
         probe(nodes, url, blocked=True)
         for node in nodes:
             for tool in node["tools"]:

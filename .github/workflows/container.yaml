@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write
+      packages: read
       actions: read
     outputs:
       build: ${{ steps.image.outputs.build }}

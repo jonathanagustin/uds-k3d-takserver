@@ -23,7 +23,6 @@ on:
 permissions:
   contents: read
   packages: read
-  id-token: write
 
 jobs:
   # Decides whether this event needs Full Core. The nightly run, a manual

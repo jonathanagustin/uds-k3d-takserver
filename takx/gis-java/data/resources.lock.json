@@ -1,0 +1,398 @@
+{
+  "schema": 1,
+  "project_artifact": "uds-takserver-gdal-data.jar",
+  "scope": "Project-built resources from official modified GDAL2.4.4 source; not an upstream SDK/native runtime",
+  "repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "archive": {
+    "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/gdal-2.4.4-mod.tar.gz",
+    "sha256": "a170207c0548cadec57e3a6e57727f66d4b64bf4a9a3ddd6c6bd0bf2479260e2",
+    "bytes": 14568775,
+    "java_files": 58
+  },
+  "selection": {
+    "directory": "./gdal/data/",
+    "glob": "*.*",
+    "source_install_statement": "for f in LICENSE.TXT data/*.* ; do $(INSTALL_DATA) $$f $(DESTDIR)$(INST_DATA) ; done"
+  },
+  "source_notices": {
+    "./gdal/GNUmakefile": {
+      "sha256": "4eab8a17f0adfc39cb931bc4a4c53cfeba045273d2379f7f9cc47281c4a01458",
+      "bytes": 10402
+    },
+    "./gdal/LICENSE.TXT": {
+      "sha256": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+      "bytes": 18164
+    }
+  },
+  "resources": {
+    "GDALLogoBW.svg": {
+      "sha256": "aac9dab33d479e0b832b8bd7c9e5510dcbef34a7c6cc9aea96bbe2aab5161c53",
+      "bytes": 13022
+    },
+    "GDALLogoColor.svg": {
+      "sha256": "2c102a31c6e9116aa9b98787d8bf5cf648dbcc2b930aee653cd35df65ed118d0",
+      "bytes": 12305
+    },
+    "GDALLogoGS.svg": {
+      "sha256": "1ae6e2d92e6b0439f3baee0cb55dad8b97abfb4fcc58c9189b23b63c818aeeca",
+      "bytes": 12305
+    },
+    "bag_template.xml": {
+      "sha256": "daf7816f686c35b51ec66c90fc6aedbf12dbef97f28f9fae9731392f92afb733",
+      "bytes": 9020
+    },
+    "compdcs.csv": {
+      "sha256": "639dbf0148e868aa989720ec3c439db26fcaa1a8cbe87901f809c6ee0b783462",
+      "bytes": 9202
+    },
+    "coordinate_axis.csv": {
+      "sha256": "d7064740157ec8628d37032f073409f01095c0e7a406ac79c3f64efb79001d32",
+      "bytes": 8302
+    },
+    "cubewerx_extra.wkt": {
+      "sha256": "1cca3fa3e249f4cc7d1bf0ffb0a71a1a2afadd10afdf7ed0aa292dbc5e4f0768",
+      "bytes": 11977
+    },
+    "datum_shift.csv": {
+      "sha256": "dd0c6b938e8ccc17a0a6786375db6f23792d26312759adf3b55c692f049be270",
+      "bytes": 180007
+    },
+    "default.rsc": {
+      "sha256": "9e1c9d7081d52775e750d4155d49255252b04ca81fef27cb2997675d3cd9626b",
+      "bytes": 463632
+    },
+    "ecw_cs.wkt": {
+      "sha256": "8e6354a762e8cd82e4c8da1117503e17f487f7b4585ac2cef2d811103e241ac6",
+      "bytes": 363717
+    },
+    "eedaconf.json": {
+      "sha256": "13cd9d27fca19dc9e3103ee7f78286310a4bdb2b2d83d916391d7b316d8e2d35",
+      "bytes": 379
+    },
+    "ellipsoid.csv": {
+      "sha256": "b1701647f5b9ed49b9602ab0efa22b5d28506e46fe24f324b3f0aaa00f7e7ed5",
+      "bytes": 14759
+    },
+    "epsg.wkt": {
+      "sha256": "967ad6adf49cbfc3a5215cfab183e45e4f125eaa121cdefe0d86e9955782383c",
+      "bytes": 50
+    },
+    "esri_StatePlane_extra.wkt": {
+      "sha256": "682df1b231cb6f1287685d4c64bf1b2611c0af43c30483473bbb366ce1bd8d33",
+      "bytes": 332546
+    },
+    "esri_Wisconsin_extra.wkt": {
+      "sha256": "7e05421213ba1768873d7e722120ac883e650302ca9eae628b1b0d14fb907e5b",
+      "bytes": 75845
+    },
+    "esri_epsg.wkt": {
+      "sha256": "9bc88fbb0711e5139cdbf613928ad0fa128cc8cd5707588147f885d6d466127d",
+      "bytes": 2238083
+    },
+    "esri_extra.wkt": {
+      "sha256": "0df21746f286b91dd1c9a34d744fed716c1c632b82cb2746eae6fc2a6d9094cd",
+      "bytes": 1495620
+    },
+    "gcs.csv": {
+      "sha256": "32ee6fee13c1ed0cf56a0962a179ca77df851876138d0169976fe8d7ab9f18d2",
+      "bytes": 54388
+    },
+    "gcs.override.csv": {
+      "sha256": "97ee0bee1d80834b048a68bad368a782061cdfe84d58f5ef78f7977a0ac1c0be",
+      "bytes": 513
+    },
+    "gdal_datum.csv": {
+      "sha256": "1e7dc7e25ce13a04e1142156c7dd98545df9394ade9f441b6c4045520e5d5987",
+      "bytes": 247326
+    },
+    "gdalicon.png": {
+      "sha256": "d90f50a8f74c325086c867bf006a92266c259a270d9166b2f41f586b67755729",
+      "bytes": 2021
+    },
+    "gdalvrt.xsd": {
+      "sha256": "fbbdab86d6c395b12ceefa2341a1e084ff677950fbd31cd2bb016070dda404bf",
+      "bytes": 20967
+    },
+    "geoccs.csv": {
+      "sha256": "45284bd105c37226aa0228f7d856a480cf828a775231980817dde3e56ae5de56",
+      "bytes": 15669
+    },
+    "gml_registry.xml": {
+      "sha256": "dab571b2a74e4b6de27a0fde62d34887141ca456d11caacdd75a166b2de5a743",
+      "bytes": 6643
+    },
+    "gmlasconf.xml": {
+      "sha256": "200939d2ef87de4df80e6ebf30908c60e9654e0bfc6b79c7ae4ea8a9447db76e",
+      "bytes": 7432
+    },
+    "gmlasconf.xsd": {
+      "sha256": "a2f5290d7f0d98aaa5a542ccc5b84344c00508ddcf31630bc028bfe4ba9e6434",
+      "bytes": 48744
+    },
+    "gt_datum.csv": {
+      "sha256": "dd0722e59b04d5da58409bceaec4436ec726306446bd6477ecbaa819c58f056d",
+      "bytes": 15804
+    },
+    "gt_ellips.csv": {
+      "sha256": "c10676c298140d70248045e0c22d73e34c5cf85db359167374367d493ffa7cf4",
+      "bytes": 1719
+    },
+    "header.dxf": {
+      "sha256": "11c47d822048a37b8fee1118f35ef457d016e37d49f82eca3efc6947ced0ccda",
+      "bytes": 7357
+    },
+    "inspire_cp_BasicPropertyUnit.gfs": {
+      "sha256": "286d7b67c2fa3a5c321d439f83193bc06e0c6a0a6536838e79f151678ab5471c",
+      "bytes": 1740
+    },
+    "inspire_cp_CadastralBoundary.gfs": {
+      "sha256": "55963c9317f76508f5b64729e6057a230f1f5fc9473851f1031f99c50b1aeb86",
+      "bytes": 1650
+    },
+    "inspire_cp_CadastralParcel.gfs": {
+      "sha256": "6f14b49b1694abfe191f1d45c84c6e62678866e3941dc53f095e0ec6cfa30e24",
+      "bytes": 2450
+    },
+    "inspire_cp_CadastralZoning.gfs": {
+      "sha256": "7b5182fbca4b8d9ea073e398d085037792cbd9444d1dc6b3596fa2ed030b4cfa",
+      "bytes": 4812
+    },
+    "jpfgdgml_AdmArea.gfs": {
+      "sha256": "13ee375bb8bc98152d97284f645b61bd135530c64f418b38587b9eb1eef90770",
+      "bytes": 1640
+    },
+    "jpfgdgml_AdmBdry.gfs": {
+      "sha256": "68bec4b06bfc5b49ae5e92b307e37769881cfb579dd4c2cad668d800b0b15d87",
+      "bytes": 1382
+    },
+    "jpfgdgml_AdmPt.gfs": {
+      "sha256": "fd4198972d31a3446526e76511aa77cb5609c5da27fdfe21e0da100e047b0010",
+      "bytes": 1633
+    },
+    "jpfgdgml_BldA.gfs": {
+      "sha256": "afe1e3130edb8c3e1f42ef83c0f14ae218b7eeda9526147d8fd242d503134fa9",
+      "bytes": 1501
+    },
+    "jpfgdgml_BldL.gfs": {
+      "sha256": "13dd6c1acdc89548f738d22e8786aa0408cba7c041f4b334fc04b4e44295169f",
+      "bytes": 1503
+    },
+    "jpfgdgml_Cntr.gfs": {
+      "sha256": "f53dc458d87b3d972604d31d2092e43a5a86807cfde7d7f48db09e33b2bac24e",
+      "bytes": 1501
+    },
+    "jpfgdgml_CommBdry.gfs": {
+      "sha256": "19f9b465633c3debea19875e73387b970331b329cb97efc29f2e44d701bad255",
+      "bytes": 1384
+    },
+    "jpfgdgml_CommPt.gfs": {
+      "sha256": "038d64f0e24aad6ab0e8df823efc9d949d0a134ecf8eb491f0308e3eb9ae61b3",
+      "bytes": 1635
+    },
+    "jpfgdgml_Cstline.gfs": {
+      "sha256": "59d7cc2fb9cf3f8cbe5232a81661aa101bc2d7b0c56cb71886bb5b59514f849e",
+      "bytes": 1509
+    },
+    "jpfgdgml_ElevPt.gfs": {
+      "sha256": "b2a0bd2c6881fb6198d78864f1444975ec2cd0b4a0b0a5621fc838f9ace4ef00",
+      "bytes": 1500
+    },
+    "jpfgdgml_GCP.gfs": {
+      "sha256": "9bfdfc0e4387170f01c24d786eb06066476f2e36d7d4bcf050c48166ad5d3247",
+      "bytes": 2523
+    },
+    "jpfgdgml_LeveeEdge.gfs": {
+      "sha256": "a7a918dc798713623937bd86a42d08c79cb40fc6adfb81a9eb212e96c991d891",
+      "bytes": 1386
+    },
+    "jpfgdgml_RailCL.gfs": {
+      "sha256": "4ce8cb56a3418192ceb1bf26f2760d1c7340015bac32f58c58658669f326540c",
+      "bytes": 1507
+    },
+    "jpfgdgml_RdASL.gfs": {
+      "sha256": "94cb6c9cbf96647c63deb52bb0fd4be3d9afe0c619b20b7dfba75e752e1356b3",
+      "bytes": 1251
+    },
+    "jpfgdgml_RdArea.gfs": {
+      "sha256": "de901847ae59461232c05f253360fc7c9b6c2cd2f445b6d4832b7f78f1acc5ec",
+      "bytes": 1515
+    },
+    "jpfgdgml_RdCompt.gfs": {
+      "sha256": "a0d80f94966d4e36800db214d34e6aaffd7b8aa9e6a42ec90431d2acf7e44c08",
+      "bytes": 1646
+    },
+    "jpfgdgml_RdEdg.gfs": {
+      "sha256": "f3f434940cf62093de6a6fc0cf87f38b9afc3310cbacc5bbefd1f66c52acd1bd",
+      "bytes": 1642
+    },
+    "jpfgdgml_RdMgtBdry.gfs": {
+      "sha256": "fc3d9286cfbda69902a04726544bb9a48b2180cb4dda817a44f6204e899602fc",
+      "bytes": 1386
+    },
+    "jpfgdgml_RdSgmtA.gfs": {
+      "sha256": "73d937c106234c43bb9073b8c8b6cbe0175de921cb5588262a687adee51795b7",
+      "bytes": 1644
+    },
+    "jpfgdgml_RvrMgtBdry.gfs": {
+      "sha256": "77f6caad076a3eab3bc7ef8464808954ac8ad518d7f910711daabe45fc43f6bf",
+      "bytes": 1388
+    },
+    "jpfgdgml_SBAPt.gfs": {
+      "sha256": "a5eb7f357c7bc9921fd3ed7f576c5b1efa4f3fa716834364b48b860bfb7dd45d",
+      "bytes": 1375
+    },
+    "jpfgdgml_SBArea.gfs": {
+      "sha256": "8732f2b86ab3f84f37bd5c87a99e735492e596c4aa92f2ac8debd511c4b2ac11",
+      "bytes": 1507
+    },
+    "jpfgdgml_SBBdry.gfs": {
+      "sha256": "2abc491f475c05604593c34a5a7667de99d44e1cc437e67b582919bfe693b932",
+      "bytes": 1253
+    },
+    "jpfgdgml_WA.gfs": {
+      "sha256": "3f899da9b40ecbdc5c150f3d26daf2b696f04f019ecc13a7505fba77313412ba",
+      "bytes": 1497
+    },
+    "jpfgdgml_WL.gfs": {
+      "sha256": "aeeb1dec07388bfa85cf7f1a1f838f53a81e677999b62f8a4f80422f341d72ec",
+      "bytes": 1499
+    },
+    "jpfgdgml_WStrA.gfs": {
+      "sha256": "8a5e7065f0290f1b740cab53cf4c45d1b0e88dea3a68612a82392828ab1823cb",
+      "bytes": 1503
+    },
+    "jpfgdgml_WStrL.gfs": {
+      "sha256": "83b6c508bc3b3eb8f23eebdf48c6a36b34b26be8d720a3a99f060e3409185689",
+      "bytes": 1505
+    },
+    "netcdf_config.xsd": {
+      "sha256": "0759d3529544f7a4fbc4dee38c9170eab7427a80d90d2ea0a0358bafdeda7fd2",
+      "bytes": 7585
+    },
+    "nitf_spec.xml": {
+      "sha256": "d9f54f6fa0209bae51047a3befcbd9a186a4cebf618989e9bb34061d354aa0a4",
+      "bytes": 95917
+    },
+    "nitf_spec.xsd": {
+      "sha256": "e458aacd4c62b6a51d8a3cdce786a50fb0bd77b650b789cd13c57c8c461f913a",
+      "bytes": 6184
+    },
+    "ogrvrt.xsd": {
+      "sha256": "cb198ad582727e0199bcf767081f20cc4701eafd2d6a0326af0b11f534a59a96",
+      "bytes": 25752
+    },
+    "osmconf.ini": {
+      "sha256": "4340ccc37f40398b1508adc52b9b9166bd2df8c57b4e93d26bc01507dd6e8e83",
+      "bytes": 4879
+    },
+    "ozi_datum.csv": {
+      "sha256": "e3678e3f144084aeb3488c2e1ae2247f07a841f501a89e7225ae9dd9bfb19868",
+      "bytes": 8482
+    },
+    "ozi_ellips.csv": {
+      "sha256": "0c8363bfdedc1787d53463d705e2e1ce8fbdfcd49d1e3c778f5d4282980d75c6",
+      "bytes": 1349
+    },
+    "pci_datum.txt": {
+      "sha256": "3a240f847754d7a9c64752975e837f583bf5312f454a61fcc9611c5d63f5390b",
+      "bytes": 35105
+    },
+    "pci_ellips.txt": {
+      "sha256": "60d4a950ddc976e28751b691a6680acf1c5c966ca410043220f627b7350925cc",
+      "bytes": 3466
+    },
+    "pcs.csv": {
+      "sha256": "122efe6747bc63c4db17c8050f16a0d0da3648e06a8b415101596be5123279d3",
+      "bytes": 798625
+    },
+    "pcs.override.csv": {
+      "sha256": "dc5e582714cc25d0e12efe083aca89a0bde0fb878deafa85ea89d62f19d83c5c",
+      "bytes": 1581
+    },
+    "pds4_template.xml": {
+      "sha256": "c4877974c8391e0c0c2f50a8702ba42734f264550e763660a4c3c52bf1ec31dc",
+      "bytes": 3338
+    },
+    "plscenesconf.json": {
+      "sha256": "e2d66c22835ce26edf2da6a4eeaa46c8f23afa328c072d90a9e9e961ff629f2e",
+      "bytes": 15787
+    },
+    "prime_meridian.csv": {
+      "sha256": "972b1b88cd6f4daff24c6ca403dda1ef81aea46e6aff2044d10f773a0f27768a",
+      "bytes": 1910
+    },
+    "projop_wparm.csv": {
+      "sha256": "afbff88708c4dc64764a9705fd2eaf431616fc409ae6843199e008e0f38519d7",
+      "bytes": 289707
+    },
+    "ruian_vf_ob_v1.gfs": {
+      "sha256": "afbf77b20be9e82a359e630d5d9e6ab789666d21e11e8623ced4cfccd026838c",
+      "bytes": 46775
+    },
+    "ruian_vf_st_uvoh_v1.gfs": {
+      "sha256": "8ecd4db08ef5ea9f07b6dce9903c7a74299238700c784b009ccda817dea89038",
+      "bytes": 2600
+    },
+    "ruian_vf_st_v1.gfs": {
+      "sha256": "343787735ee46d2a8cc52519c5950c13a9c3cef1bbbdb3a95d198354435808ad",
+      "bytes": 45972
+    },
+    "ruian_vf_v1.gfs": {
+      "sha256": "658b51ce5c4b972ff44688f275d288585e807eefed9c8fbac42fbc91b4d40220",
+      "bytes": 67334
+    },
+    "s57agencies.csv": {
+      "sha256": "212ef7211ed83c4382ba59e2ee4437a7331713b29833bee7645c0731cabc4270",
+      "bytes": 13304
+    },
+    "s57attributes.csv": {
+      "sha256": "f4b6dfe2e82fea5e7ee433e13683292a3fa09bb66750428e4b1578f99a46d2de",
+      "bytes": 20001
+    },
+    "s57expectedinput.csv": {
+      "sha256": "d5b09a5c4248f3eb0906a4e3ac68d7380c86f819d70deae3662e736f0597bc6c",
+      "bytes": 20885
+    },
+    "s57objectclasses.csv": {
+      "sha256": "8bf93888b0c825096645ec5c3c9fdf0a921e37dd32d09f39f89f2d60445be60a",
+      "bytes": 53304
+    },
+    "seed_2d.dgn": {
+      "sha256": "dd8465f18569d9289809e9e0962115d365d0a56de021393952a5e7a0a20b527c",
+      "bytes": 9216
+    },
+    "seed_3d.dgn": {
+      "sha256": "97c2f00ee6ea96873b7d16e5e898b4850e3d35448299d7d9d37e7d1792b56896",
+      "bytes": 2048
+    },
+    "stateplane.csv": {
+      "sha256": "30c6210872b0a4c10d40739a8cb6beda630a7ef3eb4cb07a7128e26e8e83cbe3",
+      "bytes": 10360
+    },
+    "trailer.dxf": {
+      "sha256": "e68bf8a39303d528fa19d7e88d9cee676f5ea46899cfcdc07ba6375028d2cd67",
+      "bytes": 220
+    },
+    "unit_of_measure.csv": {
+      "sha256": "013e3aa222d040af0e649128e16c4452fa929708368d25f377187f4091f2a63f",
+      "bytes": 22291
+    },
+    "vdv452.xml": {
+      "sha256": "071f7a47c97e3436336bcd856d3f41de8e58f798409c31801480f0bafe689752",
+      "bytes": 25904
+    },
+    "vdv452.xsd": {
+      "sha256": "16fa364097e660b029bbff306b6b693c8745f5dab3b3907af07c97dd2c199a7c",
+      "bytes": 2942
+    },
+    "vertcs.csv": {
+      "sha256": "3b93b3d36d9c048dd9a20c833b1486429966e15e5d0803853118e8ed31587e5e",
+      "bytes": 13530
+    },
+    "vertcs.override.csv": {
+      "sha256": "709b6805d561e909c5f85f529e4d312f7a639a81f72a33de757c302294c6647d",
+      "bytes": 1081
+    }
+  }
+}

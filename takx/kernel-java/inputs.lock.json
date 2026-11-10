@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "java_major": 17,
+  "java_release": 11,
+  "modules": {
+    "takkernel/annotation/src/main/java": 6,
+    "takkernel/port/src/main/java": 57,
+    "takkernel/port/src/jre/java": 20,
+    "takkernel/engine/src/main/java": 848,
+    "takkernel/engine/src/jre/java": 14
+  },
+  "source_inventory_sha256": "fcec5e915d93e0ec0423ff4b5ccc35fbd8d8f24552fb5f9c397a6a4d926f25c3",
+  "unused_import_patch": {
+    "path": "takx/patches/0001-kernel-remove-unused-colorfilter-import.patch",
+    "sha256": "dfafe9c5c670e4a2d62194ac1d6722e1b77b4e94d0d9ec494af6193c88cea2dc",
+    "target": "takkernel/port/src/main/java/gov/tak/platform/marshal/ColorBlendModeMarshal.java",
+    "patched_sha256": "00c5cfa7a755ef47b3d8ce09dc8b714cbe9e909abcccf61f087b6e859692373f"
+  },
+  "public_jars": {
+    "eventbus-3.2.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/greenrobot/eventbus/3.2.0/eventbus-3.2.0.jar",
+      "sha256": "7b0f9e9d77607ffd2d17ff5742af218063509e45c9cc5bacf0db2c153e9c5e31",
+      "bytes": 60100
+    },
+    "okhttp-4.11.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/4.11.0/okhttp-4.11.0.jar",
+      "sha256": "ee8f6bd6cd1257013d748330f4ca147638a9fbcb52fb388d5ac93cf53408745d",
+      "bytes": 786969
+    },
+    "okio-jvm-3.2.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.2.0/okio-jvm-3.2.0.jar",
+      "sha256": "b642baef4c570055de4cb3d1667b2b16dced901ff8066345a063691aa06025a4",
+      "bytes": 345115
+    },
+    "kotlin-stdlib-1.6.20.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.6.20/kotlin-stdlib-1.6.20.jar",
+      "sha256": "eeb51c2b67b26233fd81d0bc4f8044ec849718890905763ceffd84a31e2cb799",
+      "bytes": 1509405
+    },
+    "kotlin-stdlib-common-1.6.20.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.6.20/kotlin-stdlib-common-1.6.20.jar",
+      "sha256": "8da40a2520d30dcb1012176fe93d24e82d08a3e346c37e0343b0fb6f64f6be01",
+      "bytes": 200631
+    },
+    "kotlin-stdlib-jdk7-1.6.20.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.6.20/kotlin-stdlib-jdk7-1.6.20.jar",
+      "sha256": "aa2fa2e81355c4d98dd97da2169bf401f842261378f5b1cbea1aa11855d67620",
+      "bytes": 23898
+    },
+    "kotlin-stdlib-jdk8-1.6.20.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.6.20/kotlin-stdlib-jdk8-1.6.20.jar",
+      "sha256": "fdab1bf120e2b5e7ab6d7888e9ebc024ec6b8ca729361296395dab634b213695",
+      "bytes": 17773
+    },
+    "annotations-13.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "bytes": 17536
+    },
+    "guava-30.0-jre.jar": {
+      "url": "https://repo.maven.apache.org/maven2/com/google/guava/guava/30.0-jre/guava-30.0-jre.jar",
+      "sha256": "56b292df9ec29d102820c1fd7dd581cd749d5c416c7b3aeac008dbda3b984cc2",
+      "bytes": 2858426
+    },
+    "kxml2-2.3.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar",
+      "sha256": "f264dd9f79a1fde10ce5ecc53221eff24be4c9331c830b7d52f2f08a7b633de2",
+      "bytes": 43858
+    },
+    "json-20220924.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/json/json/20220924/json-20220924.jar",
+      "sha256": "57d65f5883bd65fa41e6d06cb7dcaceb73a49338bb8a4611c9e22d2a3f674a97",
+      "bytes": 70348
+    },
+    "httpclient-4.5.13.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.13/httpclient-4.5.13.jar",
+      "sha256": "6fe9026a566c6a5001608cf3fc32196641f6c1e5e1986d1037ccdbd5f31ef743",
+      "bytes": 780321
+    },
+    "httpcore-4.4.13.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcore/4.4.13/httpcore-4.4.13.jar",
+      "sha256": "e06e89d40943245fcfa39ec537cdbfce3762aecde8f9c597780d2b00c2b43424",
+      "bytes": 328593
+    },
+    "commons-logging-1.2.jar": {
+      "url": "https://repo.maven.apache.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar",
+      "sha256": "daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636",
+      "bytes": 61829
+    },
+    "commons-codec-1.11.jar": {
+      "url": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.11/commons-codec-1.11.jar",
+      "sha256": "e599d5318e97aa48f42136a2927e6dfa4e8881dff0e6c8e3109ddbbff51d7b7d",
+      "bytes": 335042
+    },
+    "bcprov-jdk18on-1.78.1.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.78.1/bcprov-jdk18on-1.78.1.jar",
+      "sha256": "add5915e6acfc6ab5836e1fd8a5e21c6488536a8c1f21f386eeb3bf280b702d7",
+      "bytes": 8324412
+    },
+    "bcpkix-jdk18on-1.78.1.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.78.1/bcpkix-jdk18on-1.78.1.jar",
+      "sha256": "4b48ea084e5232b9d79ebca1887b9de037b124931807cd60710748c2aee08cc9",
+      "bytes": 1125173
+    },
+    "bcutil-jdk18on-1.78.1.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.78.1/bcutil-jdk18on-1.78.1.jar",
+      "sha256": "d9fa56f97b0f761ce3bc8d9d74c5d7137a987bf5bd3abfe1003f9bafa45a1d2f",
+      "bytes": 705135
+    },
+    "gluegen-rt-2.5.0.jar": {
+      "url": "https://jogamp.org/deployment/maven/org/jogamp/gluegen/gluegen-rt/2.5.0/gluegen-rt-2.5.0.jar",
+      "sha256": "3620c18536a8671fcb1c595d7448e9d31226b824117af6a4c6d45c657f4dabe3",
+      "bytes": 387897
+    },
+    "jogl-all-2.5.0.jar": {
+      "url": "https://jogamp.org/deployment/maven/org/jogamp/jogl/jogl-all/2.5.0/jogl-all-2.5.0.jar",
+      "sha256": "245717cceabca264a210a899f8839d47bd127f50f80892ead2277dd89cbcd301",
+      "bytes": 3741453
+    },
+    "slf4j-api-1.7.30.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.30/slf4j-api-1.7.30.jar",
+      "sha256": "cdba07964d1bb40a0761485c6b1e8c2f8fd9eb1d19c53928ac0d7f9510105c57",
+      "bytes": 41472
+    },
+    "commons-text-1.15.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-text/1.15.0/commons-text-1.15.0.jar",
+      "sha256": "58d2da30f058512a1e7f914e39241deca4dff5c27a085b4ed2faa9e7208067f6",
+      "bytes": 264873
+    },
+    "commons-lang3-3.20.0.jar": {
+      "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.20.0/commons-lang3-3.20.0.jar",
+      "sha256": "69e5c9fa35da7a51a5fd2099dfe56a2d8d32cf233e2f6d770e796146440263f4",
+      "bytes": 713862
+    }
+  },
+  "gis_java": {
+    "recipe": "takx/gis-java/build.py",
+    "source_lock": "takx/gis-java/sources.lock.json",
+    "artifacts": {
+      "gdal-2.4.4-mod-java.jar": {
+        "baseline_jar_sha256": "62641f83d6d6d1455a6f318c19ba4db36f35dd88719cde9ce7ae5de575938dc8",
+        "class_entries": {
+          "org/gdal/gdal/Band.class": "3ab52a4128a7ff6701a93ff9219aeb486175087948f68a59b401341ae8d6fbd3",
+          "org/gdal/gdal/BuildVRTOptions.class": "d158bd1d2d94217e40a266b94c124d7cb74d952832b4878cca50e564f4fc4e4f",
+          "org/gdal/gdal/ColorTable.class": "e760e2a73dcd4f2fed771a93cf627a74ebfbfd76ba9d0d2631f7a8f3457c731e",
+          "org/gdal/gdal/DEMProcessingOptions.class": "403911bdf5181b1a1b2aea58ac215db00cf1651cf57320941229cbb8850a57a0",
+          "org/gdal/gdal/Dataset.class": "51160456d8104b4d0761d3401c9be0687f74541e25f26083d014f79df26b1995",
+          "org/gdal/gdal/Driver.class": "8f8f4dfb4cbc18c1d454e3333529fd242bd682cf5a87b8f2c8b2ab913422e6af",
+          "org/gdal/gdal/GCP.class": "2e345a191ec6682d25176d508578b43c10b1b8f38696b0d779f7fe46af12f490",
+          "org/gdal/gdal/GridOptions.class": "08f5ba74a287a4ff0a43d4c3c4fb6e58c9058c7685c686bab6728e116ba1652a",
+          "org/gdal/gdal/InfoOptions.class": "8cb284a6cadf5b8aa51385bc1e78461996d95d76edec613baf26c14296df299c",
+          "org/gdal/gdal/MajorObject.class": "1319bed9bb2197d6777c2a9f868e5d74c6ab96db30072f7d3908f05958b177f3",
+          "org/gdal/gdal/NearblackOptions.class": "b978cce3a5b8abbd3bb5f3d5658f11d53bf9d315b7c09cce86ccb3d06aa5eb79",
+          "org/gdal/gdal/ProgressCallback.class": "ef9fa4a33657734698d4d63a2056f63f34fa7d8462805636d947e70d85cf76cb",
+          "org/gdal/gdal/RasterAttributeTable.class": "992f1689469e04cfe583ce79b854b77c330f93e6cd160edd2a8ec4be9978813b",
+          "org/gdal/gdal/RasterizeOptions.class": "9829d400906cbe88e8ad52382e359daa78d7977af51e24adafd829c5ed400678",
+          "org/gdal/gdal/SWIGTYPE_p_CPLErrorHandler.class": "7e9a1bb8ddeacf3ed5aa6f6fe6c817955f594fce8636f7bf7b79e0733d842974",
+          "org/gdal/gdal/SWIGTYPE_p_int.class": "fcbe8d149192f73fea3ba1cfedf249bdec9eb5dcd4a26095c3249764b82c9588",
+          "org/gdal/gdal/SWIGTYPE_p_void.class": "f0ff045dc330d062f059c21256259c8cc95314078e03b6f1b1ed968127c714f1",
+          "org/gdal/gdal/TermProgressCallback.class": "23a74cd92fc6c1131cb22f2f7f2a0a041ed12c1d642ddfa57a36d5dfeb53d08c",
+          "org/gdal/gdal/Transformer.class": "3db45d4d0b2d7822dfa8ac020d0b3ef79c34c4d8507e98af2e8298d6d8ba091d",
+          "org/gdal/gdal/TranslateOptions.class": "cce678d71781efe1483746c55f28e9e111647f2eac74601316e2792dc49a3ea3",
+          "org/gdal/gdal/VectorTranslateOptions.class": "c313514a5f589f434f73b49682b2e69bf1e304968253ba17286e4c3cc5f0983d",
+          "org/gdal/gdal/WarpOptions.class": "137977f95feb5a77ad7e71dbdcb73476b91a91224e0f66d66a64464897f6ad43",
+          "org/gdal/gdal/XMLNode.class": "fbdaa4cef37538d55288727802aff505c9bde0752bcecfeba45f3ee8684bfb95",
+          "org/gdal/gdal/XMLNodeType.class": "20800b43a65c411d08f8f337e0ae72a7dbcc0bea2b35770ab9b40db9d80dc248",
+          "org/gdal/gdal/gdal.class": "cd1486fac7f5b62bfb7f7aa92267e7706e9a31ba76bc1ce918a3d44a37b4fc95",
+          "org/gdal/gdal/gdalJNI.class": "8974afba1aeec5c3b287740b375ba60b331135ef99ec40862630dcec60e0b63b",
+          "org/gdal/gdalconst/gdalconst.class": "a9e0e8700035b260746d0d07324e9d87927d23a55e7214b6301123d01b5d1a78",
+          "org/gdal/gdalconst/gdalconstConstants.class": "dc59946ff60b31d0f7395aec6586f44c864f9ddbd6008f6405fa1867a34d1bbf",
+          "org/gdal/gdalconst/gdalconstJNI.class": "6792a0568178bc602ca0ca271e631ee993c4e4d96d9389f9f811f2c73a0a321f",
+          "org/gdal/gnm/GenericNetwork.class": "379348b3b7ef09be5475bb02a363392757ff760adc8ad1674dce526aed49af3b",
+          "org/gdal/gnm/GraphAlgorithm.class": "e247854a7a820fbfed26e655d42cea411d496ada009a7b3f35fef6fca117ea6b",
+          "org/gdal/gnm/Network.class": "0d52f4eb981acff1b63d5f2ca6e63962672dfe06aa788fbcb8e74e5c97750a48",
+          "org/gdal/gnm/ProgressCallback.class": "9cbb14e12e9840b89fd0d8735ed49f3278ddb060f39f3cf9cc13c4c8a73c3ecf",
+          "org/gdal/gnm/TermProgressCallback.class": "2d345e5f7f8bbafaf9f63790fc5504e2bd1a7185fce372c2bdd78b0420ace4e0",
+          "org/gdal/gnm/gnm.class": "e92afe44bab2d55fe8d415ed985b3083c8c8e5d9260a16affeaee9801f8612f4",
+          "org/gdal/gnm/gnmConstants.class": "bcfd49d84b6a00100ecde3c31556d6efaf84bcab686623ce2b860dbdfca4aefd",
+          "org/gdal/gnm/gnmJNI.class": "4a4786bd040108c7863c068af07e377091bf6936fedf331935cbd82a5a34e70f",
+          "org/gdal/ogr/DataSource.class": "6b82d49c832b923cb1f6b6dbffe7a6845b517b76b96ca077550f5c7accafa04a",
+          "org/gdal/ogr/Driver.class": "ed88ce849f7dcf6f1b5478e8997b147b5108386e8c2ffa4fab3a4737a2204a5d",
+          "org/gdal/ogr/Feature.class": "d601c6ffc6daed27a5cadc7e1159582c59f6ee5e2db8ba9785477fc9a785d3bc",
+          "org/gdal/ogr/FeatureDefn.class": "2ca8701625b17cff3a8378e483aceb36b2b0580a46a4b8604f3db2585c733abc",
+          "org/gdal/ogr/FeatureNative$1.class": "b28e4bd068c3b0c5b02e1dce61d19ca74c3cda5048b69395f45459f29c3b2c02",
+          "org/gdal/ogr/FeatureNative.class": "79cc964e0564453341cf6e5f523ff6eed92b1b25acaafc3f86d61e1c58927ba4",
+          "org/gdal/ogr/FieldDefn.class": "90bbdf59dd46876e536140d49f0686eee988a70a81031d4aff3a38534d920e01",
+          "org/gdal/ogr/GeomFieldDefn.class": "ce2c0da0edbd083e367baf0d7a7f48799db1969d5231ced37359fd266548d1a5",
+          "org/gdal/ogr/Geometry.class": "059604b8af08ddc5b51653ef65ce0f03e1ec9ad5f8a2faa26c320d53418bf865",
+          "org/gdal/ogr/GeometryNative$1.class": "61168399fb93eddfd86df39f97ee040633a1e75f8dcfcb3616d1f012535370dd",
+          "org/gdal/ogr/GeometryNative.class": "01105acf1761e98c139ca1a539a5f8f289bfeda694dc1545d81e58dbaa8df986",
+          "org/gdal/ogr/Layer.class": "9d7622084cf6859705074831e971e124bf4cf30d28ceb3385c09f66ab9a1d5fa",
+          "org/gdal/ogr/ProgressCallback.class": "16e5a55984805b9a5f7f312f7f138f317e68c7813ea3ba04d95b7e8772f11146",
+          "org/gdal/ogr/StyleTable.class": "a27b1e74775b31970ff16134d626b9f226c1081896c4b81b2decc30a070e2980",
+          "org/gdal/ogr/TermProgressCallback.class": "def8b014748826ccf29a07c7722ba49f8c61f964739b8161b9956ae6d1b3077a",
+          "org/gdal/ogr/ogr.class": "f692f97dffcd6dc213a00dc4f4ab9ec55be7ad9ccd81edcf13883fadcb4ce176",
+          "org/gdal/ogr/ogrConstants.class": "06e139835d51fb12330b14633e1f8dc83d5dbd820eeb2ed37c8b2471e673a59d",
+          "org/gdal/ogr/ogrJNI.class": "469afbb1ef6bf29c280f8ae1522e9292e2a89adec09d29d6470fe36411bf360d",
+          "org/gdal/osr/CoordinateTransformation.class": "5869de4349a79064d39c47eac04e7563c3d90402f9b35fa9b268eb4c594cd0df",
+          "org/gdal/osr/SpatialReference.class": "b4819792449ae4c604839b9f912bb5230c15721fdd4705d509336296d390c430",
+          "org/gdal/osr/osr.class": "0bf4212707705711df2e630faa59ef5072120b9a41c9245c21edaddb6cb7aa5f",
+          "org/gdal/osr/osrConstants.class": "14b64008bd28aa226b1aa9860bce2856c215b7df7e6c02f7b12e9bc36147e164",
+          "org/gdal/osr/osrJNI.class": "d40ca3b43c19b2efcdeed0b0ca62fc4444a14e18ca6c637556c66610c7be5fac"
+        }
+      },
+      "assimp-4.0.1-mod-jassimp-java.jar": {
+        "baseline_jar_sha256": "ec5e443a539d202d09595b01f3e2280242b71aec75e0869a0674e12c85fdc8cf",
+        "class_entries": {
+          "jassimp/AiAnimBehavior.class": "ca95c9767edc78961fc280846d5cc42a54c0e28133f9285d16761a18890dc626",
+          "jassimp/AiAnimation.class": "8f0253b24cdcbe66f07677c4ef0dd5443f14426240eaab98f5ae547ccb758a63",
+          "jassimp/AiBlendMode.class": "f89d51be2b619fc3f4ebccd013ed2c84d1231892d2e524fc58fbecda17efffc3",
+          "jassimp/AiBone.class": "5f09e182d6c52eadc5897e3bb28f62046a856d235b754fa0e64f0032cdf9828a",
+          "jassimp/AiBoneWeight.class": "e9e8e6b281d67eaee85973cdf02152a191328e47ffe05d3140ca7389775261a5",
+          "jassimp/AiBufferAllocator.class": "b4aeae4a77e2aa8ceda7a4788b5643605ab3564f94355cc2923ef24b69337dcd",
+          "jassimp/AiBuiltInWrapperProvider.class": "5c7c1105a5042d7a135758cf16eb8a6d21c7711b4fde46b9f04d8f1896602d89",
+          "jassimp/AiCamera.class": "fbc080fadc3d2770dd7834f875dec8bae0b49898a87e309ee08e288503150654",
+          "jassimp/AiClassLoaderIOSystem.class": "cede666ce1c2272d3085ce6e848a09833491df6729740b152e7137a3eb6fcf93",
+          "jassimp/AiColor.class": "e93a5a5abe74dc9002a3365c7fd871c215460e80d17c97e0eeed2ed0bf6528f7",
+          "jassimp/AiConfig.class": "5ca69c1b4948c034323e9fe8c6fbb95dff67b6f3478edc2438dfbb00d89aae01",
+          "jassimp/AiConfigOptions.class": "2cff249f99c97deef0e652ec9494187e193086a67093030bd50b3deeebb68cbf",
+          "jassimp/AiIOStream.class": "11f9a18da93d919aa019532280789547443e52cbe2918916e78cc72db3e3ccda",
+          "jassimp/AiIOSystem.class": "ae2b0de57251d9dc406255b35e9b64e809007cd6f907b1dc97ff33b8dd470815",
+          "jassimp/AiInputStreamIOStream$ByteBufferOutputStream.class": "2671a7ca35b75c3895f36ee101f3df834570f1c05672f4e5b82d92cea0a6b0fb",
+          "jassimp/AiInputStreamIOStream.class": "3db1ac930dd75511e4068e6f0a24a4b88973fe00faba7be5f0a2d181c537364f",
+          "jassimp/AiLight.class": "2a24991104db1b6e5aa4b645f025f578a94498c00dcdd7ee2637d08d8008cfc1",
+          "jassimp/AiLightType.class": "a6f7a6a6fb6f4fa48033eecfcb9d4ac7d9a8e2034c6e06e6eceaede58e158c11",
+          "jassimp/AiMaterial$Property.class": "3bb15453b82e90f9cc66c484322f990f8d0a8213677fe5f250cc25cea1624ae6",
+          "jassimp/AiMaterial$PropertyKey.class": "8fa7fdce4b32cfa12fb192c54157c4505b043921925ae41825d91725388d8b5a",
+          "jassimp/AiMaterial$PropertyType.class": "7a13f9375b2583f78ede4fdad802969aed2176bb923732689c60d7f2e1f5f532",
+          "jassimp/AiMaterial.class": "966d92abfb094e1d59b1783c3d3bbca5d0b62887270127e223cd89244e120e93",
+          "jassimp/AiMatrix4f.class": "a2965eb00fe8d1b2c3de5bc90d241f8fc0c433dc6e468bb7a24c507c42f1424c",
+          "jassimp/AiMesh.class": "36bb1ea3b9dadae81f467cc1cfdd6009ae6de1b075cf1c07f39854ce69d54972",
+          "jassimp/AiMeshAnim.class": "d5ccc8928161a462cb1a2a8c6d708bc2913fd468e92853edd7540f03bd8a24d8",
+          "jassimp/AiMetadataEntry$AiMetadataType.class": "73fd9d404239c05d446507f56f4d1d2bba1a54a033782c6c6b970f2f0d5a545f",
+          "jassimp/AiMetadataEntry.class": "f87d3c0255239378fe6cc2bd872f4faedadf19cf6db7c4d74a50d4f7f15b8931",
+          "jassimp/AiNode.class": "53067e9cbb42fc452ad131c0d1a0aa010e326a881e4769e38b6fc8af731e4f93",
+          "jassimp/AiNodeAnim.class": "a1cf050d8e6d230032904fd2417b78613f7f3fe61ca947f9b3643acae2c43d4b",
+          "jassimp/AiPostProcessSteps.class": "f4bf819159848f182765a762bb4609493ae06c94b6d17f9c6fb42e6f8d7c82ea",
+          "jassimp/AiPrimitiveType.class": "448c22dc8991949c0d77d53cebffbba7989973aafeb5f9c476778bb6061459c8",
+          "jassimp/AiQuaternion.class": "cdb7aaaf939f71a835ddbb8fec1ce43a880f0776b35099029e5bb3a82cc062bf",
+          "jassimp/AiScene.class": "9ce58583c8305a694f286decb676518d8228c7dd801c2f80c0bb9e234c32b028",
+          "jassimp/AiSceneFlag.class": "d1c1bc641c64004ca6751161f9f0b33b80f45fe0ad593fa0073345e2ca69256f",
+          "jassimp/AiShadingMode.class": "c0ca50d662ec53134f89fa545faa2e51e7203f033a8fb326907ee76ebdcf372f",
+          "jassimp/AiTextureInfo.class": "b875a25ae2e0f211c9686dacc6c40fac75b97ec4521b1f5b54cb6227e5e8cf67",
+          "jassimp/AiTextureMapMode.class": "edc529f49d7baf43640142e53afea99665ad7d297a0928105b6ae122a4290131",
+          "jassimp/AiTextureMapping.class": "86ec776aa82bacfcf7512eab0309e1d0a1f42d018d0d1f4431c786718eaa79b9",
+          "jassimp/AiTextureOp.class": "a5fb5460a02a08c81fc7ded581d7f26bf723426e1a1172fc2b329016b5e15517",
+          "jassimp/AiTextureType.class": "6c9387187a8ebf1f9dd399eb6c9c768fe3798b4d4205a800a5b51f572e417bca",
+          "jassimp/AiVector.class": "25c7be4d1676d665721b5010ced39a57d50e19a84c80060a3e25a686d74c10fe",
+          "jassimp/AiWrapperProvider.class": "e4bb511ae27c1fd8f6a78b46e4fb4f1cda5aabb8afc3bc6850b2624db4fa867e",
+          "jassimp/JaiDebug.class": "6053bdccb72f8b3af3b36ae40f35414dc099e98062e237261120ae889e7ada7b",
+          "jassimp/Jassimp$1.class": "a7386a6483d3cb53d13c19db5d2d5edf56d371425fd82a7ec4149eb73b09aa86",
+          "jassimp/Jassimp.class": "1683e9c04b7b6f8ad20519b384aae84c21a5e8ffc534c754421c949e8b9e5840",
+          "jassimp/JassimpConfig.class": "0073d9b6f74226a2f2f6510ac68e7b8d5f58ea39512ec3aa9a9f34b89ee4197d",
+          "jassimp/JassimpLibraryLoader.class": "8181e4a799690ff2293131a7ea48c330903a8cffc9637f3adfa69f9fbd54a437"
+        }
+      }
+    }
+  },
+  "patched_replacements": {
+    "okio-jvm-3.2.0.jar": {
+      "name": "okio-jvm-3.4.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.4.0/okio-jvm-3.4.0.jar",
+      "sha256": "0139ec7a506dbbd54cad62291b019cb850534be097c8c66c1000d5fbe8edef3e",
+      "bytes": 360090
+    },
+    "guava-30.0-jre.jar": {
+      "name": "guava-33.7.2-jre.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/google/guava/guava/33.7.2-jre/guava-33.7.2-jre.jar",
+      "sha256": "b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c",
+      "bytes": 3057659
+    },
+    "json-20220924.jar": {
+      "name": "json-20260719.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/json/json/20260719/json-20260719.jar",
+      "sha256": "c243f45f9590c12694a4142ed3f07fc70dfb71e4daebd05ae234bf92a2da92a6",
+      "bytes": 90031
+    },
+    "bcprov-jdk18on-1.78.1.jar": {
+      "name": "bcprov-jdk18on-1.85.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.85/bcprov-jdk18on-1.85.jar",
+      "sha256": "20af26bf6060bb8005cc2389916812c1e0e998dc48d2ced7131b89461b54cff7",
+      "bytes": 10321819
+    },
+    "bcpkix-jdk18on-1.78.1.jar": {
+      "name": "bcpkix-jdk18on-1.85.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.85/bcpkix-jdk18on-1.85.jar",
+      "sha256": "c9f82b2d4e99c4bbdfccf684e52cc06ea06a0b567bfd0d08f9c5a3f417055996",
+      "bytes": 1315409
+    },
+    "bcutil-jdk18on-1.78.1.jar": {
+      "name": "bcutil-jdk18on-1.85.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.85/bcutil-jdk18on-1.85.jar",
+      "sha256": "590f55ed5d68529239898a4a5c4f730b6e37f45d1cfa3fbe51f8485abe32c42d",
+      "bytes": 718812
+    }
+  },
+  "shared_profile": {
+    "modules": {
+      "takkernel/shared/src/main/java": 212,
+      "takkernel/shared/src/jre/java": 19
+    },
+    "combined_source_inventory_sha256": "777bd30dc5a6e128545cd9c12cf9b19771206007ab7836419097d8a04808b602",
+    "public_jars": {
+      "jackson-databind-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.13.1/jackson-databind-2.13.1.jar",
+        "bytes": 1534017,
+        "sha256": "56cfbdc9e1736b5c56b43757f6cf546ee6d49393c79383c4e495c4f7047cb506"
+      },
+      "jackson-core-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.13.1/jackson-core-2.13.1.jar",
+        "bytes": 374588,
+        "sha256": "8be6935cd8f9673ac684a589aaa1caecd57dee7c37ed1443d17924325799003d"
+      },
+      "jackson-annotations-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.13.1/jackson-annotations-2.13.1.jar",
+        "bytes": 75717,
+        "sha256": "ab607939d288e22bff4cb97acc6b25e841d82681f2bc40ce67bb35cb0ffdb06d"
+      },
+      "mil-sym-renderer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-renderer/0.1.41/mil-sym-renderer-0.1.41.jar",
+        "bytes": 213427,
+        "sha256": "5b480ed3e2c9cfbc0752085f1671f3afa812987097cd951cc8db38b5bda94bb6"
+      },
+      "mil-sym-java-2.1.5.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-java/2.1.5/mil-sym-java-2.1.5.jar",
+        "bytes": 1651691,
+        "sha256": "889d1b46869412eef02e3683645a8bc472cdbbca153d026ec17220c8b87a62ce"
+      },
+      "JavaRenderer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRenderer/0.1.41/JavaRenderer-0.1.41.jar",
+        "bytes": 48521,
+        "sha256": "eee408e16ea8492e516079d98e5ee84657e64e367b28f2cf4d6e2185987fc77b"
+      },
+      "RendererPluginInterface-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/RendererPluginInterface/0.1.41/RendererPluginInterface-0.1.41.jar",
+        "bytes": 3970,
+        "sha256": "852f466bb5eaa4254b2e4de3df45c1a1523b12fd2a98978201ba15aed55ddf13"
+      },
+      "JavaRendererServer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRendererServer/0.1.41/JavaRendererServer-0.1.41.jar",
+        "bytes": 93789,
+        "sha256": "be48224df2ed76ea3c84813e96cd3908875faa26a6e2ac7b033e64f58f2b6366"
+      },
+      "JavaLineArray-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaLineArray/0.1.41/JavaLineArray-0.1.41.jar",
+        "bytes": 299837,
+        "sha256": "427b678c1cfb4b74ac453769d43cb104a7025985f565a6cfab6253b20ab81669"
+      },
+      "JavaRendererUtils-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRendererUtils/0.1.41/JavaRendererUtils-0.1.41.jar",
+        "bytes": 688768,
+        "sha256": "87f7be80333ed7758ddacc3d74ccee783416fc653a9f074eea442fca515267a6"
+      }
+    },
+    "patched_replacements": {
+      "jackson-databind-2.13.1.jar": {
+        "name": "jackson-databind-2.23.0.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.23.0/jackson-databind-2.23.0.jar",
+        "bytes": 1716668,
+        "sha256": "abd1edd2736c764da03fe6cb7a9de70d48dd0a198aed131604c564bff62f9cc1"
+      },
+      "jackson-core-2.13.1.jar": {
+        "name": "jackson-core-2.23.0.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.23.0/jackson-core-2.23.0.jar",
+        "bytes": 603520,
+        "sha256": "449798beb4c4ec26de9cc25b39ca2198036883fb905ca968cbef7136d19a25d9"
+      },
+      "jackson-annotations-2.13.1.jar": {
+        "name": "jackson-annotations-2.23.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.23/jackson-annotations-2.23.jar",
+        "bytes": 84212,
+        "sha256": "e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c"
+      }
+    }
+  }
+}

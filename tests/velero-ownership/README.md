@@ -1,11 +1,12 @@
 # Opt-in Velero ownership experiment
 
-This is an experimental preparation and **read-only** acceptance harness for
-[issue 258](https://github.com/jonathanagustin/uds-takserver/issues/258), not a
-production migration command. It never transfers metadata, upgrades Helm,
-deletes namespaces or initiates a restore. FILESYSTEM_BACKUP remains false by
-default and FILESYSTEM_BACKUP_OWNER remains local. A direct switch on an
-existing installation can delete the current agent and configuration.
+This is an experimental preparation, observer and guarded disposable-cluster
+acceptance harness for [issue 258](https://github.com/jonathanagustin/uds-takserver/issues/258),
+not a production migration command. The observer is read-only; the separately
+invoked staged driver deliberately mutates only its verified ephemeral cluster.
+FILESYSTEM_BACKUP remains false by default and FILESYSTEM_BACKUP_OWNER remains
+local. A direct switch on an existing installation can delete its current agent
+and configuration. Live acceptance is still pending.
 
 ## Reviewed inputs
 
@@ -94,51 +95,111 @@ directory and `fresh-ready` then `fresh-core`; it is not handoff/reversal proof.
 A readiness observation is a bounded sample, not an atomic transaction or a
 claim that no subsequent cluster change occurred.
 
-## Proposed ephemeral Full Core trial, pending review
-
-Reuse the existing Full Core workflow's native two-architecture jobs and warm
-published images; do not add app image compilation or a parallel cold matrix.
-No workflow or dispatch is added by this preparation. Run on one reviewed
-candidate commit after normal gates settle, with an explicit timeout and bounded
-sanitized artifacts. Stage operations in each disposable job:
-
-1. **Existing local path:** install the ordinary full bundle first. Install the
-   candidate's equivalent bootstrap exemption through core-base before enabling
-   Core's privileged agent. Observe local-before. Save external recovery state
-   privately: both Helm histories/manifests, DS UID/resourceVersion/managedFields
-   and the old config. These are not public workflow artifacts.
-2. A separately reviewed one-off driver must protect the DS, transfer only the
-   expected local Helm owner using UID/resourceVersion/old-owner preconditions,
-   enable the candidate Core chart and new config, verify Ready agents, then
-   upgrade TAK with owner=core. Observe core-ready; perform the existing backup,
-   volume restore and post-restore API acceptance; observe core-after.
-3. Reverse in controlled order: retain bootstrap, recreate the real local
-   ConfigMap before local rollout, protect the DS while removing it from Core's
-   manifest, transfer ownership only after exact precondition checks, deploy the
-   local agent, then retire Core's config after local readiness. Observe
-   local-ready; run a new backup/restore/API acceptance; observe local-after.
-4. Exercise interruption boundaries and unknown-owner refusal before declaring
-   this an operator migration. Raw rollback of either release independently is
-   not a demonstrated recovery procedure. Do not run namespace deletion or
-   metadata restoration as an unconditional cleanup handler.
-5. On a **separate fresh ephemeral cluster**, deploy candidate core-base/Core
-   agent before TAK owner=core, observe fresh-ready and require fresh-core
-   backup/restore/API acceptance. This may reuse the same native job after its
-   prior disposable cluster is explicitly removed, rather than adding jobs.
-
-This preparation does not contain the mutating driver: its exact Zarf commands,
-metadata preconditions, stop/recovery paths and admission/field-manager behavior
-still need review and live validation. Thus a standard green Full Core run or
-these offline tests alone cannot close issue 258. The live matrix must prove
-both architectures and the staged paths above before any default-owner change.
-
-Local preparation host: Docker 29.9.2 answers, zero containers/volumes, but only
-about 1.6 GiB filesystem space was free. A real local Full Core deployment was not
-attempted; unrelated cache data was not deleted to force it to fit.
-
 Offline checks (no cluster, downloads or ownership writes):
 
 ```bash
 uv run --no-project --with pyyaml==6.0.3 python -B -m unittest \
-  tests.test_filesystem_backup_owner tests.test_velero_handoff -v
+  tests.test_filesystem_backup_owner tests.test_velero_handoff \
+  tests.test_ephemeral_cluster tests.test_velero_transfer tests.test_velero_trial -v
 ```
+
+## Guarded staged driver (not yet accepted live)
+
+`candidate.py`, `transfer.py`, and `drive.py` implement an opt-in disposable
+acceptance harness. They do not change production defaults. The commands are
+not a supported production migration procedure and must not be used on a
+persistent cluster.
+
+The shared `tests/ephemeral-cluster.py` guard binds every outer mutation to
+this repository's exact GitHub Actions run, attempt, source SHA, local Docker
+Unix socket, fixed `k3d-uds` context, API port, server container ID, cluster UID
+and nonterminating run marker. Run its `docker` operation **before bootstrap**,
+then `mark` only after creating that run's disposable cluster. Docker environment
+and non-default contexts are refused, including remote endpoints. There is no
+local/production override. The marker is never overwritten.
+
+Prepare in a fresh private runner directory after pinning the existing image
+keys and acquiring the exact dev package. Core packages retain their keyless checks; the local
+experimental bundle/dev package is not claimed to be a signed release. Extract the actual single local
+Exemption from a Helm render as above, then:
+
+```bash
+python3 tests/velero-ownership/candidate.py prepare \
+  --exemption "$RUNNER_TEMP/agent-exemption.yaml" \
+  --directory "$RUNNER_TEMP/owner-candidate"
+# The usual bundle helper copies the flavored dev package to its unflavored
+# name. Do the same reviewed copy before create, without compiling new images.
+for variant in core detach clean; do
+  uds create "$RUNNER_TEMP/owner-candidate/$variant" --confirm \
+    --output "$RUNNER_TEMP/owner-candidate/$variant"
+done
+python3 tests/velero-ownership/candidate.py bind \
+  --directory "$RUNNER_TEMP/owner-candidate"
+python3 tests/velero-ownership/drive.py round-trip \
+  --plan "$RUNNER_TEMP/owner-candidate/plan.json" \
+  --evidence "$RUNNER_TEMP/owner-trial"
+```
+
+The prepared core variant contains only Core base, backup/restore and TAK with
+CloudTAK. The detach variant omits Core's agent but retains its config; clean
+omits that config too. Both retain the remaining reviewed Velero overrides.
+Relative package/values-file paths are relocated rather than silently changed.
+Binding checks prepared bytes and records actual archive hashes against the
+workflow SHA. The driver rechecks bytes before deploy, uses UDS 0.41 package
+selection and `UDS_CONFIG`, permits one deployment attempt (`--retries 1`),
+and does not use force-conflicts, take-ownership, insecure or signature bypass.
+Zarf treats zero retries as its default; zero would not disable retries.
+
+The fixed sequence is fresh Core-agent-first installation and real
+backup/restore/API acceptance; conversion to a known local baseline; then
+local-to-Core and Core-to-local, each with new acceptance. It keeps the same
+DaemonSet UID throughout and records separate fresh/handoff proofs. Three
+backup names use the explicit fresh/core/local suffix without changing the
+GitHub run identity. The backup helper's trial mode fixes its context and
+rechecks the shared guard before its mutating kubectl calls. Initial Core
+bootstrap requires no existing Velero server or agent; later phases refuse
+active, unknown or terminating Velero work, unpaused schedules and live data
+movers. Metadata writes use API JSON Patch tests for the exact UID,
+resourceVersion, old Helm owner and managed-by label. A concurrent update
+fails instead of being retried or forced. These are bounded observations, not
+an atomic lock against an unrelated operator starting a backup.
+
+A failed step stops immediately with `accepted: false` in `journal.json`.
+There is no automatic rollback, ownership reset or cluster deletion. The
+journal and any `PRIVATE-command-failure.txt` are private mode-0600 files;
+**never upload the entire evidence directory**. Command failures can contain
+credentials. Upload only the observer's sanitized fresh/handoff JSON and a
+reviewed sanitized journal. The journal retains the failed stage before any
+recovery; it does not equate recovery with accepted reversal.
+
+An explicitly reviewed recovery may use a **new** evidence directory and the
+original journal's exact DaemonSet UID:
+
+```bash
+python3 tests/velero-ownership/drive.py recover-local \
+  --plan "$RUNNER_TEMP/owner-candidate/plan.json" \
+  --daemonset-uid EXACT_ORIGINAL_UID \
+  --evidence "$RUNNER_TEMP/owner-recovery"
+```
+
+Recovery recreates/verifies local config, detaches the protected Core agent,
+transfers only a known owner, redeploys local, waits for the same UID, then
+retires Core config. An unknown, terminating or incomplete resource stops it.
+It records `recoveryOnly: true` and never sets acceptance true. Helpers are
+idempotent only after checking current API objects; the full trial deliberately
+refuses reusing an evidence directory or an existing fresh-install agent.
+
+The hosted workflow is still a review prerequisite. A focused manual selector
+should default to native AMD; ARM-only completes the other architecture later.
+Use the same run's slim Core 1.16 bootstrap, local-path-local StorageClass and
+warm published package, then this exact driver. Do not run the ordinary
+install/upgrade matrix or unrelated monitoring/portal/Falco checks. If identity
+is also selected, require owner acceptance plus the restored local/shared
+baseline before its separate driver and keep separate scenario results. Budget
+up to 180 minutes per selected architecture for bootstrap, staged deployments
+and three 35-minute bounded backup/restore/API calls. This is a **ceiling, not
+a measured runtime**; AMD pilot evidence must establish actual cost before
+running ARM. Missing package/credentials, admission conflicts, bootstrap
+failures or missing scenario proofs fail the job; no blanket retry or skipped
+green summary. Both architectures' live acceptance remains required before any
+default change or issue closure.

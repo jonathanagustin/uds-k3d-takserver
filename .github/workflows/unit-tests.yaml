@@ -162,4 +162,4 @@ jobs:
       - name: Package values follow the variables
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_package_values tests.test_trust_bundle tests.test_expose_annotations tests.test_workload_identities tests.test_filesystem_backup_owner tests.test_velero_handoff tests.test_ephemeral_cluster tests.test_velero_transfer tests.test_velero_trial -v

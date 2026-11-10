@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "evidence_kind": "local bounded production consumer compiler investigation; not a shipped complete client compiler recipe",
+  "takx_revisions": {
+    "5.8": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
+    "5.7": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713"
+  },
+  "source_lock_sha256": "ba2dc766d104a9107b09dce49c97df8234f9cb5feb3f32d8a1e74484be6e61a2",
+  "patch_sha256": "d4188bfd5d14230dcd4a8d663d4f0a087c3fa4b395290125c9fe1b5115950876",
+  "stager_sha256": "092f0896678cbafa823f3559e2cbb1be3ff0e1601ff84f5adcd9d007f7dcd54b",
+  "bytecode_checker_sha256": "0a6cd9cda5c82e19db79c875d13711203d619d1d30aa86337e14ecb3a9e6c4cd",
+  "kernel_source_commit": "f1093e7a375299148f8f75c75a28438786a69465",
+  "kernel_input_class_files": 2697,
+  "worldwind_identity": "uds-takserver-worldwind-java / project-standard-gdal-rgb; not 2.2.1-TAKX-4",
+  "worldwind_jar_sha256": "90774682165a6bea284b6723040bb4dbc695e64c8b25bac55c32b830815d9f35",
+  "worldwind_build_inputs_sha256": "41d1f2ca2f4a671df2e4a31c5fd678771aa54736998cc41d0063fc157580592d",
+  "worldwind_classes": 3241,
+  "worldwind_java_sources": 1727,
+  "frozen_classpath_jars": 37,
+  "full_input_receipt_sha256": "7e131050bb2d5dcd5ba020d15a986dec4c5bc4fb8a995816e77a52b3410fa85a",
+  "unpatched_probe_errors_per_profile": 1,
+  "unpatched_error": "AOverlayLayer.java:145: NASA TextRenderer cannot be converted to JOGL TextRenderer",
+  "compiler": {
+    "release": 17,
+    "annotation_processing": false,
+    "sourcepath": "empty",
+    "maximum_heap_mib": 768,
+    "active_processors": 2,
+    "timeout_seconds": 180
+  },
+  "profiles": {
+    "5.8": {
+      "exit_code": 0,
+      "errors": 0,
+      "explicit_takx_sources": 20,
+      "unchanged_sources": 19,
+      "single_import_patched_sources": 1,
+      "compiled_classes": 23,
+      "sourcepath_empty": true,
+      "real_nasa_bytecode_check": "pass",
+      "native_or_full_client_acceptance": false,
+      "source_receipt_sha256": "c962e2676ac04900e8eee5041969768aa568da6a05ea23524363e71a1f47235a",
+      "output_class_hashes_sha256": "ccb1a1cace6520a5011f19c6df0e318bd4b301a6ab633db9b505e05cfbe424f4",
+      "bytecode_sha256": "8f90bb83b380be3922633ac7144b8b97cfc63b540e9f72715eb0d3abf479df8d"
+    },
+    "5.7": {
+      "exit_code": 0,
+      "errors": 0,
+      "explicit_takx_sources": 20,
+      "unchanged_sources": 19,
+      "single_import_patched_sources": 1,
+      "compiled_classes": 23,
+      "sourcepath_empty": true,
+      "real_nasa_bytecode_check": "pass",
+      "native_or_full_client_acceptance": false,
+      "source_receipt_sha256": "921898f5d39b1f91cdb2b28ad4907375b42231d911b6dd90882e77e5cf024fac",
+      "output_class_hashes_sha256": "c84a2af73347717907aa86002afa124ac1dd3502243b398424cd3475e2e51701",
+      "bytecode_sha256": "8f90bb83b380be3922633ac7144b8b97cfc63b540e9f72715eb0d3abf479df8d"
+    }
+  },
+  "native_or_full_client_acceptance": false
+}

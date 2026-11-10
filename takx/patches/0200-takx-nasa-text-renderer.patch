@@ -1,0 +1,9 @@
+--- a/Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java
++++ b/Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java
+@@ -3,5 +3,5 @@
+ import com.jogamp.opengl.GL;
+ import com.jogamp.opengl.GL2;
+-import com.jogamp.opengl.util.awt.TextRenderer;
++import gov.nasa.worldwind.render.TextRenderer;
+ import gov.nasa.worldwind.layers.AbstractLayer;
+ import gov.nasa.worldwind.render.DrawContext;

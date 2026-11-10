@@ -11,3 +11,12 @@ The patch adds the Java/JNI/C++ streaming-contact fallback needed by both pinned
 Future changes belong here as small, ordered diffs against a recorded upstream revision. Each patch must state the concrete incompatibility, intended behavior, applicable version and tests. Apply patches deterministically and include their hashes in build inputs before enabling them. Keep substantial upstream code in its upstream checkout rather than copying it into an untracked compatibility SDK.
 
 A repository-local adapter is appropriate only when it implements real, tested behavior at an integration boundary. Do not add placeholder SDK classes, rename an old artifact to satisfy a newer dependency, treat a fixed-UDP endpoint as a TLS streaming route, or silently remove features. Unsupported capabilities must be visible and covered by tests; upstream fixes should remain easy to review and retire when a matching source release becomes available.
+
+`0200-takx-nasa-text-renderer.patch` changes one import in the pinned TAKX 5.7/5.8
+`AOverlayLayer` production consumer. Stock NASA WorldWind 2.2.1 returns its own
+`gov.nasa.worldwind.render.TextRenderer` from `OGLTextRenderer`; the consumer had
+expected JOGL's different class. The patch keeps the real factory, cache and
+rendering calls. It is an explicit project compatibility patch, not the unavailable
+upstream `2.2.1-TAKX-4` patch set. [Source pins and staging guards](../worldwind-consumers/README.md)
+apply it only to verified source copies. Neither the native build nor Kernel recipe
+applies this patch automatically.

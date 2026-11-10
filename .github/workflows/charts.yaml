@@ -1,0 +1,84 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Publish Helm charts
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag (charts only, such as v0.11.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-charts-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft))
+      && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      # Keep the publisher from the invoking workflow commit. Chart files come
+      # separately from the validated tag, including backfills of older tags.
+      - name: Checkout publisher and release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned Helm, registry client, and uv
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: helm crane uv
+          cache: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish and verify both immutable charts
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          uv run --no-project --with pyyaml==6.0.3 python -B .github/scripts/publish-charts.py \
+            --tag "${RELEASE_TAG}" --output "${RUNNER_TEMP}/helm-charts" --publish
+
+      # This attests the publisher job and resulting immutable digest. The
+      # packaged chart and OCI annotations separately identify the source tag.
+      - name: Attest chart packaging
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/helm-charts/subjects.txt
+
+      - name: Verify chart attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          while read -r digest name; do
+            gh attestation verify "oci://${name}@sha256:${digest}" \
+              --owner "${GITHUB_REPOSITORY_OWNER}" \
+              --signer-workflow "${GITHUB_WORKFLOW_REF%@*}"
+          done < "${RUNNER_TEMP}/helm-charts/subjects.txt"

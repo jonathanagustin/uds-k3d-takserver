@@ -44,6 +44,8 @@ upstream/takx
 .github/workflows/scorecard-analysis.yaml
 .github/workflows/release-please.yaml
 .github/workflows/release.yaml
+.github/workflows/charts.yaml
+.github/scripts/publish-charts.py
 .github/workflows/cosign.yaml
 .github/workflows/demo.yaml
 .github/workflows/benchmark.yaml

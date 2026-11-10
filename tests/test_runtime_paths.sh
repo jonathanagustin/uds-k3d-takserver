@@ -78,6 +78,8 @@ check_match ".github/workflows/scorecard-analysis.yaml" ignore
 check_match ".github/workflows/benchmark.yaml" ignore
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
+check_match ".github/workflows/charts.yaml" ignore
+check_match ".github/scripts/publish-charts.py" ignore
 check_match ".github/workflows/full-core.yaml" ignore
 check_match ".github/workflows/scan.yaml" ignore
 check_match ".github/test-infra/aws/eks/main.tf" ignore

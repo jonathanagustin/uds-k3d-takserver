@@ -1,0 +1,11 @@
+--- a/src/c_api.cpp
++++ b/src/c_api.cpp
+@@ -430,7 +430,7 @@
+         LASError_PushError(LE_Failure, e.what(), "LASReader_Seek");
+     }
+  
+-    return LE_None;
++    return LE_Failure;
+ 
+ }
+ 

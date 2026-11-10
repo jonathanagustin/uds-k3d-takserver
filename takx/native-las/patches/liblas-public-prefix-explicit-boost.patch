@@ -1,0 +1,136 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -27,82 +27,29 @@
+ ###########################################################
+ # TAK Conan
+ 
+-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/conan.cmake)
+-
+-conan_cmake_configure(REQUIRES
+-    LASzip/3.4.3c
+-  GENERATORS
+-    cmake_find_package)
+-
+-if (ANDROID)
+-    set (conan_settings 
+-        build_type=Release
+-        compiler=gcc
+-        compiler.libcxx=libstdc++
+-        compiler.version=8
+-        os=Android
+-        os.api_level=21
+-    )
+-    if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
+-        list (APPEND conan_settings arch=armv8)
+-    elseif (${CMAKE_ANDROID_ARCH_ABI} STREQUAL armeabi-v7a)
+-        list (APPEND conan_settings arch=armv7)
+-    elseif (${CMAKE_ANDROID_ARCH_ABI} STREQUAL x86)
+-        list (APPEND conan_settings arch=x86)
+-    elseif (${CMAKE_ANDROID_ARCH_ABI} STREQUAL x86_64)
+-        list (APPEND conan_settings arch=x86_64)
+-    endif ()
+-elseif (MSVC)
+-    set (conan_settings 
+-        build_type=Release
+-        "compiler=Visual Studio"
+-        compiler.runtime=MD
+-        compiler.version=14
+-        os=Windows
+-    )
+-elseif (UNIX AND NOT APPLE) #Linux
+-    set (conan_settings 
+-        build_type=Release
+-        compiler=gcc
+-        compiler.libcxx=libstdc++
+-        compiler.version=8
+-        os=Linux
+-        arch=x86_64
+-    )
+-elseif (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "Darwin") #MacOS
+-    set (conan_settings
+-        build_type=Release
+-        compiler=gcc
+-        compiler.libcxx=libstdc++
+-        compiler.version=8
+-        os=Macos
+-        arch=x86_64
+-    )
+-else ()
+-    # Auto-detect for other platforms
+-    conan_cmake_autodetect(conan_settings)
+-endif ()
+-
+-# If supplied with CONAN_PATH environment variable, pass to 
+-# conan_cmake support script to bypass searching for it in PATH
+-if (DEFINED ENV{CONAN_PATH})
+-    set (CONAN_COMMAND $ENV{CONAN_PATH})
+-endif()
+-conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_BINARY_DIR}
+-                    BUILD missing
+-                    SETTINGS ${conan_settings})
+-
+-list (APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
+-find_package(LASzip)
+-
+-set (LASZIP_INCLUDE_DIR ${LASzip_INCLUDE_DIR})
+-if (MSVC)
+-  set (LASZIP_LIBRARY ${LASzip_LIB_DIRS}/laszip3.lib)
+-else ()
+-  set (LASZIP_LIBRARY ${LASzip_LIB_DIRS}/liblaszip.a)
+-endif ()
+-set (LASZIP_VERSION ${LASzip_VERSION})
+-set (LASZIP_FOUND ${LASzip_FOUND})
++# Project public-source profile: resolve only the actual source-built LASzip prefix.
++if(NOT DEFINED PUBLIC_LASZIP_PREFIX)
++  message(FATAL_ERROR "PUBLIC_LASZIP_PREFIX must identify the reviewed source-built LASzip output")
++endif()
++find_path(LASZIP_INCLUDE_DIR NAMES laszip/laszip.hpp
++  PATHS "${PUBLIC_LASZIP_PREFIX}/include" NO_DEFAULT_PATH REQUIRED)
++set(_public_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
++set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
++find_library(LASZIP_LIBRARY NAMES laszip
++  PATHS "${PUBLIC_LASZIP_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED)
++set(CMAKE_FIND_LIBRARY_SUFFIXES "${_public_library_suffixes}")
++file(REAL_PATH "${PUBLIC_LASZIP_PREFIX}" _public_laszip_prefix)
++file(REAL_PATH "${LASZIP_INCLUDE_DIR}/laszip/laszip.hpp" _public_laszip_header)
++file(REAL_PATH "${LASZIP_LIBRARY}" _public_laszip_library)
++string(FIND "${_public_laszip_header}" "${_public_laszip_prefix}/" _public_header_index)
++string(FIND "${_public_laszip_library}" "${_public_laszip_prefix}/" _public_library_index)
++if(NOT _public_header_index EQUAL 0 OR NOT _public_library_index EQUAL 0 OR
++    NOT _public_laszip_library MATCHES "[.]a$")
++  message(FATAL_ERROR "LASzip must resolve to the real static source-built prefix")
++endif()
++set(LASZIP_VERSION "3.4.3")
++set(LASZIP_FOUND TRUE)
++
+ 
+ ###########################################################
+ 
+@@ -262,7 +209,12 @@
+ endif(WIN32)
+ 
+ find_package(Threads)
+-find_package(Boost 1.42 COMPONENTS program_options thread system iostreams filesystem REQUIRED)
++# Use CMake's real module, not the bundled header-only FOUND metadata.
++set(_public_cmake_module_path "${CMAKE_MODULE_PATH}")
++set(CMAKE_MODULE_PATH "")
++find_package(Boost 1.77.0 EXACT MODULE
++  COMPONENTS program_options thread system iostreams filesystem REQUIRED)
++set(CMAKE_MODULE_PATH "${_public_cmake_module_path}")
+ 
+ if(Boost_FOUND AND Boost_PROGRAM_OPTIONS_FOUND)
+   if(EXISTS "${Boost_INCLUDE_DIRS}")
+@@ -281,12 +233,7 @@
+ set(WITH_STATIC_LASZIP TRUE CACHE BOOL "Choose of LASzip should be statically linked")
+ mark_as_advanced(WITH_STATIC_LASZIP)
+ 
+-if (WITH_LASZIP)
+-  find_package (LASzip 2.0.1 QUIET NO_MODULE)
+-  if (NOT LASZIP_FOUND)
+-    find_package (LASzip 2.0.1)
+-  endif ()
+-endif ()
++# LASzip is resolved above from the explicit source-built prefix only.
+ if(LASZIP_FOUND)
+     include_directories(${LASZIP_INCLUDE_DIR})
+     add_definitions(-DHAVE_LASZIP=1)

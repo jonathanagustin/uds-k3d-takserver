@@ -12,6 +12,8 @@ The opt-in [public native dependency profile](native-deps/README.md) source-buil
 Draco 1.5.7 and verifies selected TinyGLTF/Khronos header inputs. Real codec and
 PIC probes cover that dependency only; it does not supply a Kernel SDK, JNI,
 map rendering or either TAKX client.
+The separate [LAS native profile](native-las/README.md) builds public libLAS,
+LASzip and Boost sources with real LAS/LAZ, seek/reset, error and PIC probes.
 
 The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
 

@@ -83,9 +83,16 @@ present, but that name inventory is not compilation of either complete manager.
 With the shared output included, the refreshed import inventory returns to the
 two/eighteen source-absent imports. It still does not test all members or compile
 either client. Both clients still require their full dependency
-closure, including custom WorldWind `2.2.1-TAKX-4` and CDI Blacksmith `1.1.3`,
-full source/API compatibility checks, resources/packaging, native GIS/GL/Kernel
+closure, including custom WorldWind `2.2.1-TAKX-4`, full source/API
+compatibility checks, resources/packaging, native GIS/GL/Kernel
 linkage, map rendering/recovery, enrollment and CoT interoperability. No frozen,
 complete client compiler recipe/classpath was available to rerun in this
 checkpoint; the older artifacts were inventories and module probes. The current
 foundation work does not establish a functioning TAKX application.
+
+CDI Blacksmith `1.1.3` remains an upstream **test-suite** dependency, not an
+established production runtime requirement. Both pinned clients declare it via
+`gradle/standardTestSetup.gradle` (`testImplementation`); the TestSupport module
+exports it for test consumers, while application assembly excludes that module.
+See the [WorldWind source recipe](worldwind-java/README.md) for exact source pins
+and the limits of the independently built public-source profile.

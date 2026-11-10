@@ -1,0 +1,8 @@
+<!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">TAK on UDS — Field unicorn</title>
+  <desc id="desc">An original friendly unicorn profile, with a bold horn and a trail-shaped mane.</desc>
+  <path fill="#0F172A" fill-rule="evenodd" d="M9 58 12 43Q14 34 23 28L20 13Q19 10 22 11L34 22H39L52 5Q54 3 53 7L49 27 58 35Q61 38 58 42L54 47Q52 49 49 47L41 43 38 58ZM44 31a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>
+  <path fill="#22D3EE" d="M39 22 52 5Q54 3 53 7L49 27Z"/>
+  <path fill="#22D3EE" d="M23 28Q14 34 12 43L9 58H19L24 43Z"/>
+</svg>

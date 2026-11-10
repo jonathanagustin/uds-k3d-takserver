@@ -11,7 +11,8 @@ paths:
     ignore:
       - 'unknown permission scope "(code-quality|drives|vulnerability-alerts)"'
   # GitHub supports FIFO queues; pinned actionlint 1.7.12 does not know this
-  # single key yet. tests/test_image_producers.py validates these sections.
+  # single key yet. tests/test_image_producers.py and the UI publisher
+  # workflow contract validate these sections.
   .github/workflows/test.yaml:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
@@ -22,6 +23,9 @@ paths:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
   .github/workflows/atak.yaml:
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/ui-reel.yaml:
     ignore:
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
   .github/workflows/atak-e2e.yaml:

@@ -162,3 +162,86 @@ a time with a shared two-second snapshot budget, so this is not one atomic
 cross-client instant; no counters from the later termination/join period are
 intentionally included. A lock timeout invalidates the counters. Historical
 interval-printer records omit unprinted tails and are not counter-equivalent.
+
+## Opt-in sustained synthetic baseline
+
+The manual Benchmark input `study=synthetic-baseline` selects baseline only,
+50 clients, three repeats, and the `synthetic-baseline-v1` protocol. It forces
+`profile=baseline` and `clients=50`; schedule/PR/default short sweeps stay
+unchanged. It installs once on each native architecture, marks that disposable
+local k3d cluster with the shared ephemeral guard, and verifies the same proof
+before each repeat. No tuning configurations or image build jobs are added.
+
+Expected budget is 100–120 minutes per architecture (200–240 aggregate runner
+minutes): 75 steady workload minutes plus approximately 2.5 minutes of client ramp
+and installation, initialization and collection.
+The existing 180-minute job limit remains the hard outer ceiling. The first
+invalid repeat stops that architecture; no automatic retry or 200-client point
+is authorized. No baseline study has been dispatched by this implementation.
+
+Each repeat starts one parent with the same live TLS clients throughout a
+300-second steady warm-up and 1200-second measured interval. A separate ramp
+first has a 120-second deadline for all 50 actual child processes to be alive
+and all 50 observed connection balances to equal one. Only then does the parent
+publish READY and the runner begin the full 300-second warm-up; reconnect or
+disconnect changes across that warm-up invalidate the point. The same sessions
+continue through measurement. After warm-up, the runner reads raw database
+statistics and boundary inventory, then sends a local-file GO/START/END handshake. The pre-install bootstrap guard refuses an
+already existing cluster/context; the marker cannot retroactively claim one. The parent
+snapshots all shared counters and starts its measured clock; a second snapshot
+ends the interval before client termination. Each snapshot has the existing
+shared two-second array-lock budget and retains per-UID monotonic read timestamps
+and snapshot begin/end timestamps. Capture is sequential across clients, not an
+atomic cross-client sample. Elapsed time must be 1200–1203 seconds. The record
+retains both snapshots and exact parent wall/monotonic boundaries. Only their
+deltas contribute to measured rates/mean ping-pong latency. All 50 identities
+must have one observed connection at both boundaries and no intervening
+connect/disconnect events. The parent also checks the real CoT children's
+liveness throughout startup/warm-up/measurement; intentionally exited printer
+helpers are excluded. No requested-client concurrency is inferred.
+
+The pinned XML CoT implementation counts self-SA and ping in messages sent;
+missions are disabled, so their difference gives observed self-SA sends. Each
+client must contribute at least 216 self-SA sends, 216 pings and 216 pongs
+(90% of the 240 nominal five-second ticks), plus received broadcast progress.
+This is an explicit workload/performance acceptance threshold, not a dead-client
+inference or a corruption diagnosis. Fewer pongs/receives can be a real overload
+observation. Such points retain their raw before/after counters, are classified
+`workload-performance-failed`, stop further repeats and cannot support a tuning
+front or a capacity-pass claim. A real child exit is classified separately.
+
+`--interval 5` explicitly requests one self-SA update per five seconds per
+client: 10 offered self-SA updates/s. Ping probes run every 5000 ms and offline
+metrics printing is disabled. Sent/received message rates retain upstream
+counter semantics, including protocol/control traffic and receiver fan-out;
+received/offered is not a delivery percentage. There is no p95 estimate.
+
+Raw PostgreSQL snapshots are retained as `postgres.window_before/window_after`;
+existing counter fields contain their nonnegative deltas. Reset timestamps
+from the database/checkpointer/I/O views must match across both snapshots. No shared database
+statistics are reset in this mode. Actual settings must remain identical;
+PostgreSQL 18/PostGIS 3.6 are checked. The database snapshot brackets must be
+within five seconds of the parent counter boundaries. These are explicit small
+brackets rather than a transactional atomic cross-system instant. A counter
+reset, failed/missing boundary or excessive skew invalidates the record.
+
+`study` retains source commit, tester/config SHA-256, repeat number, workload
+settings, runner machine/kernel/logical CPU count, boundary timestamps, bounded
+5-second per-container memory/CPU samples (maximum 400 batches/256 containers),
+and fixed-path cgroup-v2 `memory.max`/`cpu.max` at both boundaries. The database
+must retain its 512Mi cgroup limit. `capacity` retains configured limits, Pod UID,
+container/image IDs and before/after restart/readiness/OOM evidence. Sampler
+startup follows the parent's start handshake; stopping follows its end handshake
+with 200 ms polling. The source timestamps remain available for inspecting the
+boundary lag. Working set is not process RSS or a continuous maximum.
+
+`baseline-r1/r2/r3.json` prevent overwrites. An invalid record remains available
+and cannot enter the sustained-study front. Reporting isolates this protocol
+from historical ramp-inclusive records, keeps individual repeats, and provides
+median/range only when all three valid repeats are present. These repeats share
+one cluster's data/cache history and are not independent cluster replications.
+Native hosted-runner differences remain confounded with architecture. This is
+an exploratory synthetic baseline, not production representativeness, a tuning
+recommendation or an architecture ranking. Issues #49/#51 remain open. Choose
+two justified tuning points only after the baseline identifies a bottleneck;
+do not compare a named preset that merely reproduces actual default settings.

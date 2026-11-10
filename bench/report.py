@@ -6,6 +6,7 @@
 
 import json
 import math
+import statistics
 import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -35,10 +36,14 @@ def cohorts(records):
         load = record.get("load") or {}
         revision = record.get("git_sha")
         clients = nonnegative(load.get("clients"))
-        duration = nonnegative(load.get("duration_s"))
+        study = record.get('study') or {}
+        duration = nonnegative(study.get('measurement_s') if study else load.get('duration_s'))
+        protocol = (study.get('protocol'), study.get('warmup_s'), study.get('self_sa_interval_s'), study.get('tester_sha256')) if study else ('short',)
         if revision and clients and duration:
-            key = (revision, clients, duration)
+            key = (revision, clients, duration, protocol)
             label = f"clients={clients}, duration={duration} s, revision={revision}"
+            if study:
+                label += f", protocol={study.get('protocol')}, warmup={study.get('warmup_s')} s, self-SA={study.get('self_sa_interval_s')} s"
         else:
             key = ("incomplete", index)
             label = f"record {index + 1}: incomplete comparison metadata (not ranked against other records)"
@@ -55,6 +60,10 @@ def point(record):
     throughput = None
     if duration and received is not None:
         throughput = received / duration
+    if record.get('study') and record.get('errors'):
+        throughput = None
+        kubelet = {}
+        load = {}
     ready_s = ready.get("warm_s")
     if ready_s is None:
         ready_s = ready.get("cold_s")
@@ -139,6 +148,7 @@ def markdown(records):
                 lines.append("Front: " + ", ".join(sorted(p["config"] for p in kept)))
                 lines.append("Dominated: " + (", ".join(sorted(p["config"] for p in dominated)) or "none"))
                 lines.append("")
+        lines.extend(study_lines(matched))
         lines.extend(measurement_lines(matched))
         lines.extend(startup_lines(matched))
         lines.extend(postgres_lines(matched))
@@ -161,6 +171,35 @@ def measured(value, divisor=1, precision=3):
     if valid is None:
         return f"invalid ({cell(value)})"
     return f"{valid / divisor:.{precision}f}"
+
+
+def study_lines(records):
+    rows = [r for r in records if r.get('study')]
+    if not rows:
+        return []
+    lines = ['### Synthetic baseline repeats', '',
+             'One cluster per native architecture; these repeats share data/cache history and are not independent cluster replicates. Synthetic traffic is not production representative. Received messages include fan-out; offered self-SA updates and sent/received message rates have different semantics. Collection failures and workload-performance failures remain in the table and are excluded from the tuning front; low traffic or missing pongs can be genuine overload observations.', '',
+             '| Architecture | Repeat | Valid | Offered self-SA/s | Observed self-SA/s | Observed stable clients | Sent messages/s | Received messages/s | Actual measured seconds |',
+             '| --- | --- | --- | --- | --- | --- | --- | --- | --- |']
+    for record in rows:
+        study, load = record['study'], record.get('load') or {}
+        values = [cell(record.get('arch')), cell(study.get('repeat')), 'no' if record.get('errors') else 'yes',
+                  measured(load.get('offered_self_sa_per_s')), measured(load.get('observed_self_sa_per_s')), cell(load.get('observed_stable_clients')),
+                  measured(load.get('sent_messages_per_s')), measured(load.get('received_messages_per_s')),
+                  measured(load.get('duration_s'))]
+        lines.append('| ' + ' | '.join(values) + ' |')
+    lines += ['', '| Architecture | Valid repeats / planned | Received messages/s median [range] | Mean ping-pong ms median [range] |',
+              '| --- | --- | --- | --- |']
+    for arch in sorted({str(r.get('arch')) for r in rows}):
+        valid = [r for r in rows if str(r.get('arch')) == arch and not r.get('errors')]
+        def spread(key):
+            values = [r['load'].get(key) for r in valid]
+            values = [v for v in values if nonnegative(v) is not None]
+            if len(values) != 3:
+                return 'incomplete'
+            return f'{statistics.median(values):.3f} [{min(values):.3f}, {max(values):.3f}]'
+        lines.append('| ' + ' | '.join([cell(arch), f'{len(valid)} / 3', spread('received_messages_per_s'), spread('ping_pong_ms_mean')]) + ' |')
+    return lines + ['']
 
 
 def measurement_lines(records):

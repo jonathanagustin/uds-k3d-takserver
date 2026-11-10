@@ -13,6 +13,9 @@ import json
 import os
 import platform
 import re
+import importlib.util
+import resource
+import signal
 import shutil
 import subprocess
 import sys
@@ -30,10 +33,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bench.loadlog import parse
-from bench import capacity
+from bench import capacity, sustained
 from bench.phases import pod_phases
 from bench.startup import max_generation, max_restarts
-from bench.tester_exit import bind_tester, reap
+from bench.tester_exit import ANCHOR, bind_tester, reap, kill_group
 
 UNITS = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "k": 10**3, "M": 10**6, "G": 10**9}
 POSTGRES_SETTINGS = (
@@ -65,6 +68,9 @@ SELECT json_build_object(
     FROM pg_stat_io io
     WHERE io.backend_type = 'client backend'
   ),
+  'stats_reset_database', d.stats_reset,
+  'stats_reset_checkpointer', c.stats_reset,
+  'stats_reset_io', (SELECT max(io.stats_reset) FROM pg_stat_io io WHERE io.backend_type = 'client backend'),
   'shared_buffers', current_setting('shared_buffers'),
   'work_mem', current_setting('work_mem'),
   'effective_cache_size', current_setting('effective_cache_size'),
@@ -79,13 +85,15 @@ WHERE d.datname = 'cot'
 
 def kubectl_cmd():
     if shutil.which("kubectl"):
-        return ["kubectl"]
+        return ["kubectl", "--context", "k3d-uds"] if sustained.enabled() else ["kubectl"]
     if shutil.which("uds"):
-        return ["uds", "zarf", "tools", "kubectl"]
+        return ["uds", "zarf", "tools", "kubectl", "--context", "k3d-uds"] if sustained.enabled() else ["uds", "zarf", "tools", "kubectl"]
     raise RuntimeError("kubectl is not available")
 
 
 def kubectl(*args, check=True, timeout=None):
+    if sustained.enabled() and timeout is None:
+        timeout = 15
     try:
         result = subprocess.run(
             [*kubectl_cmd(), *args],
@@ -489,6 +497,29 @@ RESET_STATEMENTS = (
 )
 
 
+def postgres_version():
+    raw = postgres_sql(["SELECT json_build_object('server_version_num', current_setting('server_version_num'), 'postgis_version', postgis_lib_version())"], kubectl, database='cot')
+    value = json.loads(raw)
+    if (not re.fullmatch(r'18[0-9]{4}', value.get('server_version_num', ''))
+            or not re.fullmatch(r'3\.6\.[0-9]+', value.get('postgis_version', ''))):
+        raise ValueError('synthetic study requires PostgreSQL18 and PostGIS3.6')
+    return value
+
+
+def postgres_cgroup():
+    pod = postgres_pod(kubectl)
+    values = {}
+    for name, pattern in (('memory.max', r'[0-9]+'), ('cpu.max', r'(?:max|[0-9]+) [0-9]+')):
+        raw = kubectl('exec', '-n', 'takserver', pod, '-c', 'postgresql', '--',
+                      'cat', '/sys/fs/cgroup/' + name).stdout.strip()
+        if not re.fullmatch(pattern, raw):
+            raise RuntimeError('PostgreSQL cgroup-v2 limit unavailable')
+        values[name] = raw
+    if values['memory.max'] != str(512 * 1024**2):
+        raise RuntimeError('PostgreSQL cgroup memory limit differs from 512Mi study constraint')
+    return values
+
+
 def reset_postgres_counters(runner=None):
     run = runner or kubectl
     postgres_sql(list(RESET_STATEMENTS), run, database="cot")
@@ -528,6 +559,7 @@ def assemble_postgres(row, rss_samples):
         "peak_rss_bytes": max(samples) if samples else None,
         "steady_rss_bytes": samples[-1] if samples else None,
         "settings": {key: row.get(key) for key in POSTGRES_SETTINGS},
+        "stats_reset": {key: row[key] for key in ("stats_reset_database", "stats_reset_checkpointer", "stats_reset_io") if key in row},
     }
 
 
@@ -707,7 +739,7 @@ def keystore_password():
     return "atakatak"
 
 
-def kubelet_samples(stop, sink, errors, pg_rss=None, containers=None, capacity_errors=None):
+def kubelet_samples(stop, sink, errors, pg_rss=None, containers=None, capacity_errors=None, raw_samples=None):
     while not stop.is_set():
         try:
             nodes = kubectl("get", "nodes", "-o", "name").stdout.split()
@@ -717,8 +749,26 @@ def kubelet_samples(stop, sink, errors, pg_rss=None, containers=None, capacity_e
             for node in nodes:
                 raw = kubectl("get", "--raw", f"/api/v1/nodes/{node.split('/', 1)[-1]}/proxy/stats/summary").stdout
                 summary = json.loads(raw)
+                if stop.is_set():
+                    return
                 if containers is not None:
                     capacity.observe(summary, containers, capacity_errors)
+                if raw_samples is not None:
+                    rows = []
+                    for pod in summary.get('pods', []):
+                        ref = pod.get('podRef', {})
+                        if ref.get('namespace') not in capacity.NAMESPACES:
+                            continue
+                        for item in pod.get('containers', []):
+                            memory, row_cpu = item.get('memory', {}), item.get('cpu', {})
+                            rows.append({'namespace': ref.get('namespace'), 'pod_uid': ref.get('uid'),
+                                         'container': item.get('name'), 'memory_time': memory.get('time'),
+                                         'working_set_bytes': memory.get('workingSetBytes'),
+                                         'cpu_time': row_cpu.get('time'), 'cpu_nanocores': row_cpu.get('usageNanoCores')})
+                    if len(raw_samples) >= 400 or len(rows) > capacity.MAX_CONTAINERS:
+                        capacity.note(capacity_errors, 'raw sample bound exceeded')
+                    else:
+                        raw_samples.append({'observed_unix': time.time(), 'containers': rows})
                 for pod in summary.get("pods", []):
                     ref = pod.get("podRef", {})
                     if ref.get("namespace") not in ("takserver", "cloudtak"):
@@ -782,12 +832,14 @@ def stop_load_forward(forward):
             forward.wait(timeout=5)
 
 
-def run_load(clients, duration, password, tester):
+def run_load(clients, duration, password, tester, study=False, boundary=None):
     if not tester.is_file():
         raise RuntimeError("load tester unavailable")
     cert_dir = Path(tempfile.mkdtemp(prefix="bench-certs-"))
     forward = None
     patched_dir = None
+    proc = None
+    output = None
     try:
         load_operation("certificate extraction", subprocess.run,
                        ["bash", str(ROOT / "tests" / "extract-certs.sh"), str(cert_dir)], check=True, cwd=ROOT)
@@ -818,7 +870,8 @@ def run_load(clients, duration, password, tester):
         interval = max(1, duration // 3)
         patched_dir = Path(tempfile.mkdtemp(prefix="bench-tester-"))
         patched = patched_dir / "tak_tester.py"
-        patched.write_text(bind_tester(tester.read_text(encoding="utf-8")), encoding="utf-8")
+        source = bind_tester(tester.read_text(encoding="utf-8"))
+        patched.write_text(sustained.bind(source, ANCHOR) if study else source, encoding="utf-8")
         env = os.environ.copy()
         env["TAK_TESTER_DURATION"] = str(duration)
         env["BENCH_CUMULATIVE_STATS"] = "1"
@@ -831,6 +884,13 @@ def run_load(clients, duration, password, tester):
             "--skip-mission-api",
             "--send-metrics-interval", str(interval),
         ]
+        if study:
+            command += ['--interval', '5', '--ping-interval', '5000']
+            env['BENCH_WINDOW_READY'] = str(patched_dir / 'ready')
+            env['BENCH_WINDOW_GO'] = str(patched_dir / 'go')
+            env['BENCH_WINDOW_START'] = str(patched_dir / 'start')
+            env['BENCH_WINDOW_END'] = str(patched_dir / 'end')
+            output = tempfile.TemporaryFile(mode='w+')
         # Preserve the bounded tester and its process-group timeout escalation.
         proc = load_operation(
             "load tester launch", subprocess.Popen,
@@ -838,16 +898,54 @@ def run_load(clients, duration, password, tester):
             cwd=tester.parent,
             env=env,
             start_new_session=True,
-            stdout=subprocess.PIPE,
+            stdout=output if study else subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            preexec_fn=(lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (16*1024*1024, 16*1024*1024))) if study else None,
         )
-        text = load_operation("load tester wait", reap, proc, duration + 20)
+        if study:
+            deadline = time.monotonic() + sustained.RAMP_DEADLINE + sustained.WARMUP + duration + 40
+            ramp_until = time.monotonic() + sustained.RAMP_DEADLINE
+            while not (patched_dir / 'ready').is_file():
+                if time.monotonic() >= ramp_until or proc.poll() is not None:
+                    raise ValueError('all 50 clients did not become connected before ramp deadline')
+                time.sleep(0.2)
+            warm_until = time.monotonic() + sustained.WARMUP
+            while time.monotonic() < warm_until and proc.poll() is None:
+                time.sleep(min(0.5, max(0, warm_until-time.monotonic())))
+            if proc.poll() is not None:
+                raise ValueError('load process exited during warmup')
+            boundary('before')
+            (patched_dir / 'go').touch(exist_ok=False)
+            while not (patched_dir / 'start').is_file():
+                if time.monotonic() >= deadline or proc.poll() is not None:
+                    raise ValueError('measured start unavailable before deadline')
+                time.sleep(0.2)
+            boundary('started')
+            while not (patched_dir / 'end').is_file():
+                if time.monotonic() >= deadline or proc.poll() is not None:
+                    raise ValueError('measured boundary unavailable before deadline')
+                time.sleep(0.2)
+            boundary('after')
+            load_operation("measured load cleanup", proc.wait, timeout=20)
+            if proc.returncode:
+                raise ValueError('load process failed after measured window')
+            output.seek(0)
+            text = output.read(16*1024*1024)
+        else:
+            text = load_operation("load tester wait", reap, proc, duration + 20)
         try:
-            return parse(text)
+            return sustained.parse_window(text) if study else parse(text)
+        except sustained.WindowInvalid:
+            raise
         except ValueError:
             raise ValueError("load metrics invalid or missing") from None
     finally:
+        if study and proc is not None:
+            kill_group(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=5)
+        if output is not None:
+            output.close()
         try:
             if forward is not None:
                 load_operation("port forward cleanup", stop_load_forward, forward)
@@ -964,9 +1062,11 @@ def write_record(record, out_dir):
     return dest
 
 
-def one(config, clients, out_dir, tester, cold):
+def one(config, clients, out_dir, tester, cold, study=False):
     duration = int(config["duration_s"])
     record = blank(arch_name(), config["name"], clients, duration)
+    if study:
+        record['study'] = config['study']
     try:
         postgres_changed = apply_postgres(config)
         apply_config(config)
@@ -988,7 +1088,7 @@ def one(config, clients, out_dir, tester, cold):
         if record["package_bytes"] is None:
             record["errors"].append("no zarf-package-takserver tarball to stat")
         try:
-            record["images"] = image_bytes()
+            record["images"] = config.get("cached_images") or image_bytes()
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             record["errors"].append(f"image bytes: {error}")
         samples = []
@@ -1002,31 +1102,88 @@ def one(config, clients, out_dir, tester, cold):
             target=kubelet_samples,
             args=(stop, samples, sample_errors, pg_rss, containers, capacity_errors), daemon=True,
         )
-        thread.start()
+        window = {}
+        raw_samples = []
+        if study:
+            thread = threading.Thread(target=kubelet_samples, args=(stop, samples, sample_errors, pg_rss, containers, capacity_errors, raw_samples), daemon=True)
+        def boundary(phase):
+            # Keep raw DB snapshots and their bracket timestamps; no reset can
+            # erase warmup activity or checkpoint evidence.
+            if phase == 'before':
+                window['before_unix'] = time.time()
+                window['cgroup_before'] = postgres_cgroup()
+                window['database_version'] = postgres_version()
+                window['database_before_started_unix'] = time.time()
+                window['postgres_before'] = read_postgres([])
+                window['database_before_finished_unix'] = time.time()
+                window['capacity_before'] = capacity_inventory(capacity_errors)
+                samples.clear()
+                pg_rss.clear()
+                containers.clear()
+                window['before_finished_unix'] = time.time()
+            elif phase == 'started':
+                thread.start()
+                window['memory_started_unix'] = time.time()
+            else:
+                stop.set()
+                window['after_unix'] = time.time()
+                window['database_after_started_unix'] = time.time()
+                window['postgres_after'] = read_postgres(pg_rss)
+                window['database_after_finished_unix'] = time.time()
+                window['cgroup_after'] = postgres_cgroup()
+                stop.set()
+                thread.join(timeout=10)
+                window['capacity_after'] = capacity_inventory(capacity_errors)
+                window['after_finished_unix'] = time.time()
+        if not study:
+            thread.start()
         try:
             try:
-                reset_postgres_counters()
+                if not study:
+                    reset_postgres_counters()
             except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
                 record["errors"].append(f"postgres counters: {error}")
             password = keystore_password()
-            parsed = run_load(clients, duration, password, tester)
+            parsed = run_load(clients, duration, password, tester, study=True, boundary=boundary) if study else run_load(clients, duration, password, tester)
             record["load"].update(parsed)
         except (RuntimeError, subprocess.CalledProcessError, ValueError, OSError) as error:
+            if isinstance(error, sustained.WindowInvalid):
+                record["load"]["window"] = error.window
+                record["study"]["outcome"] = error.category
             record["errors"].append(f"load: {error}")
         finally:
             stop.set()
-            thread.join(timeout=10)
+            if thread.ident is not None:
+                thread.join(timeout=10)
         record["errors"].extend(sample_errors)
         if thread.is_alive():
             capacity_errors = list(capacity_errors)
             capacity.note(capacity_errors, "sampler did not stop; per-container samples were omitted")
             containers = {}
         capacity_after = capacity_inventory(capacity_errors)
+        if study:
+            capacity_before = window.get('capacity_before', {})
+            capacity_after = window.get('capacity_after', {})
         record["capacity"] = capacity.assemble(capacity_before, capacity_after, containers, capacity_errors)
         record["errors"].extend(f"capacity: {error}" for error in record["capacity"]["errors"])
         try:
-            record["postgres"] = read_postgres(pg_rss)
-        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            if study:
+                record['postgres'] = sustained.postgres_delta(window['postgres_before'], window['postgres_after'])
+                record['study']['memory_samples'] = raw_samples
+                record['study']['database_version'] = window['database_version']
+                record['study']['cgroup_before'] = window['cgroup_before']
+                record['study']['cgroup_after'] = window['cgroup_after']
+                if window['cgroup_before'] != window['cgroup_after']:
+                    raise ValueError('PostgreSQL cgroup limits changed')
+                record['study']['database_boundary'] = {k: v for k,v in window.items() if k.endswith('_unix')}
+                end = (record['load'].get('window') or {}).get('end_unix')
+                start = (record['load'].get('window') or {}).get('start_unix')
+                if (end is None or start is None or not 0 <= start-window['database_before_started_unix'] <= 5
+                        or not 0 <= window['database_after_finished_unix']-end <= 5):
+                    raise ValueError('PostgreSQL boundary outside five-second bracket tolerance')
+            else:
+                record["postgres"] = read_postgres(pg_rss)
+        except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError, KeyError, ValueError) as error:
             record["errors"].append(f"postgres: {error}")
         if samples:
             record["kubelet"] = {
@@ -1049,6 +1206,7 @@ def main(argv):
     out_dir = ROOT / "bench" / "out"
     tester = Path(os.environ.get("TAK_LOAD_TESTER", ROOT / "upstream" / "takserver" / "src" / "testing" / "load_test" / "tak_tester.py"))
     try:
+        study = sustained.enabled()
         configs = selected_configs(sorted(config_dir.glob("*.yaml")))
     except ValueError as error:
         print(str(error), file=sys.stderr)
@@ -1059,14 +1217,25 @@ def main(argv):
     if not shutil.which("kubectl") and not shutil.which("uds"):
         print("kubectl is not available, so no benchmark record was written", file=sys.stderr)
         return 2
+    if study:
+        spec = importlib.util.spec_from_file_location('ephemeral', ROOT / 'tests/ephemeral-cluster.py')
+        ephemeral = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ephemeral)
+        def guarded_command(argv):
+            return subprocess.run(argv, check=True, capture_output=True, text=True, timeout=15).stdout
+        proof = ephemeral.verify('k3d-uds', guarded_command)
     cold, cold_errors = ready_age()
     failed = False
+    cached_images = None
     for original in configs:
         if original.get("skip"):
             reason = original.get("reason") or "skipped"
             print(f"skip {original['name']}: {reason}")
             continue
-        counts = selected_clients(original)
+        counts = [50] * sustained.REPEATS if study else selected_clients(original)
+        if study:
+            original = {**original, 'duration_s': sustained.DURATION}
+            provenance = sustained.provenance(original, git_sha(), tester)
         try:
             saved = snapshot(original)
         except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
@@ -1077,13 +1246,24 @@ def main(argv):
             # The first client count keeps the config name. Further counts
             # get a suffix so they do not overwrite that file.
             name = original["name"] if index == 0 else f"{original['name']}-c{clients}"
-            record = one({**original, "name": name}, clients, out_dir, tester, cold)
+            if study:
+                if ephemeral.verify('k3d-uds', guarded_command) != proof:
+                    raise ValueError('owned ephemeral cluster proof changed')
+                name = f"baseline-r{index+1}"
+                config = {**original, 'name': name, 'cached_images': cached_images, 'study': {**provenance, 'repeat': index+1}}
+                config['study']['runner'] = {'machine': platform.machine(), 'kernel': platform.release(), 'logical_cpus': os.cpu_count()}
+                record = one(config, clients, out_dir, tester, cold, study=True)
+                cached_images = record.get('images')
+            else:
+                record = one({**original, "name": name}, clients, out_dir, tester, cold)
             if cold_errors and not original.get("restart"):
                 record["errors"].extend(cold_errors)
                 write_record(record, out_dir)
             if record["errors"]:
                 failed = True
                 print(f"{name}: " + "; ".join(record["errors"]), file=sys.stderr)
+                if study:
+                    return 1  # Do not spend two more trials after an invalid baseline.
         try:
             restore(original, saved)
         except (RuntimeError, subprocess.CalledProcessError) as error:

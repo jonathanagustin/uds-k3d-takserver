@@ -17,10 +17,10 @@ class AgentDiagnosticsTests(unittest.TestCase):
         return subprocess.check_output(['python3', str(HELPER), mode],
                                        input=json.dumps(value), text=True)
 
-    def capture_fixture(self, docker_body):
+    def capture_fixture(self, docker_body, uds_body=None):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            for name, body in {'uds': '#!/bin/sh\nexit 1\n',
+            for name, body in {'uds': ('#!/usr/bin/env python3\n' + uds_body) if uds_body is not None else '#!/bin/sh\nexit 1\n',
                                'docker': '#!/usr/bin/env python3\n' + docker_body}.items():
                 path = directory / name
                 path.write_text(body)
@@ -29,6 +29,109 @@ class AgentDiagnosticsTests(unittest.TestCase):
                                     env={**os.environ, 'PATH': str(directory) + ':' + os.environ['PATH']},
                                     capture_output=True, text=True, check=True, timeout=35)
             return result.stdout + result.stderr
+
+    @staticmethod
+    def physical_pod():
+        return {'metadata': {'namespace': 'zarf', 'name': 'agent-hook-fixture',
+                             'uid': '12345678-1234-1234-1234-123456789abc'},
+                'spec': {'nodeName': 'k3d-fixture-server-0', 'containers': [{'name': 'server'}]},
+                'status': {'containerStatuses': [{'name': 'server', 'restartCount': 2,
+                                                  'containerID': 'containerd://' + 'a' * 64}]}}
+
+    @staticmethod
+    def physical_api(pod):
+        return f"""import json, sys
+pod = {pod!r}
+if 'service' in sys.argv:
+    print(json.dumps({{'spec': {{'selector': {{'app': 'agent-hook'}}}}}}))
+elif 'pods' in sys.argv and any(arg.startswith('jsonpath=') for arg in sys.argv):
+    print('agent-hook-fixture')
+elif 'pod' in sys.argv:
+    print(json.dumps(pod))
+"""
+
+    def test_no_crictl_uses_only_api_uid_and_bounded_current_previous_attempts(self):
+        body = """import sys
+if sys.argv[1] == 'ps':
+    print('k3d-fixture-server-0')
+elif 'crictl' in sys.argv:
+    print("No help topic for 'crictl'")
+    sys.exit(3)
+elif 'sh' in sys.argv:
+    assert sys.argv[-1].startswith('/var/log/pods/zarf_agent-hook-fixture_12345678-1234-1234-1234-123456789abc/server/')
+    assert sys.argv[-1].split('/')[-1] in ('2.log', '1.log', '0.log')
+    assert '-L' in sys.argv[-4]
+    if sys.argv[-1].endswith('/1.log'): print('previous-attempt-one')
+    if sys.argv[-1].endswith('/0.log'): print('older-attempt-zero')
+"""
+        output = self.capture_fixture(body, self.physical_api(self.physical_pod()))
+        self.assertIn("No help topic for 'crictl'", output)
+        self.assertIn('Node CRI container list (k3d-fixture-server-0): exit=3', output)
+        self.assertEqual(output.count('Node physical agent attempt:'), 3)
+        self.assertIn('successful empty stream bytes=0', output)
+        self.assertIn('previous-attempt-one', output)
+        self.assertIn('older-attempt-zero', output)
+        self.assertIn('exit=0 captured_bytes=0', output)
+        self.assertLess(output.index('attempt=2'), output.index('attempt=1'))
+        self.assertLess(output.index('attempt=1'), output.index('attempt=0'))
+
+    def test_physical_identity_rejects_paths_missing_ids_and_unbounded_attempts(self):
+        valid = self.physical_pod()
+        lines = self.helper('physical', valid).splitlines()
+        self.assertEqual(len(lines), 3)
+        self.assertEqual([line.split('\t')[-1] for line in lines], ['2', '1', '0'])
+        import copy
+        for section, key, value in [('metadata', 'namespace', 'other'),
+                                     ('metadata', 'name', 'agent-hook-../../private'),
+                                     ('metadata', 'uid', '../../private'),
+                                     ('spec', 'nodeName', 'host')]:
+            pod = copy.deepcopy(valid)
+            pod[section][key] = value
+            result = subprocess.run(['python3', str(HELPER), 'physical'], input=json.dumps(pod),
+                                    text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, '')
+        for attempt in (-1, True, 2147483648, '2'):
+            pod = copy.deepcopy(valid)
+            pod['status']['containerStatuses'][0]['restartCount'] = attempt
+            result = subprocess.run(['python3', str(HELPER), 'physical'], input=json.dumps(pod),
+                                    text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, '')
+        valid['status']['containerStatuses'][0]['restartCount'] = 2147483647
+        self.assertEqual(len(self.helper('physical', valid).splitlines()), 3)
+
+    def test_physical_fallback_omits_oversize_auth_and_incomplete_reads(self):
+        prefix = """import sys
+if sys.argv[1] == 'ps': print('k3d-fixture-server-0')
+elif 'crictl' in sys.argv:
+    print("No help topic for 'crictl'"); sys.exit(3)
+elif 'sh' in sys.argv:
+ """
+        cases = [("print('x' * 65537)", 'omitted oversized stream', 'x' * 100),
+                 ("print('{\"auths\":{\"registry\":{\"auth\":\"never-print-auth\"}}}')",
+                  'Omitted authentication-bearing', 'never-print-auth'),
+                 ("print('never-print-incomplete'); print('physical read failed', file=sys.stderr); sys.exit(7)",
+                  'exit=7 captured_bytes=', 'never-print-incomplete')]
+        for action, expected, forbidden in cases:
+            with self.subTest(expected=expected):
+                output = self.capture_fixture(prefix + action + '\n', self.physical_api(self.physical_pod()))
+                self.assertIn(expected, output)
+                self.assertNotIn(forbidden, output)
+
+    def test_physical_fallback_requires_live_api_and_discovered_node(self):
+        body = """import sys
+if sys.argv[1] == 'ps': print('k3d-fixture-server-0')
+elif 'crictl' in sys.argv: sys.exit(3)
+elif 'sh' in sys.argv: print('unexpected-physical-read')
+"""
+        output = self.capture_fixture(body)
+        self.assertNotIn('unexpected-physical-read', output)
+        pod = self.physical_pod()
+        pod['spec']['nodeName'] = 'k3d-other-server-0'
+        output = self.capture_fixture(body, self.physical_api(pod))
+        self.assertIn('omitted undiscovered node', output)
+        self.assertNotIn('unexpected-physical-read', output)
 
     def test_discovery_failure_and_successful_zero_nodes_are_distinct(self):
         output = self.capture_fixture("import sys\nprint('Authorization: Bearer unique-marker')\nsys.exit(7)\n")

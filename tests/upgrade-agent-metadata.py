@@ -45,7 +45,27 @@ def resource_metadata(resources):
 
 
 value = json.load(sys.stdin)
-if sys.argv[1] == 'pod':
+if sys.argv[1] == 'physical':
+    # Kubelet builds this directory from the live API identity and the log
+    # filename from restartCount. Never discover pods by filesystem glob.
+    meta = value.get('metadata', {})
+    spec = value.get('spec', {})
+    name, uid, node = meta.get('name', ''), meta.get('uid', ''), spec.get('nodeName', '')
+    assert meta.get('namespace') == 'zarf'
+    assert isinstance(name, str) and len(name) <= 253 and re.fullmatch(r'agent-hook-[a-z0-9-]+', name)
+    assert isinstance(uid, str) and re.fullmatch(r'[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}', uid)
+    assert isinstance(node, str) and re.fullmatch(r'k3d-[a-zA-Z0-9_.-]+-(?:server|agent)-[0-9]+', node)
+    statuses = [item for item in value.get('status', {}).get('containerStatuses', [])
+                if item.get('name') == 'server']
+    assert len(statuses) == 1
+    attempt = statuses[0].get('restartCount')
+    assert type(attempt) is int and 0 <= attempt <= 2147483647
+    container_id = statuses[0].get('containerID', '')
+    assert isinstance(container_id, str) and re.fullmatch(r'containerd://[a-f0-9]{12,64}', container_id)
+    directory = f'zarf_{name}_{uid}'
+    for number in range(attempt, max(-1, attempt - 3), -1):
+        print(node, directory, number, sep='\t')
+elif sys.argv[1] == 'pod':
     spec = value.get('spec', {})
     print(json.dumps({'node': spec.get('nodeName'), 'uid': value.get('metadata', {}).get('uid')}))
     for container in spec.get('containers', []):

@@ -87,6 +87,8 @@ def receipt(directory, arch):
                 and guard['runAttempt'] == result['runAttempt'], 'scenario source/run differs')
         result['proofHashes'][scenario + '-journal'] = sha(journal_path)
         result['results'][scenario] = 'passed'
+    if 'velero' in scenarios:
+        result['daemonsetUID'] = json.loads((directory / 'owner/journal.json').read_text())['daemonsetUID']
     result['clusterUID'] = guard['clusterUID']
     return result
 
@@ -105,7 +107,31 @@ def verify(directory):
                 and value.get('scenarios') == scenarios
                 and value.get('results') == {scenario: 'passed' for scenario in scenarios},
                 'selected architecture/scenario lacks exact-run acceptance')
+        verify_public_proofs(directory.parent / 'proofs' / arch, value)
     return {'selectedArchitectures': arches, 'selectedScenarios': scenarios, 'accepted': True}
+
+
+def verify_public_proofs(directory, value):
+    hashes = value['publishedProofHashes']
+    progress_path = directory / 'progress.json'
+    require(sha(progress_path) == hashes['progress'], 'published progress differs')
+    progress = bounded_json(progress_path)
+    require(progress.get('accepted') is True, 'published progress is not accepted')
+    if 'velero' in value['scenarios']:
+        require(progress.get('ownerSteps') == [{'name': name, 'status': 'passed'} for name in OWNER_STEPS],
+                'public owner progress is incomplete')
+        for stage in ('fresh-core', 'core-after', 'local-after'):
+            path = directory / (stage + '.json')
+            require(sha(path) == hashes[stage], 'published observer proof differs or is absent')
+            proof = bounded_json(path)
+            require(sanitize_observer(proof, stage) == proof and proof['backupRestore'] is True
+                    and proof['observerSHA256'] == sha(ROOT / 'tests/velero-ownership/observe.py')
+                    and proof['clusterUID'] == value['clusterUID'] and proof['daemonsetUID'] == value['daemonsetUID'],
+                    'published observer acceptance does not match receipt')
+    if 'identities' in value['scenarios']:
+        require({'traffic-baseline', 'traffic-dual-before-rollout', 'traffic-transition', 'traffic-strict',
+                 'traffic-rollback', 'traffic-shared', 'reversed-and-verified'}.issubset(progress['identityStages'])
+                and 'stopped' not in progress['identityStages'], 'public identity progress is incomplete')
 
 
 def bounded_json(path):
@@ -171,7 +197,6 @@ def publish(directory, output, arch):
         value = {'schema': 1, 'sourceSHA': os.environ['GITHUB_SHA'], 'runID': os.environ['GITHUB_RUN_ID'],
                  'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'architecture': arch, 'scenarios': scenarios,
                  'accepted': False, 'results': {name: 'failed-or-incomplete' for name in scenarios}}
-    (output / 'receipts' / (arch + '.json')).write_text(json.dumps(value, indent=2) + '\n')
     progress = {'schema': 1, 'accepted': value['accepted'], 'ownerSteps': [], 'identityStages': []}
     try:
         journal = bounded_json(directory / 'owner/journal.json')
@@ -199,6 +224,18 @@ def publish(directory, output, arch):
             (public / (stage + '.json')).write_text(json.dumps(allowed, indent=2) + '\n')
         except (ValueError, OSError, KeyError, TypeError, AttributeError):
             continue
+    value['publishedProofHashes'] = {path.stem: sha(path) for path in public.glob('*.json')}
+    if value['accepted']:
+        try:
+            verify_public_proofs(public, value)
+        except (ValueError, OSError, KeyError, TypeError, AttributeError):
+            value['accepted'] = False
+            value['results'] = {name: 'failed-or-incomplete' for name in scenarios}
+    if progress['accepted'] != value['accepted']:
+        progress['accepted'] = value['accepted']
+        (public / 'progress.json').write_text(json.dumps(progress, indent=2) + '\n')
+        value['publishedProofHashes']['progress'] = sha(public / 'progress.json')
+    (output / 'receipts' / (arch + '.json')).write_text(json.dumps(value, indent=2) + '\n')
     return value
 
 

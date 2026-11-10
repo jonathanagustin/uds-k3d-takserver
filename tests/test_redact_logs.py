@@ -80,6 +80,59 @@ client_secret={FORM}&grant_type=authorization_code
 
 
 class RedactLogsTests(unittest.TestCase):
+    def test_quoted_azure_sas_signature_is_redacted_without_losing_url_or_status(self):
+        raw = ('Error: Get "https://example.blob.core.windows.net/container/file?sv=2026-02-06'
+               '&sp=r&sig=fixture-signature%2Fpart%2Btail%3D&se=2026-11-11": 403 Forbidden')
+        expected = raw.replace('fixture-signature%2Fpart%2Btail%3D', '[REDACTED]')
+        clean, count = redact.redact_text(raw)
+        self.assertEqual(clean, expected)
+        self.assertEqual(count, 1)
+        again, second_count = redact.redact_text(clean)
+        self.assertEqual(again, clean)
+        self.assertEqual(second_count, 0)
+
+    def test_signed_query_html_and_json_delimiters_and_escaped_values(self):
+        forms = [
+            ('?sig=fixture%3D', '?sig=[REDACTED]'),
+            ('?sig=fixture%3D&sp=r', '?sig=[REDACTED]&sp=r'),
+            ('?sv=1&amp;sig=fixture%3D&amp;sp=r', '?sv=1&amp;sig=[REDACTED]&amp;sp=r'),
+            ('?sv=1&#38;sig=fixture%3D&#38;sp=r', '?sv=1&#38;sig=[REDACTED]&#38;sp=r'),
+            ('?sv=1&#x26;SIG=fixture%3D&#x26;sp=r', '?sv=1&#x26;SIG=[REDACTED]&#x26;sp=r'),
+            (r'?sv=1\u0026sig=fixture%3D\u0026sp=r', r'?sv=1\u0026sig=[REDACTED]\u0026sp=r'),
+            (r'\u003fsig\u003dfixture%3D\u0026sp=r', r'\u003fsig\u003d[REDACTED]\u0026sp=r'),
+            (r'?sig=fixture\/part\u003d\u0026sp=r', r'?sig=[REDACTED]\u0026sp=r'),
+        ]
+        for raw, expected in forms:
+            for wrapper in (lambda value: 'Get "https://example.blob.core.windows.net/a' + value + '": 403 Forbidden',
+                            lambda value: json.dumps({'url': 'https://example.blob.core.windows.net/a' + value}),
+                            lambda value: json.dumps(json.dumps({'url': 'https://example.blob.core.windows.net/a' + value})),
+                            lambda value: '&quot;https://example.blob.core.windows.net/a' + value + '&quot;'):
+                with self.subTest(raw=raw, wrapper=wrapper):
+                    clean, count = redact.redact_text(wrapper(raw))
+                    # Encode expected after wrapping so JSON escape delimiters
+                    # stay exactly as they were; only the signature changes.
+                    self.assertEqual(clean, wrapper(expected))
+                    self.assertEqual(count, 1)
+                    self.assertEqual(redact.redact_text(clean), (clean, 0))
+
+    def test_signature_cli_stream_preserves_status_and_handles_long_escape_run(self):
+        # Synthetic malformed JSON must not make the new regex backtrack over
+        # every possible split of a long backslash run.
+        raw = ('Get "https://example.blob.core.windows.net/a?sig=fixture%3D": 403 Forbidden\n'
+               + '?sig=fixture' + '\\' * 100000 + 'u0026sp=r\n')
+        result = subprocess.run([os.sys.executable, str(SPEC.origin), '-'], input=raw,
+                                text=True, capture_output=True, timeout=5, check=True)
+        self.assertNotIn('fixture', result.stdout)
+        self.assertIn('403 Forbidden', result.stdout)
+        self.assertIn('sp=r', result.stdout)
+
+    def test_ordinary_urls_and_non_signature_fields_remain_unchanged(self):
+        for raw in ('https://example.blob.core.windows.net/a?sv=2026-02-06&sp=r',
+                    'https://example.test/signature.txt?signal=ok&signature_hint=public',
+                    'https://example.test/a?digest=sha256:123#fragment', 'design=public sig=public',
+                    'https://example.test/a?sig=&sp=r'):
+            self.assertEqual(redact.redact_text(raw), (raw, 0))
+
     def assert_no_private_material(self, text):
         self.assertFalse(any(value in text for value in (*PRIVATE_PARTS, PRIVATE_B64)),
                          "private material survived redaction")

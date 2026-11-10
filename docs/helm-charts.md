@@ -1,10 +1,8 @@
 # Helm charts in GHCR
 
-GitHub repository renames do not rename existing GHCR packages. Releases through
-0.10 keep their original registry coordinates for upgrades. The 0.11 Zarf
-package and new application images use `ghcr.io/jonathanagustin/uds-takserver`.
-Historical packages are separate artifacts; their presence does not mean new
-builds still publish to the old namespace.
+New packages use `ghcr.io/jonathanagustin/uds-takserver`. The separate
+[GHCR migration](package-migration.md) preserves historical artifacts and keeps
+legacy URLs available for older releases.
 
 The charts publisher handles the two existing charts independently:
 

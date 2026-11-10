@@ -3,6 +3,7 @@
 
 """Runner routing probes report timeouts without blocking later cleanup."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -117,7 +118,29 @@ class RunnerWedgeProbeTests(unittest.TestCase):
         planner = next(step for step in test["check-flavor"]["steps"]
                        if "TEST_RUNNER" in step.get("env", {}))
         self.assertEqual(planner["env"]["TEST_RUNNER"], expected)
-        for job in (test["validate-upgrade"], test["validate-upgrade-pg15"], full["validate-full-core"], bench["benchmark"]):
+        # Test's upgrade matrices are planned at runtime. Exercise that actual
+        # planner, retaining the runner override and native ARM contracts.
+        for runner in ("", "custom-amd64-runner"):
+            env = {**os.environ, "EVENT_NAME": "push", "TRUST_BUNDLE": "false",
+                   "DIAGNOSTIC_CASE": "none", "TEST_RUNNER": runner}
+            env.pop("GITHUB_OUTPUT", None)
+            result = subprocess.run(
+                ["python3", str(ROOT / ".github/scripts/test-validation-mode.py"), "plan"],
+                env=env, capture_output=True, text=True, check=True)
+            outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
+            for name, key in (("validate-upgrade", "upgrade-matrix"),
+                              ("validate-upgrade-pg15", "pg15-matrix")):
+                with self.subTest(runner=runner, job=name):
+                    job = test[name]
+                    self.assertEqual(job["strategy"]["matrix"],
+                                     "${{ fromJSON(needs.check-flavor.outputs." + key + ") }}")
+                    self.assertIn("check-flavor", job["needs"])
+                    rows = json.loads(outputs[key])["include"]
+                    self.assertEqual([(row["arch"], row["runner"]) for row in rows],
+                                     [("amd64", runner or "ubuntu-22.04"),
+                                      ("arm64", "ubuntu-22.04-arm")])
+                    self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        for job in (full["validate-full-core"], bench["benchmark"]):
             rows = job["strategy"]["matrix"]["include"]
             self.assertEqual([(row["arch"], row["runner"]) for row in rows],
                              [("amd64", expected), ("arm64", "ubuntu-22.04-arm")])

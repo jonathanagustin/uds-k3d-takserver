@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.11.0...v0.12.0) (2026-11-10)
+
+
+### Features
+
+* **demo:** render an attested UI reel without a cluster ([#415](https://github.com/jonathanagustin/uds-takserver/issues/415)) ([82b93bf](https://github.com/jonathanagustin/uds-takserver/commit/82b93bfeb4c75dd7ecf60b9fda4558449c168a01))
+* publish release Helm charts as immutable OCI artifacts ([#404](https://github.com/jonathanagustin/uds-takserver/issues/404)) ([c7441fb](https://github.com/jonathanagustin/uds-takserver/commit/c7441fb644402d6667d6f51ca641dd60b0a2398e))
+* **takx:** add the public desktop Kernel compatibility foundation ([#414](https://github.com/jonathanagustin/uds-takserver/issues/414)) ([d657d02](https://github.com/jonathanagustin/uds-takserver/commit/d657d02fafc1196bedff93fa0caee2638af7e5ca))
+
+
+### Bug Fixes
+
+* preserve metadata-only requests across registry redirects ([#405](https://github.com/jonathanagustin/uds-takserver/issues/405)) ([2620569](https://github.com/jonathanagustin/uds-takserver/commit/2620569eca085ccd8fc3708534e1f4b3da013da9))
+* use verified migrated package references for older releases ([#406](https://github.com/jonathanagustin/uds-takserver/issues/406)) ([f8271e0](https://github.com/jonathanagustin/uds-takserver/commit/f8271e0422e50410979d902ff449b91be067a79f))
+* verify release provenance across repository rename ([#402](https://github.com/jonathanagustin/uds-takserver/issues/402)) ([b6a758c](https://github.com/jonathanagustin/uds-takserver/commit/b6a758c5fcbe9d261341e293fb60540947cec807))
+
 ## [0.11.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.10.0...v0.11.0) (2026-11-09)
 
 

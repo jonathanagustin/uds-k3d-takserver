@@ -56,3 +56,15 @@ jobs:
     uses: ./.github/workflows/docs.yaml
     with:
       release_tag: ${{ needs.release-please.outputs.tag }}
+
+  charts:
+    needs: release-please
+    if: needs.release-please.outputs.release-created == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/charts.yaml
+    with:
+      tag: ${{ needs.release-please.outputs.tag }}

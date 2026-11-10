@@ -1,0 +1,45 @@
+{
+  "ignite": {
+    "greeting": {
+      "byte_order": "little-endian",
+      "bytes": 18,
+      "message_type": -1,
+      "uuid_bytes": 16
+    },
+    "license": "Apache-2.0",
+    "repository": "https://github.com/apache/ignite",
+    "revision": "d53d4540b64bb4a25f1a5a1003c4338727628c9f",
+    "source_files": {
+      "NodeIdMessage.java": {
+        "path": "modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/messages/NodeIdMessage.java",
+        "sha256": "d765b279361888e4a83fd71f8d1a70a55bbc8d7581085760e65cb96c763f3fc8",
+        "url": "https://github.com/apache/ignite/blob/d53d4540b64bb4a25f1a5a1003c4338727628c9f/modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/messages/NodeIdMessage.java"
+      },
+      "TcpCommunicationSpi.java": {
+        "path": "modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/TcpCommunicationSpi.java",
+        "sha256": "eb95c8700300f303037bcea22bc4ab50ae9e8e468d823f3034283a2014fa7f83",
+        "url": "https://github.com/apache/ignite/blob/d53d4540b64bb4a25f1a5a1003c4338727628c9f/modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/TcpCommunicationSpi.java"
+      },
+      "TcpHandshakeExecutor.java": {
+        "path": "modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/internal/TcpHandshakeExecutor.java",
+        "sha256": "0bf49159ea61a1e605e76ede05549acd41f5188305f1fbdc3abb28a140407c74",
+        "url": "https://github.com/apache/ignite/blob/d53d4540b64bb4a25f1a5a1003c4338727628c9f/modules/core/src/main/java/org/apache/ignite/spi/communication/tcp/internal/TcpHandshakeExecutor.java"
+      }
+    },
+    "version": "2.17.0"
+  },
+  "nats": {
+    "reference": "https://docs.nats.io/reference/reference-protocols/nats-protocol#info",
+    "server_greeting_prefix": "INFO "
+  },
+  "postgres": {
+    "accepted_reply": [
+      "S",
+      "N"
+    ],
+    "reference": "https://www.postgresql.org/docs/18/protocol-message-formats.html#PROTOCOL-MESSAGE-FORMATS-SSLREQUEST",
+    "request_hex": "0000000804d2162f"
+  },
+  "schema": 1,
+  "scope": "read-only protocol reachability; no cluster join/cache write/client authentication acceptance"
+}

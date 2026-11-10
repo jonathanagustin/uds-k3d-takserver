@@ -39,7 +39,7 @@ def snapshot(local=False):
     ds = {'kind': 'DaemonSet', 'metadata': owned('node-agent', local), 'spec': {'selector': {'matchLabels': {'name': 'node-agent'}}},
           'status': {'desiredNumberScheduled': 1, 'numberReady': 1, 'updatedNumberScheduled': 1, 'numberAvailable': 1, 'observedGeneration': 2}}
     cm = {'kind': 'ConfigMap', 'metadata': owned(config, local), 'data': {'node-agent-config.json': json.dumps({'privilegedFsBackup': True, 'podLabels': {'app.kubernetes.io/name': 'velero', 'app.kubernetes.io/component': 'velero-data-mover'}})}}
-    result = {'clusterUID': 'test-cluster', 'daemonset': ds, 'agentConfig': cm,
+    result = {'retiredCoreConfig': None, 'clusterUID': 'test-cluster', 'daemonset': ds, 'agentConfig': cm,
               'pods': {'items': [{'metadata': {'ownerReferences': [{'uid': 'same-agent', 'controller': True}]}, 'status': {'phase': 'Running', 'conditions': [{'type': 'Ready', 'status': 'True'}]}, 'spec': {'containers': [{'name': 'node-agent', 'args': ['--node-agent-configmap=' + config]}]}}]},
               'bootstrap': {'metadata': {'name': 'velero-node-agent-bootstrap'}, 'spec': {'exemptions': ['exact']}}, 'localExemption': {'metadata': {'name': 'velero-node-agent'}, 'spec': {'exemptions': ['exact']}},
               'coreManifest': [] if local else [ds, cm], 'localManifest': [ds, cm] if local else [],
@@ -52,6 +52,19 @@ def snapshot(local=False):
 
 
 class HandoffTests(unittest.TestCase):
+    def test_local_evidence_requires_manifest_and_live_core_config_absence(self):
+        baseline = observe.validate(snapshot(True), 'local-before')
+        for mode in ('manifest', 'live', 'unobserved'):
+            value = snapshot(True)
+            if mode == 'manifest':
+                value['coreManifest'].append({'kind': 'ConfigMap', 'metadata': {'name': 'velero-node-agent-config', 'namespace': 'velero'}})
+            elif mode == 'live':
+                value['retiredCoreConfig'] = {'metadata': {'name': 'velero-node-agent-config', 'deletionTimestamp': 'now'}}
+            else:
+                del value['retiredCoreConfig']
+            with self.assertRaises(ValueError):
+                observe.validate(value, 'local-after', baseline)
+
     def test_owner_variable_default_and_early_zarf_values_file(self):
         package = yaml.safe_load((ROOT / 'zarf.yaml').read_text())
         variable = next(v for v in package['variables'] if v['name'] == 'FILESYSTEM_BACKUP_OWNER')
@@ -104,6 +117,21 @@ class HandoffTests(unittest.TestCase):
             with self.subTest(change=change):
                 value = snapshot(); change(value)
                 with self.assertRaises(ValueError): observe.validate(value, 'core-after', baseline)
+
+    def test_terminating_agent_resources_cannot_be_ready_evidence(self):
+        for local in (False, True):
+            stage = 'local-before' if local else 'core-ready'
+            observe.validate(snapshot(local), stage)
+            for resource in ('daemonset', 'pod', 'config'):
+                with self.subTest(local=local, resource=resource):
+                    value = snapshot(local)
+                    obj = {'daemonset': value['daemonset'], 'pod': value['pods']['items'][0],
+                           'config': value['agentConfig']}[resource]
+                    # Kubernetes may retain Ready status while deletion is in
+                    # progress. Ownership and last-ready status are insufficient.
+                    obj['metadata']['deletionTimestamp'] = '2026-11-09T00:00:30Z'
+                    with self.assertRaisesRegex(ValueError, 'terminating'):
+                        observe.validate(value, stage)
 
     def test_stale_wrong_backup_partial_or_missing_volume_and_secret_manifest_fail(self):
         for mutate in [lambda s: s['backup']['metadata'].update(creationTimestamp='2026-11-08T00:00:00Z'),

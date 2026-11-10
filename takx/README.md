@@ -10,6 +10,11 @@ The optional [desktop compatibility prototype](compat/README.md) supplies real b
 
 The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
 
+The opt-in [UI Java source recipe](ui-java/README.md) rebuilds public desktop
+dependency candidates for compiler probes. Its default original-source profile
+and separate experimental Wizard reference preserve actual source identities;
+they do not establish a working TAKX client.
+
 ## Run locally
 
 Use Linux amd64, JDK 17 (`JAVA_HOME`), Python 3, Git, GNU make, GCC/G++, Perl, Ant, dos2unix, patch, tar, pkg-config, coreutils and the usual C/C++ build headers. The source archive configure scripts are already generated. These are optional local prerequisites; no default task or GitHub workflow installs or runs this component.

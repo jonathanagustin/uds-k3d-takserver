@@ -1,0 +1,299 @@
+{
+  "schema": 1,
+  "java_major": 17,
+  "java_release": 8,
+  "profiles": {
+    "original": [
+      "docking-core",
+      "docking-common",
+      "colorchooser-author-1.5",
+      "toast-1.0.3",
+      "salamander-tag-v1.1.1"
+    ],
+    "wizard-reference": [
+      "wizard-reference"
+    ]
+  },
+  "archives": {
+    "dockingframes": {
+      "file": "docking.tar.gz",
+      "url": "https://codeload.github.com/Benoker/DockingFrames/tar.gz/3db975668140de78d760ac887b4961b3bfd726bb",
+      "bytes": 8483425,
+      "sha256": "74376c73f61e969efd8fbcca6e6f25f3bde50e4d82f06f1d535f92c53cb737ba",
+      "prefix": "DockingFrames-3db975668140de78d760ac887b4961b3bfd726bb/",
+      "repository": "Benoker/DockingFrames",
+      "revision": "3db975668140de78d760ac887b4961b3bfd726bb"
+    },
+    "salamander": {
+      "file": "svg.tar.gz",
+      "url": "https://codeload.github.com/blackears/svgSalamander/tar.gz/1ae35c294f70d0db205bb3069459bcd00535d089",
+      "bytes": 7510035,
+      "sha256": "cfd048ed6be1d4ddaab51ce66d64f759235ea0ce7a135138274b3b3fa7a962e1",
+      "prefix": "svgSalamander-1ae35c294f70d0db205bb3069459bcd00535d089/",
+      "repository": "blackears/svgSalamander",
+      "revision": "1ae35c294f70d0db205bb3069459bcd00535d089"
+    },
+    "colorchooser": {
+      "file": "color.tar.gz",
+      "url": "https://codeload.github.com/timboudreau/colorchooser/tar.gz/18a2d1573cc9a012d15313ac302c63ad7e44b4cb",
+      "bytes": 535844,
+      "sha256": "5f700ac407a092a2c3a0143aa3e7ac2823f425cf07ac6fbd740066e27ae0eba3",
+      "prefix": "colorchooser-18a2d1573cc9a012d15313ac302c63ad7e44b4cb/",
+      "repository": "timboudreau/colorchooser",
+      "revision": "18a2d1573cc9a012d15313ac302c63ad7e44b4cb"
+    },
+    "toast": {
+      "file": "toast103.tar.gz",
+      "url": "https://codeload.github.com/DJ-Raven/swing-toast-notifications/tar.gz/191114d232d844fa6ad23a25c9c35820b6f72b3a",
+      "bytes": 1471005,
+      "sha256": "a47f820883677e92b4703c2a847dbac96d5b0ef80ca8b9bb334a114617a2dbac",
+      "prefix": "swing-toast-notifications-191114d232d844fa6ad23a25c9c35820b6f72b3a/",
+      "repository": "DJ-Raven/swing-toast-notifications",
+      "revision": "191114d232d844fa6ad23a25c9c35820b6f72b3a"
+    },
+    "wizard-reference": {
+      "file": "wizard-copy.tar.gz",
+      "url": "https://codeload.github.com/Lonzak/Wizard-API/tar.gz/746cce7bcd616790328393bac770a7db3708836c",
+      "bytes": 2023283,
+      "sha256": "6d2ffbd25a83148d790275eeda80939484ae8a29552b62a84ba624d03f102f18",
+      "prefix": "Wizard-API-746cce7bcd616790328393bac770a7db3708836c/",
+      "repository": "Lonzak/Wizard-API",
+      "revision": "746cce7bcd616790328393bac770a7db3708836c"
+    }
+  },
+  "public_jars": {
+    "ant-1.8.1.jar": {
+      "coordinate": "org.apache.ant:ant:1.8.1",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/ant/ant/1.8.1/ant-1.8.1.jar",
+      "bytes": 1514270,
+      "sha256": "1a02baffba9bafdc8afd0b399b2fb5a85dc287eb8514bad958965ac0005a0960"
+    },
+    "javacc-5.0.jar": {
+      "coordinate": "net.java.dev.javacc:javacc:5.0",
+      "url": "https://repo.maven.apache.org/maven2/net/java/dev/javacc/javacc/5.0/javacc-5.0.jar",
+      "bytes": 298569,
+      "sha256": "71113161bc8cf6641515541c2818028b87c78ec2e8ffaa75317686ee08967b89"
+    },
+    "flatlaf-3.4.1.jar": {
+      "coordinate": "com.formdev:flatlaf:3.4.1",
+      "url": "https://repo.maven.apache.org/maven2/com/formdev/flatlaf/3.4.1/flatlaf-3.4.1.jar",
+      "bytes": 883749,
+      "sha256": "8b4bbd34727f80e74555b2be3d8dcb994434654986c64f4298162247a9d35ffc"
+    },
+    "flatlaf-extras-3.4.1.jar": {
+      "coordinate": "com.formdev:flatlaf-extras:3.4.1",
+      "url": "https://repo.maven.apache.org/maven2/com/formdev/flatlaf-extras/3.4.1/flatlaf-extras-3.4.1.jar",
+      "bytes": 117738,
+      "sha256": "74dad5fa0d952d2c535911d762b0b818048016db08f5f0fe79a7d1cca183051f"
+    }
+  },
+  "license_text": {
+    "file": "CDDL-1.0.txt",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/CDDL-1.0.txt",
+    "revision": "31846481de7ea17d92f2f46fad76abe58b2e9bb0",
+    "bytes": 16514,
+    "sha256": "fde9ef48461569987d09cac803379245dfda04e7751075f39b578a0ce927d470"
+  },
+  "artifacts": {
+    "docking-core": {
+      "source": "dockingframes",
+      "java_root": "docking-frames-core/src",
+      "java": {
+        "count": 1037,
+        "inventory_sha256": "70e934eee94149879fb643708e92f6a4c02a3ab9cca0816ca42bb5b2676bbfcb"
+      },
+      "resource_root": "docking-frames-core/src",
+      "resources": {
+        "count": 62,
+        "inventory_sha256": "6b64c1f81710e89c92089f3bfd8bedf520d185220a282e4d44aa2e05c45cc6dd"
+      },
+      "classpath": [],
+      "classification": "established-original",
+      "identity": {
+        "requested_coordinate": "org.dockingframes:docking-frames-core:1.1.3p1",
+        "project_identity": "tag/POM/version file1.1.3p1",
+        "repository": "https://github.com/Benoker/DockingFrames",
+        "revision": "3db975668140de78d760ac887b4961b3bfd726bb",
+        "license": "LGPL-2.1-or-later"
+      },
+      "reference_class_files": 1934,
+      "notices": [
+        {
+          "source": "dockingframes",
+          "path": "docking-frames-core/license.txt",
+          "target": "LGPL-2.1.txt"
+        }
+      ]
+    },
+    "docking-common": {
+      "source": "dockingframes",
+      "java_root": "docking-frames-common/src",
+      "java": {
+        "count": 429,
+        "inventory_sha256": "3025008ff06374eb9aad2a30244077f7a41c4c40ef662d1c88c5324be15ed674"
+      },
+      "resource_root": "docking-frames-common/src",
+      "resources": {
+        "count": 56,
+        "inventory_sha256": "10052c264a229af5d693c86f298f1794bde80bf3fa122db14db96160f4be9c72"
+      },
+      "classpath": [
+        "artifact:docking-core"
+      ],
+      "classification": "established-original",
+      "identity": {
+        "requested_coordinate": "org.dockingframes:docking-frames-common:1.1.3p1",
+        "project_identity": "tag/parent POM1.1.3p1",
+        "repository": "https://github.com/Benoker/DockingFrames",
+        "revision": "3db975668140de78d760ac887b4961b3bfd726bb",
+        "license": "LGPL-2.1-or-later"
+      },
+      "reference_class_files": 678,
+      "notices": [
+        {
+          "source": "dockingframes",
+          "path": "docking-frames-core/license.txt",
+          "target": "LGPL-2.1.txt"
+        }
+      ]
+    },
+    "colorchooser-author-1.5": {
+      "source": "colorchooser",
+      "java_root": "src/main/java",
+      "java": {
+        "count": 21,
+        "inventory_sha256": "654fe2284d0bfd12ff3649dc1bc517a571e7afe43a8e4935ddc6bbccd44e0375"
+      },
+      "resource_root": "src/main/resources",
+      "resources": {
+        "count": 13,
+        "inventory_sha256": "e30f837c5b653c4ef2ab2196742549e0672cd03050176b852482a0c56c2fbf0f"
+      },
+      "classpath": [],
+      "classification": "original-author-version-candidate",
+      "identity": {
+        "requested_coordinate": "net.java.dev:colorchooser:1.1",
+        "project_identity": "author POM1.5; NOT requested1.1",
+        "repository": "https://github.com/timboudreau/colorchooser",
+        "revision": "18a2d1573cc9a012d15313ac302c63ad7e44b4cb",
+        "license": "Apache-2.0"
+      },
+      "reference_class_files": 83,
+      "notices": [
+        {
+          "source": "toast",
+          "path": "LICENSE",
+          "target": "Apache-2.0.txt"
+        }
+      ]
+    },
+    "toast-1.0.3": {
+      "source": "toast",
+      "java_root": "src/main/java",
+      "java": {
+        "count": 8,
+        "inventory_sha256": "8662c04c8ddd89e527e2e58b2e9a1ac9f0852431a56b25823d6cdb97b899c75b"
+      },
+      "resource_root": "src/main/resources",
+      "resources": {
+        "count": 5,
+        "inventory_sha256": "781c38758ec4ea178cbc9475638f8698969f16be8b87fc780a8b96720079c836"
+      },
+      "classpath": [
+        "flatlaf-3.4.1.jar",
+        "flatlaf-extras-3.4.1.jar"
+      ],
+      "classification": "established-original",
+      "identity": {
+        "requested_coordinate": "raven.toast:swing-toast-notifications:1.0.3",
+        "project_identity": "original POM1.0.3",
+        "repository": "https://github.com/DJ-Raven/swing-toast-notifications",
+        "revision": "191114d232d844fa6ad23a25c9c35820b6f72b3a",
+        "license": "Apache-2.0"
+      },
+      "reference_class_files": 14,
+      "notices": [
+        {
+          "source": "toast",
+          "path": "LICENSE",
+          "target": "Apache-2.0.txt"
+        }
+      ]
+    },
+    "salamander-tag-v1.1.1": {
+      "source": "salamander",
+      "java_root": "svg-core/src/main/java",
+      "java": {
+        "count": 125,
+        "inventory_sha256": "89c0dc6fed67f5475fb63c17428f7989bf1353918d6a58df6c5ae97aeec3d1f5"
+      },
+      "resource_root": "svg-core/src/main/res",
+      "resources": {
+        "count": 7,
+        "inventory_sha256": "ec2cf7f98e8abe8d423d0231a75ab418bb247234e9f9a7dbb32d8a97be2ed6d5"
+      },
+      "classpath": [
+        "ant-1.8.1.jar"
+      ],
+      "classification": "established-tag-original",
+      "identity": {
+        "requested_coordinate": "com.github.blackears:svgSalamander:v1.1.1",
+        "project_identity": "tagv1.1.1; original POM says1.0.39",
+        "repository": "https://github.com/blackears/svgSalamander",
+        "revision": "1ae35c294f70d0db205bb3069459bcd00535d089",
+        "license": "BSD source notices; BSD/LGPL texts retained"
+      },
+      "reference_class_files": 187,
+      "notices": [
+        {
+          "source": "salamander",
+          "path": "www/license/license-bsd.txt",
+          "target": "BSD.txt"
+        },
+        {
+          "source": "salamander",
+          "path": "www/license/license-lgpl.txt",
+          "target": "LGPL.txt"
+        }
+      ],
+      "generator": {
+        "tool": "javacc-5.0.jar",
+        "grammar": "svg-core/src/main/java/com/kitfox/svg/animation/AnimTimeParser.jjt",
+        "generated": {
+          "count": 21,
+          "inventory_sha256": "9b85c8da0e8885d733afe6fb52b0221ed893be0b54dd367a4985d4b767c2f4a1"
+        }
+      }
+    },
+    "wizard-reference": {
+      "source": "wizard-reference",
+      "java_root": "src",
+      "java": {
+        "count": 28,
+        "inventory_sha256": "14896abdc09f7578ba171e6eab869d1b31bcbff8bab013a4cde28bd54e2a109a"
+      },
+      "resource_root": "src",
+      "resources": {
+        "count": 15,
+        "inventory_sha256": "6e5213b50e86583f4b110582288ced1e38a233ea7262dbb348dc7d99ebe4840c"
+      },
+      "classpath": [],
+      "classification": "experimental-source-reference",
+      "identity": {
+        "requested_coordinate": "org.netbeans:wizard:rev-28122010",
+        "project_identity": "preserved-source reference; NOT exact rev-28122010",
+        "repository": "https://github.com/Lonzak/Wizard-API",
+        "revision": "746cce7bcd616790328393bac770a7db3708836c",
+        "license": "CDDL-1.0 headers; SPDX license text"
+      },
+      "reference_class_files": 60,
+      "notices": [
+        {
+          "source": "license",
+          "path": "CDDL-1.0.txt",
+          "target": "CDDL-1.0.txt"
+        }
+      ]
+    }
+  }
+}

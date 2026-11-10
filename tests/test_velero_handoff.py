@@ -105,6 +105,21 @@ class HandoffTests(unittest.TestCase):
                 value = snapshot(); change(value)
                 with self.assertRaises(ValueError): observe.validate(value, 'core-after', baseline)
 
+    def test_terminating_agent_resources_cannot_be_ready_evidence(self):
+        for local in (False, True):
+            stage = 'local-before' if local else 'core-ready'
+            observe.validate(snapshot(local), stage)
+            for resource in ('daemonset', 'pod', 'config'):
+                with self.subTest(local=local, resource=resource):
+                    value = snapshot(local)
+                    obj = {'daemonset': value['daemonset'], 'pod': value['pods']['items'][0],
+                           'config': value['agentConfig']}[resource]
+                    # Kubernetes may retain Ready status while deletion is in
+                    # progress. Ownership and last-ready status are insufficient.
+                    obj['metadata']['deletionTimestamp'] = '2026-11-09T00:00:30Z'
+                    with self.assertRaisesRegex(ValueError, 'terminating'):
+                        observe.validate(value, stage)
+
     def test_stale_wrong_backup_partial_or_missing_volume_and_secret_manifest_fail(self):
         for mutate in [lambda s: s['backup']['metadata'].update(creationTimestamp='2026-11-08T00:00:00Z'),
                        lambda s: s['restore']['spec'].update(backupName='wrong'),

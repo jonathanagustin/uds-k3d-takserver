@@ -66,6 +66,8 @@ exclusively, never overwritten. Helm manifests can contain credentials: the
 observer keeps those in memory, filters to the known agent/config resources,
 and saves only sanitized identity/status summaries, hashes and volume-copy
 identities. Do not upload raw `helm get manifest` output.
+Terminating agent DaemonSets, Pods and configuration are rejected even when
+their last reported readiness or ownership still matches the expected stage.
 
 After a separately reviewed real migration, record `core-ready`. This checks
 that Core's stored manifest owns the actual agent/config, TAK's manifest no

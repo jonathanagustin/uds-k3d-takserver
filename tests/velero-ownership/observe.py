@@ -39,6 +39,7 @@ def resources(text):
 
 def validate(snapshot, stage, baseline=None):
     ds = snapshot['daemonset']
+    require(not ds['metadata'].get('deletionTimestamp'), 'agent DaemonSet is terminating')
     require(ds['spec']['selector'] == {'matchLabels': {'name': 'node-agent'}}, 'unexpected immutable selector')
     uid = ds['metadata']['uid']
     if baseline:
@@ -56,11 +57,13 @@ def validate(snapshot, stage, baseline=None):
     require(len(pods) == desired, 'agent pod count differs from desired nodes')
     config = 'node-agent-config' if expected == LOCAL else 'velero-node-agent-config'
     for pod in pods:
+        require(not pod['metadata'].get('deletionTimestamp'), 'agent pod is terminating')
         require(any(o.get('uid') == uid and o.get('controller') is True for o in pod['metadata'].get('ownerReferences', [])), 'pod is not controlled by this DaemonSet')
         require(pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True' for c in pod['status'].get('conditions', [])), 'agent pod not Ready')
         container = next(c for c in pod['spec']['containers'] if c['name'] == 'node-agent')
         require('--node-agent-configmap=' + config in container.get('args', []), 'pod uses wrong agent configuration')
     require(snapshot['agentConfig']['metadata']['name'] == config and owner(snapshot['agentConfig'], expected), 'configuration has wrong name/owner')
+    require(not snapshot['agentConfig']['metadata'].get('deletionTimestamp'), 'agent configuration is terminating')
     payload = json.loads(snapshot['agentConfig']['data']['node-agent-config.json'])
     require(payload == {'privilegedFsBackup': True, 'podLabels': {'app.kubernetes.io/name': 'velero', 'app.kubernetes.io/component': 'velero-data-mover'}}, 'unexpected data-mover configuration')
     require(snapshot['bootstrap']['metadata']['name'] == 'velero-node-agent-bootstrap' and snapshot['localExemption']['metadata']['name'] == 'velero-node-agent', 'unexpected exemption identities')

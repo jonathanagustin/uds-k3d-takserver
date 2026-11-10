@@ -148,3 +148,62 @@ Omission logging reports only a fixed allowlisted stage (for example
 environment values, payloads and filesystem paths are never printed. A stage
 identifies where collection stopped; it does not prove a root cause or turn
 missing evidence into a successful receipt.
+
+## Read-only shadow checker
+
+`.github/scripts/install-reuse-shadow.py` inspects one signed receipt without
+changing workflow decisions. Run it manually from independently reviewed source:
+
+```sh
+python3 .github/scripts/install-reuse-shadow.py \
+  --receipt /private/install-receipt-install-amd64.json \
+  --bundle /private/install-receipt-install-amd64.jsonl \
+  --pr PR_NUMBER --target EXACT_SQUASH_COMMIT --policy-ref REVIEWED_POLICY_COMMIT \
+  --gh /path/to/gh
+```
+
+Use exact 40-character commit IDs. The policy commit must be selected independently
+of downloaded evidence; it supplies the approved workflow and selected producer files.
+The checker compares the workflow plus five helper files, including the directly
+executed dev-package key helper. This is a partial dependency policy, not validation
+of the complete acquisition, test and sanitization dependency closure; that
+limitation remains an explicit permanent blocker. It does not trust an arbitrary
+PR's claim of approved code. The supplied receipt and Sigstore bundle are data files,
+never executable inputs. GitHub CLI must support `attestation verify` with exact
+certificate, issuer, source and signer restrictions; unsupported tools or denied
+API reads produce a fresh-execution decision. No installation or workflow dispatch
+is performed. Authenticated read access to the repository's Actions metadata,
+artifacts and attestations is needed.
+
+The checker enforces actual synthetic-merge parents, a same-repository merged PR,
+a single-parent squash target and exact tested/pushed tree equality. It reads all
+bounded run/job/artifact pages, rejects superseded attempts and newer applicable
+runs, requires the whole job and real execution steps to pass, and requires offline
+egress restoration. It verifies the signed receipt subject, workflow, GitHub issuer,
+numeric repository identity and exact run/attempt invocation. It also downloads the
+unique unexpired artifact and compares its bytes to the signed receipt. Archives
+must contain one small regular receipt file; paths, symlinks and extra entries are
+rejected. API/crypto commands have 45-second limits and 4 MiB output limits, with
+at most ten pages per listing. Output limits apply to drained stdout/stderr
+pipes, not to unrelated GitHub CLI cache files. Missing, malformed or ambiguous evidence falls back
+to fresh execution. Errors omit response bodies and credentials.
+
+Every output says `decision: execute-fresh` and `reuse_authorized: false`.
+`evidence_qualified` only describes the historical evidence checks. It cannot
+establish prospective package/input equivalence or runner execution-class policy,
+and those blockers remain even when historical evidence passes. It cannot enable
+reuse, satisfy the Test verifier or replace fresh upgrades. This checker deliberately
+has no CI job, scheduling hook or skip output.
+
+The combined PR433 trial produced authenticated AMD ordinary/offline receipts for
+synthetic merge `e51c23d1712b74ddbbf348751426d07958174cf6`, whose tree matches its PR
+head's tree. This does not establish that a sequence of constituent PR squash merges
+is an eligible same-PR squash. Its ARM receipt authentication failed before upload;
+ARM has no signed artifact and must execute fresh. Producer omission remains
+independent of successful application acceptance.
+
+Run the offline structural-policy and transport guards with
+`python3 -B -m unittest tests.test_install_reuse_shadow -v`. Fixture verification
+objects test policy parsing only; they are not signatures or evidence of actual
+cryptographic qualification. The CLI obtains verification results only from its
+cryptographic verifier.

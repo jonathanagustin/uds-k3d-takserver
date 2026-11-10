@@ -91,6 +91,53 @@ def assert_native_plus_one_airgap(test, rows):
 
 
 class AirgapContracts(unittest.TestCase):
+    def test_real_faults_emit_only_allowlisted_failure_metadata(self):
+        cases = (
+            ('process-exit', 'import sys;sys.exit(7)', 1, 7, None),
+            ('process-exit', 'import sys;sys.exit(137)', 1, 137, None),
+            ('process-signal', 'import os,signal;os.kill(os.getpid(),signal.SIGTERM)', 1, -15, 15),
+            ('deadline', 'import time;time.sleep(30)', 0.1, None, None),
+            ('wait-deadline', 'import os,time;os.close(1);os.close(2);time.sleep(30)', 0.1, None, None),
+            ('output-limit', 'import sys;sys.stdout.write("x"*70000)', 1, None, None),
+            ('invalid-utf8', 'import sys;sys.stdout.buffer.write(b"\\xff")', 1, None, None),
+            ('os-error', None, 1, None, None),
+        )
+        for expected, source, seconds, code, signal in cases:
+            output = io.StringIO()
+            def execute(_cid, _args, _deadline):
+                command = [sys.executable, '-c', source] if source else ['/nonexistent/PRIVATE_ARG_SECRET']
+                return AIRGAP.bounded_command(command, time.monotonic() + seconds)
+            with self.subTest(outcome=expected, code=code), \
+                    patch.object(AIRGAP, 'bounded_exec', side_effect=execute), \
+                    patch.object(AIRGAP, 'backend_diagnostic'), contextlib.redirect_stderr(output):
+                with self.assertRaisesRegex(RuntimeError, 'node firewall command failed'):
+                    AIRGAP.firewall('PRIVATE_NODE_SECRET', binding(), '-A', AIRGAP.CHAIN,
+                                    '-d', 'PRIVATE_ARG_SECRET', '-j', 'RETURN')
+            lines = output.getvalue().splitlines()
+            metadata = json.loads(next(line.split(': ', 1)[1] for line in lines
+                                       if line.startswith('Airgap firewall failure metadata: ')))
+            self.assertEqual(metadata['outcome'], expected)
+            self.assertEqual(metadata['exit'], code)
+            self.assertEqual(metadata['signal'], signal)
+            self.assertEqual(metadata['operation'], 'append-rule')
+            self.assertEqual(metadata['argument_roles'], ['destination', 'jump-target'])
+            self.assertTrue(0 <= metadata['elapsed_ms'] <= 60000)
+            self.assertLess(len(json.dumps(metadata)), 300)
+            self.assertNotIn('PRIVATE', output.getvalue())
+            self.assertNotIn(source or 'nonexistent', output.getvalue())
+
+    def test_failure_metadata_clamps_numbers_and_never_echoes_unknown_errors(self):
+        error = subprocess.CalledProcessError(999999, ['PRIVATE_ARG_SECRET'])
+        with patch.object(AIRGAP.time, 'monotonic', return_value=100000):
+            result = AIRGAP.firewall_failure_metadata(('PRIVATE_ARG_SECRET',), error, 0)
+        self.assertEqual(result['exit'], None)
+        self.assertEqual(result['elapsed_ms'], 60000)
+        self.assertEqual(result['operation'], 'unknown')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        result = AIRGAP.firewall_failure_metadata((), RuntimeError('PRIVATE_ERROR_SECRET'), time.monotonic())
+        self.assertEqual(result['outcome'], 'unknown-error')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+
     def test_real_process_generic_flip_does_not_change_bound_mutations_or_restore(self):
         # This executable is a protocol fixture, not Docker or a firewall.
         with tempfile.TemporaryDirectory() as directory:

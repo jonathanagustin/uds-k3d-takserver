@@ -69,11 +69,17 @@ CID = re.compile(r"[0-9a-f]{64}")
 DIAGNOSED = set()
 
 
+class BoundedCommandError(RuntimeError):
+    def __init__(self, outcome, message):
+        super().__init__(message)
+        self.outcome = outcome
+
+
 def bounded_command(args, deadline):
     """Own the local client group; bound complete output and remote execution."""
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise RuntimeError("airgap diagnostic deadline exhausted")
+        raise BoundedCommandError('deadline', "airgap diagnostic deadline exhausted")
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                start_new_session=True)
     streams = {process.stdout: bytearray(), process.stderr: bytearray()}
@@ -85,7 +91,7 @@ def bounded_command(args, deadline):
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise RuntimeError("airgap bounded command timed out")
+                raise BoundedCommandError('deadline', "airgap bounded command timed out")
             for key, _ in selector.select(min(remaining, 0.1)):
                 chunk = os.read(key.fileobj.fileno(), 4096)
                 if not chunk:
@@ -93,7 +99,7 @@ def bounded_command(args, deadline):
                 else:
                     streams[key.fileobj].extend(chunk)
                     if sum(map(len, streams.values())) > 65536:
-                        raise RuntimeError("airgap bounded command output exceeded limit")
+                        raise BoundedCommandError('output-limit', "airgap bounded command output exceeded limit")
         process.wait(timeout=max(0.001, deadline - time.monotonic()))
         return subprocess.CompletedProcess(args, process.returncode,
             streams[process.stdout].decode('utf-8', errors='strict'),
@@ -228,6 +234,7 @@ def backend_diagnostic(node, binding):
 
 def firewall(node, tool, *args, check=True):
     binding = validate_binding(tool)
+    started = time.monotonic()
     try:
         result = bounded_exec(binding["cid"], [binding["path"], binding["family"], "-w", "1", *args],
                               time.monotonic() + 5)
@@ -235,10 +242,42 @@ def firewall(node, tool, *args, check=True):
             result.check_returncode()
         return result
     except (subprocess.SubprocessError, RuntimeError, OSError, UnicodeError) as error:
+        print('Airgap firewall failure metadata: ' + json.dumps(
+            firewall_failure_metadata(args, error, started), sort_keys=True), file=sys.stderr)
         print('Node firewall command failed; sanitized stderr: ' +
               firewall_error_detail(getattr(error, 'stderr', None)), file=sys.stderr)
         backend_diagnostic(node, binding)
         raise RuntimeError("node firewall command failed") from None
+
+
+def firewall_failure_metadata(args, error, started):
+    """Only fixed operation/role labels and bounded numbers; never argv/text."""
+    operations = {'-N': 'create-chain', '-A': 'append-rule', '-I': 'insert-rule',
+                  '-L': 'list-chain', '-C': 'check-rule', '-D': 'delete-rule',
+                  '-F': 'flush-chain', '-X': 'delete-chain'}
+    roles = {'-d': 'destination', '-o': 'output-interface', '-j': 'jump-target',
+             '-n': 'numeric-listing', '-v': 'verbose-listing', '-x': 'exact-counters'}
+    code = getattr(error, 'returncode', None)
+    code = code if type(code) is int and -255 <= code <= 255 else None
+    if isinstance(error, BoundedCommandError) and error.outcome in ('deadline', 'output-limit'):
+        outcome = error.outcome
+    elif isinstance(error, subprocess.CalledProcessError):
+        outcome = 'process-signal' if code is not None and code < 0 else 'process-exit'
+    elif isinstance(error, subprocess.TimeoutExpired):
+        outcome = 'wait-deadline'
+    elif isinstance(error, OSError):
+        outcome = 'os-error'
+    elif isinstance(error, UnicodeError):
+        outcome = 'invalid-utf8'
+    else:
+        outcome = 'unknown-error'
+    return {'outcome': outcome, 'exit': code,
+            # Only a negative local process return code establishes a signal.
+            # Remote exit 137 remains exit 137, not a claimed signal cause.
+            'signal': -code if code is not None and -64 <= code < 0 else None,
+            'elapsed_ms': min(60000, max(0, int((time.monotonic() - started) * 1000))),
+            'operation': operations.get(args[0], 'unknown') if args else 'unknown',
+            'argument_roles': sorted({roles[arg] for arg in args if arg in roles})}
 
 
 def require_private_network(node):

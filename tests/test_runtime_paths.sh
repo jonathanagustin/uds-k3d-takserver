@@ -79,7 +79,10 @@ check_match ".github/workflows/benchmark.yaml" ignore
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
 check_match ".github/workflows/mutation.yaml" ignore
-check_match "pepr/mutation/package-lock.json" ignore
+# Mutation tooling is isolated from the Pepr package used by cluster jobs.
+for mutation_path in .gitignore check-report.mjs package-lock.json package.json stryker.config.mjs; do
+  check_match "pepr/mutation/${mutation_path}" ignore
+done
 check_match "pepr/package-lock.json" relevant
 check_match ".github/workflows/charts.yaml" ignore
 check_match ".github/scripts/publish-charts.py" ignore
@@ -145,6 +148,9 @@ check_decide false $'takx/build-commoncommo.sh\nupstream/takx'
 check_decide true $'takx/source_inputs.py\nupstream/takserver'
 check_decide true $'takx/source_inputs.py\n.gitmodules'
 check_decide false "pepr/capabilities/workload.test.ts"
+check_decide false $'pepr/mutation/package-lock.json\npepr/mutation/stryker.config.mjs'
+check_decide true $'pepr/mutation/check-report.mjs\npepr/capabilities/workload.ts'
+check_decide true $'pepr/mutation/package.json\npepr/package-lock.json'
 check_decide true "charts/takserver/templates/prereqs.yaml"
 check_decide true "pepr/capabilities/workload.ts"
 check_decide true ".github/container-and-chart/cloudtak/Dockerfile"
@@ -194,7 +200,7 @@ must_relevant() {
     .gitmodules | upstream/takserver | upstream/cloudtak) return 0 ;;
     pepr/*)
       case "${path}" in
-        pepr/capabilities/*.test.ts | pepr/scripts/coverage-summary.mjs) return 1 ;;
+        pepr/capabilities/*.test.ts | pepr/mutation/* | pepr/scripts/coverage-summary.mjs) return 1 ;;
         *) return 0 ;;
       esac
       ;;

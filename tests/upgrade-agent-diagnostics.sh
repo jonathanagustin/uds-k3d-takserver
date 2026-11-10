@@ -12,7 +12,7 @@ redact() {
   python3 -c '
 import re, sys
 text = sys.stdin.read()
-if re.search(r"authorization|bearer|basic", text, re.IGNORECASE):
+if re.search(r"authorization|bearer|basic|registry[_. -]?(?:auth|password|credential|token|secret)|dockerconfigjson|\bauths?\b|identitytoken|accesstoken|://[^\s/@]+:[^\s/@]+@", text, re.IGNORECASE):
     print("Omitted authentication-bearing agent diagnostic")
 else:
     sys.stdout.write(text)
@@ -39,6 +39,27 @@ if [[ "${UPGRADE_AGENT_DIAGNOSTICS_INNER:-}" != 1 ]]; then
 fi
 k() { timeout --kill-after=1s 3s uds zarf tools kubectl --request-timeout=2s "$@"; }
 safe() { k "$@" 2>&1 | redact 40 || echo 'Omitted unavailable or unsanitizable agent diagnostic'; }
+# K3d nodes are Docker containers (app=k3d). K3s ships crictl configured for
+# its embedded containerd; use its CRI API rather than guessing rotated paths.
+# Also works when the Kubernetes API/Service selector is unavailable. Never
+# inspect Docker env, Kubernetes Secrets, or CRI inspect (which includes env).
+nodes="$(timeout --kill-after=1s 3s docker ps --filter label=app=k3d --format '{{.Names}}' 2>/dev/null || true)"
+node_count=0
+while IFS= read -r node; do
+  [[ "${node}" =~ ^k3d-[a-zA-Z0-9_.-]+-(server|agent)-[0-9]+$ ]] || continue
+  node_count=$((node_count + 1))
+  [[ "${node_count}" -le 2 ]] || break
+  ids="$(timeout --kill-after=1s 3s docker exec "${node}" k3s crictl ps -a -o json 2>/dev/null |
+    python3 "${here}/upgrade-agent-metadata.py" cri 2>/dev/null || true)"
+  while read -r id metadata; do
+    [[ "${id}" =~ ^[a-f0-9]{12,64}$ ]] || continue
+    echo "Node CRI agent log: ${node}/${id}"
+    printf '%s\n' "${metadata}" | redact 4
+    timeout --kill-after=1s 3s docker exec "${node}" k3s crictl logs --tail=80 "${id}" 2>&1 |
+      redact 80 || echo 'Omitted unavailable or unsanitizable CRI diagnostic'
+  done <<<"${ids}"
+done <<<"${nodes}"
+
 echo "Zarf agent diagnostics: phase=${1:-unknown}, namespace=zarf deployment/service=agent-hook"
 safe get deployment agent-hook -n zarf -o wide
 safe get service,endpoints agent-hook -n zarf -o wide
@@ -51,8 +72,7 @@ print(",".join(f"{key}={value}" for key,value in sorted(selector.items())))
 ' 2>/dev/null || true)"
 if [[ -z "${selector}" ]]; then
   echo 'Agent Service selector unavailable; omitted pod logs'
-  exit 0
-fi
+else
 safe get pods -n zarf -l "${selector}" -o wide
 pods="$(k get pods -n zarf -l "${selector}" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
 count=0
@@ -60,8 +80,11 @@ while IFS= read -r pod; do
   [[ -n "${pod}" ]] || continue
   count=$((count + 1))
   [[ "${count}" -le 2 ]] || break
+  echo "Agent container metadata: ${pod}/server"
+  k get pod -n zarf "${pod}" -o json 2>/dev/null | python3 "${here}/upgrade-agent-metadata.py" pod | redact 12 || true
   echo "Current agent log: ${pod}/server"
   safe logs -n zarf "${pod}" -c server --tail=80
   echo "Previous agent log: ${pod}/server"
   safe logs -n zarf "${pod}" -c server --previous --tail=80
 done <<<"${pods}"
+fi

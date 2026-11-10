@@ -10,6 +10,11 @@ on:
         description: Install private gateway PKI and verify live CA rotation and SSO
         type: boolean
         default: false
+      diagnostic_case:
+        description: Run one instrumented AMD upgrade case (not full acceptance)
+        type: choice
+        default: none
+        options: [none, upgrade-amd64, pg15-amd64]
   pull_request:
     types: [opened, reopened, synchronize]
     # Anything not listed is relevant and starts the install and upgrade
@@ -393,11 +398,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Plan install acceptance mode
+      - name: Plan validation mode
         id: validation-mode
         env:
           EVENT_NAME: ${{ github.event_name }}
           TRUST_BUNDLE: ${{ inputs.trust_bundle && 'true' || 'false' }}
+          DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}
           # Temporary older-kernel comparison for #300; keep the override.
           TEST_RUNNER: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
         run: python3 .github/scripts/test-validation-mode.py plan
@@ -408,6 +414,9 @@ jobs:
     outputs:
       upgrade-flavors: ${{ steps.test-flavor.outputs.upgrade-flavors }}
       install-matrix: ${{ steps.validation-mode.outputs.install-matrix }}
+      upgrade-matrix: ${{ steps.validation-mode.outputs.upgrade-matrix }}
+      pg15-matrix: ${{ steps.validation-mode.outputs.pg15-matrix }}
+      diagnostic-case: ${{ steps.validation-mode.outputs.diagnostic-case }}
 
   # Install and upgrade do not need each other, so they run at the same time.
   # Upgrade must resolve a released baseline; the first-release bootstrap is reported explicitly.
@@ -417,6 +426,7 @@ jobs:
   # and arm64.
   validate-install:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
+    if: ${{ needs.check-flavor.outputs.diagnostic-case == 'none' }}
     strategy:
       fail-fast: false
       # A trust-only manual trial needs both native installs, not another
@@ -714,18 +724,13 @@ jobs:
         run: python3 tests/prepare-trust-fixture.py cleanup --parent "${RUNNER_TEMP}" --directory "${PRIVATE_FIXTURE}"
 
   validate-upgrade:
-    needs: [images, cloudtak-index, postgis-index]
+    needs: [check-flavor, images, cloudtak-index, postgis-index]
     # Preserve baseline discovery after image-prep failures for normal runs.
-    # Only the explicit trust-only manual trial intentionally omits upgrades.
-    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
+    # Explicit manual modes omit only the unselected validation work.
+    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && needs.check-flavor.outputs.diagnostic-case != 'pg15-amd64' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+      matrix: ${{ fromJSON(needs.check-flavor.outputs.upgrade-matrix) }}
     name: validate-upgrade (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     # A healthy upgrade finishes in about 30 minutes. This job limit is what
@@ -753,17 +758,12 @@ jobs:
   # and on a pull request that has the upgrade-pg15 label when a commit is
   # pushed, so it adds no time to other pull requests.
   validate-upgrade-pg15:
-    needs: [images, cloudtak-index, postgis-index]
-    if: ${{ !cancelled() && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')) }}
+    needs: [check-flavor, images, cloudtak-index, postgis-index]
+    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && (needs.check-flavor.outputs.diagnostic-case == 'pg15-amd64' || (needs.check-flavor.outputs.diagnostic-case == 'none' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')))) }}
     # Release 0.6.0 published an arm64 package too, so this runs on both.
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+      matrix: ${{ fromJSON(needs.check-flavor.outputs.pg15-matrix) }}
     name: validate-upgrade-pg15 (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
@@ -802,6 +802,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           TRUST_BUNDLE: ${{ inputs.trust_bundle && 'true' || 'false' }}
+          DIAGNOSTIC_CASE: ${{ inputs.diagnostic_case || 'none' }}
           INSTALL_RESULT: ${{ needs.validate-install.result }}
           UPGRADE_RESULT: ${{ needs.validate-upgrade.result }}
           PG15_RESULT: ${{ needs.validate-upgrade-pg15.result }}

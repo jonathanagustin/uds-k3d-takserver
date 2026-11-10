@@ -193,6 +193,41 @@ def upstream_sources(source, lock):
     return files, {entry['path']: entry['sha256'] for entry in inventory}
 
 
+def adapter_sources(repo):
+    """Snapshot only committed, unchanged Java bytes in the consumed adapter tree."""
+    root = 'takx/compat/src/main/java'
+    env = dict(os.environ, GIT_NO_LAZY_FETCH='1')
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(repo), *args], env=env, timeout=30)
+    commit = git('rev-parse', 'HEAD').decode().strip()
+    changed = git('diff', '--name-only', '-z', commit, '--', root).split(b'\0')
+    # Include ignored files: an ignored Java source must not sneak into this boundary.
+    untracked = git('ls-files', '--others', '-z', '--', root).split(b'\0')
+    if any(name.endswith(b'.java') for name in changed + untracked):
+        raise ValueError('modified or untracked consumed adapter Java sources')
+    files = {}
+    for record in git('ls-tree', '-r', '-z', commit, '--', root).split(b'\0'):
+        if not record:
+            continue
+        metadata, name = record.split(b'\t', 1)
+        if not name.endswith(b'.java'):
+            continue
+        mode, kind, object_id = metadata.decode().split()
+        relative = PurePosixPath(name.decode()).relative_to(root)
+        source = repo / root / relative
+        if (mode not in {'100644', '100755'} or kind != 'blob'
+                or any(p.is_symlink() for p in (source, *source.parents) if p != repo and repo in p.parents)
+                or not source.is_file()):
+            raise ValueError('consumed adapter sources must be regular tracked files')
+        original = git('cat-file', 'blob', object_id)
+        if source.read_bytes() != original:
+            raise ValueError('adapter bytes differ from recorded commit: ' + str(relative))
+        files[relative.as_posix()] = original
+    if not files:
+        raise ValueError('real tracked adapter sources required')
+    return commit, dict(sorted(files.items()))
+
+
 def fresh_output(path):
     if path.is_symlink():
         raise ValueError('output must not be a symlink')
@@ -231,10 +266,7 @@ def main():
     patch = REPO / lock['unused_import_patch']['path']
     if digest(patch) != lock['unused_import_patch']['sha256']:
         raise ValueError('unused-import patch differs from reviewed input')
-    adapter_root = REPO / 'takx/compat/src/main/java'
-    adapters = sorted(adapter_root.rglob('*.java'))
-    if not adapters or any(p.is_symlink() for p in adapters):
-        raise ValueError('real adapter sources required; source symlinks are not accepted')
+    adapter_commit, adapters = adapter_sources(REPO)
     output.mkdir(parents=True, exist_ok=False)
     frozen = []
     for name, data in sorted(sources.items()):
@@ -247,9 +279,9 @@ def main():
             changed.append(name)
     if changed != [lock['unused_import_patch']['target']] or digest(output / 'stage' / changed[0]) != lock['unused_import_patch']['patched_sha256']:
         raise ValueError('unexpected upstream source modification')
-    for source in adapters:
-        path = output / 'stage/compat' / source.relative_to(adapter_root); path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, path); frozen.append(path)
+    for name, data in adapters.items():
+        path = output / 'stage/compat' / name; path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data); frozen.append(path)
     (output / 'classpath').mkdir()
     classpath = []
     for source, metadata in jars:
@@ -265,7 +297,8 @@ def main():
             verified_class_entries(target, lock['gis_java']['artifacts'][source.name]['class_entries'])
         classpath.append({'path': str(target), 'sha256': expected, **metadata})
     inputs = {
-        'schema': 1, 'source_commit': subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip(),
+        'schema': 1, 'source_commit': adapter_commit,
+        'adapter_inventory': [{'path': name, 'sha256': hashlib.sha256(data).hexdigest()} for name, data in adapters.items()],
         'classpath_profile': args.profile, 'upstream_revision': REVISION, 'engine_sources': 862, 'upstream_sources': 945,
         'unchanged_upstream_sources': 944, 'adapter_sources': len(adapters),
         'recipe_sha256': digest(HERE / 'build.py'), 'lock_sha256': digest(HERE / 'inputs.lock.json'),

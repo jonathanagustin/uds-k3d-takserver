@@ -8,6 +8,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 import warnings
 import zipfile
@@ -92,6 +93,61 @@ class CompilerGuards(unittest.TestCase):
                 with zipfile.ZipFile(path, 'w') as z:
                     z.writestr('fixture/Entry.class', b'a'); z.writestr('fixture/Entry.class', b'b')
             with self.assertRaises(ValueError): BUILD.class_entries(path)
+
+    @staticmethod
+    def adapter_repository(root):
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.STDOUT)
+        git('init', '-q')
+        git('config', 'user.name', 'uds-takserver-test')
+        git('config', 'user.email', 'test@example.invalid')
+        source = root / 'takx/compat/src/main/java/fixture/Entry.java'
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b'class Entry {}\n')
+        (root / '.gitignore').write_text('Ignored.java\n')
+        (root / 'README.md').write_text('unrelated document\n')
+        git('add', '.'); git('commit', '-qm', 'test fixture')
+        return source, git
+
+    def test_adapter_snapshot_binds_committed_bytes_and_allows_unrelated_edits(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); source, git = self.adapter_repository(root)
+            (root / 'README.md').write_text('changed unrelated document\n')
+            (root / 'unrelated.java').write_text('outside consumed tree\n')
+            commit, snapshot = BUILD.adapter_sources(root)
+            self.assertEqual(commit, git('rev-parse', 'HEAD').decode().strip())
+            self.assertEqual(snapshot, {'fixture/Entry.java': b'class Entry {}\n'})
+            # A later worktree edit cannot alter the verified bytes written to the proof.
+            source.write_bytes(b'class Altered {}\n')
+            self.assertEqual(snapshot['fixture/Entry.java'], b'class Entry {}\n')
+
+    def test_adapter_boundary_rejects_changed_staged_untracked_and_ignored_java(self):
+        for case in ('modified', 'staged', 'assume-unchanged', 'untracked', 'ignored', 'deleted'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                root = Path(d); source, git = self.adapter_repository(root)
+                if case in ('modified', 'staged', 'assume-unchanged'):
+                    if case == 'assume-unchanged': git('update-index', '--assume-unchanged', str(source))
+                    source.write_text('class Changed {}\n')
+                    if case == 'staged': git('add', str(source))
+                elif case == 'deleted':
+                    source.unlink()
+                else:
+                    (source.parent / ('Ignored.java' if case == 'ignored' else 'Extra.java')).write_text('class Extra {}\n')
+                with self.assertRaises(ValueError): BUILD.adapter_sources(root)
+
+    def test_adapter_boundary_rejects_source_and_directory_symlinks(self):
+        for case in ('source', 'directory', 'committed-link'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                root = Path(d); source, git = self.adapter_repository(root)
+                if case in ('source', 'committed-link'):
+                    target = root / 'original'; target.write_bytes(source.read_bytes())
+                    source.unlink(); source.symlink_to(target)
+                    if case == 'committed-link':
+                        git('add', str(source)); git('commit', '-qm', 'link fixture')
+                else:
+                    original = root / 'original-directory'
+                    source.parent.rename(original); source.parent.symlink_to(original, target_is_directory=True)
+                with self.assertRaises(ValueError): BUILD.adapter_sources(root)
 
     def test_new_external_output_and_argument_quoting(self):
         with tempfile.TemporaryDirectory() as d:

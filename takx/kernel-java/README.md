@@ -34,7 +34,11 @@ files retain their original bytes. The existing reviewed, hash-checked
 [unused-import patch](../patches/0001-kernel-remove-unused-colorfilter-import.patch)
 changes only `ColorBlendModeMarshal.java`; the other 944 upstream files remain
 byte-for-byte identical. No SDK stub or replacement upstream method is supplied.
-The real adapters in `takx/compat/src/main/java` are copied and hashed separately.
+The real adapters in `takx/compat/src/main/java` must be tracked, unmodified
+regular files matching the recorded repository commit. Untracked Java files
+(including ignored files), modified sources and symlinks are rejected; unrelated
+worktree edits are allowed. Verified committed bytes are frozen directly, and
+their complete path/hash inventory is recorded separately from upstream sources.
 
 The classpath contains exactly 25 inputs:
 

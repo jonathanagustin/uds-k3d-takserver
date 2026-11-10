@@ -21,6 +21,8 @@ jobs:
     outputs:
       release-created: ${{ steps.release.outputs.release_created }}
       tag: ${{ steps.release.outputs.tag_name }}
+      release-id: ${{ steps.release.outputs.id }}
+      source-sha: ${{ steps.release.outputs.sha }}
     steps:
       - name: Open the release pull request
         id: release
@@ -31,7 +33,7 @@ jobs:
   # Releases created with GITHUB_TOKEN do not trigger another release workflow.
   # Call the publisher directly using the tag emitted by Release Please.
   publish:
-    needs: release-please
+    needs: [release-please, charts]
     if: needs.release-please.outputs.release-created == 'true'
     # release.yaml's provenance job needs contents (release upload),
     # id-token and attestations on top of the package write.
@@ -43,6 +45,8 @@ jobs:
     uses: ./.github/workflows/release.yaml
     with:
       tag: ${{ needs.release-please.outputs.tag }}
+      release_id: ${{ needs.release-please.outputs.release-id }}
+      source_sha: ${{ needs.release-please.outputs.source-sha }}
 
   # GITHUB_TOKEN-created releases do not emit a new release workflow run.
   # Wait for package publication/provenance, then rebuild with the new tag.
@@ -68,3 +72,4 @@ jobs:
     uses: ./.github/workflows/charts.yaml
     with:
       tag: ${{ needs.release-please.outputs.tag }}
+      source_sha: ${{ needs.release-please.outputs.source-sha }}

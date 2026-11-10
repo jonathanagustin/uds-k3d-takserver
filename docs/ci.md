@@ -112,7 +112,7 @@ Full Core puts that group on `validate-full-core`, per architecture, and only wh
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. When a release is created, it calls the Release workflow, then rebuilds Docs after successful package publication and provenance |
+| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. Creates a draft with its exact Git tag, verifies charts, then calls the package publisher. Promotes the draft only after both signed architecture packages and provenance verify; Docs follows promotion |
 | Release | `release.yaml` | a published release, a call from Release Please, and by hand with an existing tag | Builds the released package with its SBOM on amd64 and arm64, signs it keylessly, publishes it, and attests its build provenance. See [Verify a release](../README.md#verify-a-release) |
 
 ## Other clusters
@@ -335,3 +335,24 @@ never the terminal or an issue. Verify the artifact's run, attempt and source
 through GitHub metadata before interpreting its contents. Encryption protects
 confidentiality; it does not turn diagnostics into acceptance, recover discarded
 tail bytes, establish a causal explanation or authorize another trial.
+
+
+### Release readiness
+
+Release Please creates a draft and its Git tag together. Charts publish first;
+then the existing native publisher signs and verifies both architecture packages
+and verifies provenance for their final index. Only then does its existing
+release writer publish the source-bound draft. A failed stage leaves the draft
+unpublished. Upgrades continue to select published stable releases and still
+refuse an invalid selected baseline; they never fall back after a failure.
+
+Native jobs check the expected tag/source before building. The readiness helper
+comes from the invoking workflow SHA, including when backfilling an older tag.
+Already-public releases can be verified again without changing their metadata.
+Prefer rerunning the original Release Please caller after a failed stage.
+Manual draft recovery must supply the exact trusted `release_id` and `source_sha`
+as well as `tag`; incomplete, mismatched or unavailable identity fails before
+building. If Release Please returns a branch name instead of a commit SHA,
+publication stops and requires explicit recovery. No tag is moved. This lifecycle
+has offline contract tests; a future
+real release still needs its actual publication and promotion evidence.

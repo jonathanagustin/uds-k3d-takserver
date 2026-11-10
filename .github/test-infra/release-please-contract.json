@@ -1,0 +1,17 @@
+{
+  "schemaSource": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "schemaSHA256": "82ae5d0a805cd3e4c437ce7a4d3eae1e3db51706ad414c624cc749ca02e7c1c5",
+  "properties": {
+    "draft": {
+      "description": "Create the GitHub release in draft mode. Defaults to `false`.",
+      "type": "boolean"
+    },
+    "force-tag-creation": {
+      "description": "Force the creation of a Git tag for the release. This is particularly useful when `draft` is enabled, because GitHub does not create a Git tag for draft releases until they are published. This 'lazy tag creation' causes release-please to fail to find the previous release, potentially generating incorrect changelogs. Setting this to `true` ensures the tag is created immediately. Defaults to `false`.",
+      "type": "boolean"
+    }
+  },
+  "actionRef": "45996ed1f6d02564a971a2fa1b5860e934307cf7",
+  "actionLockSHA256": "e9b82ebdef8b0efc1d9bb62c8b605e07f863544cd124cb6cb0362dd55c79d3aa",
+  "releasePleaseVersion": "17.6.0"
+}

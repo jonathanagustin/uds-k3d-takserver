@@ -11,6 +11,14 @@ on:
       tag:
         required: true
         type: string
+      release_id:
+        description: Exact draft ID emitted by Release Please (empty for public backfills)
+        type: string
+        default: ""
+      source_sha:
+        description: Exact release source SHA emitted by Release Please
+        type: string
+        default: ""
   # Re-publish an existing Release Please tag, for example after a failed run.
   workflow_dispatch:
     inputs:
@@ -18,6 +26,14 @@ on:
         description: Existing release tag, such as v0.2.0
         required: true
         type: string
+      release_id:
+        description: Exact trusted draft ID for recovery (empty for public backfills)
+        type: string
+        default: ""
+      source_sha:
+        description: Exact trusted draft source SHA for recovery
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -60,6 +76,8 @@ jobs:
         id: release
         env:
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -68,10 +86,44 @@ jobs:
             exit 1
           fi
           version="${BASH_REMATCH[1]}"
+          # A pre-existing tag must never redirect a new draft's package bytes.
+          python3 - <<'PY_CHECK'
+          import os, re, subprocess
+          identity = os.environ['RELEASE_ID']
+          source = os.environ['RELEASE_SOURCE_SHA']
+          if identity or source:
+              valid = (re.fullmatch(r'[1-9][0-9]*', identity)
+                       and re.fullmatch(r'[0-9a-f]{40}', source)
+                       and subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == source)
+              if not valid:
+                  raise SystemExit('Release source identity mismatch')
+          PY_CHECK
           git merge-base --is-ancestor HEAD origin/main
           manifest="$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')"
           test "${version}" = "${manifest}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout trusted readiness checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-publisher
+          sparse-checkout: .github/test-infra/release-readiness.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Verify release availability identity before building
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+          READINESS_MODE: check
+        run: |
+          CHECKED_SOURCE_SHA="$(git rev-parse HEAD)"
+          export CHECKED_SOURCE_SHA
+          python3 .release-publisher/.github/test-infra/release-readiness.py
 
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
@@ -143,7 +195,7 @@ jobs:
   # Sigstore with this workflow's identity. The attestation is stored with
   # the package in GHCR and in the repository's attestations, and the bundle
   # is added to the GitHub release. It runs after both architectures are in
-  # the index, so a failure here never blocks the publish. Verify with:
+  # the index. A draft becomes public only after verification. Verify with:
   #   gh attestation verify oci://ghcr.io/jonathanagustin/uds-takserver/takserver:<version>-upstream \
   #     --owner jonathanagustin
   # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
@@ -157,6 +209,13 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # The helper comes from the invoking publisher workflow, not an old tag.
+      - name: Checkout trusted release publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
         with:
@@ -234,4 +293,12 @@ jobs:
           gh attestation verify "oci://${SUBJECT}" \
             --owner "${GITHUB_REPOSITORY_OWNER}" \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yaml"
-  # @lulaEnd 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
+      - name: Publish only the verified draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python3 .github/test-infra/release-readiness.py
+        # @lulaEnd 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17

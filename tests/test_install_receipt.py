@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / '.github/scripts/install-receipt.py'
 SPEC = importlib.util.spec_from_file_location('install_receipt', SCRIPT)
@@ -107,6 +108,39 @@ class InstallReceiptTests(unittest.TestCase):
                 inputs['package_key'] = 'arm64-' + 'a' * 16
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 self.build(inputs=inputs)
+
+    def test_missing_promisor_object_is_not_fetched(self):
+        remote = self.root / 'remote.git'
+        subprocess.run(['git', 'clone', '-q', '--bare', str(self.root), str(remote)], check=True)
+        blob = self.git('rev-parse', 'HEAD:' + RECEIPT.WORKFLOW)
+        path = self.root / '.git/objects' / blob[:2] / blob[2:]
+        self.assertTrue(path.exists())
+        path.unlink()
+        self.git('config', 'remote.origin.url', remote.as_uri())
+        self.git('config', 'remote.origin.promisor', 'true')
+        self.git('config', 'extensions.partialClone', 'origin')
+        with self.assertRaisesRegex(ValueError, 'checkout identity unavailable'):
+            self.build()
+        self.assertFalse(path.exists())
+
+    def test_git_timeout_omits_instead_of_waiting_for_a_hung_helper(self):
+        directory = self.root / 'bin'
+        directory.mkdir()
+        fake = directory / 'git'
+        fake.write_text('#!/usr/bin/env python3\nimport time\ntime.sleep(2)\n')
+        fake.chmod(0o755)
+        with mock.patch.dict(os.environ, {'PATH': str(directory) + ':' + os.environ['PATH']}), \
+                mock.patch.object(RECEIPT, 'GIT_TIMEOUT', 0.05):
+            with self.assertRaisesRegex(ValueError, 'checkout identity unavailable'):
+                self.build()
+
+    def test_oversized_workflow_identity_is_omitted(self):
+        (self.root / RECEIPT.WORKFLOW).write_text('x' * 1025)
+        self.git('add', RECEIPT.WORKFLOW)
+        self.git('commit', '-qm', 'large workflow')
+        with mock.patch.object(RECEIPT, 'MAX_WORKFLOW_BYTES', 1024):
+            with self.assertRaisesRegex(ValueError, 'workflow identity unavailable'):
+                self.build()
 
     def test_cli_omits_rejected_payload_and_refuses_output_replacement(self):
         manifest = self.root / 'inputs.json'

@@ -11,6 +11,9 @@ An emitted record is a caller's statement. Its `success` field is not independen
 proof that the test step, cleanup, or entire job passed. A later authenticated
 consumer must verify those facts against GitHub and the receipt artifact.
 
+Git reads have five-second limits, disable lazy fetch and remote protocols, and
+omit missing or oversized workflow objects rather than fetching them.
+
 The producer records the actual checkout's `HEAD` commit and tree, rather than
 assuming that the PR head or `GITHUB_SHA` was tested. This matters because PR
 checkout normally uses a synthetic merge commit. It also hashes the workflow

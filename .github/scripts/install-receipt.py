@@ -6,11 +6,14 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 
 WORKFLOW = '.github/workflows/test.yaml'
+GIT_TIMEOUT = 5
+MAX_WORKFLOW_BYTES = 1024 * 1024
 IMAGES = {'takserver-api', 'takserver-messaging', 'takserver-config',
           'takserver-plugins', 'takserver-database-setup', 'takserver-ignite',
           'cloudtak', 'postgis'}
@@ -45,7 +48,13 @@ def validate_inputs(value, arch):
 
 
 def git(root, *args):
-    result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, check=False)
+    env = {**os.environ, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0'}
+    try:
+        result = subprocess.run(['git', '-c', 'protocol.allow=never', '--no-optional-locks',
+                                 '-C', str(root), *args], capture_output=True, check=False,
+                                timeout=GIT_TIMEOUT, stdin=subprocess.DEVNULL, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError('checkout identity unavailable') from None
     require(result.returncode == 0, 'checkout identity unavailable')
     return result.stdout
 
@@ -66,6 +75,8 @@ def receipt(root, repository, event, run_id, attempt, arch, scenario, result, in
     tree = git(root, 'rev-parse', '--verify', 'HEAD^{tree}').decode().strip()
     require(all(re.fullmatch(r'[a-f0-9]{40}', item) for item in (commit, tree)),
             'unsupported checkout identity')
+    size = git(root, 'cat-file', '-s', f'HEAD:{WORKFLOW}').strip()
+    require(size.isdigit() and int(size) <= MAX_WORKFLOW_BYTES, 'workflow identity unavailable')
     workflow = git(root, 'show', f'HEAD:{WORKFLOW}')
     return {
         'schema_version': 1,

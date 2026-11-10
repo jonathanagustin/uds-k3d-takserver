@@ -131,6 +131,56 @@ class PolicyTests(unittest.TestCase):
                 self.assertFalse(self.result()['evidence_qualified'])
                 self.gets = saved
 
+    def test_pr423_stale_snapshot_uses_actual_tested_base_not_metadata(self):
+        # Actual observed PR423 base/head/synthetic/tree values. The target
+        # commit and crypto object are STRUCTURAL fixtures, not a real squash
+        # or signature claim. Authentic qualification is a separate live probe.
+        stale_snapshot = '904905f0a88dca238e9a283280e13f1017e8ed5d'
+        tested_base = '8691a11b0db743923cbe99f8c3f486a9bfa3b04d'
+        tested_head = '2a5afcf2244de21271ba688bd348b9f10c3188d3'
+        tested_merge = '0109e4ac6bb05801fb6460b0c4274afbff3e0078'
+        tested_tree = 'f8b066fe58de38ed2547bb0b9de7534684d48a46'
+        self.gets[f'git/commits/{tested_merge}'] = {
+            'sha': tested_merge, 'tree': {'sha': tested_tree},
+            'parents': [{'sha': tested_base}, {'sha': tested_head}]}
+        self.merge = tested_merge
+        self.pr['base']['sha'] = stale_snapshot
+        self.pr['head']['sha'] = tested_head
+        self.run['head_sha'] = tested_head
+        self.receipt['source'].update(checkout_commit=tested_merge, checkout_tree=tested_tree)
+        self.gets[f'git/commits/{self.target}'].update(
+            tree={'sha': tested_tree}, parents=[{'sha': tested_base}])
+        result = self.result()
+        self.assertTrue(result['evidence_qualified'])
+        self.assertFalse(result['reuse_authorized'])
+        for blocker in ('prospective-input-equivalence-not-proven',
+                        'execution-class-policy-not-established',
+                        'complete-producer-dependency-policy-not-established',
+                        'consumer-enforcement-not-enabled'):
+            self.assertIn(blocker, result['blockers'])
+
+    def test_actual_base_change_is_rejected_even_when_pr_snapshot_matches_target(self):
+        # Equal trees do not excuse a different actual main base after testing.
+        advanced = 'a' * 40
+        self.pr['base']['sha'] = advanced
+        self.gets[f'git/commits/{self.target}']['parents'] = [{'sha': advanced}]
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_changed_current_pr_head_is_not_the_tested_head(self):
+        self.pr['head']['sha'] = 'a' * 40
+        self.run['head_sha'] = self.pr['head']['sha']
+        self.assertFalse(self.result()['evidence_qualified'])
+
+    def test_missing_extra_or_malformed_parents_fail_closed(self):
+        for source_parents, target_parents in (([], [{'sha': self.base}]),
+                                                ([{'sha': self.base}], [{'sha': self.base}]),
+                                                ([{'sha': self.base}, {'sha': self.head}], []),
+                                                ([{'sha': 'invalid'}, {'sha': self.head}],
+                                                 [{'sha': 'invalid'}])):
+            self.gets[f'git/commits/{self.merge}']['parents'] = source_parents
+            self.gets[f'git/commits/{self.target}']['parents'] = target_parents
+            self.assertFalse(self.result()['evidence_qualified'])
+
     def test_open_or_fork_pr_is_not_same_repository_squash(self):
         for change in ('open', 'fork', 'wrong-merge'):
             saved = copy.deepcopy(self.pr)

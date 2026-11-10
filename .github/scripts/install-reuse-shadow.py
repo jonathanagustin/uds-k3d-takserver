@@ -252,9 +252,15 @@ def qualify(api, receipt, raw, verified, pr_number, target, policy_ref):
             pr['merge_commit_sha'] == target, 'not-unambiguous-same-repository-main-merge')
     source = api.get(f'git/commits/{receipt["source"]["checkout_commit"]}')
     pushed = api.get(f'git/commits/{target}')
+    source_parents = [parent['sha'] for parent in source['parents']]
+    target_parents = [parent['sha'] for parent in pushed['parents']]
+    # PR base.sha can retain an older fork-point snapshot after main advances.
+    # The immutable commits must prove that the ACTUAL tested/merged bases match.
     require(source['sha'] == receipt['source']['checkout_commit'] and pushed['sha'] == target and
-            [p['sha'] for p in source['parents']] == [pr['base']['sha'], pr['head']['sha']] and
-            [p['sha'] for p in pushed['parents']] == [pr['base']['sha']],
+            len(source_parents) == 2 and len(target_parents) == 1 and
+            all(isinstance(parent, str) and SHA.fullmatch(parent)
+                for parent in source_parents + target_parents) and
+            source_parents[0] == target_parents[0] and source_parents[1] == pr['head']['sha'],
             'synthetic-merge-or-squash-ancestry-mismatch')
     require(source['tree']['sha'] == receipt['source']['checkout_tree'] == pushed['tree']['sha'],
             'tested-and-pushed-trees-differ')

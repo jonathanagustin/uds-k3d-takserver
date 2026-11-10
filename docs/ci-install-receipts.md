@@ -176,7 +176,13 @@ is performed. Authenticated read access to the repository's Actions metadata,
 artifacts and attestations is needed.
 
 The checker enforces actual synthetic-merge parents, a same-repository merged PR,
-a single-parent squash target and exact tested/pushed tree equality. It reads all
+a single-parent squash target and exact tested/pushed tree equality. The tested
+synthetic merge's first parent must equal the squash target's only parent; its
+second parent must equal the PR's current head. The PR base SHA can retain an older
+fork-point snapshot after main advances, so it is not the authority for the tested
+base. Different actual tested/merged parents still require fresh execution even
+when their trees happen to match. Same-repository, merged-main and exact PR merge
+commit bindings remain required. It reads all
 bounded run/job/artifact pages, rejects superseded attempts and newer applicable
 runs, requires the whole job and real execution steps to pass, and requires offline
 egress restoration. It verifies the signed receipt subject, workflow, GitHub issuer,

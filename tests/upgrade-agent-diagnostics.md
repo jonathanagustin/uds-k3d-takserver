@@ -1,7 +1,7 @@
 # Agent failure evidence
 
 `upgrade-agent-diagnostics.sh` runs only after failure: upgrade boundary checks
-invoke it in `tests/upgrade.sh`, ordinary Test installs invoke it immediately
+invoke it in `tests/upgrade.sh`, Test install rows invoke it immediately
 after their runner-wedge check, and Full Core invokes it immediately after its
 runner-wedge check with constant phase `full-core`. The workflow callers skip
 capture when a runner network stall was detected and have a two-minute step
@@ -52,17 +52,19 @@ These establish capture behavior and redaction; they do not reproduce the agent
 failure or establish its cause. The outer deadline may truncate evidence when
 multiple commands are slow. No unchanged CI retry is implied.
 
-A manually dispatched Test workflow can select focused upgrade evidence:
+A manually dispatched Test workflow can select focused evidence:
 
-| `diagnostic_case` | Upgrade work |
+| `diagnostic_case` | Selected runtime work |
 | --- | --- |
+| `airgap-amd64` | Existing AMD airgap install row only; receipts omitted |
 | `upgrade-amd64` | Regular upgrade, AMD only |
 | `pg15-amd64` | Retained PostgreSQL 15 upgrade, AMD only |
 | `pg15-both` | Retained PostgreSQL 15 upgrades, AMD and ARM |
 
 AMD uses the existing `TEST_RUNNER` repository variable; ARM uses the ordinary
-native ARM runner. Each selection skips installs and the unselected upgrade
-family. `pg15-both` runs the two additional main-branch PG15 paths without
+native ARM runner. Upgrade selections skip installs and the unselected upgrade family.
+`airgap-amd64` selects only the existing AMD airgap install row and skips both
+upgrade families; its success is diagnostic-only and emits no install receipt. `pg15-both` runs the two additional main-branch PG15 paths without
 repeating the three install and two regular-upgrade paths. It does not reuse
 or certify any earlier result: retain the separate PR evidence for those paths.
 
@@ -70,3 +72,12 @@ These modes cannot be combined with `trust_bundle`, are ignored for PR/push
 events, and report only diagnostic success. Default `none` preserves all ordinary
 matrix entries and PG15 trigger rules. Dispatch is deliberate; no automatic
 retry, scheduling or result reuse is added.
+
+The airgap firewall uses built-in DROP for Docker embedded DNS and its terminal
+deny rule, preserving the internal-network and loopback allow ordering. This
+reduces dependency on an optional REJECT extension; it is not a diagnosis of
+the prior hidden-stderr failure. Firewall command failures still raise and
+restore node egress. Their stderr is sanitized as a whole, authentication-bearing
+streams are omitted, and only a bounded single-line detail is printed. The
+Docker packet fixtures assert DROP counters but remain opt-in; fixture edits
+and offline rule-order tests do not establish live airgap acceptance.

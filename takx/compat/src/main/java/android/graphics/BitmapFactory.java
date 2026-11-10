@@ -27,6 +27,18 @@ public final class BitmapFactory {
         public boolean inScaled = true;
         public Bitmap inBitmap;
         public boolean inJustDecodeBounds;
+        public int inDensity;
+        public int inTargetDensity;
+        public int inScreenDensity;
+        // Only these deprecated requests are ignored by the pinned Android 14 API.
+        public boolean inDither;
+        public boolean inInputShareable;
+        public boolean inPreferQualityOverSpeed;
+        public boolean inPurgeable;
+        // Still active in AOSP: rejected explicitly by this ImageIO slice.
+        public byte[] inTempStorage;
+        public boolean mCancel;
+        public void requestCancelDecode() { mCancel = true; }
         public int outWidth;
         public int outHeight;
     }
@@ -126,6 +138,15 @@ public final class BitmapFactory {
     }
 
     private static void validate(Options options) {
+        if (options != null && options.inTempStorage != null) {
+            throw new UnsupportedOperationException("caller-supplied decoder scratch storage is not supported");
+        }
+        // AOSP bounds-only returns before density scaling/metadata. Actual
+        // images require density metadata even when inScaled is false or the
+        // source/target densities match; do not silently discard that request.
+        if (options != null && !options.inJustDecodeBounds && options.inDensity != 0) {
+            throw new UnsupportedOperationException("bitmap density metadata/scaling is outside this slice");
+        }
         if (options != null && options.inBitmap != null && options.inBitmap.isRecycled()) {
             throw new ReuseException("cannot reuse a recycled bitmap");
         }
@@ -166,6 +187,10 @@ public final class BitmapFactory {
             reset(options);
             return null;
         }
+    }
+
+    public static Bitmap decodeStream(InputStream stream) {
+        return decodeStream(stream, null, null);
     }
 
     public static Bitmap decodeStream(InputStream stream, Object padding, Options options) {

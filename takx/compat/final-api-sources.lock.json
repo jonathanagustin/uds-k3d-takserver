@@ -1,0 +1,52 @@
+{
+  "android_release": "android-14.0.0_r1",
+  "frameworks_base_revision": "299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368",
+  "libcore_revision": "4ce63484144d6e245ad55e7a0027ea075cbd804c",
+  "skia_revision": "1145116447a46710a65e3a5deabb7d7c752af5ea",
+  "upstream_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "sources": {
+    "Bitmap.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Bitmap.java",
+      "sha256": "88aa989eeab261f3951b6286bc40f209910c13f29d998cabab6234bb818f2570"
+    },
+    "BitmapFactory.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/BitmapFactory.java",
+      "sha256": "23089775e4e6afca47f0f2709adab4f06e9a36ffed086ae45a5190a4db70e2b7"
+    },
+    "Paint.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Paint.java",
+      "sha256": "e748f2b3c0adafe7af32236e82c82b71cb211c058872b659159fc58f4f7cc3c7"
+    },
+    "Canvas.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/Canvas.java",
+      "sha256": "cec5d0255cb032f012f8bed12641fa303fefbdf3946425cdf10f18fcfabe3961"
+    },
+    "BaseCanvas.java": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/graphics/java/android/graphics/BaseCanvas.java",
+      "sha256": "1871ee236cc21ddbc83dae5a6b97c7514e6b69d312d6a6f3a33b2f38f2831c49"
+    },
+    "Os.java": {
+      "url": "https://android.googlesource.com/platform/libcore/+/4ce63484144d6e245ad55e7a0027ea075cbd804c/luni/src/main/java/android/system/Os.java?format=TEXT",
+      "encoding": "base64",
+      "sha256": "313c95bde491a4c71360e79cc9df00b48f5e4d91f27624411c2ce55ee24c4885"
+    },
+    "ErrnoException.java": {
+      "url": "https://android.googlesource.com/platform/libcore/+/4ce63484144d6e245ad55e7a0027ea075cbd804c/luni/src/main/java/android/system/ErrnoException.java?format=TEXT",
+      "encoding": "base64",
+      "sha256": "05ca762b6dd861965d98a55e1a994049e617ecf5656353cc8b405e2bbf25dfac"
+    },
+    "StructStat.java": {
+      "url": "https://android.googlesource.com/platform/libcore/+/4ce63484144d6e245ad55e7a0027ea075cbd804c/luni/src/main/java/android/system/StructStat.java?format=TEXT",
+      "encoding": "base64",
+      "sha256": "a403e65d0d600b08688012fc7961b78a94acba7ff6c53d7bd47f59e8093bc06f"
+    },
+    "Bitmap.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/299fe6f5d6fc6f1af7c3411dcf4e5efdf7217368/libs/hwui/jni/Bitmap.cpp",
+      "sha256": "7bcb7148d6333f5f89b35f761de8ccecc24a4ec6ae0408a4539f3c4fbec40877"
+    },
+    "SkConvertPixels.cpp": {
+      "url": "https://raw.githubusercontent.com/aosp-mirror/platform_external_skia/1145116447a46710a65e3a5deabb7d7c752af5ea/src/core/SkConvertPixels.cpp",
+      "sha256": "4b99addf078b554fe8a176bc7527c6ab4236037c13954cb5ad082828d4617ffd"
+    }
+  }
+}

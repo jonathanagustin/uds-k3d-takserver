@@ -12,6 +12,7 @@ callers must stop using them before reconfiguration.
 | ARGB_8888 | R, G, B, A bytes | Straight, unpremultiplied channels |
 | RGB_565 | Little-endian 16-bit R5G6B5 words | Rounded low-precision CPU packing; bit-replicated unpacking; opaque |
 | ALPHA_8 | One alpha byte | RGB ignored on writes and zero on reads |
+| ARGB_4444 request | Normalized to ARGB_8888 | Deprecated alias; actual allocation and reported config are N32 |
 
 The owned default is **unpremultiplied**, preserving the adapter's existing
 straight-alpha pixel and PNG contracts, including transparent RGB values.
@@ -83,7 +84,7 @@ into a temporary scalar-lane C++ math oracle, and compares Java pixel/storage re
 BSD license is retained in LICENSE-Skia-BSD.txt. This oracle executes selected
 integer math, not the Skia library, JNI, an Android runtime or a renderer.
 
-Its 75,847 assertions include all 65,536 RGB565 words, 5,000 deterministic
+Its 75,852 assertions include all 65,536 RGB565 words, 5,000 deterministic
 packing vectors against the called CPU pipeline formulas (LCG seed 0x5a17e), all alpha-byte values, raw byte goldens,
 ByteBuffer state/error cases, actual cross-config capacity, Java2D drawing,
 codec pixels and fixed-shape region reuse. These are assertion counts, not API

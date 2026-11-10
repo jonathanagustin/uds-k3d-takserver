@@ -39,6 +39,14 @@ public final class Canvas {
         return g;
     }
 
+    public void drawColor(int color) {
+        Graphics2D g = graphics(null, false);
+        try {
+            g.setColor(new java.awt.Color(color, true));
+            g.fillRect(0, 0, target.getWidth(), target.getHeight());
+        } finally { g.dispose(); }
+    }
+
     public void drawBitmap(Bitmap bitmap, float left, float top, Paint paint) {
         Objects.requireNonNull(bitmap, "bitmap");
         finite(left, top);

@@ -11,6 +11,21 @@ import java.util.Objects;
 
 /** Java2D text measurement surface consumed by the public Kernel port module. */
 public class Paint {
+    public static final int UNDERLINE_TEXT_FLAG = 0x08;
+    public static final int STRIKE_THRU_TEXT_FLAG = 0x10;
+
+    public Paint() {}
+    public Paint(Paint source) {
+        Objects.requireNonNull(source, "source");
+        typeface = source.typeface;
+        textSize = source.textSize;
+        antiAlias = source.antiAlias;
+        style = source.style;
+        align = source.align;
+        color = source.color;
+        strokeWidth = source.strokeWidth;
+    }
+
     public enum Style { FILL, STROKE, FILL_AND_STROKE }
     public enum Align { LEFT, CENTER, RIGHT }
 

@@ -127,7 +127,7 @@ public final class NativeBitmapStorageTest {
             check(config==Bitmap.Config.RGB_565 ? actual==0xff840000 : config==Bitmap.Config.ALPHA_8 ? actual==0x80000000 : actual==0x80ff0000,
                     "Canvas uses actual format color and alpha conversion");
             Bitmap scaled=Bitmap.createScaledBitmap(target,6,4,false);
-            check(scaled.getConfig()==config && scaled.getPixel(3,1)==actual, "scaling retains actual source config and semantic pixels");
+            check(scaled.getConfig()==target.getConfig() && scaled.getPixel(3,1)==actual, "scaling retains actual source config and semantic pixels");
             ByteArrayOutputStream png=new ByteArrayOutputStream();check(target.compress(Bitmap.CompressFormat.PNG,80,png), "real format image encodes PNG");
             check(ImageIO.read(new ByteArrayInputStream(png.toByteArray())).getRGB(1,1)==actual, "PNG codec receives semantic colors rather than misreading custom raster samples");
         }

@@ -8,7 +8,9 @@ import java.util.Objects;
 /** ARGB pixel slice of uds-desktop-android-compat 0.1.0; not an Android SDK. */
 public final class Bitmap {
     public enum Config {
-        ARGB_8888(4), RGB_565(2), ALPHA_8(1);
+        ARGB_8888(4), RGB_565(2), ALPHA_8(1),
+        /** Android 14 creation normalizes this legacy request to ARGB_8888. */
+        @Deprecated ARGB_4444(4);
         final int bytes;
         Config(int bytes) { this.bytes = bytes; }
     }
@@ -45,6 +47,7 @@ public final class Bitmap {
     }
 
     private Bitmap(int width, int height, boolean mutable, Config config) {
+        config = normalized(config);
         int count = byteCount(width, height, config);
         this.config = config;
         this.alpha = config != Config.RGB_565;
@@ -54,7 +57,12 @@ public final class Bitmap {
         reshape(width, height);
     }
 
+    private static Config normalized(Config config) {
+        return config == Config.ARGB_4444 ? Config.ARGB_8888 : Objects.requireNonNull(config, "config");
+    }
+
     private static int byteCount(int width, int height, Config config) {
+        config = normalized(config);
         Objects.requireNonNull(config, "config");
         long pixels = (long) width * height;
         if (width <= 0 || height <= 0 || pixels > Integer.MAX_VALUE / config.bytes) {
@@ -70,6 +78,7 @@ public final class Bitmap {
     }
 
     private static boolean alphaFor(Config config, boolean alpha) {
+        config = normalized(config);
         return config == Config.ALPHA_8 || (config == Config.ARGB_8888 && alpha);
     }
 
@@ -91,6 +100,7 @@ public final class Bitmap {
 
     void replaceDecoded(int width, int height, int[] pixels, boolean alpha, Config config) {
         checkWritable();
+        config = normalized(config);
         int count = byteCount(width, height, config);
         requireOwned();
         if (count > allocation.length) { throw new IllegalArgumentException("bitmap allocation is too small"); }
@@ -120,6 +130,32 @@ public final class Bitmap {
 
     public Config getConfig() { checkLive(); return owned ? config : null; }
     public boolean hasAlpha() { checkLive(); return alpha; }
+    public void setHasAlpha(boolean value) {
+        checkLive(); requireOwned();
+        if (config == Config.ALPHA_8 && !value) {
+            throw new UnsupportedOperationException("opaque ALPHA_8 metadata is outside this storage slice");
+        }
+        alpha = config != Config.RGB_565 && value;
+        reshape(width, height);
+    }
+    public Bitmap copy(Config targetConfig, boolean targetMutable) {
+        checkLive();
+        Config resolved = normalized(targetConfig);
+        if (resolved == Config.ALPHA_8 && !alpha) {
+            throw new UnsupportedOperationException("opaque ALPHA_8 metadata is outside this storage slice");
+        }
+        if (owned && resolved == config) {
+            // Like native readPixels' identical-format path, preserve physical
+            // bytes as well as semantic colors (including opaque alpha hints).
+            Bitmap result = new Bitmap(width, height, targetMutable, resolved);
+            result.alpha = alpha;
+            result.reshape(width, height);
+            System.arraycopy(allocation, 0, result.allocation, 0, getByteCount());
+            return result;
+        }
+        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        return decoded(width, height, pixels, targetMutable, alpha, resolved);
+    }
     public boolean isPremultiplied() { checkLive(); return !owned && image.isAlphaPremultiplied(); }
     public void setPremultiplied(boolean value) {
         checkLive();
@@ -249,6 +285,7 @@ public final class Bitmap {
 
     public void reconfigure(int width, int height, Config config) {
         checkLive();
+        config = normalized(config);
         int count = byteCount(width, height, config);
         if (!mutable) { throw new IllegalStateException("bitmap is immutable"); }
         Objects.requireNonNull(config, "config");

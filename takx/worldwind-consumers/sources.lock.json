@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "patch": "0200-takx-nasa-text-renderer.patch",
+  "patch_sha256": "d4188bfd5d14230dcd4a8d663d4f0a087c3fa4b395290125c9fe1b5115950876",
+  "patched_path": "Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java",
+  "nasa_revision": "9ccf6b8ed2ae452ef51e7b1739a7ffd4ef78a403",
+  "profiles": {
+    "5.8": {
+      "revision": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
+      "repository": "https://github.com/TAK-Product-Center/TAKX",
+      "sources": [
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/NoOpSectorGeometry.java",
+          "sha256": "9a58e699ea485f8787833decabf9a3fbb042db0c746e1037ce83fb29132287fe",
+          "staged_sha256": "9a58e699ea485f8787833decabf9a3fbb042db0c746e1037ce83fb29132287fe"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/NoOpTessellator.java",
+          "sha256": "d300024d0c5f8b3ca35ffd428f70314adae975b95dfe5a2cf143104de98cc90f",
+          "staged_sha256": "d300024d0c5f8b3ca35ffd428f70314adae975b95dfe5a2cf143104de98cc90f"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/TakWorldWindow.java",
+          "sha256": "4cb1fbeabd19675157341eb158b9dd372e4496ff78bed78666958d0800943361",
+          "staged_sha256": "4cb1fbeabd19675157341eb158b9dd372e4496ff78bed78666958d0800943361"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/api/terrain/experimental/DraggableSupportCompat.java",
+          "sha256": "ea27aa444330a06e1e944aaf5d06d59b9ee0556bd018574e4c079dc62c090111",
+          "staged_sha256": "ea27aa444330a06e1e944aaf5d06d59b9ee0556bd018574e4c079dc62c090111"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/view/gui/maps/exporters/dataset/SectorNormalizer.java",
+          "sha256": "da881c9191dd7b0a02180a92e623a7d739b8975fd88ba1a5b6fc2f145a6dd07b",
+          "staged_sha256": "da881c9191dd7b0a02180a92e623a7d739b8975fd88ba1a5b6fc2f145a6dd07b"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/imagerywizard/AVListComparator.java",
+          "sha256": "75f95f14c9ba4f2fbbb4ae9f49eadb6e75cd39937c31b8e281e8cc3608cf6672",
+          "staged_sha256": "75f95f14c9ba4f2fbbb4ae9f49eadb6e75cd39937c31b8e281e8cc3608cf6672"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/RotatableGlobeAnnotation.java",
+          "sha256": "2dcef0a462156bf32ca4572819a4002312dcc2bde20e97966d204812e4f1d5d6",
+          "staged_sha256": "2dcef0a462156bf32ca4572819a4002312dcc2bde20e97966d204812e4f1d5d6"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/ScreenImage.java",
+          "sha256": "b148ade36963af541eb6c1e1b5878bd125256cf3751b342d8d47691b3b336add",
+          "staged_sha256": "b148ade36963af541eb6c1e1b5878bd125256cf3751b342d8d47691b3b336add"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/ShapefileFeatureCursor.java",
+          "sha256": "ccbaa276c932a893daf6a18b68fdb6053c986fbd9a324b6b65029dcc2d7fc78f",
+          "staged_sha256": "ccbaa276c932a893daf6a18b68fdb6053c986fbd9a324b6b65029dcc2d7fc78f"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/TakWorldWindowImpl.java",
+          "sha256": "3137b7222d72bf14701fe8f0ee83bb0c3646ed90c55140957261b927d6ee4740",
+          "staged_sha256": "3137b7222d72bf14701fe8f0ee83bb0c3646ed90c55140957261b927d6ee4740"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/GeometryAnnotation.java",
+          "sha256": "1753a617be02cf59540abda7825585f7315e1aa6dd52bb27ba92789c316bed64",
+          "staged_sha256": "1753a617be02cf59540abda7825585f7315e1aa6dd52bb27ba92789c316bed64"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/MarkerLayer.java",
+          "sha256": "b7cce5b84bff1e419e2dbfa95736ea512aa613738246e10b05f43a42b3bf720a",
+          "staged_sha256": "b7cce5b84bff1e419e2dbfa95736ea512aa613738246e10b05f43a42b3bf720a"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/MarkerRenderable.java",
+          "sha256": "8272429ca730d46028d783823854e1f9689626e416dd633bdbda6a1a4c00e6b4",
+          "staged_sha256": "8272429ca730d46028d783823854e1f9689626e416dd633bdbda6a1a4c00e6b4"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java",
+          "sha256": "e820964a9530c3c96ee2155b20e8846aa819240459db099e13939f238307e518",
+          "staged_sha256": "ea2c4e7ddbf66ea83918322352280ca95d228250fbbe91057bfd5d1b53d25709"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/layer/WorldWindRenderableLayer.java",
+          "sha256": "da34a4478fdc13942de20f443e6040d9ab6cff96a1bd96d872a2047388c620f6",
+          "staged_sha256": "da34a4478fdc13942de20f443e6040d9ab6cff96a1bd96d872a2047388c620f6"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/utils/MotionEventAdapter.java",
+          "sha256": "fe8cc6b4a225d8b6a08251cc3d8103e418b5a8a803a8462ed3f9e1f66b113bfc",
+          "staged_sha256": "fe8cc6b4a225d8b6a08251cc3d8103e418b5a8a803a8462ed3f9e1f66b113bfc"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/utils/PowerOfTwoPaddedImage.java",
+          "sha256": "5adaca5dacb1bf604a03b84140117f63cffde55431a34fe72d11ab1f508cead2",
+          "staged_sha256": "5adaca5dacb1bf604a03b84140117f63cffde55431a34fe72d11ab1f508cead2"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/TakEarthGlobe.java",
+          "sha256": "88f48c661ac912905488d217ba0edf01901b146b23a156e46a1ed7e127c3db47",
+          "staged_sha256": "88f48c661ac912905488d217ba0edf01901b146b23a156e46a1ed7e127c3db47"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/GlobeTextUtils.java",
+          "sha256": "5a9b8d91864c347d7b3789ca922169fde05ff2a1aa21ee1524c30f4e6df2dfee",
+          "staged_sha256": "5a9b8d91864c347d7b3789ca922169fde05ff2a1aa21ee1524c30f4e6df2dfee"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/ui/FontUtils.java",
+          "sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace",
+          "staged_sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace"
+        }
+      ]
+    },
+    "5.7": {
+      "revision": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
+      "repository": "https://github.com/TAK-Product-Center/TAKX",
+      "sources": [
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/NoOpSectorGeometry.java",
+          "sha256": "9a58e699ea485f8787833decabf9a3fbb042db0c746e1037ce83fb29132287fe",
+          "staged_sha256": "9a58e699ea485f8787833decabf9a3fbb042db0c746e1037ce83fb29132287fe"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/NoOpTessellator.java",
+          "sha256": "d300024d0c5f8b3ca35ffd428f70314adae975b95dfe5a2cf143104de98cc90f",
+          "staged_sha256": "d300024d0c5f8b3ca35ffd428f70314adae975b95dfe5a2cf143104de98cc90f"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/TakWorldWindow.java",
+          "sha256": "4cb1fbeabd19675157341eb158b9dd372e4496ff78bed78666958d0800943361",
+          "staged_sha256": "4cb1fbeabd19675157341eb158b9dd372e4496ff78bed78666958d0800943361"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/api/terrain/experimental/DraggableSupportCompat.java",
+          "sha256": "ea27aa444330a06e1e944aaf5d06d59b9ee0556bd018574e4c079dc62c090111",
+          "staged_sha256": "ea27aa444330a06e1e944aaf5d06d59b9ee0556bd018574e4c079dc62c090111"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/view/gui/maps/exporters/dataset/SectorNormalizer.java",
+          "sha256": "da881c9191dd7b0a02180a92e623a7d739b8975fd88ba1a5b6fc2f145a6dd07b",
+          "staged_sha256": "da881c9191dd7b0a02180a92e623a7d739b8975fd88ba1a5b6fc2f145a6dd07b"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/imagerywizard/AVListComparator.java",
+          "sha256": "75f95f14c9ba4f2fbbb4ae9f49eadb6e75cd39937c31b8e281e8cc3608cf6672",
+          "staged_sha256": "75f95f14c9ba4f2fbbb4ae9f49eadb6e75cd39937c31b8e281e8cc3608cf6672"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/RotatableGlobeAnnotation.java",
+          "sha256": "2dcef0a462156bf32ca4572819a4002312dcc2bde20e97966d204812e4f1d5d6",
+          "staged_sha256": "2dcef0a462156bf32ca4572819a4002312dcc2bde20e97966d204812e4f1d5d6"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/ScreenImage.java",
+          "sha256": "b148ade36963af541eb6c1e1b5878bd125256cf3751b342d8d47691b3b336add",
+          "staged_sha256": "b148ade36963af541eb6c1e1b5878bd125256cf3751b342d8d47691b3b336add"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/ShapefileFeatureCursor.java",
+          "sha256": "6379efa3b190380b83be92cec4ee341cefae94e4dfa71af5e7ecdcaad4a4a0e8",
+          "staged_sha256": "6379efa3b190380b83be92cec4ee341cefae94e4dfa71af5e7ecdcaad4a4a0e8"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/TakWorldWindowImpl.java",
+          "sha256": "3137b7222d72bf14701fe8f0ee83bb0c3646ed90c55140957261b927d6ee4740",
+          "staged_sha256": "3137b7222d72bf14701fe8f0ee83bb0c3646ed90c55140957261b927d6ee4740"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/GeometryAnnotation.java",
+          "sha256": "1753a617be02cf59540abda7825585f7315e1aa6dd52bb27ba92789c316bed64",
+          "staged_sha256": "1753a617be02cf59540abda7825585f7315e1aa6dd52bb27ba92789c316bed64"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/MarkerLayer.java",
+          "sha256": "b7cce5b84bff1e419e2dbfa95736ea512aa613738246e10b05f43a42b3bf720a",
+          "staged_sha256": "b7cce5b84bff1e419e2dbfa95736ea512aa613738246e10b05f43a42b3bf720a"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/MarkerRenderable.java",
+          "sha256": "8272429ca730d46028d783823854e1f9689626e416dd633bdbda6a1a4c00e6b4",
+          "staged_sha256": "8272429ca730d46028d783823854e1f9689626e416dd633bdbda6a1a4c00e6b4"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java",
+          "sha256": "e820964a9530c3c96ee2155b20e8846aa819240459db099e13939f238307e518",
+          "staged_sha256": "ea2c4e7ddbf66ea83918322352280ca95d228250fbbe91057bfd5d1b53d25709"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/layer/WorldWindRenderableLayer.java",
+          "sha256": "da34a4478fdc13942de20f443e6040d9ab6cff96a1bd96d872a2047388c620f6",
+          "staged_sha256": "da34a4478fdc13942de20f443e6040d9ab6cff96a1bd96d872a2047388c620f6"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/utils/MotionEventAdapter.java",
+          "sha256": "fe8cc6b4a225d8b6a08251cc3d8103e418b5a8a803a8462ed3f9e1f66b113bfc",
+          "staged_sha256": "fe8cc6b4a225d8b6a08251cc3d8103e418b5a8a803a8462ed3f9e1f66b113bfc"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/utils/PowerOfTwoPaddedImage.java",
+          "sha256": "5adaca5dacb1bf604a03b84140117f63cffde55431a34fe72d11ab1f508cead2",
+          "staged_sha256": "5adaca5dacb1bf604a03b84140117f63cffde55431a34fe72d11ab1f508cead2"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/tak/ww/TakEarthGlobe.java",
+          "sha256": "88f48c661ac912905488d217ba0edf01901b146b23a156e46a1ed7e127c3db47",
+          "staged_sha256": "88f48c661ac912905488d217ba0edf01901b146b23a156e46a1ed7e127c3db47"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/globe/GlobeTextUtils.java",
+          "sha256": "5a9b8d91864c347d7b3789ca922169fde05ff2a1aa21ee1524c30f4e6df2dfee",
+          "staged_sha256": "5a9b8d91864c347d7b3789ca922169fde05ff2a1aa21ee1524c30f4e6df2dfee"
+        },
+        {
+          "path": "Platform/src/main/java/gov/takx/platform/ui/FontUtils.java",
+          "sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace",
+          "staged_sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace"
+        }
+      ]
+    }
+  }
+}

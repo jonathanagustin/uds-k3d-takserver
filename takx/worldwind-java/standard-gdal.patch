@@ -1,0 +1,97 @@
+--- a/src/gov/nasa/worldwind/util/gdal/GDALUtils.java
++++ b/src/gov/nasa/worldwind/util/gdal/GDALUtils.java
+@@ -77,78 +77,9 @@
+     protected static final CopyOnWriteArraySet<String> FAILED_LIBRARIES = new CopyOnWriteArraySet<String>();
+ 
+     static {
+-        // Allow the app or user to prevent library loader replacement.
+-        if (System.getProperty("gov.nasa.worldwind.prevent.gdal.loader.replacement") == null) {
+-            replaceLibraryLoader(); // This must be the first line of initialization
+-        }
++        // Project standard-GDAL profile: retain the real initialize/preloader,
++        // without NASA's optional custom gdal.LibraryLoader extension.
+         initialize();
+-    }
+-
+-    private static class GDALLibraryLoader implements gdal.LibraryLoader {
+-
+-        @Override
+-        public void load(String libName) throws UnsatisfiedLinkError {
+-            if (WWUtil.isEmpty(libName)) {
+-                String message = Logging.getMessage("nullValue.LibraryIsNull");
+-                Logging.logger().severe(message);
+-                throw new java.lang.UnsatisfiedLinkError(message);
+-            }
+-
+-            // check if the library is already loaded
+-            if (LOADED_LIBRARIES.contains(libName)) {
+-                return;
+-            }
+-
+-            String message;
+-
+-            // check if the library is already known (from previous attempts) to fail to load
+-            if (!FAILED_LIBRARIES.contains(libName)) {
+-                try {
+-                    NativeLibraryLoader.loadLibrary(null, libName);
+-                    LOADED_LIBRARIES.add(libName);
+-                    Logging.logger().info(Logging.getMessage("generic.LibraryLoadedOK", libName));
+-
+-                    return; // GOOD! Leaving now
+-                } catch (Throwable t) {
+-                    String reason = WWUtil.extractExceptionReason(t);
+-                    message = Logging.getMessage("generic.LibraryNotLoaded", libName, reason);
+-                    Logging.logger().finest(message);
+-
+-                    FAILED_LIBRARIES.add(libName);
+-                }
+-            } else {
+-                String reason = Logging.getMessage("generic.LibraryNotFound", libName);
+-                message = Logging.getMessage("generic.LibraryNotLoaded", libName, reason);
+-            }
+-
+-            throw new UnsatisfiedLinkError(message);
+-        }
+-    }
+-
+-    protected static void replaceLibraryLoader() {
+-        try {
+-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+-            Class gdalClass = cl.loadClass("org.gdal.gdal.gdal");
+-
+-            boolean isKnownBuild = false;
+-            Method[] methods = gdalClass.getDeclaredMethods();
+-            for (Method m : methods) {
+-                if ("setLibraryLoader".equals(m.getName())) {
+-                    gdal.setLibraryLoader(new GDALLibraryLoader());
+-                    isKnownBuild = true;
+-                    break;
+-                }
+-            }
+-
+-            if (!isKnownBuild) {
+-                String message = Logging.getMessage("gdal.UnknownBuild", gdal.VersionInfo());
+-                Logging.logger().finest(message);
+-            }
+-        } catch (ClassNotFoundException cnf) {
+-            Logging.logger().finest(cnf.getMessage());
+-        } catch (Throwable t) {
+-            Logging.logger().finest(t.getMessage());
+-        }
+     }
+ 
+     protected static boolean is32bitArchitecture() {
+@@ -661,7 +592,12 @@
+         Band band1 = ds.GetRasterBand(1);
+         BufferedImage img;
+         if (band1.GetRasterColorInterpretation() == gdalconstConstants.GCI_PaletteIndex) {
+-            cm = band1.GetRasterColorTable().getIndexColorModel(gdal.GetDataTypeSize(bandDataType));
++            ColorTable table = band1.GetRasterColorTable();
++            if (table.GetPaletteInterpretation() != gdalconstConstants.GPI_RGB) {
++                throw new IllegalArgumentException("Standard GDAL profile requires an RGB palette");
++            }
++            cm = ProjectPaletteColorModel.create(gdal.GetDataTypeSize(bandDataType),
++                    table.GetCount(), table::GetColorEntry);
+             img = new BufferedImage(cm, raster, false, null);
+         } else if (band1.GetRasterColorInterpretation() == gdalconstConstants.GCI_GrayIndex && reqBandCount == 2) {
+             int transparency = Transparency.BITMASK;

@@ -129,6 +129,8 @@ jobs:
           python3 -B -m unittest discover -s takx/gis-java -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/gis-java/data -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/kernel-java -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/worldwind-java -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/worldwind-consumers -p 'test_stage.py' -v
 
   # Renders the package without a cluster and checks that the package values
   # default to the Zarf variables, so a DOMAIN change still moves the hosts.

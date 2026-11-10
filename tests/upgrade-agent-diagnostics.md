@@ -45,10 +45,21 @@ These establish capture behavior and redaction; they do not reproduce the agent
 failure or establish its cause. The outer deadline may truncate evidence when
 multiple commands are slow. No unchanged CI retry is implied.
 
-A manually dispatched Test workflow can select `diagnostic_case=upgrade-amd64`
-(or `pg15-amd64` for the retained PostgreSQL 15 path). The selected case runs
-one AMD row using the existing `TEST_RUNNER` repository variable. It skips
-installs and the unselected upgrade family. This mode cannot be combined with
-`trust_bundle`, is ignored for PR/push events, and reports only diagnostic
-success. Default `none` preserves all ordinary matrix entries and PG15 trigger
-rules. Dispatch is deliberate; no automatic retry or scheduling is added.
+A manually dispatched Test workflow can select focused upgrade evidence:
+
+| `diagnostic_case` | Upgrade work |
+| --- | --- |
+| `upgrade-amd64` | Regular upgrade, AMD only |
+| `pg15-amd64` | Retained PostgreSQL 15 upgrade, AMD only |
+| `pg15-both` | Retained PostgreSQL 15 upgrades, AMD and ARM |
+
+AMD uses the existing `TEST_RUNNER` repository variable; ARM uses the ordinary
+native ARM runner. Each selection skips installs and the unselected upgrade
+family. `pg15-both` runs the two additional main-branch PG15 paths without
+repeating the three install and two regular-upgrade paths. It does not reuse
+or certify any earlier result: retain the separate PR evidence for those paths.
+
+These modes cannot be combined with `trust_bundle`, are ignored for PR/push
+events, and report only diagnostic success. Default `none` preserves all ordinary
+matrix entries and PG15 trigger rules. Dispatch is deliberate; no automatic
+retry, scheduling or result reuse is added.

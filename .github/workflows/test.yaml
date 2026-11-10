@@ -11,10 +11,10 @@ on:
         type: boolean
         default: false
       diagnostic_case:
-        description: Run one instrumented AMD upgrade case (not full acceptance)
+        description: Select focused upgrade evidence (not full acceptance)
         type: choice
         default: none
-        options: [none, upgrade-amd64, pg15-amd64]
+        options: [none, upgrade-amd64, pg15-amd64, pg15-both]
   pull_request:
     types: [opened, reopened, synchronize]
     # Anything not listed is relevant and starts the install and upgrade
@@ -728,7 +728,7 @@ jobs:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
     # Preserve baseline discovery after image-prep failures for normal runs.
     # Explicit manual modes omit only the unselected validation work.
-    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && needs.check-flavor.outputs.diagnostic-case != 'pg15-amd64' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
+    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && needs.check-flavor.outputs.diagnostic-case != 'pg15-amd64' && needs.check-flavor.outputs.diagnostic-case != 'pg15-both' && !(github.event_name == 'workflow_dispatch' && inputs.trust_bundle) }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.check-flavor.outputs.upgrade-matrix) }}
@@ -760,7 +760,7 @@ jobs:
   # pushed, so it adds no time to other pull requests.
   validate-upgrade-pg15:
     needs: [check-flavor, images, cloudtak-index, postgis-index]
-    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && (needs.check-flavor.outputs.diagnostic-case == 'pg15-amd64' || (needs.check-flavor.outputs.diagnostic-case == 'none' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')))) }}
+    if: ${{ !cancelled() && needs.check-flavor.result == 'success' && (needs.check-flavor.outputs.diagnostic-case == 'pg15-amd64' || needs.check-flavor.outputs.diagnostic-case == 'pg15-both' || (needs.check-flavor.outputs.diagnostic-case == 'none' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15')))) }}
     # Release 0.6.0 published an arm64 package too, so this runs on both.
     strategy:
       fail-fast: false
@@ -807,4 +807,5 @@ jobs:
           INSTALL_RESULT: ${{ needs.validate-install.result }}
           UPGRADE_RESULT: ${{ needs.validate-upgrade.result }}
           PG15_RESULT: ${{ needs.validate-upgrade-pg15.result }}
+          PG15_REQUIRED: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'upgrade-pg15') }}
         run: python3 .github/scripts/test-validation-mode.py verify

@@ -18,7 +18,7 @@ def diagnostic_case(event, requested, selected="none"):
     if event != "workflow_dispatch":
         return "none"
     selected = selected or "none"
-    if selected not in {"none", "upgrade-amd64", "pg15-amd64"}:
+    if selected not in {"none", "upgrade-amd64", "pg15-amd64", "pg15-both"}:
         raise ValueError("Unknown diagnostic case")
     if selected != "none" and trust_only(event, requested):
         raise ValueError("Diagnostic case and trust_bundle cannot be combined")
@@ -44,7 +44,9 @@ def install_matrix(event, requested, amd64_runner):
     return {"include": include}
 
 
-def verify(event, requested, install, upgrade, pg15, selected="none"):
+def verify(event, requested, install, upgrade, pg15, selected="none", pg15_required="false"):
+    if pg15_required not in {"true", "false"}:
+        raise ValueError("Unknown PostgreSQL 15 expectation")
     selected = diagnostic_case(event, requested, selected)
     if selected != "none":
         expected = (("skipped", "success", "skipped") if selected == "upgrade-amd64"
@@ -57,7 +59,15 @@ def verify(event, requested, install, upgrade, pg15, selected="none"):
     expected_upgrade = "skipped" if trust_only(event, requested) else "success"
     if upgrade != expected_upgrade:
         raise ValueError(f"Upgrade result {upgrade}; expected {expected_upgrade}")
-    allowed_pg15 = {"skipped"} if trust_only(event, requested) else {"success", "skipped"}
+    if trust_only(event, requested):
+        allowed_pg15 = {"skipped"}
+    elif event == "push" or (event == "pull_request" and pg15_required == "true"):
+        # A missing or false flag cannot weaken the unconditional push policy.
+        # For PRs the workflow supplies its label-based selection policy,
+        # independently of the job result being verified.
+        allowed_pg15 = {"success"}
+    else:
+        allowed_pg15 = {"success", "skipped"}
     if pg15 not in allowed_pg15:
         raise ValueError(f"PostgreSQL 15 upgrade did not pass or intentionally skip: {pg15}")
 
@@ -78,7 +88,8 @@ def main():
         return
     if sys.argv[1:] != ["verify"]:
         raise ValueError("expected plan or verify")
-    verify(event, requested, os.environ["INSTALL_RESULT"], os.environ["UPGRADE_RESULT"], os.environ["PG15_RESULT"], selected)
+    verify(event, requested, os.environ["INSTALL_RESULT"], os.environ["UPGRADE_RESULT"], os.environ["PG15_RESULT"],
+           selected, os.environ.get("PG15_REQUIRED", "false"))
     if selected != "none":
         print("Selected diagnostic case passed—not full acceptance")
         return

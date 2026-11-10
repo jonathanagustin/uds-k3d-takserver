@@ -103,15 +103,17 @@ class AirgapContracts(unittest.TestCase):
         self.assertFalse(any('REJECT' in call.args for call in command.call_args_list))
 
     def test_firewall_failure_reports_sanitized_stderr_and_still_raises(self):
-        error = subprocess.CalledProcessError(1, ['docker', 'exec'], stderr=
-                                               'iptables v1.8.11: lock timeout; password=DO_NOT_EMIT\n')
-        output = io.StringIO()
-        with patch.object(AIRGAP, 'docker', side_effect=error), contextlib.redirect_stderr(output):
-            with self.assertRaises(subprocess.CalledProcessError):
-                AIRGAP.firewall('k3d-node', 'iptables', '-A', AIRGAP.CHAIN, '-j', 'DROP')
-        self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
-        self.assertNotIn('DO_NOT_EMIT', output.getvalue())
-        self.assertIn('[REDACTED]', output.getvalue())
+        stderr = 'iptables v1.8.11: lock timeout; password=DO_NOT_EMIT\n'
+        for error in (subprocess.CalledProcessError(1, ['docker', 'exec'], stderr=stderr),
+                      subprocess.TimeoutExpired(['docker', 'exec'], 30, stderr=stderr.encode())):
+            output = io.StringIO()
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(AIRGAP, 'docker', side_effect=error), contextlib.redirect_stderr(output):
+                with self.assertRaises(type(error)):
+                    AIRGAP.firewall('k3d-node', 'iptables', '-A', AIRGAP.CHAIN, '-j', 'DROP')
+            self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
+            self.assertNotIn('DO_NOT_EMIT', output.getvalue())
+            self.assertIn('[REDACTED]', output.getvalue())
 
     def test_firewall_stderr_is_redacted_before_truncation_and_auth_is_omitted_whole(self):
         detail = AIRGAP.firewall_error_detail('-----BEGIN PRIVATE KEY-----\n' +

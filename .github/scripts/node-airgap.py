@@ -60,7 +60,7 @@ def firewall_error_detail(stderr):
 def firewall(node, tool, *args, check=True):
     try:
         return docker("exec", node, tool, "-w", "5", *args, check=check)
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print('Node firewall command failed; sanitized stderr: ' +
               firewall_error_detail(error.stderr), file=sys.stderr)
         raise

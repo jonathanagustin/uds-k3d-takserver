@@ -96,3 +96,7 @@ Run the fast offline guards without downloading or compiling GIS sources:
 ```bash
 python3 -B -m unittest discover -s takx/gis-java -p test_build.py -v
 ```
+
+The separate [data-only recipe](data/README.md) builds a project resource JAR
+from the same locked GDAL source archive. It uses no SDK inputs and does not
+build or run GDAL/native libraries.

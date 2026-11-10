@@ -12,6 +12,53 @@ SCRIPT = Path(__file__).resolve().parents[1] / '.github/scripts/dev-package.sh'
 
 
 class PackageKeyTests(unittest.TestCase):
+    def test_docs_site_non_markdown_changes_preserve_key_and_runtime_inputs_do_not(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(root), *args], text=True)
+            git('init', '-q')
+            tools = root / 'bin'
+            tools.mkdir()
+            uds = tools / 'uds'
+            uds.write_text('#!/bin/sh\n[ "$*" = version ] || exit 99\necho fixture-cli\n')
+            uds.chmod(0o755)
+            env = dict(os.environ, PATH=f'{tools}:{os.environ["PATH"]}')
+            def key():
+                return subprocess.check_output(['bash', str(SCRIPT), 'key'], cwd=root, env=env, text=True).strip()
+            runtime = ['zarf.yaml', 'common/zarf.yaml', 'charts/cloudtak/files/icon.svg',
+                       'values/common-values.yaml', 'assets/icon.svg']
+            site = ['docs-site/src/content/docs/example.mdx', 'docs-site/astro.config.mjs',
+                    'docs-site/package.json', 'docs-site/pnpm-lock.yaml', 'docs-site/public/logo.svg']
+            for name in runtime + site:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('original\n')
+            git('add', *runtime, *site)
+            baseline = key()
+            # Non-.md files are essential: Markdown was already excluded.
+            for name in site:
+                with self.subTest(site=name):
+                    path = root / name
+                    path.write_text('edited\n')
+                    self.assertEqual(key(), baseline)
+                    git('rm', '-f', name)
+                    self.assertEqual(key(), baseline)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('original\n')
+                    git('add', name)
+            addition = root / 'docs-site/public/new-brand.png'
+            addition.write_bytes(b'synthetic image fixture')
+            git('add', str(addition.relative_to(root)))
+            self.assertEqual(key(), baseline)
+            for name in runtime:
+                with self.subTest(runtime=name):
+                    path = root / name
+                    path.write_text('changed\n')
+                    self.assertNotEqual(key(), baseline)
+                    path.write_text('original\n')
+            self.assertEqual(key(), baseline)
+
     def test_optional_sources_preserve_runtime_key(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

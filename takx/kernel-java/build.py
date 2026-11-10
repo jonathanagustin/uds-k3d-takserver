@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Compile every pinned public desktop Kernel Java source; never build/load native code."""
+"""Compile pinned engine/port/annotation and optional shared Java sources; never load JNI."""
 import argparse
 import copy
 import hashlib
@@ -30,6 +30,8 @@ MODULES = {
     'takkernel/engine/src/jre/java': 14,
 }
 
+SHARED_MODULES = {'takkernel/shared/src/main/java': 212, 'takkernel/shared/src/jre/java': 19}
+
 
 def digest(path):
     value = hashlib.sha256()
@@ -46,7 +48,12 @@ def canonical_hash(value):
 def validate_lock(lock):
     if (lock.get('schema'), lock.get('revision'), lock.get('java_major'), lock.get('java_release')) != (1, REVISION, 17, 11):
         raise ValueError('unsupported source pin, schema or Java target')
-    if lock.get('modules') != MODULES or len(lock.get('public_jars', {})) != 23:
+    scope = lock.get('scope', 'engine')
+    if scope not in {'engine', 'engine-shared'}:
+        raise ValueError('unknown source scope')
+    expected_modules = {**MODULES, **SHARED_MODULES} if scope == 'engine-shared' else MODULES
+    expected_jars = 33 if scope == 'engine-shared' else 23
+    if lock.get('modules') != expected_modules or len(lock.get('public_jars', {})) != expected_jars:
         raise ValueError('complete desktop source/classpath inventory required')
     if set(lock['gis_java']['artifacts']) != {'gdal-2.4.4-mod-java.jar', 'assimp-4.0.1-mod-jassimp-java.jar'}:
         raise ValueError('both reviewed GIS source outputs are required')
@@ -60,17 +67,34 @@ def validate_lock(lock):
             raise ValueError('unreviewed public dependency: ' + name)
 
 
-def select_profile(lock, profile):
+def select_profile(lock, profile, scope='engine'):
+    validate_lock(lock)
     selected = copy.deepcopy(lock)
-    replacements = lock.get('patched_replacements', {})
+    replacements = copy.deepcopy(lock.get('patched_replacements', {}))
     if len(replacements) != 6 or not set(replacements).issubset(lock['public_jars']):
-        raise ValueError('six reviewed dependency replacements required')
+        raise ValueError('six reviewed engine dependency replacements required')
+    if scope == 'engine-shared':
+        shared = lock['shared_profile']
+        if (shared['modules'] != SHARED_MODULES or len(shared['public_jars']) != 10
+                or len(shared['patched_replacements']) != 3
+                or not set(shared['patched_replacements']).issubset(shared['public_jars'])
+                or set(shared['public_jars']) & set(selected['public_jars'])):
+            raise ValueError('complete shared source and dependency inventory required')
+        selected['modules'].update(shared['modules'])
+        selected['source_inventory_sha256'] = shared['combined_source_inventory_sha256']
+        selected['public_jars'].update(shared['public_jars'])
+        replacements.update(shared['patched_replacements'])
+    elif scope != 'engine':
+        raise ValueError('unknown source scope')
+    selected['scope'] = scope
+    original = copy.deepcopy(selected['public_jars'])
     if profile == 'patched':
         for old, entry in replacements.items():
             del selected['public_jars'][old]
             selected['public_jars'][entry['name']] = {k: v for k, v in entry.items() if k != 'name'}
     elif profile != 'baseline':
         raise ValueError('unknown compilation profile')
+    selected['baseline_matching_public_jars'] = sum(original.get(name) == entry for name, entry in selected['public_jars'].items())
     validate_lock(selected)
     return selected
 
@@ -164,15 +188,16 @@ def verified_gis(build, lock):
 
 
 def upstream_sources(source, lock):
+    modules = lock['modules']
     env = dict(os.environ, GIT_NO_LAZY_FETCH='1')
     def git(*args):
         return subprocess.check_output(['git', '-C', str(source), *args], env=env, timeout=30)
     if git('rev-parse', 'HEAD').decode().strip() != REVISION:
         raise ValueError('official checkout must be at the pinned revision')
-    git('diff', '--exit-code', 'HEAD', '--', *MODULES)
-    if any(p.endswith('.java') for p in git('ls-files', '--others', '--exclude-standard', '--', *MODULES).decode().splitlines()):
+    git('diff', '--exit-code', 'HEAD', '--', *modules)
+    if any(p.endswith('.java') for p in git('ls-files', '--others', '--exclude-standard', '--', *modules).decode().splitlines()):
         raise ValueError('untracked Java files in the consumed upstream source trees')
-    data = git('archive', '--format=tar', REVISION, *MODULES)
+    data = git('archive', '--format=tar', REVISION, *modules)
     if len(data) > 64 * 1024 * 1024:
         raise ValueError('source archive exceeds reviewed bounds')
     files = {}
@@ -183,12 +208,12 @@ def upstream_sources(source, lock):
             relative = PurePosixPath(item.name)
             if (not item.isfile() or relative.is_absolute() or '..' in relative.parts
                     or item.name in files or item.size > 2 * 1024 * 1024
-                    or not any(item.name.startswith(m + '/') for m in MODULES)):
+                    or not any(item.name.startswith(m + '/') for m in modules)):
                 raise ValueError('invalid Java source archive member')
             files[item.name] = archive.extractfile(item).read()
-    counts = {m: sum(p.startswith(m + '/') for p in files) for m in MODULES}
+    counts = {m: sum(p.startswith(m + '/') for p in files) for m in modules}
     inventory = [{'path': p, 'sha256': hashlib.sha256(data).hexdigest()} for p, data in sorted(files.items())]
-    if counts != MODULES or canonical_hash(inventory) != lock['source_inventory_sha256']:
+    if counts != modules or canonical_hash(inventory) != lock['source_inventory_sha256']:
         raise ValueError('pinned complete source inventory differs')
     return files, {entry['path']: entry['sha256'] for entry in inventory}
 
@@ -243,16 +268,18 @@ def quoted_argument(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--scope', choices=('engine', 'engine-shared'), default='engine',
+                        help='engine/port/annotation by default; optionally include all shared desktop sources')
     parser.add_argument('--profile', choices=('patched', 'baseline'), default='patched',
                         help='patched dependencies by default; baseline is historical investigation only')
     parser.add_argument('--source', type=Path, required=True, help='clean pinned official atak-civ checkout')
-    parser.add_argument('--classpath-dir', type=Path, required=True, help='cache for the 23 exact public JARs')
+    parser.add_argument('--classpath-dir', type=Path, required=True, help='cache for the selected locked public JARs')
     parser.add_argument('--gis-build', type=Path, required=True, help='completed output of takx/gis-java/build.py')
     parser.add_argument('--output', type=Path, required=True, help='new external proof directory; existing output is refused')
     parser.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), required=not bool(os.environ.get('JAVA_HOME')))
     parser.add_argument('--fetch-dependencies', action='store_true', help='allow missing public JARs to download from locked URLs')
     args = parser.parse_args()
-    lock = select_profile(json.loads((HERE / 'inputs.lock.json').read_text()), args.profile)
+    lock = select_profile(json.loads((HERE / 'inputs.lock.json').read_text()), args.profile, args.scope)
     output = fresh_output(args.output)
     java = args.java_home.resolve()
     javac = java / 'bin/javac'
@@ -299,13 +326,14 @@ def main():
     inputs = {
         'schema': 1, 'source_commit': adapter_commit,
         'adapter_inventory': [{'path': name, 'sha256': hashlib.sha256(data).hexdigest()} for name, data in adapters.items()],
-        'classpath_profile': args.profile, 'upstream_revision': REVISION, 'engine_sources': 862, 'upstream_sources': 945,
-        'unchanged_upstream_sources': 944, 'adapter_sources': len(adapters),
+        'classpath_profile': args.profile, 'source_scope': args.scope, 'upstream_revision': REVISION,
+        'engine_sources': 862, 'shared_sources': 231 if args.scope == 'engine-shared' else 0,
+        'upstream_sources': len(sources), 'unchanged_upstream_sources': len(sources) - 1, 'adapter_sources': len(adapters),
         'recipe_sha256': digest(HERE / 'build.py'), 'lock_sha256': digest(HERE / 'inputs.lock.json'),
         'toolchain': {'javac': str(javac), 'version': version, 'sha256': digest(javac)},
         'applied_patch': lock['unused_import_patch'], 'gis_receipt': gis_receipt,
         'sources': [{'path': str(p), 'sha256': digest(p),
-                     **({'original_sha256': original_hashes[p.relative_to(output / 'stage').as_posix()]} if p in frozen[:945] else {})} for p in frozen],
+                     **({'original_sha256': original_hashes[p.relative_to(output / 'stage').as_posix()]} if p in frozen[:len(sources)] else {})} for p in frozen],
         'classpath': classpath,
     }
     (output / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
@@ -327,11 +355,13 @@ def main():
     diagnostics = (output / 'stderr.log').read_text()
     classes = {p.relative_to(output / 'classes').as_posix(): digest(p) for p in sorted((output / 'classes').rglob('*.class'))}
     (output / 'class-hashes.json').write_text(json.dumps(classes, indent=2) + '\n')
-    summary = {'classpath_profile': args.profile, 'baseline_matching_public_jars': 23 if args.profile == 'baseline' else 17,
+    summary = {'classpath_profile': args.profile, 'source_scope': args.scope,
+               'baseline_matching_public_jars': lock['baseline_matching_public_jars'],
                'exit_code': code, 'errors': len(re.findall(r'^.*?:\d+: error:', diagnostics, re.M)),
                'warnings': len(re.findall(r'^.*?:\d+: warning:', diagnostics, re.M)), 'engine_sources': 862,
-               'upstream_sources': 945, 'unchanged_upstream_sources': 944, 'adapter_sources': len(adapters),
-               'all_sources': len(frozen), 'compiled_class_files': len(classes), 'exact_public_jars': 23,
+               'shared_sources': 231 if args.scope == 'engine-shared' else 0,
+               'upstream_sources': len(sources), 'unchanged_upstream_sources': len(sources) - 1, 'adapter_sources': len(adapters),
+               'all_sources': len(frozen), 'compiled_class_files': len(classes), 'exact_public_jars': len(lock['public_jars']),
                'source_rebuilt_gis_jars': 2, 'gis_classes_identical_to_original_probe': 107, 'native_or_client_acceptance': False}
     (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary)); raise SystemExit(code)

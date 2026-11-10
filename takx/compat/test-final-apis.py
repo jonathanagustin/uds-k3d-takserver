@@ -28,6 +28,10 @@ def kernel_classpath(parser, proof):
     result = json.loads((proof / 'result.json').read_text())
     if inputs.get('upstream_revision') != REVISION or result.get('exit_code') != 0:
         parser.error('successful pinned frozen Kernel compilation required')
+    recorded_classes = json.loads((proof / 'class-hashes.json').read_text())
+    actual_classes = {p.relative_to(proof / 'classes').as_posix(): digest(p) for p in (proof / 'classes').rglob('*.class')}
+    if not recorded_classes or actual_classes != recorded_classes:
+        parser.error('frozen class output inventory changed')
     adapters = set()
     upstream = set()
     for item in inputs['sources']:
@@ -103,6 +107,14 @@ def main():
                 # and upstream classes produced by the complete compile proof.
                 subprocess.run(['java', '-Djava.awt.headless=true', '-cp', cp + os.pathsep + str(classes),
                                 'com.atakmap.map.gdal.VsiFileHandlerTest', str(mount)], check=True, timeout=30)
+                if (args.kernel_proof / 'stage/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java').is_file():
+                    test = HERE / 'src/test/java/gov/tak/api/cot/detail/RolesManagerIconTest.java'
+                    subprocess.run(['javac', '--release', '11', '-encoding', 'UTF-8', '-proc:none', '-cp', cp,
+                                    '-d', str(classes), str(test)], check=True, timeout=30)
+                    subprocess.run(['java', '-Djava.awt.headless=true', '-cp', cp + os.pathsep + str(classes),
+                                    'gov.tak.api.cot.detail.RolesManagerIconTest', str(work / 'roles')], check=True, timeout=30)
+                else:
+                    print('Kernel RolesManager integration: NOT RUN (supply engine-shared proof)')
             else:
                 print('Kernel VSI integration: NOT RUN (supply --kernel-proof)')
         finally:

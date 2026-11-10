@@ -2,9 +2,9 @@
 
 The shipped Java compiler proves the complete **engine, port and annotation
 desktop profile**: 862 engine, 77 port, six annotation and 59 adapter sources.
-It does not compile the separate `takkernel/shared` module, assemble a complete
-Kernel SDK or compile either TAKX client. The shared module adds 231 desktop
-sources: 212 in `src/main/java` and 19 in `src/jre/java`.
+The explicit `--scope engine-shared` option additionally compiles all 231 shared
+desktop sources: 212 in `src/main/java` and 19 in `src/jre/java`. Neither scope
+assembles a complete Kernel SDK or compiles either TAKX client.
 
 Both official clients remain candidates; prefer 5.8 after actual client and
 runtime acceptance. The source and artifact identities remain distinct:
@@ -61,14 +61,17 @@ RolesManager.java:262: incompatible types: String cannot be converted to char[]
 paint.measureText(abbreviation, 0, abbreviation.length())
 ```
 
-The adapter lacks `Paint.measureText(String, start, end)`. This is the next
-concrete API repair and consumer test, followed by another full shared compile.
-The failed probe's partial class output is not an accepted shared artifact.
+The adapter now supplies `Paint.measureText(String, start, end)` with the pinned
+Android range and pixel-rounding contracts. A fresh run of all 1,235 combined
+sources succeeds with zero errors and four warnings. The unchanged
+`RolesManager` consumer is exercised using a real asset and glyph-position
+checks. The failed probes' partial class outputs are not accepted artifacts.
 This investigation retained separate source, classpath and output receipts and
-used bounded javac only; it ran no native build, renderer or client. Its original
-Jackson 2.13.1 and symbol-renderer classpath is compilation evidence, not a
-runtime dependency recommendation. A reusable shared profile needs its own
-reviewed dependency/advisory assessment.
+used bounded javac only; it ran no native build, renderer or client. The reusable shared scope locks its full compile classpath and defaults to
+patched Jackson versions. Its [recorded advisory assessment](kernel-java/shared-advisories.json)
+returns no findings for 33 patched classpath coordinates; that is not a complete
+runtime dependency audit. The original Jackson 2.13.1 classpath remains an
+explicit historical baseline.
 
 The real patched CommonCommo JAR is still 1.17.2. Its SHA256
 `7563ec3978c7ff7c39ff2525b04dfcb9b9905ea175904e2393edae703b24ce4e`
@@ -77,7 +80,9 @@ matches the existing native foundation receipt. A fresh typed compile verifies
 All 36/37 distinct method names used by the two inspected Commo managers are now
 present, but that name inventory is not compilation of either complete manager.
 
-After shared compilation, both clients still require their full dependency
+With the shared output included, the refreshed import inventory returns to the
+two/eighteen source-absent imports. It still does not test all members or compile
+either client. Both clients still require their full dependency
 closure, including custom WorldWind `2.2.1-TAKX-4` and CDI Blacksmith `1.1.3`,
 full source/API compatibility checks, resources/packaging, native GIS/GL/Kernel
 linkage, map rendering/recovery, enrollment and CoT interoperability. No frozen,

@@ -1,8 +1,9 @@
 {
-  "queried_at": "2026-11-10T03:02:39.644395+00:00",
+  "queried_at": "2026-11-10T04:13:11.413484+00:00",
   "service": "https://api.osv.dev/v1/querybatch",
-  "lock_sha256": "8e4dcac015060d81f59c42aaff7556f706f243d33bb512e1f86bb778c719d745",
-  "scope": "23 direct public Maven inputs per profile; excludes native GIS, JDK and transitive/runtime closure",
+  "lock_sha256": "40756dea76b571be44b4611ff9bb853b40206ae8377aac20ec82c1614432b1dc",
+  "source_scope": "engine",
+  "scope": "23 direct public Maven inputs per profile; excludes native GIS, JDK and full runtime closure",
   "profiles": {
     "baseline": [
       {

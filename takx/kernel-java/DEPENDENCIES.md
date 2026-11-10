@@ -37,3 +37,29 @@ temporary-file tests, and certificate/path-validation/cryptographic tests with
 the aligned BC modules. The complete Java compile and unchanged Kernel VSI tests
 validate source linkage and the exercised filesystem behavior only. They do not
 exercise these security-sensitive dependency contracts or native GIS/JNI.
+
+## Shared-scope additions
+
+The opt-in `engine-shared` scope adds ten locked JARs. At the pinned ATAK source,
+[`takkernel/shared/build.gradle`](https://github.com/TAK-Product-Center/atak-civ/blob/9f6893dd657feacc35ec5de03dad721c2e44170e/takkernel/shared/build.gradle)
+declares Jackson databind 2.13.1, `mil-sym-renderer` 0.1.41 and `mil-sym-java`
+2.1.5. Jackson adds its matching core/annotations. The official
+[renderer POM](https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-renderer/0.1.41/mil-sym-renderer-0.1.41.pom)
+and [parent dependency management](https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-java/0.1.41/mil-sym-java-0.1.41.pom)
+resolve JavaRenderer, RendererPluginInterface, JavaRendererServer, JavaLineArray
+and JavaRendererUtils, all 0.1.41. These five transitives supply real classes;
+no replacement symbol APIs are supplied.
+
+The default patched shared profile upgrades Jackson databind/core to 2.23.0 and
+annotations to 2.23 (the version declared by its 2.23 BOM). The baseline retains
+all three at 2.13.1. [shared-advisories.json](shared-advisories.json) records 31
+advisory entries for the 33 baseline coordinates, including 14 for old Jackson
+databind and three for old Jackson core; the other 14 belong to the existing
+engine baseline. It returns no advisories for the 33 patched coordinates.
+Regenerate with `python3 takx/kernel-java/audit-dependencies.py --scope engine-shared`.
+All archive URLs, sizes and SHA256 hashes are in the shared lock section.
+
+This validates compilation with those exact inputs, not a complete runtime
+closure or military-symbol rendering. In particular, published symbol-library
+runtime dependencies, renderer resources, native linkage, untrusted input
+handling and full client interoperability still require separate validation.

@@ -295,5 +295,84 @@
       "sha256": "590f55ed5d68529239898a4a5c4f730b6e37f45d1cfa3fbe51f8485abe32c42d",
       "bytes": 718812
     }
+  },
+  "shared_profile": {
+    "modules": {
+      "takkernel/shared/src/main/java": 212,
+      "takkernel/shared/src/jre/java": 19
+    },
+    "combined_source_inventory_sha256": "777bd30dc5a6e128545cd9c12cf9b19771206007ab7836419097d8a04808b602",
+    "public_jars": {
+      "jackson-databind-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.13.1/jackson-databind-2.13.1.jar",
+        "bytes": 1534017,
+        "sha256": "56cfbdc9e1736b5c56b43757f6cf546ee6d49393c79383c4e495c4f7047cb506"
+      },
+      "jackson-core-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.13.1/jackson-core-2.13.1.jar",
+        "bytes": 374588,
+        "sha256": "8be6935cd8f9673ac684a589aaa1caecd57dee7c37ed1443d17924325799003d"
+      },
+      "jackson-annotations-2.13.1.jar": {
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.13.1/jackson-annotations-2.13.1.jar",
+        "bytes": 75717,
+        "sha256": "ab607939d288e22bff4cb97acc6b25e841d82681f2bc40ce67bb35cb0ffdb06d"
+      },
+      "mil-sym-renderer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-renderer/0.1.41/mil-sym-renderer-0.1.41.jar",
+        "bytes": 213427,
+        "sha256": "5b480ed3e2c9cfbc0752085f1671f3afa812987097cd951cc8db38b5bda94bb6"
+      },
+      "mil-sym-java-2.1.5.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-java/2.1.5/mil-sym-java-2.1.5.jar",
+        "bytes": 1651691,
+        "sha256": "889d1b46869412eef02e3683645a8bc472cdbbca153d026ec17220c8b87a62ce"
+      },
+      "JavaRenderer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRenderer/0.1.41/JavaRenderer-0.1.41.jar",
+        "bytes": 48521,
+        "sha256": "eee408e16ea8492e516079d98e5ee84657e64e367b28f2cf4d6e2185987fc77b"
+      },
+      "RendererPluginInterface-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/RendererPluginInterface/0.1.41/RendererPluginInterface-0.1.41.jar",
+        "bytes": 3970,
+        "sha256": "852f466bb5eaa4254b2e4de3df45c1a1523b12fd2a98978201ba15aed55ddf13"
+      },
+      "JavaRendererServer-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRendererServer/0.1.41/JavaRendererServer-0.1.41.jar",
+        "bytes": 93789,
+        "sha256": "be48224df2ed76ea3c84813e96cd3908875faa26a6e2ac7b033e64f58f2b6366"
+      },
+      "JavaLineArray-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaLineArray/0.1.41/JavaLineArray-0.1.41.jar",
+        "bytes": 299837,
+        "sha256": "427b678c1cfb4b74ac453769d43cb104a7025985f565a6cfab6253b20ab81669"
+      },
+      "JavaRendererUtils-0.1.41.jar": {
+        "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/JavaRendererUtils/0.1.41/JavaRendererUtils-0.1.41.jar",
+        "bytes": 688768,
+        "sha256": "87f7be80333ed7758ddacc3d74ccee783416fc653a9f074eea442fca515267a6"
+      }
+    },
+    "patched_replacements": {
+      "jackson-databind-2.13.1.jar": {
+        "name": "jackson-databind-2.23.0.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.23.0/jackson-databind-2.23.0.jar",
+        "bytes": 1716668,
+        "sha256": "abd1edd2736c764da03fe6cb7a9de70d48dd0a198aed131604c564bff62f9cc1"
+      },
+      "jackson-core-2.13.1.jar": {
+        "name": "jackson-core-2.23.0.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.23.0/jackson-core-2.23.0.jar",
+        "bytes": 603520,
+        "sha256": "449798beb4c4ec26de9cc25b39ca2198036883fb905ca968cbef7136d19a25d9"
+      },
+      "jackson-annotations-2.13.1.jar": {
+        "name": "jackson-annotations-2.23.jar",
+        "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.23/jackson-annotations-2.23.jar",
+        "bytes": 84212,
+        "sha256": "e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c"
+      }
+    }
   }
 }

@@ -1,0 +1,381 @@
+{
+  "queried_at": "2026-11-10T04:13:12.496888+00:00",
+  "service": "https://api.osv.dev/v1/querybatch",
+  "lock_sha256": "40756dea76b571be44b4611ff9bb853b40206ae8377aac20ec82c1614432b1dc",
+  "source_scope": "engine-shared",
+  "scope": "33 direct public Maven inputs per profile; excludes native GIS, JDK and full runtime closure",
+  "profiles": {
+    "baseline": [
+      {
+        "package": "org.greenrobot:eventbus",
+        "version": "3.2.0",
+        "advisories": []
+      },
+      {
+        "package": "com.squareup.okhttp3:okhttp",
+        "version": "4.11.0",
+        "advisories": []
+      },
+      {
+        "package": "com.squareup.okio:okio-jvm",
+        "version": "3.2.0",
+        "advisories": [
+          "GHSA-w33c-445m-f8w7"
+        ]
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-common",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-jdk7",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains:annotations",
+        "version": "13.0",
+        "advisories": []
+      },
+      {
+        "package": "com.google.guava:guava",
+        "version": "30.0-jre",
+        "advisories": [
+          "GHSA-5mg8-w23w-74h3",
+          "GHSA-7g45-4rm6-3mm3",
+          "GHSA-xxph-c9ww-hj94"
+        ]
+      },
+      {
+        "package": "net.sf.kxml:kxml2",
+        "version": "2.3.0",
+        "advisories": []
+      },
+      {
+        "package": "org.json:json",
+        "version": "20220924",
+        "advisories": [
+          "GHSA-3vqj-43w4-2q58",
+          "GHSA-4jq9-2xhw-jpx7",
+          "GHSA-ghc9-756g-vrcv"
+        ]
+      },
+      {
+        "package": "org.apache.httpcomponents:httpclient",
+        "version": "4.5.13",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.httpcomponents:httpcore",
+        "version": "4.4.13",
+        "advisories": []
+      },
+      {
+        "package": "commons-logging:commons-logging",
+        "version": "1.2",
+        "advisories": []
+      },
+      {
+        "package": "commons-codec:commons-codec",
+        "version": "1.11",
+        "advisories": []
+      },
+      {
+        "package": "org.bouncycastle:bcprov-jdk18on",
+        "version": "1.78.1",
+        "advisories": [
+          "GHSA-574f-3g2m-x479",
+          "GHSA-9pwp-9qqc-pr26",
+          "GHSA-c3fc-8qff-9hwx",
+          "GHSA-p93r-85wp-75v3",
+          "GHSA-qp49-qgx5-5m26"
+        ]
+      },
+      {
+        "package": "org.bouncycastle:bcpkix-jdk18on",
+        "version": "1.78.1",
+        "advisories": [
+          "GHSA-4cx2-fc23-5wg6",
+          "GHSA-wg6q-6289-32hp"
+        ]
+      },
+      {
+        "package": "org.bouncycastle:bcutil-jdk18on",
+        "version": "1.78.1",
+        "advisories": []
+      },
+      {
+        "package": "org.jogamp.gluegen:gluegen-rt",
+        "version": "2.5.0",
+        "advisories": []
+      },
+      {
+        "package": "org.jogamp.jogl:jogl-all",
+        "version": "2.5.0",
+        "advisories": []
+      },
+      {
+        "package": "org.slf4j:slf4j-api",
+        "version": "1.7.30",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.commons:commons-text",
+        "version": "1.15.0",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.commons:commons-lang3",
+        "version": "3.20.0",
+        "advisories": []
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-databind",
+        "version": "2.13.1",
+        "advisories": [
+          "GHSA-3wrr-7qpf-2prh",
+          "GHSA-57j2-w4cx-62h2",
+          "GHSA-5gvw-p9qm-jgwh",
+          "GHSA-5jmj-h7xm-6q6v",
+          "GHSA-cxp5-3px4-pw24",
+          "GHSA-gx83-3vf8-gh7j",
+          "GHSA-hgj6-7826-r7m5",
+          "GHSA-j3rv-43j4-c7qm",
+          "GHSA-jjjh-jjxp-wpff",
+          "GHSA-rgv9-q543-rqg4",
+          "GHSA-rmj7-2vxq-3g9f",
+          "GHSA-vvgp-rfg2-7rr6",
+          "GHSA-wjgm-6hv5-3cvf",
+          "GHSA-wv8q-qhhj-9h54"
+        ]
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-core",
+        "version": "2.13.1",
+        "advisories": [
+          "GHSA-7hhh-6rmp-j9qf",
+          "GHSA-h46c-h94j-95f3",
+          "GHSA-r7wm-3cxj-wff9"
+        ]
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-annotations",
+        "version": "2.13.1",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:mil-sym-renderer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:mil-sym-java",
+        "version": "2.1.5",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRenderer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:RendererPluginInterface",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRendererServer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaLineArray",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRendererUtils",
+        "version": "0.1.41",
+        "advisories": []
+      }
+    ],
+    "patched": [
+      {
+        "package": "org.greenrobot:eventbus",
+        "version": "3.2.0",
+        "advisories": []
+      },
+      {
+        "package": "com.squareup.okhttp3:okhttp",
+        "version": "4.11.0",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-common",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-jdk7",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+        "version": "1.6.20",
+        "advisories": []
+      },
+      {
+        "package": "org.jetbrains:annotations",
+        "version": "13.0",
+        "advisories": []
+      },
+      {
+        "package": "net.sf.kxml:kxml2",
+        "version": "2.3.0",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.httpcomponents:httpclient",
+        "version": "4.5.13",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.httpcomponents:httpcore",
+        "version": "4.4.13",
+        "advisories": []
+      },
+      {
+        "package": "commons-logging:commons-logging",
+        "version": "1.2",
+        "advisories": []
+      },
+      {
+        "package": "commons-codec:commons-codec",
+        "version": "1.11",
+        "advisories": []
+      },
+      {
+        "package": "org.jogamp.gluegen:gluegen-rt",
+        "version": "2.5.0",
+        "advisories": []
+      },
+      {
+        "package": "org.jogamp.jogl:jogl-all",
+        "version": "2.5.0",
+        "advisories": []
+      },
+      {
+        "package": "org.slf4j:slf4j-api",
+        "version": "1.7.30",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.commons:commons-text",
+        "version": "1.15.0",
+        "advisories": []
+      },
+      {
+        "package": "org.apache.commons:commons-lang3",
+        "version": "3.20.0",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:mil-sym-renderer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:mil-sym-java",
+        "version": "2.1.5",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRenderer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:RendererPluginInterface",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRendererServer",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaLineArray",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "io.github.missioncommand:JavaRendererUtils",
+        "version": "0.1.41",
+        "advisories": []
+      },
+      {
+        "package": "com.squareup.okio:okio-jvm",
+        "version": "3.4.0",
+        "advisories": []
+      },
+      {
+        "package": "com.google.guava:guava",
+        "version": "33.7.2-jre",
+        "advisories": []
+      },
+      {
+        "package": "org.json:json",
+        "version": "20260719",
+        "advisories": []
+      },
+      {
+        "package": "org.bouncycastle:bcprov-jdk18on",
+        "version": "1.85",
+        "advisories": []
+      },
+      {
+        "package": "org.bouncycastle:bcpkix-jdk18on",
+        "version": "1.85",
+        "advisories": []
+      },
+      {
+        "package": "org.bouncycastle:bcutil-jdk18on",
+        "version": "1.85",
+        "advisories": []
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-databind",
+        "version": "2.23.0",
+        "advisories": []
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-core",
+        "version": "2.23.0",
+        "advisories": []
+      },
+      {
+        "package": "com.fasterxml.jackson.core:jackson-annotations",
+        "version": "2.23",
+        "advisories": []
+      }
+    ]
+  }
+}

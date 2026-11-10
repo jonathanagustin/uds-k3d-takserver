@@ -20,9 +20,9 @@ uds run fit-runner --no-progress
 # Fetch the bundle's Core package archive while the runner is online.
 uds run create:test-bundle --no-progress
 "${firewall[@]}" block
-# API access and the runner's own HTTPS remain usable under the restriction.
+# API access and direct host transport to the same public IP remain usable.
 uds zarf tools kubectl get --raw /readyz
-curl --fail --silent --show-error --max-time 20 https://api.github.com/zen >/dev/null
+"${firewall[@]}" host-check
 uds run deploy:test-bundle --with config=bundle/airgap-config.yaml --with options=--force-conflicts --no-progress
 uds run setup:keycloak-user --with group=/UDS\ Core/Admin --no-progress
 python3 tests/ensure-tak-group.py

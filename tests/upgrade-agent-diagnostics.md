@@ -108,3 +108,12 @@ pilot requires two current agent replicas through the existing bounded live
 health helper. One unhealthy replica, stale ownership, duplicate endpoints or
 failed direct health prevents diagnostic success. This is an opt-in availability
 pilot, not a startup/liveness root-cause fix or full acceptance.
+
+The post-block host transport check uses the same validated public-IP
+`AIRGAP_PROBE_URL` as the node checks (default `http://1.1.1.1/cdn-cgi/trace`).
+It ignores curl configuration and proxies, makes one bounded request, and
+accepts any HTTP status, including 500, as reachability evidence. Transport,
+TLS and non-HTTP failures still stop deployment; credentials/query/fragment
+URLs are rejected without logging their values. No retry or TLS verification
+bypass is used. This removes the unrelated GitHub Zen dependency; the prior
+host TLS EOF cause remains unknown.

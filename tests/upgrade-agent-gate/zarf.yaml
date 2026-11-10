@@ -5,10 +5,13 @@ kind: ZarfPackageConfig
 metadata:
   name: upgrade-agent-gate
   version: 0.0.0
-  description: CI-only admission readiness barrier around the released Core transition
+  description: CI-only agent availability barrier around the released Core transition
 components:
   - name: agent-ready
     required: true
+    files:
+      - source: live-health.py
+        target: .cache/upgrade-agent-gate/live-health.py
     actions:
       onDeploy:
         before:
@@ -28,7 +31,7 @@ components:
                 name: agent-hook
                 namespace: zarf
                 condition: '{.subsets[0].addresses[0].targetRef.kind}=Pod'
-          - description: Verify the agent endpoint serves its HTTPS target port
+          - description: Verify endpoint metadata advertises target port 8443
             maxTotalSeconds: 15
             wait:
               cluster:
@@ -36,3 +39,7 @@ components:
                 name: agent-hook
                 namespace: zarf
                 condition: '{.subsets[0].ports[0].port}=8443'
+        after:
+          - description: Probe live agent HTTPS health through the Kubernetes API
+            maxTotalSeconds: 40
+            cmd: python3 .cache/upgrade-agent-gate/live-health.py

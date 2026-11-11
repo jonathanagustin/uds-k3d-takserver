@@ -146,6 +146,7 @@ jobs:
           python3 -B -m unittest discover -s takx/gis-java -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/gis-java/data -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/kernel-java -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/kernel-native -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-deps -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-las -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-assimp -p 'test_build.py' -v

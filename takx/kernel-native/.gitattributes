@@ -1,0 +1,7 @@
+# Preserve checksum-pinned source patches and generated historical review diffs.
+patches/*.patch -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol
+historical-producers/**/*.diff -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol linguist-generated
+# Generated source inventories; build policy and owned code remain reviewable.
+native-sources.lock.json linguist-generated
+gltf-inputs.lock.json linguist-generated
+gles1-headers.lock.json linguist-generated

@@ -1,0 +1,21 @@
+--- consumed-ancestor/build-plan.json
++++ current/build-plan.json
+@@ -1,7 +1,7 @@
+ {
+   "schema_version": 1,
+   "port_commit": "1de2026f28ead93ff1773e6e680387643e914ea1",
+-  "sources_acquisition": "acquisition.json",
++  "sources_acquisition": "inputs.lock.json",
+   "configure_common": [
+     "-G",
+     "Ninja",
+@@ -64,7 +64,8 @@
+     "libwebp",
+     "catch2",
+     "abseil",
+-    "s2geometry"
++    "s2geometry",
++    "modp-base64"
+   ],
+   "plans": {
+     "asyncplusplus": {

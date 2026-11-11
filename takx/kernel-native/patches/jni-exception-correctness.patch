@@ -1,0 +1,63 @@
+--- a/takkernel/engine/src/main/jni/common.cpp
++++ b/takkernel/engine/src/main/jni/common.cpp
+@@ -194,15 +194,37 @@
+         ClassLoader_class.runtime = NULL;
+ 
+         ClassLoader_class.id = ATAKMapEngineJNI_findClass(env, "java/lang/ClassLoader");
++        if(env->ExceptionCheck() || !ClassLoader_class.id)
++            return JNI_ERR;
+         ClassLoader_class.loadClass = env->GetMethodID(ClassLoader_class.id, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
++        if(env->ExceptionCheck() || !ClassLoader_class.loadClass)
++            return JNI_ERR;
+ 
+         Java::JNILocalRef Class_class(*env, env->FindClass("java/lang/Class"));
++        if(env->ExceptionCheck() || !Class_class)
++            return JNI_ERR;
+         jmethodID Class_getClassLoader = env->GetMethodID(Class_class, "getClassLoader", "()Ljava/lang/ClassLoader;");
+-
+-        ClassLoader_class.runtime = env->NewGlobalRef(env->CallObjectMethod(Class_class, Class_getClassLoader));
++        if(env->ExceptionCheck() || !Class_getClassLoader)
++            return JNI_ERR;
++
++        jobject runtimeLoader = env->CallObjectMethod(Class_class, Class_getClassLoader);
++        if(env->ExceptionCheck())
++            return JNI_ERR;
++        Java::JNILocalRef runtimeLoaderRef(*env, runtimeLoader);
++        ClassLoader_class.runtime = env->NewGlobalRef(runtimeLoaderRef);
++        if(env->ExceptionCheck() || (runtimeLoader && !ClassLoader_class.runtime))
++            return JNI_ERR;
+ 
+         Java::JNILocalRef EngineLibrary_class(*env, env->FindClass("com/atakmap/map/EngineLibrary"));
+-        ClassLoader_class.library = env->NewGlobalRef(env->CallObjectMethod(EngineLibrary_class, Class_getClassLoader));
++        if(env->ExceptionCheck() || !EngineLibrary_class)
++            return JNI_ERR;
++        jobject libraryLoader = env->CallObjectMethod(EngineLibrary_class, Class_getClassLoader);
++        if(env->ExceptionCheck())
++            return JNI_ERR;
++        Java::JNILocalRef libraryLoaderRef(*env, libraryLoader);
++        ClassLoader_class.library = env->NewGlobalRef(libraryLoaderRef);
++        if(env->ExceptionCheck() || (libraryLoader && !ClassLoader_class.library))
++            return JNI_ERR;
+     }
+ 
+     // Load externed classes/methods
+@@ -902,8 +924,19 @@
+         char msgbuf[256];
+         vsnprintf(msgbuf, 255u, fmt, arg);
+         LocalJNIEnv env;
++        // Preserve an exception already pending on this caller/thread.
++        if (!env.valid() || env->ExceptionCheck())
++            return -1;
+         Java::JNILocalRef mmsg(*env, env->NewStringUTF(msgbuf));
++        if (env->ExceptionCheck() || !mmsg.get())
++            return -1;
+         env->CallStaticIntMethod(Log_class.id, log, mtag, mmsg.get());
++        // This best-effort callback may fail without poisoning later JNI work.
++        // Do not recursively log its exception.
++        if (env->ExceptionCheck()) {
++            env->ExceptionClear();
++            return -1;
++        }
+     }
+     return 0;
+ }

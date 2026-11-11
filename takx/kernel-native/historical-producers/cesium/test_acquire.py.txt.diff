@@ -1,0 +1,19 @@
+--- consumed/test_acquire.py
++++ current/test_acquire.py
+@@ -42,10 +42,13 @@
+                 self.assertFalse((root/'out').exists())
+ 
+     def test_exact_zstd_test_links_materialize_without_symlinks(self):
+-        archive=Path('/workspace/cesium-source-cache/zstd.tar.gz')
+-        if not archive.is_file():self.skipTest('verified source cache unavailable')
+         with tempfile.TemporaryDirectory() as d:
+-            root=Path(d);links={}
++            root=Path(d);links={};archive=root/'zstd.tar'
++            wrapper=b'#!/bin/sh\n\nzstdname=$(basename $0)\n\nif [ -z "$EXEC_PREFIX" ]; then\n    "$ZSTD_SYMLINK_DIR/$zstdname" $@\nelse\n    $EXEC_PREFIX "$ZSTD_SYMLINK_DIR/$zstdname" $@\nfi\n'
++            with tarfile.open(archive,'w') as tar:
++                target=tarfile.TarInfo('source/tests/cli-tests/bin/zstd');target.size=len(wrapper);tar.addfile(target,io.BytesIO(wrapper))
++                for name in ('unzstd','zstdcat'):
++                    link=tarfile.TarInfo('source/tests/cli-tests/bin/'+name);link.type=tarfile.SYMTYPE;link.linkname='zstd';tar.addfile(link)
+             result=ACQUIRE.extract(archive,root/'out',{'expanded':0},allow_zstd_tests=True,source_links=links)
+             self.assertEqual(set(links),{'tests/cli-tests/bin/unzstd','tests/cli-tests/bin/zstdcat'})
+             for name in links:

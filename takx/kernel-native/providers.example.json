@@ -1,0 +1,25 @@
+{
+  "sqlcipher": "/data/proofs/sqlcipher",
+  "geos": "/data/proofs/geos",
+  "proj": "/data/proofs/proj",
+  "assimp": "/data/proofs/assimp",
+  "las": "/data/proofs/las",
+  "mdb": "/data/proofs/mdbtools",
+  "draco": "/data/proofs/draco",
+  "spatial": "/data/proofs/spatial-database",
+  "cesium": {
+    "root": "/data/proofs/cesium",
+    "dependency_root": "/data/proofs/cesium-stopped-dependencies",
+    "stopped_inventory": "/data/proofs/cesium-stopped-inventory.json",
+    "acquisition_root": "/data/proofs/cesium-source-acquisition"
+  },
+  "gdal_jni": {
+    "root": "/data/proofs/gdal-jni",
+    "dependency_root": "/data/proofs/gdal-stopped-dependency",
+    "dependency_proof": "/data/proofs/gdal-dependency-metadata"
+  },
+  "gles": "/data/proofs/gles",
+  "kml": "/data/proofs/kml",
+  "curl": "/data/proofs/core-curl",
+  "kernel_java": "/data/proofs/kernel-java"
+}

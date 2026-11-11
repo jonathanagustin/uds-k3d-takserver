@@ -1,0 +1,1301 @@
+{
+  "cesium": {
+    "kind": "exact-consumed-owned-producer-source-variant",
+    "recipe": {
+      "inputs.lock.json": {
+        "bytes": 84398,
+        "sha256": "93d92221976a09076a2dc8f8da5e272fe10e865c203fd60d45d934a624677b6d"
+      },
+      "test_acquire.py": {
+        "bytes": 3738,
+        "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea"
+      },
+      "providers.cmake": {
+        "bytes": 1329,
+        "sha256": "42c69e5160fbfb825422467ee40e5457674635f7a81fb04759e44660211e963c"
+      },
+      "acquire.py": {
+        "bytes": 12248,
+        "sha256": "c067f3585347f52230c544f827c9831e9a4c9932b04812e885409fd37f4348b9"
+      },
+      "build-plan.json": {
+        "bytes": 24018,
+        "sha256": "e9816c34b0c5d72cb60078d55335c373260abc11ff55723b9e8256f4077d6c4d"
+      },
+      "metadata.lock.json": {
+        "bytes": 50568,
+        "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a"
+      },
+      "build.py": {
+        "bytes": 13015,
+        "sha256": "659234b63caa129ea25b5c91cc0d2be46953d9afba36c962760eda2acc5df7dd"
+      },
+      "cesium-tree.json": {
+        "bytes": 384465,
+        "sha256": "e1f1686b2266f9df5bb852348cbac7a20c35fa1c315eeec201a68e3bde23858a"
+      },
+      "ports/meshoptimizer/vcpkg.json": {
+        "bytes": 486,
+        "sha256": "0526703157627d1db390c291f7b8cacdb85cd3f9ec46b803fef92c3085cd175e"
+      },
+      "ports/meshoptimizer/portfile.cmake": {
+        "bytes": 1658,
+        "sha256": "5075b7cdb8283c474d61a0f3e4b4fe904b22d825c117a47e2e62cab1e7c589ba"
+      },
+      "ports/glm/usage": {
+        "bytes": 265,
+        "sha256": "2e9da7655db7eb2a2b58bb857e20ddfb46c0483235d2c868e819f72d10b18287"
+      },
+      "ports/glm/fix-clang.patch": {
+        "bytes": 816,
+        "sha256": "11175e50d673af29546980307e6a1dfab07cb73259a0672a6c9b2b42508c287b"
+      },
+      "ports/glm/vcpkg.json": {
+        "bytes": 321,
+        "sha256": "e667d77bbd9bc58bcb5eed3017574428bbe6debb8f6c46354b9482465010fe62"
+      },
+      "ports/glm/portfile.cmake": {
+        "bytes": 849,
+        "sha256": "4c42ae3b630892e6556e00a08208f5ffbc9c3fdea36dee666788043692b641c8"
+      },
+      "ports/sqlite3/usage": {
+        "bytes": 192,
+        "sha256": "1cd1a4fe57d9caf51321f363f1d395074ac7d0c14b7035a5d2c218670be4b5b3"
+      },
+      "ports/sqlite3/sqlite3-vcpkg-config.h.in": {
+        "bytes": 1122,
+        "sha256": "9bfd209bc336dd0514c7ed9e7e70b8d1f70224fee7c300224b163ac1c365becd"
+      },
+      "ports/sqlite3/add-config-include.patch": {
+        "bytes": 538,
+        "sha256": "15a6fc0818d6407b468e3c869627445f1af09ef94ecf5c792eee71bc30ca7e68"
+      },
+      "ports/sqlite3/sqlite3-config.in.cmake": {
+        "bytes": 166,
+        "sha256": "7a44f5805ced746c4dcb497055bce06e45eb3ecb3506465fcde4d442a2179d96"
+      },
+      "ports/sqlite3/vcpkg.json": {
+        "bytes": 1985,
+        "sha256": "e22b98b26761db51c2e51c179d680839f9133519e37320ed043730f55840aa97"
+      },
+      "ports/sqlite3/portfile.cmake": {
+        "bytes": 3619,
+        "sha256": "3d9829e3689f46e74e3af8698cce9381fd24bd479e893c58531c415c6b290ad8"
+      },
+      "ports/sqlite3/CMakeLists.txt": {
+        "bytes": 2618,
+        "sha256": "db133f80084dbbaccbc61c314d437412a5cc31b49378b19b7748f63269e3435a"
+      },
+      "ports/sqlite3/fix-arm-uwp.patch": {
+        "bytes": 1146,
+        "sha256": "f4397f84d931cccb44a038194c895e28c749f1825ab45db4b5dccd6e3b6b5967"
+      },
+      "ports/sqlite3/sqlite3.pc.in": {
+        "bytes": 269,
+        "sha256": "7d0eef3b49bc8c7fbb6a06b449855060ab5d9b4ab37d1781a0269dda8421a391"
+      },
+      "ports/zstd/fix-windows-rc-compile.patch": {
+        "bytes": 759,
+        "sha256": "24080a83a9d7b19b431fc499972f404e86fa96b188315d3fb8bca932da88fe66"
+      },
+      "ports/zstd/usage": {
+        "bytes": 119,
+        "sha256": "dd373e885aea14820e812e58de22d2e8d83f42248d695d6877fe17bd0f3ff455"
+      },
+      "ports/zstd/fix-emscripten-and-clang-cl.patch": {
+        "bytes": 1487,
+        "sha256": "041a4839df3d92f1590fcac90a6be6be7821bd2095557b182245114e003231f4"
+      },
+      "ports/zstd/vcpkg.json": {
+        "bytes": 478,
+        "sha256": "9b5eef0d52e96174f408df225a3b8519b7dcad05c2a25dfad346ae4955b5dca8"
+      },
+      "ports/zstd/portfile.cmake": {
+        "bytes": 2326,
+        "sha256": "d71625895a1ab3ff63bc8ea66b5d5b7ffb1a38e42c099efe7056122a679f0de6"
+      },
+      "ports/zstd/no-static-suffix.patch": {
+        "bytes": 523,
+        "sha256": "639fedd3fc4cf634e4ae63ad0077e547a91d3fef1dd26a59f0e817378c5cc434"
+      },
+      "ports/libjpeg-turbo/usage": {
+        "bytes": 436,
+        "sha256": "f6ff243d0aba5bc85904527de17fc8a341a3568b0b19e3ac63b95029125b9e68"
+      },
+      "ports/libjpeg-turbo/add-options-for-exes-docs-headers.patch": {
+        "bytes": 8463,
+        "sha256": "5c93ee62645786820dcca65d7158d39a355c3c7ac31f1d07e0a52d26e7875598"
+      },
+      "ports/libjpeg-turbo/vcpkg-cmake-wrapper.cmake": {
+        "bytes": 1837,
+        "sha256": "d257c0a541dd60c4b6eb6f46a5e9f128a64a6ec40f3b8b5bc8ab753e7a935c61"
+      },
+      "ports/libjpeg-turbo/vcpkg.json": {
+        "bytes": 807,
+        "sha256": "72c77395fe1daceda5b6d67f1b465b49c007ae99b73257e1f69d50cb35aa2589"
+      },
+      "ports/libjpeg-turbo/portfile.cmake": {
+        "bytes": 4578,
+        "sha256": "1a7b8c646c6ba9d4aa1ad90d6ef7cec98727a8003cc15013ca7334842b193386"
+      },
+      "ports/libjpeg-turbo/workaround_cmake_system_processor.patch": {
+        "bytes": 525,
+        "sha256": "1fd13c06d27a2fcef233fe209ba0c856ed76311be59ae72e15d1c58fe36eab04"
+      },
+      "ports/uriparser/usage": {
+        "bytes": 164,
+        "sha256": "7ed66a81f955138beaea32993fd038561d7e7d1da2edc4efc8cb488fe0cbf96f"
+      },
+      "ports/uriparser/vcpkg.json": {
+        "bytes": 463,
+        "sha256": "7ff9ca1a8113e30002a73fc5c7ac55dee51b891573d8ed65c44ec3cd3a427953"
+      },
+      "ports/uriparser/portfile.cmake": {
+        "bytes": 1761,
+        "sha256": "e3f7dd0b8c3f5240f7b566d4943a4fac86cd897a3f5deaa393d966923f10d862"
+      },
+      "ports/libwebp/0003-simd.patch": {
+        "bytes": 955,
+        "sha256": "4ca73353afbfefc31147d62d7f035e151b981f9cda6636151a84a3ca51cd39d9"
+      },
+      "ports/libwebp/usage": {
+        "bytes": 409,
+        "sha256": "4898bdd3351dcd0868d2f0786ab114c8b161dda8db6cd84f7fe93bf0639f08d1"
+      },
+      "ports/libwebp/0008-sdl.patch": {
+        "bytes": 1881,
+        "sha256": "2f05c20f07165ac556ef7c67c25af0e461d3cbd8539d5769296ace52b37b9311"
+      },
+      "ports/libwebp/0002-cmake-config.patch": {
+        "bytes": 1226,
+        "sha256": "55567849c38d3231032cb0aff6c067e1e2ca1c6515823880a6c4a885780c0ba3"
+      },
+      "ports/libwebp/vcpkg.json": {
+        "bytes": 4870,
+        "sha256": "2ceb5f9ee69defc689ad0c011790b0419e79a465fde66190b8c6b89585439613"
+      },
+      "ports/libwebp/portfile.cmake": {
+        "bytes": 2465,
+        "sha256": "1df3a5f842f9fdfd2906a214e2fe743edca053894ac85537684632bca28b03f9"
+      },
+      "ports/ms-gsl/vcpkg.json": {
+        "bytes": 368,
+        "sha256": "dac667ac94055fd95ec4c437352788ef6c08da8050955c2480750bdd3e6a5ab0"
+      },
+      "ports/ms-gsl/portfile.cmake": {
+        "bytes": 722,
+        "sha256": "1111194d640e760f4044653e004606f5705120fee6a1ef6768a33ca75cfabb4e"
+      },
+      "ports/catch2/fix-install-path.patch": {
+        "bytes": 1103,
+        "sha256": "d67374154f1910e41937173e9871991dfd5e43f43cca19a2fec10d3392000275"
+      },
+      "ports/catch2/vcpkg.json": {
+        "bytes": 367,
+        "sha256": "5e75b13dc9c1b686721656ef79e15ec279740de351e27e862f8e0919c347f693"
+      },
+      "ports/catch2/portfile.cmake": {
+        "bytes": 1460,
+        "sha256": "acf52a0f356fff3d7158f077fed6eeaf2b71fbb6794d9485406714fc2853a71d"
+      },
+      "ports/ktx/0001-Use-vcpkg-zstd.patch": {
+        "bytes": 4449,
+        "sha256": "44d95d0724f37b8a664e8bd742e29343db5264de4901649c2cb9daa33e90a69e"
+      },
+      "ports/ktx/0002-Fix-versioning.patch": {
+        "bytes": 561,
+        "sha256": "a3b482708c49efbb1b39fedd7a321c05b9f3d89f30362338765e398f31903438"
+      },
+      "ports/ktx/0004-quirks.patch": {
+        "bytes": 764,
+        "sha256": "7cf9e647c57ce0edf2e200aef5b207caaec475decef320d7b0ce6d8a6eec1114"
+      },
+      "ports/ktx/0006-fix-ios-install.patch": {
+        "bytes": 361,
+        "sha256": "1c224e79e0c3caff4a7d3d970992154ff451ce661c119f40deab2fbb5aba7921"
+      },
+      "ports/ktx/vcpkg.json": {
+        "bytes": 830,
+        "sha256": "c033adb75db654343d82144a2332df5497f3102f32a0bd0047fc6432ac5d5be8"
+      },
+      "ports/ktx/portfile.cmake": {
+        "bytes": 2696,
+        "sha256": "6691611817d2756bf07f415757ad1edeb18ead71de994b40019229435d2235dc"
+      },
+      "ports/ktx/0003-mkversion.patch": {
+        "bytes": 673,
+        "sha256": "f61692e560771e10421b9daf15e506a610a5f2cdf00faf4a497937b042cae61a"
+      },
+      "ports/ktx/0005-no-vendored-libs.patch": {
+        "bytes": 545,
+        "sha256": "6ed8b4c341e0888bc8cabd215e2a6c580f33e3957310188f0c5ca844383ba301"
+      },
+      "ports/rapidjson/vcpkg.json": {
+        "bytes": 400,
+        "sha256": "e003a19faf326d9e5ee55544c904e38b0483d0d72420ba6b6129927e7c72bc61"
+      },
+      "ports/rapidjson/portfile.cmake": {
+        "bytes": 1890,
+        "sha256": "e51514972f8091c5ca3652d36dd7085bca8cd728d7158437743bb161fdb64afe"
+      },
+      "ports/draco/disable-symlinks.patch": {
+        "bytes": 1041,
+        "sha256": "d2c7a7fc05ef02117d74c65f1c2581d5089853fa78ba85d3aea9a40a6e5b8331"
+      },
+      "ports/draco/install-linkage.diff": {
+        "bytes": 583,
+        "sha256": "10912e893e2b3e8086d5c1070f8200d6e05d93682e7f1b6aacdcd08933b76a07"
+      },
+      "ports/draco/fix-pkgconfig.patch": {
+        "bytes": 455,
+        "sha256": "1f415acc888ac56571d99909916220cc6c91e72e717487ac5b37f94b960a3c4b"
+      },
+      "ports/draco/fix-compile-error-uwp.patch": {
+        "bytes": 770,
+        "sha256": "413c08c6698987a1cd8aa04148635b425d462df7ee1b04c49676adefc132aeeb"
+      },
+      "ports/draco/vcpkg.json": {
+        "bytes": 447,
+        "sha256": "e7e081a28555034de94c1627a87803b63d295f6e45c3ded0b23e4b2566185116"
+      },
+      "ports/draco/fix-uwperror.patch": {
+        "bytes": 358,
+        "sha256": "a04c2e0c0e4b50b28f8692e80457a00bdb11b9dd3fc2cf6c7020837b26c59a8f"
+      },
+      "ports/draco/portfile.cmake": {
+        "bytes": 1093,
+        "sha256": "f2043256794ac650959ae80296e88e170e74bca84a31885ad7735ce2f0acf254"
+      },
+      "ports/vcpkg-cmake-config/copyright": {
+        "bytes": 1096,
+        "sha256": "04b60f99a43bfd7fefdc8364b24aac704a2160cef969b75ba6a38b62dc4c4b70"
+      },
+      "ports/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake": {
+        "bytes": 14648,
+        "sha256": "f3880578674f1bdbc54b67c5fc3787aaab8ee8bcf4e3e6e008204bf4ab67aa0b"
+      },
+      "ports/vcpkg-cmake-config/vcpkg.json": {
+        "bytes": 190,
+        "sha256": "3964c3d0e6b39c7f42cebd5949cccdc7eb6feb83ee434fe73756c954b173c5c2"
+      },
+      "ports/vcpkg-cmake-config/portfile.cmake": {
+        "bytes": 495,
+        "sha256": "832b34e63f5af41ad1b2e4aa79c5bfa507a005b120b51548e674accc706837d7"
+      },
+      "ports/vcpkg-cmake-config/vcpkg-port-config.cmake": {
+        "bytes": 68,
+        "sha256": "72bc3093337e633bdd19fe5d4dd1f38ca1918def49608d676a9c98c686d38b1e"
+      },
+      "ports/openssl/usage": {
+        "bytes": 195,
+        "sha256": "2f31595ba815f7c986ea9fed0f198f7a2691dc027f9e1a39dd3093753ed8bc79"
+      },
+      "ports/openssl/cmake-config.patch": {
+        "bytes": 2101,
+        "sha256": "11c01cd2ebcca46cf1f54abd1edc1e3b4776c35552eed7ee9d4fbab6b7e6159b"
+      },
+      "ports/openssl/vcpkg-cmake-wrapper.cmake.in": {
+        "bytes": 3224,
+        "sha256": "b29a6ba88f6f26f03a70cf57c31beb6de58ba0306ce8f3028f52fef4b86aec13"
+      },
+      "ports/openssl/openssl.pc.in": {
+        "bytes": 132,
+        "sha256": "add49223f08228831ced1bc35fc2c56a4ab0fe9741e1fb2bdc86c6d3da4b326a"
+      },
+      "ports/openssl/command-line-length.patch": {
+        "bytes": 629,
+        "sha256": "a1935f6eb38f49e424eaf5dd13b31f0ef46a30f531f9d7e149aac344051a1cbb"
+      },
+      "ports/openssl/vcpkg.json": {
+        "bytes": 963,
+        "sha256": "3595eb2e778fe1524f4680d2cf4724e97391a0db358fd0ba3b37bbe1240cffaa"
+      },
+      "ports/openssl/portfile.cmake": {
+        "bytes": 2804,
+        "sha256": "303b734c283b5cb5c37214373f6f8192e6c72162fe59cd94b741c9ca985c23f0"
+      },
+      "ports/openssl/asm-armcap.patch": {
+        "bytes": 2641,
+        "sha256": "aa8c092866283ca97c7b39664cb816c6f4f3e9df51a2b06ede1054187e75ca70"
+      },
+      "ports/openssl/script-prefix.patch": {
+        "bytes": 741,
+        "sha256": "a18b53acdea8180aa24c4abbe85c4269e4d092c6eba4f946d5feafa7ca2a163d"
+      },
+      "ports/openssl/install-pc-files.cmake": {
+        "bytes": 1047,
+        "sha256": "001f4b55b3da7b4faa0910b906f9c587055abaa99edac9cfb3669a06b5387d44"
+      },
+      "ports/zlib-ng/vcpkg.json": {
+        "bytes": 311,
+        "sha256": "9ac208c986cc44fb8ab277f6fae851c707a3ad6916d531d6f19c1d3ae8589a95"
+      },
+      "ports/zlib-ng/portfile.cmake": {
+        "bytes": 2105,
+        "sha256": "ba94b8299744d75729acd12cd3ecc0f8ea23d51b87fdb9e4b7a34d893235cd30"
+      },
+      "ports/cpp-httplib/usage": {
+        "bytes": 136,
+        "sha256": "49fe832473d47b628fa83b3c60809433047de90b51d26a360cbb8abf4610ca46"
+      },
+      "ports/cpp-httplib/fix-find-brotli.patch": {
+        "bytes": 2665,
+        "sha256": "07cee9d662c8971529e9931a4a6eeeafacde6b24c5c651b1c59eb5c873c299cb"
+      },
+      "ports/cpp-httplib/vcpkg.json": {
+        "bytes": 845,
+        "sha256": "b93aac1fadbcc062c01e414cfb2edfbb735d068ea8a9d9e7727f8ab0c01f5480"
+      },
+      "ports/cpp-httplib/portfile.cmake": {
+        "bytes": 1077,
+        "sha256": "4d2e3e05083921cc24dcbe91286a201d5f33cfcb41359cb16b583bafa07710f4"
+      },
+      "ports/picosha2/vcpkg.json": {
+        "bytes": 190,
+        "sha256": "a35038f484c91b3506dc25684c1d1ea7aee6a3fe786f6d0f4043ab1246f08ee4"
+      },
+      "ports/picosha2/portfile.cmake": {
+        "bytes": 468,
+        "sha256": "71a5f739b58bf772f02f734f79c5cecc69b80eaa261588249bfb92c5d3529363"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_build.cmake": {
+        "bytes": 3858,
+        "sha256": "6d1c27080fe3e768b5e7b968d6a28a37db154ebcb214297de25f10b6713511e1"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_configure.cmake": {
+        "bytes": 15511,
+        "sha256": "a8bc92be2faf621d6183ed1f3eb2ac3b103f4418b95f8695cf0dc7f7c5e8f724"
+      },
+      "ports/vcpkg-cmake/vcpkg.json": {
+        "bytes": 180,
+        "sha256": "6fd546b781a1aa5df572bdd31672cf222e55698aa5bf7d3e5c11abf1ae56a45b"
+      },
+      "ports/vcpkg-cmake/portfile.cmake": {
+        "bytes": 655,
+        "sha256": "a711531b7f13b7da16fa1f25d7c5737a423d4a126465dc9e6689a0f043fcc1aa"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_install.cmake": {
+        "bytes": 577,
+        "sha256": "3ae7886dc8434fac6f1e61190cc355fdec5fbd4f60758e2de20423cf49c91369"
+      },
+      "ports/vcpkg-cmake/vcpkg-port-config.cmake": {
+        "bytes": 189,
+        "sha256": "f0a30f77c8f5e3ac40436fe2518a61ad067f2955c7ef3be6d6a0ca4b81cd2a45"
+      },
+      "ports/modp-base64/vcpkg.json": {
+        "bytes": 305,
+        "sha256": "0070f781c774595d50ede16e1ef1ef38becaa8137f95ed123ea81894683ba065"
+      },
+      "ports/modp-base64/portfile.cmake": {
+        "bytes": 557,
+        "sha256": "1b4892035a607b9fdf51f406a9aa29cc6a04ce23f6fc478a805735569aed5d6d"
+      },
+      "ports/modp-base64/CMakeLists.txt": {
+        "bytes": 745,
+        "sha256": "2103372f5f8ea8b46aad126f2cd4a6fec40312a63fb0c92f7ebb892dbf0dd2d4"
+      },
+      "ports/modp-base64/modp_b64_data.h": {
+        "bytes": 30315,
+        "sha256": "d416fe9f492b2b99760a6b74602d012b42147762cbe27af0ba08a50ff051afd9"
+      },
+      "ports/modp-base64/libmodpbase64.def": {
+        "bytes": 84,
+        "sha256": "b4a26efcd79386541c53239787e7e90b6b09e3a7d1970b12b5d52a3059f9c6c3"
+      },
+      "ports/modp-base64/config.h.cmake": {
+        "bytes": 56,
+        "sha256": "2408ae5457d68ccf9c90238381cf89908442e4a561e5e8f1a9d6b953aadd6e4b"
+      },
+      "ports/expected-lite/vcpkg.json": {
+        "bytes": 384,
+        "sha256": "6a9cc0cbeea26b31a351de08e431b0d4a0e88b7c777a5da7fd78b16d8becb888"
+      },
+      "ports/expected-lite/portfile.cmake": {
+        "bytes": 703,
+        "sha256": "dd51eeef40f416dfbfeb202dbc6389a27dd4f0542cecb4580fee0f186ef228c3"
+      },
+      "ports/fmt/usage": {
+        "bytes": 265,
+        "sha256": "ece096518c58df58cfc60f5ad8120d248a86383482455f539d91b8ca6eac14a7"
+      },
+      "ports/fmt/fix-write-batch.patch": {
+        "bytes": 522,
+        "sha256": "5658d7b2362cddca318c21de795877c17cffbe62603860507291dccc40d537f3"
+      },
+      "ports/fmt/fix-visibility.patch": {
+        "bytes": 576,
+        "sha256": "9102cfd44cdf319ca9f04e488be039964269a731ffd271e74e322ec99d7d6cd5"
+      },
+      "ports/fmt/vcpkg.json": {
+        "bytes": 415,
+        "sha256": "c93a4ba2b439ba97b019538558398ad3bb809e4cae2ccb37faf42245209710e8"
+      },
+      "ports/fmt/portfile.cmake": {
+        "bytes": 1006,
+        "sha256": "f2f017f8a1b27d2f42e8d9f689c8cc8c8d24493b8be2d8311ce26833e4233456"
+      },
+      "ports/earcut-hpp/vcpkg.json": {
+        "bytes": 233,
+        "sha256": "51a2e57933c851a88b278a6292c48b3fb773bd9bf7e1d8d6b6cc19f9cf586f08"
+      },
+      "ports/earcut-hpp/portfile.cmake": {
+        "bytes": 548,
+        "sha256": "a7c891ec107695466b1980307fd00990cc13627d091165aca72e652af4b547d6"
+      },
+      "ports/s2geometry/usage": {
+        "bytes": 136,
+        "sha256": "38e5f00836239bb938fd18dac687dbcb8ca40321f9f8fb6113cc255c30e47083"
+      },
+      "ports/s2geometry/vcpkg.json": {
+        "bytes": 469,
+        "sha256": "dbf15efe40c755b83e127ca2b899d22263caee408ccf6061373db09431b38b61"
+      },
+      "ports/s2geometry/portfile.cmake": {
+        "bytes": 797,
+        "sha256": "da9695458e39712c9ffe93881e99a8c99316c00f33f0daa3f5e27f24c68416b4"
+      },
+      "ports/tinyxml2/0003-fix-Android-SDK-below-24-does-not-support-fseeko.patch": {
+        "bytes": 778,
+        "sha256": "9a4752addbb190beac73841c43a9406bec303d907b3b329cd9bb5b534a8b26b7"
+      },
+      "ports/tinyxml2/0002-fix-check-for-TINYXML2_EXPORT-on-non-windows.patch": {
+        "bytes": 674,
+        "sha256": "aae8bfad827d265c3cfffebd583da39e299068b68b8795233bf2b5ed9d7b2273"
+      },
+      "ports/tinyxml2/0001-fix-do-not-force-export-the-symbols-when-building-st.patch": {
+        "bytes": 1311,
+        "sha256": "08c2b7d4ba4ee1dd45f26847c022a4db1496edb6a3bdabc519ac4a330573aa8e"
+      },
+      "ports/tinyxml2/vcpkg.json": {
+        "bytes": 349,
+        "sha256": "d575e087674ddc9f5270cdf3f2c57d35ef127a30cc58268c98e8287ad474bc8c"
+      },
+      "ports/tinyxml2/portfile.cmake": {
+        "bytes": 875,
+        "sha256": "d4acb9ba939d6580f674a1f222c8d18c359d12a4881ed50ad1a0858ea046ebf0"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake": {
+        "bytes": 1804,
+        "sha256": "da894e0dafa6ef0acdc641f12b02633f273322d86a6d2e7065dc56134478cea3"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg.json": {
+        "bytes": 233,
+        "sha256": "90ff3bf8d338ffa039b69e800a1758c30f939085efcf1dfcee4d975871475a09"
+      },
+      "ports/vcpkg-cmake-get-vars/portfile.cmake": {
+        "bytes": 597,
+        "sha256": "bbcf9d6b88dd539617f4cfc1f76acbbe9a6e31fc373d79c1c626278768ea2e2a"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg-port-config.cmake": {
+        "bytes": 140,
+        "sha256": "4fd4c2e909bbdf069eb3c59b4b847b0b386cdb41840714e12b34b7eff41f9e22"
+      },
+      "ports/abseil/0002-Fix-missing-include-random-for-std-uniform_int_distr.patch": {
+        "bytes": 759,
+        "sha256": "bcab8c17f86ed4a60f61a708e3754b90af8e38352ff8eb2b3825a6ad40cc3272"
+      },
+      "ports/abseil/779a356-test-allocator.diff": {
+        "bytes": 298,
+        "sha256": "62500ac86af899d938e35a73664f6ea347f671167dbe0e5981b2a1bd64ff2fe8"
+      },
+      "ports/abseil/vcpkg.json": {
+        "bytes": 1210,
+        "sha256": "cbb1de064bac9c2e1a1874b3e9062f897aa9587e7d5152fff844ab7bba67614f"
+      },
+      "ports/abseil/portfile.cmake": {
+        "bytes": 2154,
+        "sha256": "55ffaab1a72aca272c52bf93fa344b93ef3ee3c331f658c86da38b2426f93c7e"
+      },
+      "ports/abseil/0001-revert-integer-to-string-conversion-optimizations.patch": {
+        "bytes": 54537,
+        "sha256": "bb3268f711e0ae0c33e53bee28b94aa36ce62620bb00dc2f198733b62c015a9d"
+      },
+      "ports/asyncplusplus/vcpkg.json": {
+        "bytes": 343,
+        "sha256": "a2488460f9a64cd6c372f4cf1225056051cb5297988a5cac090a8412d4dc1ab9"
+      },
+      "ports/asyncplusplus/portfile.cmake": {
+        "bytes": 699,
+        "sha256": "358629fa6f0cad7342b906549d128b4551544f20993197b8cc9bf2ee40c77239"
+      },
+      "ports/libmorton/vcpkg.json": {
+        "bytes": 303,
+        "sha256": "5aa09ba1fa76d203dcbc202f0a798bc01563d045f415b5d11f0244e8e7bc1f6a"
+      },
+      "ports/libmorton/portfile.cmake": {
+        "bytes": 634,
+        "sha256": "0f4774e006eb45fb9ce31b30b7d2615065079a6983c644c4946800b43882f946"
+      },
+      "ports/spdlog/usage": {
+        "bytes": 286,
+        "sha256": "bdc67ce7fb7be263e7fdf3c57815f8f9f6142aca5d8f4da5e5597f25a6163bc6"
+      },
+      "ports/spdlog/vcpkg.json": {
+        "bytes": 612,
+        "sha256": "39d97ac1cf204f86fb3289578fdb1dfea90ef7e5a219582c3ea964c6c7d700ef"
+      },
+      "ports/spdlog/portfile.cmake": {
+        "bytes": 2300,
+        "sha256": "a915354a24cf870a60c874f18b69bdded2ac8d8a7ab00e6a4d0dfd1ef9c97d76"
+      },
+      "ports/stb/usage": {
+        "bytes": 135,
+        "sha256": "cf896a6d0956431ce01388ad6f62f7f7aa3d9c5e0d23f7da7f9ee3568c61f78a"
+      },
+      "ports/stb/vcpkg-cmake-wrapper.cmake": {
+        "bytes": 176,
+        "sha256": "7580cacc3272d0ccedc17f9303524ec1a11c43f0476318fe840816478b8def40"
+      },
+      "ports/stb/vcpkg.json": {
+        "bytes": 209,
+        "sha256": "d0e54a471d7d555299e391b22c6d83a1c9c4213e960452957839ef55dbe57a0b"
+      },
+      "ports/stb/portfile.cmake": {
+        "bytes": 849,
+        "sha256": "4bcb5ded7fcb24cc0d9830bacc8a7be53d082ac1f8d0f74fb90ba1ac2ef5f92e"
+      },
+      "ports/stb/FindStb.cmake": {
+        "bytes": 671,
+        "sha256": "d6d9e778ddb6e7b5d13c63a63872a7a5ddba00b1cef675a7cc7c91a9a9508d91"
+      },
+      "ports/openssl/unix/move-openssldir.patch": {
+        "bytes": 628,
+        "sha256": "9e62ad861f8421e5b732bf488b7199131ac17a57f295f50c697d2591f5845e0e"
+      },
+      "ports/openssl/unix/configure": {
+        "bytes": 565,
+        "sha256": "96ef16490c8a7c240a0c96de7e641c93843d0b78400b4de7dc2c7d2e500f3480"
+      },
+      "ports/openssl/unix/remove-deps.cmake": {
+        "bytes": 314,
+        "sha256": "6f9560155faa36f82e249d20b80d28edebd546c55db144b8dabbe0affea6ab14"
+      },
+      "ports/openssl/unix/android-cc.patch": {
+        "bytes": 704,
+        "sha256": "a3cde12ca3c7c7894e73d300e0ccf728de28b87afde13776e7d7267979c3ead2"
+      },
+      "ports/openssl/unix/no-empty-dirs.patch": {
+        "bytes": 1128,
+        "sha256": "a03d46642c903c9eb09184eabc553ce1467e000c28a9e7d7e92d995970004a62"
+      },
+      "ports/openssl/unix/portfile.cmake": {
+        "bytes": 5717,
+        "sha256": "d0ed522a7c951719b07b56ccbc83e0b1815efe0cbf102f7d40ebc0b6e39b0d29"
+      },
+      "ports/openssl/unix/no-static-libs-for-shared.patch": {
+        "bytes": 543,
+        "sha256": "dc51d597ad7477fc56c2a394c84493c87a4de2b84898497dda2754dd0fd8cb53"
+      },
+      "ports/openssl/windows/install-layout.patch": {
+        "bytes": 766,
+        "sha256": "06bf9d3f9d78a99d6472bd8a63442065a90cf413af5c4e2946348bece1ce50f2"
+      },
+      "ports/openssl/windows/portfile.cmake": {
+        "bytes": 5893,
+        "sha256": "7f262ffb0219b3a0e2db7b172bec9ccad299898ac934f8de1e449fb749052582"
+      },
+      "ports/openssl/windows/install-pdbs.patch": {
+        "bytes": 2103,
+        "sha256": "e913fdc775b5e7be3eb71bfc223d51c3d8fd7e933410493efdbc53c5a1e1f3b7"
+      },
+      "ports/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt": {
+        "bytes": 9886,
+        "sha256": "75a1291434249775e2f82942e9e04b41efef3e8cded19c30a9940c691ad9148f"
+      }
+    },
+    "variants": {
+      "test_acquire.py": {
+        "snapshot": "historical-producers/cesium/test_acquire.py.txt",
+        "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+        "bytes": 3738,
+        "delta_to_current_sha256": "a73451f136ab4ae32b9c29db013955dd9175ca4dee2204aae75121d0f5e481a9"
+      },
+      "build-plan.json": {
+        "snapshot": "historical-producers/cesium/build-plan.json.txt",
+        "sha256": "e9816c34b0c5d72cb60078d55335c373260abc11ff55723b9e8256f4077d6c4d",
+        "bytes": 24018,
+        "delta_to_current_sha256": "f5a02fe8fca9b4484df7d55020a49a1ad4e22d185721776cbc1028b9acc8fecd"
+      },
+      "metadata.lock.json": {
+        "snapshot": "historical-producers/cesium/metadata.lock.json.txt",
+        "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+        "bytes": 50568,
+        "delta_to_current_sha256": "ab0082a40fdd3edf0c02d5c3e572b9551a69215922f9e5a01f8090d4d0d0b392"
+      },
+      "build.py": {
+        "snapshot": "historical-producers/cesium/build.py.txt",
+        "sha256": "659234b63caa129ea25b5c91cc0d2be46953d9afba36c962760eda2acc5df7dd",
+        "bytes": 13015,
+        "delta_to_current_sha256": "cdc2d1139a657673f47a450600413b61aea147c79b4fdb1c194b3067ace3620a"
+      }
+    },
+    "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "reason": "Historical successful consumed producer precedes later guard/packaging edits; not a fresh current-producer execution",
+    "arbitrary_frozen_recipes_accepted": false
+  },
+  "kml": {
+    "kind": "exact-consumed-owned-producer-source-variant",
+    "recipe": {
+      "build.py": "29dce10591590efb00cd76f17bbf99a481f60b90837ba3530443efd9ad8b855f",
+      "CMakeLists.txt": "592ff05ee2bf5e43b8d25e5408c172c06ace915500eb9b7cccd451593e0543c9",
+      "KMLProbe.cpp": "e8d17382a7ef6de2893ff3f7dd9b25db15126057f41f701bcab65a1da4e1f8d4",
+      "ExpatProbe.c": "02bfe16fdb87dee4c958a3b3a0076db34e0f1c341a3b168c33db2e5dbe5eabe3",
+      "inputs.lock.json": "413d5abdca37808d859a954aedd56fff0ac6b68aa20e8049de9cccd2b8d982ab",
+      "source-postimages.json": "a688ca23b74fc0a78078f9ef9979b3aa3daa2bc06efc70fa07370e6ff8926486",
+      "patches/libkml-pgsc.patch": "f8048d5f203888986302aedae8aeb586c983673a5457746229b1262490f30144",
+      "patches/minizip-zlib-crc-type.patch": "2e8743a3ac4b56070658ce9c80a1a12b0a46202588acec95d54750f4b2d40a58",
+      "patches/expat-pgsc.patch": "51f7a2c6116ec443948d96115b4fe93d07d48b03d0fbdf5b081f31254fe5cc2b",
+      "../native-deps/build.py": "3831834729d9022e5a79b9dba1a4745f8b25b43990d7064b3a95661966d0b3ae",
+      "../native-las/build.py": "6efd28cbd3d8293123caaa9dc06c7652c93141a9ece47c7941fd09de4f803b38",
+      "../native-assimp/build.py": "7f9bce45c16cf8d6525e52e20e7e3f871ac68d1148224346662386d3e1ea25d2",
+      "../kernel-scene/build.py": "b0a6019c5a9235725f5626930c4fe94c001afb35e07784d791062fda0a532ba8",
+      "../kernel-scene/kernel.py": "69b6dabf1b16d7639c364814fd96204a9aa0a606a7d2ca7503d0fcf6b4780a3e",
+      "../kernel-scene/producer.py": "6d0e875376955331a9ab0664edb17d86b6859a57834127b8beebeb92b59a66aa"
+    },
+    "variants": {
+      "build.py": {
+        "snapshot": "historical-producers/kml/build.py.txt",
+        "sha256": "29dce10591590efb00cd76f17bbf99a481f60b90837ba3530443efd9ad8b855f",
+        "bytes": 17088,
+        "delta_to_current_sha256": "acc695239d3c2aab6dda8398fc82c11f631b4cbfc2f93119a11be30db3903267"
+      }
+    },
+    "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "reason": "Historical successful consumed producer precedes later guard/packaging edits; not a fresh current-producer execution",
+    "arbitrary_frozen_recipes_accepted": false
+  },
+  "cesium_ancestor": {
+    "kind": "exact-consumed-owned-stopped-producer-source-variant",
+    "recipe": {
+      "inputs.lock.json": {
+        "bytes": 84398,
+        "sha256": "93d92221976a09076a2dc8f8da5e272fe10e865c203fd60d45d934a624677b6d"
+      },
+      "test_acquire.py": {
+        "bytes": 3738,
+        "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea"
+      },
+      "providers.cmake": {
+        "bytes": 1329,
+        "sha256": "42c69e5160fbfb825422467ee40e5457674635f7a81fb04759e44660211e963c"
+      },
+      "acquire.py": {
+        "bytes": 12248,
+        "sha256": "c067f3585347f52230c544f827c9831e9a4c9932b04812e885409fd37f4348b9"
+      },
+      "build-plan.json": {
+        "bytes": 23999,
+        "sha256": "e7757885918d9e5b0ee4a6c8476f811c9c966e80673946b3440172cfdcc75708"
+      },
+      "metadata.lock.json": {
+        "bytes": 50568,
+        "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a"
+      },
+      "build.py": {
+        "bytes": 11140,
+        "sha256": "e94b17a3b3aba49eae33e4899cecd0c9c2a45f454f9abcd1084674f887b544ae"
+      },
+      "cesium-tree.json": {
+        "bytes": 384465,
+        "sha256": "e1f1686b2266f9df5bb852348cbac7a20c35fa1c315eeec201a68e3bde23858a"
+      },
+      "ports/meshoptimizer/vcpkg.json": {
+        "bytes": 486,
+        "sha256": "0526703157627d1db390c291f7b8cacdb85cd3f9ec46b803fef92c3085cd175e"
+      },
+      "ports/meshoptimizer/portfile.cmake": {
+        "bytes": 1658,
+        "sha256": "5075b7cdb8283c474d61a0f3e4b4fe904b22d825c117a47e2e62cab1e7c589ba"
+      },
+      "ports/glm/usage": {
+        "bytes": 265,
+        "sha256": "2e9da7655db7eb2a2b58bb857e20ddfb46c0483235d2c868e819f72d10b18287"
+      },
+      "ports/glm/fix-clang.patch": {
+        "bytes": 816,
+        "sha256": "11175e50d673af29546980307e6a1dfab07cb73259a0672a6c9b2b42508c287b"
+      },
+      "ports/glm/vcpkg.json": {
+        "bytes": 321,
+        "sha256": "e667d77bbd9bc58bcb5eed3017574428bbe6debb8f6c46354b9482465010fe62"
+      },
+      "ports/glm/portfile.cmake": {
+        "bytes": 849,
+        "sha256": "4c42ae3b630892e6556e00a08208f5ffbc9c3fdea36dee666788043692b641c8"
+      },
+      "ports/sqlite3/usage": {
+        "bytes": 192,
+        "sha256": "1cd1a4fe57d9caf51321f363f1d395074ac7d0c14b7035a5d2c218670be4b5b3"
+      },
+      "ports/sqlite3/sqlite3-vcpkg-config.h.in": {
+        "bytes": 1122,
+        "sha256": "9bfd209bc336dd0514c7ed9e7e70b8d1f70224fee7c300224b163ac1c365becd"
+      },
+      "ports/sqlite3/add-config-include.patch": {
+        "bytes": 538,
+        "sha256": "15a6fc0818d6407b468e3c869627445f1af09ef94ecf5c792eee71bc30ca7e68"
+      },
+      "ports/sqlite3/sqlite3-config.in.cmake": {
+        "bytes": 166,
+        "sha256": "7a44f5805ced746c4dcb497055bce06e45eb3ecb3506465fcde4d442a2179d96"
+      },
+      "ports/sqlite3/vcpkg.json": {
+        "bytes": 1985,
+        "sha256": "e22b98b26761db51c2e51c179d680839f9133519e37320ed043730f55840aa97"
+      },
+      "ports/sqlite3/portfile.cmake": {
+        "bytes": 3619,
+        "sha256": "3d9829e3689f46e74e3af8698cce9381fd24bd479e893c58531c415c6b290ad8"
+      },
+      "ports/sqlite3/CMakeLists.txt": {
+        "bytes": 2618,
+        "sha256": "db133f80084dbbaccbc61c314d437412a5cc31b49378b19b7748f63269e3435a"
+      },
+      "ports/sqlite3/fix-arm-uwp.patch": {
+        "bytes": 1146,
+        "sha256": "f4397f84d931cccb44a038194c895e28c749f1825ab45db4b5dccd6e3b6b5967"
+      },
+      "ports/sqlite3/sqlite3.pc.in": {
+        "bytes": 269,
+        "sha256": "7d0eef3b49bc8c7fbb6a06b449855060ab5d9b4ab37d1781a0269dda8421a391"
+      },
+      "ports/zstd/fix-windows-rc-compile.patch": {
+        "bytes": 759,
+        "sha256": "24080a83a9d7b19b431fc499972f404e86fa96b188315d3fb8bca932da88fe66"
+      },
+      "ports/zstd/usage": {
+        "bytes": 119,
+        "sha256": "dd373e885aea14820e812e58de22d2e8d83f42248d695d6877fe17bd0f3ff455"
+      },
+      "ports/zstd/fix-emscripten-and-clang-cl.patch": {
+        "bytes": 1487,
+        "sha256": "041a4839df3d92f1590fcac90a6be6be7821bd2095557b182245114e003231f4"
+      },
+      "ports/zstd/vcpkg.json": {
+        "bytes": 478,
+        "sha256": "9b5eef0d52e96174f408df225a3b8519b7dcad05c2a25dfad346ae4955b5dca8"
+      },
+      "ports/zstd/portfile.cmake": {
+        "bytes": 2326,
+        "sha256": "d71625895a1ab3ff63bc8ea66b5d5b7ffb1a38e42c099efe7056122a679f0de6"
+      },
+      "ports/zstd/no-static-suffix.patch": {
+        "bytes": 523,
+        "sha256": "639fedd3fc4cf634e4ae63ad0077e547a91d3fef1dd26a59f0e817378c5cc434"
+      },
+      "ports/libjpeg-turbo/usage": {
+        "bytes": 436,
+        "sha256": "f6ff243d0aba5bc85904527de17fc8a341a3568b0b19e3ac63b95029125b9e68"
+      },
+      "ports/libjpeg-turbo/add-options-for-exes-docs-headers.patch": {
+        "bytes": 8463,
+        "sha256": "5c93ee62645786820dcca65d7158d39a355c3c7ac31f1d07e0a52d26e7875598"
+      },
+      "ports/libjpeg-turbo/vcpkg-cmake-wrapper.cmake": {
+        "bytes": 1837,
+        "sha256": "d257c0a541dd60c4b6eb6f46a5e9f128a64a6ec40f3b8b5bc8ab753e7a935c61"
+      },
+      "ports/libjpeg-turbo/vcpkg.json": {
+        "bytes": 807,
+        "sha256": "72c77395fe1daceda5b6d67f1b465b49c007ae99b73257e1f69d50cb35aa2589"
+      },
+      "ports/libjpeg-turbo/portfile.cmake": {
+        "bytes": 4578,
+        "sha256": "1a7b8c646c6ba9d4aa1ad90d6ef7cec98727a8003cc15013ca7334842b193386"
+      },
+      "ports/libjpeg-turbo/workaround_cmake_system_processor.patch": {
+        "bytes": 525,
+        "sha256": "1fd13c06d27a2fcef233fe209ba0c856ed76311be59ae72e15d1c58fe36eab04"
+      },
+      "ports/uriparser/usage": {
+        "bytes": 164,
+        "sha256": "7ed66a81f955138beaea32993fd038561d7e7d1da2edc4efc8cb488fe0cbf96f"
+      },
+      "ports/uriparser/vcpkg.json": {
+        "bytes": 463,
+        "sha256": "7ff9ca1a8113e30002a73fc5c7ac55dee51b891573d8ed65c44ec3cd3a427953"
+      },
+      "ports/uriparser/portfile.cmake": {
+        "bytes": 1761,
+        "sha256": "e3f7dd0b8c3f5240f7b566d4943a4fac86cd897a3f5deaa393d966923f10d862"
+      },
+      "ports/libwebp/0003-simd.patch": {
+        "bytes": 955,
+        "sha256": "4ca73353afbfefc31147d62d7f035e151b981f9cda6636151a84a3ca51cd39d9"
+      },
+      "ports/libwebp/usage": {
+        "bytes": 409,
+        "sha256": "4898bdd3351dcd0868d2f0786ab114c8b161dda8db6cd84f7fe93bf0639f08d1"
+      },
+      "ports/libwebp/0008-sdl.patch": {
+        "bytes": 1881,
+        "sha256": "2f05c20f07165ac556ef7c67c25af0e461d3cbd8539d5769296ace52b37b9311"
+      },
+      "ports/libwebp/0002-cmake-config.patch": {
+        "bytes": 1226,
+        "sha256": "55567849c38d3231032cb0aff6c067e1e2ca1c6515823880a6c4a885780c0ba3"
+      },
+      "ports/libwebp/vcpkg.json": {
+        "bytes": 4870,
+        "sha256": "2ceb5f9ee69defc689ad0c011790b0419e79a465fde66190b8c6b89585439613"
+      },
+      "ports/libwebp/portfile.cmake": {
+        "bytes": 2465,
+        "sha256": "1df3a5f842f9fdfd2906a214e2fe743edca053894ac85537684632bca28b03f9"
+      },
+      "ports/ms-gsl/vcpkg.json": {
+        "bytes": 368,
+        "sha256": "dac667ac94055fd95ec4c437352788ef6c08da8050955c2480750bdd3e6a5ab0"
+      },
+      "ports/ms-gsl/portfile.cmake": {
+        "bytes": 722,
+        "sha256": "1111194d640e760f4044653e004606f5705120fee6a1ef6768a33ca75cfabb4e"
+      },
+      "ports/catch2/fix-install-path.patch": {
+        "bytes": 1103,
+        "sha256": "d67374154f1910e41937173e9871991dfd5e43f43cca19a2fec10d3392000275"
+      },
+      "ports/catch2/vcpkg.json": {
+        "bytes": 367,
+        "sha256": "5e75b13dc9c1b686721656ef79e15ec279740de351e27e862f8e0919c347f693"
+      },
+      "ports/catch2/portfile.cmake": {
+        "bytes": 1460,
+        "sha256": "acf52a0f356fff3d7158f077fed6eeaf2b71fbb6794d9485406714fc2853a71d"
+      },
+      "ports/ktx/0001-Use-vcpkg-zstd.patch": {
+        "bytes": 4449,
+        "sha256": "44d95d0724f37b8a664e8bd742e29343db5264de4901649c2cb9daa33e90a69e"
+      },
+      "ports/ktx/0002-Fix-versioning.patch": {
+        "bytes": 561,
+        "sha256": "a3b482708c49efbb1b39fedd7a321c05b9f3d89f30362338765e398f31903438"
+      },
+      "ports/ktx/0004-quirks.patch": {
+        "bytes": 764,
+        "sha256": "7cf9e647c57ce0edf2e200aef5b207caaec475decef320d7b0ce6d8a6eec1114"
+      },
+      "ports/ktx/0006-fix-ios-install.patch": {
+        "bytes": 361,
+        "sha256": "1c224e79e0c3caff4a7d3d970992154ff451ce661c119f40deab2fbb5aba7921"
+      },
+      "ports/ktx/vcpkg.json": {
+        "bytes": 830,
+        "sha256": "c033adb75db654343d82144a2332df5497f3102f32a0bd0047fc6432ac5d5be8"
+      },
+      "ports/ktx/portfile.cmake": {
+        "bytes": 2696,
+        "sha256": "6691611817d2756bf07f415757ad1edeb18ead71de994b40019229435d2235dc"
+      },
+      "ports/ktx/0003-mkversion.patch": {
+        "bytes": 673,
+        "sha256": "f61692e560771e10421b9daf15e506a610a5f2cdf00faf4a497937b042cae61a"
+      },
+      "ports/ktx/0005-no-vendored-libs.patch": {
+        "bytes": 545,
+        "sha256": "6ed8b4c341e0888bc8cabd215e2a6c580f33e3957310188f0c5ca844383ba301"
+      },
+      "ports/rapidjson/vcpkg.json": {
+        "bytes": 400,
+        "sha256": "e003a19faf326d9e5ee55544c904e38b0483d0d72420ba6b6129927e7c72bc61"
+      },
+      "ports/rapidjson/portfile.cmake": {
+        "bytes": 1890,
+        "sha256": "e51514972f8091c5ca3652d36dd7085bca8cd728d7158437743bb161fdb64afe"
+      },
+      "ports/draco/disable-symlinks.patch": {
+        "bytes": 1041,
+        "sha256": "d2c7a7fc05ef02117d74c65f1c2581d5089853fa78ba85d3aea9a40a6e5b8331"
+      },
+      "ports/draco/install-linkage.diff": {
+        "bytes": 583,
+        "sha256": "10912e893e2b3e8086d5c1070f8200d6e05d93682e7f1b6aacdcd08933b76a07"
+      },
+      "ports/draco/fix-pkgconfig.patch": {
+        "bytes": 455,
+        "sha256": "1f415acc888ac56571d99909916220cc6c91e72e717487ac5b37f94b960a3c4b"
+      },
+      "ports/draco/fix-compile-error-uwp.patch": {
+        "bytes": 770,
+        "sha256": "413c08c6698987a1cd8aa04148635b425d462df7ee1b04c49676adefc132aeeb"
+      },
+      "ports/draco/vcpkg.json": {
+        "bytes": 447,
+        "sha256": "e7e081a28555034de94c1627a87803b63d295f6e45c3ded0b23e4b2566185116"
+      },
+      "ports/draco/fix-uwperror.patch": {
+        "bytes": 358,
+        "sha256": "a04c2e0c0e4b50b28f8692e80457a00bdb11b9dd3fc2cf6c7020837b26c59a8f"
+      },
+      "ports/draco/portfile.cmake": {
+        "bytes": 1093,
+        "sha256": "f2043256794ac650959ae80296e88e170e74bca84a31885ad7735ce2f0acf254"
+      },
+      "ports/vcpkg-cmake-config/copyright": {
+        "bytes": 1096,
+        "sha256": "04b60f99a43bfd7fefdc8364b24aac704a2160cef969b75ba6a38b62dc4c4b70"
+      },
+      "ports/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake": {
+        "bytes": 14648,
+        "sha256": "f3880578674f1bdbc54b67c5fc3787aaab8ee8bcf4e3e6e008204bf4ab67aa0b"
+      },
+      "ports/vcpkg-cmake-config/vcpkg.json": {
+        "bytes": 190,
+        "sha256": "3964c3d0e6b39c7f42cebd5949cccdc7eb6feb83ee434fe73756c954b173c5c2"
+      },
+      "ports/vcpkg-cmake-config/portfile.cmake": {
+        "bytes": 495,
+        "sha256": "832b34e63f5af41ad1b2e4aa79c5bfa507a005b120b51548e674accc706837d7"
+      },
+      "ports/vcpkg-cmake-config/vcpkg-port-config.cmake": {
+        "bytes": 68,
+        "sha256": "72bc3093337e633bdd19fe5d4dd1f38ca1918def49608d676a9c98c686d38b1e"
+      },
+      "ports/openssl/usage": {
+        "bytes": 195,
+        "sha256": "2f31595ba815f7c986ea9fed0f198f7a2691dc027f9e1a39dd3093753ed8bc79"
+      },
+      "ports/openssl/cmake-config.patch": {
+        "bytes": 2101,
+        "sha256": "11c01cd2ebcca46cf1f54abd1edc1e3b4776c35552eed7ee9d4fbab6b7e6159b"
+      },
+      "ports/openssl/vcpkg-cmake-wrapper.cmake.in": {
+        "bytes": 3224,
+        "sha256": "b29a6ba88f6f26f03a70cf57c31beb6de58ba0306ce8f3028f52fef4b86aec13"
+      },
+      "ports/openssl/openssl.pc.in": {
+        "bytes": 132,
+        "sha256": "add49223f08228831ced1bc35fc2c56a4ab0fe9741e1fb2bdc86c6d3da4b326a"
+      },
+      "ports/openssl/command-line-length.patch": {
+        "bytes": 629,
+        "sha256": "a1935f6eb38f49e424eaf5dd13b31f0ef46a30f531f9d7e149aac344051a1cbb"
+      },
+      "ports/openssl/vcpkg.json": {
+        "bytes": 963,
+        "sha256": "3595eb2e778fe1524f4680d2cf4724e97391a0db358fd0ba3b37bbe1240cffaa"
+      },
+      "ports/openssl/portfile.cmake": {
+        "bytes": 2804,
+        "sha256": "303b734c283b5cb5c37214373f6f8192e6c72162fe59cd94b741c9ca985c23f0"
+      },
+      "ports/openssl/asm-armcap.patch": {
+        "bytes": 2641,
+        "sha256": "aa8c092866283ca97c7b39664cb816c6f4f3e9df51a2b06ede1054187e75ca70"
+      },
+      "ports/openssl/script-prefix.patch": {
+        "bytes": 741,
+        "sha256": "a18b53acdea8180aa24c4abbe85c4269e4d092c6eba4f946d5feafa7ca2a163d"
+      },
+      "ports/openssl/install-pc-files.cmake": {
+        "bytes": 1047,
+        "sha256": "001f4b55b3da7b4faa0910b906f9c587055abaa99edac9cfb3669a06b5387d44"
+      },
+      "ports/zlib-ng/vcpkg.json": {
+        "bytes": 311,
+        "sha256": "9ac208c986cc44fb8ab277f6fae851c707a3ad6916d531d6f19c1d3ae8589a95"
+      },
+      "ports/zlib-ng/portfile.cmake": {
+        "bytes": 2105,
+        "sha256": "ba94b8299744d75729acd12cd3ecc0f8ea23d51b87fdb9e4b7a34d893235cd30"
+      },
+      "ports/cpp-httplib/usage": {
+        "bytes": 136,
+        "sha256": "49fe832473d47b628fa83b3c60809433047de90b51d26a360cbb8abf4610ca46"
+      },
+      "ports/cpp-httplib/fix-find-brotli.patch": {
+        "bytes": 2665,
+        "sha256": "07cee9d662c8971529e9931a4a6eeeafacde6b24c5c651b1c59eb5c873c299cb"
+      },
+      "ports/cpp-httplib/vcpkg.json": {
+        "bytes": 845,
+        "sha256": "b93aac1fadbcc062c01e414cfb2edfbb735d068ea8a9d9e7727f8ab0c01f5480"
+      },
+      "ports/cpp-httplib/portfile.cmake": {
+        "bytes": 1077,
+        "sha256": "4d2e3e05083921cc24dcbe91286a201d5f33cfcb41359cb16b583bafa07710f4"
+      },
+      "ports/picosha2/vcpkg.json": {
+        "bytes": 190,
+        "sha256": "a35038f484c91b3506dc25684c1d1ea7aee6a3fe786f6d0f4043ab1246f08ee4"
+      },
+      "ports/picosha2/portfile.cmake": {
+        "bytes": 468,
+        "sha256": "71a5f739b58bf772f02f734f79c5cecc69b80eaa261588249bfb92c5d3529363"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_build.cmake": {
+        "bytes": 3858,
+        "sha256": "6d1c27080fe3e768b5e7b968d6a28a37db154ebcb214297de25f10b6713511e1"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_configure.cmake": {
+        "bytes": 15511,
+        "sha256": "a8bc92be2faf621d6183ed1f3eb2ac3b103f4418b95f8695cf0dc7f7c5e8f724"
+      },
+      "ports/vcpkg-cmake/vcpkg.json": {
+        "bytes": 180,
+        "sha256": "6fd546b781a1aa5df572bdd31672cf222e55698aa5bf7d3e5c11abf1ae56a45b"
+      },
+      "ports/vcpkg-cmake/portfile.cmake": {
+        "bytes": 655,
+        "sha256": "a711531b7f13b7da16fa1f25d7c5737a423d4a126465dc9e6689a0f043fcc1aa"
+      },
+      "ports/vcpkg-cmake/vcpkg_cmake_install.cmake": {
+        "bytes": 577,
+        "sha256": "3ae7886dc8434fac6f1e61190cc355fdec5fbd4f60758e2de20423cf49c91369"
+      },
+      "ports/vcpkg-cmake/vcpkg-port-config.cmake": {
+        "bytes": 189,
+        "sha256": "f0a30f77c8f5e3ac40436fe2518a61ad067f2955c7ef3be6d6a0ca4b81cd2a45"
+      },
+      "ports/modp-base64/vcpkg.json": {
+        "bytes": 305,
+        "sha256": "0070f781c774595d50ede16e1ef1ef38becaa8137f95ed123ea81894683ba065"
+      },
+      "ports/modp-base64/portfile.cmake": {
+        "bytes": 557,
+        "sha256": "1b4892035a607b9fdf51f406a9aa29cc6a04ce23f6fc478a805735569aed5d6d"
+      },
+      "ports/modp-base64/CMakeLists.txt": {
+        "bytes": 745,
+        "sha256": "2103372f5f8ea8b46aad126f2cd4a6fec40312a63fb0c92f7ebb892dbf0dd2d4"
+      },
+      "ports/modp-base64/modp_b64_data.h": {
+        "bytes": 30315,
+        "sha256": "d416fe9f492b2b99760a6b74602d012b42147762cbe27af0ba08a50ff051afd9"
+      },
+      "ports/modp-base64/libmodpbase64.def": {
+        "bytes": 84,
+        "sha256": "b4a26efcd79386541c53239787e7e90b6b09e3a7d1970b12b5d52a3059f9c6c3"
+      },
+      "ports/modp-base64/config.h.cmake": {
+        "bytes": 56,
+        "sha256": "2408ae5457d68ccf9c90238381cf89908442e4a561e5e8f1a9d6b953aadd6e4b"
+      },
+      "ports/expected-lite/vcpkg.json": {
+        "bytes": 384,
+        "sha256": "6a9cc0cbeea26b31a351de08e431b0d4a0e88b7c777a5da7fd78b16d8becb888"
+      },
+      "ports/expected-lite/portfile.cmake": {
+        "bytes": 703,
+        "sha256": "dd51eeef40f416dfbfeb202dbc6389a27dd4f0542cecb4580fee0f186ef228c3"
+      },
+      "ports/fmt/usage": {
+        "bytes": 265,
+        "sha256": "ece096518c58df58cfc60f5ad8120d248a86383482455f539d91b8ca6eac14a7"
+      },
+      "ports/fmt/fix-write-batch.patch": {
+        "bytes": 522,
+        "sha256": "5658d7b2362cddca318c21de795877c17cffbe62603860507291dccc40d537f3"
+      },
+      "ports/fmt/fix-visibility.patch": {
+        "bytes": 576,
+        "sha256": "9102cfd44cdf319ca9f04e488be039964269a731ffd271e74e322ec99d7d6cd5"
+      },
+      "ports/fmt/vcpkg.json": {
+        "bytes": 415,
+        "sha256": "c93a4ba2b439ba97b019538558398ad3bb809e4cae2ccb37faf42245209710e8"
+      },
+      "ports/fmt/portfile.cmake": {
+        "bytes": 1006,
+        "sha256": "f2f017f8a1b27d2f42e8d9f689c8cc8c8d24493b8be2d8311ce26833e4233456"
+      },
+      "ports/earcut-hpp/vcpkg.json": {
+        "bytes": 233,
+        "sha256": "51a2e57933c851a88b278a6292c48b3fb773bd9bf7e1d8d6b6cc19f9cf586f08"
+      },
+      "ports/earcut-hpp/portfile.cmake": {
+        "bytes": 548,
+        "sha256": "a7c891ec107695466b1980307fd00990cc13627d091165aca72e652af4b547d6"
+      },
+      "ports/s2geometry/usage": {
+        "bytes": 136,
+        "sha256": "38e5f00836239bb938fd18dac687dbcb8ca40321f9f8fb6113cc255c30e47083"
+      },
+      "ports/s2geometry/vcpkg.json": {
+        "bytes": 469,
+        "sha256": "dbf15efe40c755b83e127ca2b899d22263caee408ccf6061373db09431b38b61"
+      },
+      "ports/s2geometry/portfile.cmake": {
+        "bytes": 797,
+        "sha256": "da9695458e39712c9ffe93881e99a8c99316c00f33f0daa3f5e27f24c68416b4"
+      },
+      "ports/tinyxml2/0003-fix-Android-SDK-below-24-does-not-support-fseeko.patch": {
+        "bytes": 778,
+        "sha256": "9a4752addbb190beac73841c43a9406bec303d907b3b329cd9bb5b534a8b26b7"
+      },
+      "ports/tinyxml2/0002-fix-check-for-TINYXML2_EXPORT-on-non-windows.patch": {
+        "bytes": 674,
+        "sha256": "aae8bfad827d265c3cfffebd583da39e299068b68b8795233bf2b5ed9d7b2273"
+      },
+      "ports/tinyxml2/0001-fix-do-not-force-export-the-symbols-when-building-st.patch": {
+        "bytes": 1311,
+        "sha256": "08c2b7d4ba4ee1dd45f26847c022a4db1496edb6a3bdabc519ac4a330573aa8e"
+      },
+      "ports/tinyxml2/vcpkg.json": {
+        "bytes": 349,
+        "sha256": "d575e087674ddc9f5270cdf3f2c57d35ef127a30cc58268c98e8287ad474bc8c"
+      },
+      "ports/tinyxml2/portfile.cmake": {
+        "bytes": 875,
+        "sha256": "d4acb9ba939d6580f674a1f222c8d18c359d12a4881ed50ad1a0858ea046ebf0"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake": {
+        "bytes": 1804,
+        "sha256": "da894e0dafa6ef0acdc641f12b02633f273322d86a6d2e7065dc56134478cea3"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg.json": {
+        "bytes": 233,
+        "sha256": "90ff3bf8d338ffa039b69e800a1758c30f939085efcf1dfcee4d975871475a09"
+      },
+      "ports/vcpkg-cmake-get-vars/portfile.cmake": {
+        "bytes": 597,
+        "sha256": "bbcf9d6b88dd539617f4cfc1f76acbbe9a6e31fc373d79c1c626278768ea2e2a"
+      },
+      "ports/vcpkg-cmake-get-vars/vcpkg-port-config.cmake": {
+        "bytes": 140,
+        "sha256": "4fd4c2e909bbdf069eb3c59b4b847b0b386cdb41840714e12b34b7eff41f9e22"
+      },
+      "ports/abseil/0002-Fix-missing-include-random-for-std-uniform_int_distr.patch": {
+        "bytes": 759,
+        "sha256": "bcab8c17f86ed4a60f61a708e3754b90af8e38352ff8eb2b3825a6ad40cc3272"
+      },
+      "ports/abseil/779a356-test-allocator.diff": {
+        "bytes": 298,
+        "sha256": "62500ac86af899d938e35a73664f6ea347f671167dbe0e5981b2a1bd64ff2fe8"
+      },
+      "ports/abseil/vcpkg.json": {
+        "bytes": 1210,
+        "sha256": "cbb1de064bac9c2e1a1874b3e9062f897aa9587e7d5152fff844ab7bba67614f"
+      },
+      "ports/abseil/portfile.cmake": {
+        "bytes": 2154,
+        "sha256": "55ffaab1a72aca272c52bf93fa344b93ef3ee3c331f658c86da38b2426f93c7e"
+      },
+      "ports/abseil/0001-revert-integer-to-string-conversion-optimizations.patch": {
+        "bytes": 54537,
+        "sha256": "bb3268f711e0ae0c33e53bee28b94aa36ce62620bb00dc2f198733b62c015a9d"
+      },
+      "ports/asyncplusplus/vcpkg.json": {
+        "bytes": 343,
+        "sha256": "a2488460f9a64cd6c372f4cf1225056051cb5297988a5cac090a8412d4dc1ab9"
+      },
+      "ports/asyncplusplus/portfile.cmake": {
+        "bytes": 699,
+        "sha256": "358629fa6f0cad7342b906549d128b4551544f20993197b8cc9bf2ee40c77239"
+      },
+      "ports/libmorton/vcpkg.json": {
+        "bytes": 303,
+        "sha256": "5aa09ba1fa76d203dcbc202f0a798bc01563d045f415b5d11f0244e8e7bc1f6a"
+      },
+      "ports/libmorton/portfile.cmake": {
+        "bytes": 634,
+        "sha256": "0f4774e006eb45fb9ce31b30b7d2615065079a6983c644c4946800b43882f946"
+      },
+      "ports/spdlog/usage": {
+        "bytes": 286,
+        "sha256": "bdc67ce7fb7be263e7fdf3c57815f8f9f6142aca5d8f4da5e5597f25a6163bc6"
+      },
+      "ports/spdlog/vcpkg.json": {
+        "bytes": 612,
+        "sha256": "39d97ac1cf204f86fb3289578fdb1dfea90ef7e5a219582c3ea964c6c7d700ef"
+      },
+      "ports/spdlog/portfile.cmake": {
+        "bytes": 2300,
+        "sha256": "a915354a24cf870a60c874f18b69bdded2ac8d8a7ab00e6a4d0dfd1ef9c97d76"
+      },
+      "ports/stb/usage": {
+        "bytes": 135,
+        "sha256": "cf896a6d0956431ce01388ad6f62f7f7aa3d9c5e0d23f7da7f9ee3568c61f78a"
+      },
+      "ports/stb/vcpkg-cmake-wrapper.cmake": {
+        "bytes": 176,
+        "sha256": "7580cacc3272d0ccedc17f9303524ec1a11c43f0476318fe840816478b8def40"
+      },
+      "ports/stb/vcpkg.json": {
+        "bytes": 209,
+        "sha256": "d0e54a471d7d555299e391b22c6d83a1c9c4213e960452957839ef55dbe57a0b"
+      },
+      "ports/stb/portfile.cmake": {
+        "bytes": 849,
+        "sha256": "4bcb5ded7fcb24cc0d9830bacc8a7be53d082ac1f8d0f74fb90ba1ac2ef5f92e"
+      },
+      "ports/stb/FindStb.cmake": {
+        "bytes": 671,
+        "sha256": "d6d9e778ddb6e7b5d13c63a63872a7a5ddba00b1cef675a7cc7c91a9a9508d91"
+      },
+      "ports/openssl/unix/move-openssldir.patch": {
+        "bytes": 628,
+        "sha256": "9e62ad861f8421e5b732bf488b7199131ac17a57f295f50c697d2591f5845e0e"
+      },
+      "ports/openssl/unix/configure": {
+        "bytes": 565,
+        "sha256": "96ef16490c8a7c240a0c96de7e641c93843d0b78400b4de7dc2c7d2e500f3480"
+      },
+      "ports/openssl/unix/remove-deps.cmake": {
+        "bytes": 314,
+        "sha256": "6f9560155faa36f82e249d20b80d28edebd546c55db144b8dabbe0affea6ab14"
+      },
+      "ports/openssl/unix/android-cc.patch": {
+        "bytes": 704,
+        "sha256": "a3cde12ca3c7c7894e73d300e0ccf728de28b87afde13776e7d7267979c3ead2"
+      },
+      "ports/openssl/unix/no-empty-dirs.patch": {
+        "bytes": 1128,
+        "sha256": "a03d46642c903c9eb09184eabc553ce1467e000c28a9e7d7e92d995970004a62"
+      },
+      "ports/openssl/unix/portfile.cmake": {
+        "bytes": 5717,
+        "sha256": "d0ed522a7c951719b07b56ccbc83e0b1815efe0cbf102f7d40ebc0b6e39b0d29"
+      },
+      "ports/openssl/unix/no-static-libs-for-shared.patch": {
+        "bytes": 543,
+        "sha256": "dc51d597ad7477fc56c2a394c84493c87a4de2b84898497dda2754dd0fd8cb53"
+      },
+      "ports/openssl/windows/install-layout.patch": {
+        "bytes": 766,
+        "sha256": "06bf9d3f9d78a99d6472bd8a63442065a90cf413af5c4e2946348bece1ce50f2"
+      },
+      "ports/openssl/windows/portfile.cmake": {
+        "bytes": 5893,
+        "sha256": "7f262ffb0219b3a0e2db7b172bec9ccad299898ac934f8de1e449fb749052582"
+      },
+      "ports/openssl/windows/install-pdbs.patch": {
+        "bytes": 2103,
+        "sha256": "e913fdc775b5e7be3eb71bfc223d51c3d8fd7e933410493efdbc53c5a1e1f3b7"
+      },
+      "ports/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt": {
+        "bytes": 9886,
+        "sha256": "75a1291434249775e2f82942e9e04b41efef3e8cded19c30a9940c691ad9148f"
+      }
+    },
+    "variants": {
+      "test_acquire.py": {
+        "snapshot": "historical-producers/cesium-ancestor/test_acquire.py.txt",
+        "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+        "bytes": 3738,
+        "delta_to_current_sha256": "d476d91b6f0e011b2c4325ffbe78d044b121a2b7378dde04eec95dace13bc4be"
+      },
+      "build-plan.json": {
+        "snapshot": "historical-producers/cesium-ancestor/build-plan.json.txt",
+        "sha256": "e7757885918d9e5b0ee4a6c8476f811c9c966e80673946b3440172cfdcc75708",
+        "bytes": 23999,
+        "delta_to_current_sha256": "ad4ccbaff9b213150b4499cfefb588aa8460ff0233e45ed60abbdc23898e4989"
+      },
+      "metadata.lock.json": {
+        "snapshot": "historical-producers/cesium-ancestor/metadata.lock.json.txt",
+        "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+        "bytes": 50568,
+        "delta_to_current_sha256": "286b033f5443cc5aba821c9b31a1b36bf8c0513f958e40ae36f35cb86674bf3d"
+      },
+      "build.py": {
+        "snapshot": "historical-producers/cesium-ancestor/build.py.txt",
+        "sha256": "e94b17a3b3aba49eae33e4899cecd0c9c2a45f454f9abcd1084674f887b544ae",
+        "bytes": 11140,
+        "delta_to_current_sha256": "3d73f97f304273d708dbce9b1f930ebb3786fd25f54d826e21fd13abd1b10eb4"
+      }
+    },
+    "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "reason": "Original stopped dependency producer retained by completed Cesium lineage",
+    "arbitrary_frozen_recipes_accepted": false
+  }
+}

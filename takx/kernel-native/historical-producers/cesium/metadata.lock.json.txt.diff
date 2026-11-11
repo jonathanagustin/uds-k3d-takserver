@@ -1,0 +1,16 @@
+--- consumed/metadata.lock.json
++++ current/metadata.lock.json
+@@ -992,5 +992,13 @@
+     "bytes": 5893,
+     "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/windows/portfile.cmake",
+     "sha256": "7f262ffb0219b3a0e2db7b172bec9ccad299898ac934f8de1e449fb749052582"
++  },
++  {
++    "path": "ports/LICENSE.txt",
++    "git_blob": "4d23e0e39b2531c41499e7b1c5ec0efffd15c6b6",
++    "bytes": 1073,
++    "sha256": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
++    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/LICENSE.txt",
++    "role": "verbatim license for vendored pinned port recipes and support files"
+   }
+ ]

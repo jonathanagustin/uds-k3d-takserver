@@ -1,0 +1,75 @@
+--- consumed/build.py
++++ current/build.py
+@@ -28,6 +28,32 @@
+     transforms.append({'path':str(path),'preimage':a.native.digest_bytes(before) if hasattr(a.native,'digest_bytes') else __import__('hashlib').sha256(before).hexdigest(),'postimage':a.native.digest(path)})
+ 
+ 
++def verify_resume(previous,snapshot,tools,providers,acquisition_sha256,order):
++    """Rehash the complete retained producer before adopting any installed file."""
++    frozen=json.loads(snapshot.read_text())
++    if a.inventory(previous)!=frozen:raise ValueError('stopped dependency inputs changed')
++    original=json.loads((previous/'producer.json').read_text())
++    if original['tools']!=tools or original['providers']!=providers or original['sources_receipt_sha256']!=acquisition_sha256:raise ValueError('resume producer tools or sources differ')
++    completed=json.loads((previous/'failed.json').read_text())['completed']
++    if not completed or len(completed)!=len(set(completed)) or completed!=order[:len(completed)]:raise ValueError('resume action prefix differs')
++    lineage={'fresh_dependency_build':False,'previous_output':str(previous),'stopped_inventory_sha256':a.native.digest(snapshot),'original_producer':original,'completed_actions':completed}
++    if any(a.native.digest(Path(tool['path']))!=tool['sha256'] for tool in tools.values()):
++        raise ValueError('actual resume tool changed')
++    return lineage,completed,frozen
++
++
++def relocate_pkgconfig(prefix,previous,transforms):
++    """Change only the copied owned prefix literal in regular pkg-config metadata."""
++    for path in prefix.rglob('*.pc'):
++        if path.is_symlink() or not path.is_file():raise ValueError('pkg-config metadata must be regular')
++        before=path.read_bytes();old=str(previous/'install').encode();new=str(prefix).encode()
++        if old in before:
++            path.write_bytes(before.replace(old,new))
++            transforms.append({'path':str(path),'preimage':__import__('hashlib').sha256(before).hexdigest(),'postimage':a.native.digest(path)})
++    for path in prefix.rglob('*.cmake'):
++        if str(previous).encode() in path.read_bytes():raise ValueError('CMake export retained stopped producer path')
++
++
+ def main():
+     p=argparse.ArgumentParser(description=__doc__)
+     for key in ('sources','output','sqlcipher-proof','draco-proof'):p.add_argument('--'+key,type=Path,required=True)
+@@ -48,22 +74,19 @@
+     if args.resume:
+         previous=args.resume.resolve();snapshot=args.snapshot.resolve()
+         if out==previous or out in previous.parents or previous in out.parents:raise ValueError('resume output overlaps stopped producer')
+-        frozen=json.loads(snapshot.read_text())
+-        if a.inventory(previous)!=frozen:raise ValueError('stopped dependency inputs changed')
+-        original=json.loads((previous/'producer.json').read_text())
+-        if original['tools']!=tools or original['providers']!=providers or original['sources_receipt_sha256']!=a.native.digest(src/'acquired.json'):raise ValueError('resume producer tools or sources differ')
+-        completed=json.loads((previous/'failed.json').read_text())['completed']
+-        if not completed or len(completed)!=len(set(completed)) or completed!=plan['topological_order'][:len(completed)]:raise ValueError('resume action prefix differs')
+-        lineage={'fresh_dependency_build':False,'previous_output':str(previous),'stopped_inventory_sha256':a.native.digest(snapshot),'original_producer':original,'completed_actions':completed}
++        lineage,completed,frozen=verify_resume(previous,snapshot,tools,providers,a.native.digest(src/'acquired.json'),plan['topological_order'])
+     out.mkdir();(out/'source').mkdir();(out/'build').mkdir();prefix=out/'install'
+-    if lineage:shutil.copytree(previous/'install',prefix)
++    transforms=[]
++    if lineage:
++        shutil.copytree(previous/'install',prefix)
++        relocate_pkgconfig(prefix,previous,transforms)
+     else:prefix.mkdir()
+     env=os.environ.copy();env.update({'CMAKE_BUILD_PARALLEL_LEVEL':'1','MAKEFLAGS':'-j1','LC_ALL':'C','CC':tools['cc']['path'],'CXX':tools['cxx']['path'],'PKG_CONFIG_PATH':str(prefix/'lib/pkgconfig')})
+     for key in ('CPATH','C_INCLUDE_PATH','CPLUS_INCLUDE_PATH','LIBRARY_PATH','LD_LIBRARY_PATH','CMAKE_PREFIX_PATH'):env.pop(key,None)
+     sql=args.sqlcipher_proof.resolve();draco=args.draco_proof.resolve()
+     roots=';'.join(map(str,[prefix,sql/'openssl-install',draco/'install']))
+     common=['-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_POSITION_INDEPENDENT_CODE=ON','-DBUILD_SHARED_LIBS=OFF','-DCMAKE_C_STANDARD=99','-DCMAKE_CXX_STANDARD=17','-DCMAKE_CXX_EXTENSIONS=OFF','-DCMAKE_C_COMPILER='+tools['cc']['path'],'-DCMAKE_CXX_COMPILER='+tools['cxx']['path'],'-DCMAKE_MAKE_PROGRAM='+str(NJ),'-DCMAKE_INSTALL_PREFIX='+str(prefix),'-DCMAKE_INSTALL_LIBDIR=lib','-DCMAKE_PREFIX_PATH='+roots,'-DCMAKE_FIND_ROOT_PATH='+roots,'-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY','-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY','-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY','-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF','-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DOPENSSL_ROOT_DIR='+str(sql/'openssl-install'),'-DOPENSSL_USE_STATIC_LIBS=TRUE']
+-    recipe=a.inventory(HERE);transforms=[];stages=list(completed);current='prepare'
++    recipe=a.inventory(HERE);stages=list(completed);current='prepare'
+     (out/'producer.json').write_text(json.dumps({'recipe':recipe,'tools':tools,'sources_receipt_sha256':a.native.digest(src/'acquired.json'),'providers':providers,'lineage':lineage,'fresh_dependency_build':not bool(lineage)},indent=2)+'\n')
+     def command(argv,label,seconds=180):
+         child=None;deadline=time.monotonic()+seconds;total=0;check=0
+@@ -136,6 +159,10 @@
+         if a.inventory(HERE)!=recipe:raise ValueError('current recipe changed')
+         if a.verify_providers(args.sqlcipher_proof,args.draco_proof)!=providers:raise ValueError('providers changed')
+         (out/'complete.json').write_text(json.dumps({'actual_targets':TARGETS,'fresh_dependency_build':not bool(lineage),'fresh_cesium_build':True,'lineage':lineage,'full_cesium_build_acceptance':True,'full_kernel_sdk_acceptance':False,'prepared_sha256':a.native.digest(out/'prepared.json'),'installed':a.inventory(prefix),'tools':tools,'recipe':recipe},indent=2)+'\n')
++        products=a.inventory(out)
++        archives={name:item for name,item in products.items() if name.startswith('build/cesium/cesium/') and name.endswith('.a')}
++        if len(archives)!=18:raise ValueError('eighteen genuine Cesium archive products required')
++        (out/'observed-products.json').write_text(json.dumps({'schema_version':1,'kind':'observed-completed-public-cesium-graph','full_kernel_sdk_acceptance':False,'fresh_dependency_build':not bool(lineage),'fresh_cesium_build':True,'complete_sha256':a.native.digest(out/'complete.json'),'prepared_sha256':a.native.digest(out/'prepared.json'),'all_files':products,'actual_cesium_archives':archives},indent=2)+'\n')
+         print('complete_cesium_graph_build=true full_kernel_sdk_acceptance=false')
+     except Exception as exc:
+         (out/'failed.json').write_text(json.dumps({'stage':current,'failure_class':str(exc),'completed':stages,'full_cesium_build_acceptance':False},indent=2)+'\n');raise RuntimeError('bounded public Cesium graph stopped; inspect private failed.json') from None

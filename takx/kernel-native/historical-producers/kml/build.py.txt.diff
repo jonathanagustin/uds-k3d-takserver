@@ -1,0 +1,13 @@
+--- consumed/build.py
++++ current/build.py
+@@ -196,7 +196,9 @@
+         if verify_las(args.las_proof)[1]!=boost_fact or verify_cesium(args.cesium_proof,args.cesium_stopped_snapshot)[1]!=uri_fact or verify_minizip(args.minizip_root,args.minizip_proof,mz)[1]!=mz_fact:raise ValueError('reused provider changed')
+         scene.verify_dependency(args.assimp_proof,'assimp')
+         data={'schema_version':1,'profile':'public-libkml-native','version':'1.3.0','expat_version':'2.10.0','private_static_expat_dynsym_verified':True,'recipe':initial,'tools':tools,'providers':providers,'source_postimages':post,'installed':inventory(prefix),'expat_installed':inventory(eprefix),'production_tus':lock['families'],'strict_whole_archive_pic':True,'dom_kmz_uri_controls':True,'network_io_acceptance':False,'full_kernel_sdk_acceptance':False,'loaded_providers':sorted(providers_loaded),'objects':inventory(out/'kml-build'),'shared':{'bytes':shared.stat().st_size,'sha256':native.digest(shared)},'probe_outputs':{p.name:{'bytes':p.stat().st_size,'sha256':native.digest(p)} for p in (probe,out/'probe.log')}}
+-        (out/'complete.json').write_text(json.dumps(data,indent=2)+'\n');print('genuine_six_library_libkml_controls=true full_kernel_sdk_acceptance=false')
++        (out/'complete.json').write_text(json.dumps(data,indent=2)+'\n')
++        (out/'all-products.json').write_text(json.dumps(inventory(out),indent=2)+'\n')
++        print('genuine_six_library_libkml_controls=true full_kernel_sdk_acceptance=false')
+     except Exception as exc:
+         (out/'failed.json').write_text(json.dumps({'stage':current,'failure_class':str(exc),'full_kernel_sdk_acceptance':False},indent=2)+'\n');raise RuntimeError('bounded KML profile stopped; inspect private failure evidence') from None
+ if __name__=='__main__':main()

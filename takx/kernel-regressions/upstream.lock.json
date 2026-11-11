@@ -37,6 +37,16 @@
         "spi_update_roundtrip"
       ],
       "bytes": 10920
+    },
+    {
+      "scope": "KML default point style through real OGR",
+      "path": "takkernel/engine/src/jniTest/java/com/atakmap/map/gdal/KMLStyleTest.java",
+      "blob": "0ca98b01eb3b1302fdcc23d17264debe440309ee",
+      "sha256": "694e934ecc506fa235f21cd0960420ff213e41c4c16b45f38f8767d20ba8f86b",
+      "methods": [
+        "containsDefaultPointStyle"
+      ],
+      "bytes": 3106
     }
   ],
   "license_inputs": [
@@ -56,21 +66,23 @@
       "actual production SDK classes and SPI/native database paths",
       "DTED empty-file discovery fixture, not decode",
       "GeoPackage 256x256 float samples and nondefault offset/scale",
-      "MBTiles seven upstreamcoordinates, update and reopen byte checks"
+      "MBTiles seven upstreamcoordinates, update and reopen byte checks",
+      "KML placemark without explicit point style receives OGR SYMBOL style"
     ],
     "changed": [
       "standalone checked assertions replace JUnit and Android FileUtils",
       "owned Path fixtures and deterministic UTF-8 bytepayloads",
-      "native disposables and database handles closed"
+      "native disposables and database handles closed",
+      "KML reader and provider closed/unregistered; prior GDAL configuration restored"
     ],
     "not_covered": [
       "DTED height decoding",
       "other MBTiles schema implementations or invalid mock specs",
-      "KML",
       "arbitrary elevation sampling",
       "3D rendering",
       "Android test runtime",
-      "full client"
+      "full client",
+      "KML export, exhaustive geometry and style combinations"
     ]
   }
 }

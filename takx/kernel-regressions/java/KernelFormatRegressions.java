@@ -33,7 +33,46 @@ public final class KernelFormatRegressions {
         dted(root.resolve("dted-reverse"), ElevationSource.QueryParameters.Order.ResolutionDesc);
         mbtiles(root.resolve("roundtrip.mbtiles"));
         griddedCoverage(root.resolve("terrain.gpkg"));
+        kmlDefaultPointStyle();
         System.out.println("PASS_UPSTREAM_DTED_DISCOVERY_MBTILES_ROUNDTRIP_GPKG_FLOAT_COVERAGE assertions=" + assertions);
+    }
+    private static void kmlDefaultPointStyle() throws Exception {
+        com.atakmap.map.gdal.GdalLibrary.init();
+        String previous = org.gdal.gdal.gdal.GetConfigOption("LIBKML_RESOLVE_STYLE", null);
+        org.gdal.gdal.gdal.SetConfigOption("LIBKML_RESOLVE_STYLE", "yes");
+        org.gdal.ogr.ogr.RegisterAll();
+        com.atakmap.map.layer.feature.ogr.OgrFeatureDataSource provider =
+            new com.atakmap.map.layer.feature.ogr.OgrFeatureDataSource();
+        String path = "/vsimem/uds-kernel-default-point-style.kml";
+        String fixture = "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>"
+            + "<Style id=\"defaultStyle\"><LineStyle><width>1.5</width></LineStyle></Style>"
+            + "<Placemark><name>Simple placemark</name><description>Can use HTML here.</description>"
+            + "<Point><coordinates>-122.08,37.42,0</coordinates></Point></Placemark></Document></kml>";
+        com.atakmap.map.layer.feature.FeatureDataSourceContentFactory.register(provider);
+        try {
+            org.gdal.gdal.gdal.FileFromMemBuffer(path, fixture.getBytes(StandardCharsets.UTF_8));
+            com.atakmap.map.layer.feature.FeatureDataSource.Content features =
+                com.atakmap.map.layer.feature.FeatureDataSourceContentFactory.parse(new java.io.File(path), "ogr");
+            check(features != null, "actual OGR KML reader accepts upstream placemark");
+            try {
+                int count = 0;
+                while (features.moveToNext(com.atakmap.map.layer.feature.FeatureDataSource.Content.ContentPointer.FEATURE_SET)) {
+                    while (features.moveToNext(com.atakmap.map.layer.feature.FeatureDataSource.Content.ContentPointer.FEATURE)) {
+                        count++;
+                        com.atakmap.map.layer.feature.FeatureDataSource.FeatureDefinition definition = features.get();
+                        check(definition.styleCoding == com.atakmap.map.layer.feature.FeatureDefinition.STYLE_OGR,
+                            "KML point style uses genuine OGR encoding");
+                        check(definition.rawStyle instanceof String && ((String)definition.rawStyle).contains("SYMBOL("),
+                            "KML point receives upstream default SYMBOL style");
+                    }
+                }
+                check(count != 0, "KML reader yields actual feature");
+            } finally { features.close(); }
+        } finally {
+            org.gdal.gdal.gdal.Unlink(path);
+            com.atakmap.map.layer.feature.FeatureDataSourceContentFactory.unregister(provider);
+            org.gdal.gdal.gdal.SetConfigOption("LIBKML_RESOLVE_STYLE", previous);
+        }
     }
     private static void dted(Path directory, ElevationSource.QueryParameters.Order order) throws Exception {
         Files.createDirectories(directory.resolve("w077"));

@@ -18,7 +18,8 @@ class CrawlPreflight(unittest.TestCase):
     def setUp(self):
         self.pr = {"state": "open", "draft": False, "changed_files": 30,
                    "head": {"repo": {"full_name": "owner/repo"}}}
-        self.baseline = {"type": "file", "encoding": "base64", "content": base64.b64encode(
+        self.baseline = {"type": "file", "encoding": "base64",
+                         "path": "charts/takserver/files/config/CoreConfig.xml", "content": base64.b64encode(
             (ROOT / "charts/takserver/files/config/CoreConfig.xml").read_bytes()).decode()}
 
     def test_comment_execution_requires_explicit_manual_authorization(self):
@@ -52,6 +53,24 @@ class CrawlPreflight(unittest.TestCase):
         for baseline in [{}, {**self.baseline, "content": base64.b64encode(b"<Configuration/>").decode()}]:
             with self.assertRaisesRegex(ValueError, "existing mapped baseline"):
                 PREFLIGHT.validate(self.pr, baseline, "owner/repo")
+
+    def test_existing_baseline_requires_real_ordered_comment_blocks(self):
+        identifier = "0ba6e9e4-4061-5ff4-9c29-69bffbd3a489"
+        start = f"<!-- @lulaStart {identifier} -->\n"
+        end = f"<!-- @lulaEnd {identifier} -->\n"
+        for content in [end + start, start + start + end, start + end + end,
+                        start + end + start, f'<value>@lulaStart {identifier} @lulaEnd {identifier}</value>']:
+            baseline = {**self.baseline, "content": base64.b64encode(content.encode()).decode()}
+            with self.subTest(content=content), self.assertRaisesRegex(ValueError, "existing mapped baseline"):
+                PREFLIGHT.validate(self.pr, baseline, "owner/repo")
+        # CoreConfig actually contains separate TLS blocks sharing this UUID.
+        content = start + "<Connector/>\n" + end + start + "<Connector/>\n" + end
+        PREFLIGHT.validate(self.pr, {**self.baseline, "content": base64.b64encode(content.encode()).decode()}, "owner/repo")
+
+    def test_markers_from_a_different_api_file_cannot_supply_the_baseline(self):
+        for path in [None, "other.xml", "../charts/takserver/files/config/CoreConfig.xml"]:
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "existing mapped baseline"):
+                PREFLIGHT.validate(self.pr, {**self.baseline, "path": path}, "owner/repo")
 
 
 if __name__ == "__main__":

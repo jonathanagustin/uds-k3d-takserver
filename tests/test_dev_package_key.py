@@ -206,6 +206,48 @@ class PackageKeyTests(unittest.TestCase):
                     path.write_text('original\n')
             self.assertEqual(key(), baseline)
 
+    def test_exact_lint_metadata_preserves_key_but_build_inputs_invalidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(root), *args], text=True)
+            git('init', '-q')
+            tools = root / 'bin'
+            tools.mkdir()
+            uds = tools / 'uds'
+            uds.write_text('#!/bin/sh\n[ "$*" = version ] || exit 99\necho fixture-cli\n')
+            uds.chmod(0o755)
+            env = dict(os.environ, PATH=f'{tools}:{os.environ["PATH"]}')
+            def key():
+                return subprocess.check_output(['bash', str(SCRIPT), 'key'], cwd=root, env=env, text=True).strip()
+            runtime = ['zarf.yaml', 'common/zarf.yaml', 'charts/takserver/templates/server.yaml',
+                       'pepr/src/policies.ts', 'values/upstream-values.yaml', 'tasks.yaml',
+                       'mise.toml', '.gitattributes', 'runtime-helper.sh',
+                       'charts/takserver/hk.pkl']
+            for name in runtime:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('original\n')
+            git('add', *runtime)
+            baseline = key()
+            for name in ['.codespellrc', '.license_config.yaml', 'hk.pkl']:
+                with self.subTest(metadata=name):
+                    path = root / name
+                    path.write_text('original\n')
+                    git('add', name)
+                    self.assertEqual(key(), baseline, 'adding lint metadata')
+                    path.write_text('changed\n')
+                    self.assertEqual(key(), baseline, 'editing lint metadata')
+                    git('rm', '-f', name)
+                    self.assertEqual(key(), baseline, 'removing lint metadata')
+            for name in runtime:
+                with self.subTest(runtime=name):
+                    path = root / name
+                    path.write_text('changed\n')
+                    self.assertNotEqual(key(), baseline)
+                    path.write_text('original\n')
+            self.assertEqual(key(), baseline)
+
     def test_optional_sources_preserve_runtime_key(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

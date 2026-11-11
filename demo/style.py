@@ -73,22 +73,23 @@ LOWER_SIZE = 28
 TEXT_MAX_W = int(W * 0.84)
 LOWER_MAX_W = 1180
 LOGO = Path(__file__).resolve().parents[1] / "assets" / "tak-on-uds-dark.svg"
+MARK = LOGO.with_name("tak-mark-dark.svg")
 REPOSITORY = "github.com/jonathanagustin/uds-takserver"
 
 
 @lru_cache(maxsize=8)
-def logo(width):
+def logo(width, mark=False):
     """Rasterize the canonical vector artwork; no recreated lettering/fonts."""
     result = subprocess.run([
-        "ffmpeg", "-v", "error", "-i", str(LOGO), "-vf", f"scale={width}:-1",
+        "ffmpeg", "-v", "error", "-i", str(MARK if mark else LOGO), "-vf", f"scale={width}:-1",
         "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-",
     ], capture_output=True, check=True)
     return Image.open(io.BytesIO(result.stdout)).convert("RGBA")
 
 
-def watermark(image, x, y, width=104):
+def watermark(image, x, y, width=200, mark=False):
     """Native artwork in frame chrome or canvas margin, outside recordings."""
-    image.alpha_composite(logo(width), (x, y))
+    image.alpha_composite(logo(width, mark), (x, y))
 
 
 def hex_rgb(value):
@@ -156,7 +157,7 @@ def frame():
         cx = FRAME_X + 20 + i * 20
         dd.ellipse((cx - 6, dot_y - 6, cx + 6, dot_y + 6), fill=hex_rgb(BODY) + (90,))
     under.alpha_composite(dots)
-    watermark(under, FRAME_X + FRAME_W - 124, FRAME_Y + 5)
+    watermark(under, FRAME_X + FRAME_W - 44, FRAME_Y + 6, 24, mark=True)
     over = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(over).rounded_rectangle(box, RADIUS, outline=FRAME_BORDER, width=1)
     mask = Image.new("L", (CONTENT_W, CONTENT_H), 0)
@@ -346,7 +347,7 @@ def still(src):
         cx, cy = m + 20 + i * 20, m + TITLE_BAR // 2
         draw.ellipse((cx - 6, cy - 6, cx + 6, cy + 6), fill=hex_rgb(BODY) + (90,))
     if cw >= 240:
-        watermark(img, m + fw - 124, m + 5)
+        watermark(img, m + fw - 44, m + 6, 24, mark=True)
     mask = Image.new("L", (cw, ch), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, -RADIUS * 2, cw - 1, ch - 1), RADIUS, fill=255)
     img.paste(shot, (m, m + TITLE_BAR), mask)

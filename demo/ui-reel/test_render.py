@@ -118,7 +118,7 @@ class SceneExportTests(unittest.TestCase):
                          if Path(call.args[0][-1]).name.startswith("part")
                          and call.args[0][-1].endswith(".mp4")]
                 self.assertEqual(len(parts), 5)
-                self.assertTrue(all("RECORDED DEMO FOOTAGE" in command[command.index("-vf") + 1]
+                self.assertTrue(all("RECORDED DEMO FOOTAGE" in command[command.index("-filter_complex") + 1]
                                     for command in parts))
                 self.assertEqual({p.name for p in output.iterdir()}, {
                     "uds-takserver-ui-preview.mp4", "poster.jpg", "review-strip.jpg",
@@ -142,6 +142,7 @@ class SceneExportTests(unittest.TestCase):
                     self.assertEqual(manifest["source_input"], next(
                         item for item in lock["sources"] if item["file"] == scene[1]))
                     self.assertEqual(manifest["font_input"], lock["font"])
+                    self.assertEqual(manifest["branding_input"]["sha256"], REEL.digest(REEL.BRANDING))
                     self.assertEqual(manifest["recipe_sha256"], REEL.digest(Path(REEL.__file__)))
                     self.assertEqual(manifest["lock_sha256"], REEL.digest(lock_path))
                     for item in manifest["outputs"]:

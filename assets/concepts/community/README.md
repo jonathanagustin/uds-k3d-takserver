@@ -6,8 +6,8 @@ Two original, non-mascot directions for TAK on the **Unified Defense Stack (UDS)
 prepared for [#411](https://github.com/jonathanagustin/uds-takserver/issues/411).
 This second pass starts with the favicon and refines the existing concept geometry.
 The design connects field mapping and shared awareness to an integrated platform
-for applications, identity, networking, security and operations. All work remains
-in this review directory.
+for applications, identity, networking, security and operations. The selected Connected stack is now the canonical family in `assets/`; this
+directory retains both directions and their review proofs.
 
 ![Two directions with native-size favicon examples](review-sheet.png)
 
@@ -97,5 +97,6 @@ checked for titles, stable viewBoxes and forbidden external/raster/script conten
 The 24 favicon PNGs have exact stated dimensions and transparent backgrounds.
 The Chromium overview, native-size examples, wordmarks and usage mockups were
 visually inspected. The review page has no horizontal overflow at 390px width.
-The previews show intended use; they do not modify production navigation, README,
-social imagery or historical demo footage.
+The previews show intended use. Canonical assets now supply production navigation,
+README, social imagery and future demo presentation. Historical demo footage and
+its provenance remain unchanged.

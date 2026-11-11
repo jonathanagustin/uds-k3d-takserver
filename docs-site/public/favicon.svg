@@ -1,10 +1,17 @@
 <!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
-<svg xmlns="http://www.w3.org/2000/svg" width="176" height="176" viewBox="0 0 176 176" role="img" aria-labelledby="title">
-  <title id="title">TAK location beacon</title>
-  <path fill="#4f46e5" fill-rule="evenodd" d="M62 32C34.4 32 12 54.4 12 82c0 35 50 82 50 82s50-47 50-82c0-27.6-22.4-50-50-50Zm0 26a24 24 0 1 0 0 48 24 24 0 0 0 0-48Z"/>
-  <circle cx="62" cy="82" r="12" fill="#22d3ee"/>
-  <g fill="none" stroke="#22d3ee" stroke-width="10" stroke-linecap="round">
-    <path d="M102 11a71 71 0 0 1 54 54"/>
-    <path d="M97 35a46 46 0 0 1 35 35"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">TAK on UDS — Connected stack</title>
+  <desc id="desc">Three platform layers share a connected relay that ends in a navigation heading.</desc>
+  <style>
+    .ink { fill: #0F172A; }
+    @media (prefers-color-scheme: dark) { .ink { fill: #F8FAFC; } }
+  </style>
+  <g class="ink" fill="#0F172A">
+    <rect x="8" y="16" width="40" height="8" rx="2"/>
+    <rect x="8" y="32" width="40" height="8" rx="2"/>
+    <rect x="8" y="48" width="40" height="8" rx="2"/>
+    <path d="M40 20H48V52H40Z"/>
+    <path d="M56 4 52 32 40 20 28 12Z"/>
   </g>
+  <path fill="#22D3EE" d="m51 10-2 12-5-6-6-2Z"/>
 </svg>

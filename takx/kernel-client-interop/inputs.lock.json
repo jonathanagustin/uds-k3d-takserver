@@ -4,11 +4,11 @@
   "actual_kernel_version": "8.30.5",
   "profile": "public-kernel-client-interop-v1",
   "viewport_policy": "public-viewport-fit-v1",
-  "patch_sha256": "958344593447068cad89fde7c8a9a46070ebbebee84dbcb5f5442c36dea01fb0",
+  "patch_sha256": "cabde3dc7118168836be9ee09f7463cdaf8bc479907fd9d2af1ada13f52585b2",
   "files": {
     "takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java": {
       "before": "083263482dadcd1e3385010476c100456b4b5e7197ad12812e25589d8b1c3824",
-      "after": "de5952fada0ca5f38091c63488c2366f6a4b5bfea76516fd5aff3e029ce2236e"
+      "after": "12244a15a88e7668c8093ff143cf5fa1b2dce6dfe923ab08cd1aa756994d62ae"
     },
     "takkernel/shared/src/main/java/gov/tak/api/symbology/ISymbologyProvider.java": {
       "before": "aa24500c278c28af21ef5e29a448771a4141c8fe3204f8015024b37819368225",

@@ -60,7 +60,10 @@ public final class HeadlessControls {
         Path assets=Files.createDirectories(root.resolve("assets"));BufferedImage base=new BufferedImage(64,48,BufferedImage.TYPE_INT_ARGB);
         Graphics2D g=base.createGraphics();g.setColor(Color.WHITE);g.fillRect(0,0,64,48);g.dispose();ByteArrayOutputStream bytes=new ByteArrayOutputStream();ImageIO.write(base,"png",bytes);byte[] original=bytes.toByteArray();Files.write(assets.resolve("role.png"),original);
         RolesManager manager=new RolesManager();int[] closed={0};gov.tak.api.commons.resources.IAssetManager source=name->{if(!name.equals("role.png"))throw new FileNotFoundException(name);return new ByteArrayInputStream(original){public void close()throws IOException{closed[0]++;super.close();}};};
-        Bitmap first=manager.createIcon("Mi","role.png",source),second=manager.createIcon("Mi","role.png",source);
+        gov.tak.api.commons.graphics.Bitmap firstGov=manager.createIcon("Mi","role.png",source),secondGov=manager.createIcon("Mi","role.png",source);
+        check(firstGov!=null&&secondGov!=null&&firstGov!=secondGov,"genuine fresh public bitmap ownership");
+        Bitmap first=MarshalManager.marshal(firstGov,gov.tak.api.commons.graphics.Bitmap.class,Bitmap.class),second=MarshalManager.marshal(secondGov,gov.tak.api.commons.graphics.Bitmap.class,Bitmap.class);
+        check(first!=null&&second!=null,"actual registered gov to Android roundtrip");
         check(first!=null&&first.isMutable()&&first.getWidth()==64&&first.getHeight()==48,"real fresh asset icon");check(first!=second,"fresh call not cached");check(closed[0]==2,"real streams closed");int ink=0;
         for(int y=0;y<48;y++)for(int x=0;x<64;x++){check(first.getPixel(x,y)==second.getPixel(x,y),"fresh pixel parity");if(first.getPixel(x,y)!=Color.WHITE.getRGB())ink++;}
         BufferedImage expected=new BufferedImage(64,48,BufferedImage.TYPE_INT_ARGB);Graphics2D oracle=expected.createGraphics();oracle.setColor(Color.WHITE);oracle.fillRect(0,0,64,48);oracle.setColor(Color.BLACK);oracle.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);oracle.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS,RenderingHints.VALUE_FRACTIONALMETRICS_ON);
@@ -71,7 +74,17 @@ public final class HeadlessControls {
             Context context=new Context(root.resolve("app"),"gov.tak.test.interop",loader);Bitmap cached=manager.getIcon("Mi","role.png",context);check(cached!=null&&manager.getIcon("Mi","role.png",context)==cached,"public getIcon cache retained");
             for(int y=0;y<48;y++)for(int x=0;x<64;x++)check(cached.getPixel(x,y)==first.getPixel(x,y),"existing context and real asset composition parity");
         }
-        check(Arrays.equals(Files.readAllBytes(assets.resolve("role.png")),original),"source unchanged");System.out.println("PASS_REAL_ROLE_ASSET_PIXEL_AND_CACHE_CONTROLS");
+        // Exact Client expression: the declared source type is the public gov Bitmap, not Android Bitmap.
+        BufferedImage client=MarshalManager.marshal(manager.createIcon("Mi","role.png",source),gov.tak.api.commons.graphics.Bitmap.class,BufferedImage.class);
+        check(client!=null&&client.getWidth()==64&&client.getHeight()==48,"actual Client marshal expression nonnull");
+        for(int y=0;y<48;y++)for(int x=0;x<64;x++)check(client.getRGB(x,y)==firstGov.getPixel(x,y),"Client marshal pixel identity");
+        int prior=secondGov.getPixel(0,0);firstGov.setPixel(0,0,0xff123456);
+        check(first.getPixel(0,0)==0xff123456,"real public bitmap mutable Android backing");
+        check(secondGov.getPixel(0,0)==prior&&second.getPixel(0,0)==prior&&client.getRGB(0,0)==prior,"independent fresh image mutation isolation");
+        Bitmap later=manager.getIcon("Mi","role.png",new Context(root.resolve("app"),"gov.tak.test.interop",HeadlessControls.class.getClassLoader()));
+        check(later!=null&&later.getPixel(0,0)==prior,"old Context cache unaffected by fresh mutation");
+        check(closed[0]==3,"all real fresh asset streams closed");
+        check(Arrays.equals(Files.readAllBytes(assets.resolve("role.png")),original),"source unchanged");System.out.println("PASS_REAL_ROLE_PUBLIC_BITMAP_CLIENT_MARSHAL_PIXEL_CACHE_AND_ISOLATION_CONTROLS");
     }
     static String bitmapHash(gov.tak.api.commons.graphics.Bitmap bitmap)throws Exception{
         BufferedImage image=MarshalManager.marshal(bitmap,gov.tak.api.commons.graphics.Bitmap.class,BufferedImage.class);check(image!=null,"real bitmap marshal");java.security.MessageDigest md=java.security.MessageDigest.getInstance("SHA-256");for(int y=0;y<image.getHeight();y++)for(int x=0;x<image.getWidth();x++){int p=image.getRGB(x,y);md.update((byte)(p>>>24));md.update((byte)(p>>>16));md.update((byte)(p>>>8));md.update((byte)p);}return java.util.HexFormat.of().formatHex(md.digest());

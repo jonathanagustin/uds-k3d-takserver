@@ -1,6 +1,6 @@
 --- a/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java
 +++ b/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java
-@@ -235,13 +235,27 @@
+@@ -235,13 +235,32 @@
  
      private Bitmap createIcon(String abbreviation, String baseIconURI, Context context)
      {
@@ -8,10 +8,15 @@
 +    }
 +
 +    /** Project asset-manager overload; fresh mutable icon, preserving the existing getIcon cache. */
-+    public Bitmap createIcon(String abbreviation, String baseIconURI,
++    public gov.tak.api.commons.graphics.Bitmap createIcon(String abbreviation, String baseIconURI,
 +            gov.tak.api.commons.resources.IAssetManager assets)
 +    {
-+        return createIconFromAssets(abbreviation, baseIconURI, assets);
++        Bitmap composed = createIconFromAssets(abbreviation, baseIconURI, assets);
++        if (composed == null) return null;
++        int width = composed.getWidth(), height = composed.getHeight();
++        int[] argb = new int[Math.multiplyExact(width, height)];
++        composed.getPixels(argb, 0, width, 0, 0, width, height);
++        return new gov.tak.api.commons.graphics.Bitmap(argb, 0, width, width, height);
 +    }
 +
 +    private Bitmap createIconFromAssets(String abbreviation, String baseIconURI,

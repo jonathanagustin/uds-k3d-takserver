@@ -93,6 +93,13 @@ check_match ".github/workflows/charts.yaml" ignore
 check_match ".github/scripts/publish-charts.py" ignore
 # Only this standalone read-only checker is excluded, not its producer inputs.
 check_match ".github/scripts/install-reuse-shadow.py" ignore
+# Failure-only Demo capture never participates in install or upgrade behavior.
+check_match ".github/scripts/demo-failure-diagnostics.sh" ignore
+check_match ".github/scripts/demo-failure-diagnostics.sh.bak" relevant
+check_decide false ".github/scripts/demo-failure-diagnostics.sh"
+check_decide true $'.github/scripts/demo-failure-diagnostics.sh\ncharts/takserver/values.yaml'
+check_match ".github/scripts/dump-memory.sh" relevant
+check_match ".github/scripts/redact-logs.py" relevant
 check_match ".github/scripts/install-reuse-shadow.py.bak" relevant
 check_match ".github/scripts/install-reuse-shadow-other.py" relevant
 # Manual-only orchestration is distinct from shared backup/runtime helpers.

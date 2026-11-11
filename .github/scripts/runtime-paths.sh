@@ -67,6 +67,7 @@ upstream/takx
 .github/scripts/full-core-paths.sh
 .github/scripts/runtime-paths.sh
 .github/scripts/install-reuse-shadow.py
+.github/scripts/demo-failure-diagnostics.sh
 .github/workflows/staged-migrations.yaml
 .github/scripts/staged-migrations.py
 .github/scripts/staged-migrations.sh

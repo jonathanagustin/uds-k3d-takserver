@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import resource
 import signal
 import subprocess
 import time
@@ -17,6 +18,20 @@ JAR = 'e879c65e32af6e8eda2487b8520b30a57f313b5d292798920480b227e7315a36'
 JNI = '14aa3a2f15cd136872b666fcec4903239b0ba571e7132dee9396060062d0aaa9'
 RECEIPT = '851cc79d3189f42117579d8b6785a4f2affab7fefa5b2a26ed5bd0f6285c48ce'
 CAP = 8 * 1024 * 1024
+LOG_CAP = 1024 * 1024
+RECEIPT_RESERVE = 128 * 1024
+
+
+def child_limits(cpu_seconds):
+    resource.setrlimit(resource.RLIMIT_FSIZE, (LOG_CAP, LOG_CAP))
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+
+
+def child_environment(out):
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('LD_', 'JAVA_', '_JAVA_', 'JDK_'))}
+    env['TMPDIR'] = str(out / 'tmp')
+    return env
 
 
 def digest(p):
@@ -70,21 +85,34 @@ def run(args):
         providers[str(p.resolve())] = digest(p)
     for p, h in providers.items():
         assert digest(p) == h, p
-    env = {k: v for k, v in os.environ.items() if not k.startswith(('LD_', 'JAVA_', '_JAVA_', 'JDK_'))}
-    env['HOME'] = str(out)
+    app, tmp = out / 'app', out / 'tmp'
+    app.mkdir(mode=0o700)
+    tmp.mkdir(mode=0o700)
+    env = child_environment(out)
     commands = []
+
+    def budget(reserve=RECEIPT_RESERVE):
+        assert allocated(out) + reserve <= CAP, 'output cap/reservation'
+        assert os.statvfs(out).f_bavail * os.statvfs(out).f_frsize >= 2 * 1024**3, 'free-space floor'
+
+    def write_receipt(name, data):
+        text = json.dumps(data, indent=2) + '\n'
+        assert len(text.encode()) + 4096 <= RECEIPT_RESERVE, 'receipt reserve exhausted'
+        budget()
+        (out / name).write_text(text)
+        budget(0)
 
     def command(vector, name, limit):
         log = out / (name + '.log')
-        assert allocated(out) + 1024 * 1024 < CAP
-        assert os.statvfs(out).f_bavail * os.statvfs(out).f_frsize >= 2 * 1024**3
+        budget(LOG_CAP + RECEIPT_RESERVE)
         with log.open('wb') as f:
-            p = subprocess.Popen([str(x) for x in vector], cwd=out, env=env, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+            p = subprocess.Popen([str(x) for x in vector], cwd=out, env=env, stdout=f, stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=lambda: child_limits(limit))
             end = min(deadline, time.monotonic() + limit)
             try:
                 while p.poll() is None:
                     assert time.monotonic() < end, 'deadline'
-                    assert log.stat().st_size <= 1024 * 1024 and allocated(out) <= CAP, 'output cap'
+                    assert log.stat().st_size <= LOG_CAP, 'log cap'
+                    budget()
                     time.sleep(.05)
                 assert p.returncode == 0, name + ' failed; preserved log: ' + str(log)
             finally:
@@ -92,14 +120,16 @@ def run(args):
                     os.killpg(p.pid, signal.SIGKILL)
                 p.wait()
         commands.append({'argv': [str(x) for x in vector], 'log_sha256': digest(log), 'exit': p.returncode})
-        assert log.stat().st_size <= 1024 * 1024 and allocated(out) <= CAP
+        assert log.stat().st_size <= LOG_CAP, 'log cap'
+        budget()
         return log.read_text()
 
     classes = out / 'classes'
     classes.mkdir()
     try:
-        command([jdk / 'bin/javac', '-cp', jar, '-d', classes, HERE / 'ProtocolConformance.java'], 'compile', 30)
-        text = command([jdk / 'bin/java', '-Xcheck:jni', '-Djava.library.path=' + str(prefix / 'lib'), '-cp', str(jar) + os.pathsep + str(classes), 'ProtocolConformance', HERE, jar, out / 'maps.txt'], 'runtime', 45)
+        vm = ['-Xmx128m', '-XX:MaxMetaspaceSize=128m', '-XX:ActiveProcessorCount=1', '-Duser.home=' + str(app), '-Djava.io.tmpdir=' + str(tmp)]
+        command([jdk / 'bin/javac', *['-J' + v for v in vm], '--release', '17', '-proc:none', '-cp', jar, '-d', classes, HERE / 'ProtocolConformance.java'], 'compile', 30)
+        text = command([jdk / 'bin/java', *vm, '-Xcheck:jni', '-Djava.library.path=' + str(prefix / 'lib'), '-cp', str(jar) + os.pathsep + str(classes), 'ProtocolConformance', HERE, jar, out / 'maps.txt'], 'runtime', 45)
         assert 'WARNING' not in text and 'FATAL ERROR' not in text
         assert 'actual shutdown returned' in text
         mapped = {}
@@ -116,12 +146,11 @@ def run(args):
         assert str(jni) in mapped
         for p, h in {**inputs, **providers}.items():
             assert digest(p) == h, p
-        result = {'status': 'pass', 'official_revision': PIN, 'commands': commands, 'inputs': inputs, 'mapped_elfs': mapped, 'trusted_host_runtime_inputs': providers, 'classes': {str(p.relative_to(out)): digest(p) for p in classes.rglob('*.class')}, 'strict_jni_warnings': 0, 'loopback_only': True, 'takserver_interoperability': False, 'schema_validation': False, 'full_sdk': False, 'takx_client': False}
-        (out / 'complete.json').write_text(json.dumps(result, indent=2) + '\n')
-        assert allocated(out) <= CAP
+        result = {'status': 'pass', 'official_revision': PIN, 'commands': commands, 'inputs': inputs, 'mapped_elfs': mapped, 'trusted_host_runtime_inputs': providers, 'classes': {str(p.relative_to(out)): digest(p) for p in classes.rglob('*.class')}, 'strict_jni_warnings': 0, 'loopback_only': True, 'takserver_interoperability': False, 'schema_validation': 'pinned MITRE base only; historical raw fixture rejected, codec-normalized fixture accepted', 'full_sdk': False, 'takx_client': False}
+        write_receipt('complete.json', result)
         print('PASS actual codec + loopback negotiation; receipt', out / 'complete.json')
     except BaseException as error:
-        (out / 'failure.json').write_text(json.dumps({'error': str(error), 'commands': commands, 'inputs': inputs}, indent=2) + '\n')
+        write_receipt('failure.json', {'error': str(error), 'commands': commands, 'inputs': inputs})
         raise
 
 

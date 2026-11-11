@@ -9,8 +9,12 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 import javax.xml.parsers.*;
+import javax.xml.XMLConstants;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.validation.*;
 import org.w3c.dom.*;
 import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 /** Tests the actual CommonCommo codec and streaming state machine; no replacement codec. */
 public final class ProtocolConformance {
@@ -31,6 +35,17 @@ public final class ProtocolConformance {
         f.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
         f.setXIncludeAware(false); f.setExpandEntityReferences(false);
         return f.newDocumentBuilder().parse(new InputSource(new StringReader(value)));
+    }
+    static void validate(Schema schema, String value) throws Exception {
+        Validator validator = schema.newValidator();
+        validator.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        validator.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        validator.validate(new DOMSource(xml(value)));
+        assertions++;
+    }
+    static void schemaReject(Schema schema, String value, String message) throws Exception {
+        try { validate(schema, value); } catch (SAXException expected) { assertions++; return; }
+        throw new AssertionError(message);
     }
     // Semantic XML comparison: attribute order/quote/empty-element formatting may change.
     static String tree(Node n) {
@@ -113,6 +128,15 @@ public final class ProtocolConformance {
         Commo c=new Commo((level,type,message,detail)->System.out.println("NATIVE "+level+" "+message),"protocol-conformance","SYNTHETIC");
         try {
             String source=Files.readString(Path.of(args[0],"fixtures/unknown.cot"));
+            SchemaFactory factory=SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING,true);
+            factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            Schema schema=factory.newSchema(Path.of(args[0],"official/takcot/mitre/CoT Base-Event Schema  (PUBLIC RELEASE).xsd").toFile());
+            validate(schema,source); // Actual lax detail wildcard accepts the unknown extension.
+            schemaReject(schema,source.replace("uid=\"synthetic-conformance\"", ""),"schema accepted missing UID");
+            schemaReject(schema,source.replace("lat=\"0\"", "lat=\"not-a-number\""),"schema accepted invalid numeric coordinate");
+            schemaReject(schema,source.replace("time=\"2026-01-01T00:00:00Z\"", "time=\"not-a-date\""),"schema accepted invalid date");
             byte[] b=c.cotXmlToTakproto(source,1); payload(c,source);
             String round=c.takprotoToCotXml(b);
             Document before=xml(source),after=xml(round);
@@ -127,7 +151,10 @@ public final class ProtocolConformance {
                 for(int i=0;i<x.getLength();i++) require(tree(x.item(i)).equals(tree(y.item(i))),"whole-element fallback preserves unmapped typed fields");
             }
             String official=Files.readString(Path.of(args[0],"official/takcot/examples/Marker - Spot.cot"));
+            // The historical fixture predates the pinned 2023 schema's required access attribute.
+            schemaReject(schema,official,"historical fixture unexpectedly conforms without required access");
             String officialRound=c.takprotoToCotXml(c.cotXmlToTakproto(official,1));
+            validate(schema,officialRound); // Genuine codec normalization supplies access=Undefined.
             require(xml(official).getDocumentElement().getAttribute("uid").equals(xml(officialRound).getDocumentElement().getAttribute("uid")),"unchanged official fixture UID");
             require(xml(officialRound).getElementsByTagName("archive").getLength()==2,"official duplicate details preserved");
             reject(()->c.cotXmlToTakproto(source,0),"version0 encoded");

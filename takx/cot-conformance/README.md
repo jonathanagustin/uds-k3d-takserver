@@ -34,10 +34,24 @@ providers, sanitizes Java/loader injection variables, and rehashes inputs after
 execution. Trusted host C/C++ and JDK runtimes are recorded separately. Commands
 have process-group cleanup, a 90-second total deadline, 30-second Java compilation
 and 45-second runtime limits, 1 MiB per log, 8 MiB output cap and 2 GiB free-space
-floor. Existing source/native prefixes are not modified. Default CI should run
+floor checked while each child runs. The runner preserves `HOME` and `CODEX_HOME`;
+owned application/temp directories use Java properties and `TMPDIR`. Both Java
+tools have 128 MiB heap/metaspace limits and one active processor; compilation
+targets Java 17 with annotation processing disabled. Child processes have hard
+1 MiB file-size, zero core-dump and 30/45-second CPU limits. A 128 KiB final-receipt
+reserve is checked before commands. Existing source/native prefixes are not modified. Default CI should run
 only the offline guards; the actual runtime requires explicitly supplied inputs.
 
 Controls cover:
+
+- Real JAXP validation with the unchanged MITRE base XSD, external DTD/schema
+  access disabled: valid synthetic unknown extensions, missing UID, invalid
+  numeric coordinates and invalid dates. The unchanged historical marker lacks
+  the schema's newly required `access` attribute and is rejected; its genuine
+  codec-normalized XML supplies `access=Undefined` and validates. The base's lax
+  detail wildcard is exercised; individual detail schemas are not all validated.
+  The retained `__chat` snapshot has unresolved local include dependencies and is
+  provenance/reference material only, not a claimed validated chat schema.
 
 - Genuine XML→TAK v1 broadcast-header→XML conversion, including `altendpoints`,
   Unicode, nested unknown details, extra attributes on a typed element and duplicate
@@ -50,7 +64,7 @@ Controls cover:
   frames, and denied v1 with XML fallback. Peer transport framing follows the
   official specification; every binary event payload comes from the real codec.
 
-This is not full XSD validation, a schema compiler, exhaustive fuzzing, TLS/QUIC,
+This is not full CoT-detail XSD coverage, a schema compiler, exhaustive fuzzing, TLS/QUIC,
 TAK Server interoperability, a running TAKX client or full SDK qualification.
 The explicit null/native failures remain failures; Java exit zero alone is insufficient.
 

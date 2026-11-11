@@ -31,6 +31,7 @@ component checks. Ordinary server builds do not run them.
 | Modified Assimp | C/C++ and Java/JNI scene data; zero JNI warnings on valid scenes | [Source profile](native-assimp/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
 | Historical PROJ 4.9.1 | Real forward/inverse coordinates and strict PIC linking | [Source profile](native-proj/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
 | SQLCipher 4.5.7 / SQLite 3.45.3 | Source-built Tcl 8.6.18 and OpenSSL 3.5.9; encrypted create/reopen, exact data, wrong-key rejection and strict PIC linking | [Source profile](native-sqlcipher/README.md) |
+| Historical GEOS 3.4.3 | Real C intersection, distance, buffer and invalid-input controls; official portability patch and strict PIC linking | [Source profile](native-geos/README.md) |
 
 The Assimp archive is named `4.0.1-mod`, while its modified library reports
 `4.1.0`; neither identity is relabeled. Assimp's positive checks do not establish

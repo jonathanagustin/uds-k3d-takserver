@@ -142,6 +142,8 @@ jobs:
         run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s demo/ui-reel -p 'test_publish.py' -v
 
       - name: Optional native source and cache guards
+        env:
+          PYYAML_VERSION: 6.0.3
         run: |
           python3 -B -m unittest discover -s takx -p 'test_source_inputs.py' -v
           python3 -B -m unittest discover -s takx -p 'test_tls_guards.py' -v
@@ -166,7 +168,7 @@ jobs:
           python3 -B -m unittest discover -s takx/native-kml -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-curl -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-commoncommo -p 'test_*.py' -v
-          python3 -B -m unittest discover -s takx/registry-cache -p 'test_*.py' -v
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s takx/registry-cache -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/sqlite-jdbc -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-sqlcipher -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-geos -p 'test_build.py' -v

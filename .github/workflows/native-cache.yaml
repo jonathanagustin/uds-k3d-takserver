@@ -1,0 +1,149 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Native component cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish and verify the fresh Draco component in GHCR
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-cache-draco-amd64
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    outputs:
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - name: Checkout the protected producer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout the pinned official source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: TAK-Product-Center/atak-civ
+          ref: 9f6893dd657feacc35ec5de03dad721c2e44170e
+          path: upstream-native
+          sparse-checkout: draco
+          persist-credentials: false
+
+      - name: Build and qualify one fresh component
+        run: |
+          python3 -B takx/registry-cache/producer.py build \
+            --source "${GITHUB_WORKSPACE}/upstream-native" \
+            --output "${RUNNER_TEMP}/draco-producer" --cache "${RUNNER_TEMP}/draco-tools"
+
+      - name: Retain only the candidate capsule and qualification
+        id: artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fresh-draco-candidate
+          path: |
+            ${{ runner.temp }}/draco-producer/build/draco.tar.gz
+            ${{ runner.temp }}/draco-producer/build/registry-receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.ref == 'refs/heads/main' && inputs.publish
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout the protected publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the exact candidate from this run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/native-candidate
+          merge-multiple: true
+
+      - name: Install the pinned registry client
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          mise_toml: |
+            [tools]
+            crane = "0.22.1"
+            gh = "2.103.3"
+          cache: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stage and verify the immutable OCI subject
+        run: |
+          python3 -B takx/registry-cache/transport.py stage \
+            --input "${RUNNER_TEMP}/native-candidate" --output "${RUNNER_TEMP}/native-publication"
+
+      # SLSA describes this publisher job; the separate predicate binds actual
+      # fresh compilation, target ABI and consumer observations from build.
+      - name: Attest publisher provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/native-publication/subjects.txt
+
+      - name: Attest fresh native qualification
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/native-publication/subjects.txt
+          predicate-type: https://github.com/jonathanagustin/uds-takserver/attestations/native-component/v2
+          predicate-path: ${{ runner.temp }}/native-publication/qualification.json
+
+      - name: Authenticate and read back without registry credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B takx/registry-cache/transport.py readback \
+            --publication "${RUNNER_TEMP}/native-publication/publication.json" \
+            --output "${RUNNER_TEMP}/native-readback" --trusted-source-sha "${GITHUB_SHA}"
+
+      - name: Qualify the fetched capsule at two new prefixes
+        run: |
+          python3 -B takx/registry-cache/producer.py tools --cache "${RUNNER_TEMP}/draco-tools"
+          python3 -B takx/registry-cache/producer.py consume \
+            --input "${RUNNER_TEMP}/native-readback" --output "${RUNNER_TEMP}/native-readback/consumer" \
+            --tools "${RUNNER_TEMP}/draco-tools/cmake"
+
+      - name: Promote only the verified subject
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B takx/registry-cache/transport.py promote \
+            --publication "${RUNNER_TEMP}/native-publication/publication.json" \
+            --readback "${RUNNER_TEMP}/native-readback" --output "${RUNNER_TEMP}/native-promotion"
+
+      - name: Retain the authenticated registry receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualified-draco-registry-receipt
+          path: |
+            ${{ runner.temp }}/native-promotion/accepted.json
+            ${{ runner.temp }}/native-readback/consumer/restored.json
+          if-no-files-found: error
+          retention-days: 30

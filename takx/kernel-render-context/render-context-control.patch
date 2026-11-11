@@ -1,0 +1,2804 @@
+diff --git a/takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java b/takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java
+index f72fd9b..a9a21b3 100644
+--- a/takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java
++++ b/takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java
+@@ -1,6 +1,7 @@
+ package gov.tak.platform.engine;
+ 
+ import com.jogamp.opengl.GLAutoDrawable;
++import com.jogamp.opengl.GLContext;
+ import com.jogamp.opengl.GLEventListener;
+ import com.jogamp.opengl.GLRunnable;
+ 
+@@ -19,14 +20,15 @@ import gov.tak.platform.commons.opengl.JOGLGLES;
+  *
+  * @since 3.0
+  */
+-public final class JOGLRenderContext implements RenderContext
++public final class JOGLRenderContext implements RenderContext, GLEventListener
+ {
+     final static Interop<RenderContext> RenderContext_interop = Interop.findInterop(RenderContext.class);
+     final static NativePeerManager.Cleaner WRAPPER_CLEANER = new InteropCleaner(RenderContext.class);
+ 
+     GLAutoDrawable impl;
+     RenderSurface surface;
+-    Thread glThread;
++    private volatile GLContext context;
++    private volatile boolean disposed;
+ 
+     /**
+      * Construct with a GLAutoDrawable
+@@ -35,53 +37,55 @@ public final class JOGLRenderContext implements RenderContext
+      */
+     public JOGLRenderContext(GLAutoDrawable impl)
+     {
++        if (impl == null) throw new NullPointerException("drawable");
++        this.impl = impl;
++        this.surface = JOGLRenderSurface.get(impl);
+         final Pointer wrapped = RenderContext_interop.wrap(this);
+         if (wrapped != null)
+             NativePeerManager.register(this, wrapped, null, null, WRAPPER_CLEANER);
++        // Client creation may precede drawable realization. Capture only an
++        // actual current context, never a pre-realization placeholder.
++        if (impl.getContext()!=null && impl.getContext().isCurrent()) requireCurrent(impl);
++        impl.addGLEventListener(0, this);
++    }
+ 
+-        JOGLGLES.init(impl);
+-        impl.addGLEventListener(0, new GLEventListener()
+-        {
+-            @Override
+-            public void init(GLAutoDrawable drawable)
+-            {
+-            }
+-
+-            @Override
+-            public void dispose(GLAutoDrawable drawable)
+-            {
+-            }
+-
+-            @Override
+-            public void display(GLAutoDrawable drawable)
+-            {
+-                JOGLGLES.init(impl);
+-            }
+-
+-            @Override
+-            public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height)
+-            {
+-            }
+-        });
+-        this.impl = impl;
+-        this.surface = JOGLRenderSurface.get(impl);
++    private synchronized void requireCurrent(GLAutoDrawable drawable)
++    {
++        GLContext actual=drawable.getContext();
++        if (disposed || drawable != impl || actual==null || !actual.isCurrent())
++            throw new IllegalStateException("Retired or non-current GL context");
++        if (context==null) {
++            if (actual.isShared())
++                throw new UnsupportedOperationException("Shared GL contexts are not supported by this lifecycle");
++            context=actual;
++        } else if (context!=actual) throw new IllegalStateException("Drawable context was replaced without rebinding");
++        JOGLGLES.init(drawable);
+     }
+ 
+-    /**
+-     * @return is this the render thread
+-     */
+-    @Override
+-    public synchronized boolean isRenderThread()
++    @Override public void init(GLAutoDrawable drawable) { requireCurrent(drawable); }
++    @Override public void display(GLAutoDrawable drawable) { requireCurrent(drawable); }
++    @Override public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height)
++    { requireCurrent(drawable); }
++    @Override public void dispose(GLAutoDrawable drawable)
+     {
+-        // XXX - added JOGL 2.2
+-        //return impl.isThreadGLCapable();
+-        return (Thread.currentThread() == glThread);
++        // The client may release its renderer later in this same dispose callback.
++        // The captured context, rather than the drawable's next context, determines
++        // currentness until that callback returns.
++        // Disposal can run on a different GL thread than init/display. Validate
++        // the captured old context and initialize this thread's JOGLGLES mapping
++        // before the client's later dispose callback releases renderer resources.
++        requireCurrent(drawable);
++        disposed = true;
++        // Do not let this retired listener receive init for the drawable's next
++        // context before the client's own init callback can remove it.
++        drawable.removeGLEventListener(this);
+     }
+ 
+-    private synchronized void updateGLThread()
++    @Override public boolean isRenderThread()
+     {
+-        if (glThread == null)
+-            glThread = Thread.currentThread();
++        // JOGL may move one context between init, animator and dispose threads.
++        GLContext captured=context;
++        return captured!=null && captured.isCurrent();
+     }
+ 
+     /**
+@@ -92,6 +96,8 @@ public final class JOGLRenderContext implements RenderContext
+     @Override
+     public void queueEvent(Runnable r)
+     {
++        if (r == null) throw new NullPointerException("r");
++        if (disposed) throw new IllegalStateException("Retired GL context");
+         // XXX-- this call can block the thread for an amount of time that can impact
+         //       performance. A faster queue may be desired in the future.
+         impl.invoke(false, new GLRunnable()
+@@ -99,7 +105,11 @@ public final class JOGLRenderContext implements RenderContext
+             @Override
+             public boolean run(GLAutoDrawable drawable)
+             {
+-                updateGLThread();
++                // Renderer bindings drain their owned work before retirement.
++                // A drawable may retain the already-completed JOGL envelope;
++                // never execute that envelope in its replacement context.
++                if (disposed || drawable.getContext() != context) return false;
++                requireCurrent(drawable);
+                 r.run();
+                 return true;
+             }
+@@ -198,7 +208,8 @@ public final class JOGLRenderContext implements RenderContext
+     @Override
+     public boolean isAttached()
+     {
+-        return isRenderThread() && impl.getContext().isCurrent();
++        GLContext captured=context;
++        return captured!=null && captured.isCurrent();
+     }
+ 
+     /**
+@@ -213,8 +224,8 @@ public final class JOGLRenderContext implements RenderContext
+         {
+             return false;
+         }
+-        impl.getContext().makeCurrent();
+-        return impl.getContext().isCurrent();
++        context.makeCurrent();
++        return context.isCurrent();
+     }
+ 
+     /**
+@@ -229,12 +240,11 @@ public final class JOGLRenderContext implements RenderContext
+         {
+             return false;
+         }
+-        if (impl.getContext().isCurrent())
++        if (context.isCurrent())
+         {
+-            impl.getContext().release();
++            context.release();
+         }
+-        ;
+-        return isAttached();
++        return !context.isCurrent();
+     }
+ 
+     /**
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp b/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp
+index 1b45e71..9dd1b28 100644
+--- a/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp
+@@ -5,6 +5,7 @@
+ #include <stdexcept>
+ 
+ #include "renderer/GLES20FixedPipeline.h"
++#include "renderer/RenderContextLifecycle.h"
+ #include "renderer/RenderContextAssociatedCache.h"
+ #include "renderer/GL.h"
+ 
+@@ -326,13 +327,15 @@ namespace atakmap
+             delete texture;
+             delete attribStack;
+ 
+-            std::map<int, Program *>::iterator iter;
+-            for (iter = vectorPrograms.begin(); iter != vectorPrograms.end(); ++iter)
+-                delete iter->second;
+-            for (iter = texturePrograms.begin(); iter != texturePrograms.end(); ++iter)
+-                delete iter->second;
+-            for (iter = pointPrograms.begin(); iter != pointPrograms.end(); ++iter)
+-                delete iter->second;
++            releasePrograms();
++        }
++
++        void GLES20FixedPipeline::releasePrograms()
++        {
++            for (auto* programs : {&vectorPrograms, &texturePrograms, &pointPrograms}) {
++                for (auto& entry : *programs) delete entry.second;
++                programs->clear();
++            }
+         }
+ 
+         void GLES20FixedPipeline::glMatrixMode(MatrixMode m)
+@@ -1246,4 +1249,11 @@ namespace atakmap
+         FPGLSettings::FPGLSettings() : r(1), g(1), b(1), a(1), pointSize(1) {
+         }
+     }
+-}
+\ No newline at end of file
++}
++TAK::Engine::Util::TAKErr TAK::Engine::Renderer::GLES20FixedPipeline_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return Util::TE_IllegalState;
++    atakmap::renderer::local_rc_singletons.visit(&context, [](atakmap::renderer::GLES20FixedPipeline*& pipeline) {
++        if (pipeline) pipeline->releasePrograms();
++    });
++    return Util::TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h b/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h
+index 10c2928..58ee840 100644
+--- a/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h
++++ b/takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h
+@@ -132,6 +132,8 @@ namespace atakmap
+             void glDrawArrays(int mode, int first, int count);
+             void glDrawElements(int mode, int count, int type, const void *indices);
+ 
++            // Release GPU programs while retaining this borrowed CPU identity.
++            void releasePrograms();
+         private:
+             GLES20FixedPipeline();
+             ~GLES20FixedPipeline();
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp b/takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp
+index deb7aa6..7acf867 100644
+--- a/takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp
+@@ -165,7 +165,9 @@ TAKErr TAK::Engine::Renderer::GLOffscreenFramebuffer_release(GLOffscreenFramebuf
+ }
+ GLOffscreenFramebuffer::~GLOffscreenFramebuffer() NOTHROWS
+ {
+-    if (releaseOnDestruct)
++    // Explicit GPU retirement may precede CPU destruction on a non-GL thread.
++    // Do not issue even zero-ID GL calls after the owning context has gone.
++    if (releaseOnDestruct && (handle || colorTexture || depthTexture || stencilTexture || numRenderBuffers))
+         GLOffscreenFramebuffer_release(*this);
+ }
+ 
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLText2.cpp b/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
+index bc43790..57fd72b 100644
+--- a/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
+@@ -1,5 +1,6 @@
+ #include "renderer/GL.h"
+ #include "renderer/GLText2.h"
++#include "renderer/RenderContextLifecycle.h"
+ #include <cfloat>
+ #include <assert.h>
+ #include <limits>
+@@ -196,11 +197,14 @@ GLText2 *TAK::Engine::Renderer::GLText2_intern(const TAK::Engine::Core::RenderCo
+ {
+     Lock lock(cacheMutex);
+ 
+-    std::unique_ptr<GLRenderBatch2>& SPRITE_BATCH = getSpriteBatch();
++    // CPU interning may occur off the GL thread. Associate it with the explicit
++    // owner rather than whichever context happens to be current on that thread.
++    PerContextData& data = perContextDataCache.get(&ctx);
++    std::unique_ptr<GLRenderBatch2>& SPRITE_BATCH = data.SPRITE_BATCH;
+     if (!SPRITE_BATCH.get())
+         SPRITE_BATCH.reset(new GLRenderBatch2(GLTEXT2_CHAR_BATCH_SIZE*4u));
+ 
+-    GLTextCacheMap& glTextCache = getGLTextCache();
++    GLTextCacheMap& glTextCache = data.textCache;
+     do {
+         auto entry = glTextCache.find(textFormat);
+         if(entry == glTextCache.end())
+@@ -1228,3 +1232,20 @@ namespace
+     }
+ }
+ 
++
++TAKErr TAK::Engine::Renderer::GLText2_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    Lock lock(cacheMutex);
++    TAKErr result = TE_Ok;
++    perContextDataCache.visit(&context, [&result](PerContextData& data) {
++        for (auto& entry : data.textCache) {
++            const TAKErr code = GLText2_invalidate(entry.second.get());
++            if (result == TE_Ok) result = code;
++        }
++        if (data.SPRITE_BATCH) {
++            const TAKErr code = data.SPRITE_BATCH->release();
++            if (result == TE_Ok) result = code;
++        }
++    });
++    return result;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp b/takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp
+index 41016bf..68d8ed2 100644
+--- a/takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp
+@@ -1,5 +1,10 @@
+ 
+ #include "renderer/GLWorkers.h"
++#include "renderer/RenderContextLifecycle.h"
++#include <mutex>
++#include <thread>
++#include <vector>
++#include <algorithm>
+ #include "renderer/RenderContextAssociatedCache.h"
+ 
+ using namespace TAK::Engine::Renderer;
+@@ -7,26 +12,114 @@ using namespace TAK::Engine::Core;
+ using namespace TAK::Engine::Util;
+ 
+ namespace {
++    class RetirableWorker final : public ControlWorker {
++    public:
++        explicit RetirableWorker(std::shared_ptr<ControlWorker> worker) : delegate(std::move(worker)) {}
++        bool closed() {
++            std::lock_guard<std::mutex> lock(mutex);
++            return !delegate;
++        }
++        TAKErr scheduleWork(std::shared_ptr<Work> work) NOTHROWS override {
++            if (!work) return TE_InvalidArg;
++            std::lock_guard<std::mutex> lock(mutex);
++            if (!delegate || (retiring && retirementThread!=std::this_thread::get_id())) return TE_Canceled;
++            const TAKErr code=delegate->scheduleWork(work);
++            if (code==TE_Ok) {
++                submitted.erase(std::remove_if(submitted.begin(),submitted.end(),
++                    [](const std::weak_ptr<Work>& entry) { return entry.expired(); }),submitted.end());
++                submitted.push_back(work);
++            }
++            return code;
++        }
++        TAKErr doAnyWork(int64_t limit) NOTHROWS override { return run(limit, false); }
++        TAKErr doAllWork(int64_t limit) NOTHROWS override { return run(limit, true); }
++        TAKErr interrupt() NOTHROWS override {
++            std::shared_ptr<ControlWorker> current;
++            { std::lock_guard<std::mutex> lock(mutex); current = delegate; }
++            return current ? current->interrupt() : TE_Canceled;
++        }
++        TAKErr beginRetirement() NOTHROWS {
++            std::lock_guard<std::mutex> lock(mutex);
++            if (active) return TE_IllegalState;
++            retiring=true;
++            retirementThread=std::this_thread::get_id();
++            return TE_Ok;
++        }
++        TAKErr retire() NOTHROWS {
++            std::shared_ptr<ControlWorker> old;
++            {
++                std::lock_guard<std::mutex> lock(mutex);
++                if (active) return TE_IllegalState;
++                old=delegate;
++            }
++            // Finish bounded old-context cleanup while it is genuinely current.
++            // Follow-up submissions on this GL thread remain allowed until close;
++            // other threads were rejected by beginRetirement(). One Work can
++            // exceed this soft budget; qualification also has a hard process cap.
++            TAKErr result=old ? old->doAnyWork(100) : TE_Ok;
++            if (result==TE_Done || result==TE_Interrupted) result=TE_Ok;
++            std::vector<std::shared_ptr<Work>> pending;
++            {
++                std::lock_guard<std::mutex> lock(mutex);
++                delegate.reset();
++                for (const auto& entry:submitted) if (auto work=entry.lock()) pending.push_back(work);
++                submitted.clear();
++            }
++            // Work completion can schedule continuations. Never invoke those
++            // callbacks under a worker/cache mutex, and never strand held futures.
++            for (const auto& work:pending) {
++                const TAKErr code=work->preempt(TE_Canceled);
++                if (result==TE_Ok && code!=TE_Ok && code!=TE_Done) result=code;
++            }
++            if (old) {
++                const TAKErr code=old->interrupt();
++                if (result==TE_Ok) result=code;
++            }
++            return result;
++        }
++    private:
++        TAKErr run(int64_t limit, bool all) NOTHROWS {
++            std::shared_ptr<ControlWorker> current;
++            {
++                std::lock_guard<std::mutex> lock(mutex);
++                current = delegate;
++                if (!current || (retiring && retirementThread!=std::this_thread::get_id())) return TE_Canceled;
++                ++active;
++            }
++            const TAKErr result = all ? current->doAllWork(limit) : current->doAnyWork(limit);
++            { std::lock_guard<std::mutex> lock(mutex); --active; }
++            return result;
++        }
++        std::mutex mutex;
++        std::shared_ptr<ControlWorker> delegate;
++        size_t active = 0;
++        bool retiring=false;
++        std::thread::id retirementThread;
++        std::vector<std::weak_ptr<Work>> submitted;
++    };
+     struct ContextWorkers {
+-        std::shared_ptr<ControlWorker> resourceLoad;
+-        std::shared_ptr<ControlWorker> threadWorker;
++        std::mutex mutex;
++        bool retired=false;
++        std::shared_ptr<RetirableWorker> resourceLoad;
++        std::shared_ptr<RetirableWorker> threadWorker;
+     };
+ 
+     GlobalRenderContextAssociatedCache<ContextWorkers> workerCache;
+ }
+ 
+-static std::shared_ptr<ControlWorker> makeGLControlWorker() NOTHROWS {
++static std::shared_ptr<RetirableWorker> makeGLControlWorker() NOTHROWS {
+ 	std::shared_ptr<ControlWorker> worker;
+ 	Worker_createControlWorker(worker);
+-	return worker;
++    return worker ? std::make_shared<RetirableWorker>(worker) : nullptr;
+ }
+ 
+ static std::shared_ptr<ControlWorker> globalGLResourceControlWorker() NOTHROWS {
+ 	RenderContext* renderContext = nullptr;
+     RenderContext_getCurrent(&renderContext);
+     ContextWorkers& workers = workerCache.get(renderContext);
++    std::lock_guard<std::mutex> lock(workers.mutex);
+     if (!workers.resourceLoad)
+-        workers.resourceLoad = makeGLControlWorker();
++        workers.resourceLoad = workers.retired ? std::make_shared<RetirableWorker>(nullptr) : makeGLControlWorker();
+     return workers.resourceLoad;
+ }
+ 
+@@ -34,8 +127,9 @@ static std::shared_ptr<ControlWorker> globalGLThreadWorker() NOTHROWS {
+     RenderContext* renderContext = nullptr;
+ 	RenderContext_getCurrent(&renderContext);
+     ContextWorkers& workers = workerCache.get(renderContext);
++    std::lock_guard<std::mutex> lock(workers.mutex);
+     if (!workers.threadWorker)
+-        workers.threadWorker = makeGLControlWorker();
++        workers.threadWorker = workers.retired ? std::make_shared<RetirableWorker>(nullptr) : makeGLControlWorker();
+     return workers.threadWorker;
+ }
+ 
+@@ -47,8 +141,7 @@ TAKErr TAK::Engine::Renderer::GLWorkers_doResourceLoadingWork(size_t millisecond
+ 	std::shared_ptr<ControlWorker> worker = globalGLResourceControlWorker();
+ 	if (!worker)
+ 		return TE_Err;
+-	worker->doAnyWork(millisecondLimit);
+-	return TE_Ok;
++    return worker->doAnyWork(millisecondLimit);
+ }
+ 
+ SharedWorkerPtr TAK::Engine::Renderer::GLWorkers_glThread() NOTHROWS {
+@@ -59,6 +152,53 @@ TAKErr TAK::Engine::Renderer::GLWorkers_doGLThreadWork() NOTHROWS {
+ 	std::shared_ptr<ControlWorker> worker = globalGLThreadWorker();
+ 	if (!worker)
+ 		return TE_Err;
+-	worker->doAnyWork(INT64_MAX);
+-	return TE_Ok;
+-}
+\ No newline at end of file
++    return worker->doAnyWork(INT64_MAX);
++}
++TAKErr TAK::Engine::Renderer::GLWorkers_retire(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    // Record retirement even if this context never requested a worker before.
++    // A getter during later cleanup must still return a closed terminal slot.
++    (void)workerCache.get(&context);
++    TAKErr result = TE_Ok;
++    workerCache.visit(&context, [&result](ContextWorkers& workers) {
++        std::shared_ptr<RetirableWorker> resource,thread;
++        {
++            std::lock_guard<std::mutex> lock(workers.mutex);
++            workers.retired=true;
++            resource=workers.resourceLoad;
++            thread=workers.threadWorker;
++        }
++        // Establish both barriers before any cancellation/drain callback runs.
++        for (const auto& worker:{resource,thread}) if (worker) {
++            const TAKErr code=worker->beginRetirement();
++            if (result==TE_Ok) result=code;
++        }
++        if (result!=TE_Ok) return;
++        for (const auto& worker:{resource,thread}) if (worker) {
++            const TAKErr code=worker->retire();
++            if (result==TE_Ok) result=code;
++        }
++        // Keep retired slots so old-context getters cannot create active workers.
++    });
++    return result;
++}
++TAKErr TAK::Engine::Renderer::GLWorkers_resume(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    TAKErr result=TE_Ok;
++    workerCache.visit(&context, [&result](ContextWorkers& workers) {
++        std::shared_ptr<RetirableWorker> oldResource,oldThread;
++        {
++            std::lock_guard<std::mutex> lock(workers.mutex);
++            if ((workers.resourceLoad && (!workers.retired || !workers.resourceLoad->closed())) ||
++                (workers.threadWorker && (!workers.retired || !workers.threadWorker->closed()))) {
++                result=TE_IllegalState;
++                return;
++            }
++            oldResource.swap(workers.resourceLoad);
++            oldThread.swap(workers.threadWorker);
++            workers.retired=false;
++        }
++        // Held old references remain closed. New getters create genuine workers.
++    });
++    return result;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h b/takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h
+index 5762275..5fea28f 100644
+--- a/takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h
++++ b/takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h
+@@ -1,4 +1,3 @@
+-
+ #ifndef TAK_ENGINE_RENDERER_RENDERER_CONTEXT_ASSOCIATED_CACHE_H_INCLUDED
+ #define TAK_ENGINE_RENDERER_RENDERER_CONTEXT_ASSOCIATED_CACHE_H_INCLUDED
+ 
+@@ -7,88 +6,65 @@
+ #include "thread/Mutex.h"
+ #include "thread/Lock.h"
+ #include <map>
+-#include <new>
+-
+-namespace TAK {
+-    namespace Engine {
+-        namespace Renderer {
+-            /**
+-             * Utility for caching associated data with a RenderContext
+-             */
+-            template <typename T, template <typename, typename> class S = TAK::Engine::Thread::ThreadLocalPtr >
+-            class RenderContextAssociatedCache {
+-            public:
+-                RenderContextAssociatedCache(const RenderContextAssociatedCache&) = delete;
+-                RenderContextAssociatedCache(RenderContextAssociatedCache&&) = delete;
+-                void operator=(const RenderContextAssociatedCache&) = delete;
+-                void operator=(RenderContextAssociatedCache&&) = delete;
+-
+-                RenderContextAssociatedCache() {}
+-                ~RenderContextAssociatedCache() {}
+-
+-                /**
+-                 * Get the data associated with the render context
+-                 */
+-                T& get(const TAK::Engine::Core::RenderContext* renderContext);
+-            private:
+-                struct Map_ {
+-                    enum {
+-                        BRUTE_FORCE_ARRAY_SIZE = 4
+-                    };
+-
+-                    const TAK::Engine::Core::RenderContext* contexts[BRUTE_FORCE_ARRAY_SIZE];
+-
+-                    // store values instead of pointers to keep to one cache page
+-                    T null_item;
+-                    T items[BRUTE_FORCE_ARRAY_SIZE];
+-
+-                    std::map<const TAK::Engine::Core::RenderContext*, T> overflow;
+-                };
+-
+-                S <Map_, std::default_delete<Map_>> impl_;
+-                TAK::Engine::Thread::Mutex mutex_;
+-            };
+-
+-            template <typename T>
+-            using GlobalRenderContextAssociatedCache = RenderContextAssociatedCache<T, std::unique_ptr>;
+-
+-             
+-
+-            template <typename T, template <typename, typename> class S>
+-            T& RenderContextAssociatedCache<T, S>::get(const TAK::Engine::Core::RenderContext* renderContext) {
+-                TAK::Engine::Thread::Lock lock(mutex_);
+-                if (!impl_)
+-                    impl_.reset(new Map_());
+-
+-                if (renderContext == nullptr) {
+-                    return impl_->null_item;
+-                }
+-
+-                for (int i = 0; i < Map_::BRUTE_FORCE_ARRAY_SIZE; ++i) {
+-                    if (impl_->contexts[i] == renderContext) {
+-                        return impl_->items[i];
+-                    }
+-                }
+-
+-                for (int i = 0; i < Map_::BRUTE_FORCE_ARRAY_SIZE; ++i) {
+-                    if (impl_->contexts[i] == nullptr) {
+-                        impl_->contexts[i] = renderContext;
+-
+-                        // reinit the item to future lifecycle of multiple contexts
+-                        T& item = impl_->items[i];
+-                        item.~T();
+-                        ::new (static_cast<void*>(&item)) T();
+-                        return item;
+-                    }
+-                }
++#include <memory>
++#include <vector>
++
++namespace TAK { namespace Engine { namespace Renderer {
++/** Thread-local lookup with cache-owned slots. A JOGL context can move between
++ * threads; GPU retirement must reach every slot for that context. Slot ownership
++ * therefore outlives a TLS holder. No GL operation runs under the registry lock.
++ * As with get(), callers must serialize use of one render context with its GL
++ * lifecycle. visit() does not make concurrent GPU use safe.
++ */
++template <typename T, template <typename, typename> class S = Thread::ThreadLocalPtr>
++class RenderContextAssociatedCache {
++public:
++    RenderContextAssociatedCache() {}
++    RenderContextAssociatedCache(const RenderContextAssociatedCache&) = delete;
++    RenderContextAssociatedCache(RenderContextAssociatedCache&&) = delete;
++    void operator=(const RenderContextAssociatedCache&) = delete;
++    void operator=(RenderContextAssociatedCache&&) = delete;
++
++    T& get(const TAK::Engine::Core::RenderContext* context) {
++        Thread::Lock lock(mutex_);
++        if (!impl_) {
++            std::shared_ptr<Map_> slot(new Map_());
++            slots_.push_back(slot);
++            impl_.reset(new std::shared_ptr<Map_>(slot));
++        }
++        auto& entries = (*impl_)->entries;
++        auto it = entries.find(context);
++        if (it == entries.end())
++            it = entries.emplace(context, std::shared_ptr<T>(new T())).first;
++        return *it->second;
++    }
+ 
+-                auto it = impl_->overflow.find(renderContext);
+-                if (it == impl_->overflow.end())
+-                    it = impl_->overflow.insert(std::make_pair(renderContext, T())).first;
+-                return it->second;
++    /** Visit only this binding, including slots on former rendering threads.
++     * Shared snapshots keep CPU objects alive even if a TLS holder is destroyed
++     * during the callback. Entries are retained so borrowed pointers survive GPU
++     * release/recreation. The callback must not destroy this cache.
++     */
++    template <typename Visitor>
++    void visit(const TAK::Engine::Core::RenderContext* context, Visitor visitor) {
++        std::vector<std::shared_ptr<T>> values;
++        {
++            Thread::Lock lock(mutex_);
++            for (const auto& slot : slots_) {
++                auto it = slot->entries.find(context);
++                if (it != slot->entries.end()) values.push_back(it->second);
+             }
+         }
++        for (const auto& value : values) visitor(*value);
+     }
+-}
+-
+-#endif
+\ No newline at end of file
++private:
++    struct Map_ {
++        std::map<const TAK::Engine::Core::RenderContext*, std::shared_ptr<T>> entries;
++    };
++    S<std::shared_ptr<Map_>, std::default_delete<std::shared_ptr<Map_>>> impl_;
++    std::vector<std::shared_ptr<Map_>> slots_;
++    Thread::Mutex mutex_;
++};
++template <typename T>
++using GlobalRenderContextAssociatedCache = RenderContextAssociatedCache<T, std::unique_ptr>;
++}}}
++#endif
+diff --git a/b/takkernel/engine/src/main/cpp/renderer/RenderContextLifecycle.h b/takkernel/engine/src/main/cpp/renderer/RenderContextLifecycle.h
+new file mode 100644
+index 0000000..db05f57
+--- /dev/null
++++ b/takkernel/engine/src/main/cpp/renderer/RenderContextLifecycle.h
+@@ -0,0 +1,28 @@
++// Copyright 2026 uds-takserver authors
++// SPDX-License-Identifier: GPL-3.0-only
++#ifndef TAK_ENGINE_RENDERER_RENDERCONTEXTLIFECYCLE_H_INCLUDED
++#define TAK_ENGINE_RENDERER_RENDERCONTEXTLIFECYCLE_H_INCLUDED
++#include "core/RenderContext.h"
++#include <cstddef>
++#include "util/Error.h"
++namespace TAK { namespace Engine { namespace Renderer {
++namespace Core { class GLGlobeBase; }
++/** Called only after stop/GPU release with the owning old GL context current. */
++ENGINE_API Util::TAKErr RenderContext_markTerminal(Core::GLGlobeBase& renderer) NOTHROWS;
++ENGINE_API Util::TAKErr RenderContext_terminalCounts(std::size_t* active, std::size_t* destroyed) NOTHROWS;
++/** Retire only this context's workers. Held old worker references reject work.
++ * Call on the owning current GL thread after producers have stopped. */
++ENGINE_API Util::TAKErr BatchShaders_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr BatchAtlases_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr TerrainShaders_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr SlopeShaders_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr HeatMapShaders_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr GLMapRenderGlobals_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr Shader_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr Shader_recreateContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr GLText2_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr GLES20FixedPipeline_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr GLWorkers_resume(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++ENGINE_API Util::TAKErr GLWorkers_retire(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++}}}
++#endif
+diff --git a/takkernel/engine/src/main/cpp/renderer/Shader.cpp b/takkernel/engine/src/main/cpp/renderer/Shader.cpp
+index 83980b8..2304f1d 100644
+--- a/takkernel/engine/src/main/cpp/renderer/Shader.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/Shader.cpp
+@@ -1,4 +1,6 @@
+ #include "renderer/Shader.h"
++#include "renderer/RenderContextLifecycle.h"
++#include <vector>
+ 
+ #include <map>
+ #include <sstream>
+@@ -278,6 +280,10 @@ void TAK::Engine::Renderer::Shader_get(std::shared_ptr<const Shader> &value, con
+             ctxShaders[flags] = std::shared_ptr<const Shader>(value);
+         } else {
+             value = retval->second;
++            if (value->handle == GL_NONE) {
++                Shader replacement(flags);
++                *const_cast<Shader*>(value.get()) = std::move(replacement);
++            }
+         }
+ 
+         return;
+@@ -326,6 +332,10 @@ TAKErr TAK::Engine::Renderer::Shader_get(std::shared_ptr<const Shader2> &value,
+         }
+         else {
+             value = retval->second;
++            if (value->handle == GL_NONE) {
++                const TAKErr code = makeDefaultShader2(const_cast<Shader2*>(value.get()), textured, lighting);
++                TE_CHECKRETURN_CODE(code);
++            }
+         }
+ 
+         return TE_Ok;
+@@ -344,3 +354,56 @@ TAKErr TAK::Engine::Renderer::Shader_compile(std::shared_ptr<const Shader2>& res
+     return code;
+ }
+ 
++
++TAKErr TAK::Engine::Renderer::Shader_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    Lock lock(shadersMutex());
++    TE_CHECKRETURN_CODE(lock.status);
++    auto old = shaders().find(&context);
++    if (old != shaders().end()) for (const auto& entry : old->second) {
++        Shader* shader = const_cast<Shader*>(entry.second.get());
++        if (shader->handle != GL_NONE) glDeleteProgram(shader->handle);
++        shader->handle = GL_NONE;
++    }
++    auto modern = shaders2().find(&context);
++    if (modern != shaders2().end()) for (const auto& entry : modern->second) {
++        Shader2* shader = const_cast<Shader2*>(entry.second.get());
++        if (shader->handle != GL_NONE) glDeleteProgram(shader->handle);
++        shader->handle = GL_NONE;
++    }
++    return TE_Ok;
++}
++
++TAKErr TAK::Engine::Renderer::Shader_recreateContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::vector<unsigned> oldFlags, modernFlags;
++    {
++        Lock lock(shadersMutex());
++        TE_CHECKRETURN_CODE(lock.status);
++        auto old = shaders().find(&context);
++        if (old != shaders().end()) for (const auto& entry : old->second) oldFlags.push_back(entry.first);
++        auto modern = shaders2().find(&context);
++        if (modern != shaders2().end()) for (const auto& entry : modern->second) modernFlags.push_back(entry.first);
++    }
++    for (const unsigned flags : oldFlags) {
++        RenderAttributes attrs;
++        attrs.colorPointer = (flags & FLAG_COLOR_POINTER) != 0;
++        attrs.opaque = (flags & FLAG_ALPHA_DISCARD) == 0;
++        attrs.textureIds[0] = (flags & FLAG_TEXTURED) ? 1 : 0;
++        attrs.normals = (flags & FLAG_NORMAL) != 0;
++        attrs.points = (flags & FLAG_POINTS) != 0;
++        std::shared_ptr<const Shader> shader;
++        Shader_get(shader, context, attrs);
++        if (!shader || shader->handle == GL_NONE) return TE_Err;
++    }
++    for (const unsigned flags : modernFlags) {
++        RenderAttributes attrs;
++        attrs.textureIds[0] = (flags & FLAG_TEXTURED) ? 1 : 0;
++        attrs.normals = (flags & FLAG_NORMAL) != 0;
++        std::shared_ptr<const Shader2> shader;
++        const TAKErr code = Shader_get(shader, context, attrs);
++        TE_CHECKRETURN_CODE(code);
++        if (!shader || shader->handle == GL_NONE) return TE_Err;
++    }
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp b/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp
+index b8235f0..ca017e1 100644
+--- a/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp
+@@ -500,4 +500,13 @@ TAK::Engine::Util::TAKErr TAK::Engine::Renderer::Core::GLAtmosphere::draw(const
+ 
+     DrawAtmosphere(view);
+     return Util::TAKErr::TE_Ok;
+-}
+\ No newline at end of file
++}
++void TAK::Engine::Renderer::Core::GLAtmosphere::release() NOTHROWS {
++    // This program is privately owned; no public CPU borrow is invalidated.
++    program.reset();
++    GLuint textures[] = {insideTextureHandle,outsideTextureHandle};
++    glDeleteTextures(2,textures);
++    insideTextureHandle=outsideTextureHandle=GL_NONE;
++    if (vbo) glDeleteBuffers(1,&vbo);
++    vbo=GL_NONE;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h b/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h
+index be62a45..7d37d44 100644
+--- a/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h
++++ b/takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h
+@@ -32,6 +32,7 @@ namespace TAK {
+                 public:
+                     GLAtmosphere() = default;
+                     Util::TAKErr draw(const GLGlobeBase &view) NOTHROWS;
++                    void release() NOTHROWS;
+                 private:
+                     void DrawAtmosphere(const GLGlobeBase& view) const NOTHROWS;
+                     void DrawQuad(const TAK::Engine::Math::Matrix2 &inv, const TAK::Engine::Math::Vector4<double>&cameraPos) const NOTHROWS;
+@@ -46,8 +47,8 @@ namespace TAK {
+                     int uAlpha;
+                     int aVertexCoordsHandle;
+                     int aEyeRayHandle;
+-                    unsigned int insideTextureHandle;
+-                    unsigned int outsideTextureHandle;
++                    unsigned int insideTextureHandle{0u};
++                    unsigned int outsideTextureHandle{0u};
+                     unsigned int vbo{0u};
+ 
+                 };
+diff --git a/takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp b/takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp
+index c1f2620..dfa87d8 100644
+--- a/takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp
+@@ -1300,8 +1300,49 @@ void GLGlobe::release() NOTHROWS
+ {
+     GLGlobeBase::release();
+     static_cast<SurfaceControlImpl &>(*surfaceRenderer).surface.release();
+-}
++    atmosphere.renderer.release();
+ 
++    std::set<GLuint> buffers;
++    {
++        WriteLock lock(offscreenMutex);
++        if (lock.status!=TE_Ok) {
++            Logger_log(TELL_Error,"Context release could not acquire terrain ownership lock");
++            return;
++        }
++        for (const auto& entry:offscreen.gltiles) {
++            if(entry.second.vbo) buffers.insert(entry.second.vbo);
++            if(entry.second.ibo) buffers.insert(entry.second.ibo);
++        }
++        for (const auto& tile:offscreen.visibleTiles.value) {
++            if(tile.vbo) buffers.insert(tile.vbo);
++            if(tile.ibo) buffers.insert(tile.ibo);
++        }
++        offscreen.gltiles.clear();
++        offscreen.visibleTiles.value.clear();
++        offscreen.visibleTiles.lastConfirmed.clear();
++        offscreen.visibleTiles.confirmed=false;
++        for(auto& compute:offscreen.computeContext) {
++            compute.terrainTiles.clear();
++            compute.visIndices.value.clear();
++            compute.visIndices.inside.clear();
++            compute.visIndices.intersect.clear();
++            compute.processed=false;
++        }
++        offscreen.terrainTiles2=nullptr;
++        offscreen.tileCullFboReadIdx=0u;
++        offscreen.lastVersion.terrain=offscreen.lastVersion.scene=-1;
++        offscreen.whitePixelTexId=GL_NONE; // borrowed; globals delete its owner
++        offscreen.ecef.color=offscreen.ecef.pick=offscreen.ecef.depth=TerrainTileShaders();
++        offscreen.planar.color=offscreen.planar.pick=offscreen.planar.depth=TerrainTileShaders();
++    }
++    for(const auto buffer:buffers) glDeleteBuffers(1,&buffer);
++    for(auto& compute:offscreen.computeContext) {
++        GLOffscreenFramebuffer_release(compute.tileCullFbo);
++        if(compute.tileCullPbo) glDeleteBuffers(1,&compute.tileCullPbo);
++        compute.tileCullPbo=GL_NONE;
++    }
++    GLOffscreenFramebuffer_release(offscreen.depthSamplerFbo);
++}
+ void GLGlobe::prepareScene() NOTHROWS
+ {
+     GLGlobeBase::prepareScene();
+diff --git a/takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp b/takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp
+index 85514c5..5a54ecb 100644
+--- a/takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp
+@@ -3,6 +3,8 @@
+ //
+ 
+ #include "renderer/core/GLGlobeBase.h"
++#include "renderer/RenderContextLifecycle.h"
++#include <set>
+ 
+ #include "core/LegacyAdapters.h"
+ #include "renderer/GLES20FixedPipeline.h"
+@@ -33,6 +35,14 @@ using namespace atakmap::renderer;
+     (std::abs(v) <= _EPSILON_F)
+ 
+ namespace {
++    Mutex terminalRenderersMutex;
++    std::set<const GLGlobeBase*> terminalRenderers;
++    std::size_t destroyedTerminalRenderers = 0;
++    bool isTerminalRenderer(const GLGlobeBase* renderer) NOTHROWS {
++        Lock lock(terminalRenderersMutex);
++        return lock.status==TE_Ok && terminalRenderers.find(renderer)!=terminalRenderers.end();
++    }
++
+     void asyncSetBaseMap(void *opaque) NOTHROWS;
+     void asyncSetStarsLayer(void *opaque) NOTHROWS;
+ #ifndef __ANDROID__
+@@ -143,6 +153,10 @@ GLGlobeBase::~GLGlobeBase() NOTHROWS
+         this->starsLayer.reset();
+     }
+ 
++    // GPU release has already stopped the label worker for terminal owners.
++    // Destroy this owned child before erasing terminal metadata below.
++    if (isTerminalRenderer(this)) labelManager.reset();
++
+     Lock lock(*asyncRunnablesMutex);
+     *disposed = true;
+     if(mapMovedEvent.get() && mapMovedEvent->enqueued)
+@@ -155,6 +169,13 @@ GLGlobeBase::~GLGlobeBase() NOTHROWS
+         focusChangedEvent.release();
+     if(mapResizedEvent.get() && mapResizedEvent->enqueued)
+         mapResizedEvent.release();
++    // No callbacks/GL while the registry lock is held. Remove the address only
++    // after terminal Base cleanup so a future allocation cannot inherit state.
++    {
++        Lock terminalLock(terminalRenderersMutex);
++        if (terminalLock.status==TE_Ok && terminalRenderers.erase(this))
++            ++destroyedTerminalRenderers;
++    }
+ }
+ TAKErr GLGlobeBase::start() NOTHROWS
+ {
+@@ -177,6 +198,10 @@ TAKErr GLGlobeBase::start() NOTHROWS
+ }
+ TAKErr GLGlobeBase::stop() NOTHROWS
+ {
++    // Terminal owners already stopped/released on their real GL thread. A later
++    // NativePeerManager destructor must not schedule even an empty layer event
++    // against the now-retired context. Nonterminal stop remains unchanged.
++    if (isTerminalRenderer(this)) return TE_Ok;
+     // clear all the renderables
+     std::list<atakmap::core::Layer *> empty;
+     refreshLayers(empty);
+@@ -1459,3 +1484,19 @@ namespace {
+         return _clampToGround;
+     }
+ }
++
++TAKErr TAK::Engine::Renderer::RenderContext_markTerminal(GLGlobeBase& renderer) NOTHROWS {
++    if (!renderer.context.isRenderThread() || !renderer.context.isAttached()) return TE_IllegalState;
++    Lock lock(terminalRenderersMutex);
++    TE_CHECKRETURN_CODE(lock.status);
++    terminalRenderers.insert(&renderer);
++    return TE_Ok;
++}
++TAKErr TAK::Engine::Renderer::RenderContext_terminalCounts(std::size_t* active, std::size_t* destroyed) NOTHROWS {
++    if (!active || !destroyed) return TE_InvalidArg;
++    Lock lock(terminalRenderersMutex);
++    TE_CHECKRETURN_CODE(lock.status);
++    *active=terminalRenderers.size();
++    *destroyed=destroyedTerminalRenderers;
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp b/takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp
+index 7c43196..7f0f145 100644
+--- a/takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp
+@@ -1,4 +1,5 @@
+ #include "renderer/core/GLMapRenderGlobals.h"
++#include "renderer/RenderContextLifecycle.h"
+ #include "renderer/AsyncBitmapLoader2.h"
+ #ifndef __ANDROID__
+ #include "renderer/core/GLLabelManager.h"
+@@ -261,3 +262,24 @@ TAKErr TAK::Engine::Renderer::Core::GLMapRenderGlobals_setTextureUnitLimit(const
+     textureUnitLimit = limit;
+     return TE_Ok;
+ }
++
++TAKErr TAK::Engine::Renderer::GLMapRenderGlobals_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    Context* resources = nullptr;
++    {
++        Lock lock(contextMapMutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = contextMap.find(&context);
++        if (found == contextMap.end()) return TE_Ok;
++        resources = found->second.get(); // CPU owner is retained for borrowed pointers
++    }
++    if (resources->atlas2) resources->atlas2->release();
++    if (resources->iconAtlas2) resources->iconAtlas2->release();
++    if (resources->cache2) {
++        const TAKErr code = resources->cache2->clear();
++        TE_CHECKRETURN_CODE(code);
++    }
++    if (resources->whitePixel) glDeleteTextures(1, &resources->whitePixel);
++    resources->whitePixel = GL_NONE;
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp b/takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp
+index 21b956d..c53bf82 100644
+--- a/takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp
+@@ -1,3 +1,5 @@
++#include "renderer/RenderContextLifecycle.h"
++#include <set>
+ #include "renderer/elevation/GLElevationHeatMapLayer.h"
+ 
+ #include <vector>
+@@ -434,4 +436,24 @@ TAKErr TAK::Engine::Renderer::Elevation::GLElevationHeatMapLayer_createSpi(Core:
+     };
+     spi = GLLayerSpi2Ptr(new SpiImpl(), Memory_deleter_const<GLLayerSpi2, SpiImpl>);
+     return TE_Ok;
+-}
+\ No newline at end of file
++}
++TAKErr TAK::Engine::Renderer::HeatMapShaders_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::set<GLuint> programs;
++    {
++        Lock lock(mutex());
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = shaders().find(&context);
++        if (found == shaders().end()) return TE_Ok;
++        const auto& value = found->second;
++        // Only these four programs are owned here. The base's other shader
++        // handles are borrowed from GLTerrainTile and retired by that cache.
++        programs.insert(value.ecef.lo.base.handle);
++        programs.insert(value.ecef.hi.base.handle);
++        programs.insert(value.flat.lo.base.handle);
++        programs.insert(value.flat.hi.base.handle);
++        shaders().erase(found);
++    }
++    for (const auto program : programs) if (program) glDeleteProgram(program);
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp
+index 90988a9..f634cf2 100644
+--- a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp
+@@ -1,3 +1,5 @@
++#include "renderer/RenderContextLifecycle.h"
++#include <set>
+ #include "renderer/elevation/GLTerrainSlopeAngleLayer.h"
+ 
+ #include <vector>
+@@ -478,3 +480,24 @@ TAKErr TAK::Engine::Renderer::Elevation::GLTerrainSlopeAngleLayer_createSpi(GLLa
+     return TE_Ok;
+ }
+ 
++
++TAKErr TAK::Engine::Renderer::SlopeShaders_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::set<GLuint> programs;
++    {
++        Lock lock(mutex());
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = shaders().find(&context);
++        if (found == shaders().end()) return TE_Ok;
++        const auto& value = found->second;
++        // Only these four programs are owned here. The base's other shader
++        // handles are borrowed from GLTerrainTile and retired by that cache.
++        programs.insert(value.ecef.lo.base.handle);
++        programs.insert(value.ecef.hi.base.handle);
++        programs.insert(value.flat.lo.base.handle);
++        programs.insert(value.flat.hi.base.handle);
++        shaders().erase(found);
++    }
++    for (const auto program : programs) if (program) glDeleteProgram(program);
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
+index 1473f9c..ffc05a5 100644
+--- a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
+@@ -1,4 +1,6 @@
+ #include "renderer/elevation/GLTerrainTile.h"
++#include "renderer/RenderContextLifecycle.h"
++#include <set>
+ 
+ #include <algorithm>
+ 
+@@ -131,6 +133,8 @@ namespace
+     GLenum glType(const DataType tedt) NOTHROWS;
+     void configureLightingUniforms(const TerrainTileRenderContext &ctx, const TerrainTileShader &shader) NOTHROWS;
+ 
++    Mutex colorShadersMutex;
++    Mutex depthShadersMutex;
+     std::map<const RenderContext *, std::map<int64_t, TerrainTileShaders>> colorShaders;
+     std::map<const RenderContext *, std::map<int, TerrainTileShaders>> depthShaders;
+ }
+@@ -325,8 +329,7 @@ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShade
+ }
+ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShader(const TAK::Engine::Core::RenderContext &ctx, const int srid, const unsigned int options) NOTHROWS
+ {
+-    static Mutex m;
+-    Lock lock(m);
++    Lock lock(colorShadersMutex);
+     const int64_t key = (((int64_t)srid)<<32LL)|((int64_t)options);
+     auto entry = colorShaders[&ctx].find(key);
+     if(entry != colorShaders[&ctx].end())
+@@ -373,8 +376,7 @@ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShade
+ }
+ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getDepthShader(const TAK::Engine::Core::RenderContext &ctx, const int srid) NOTHROWS
+ {
+-    static Mutex m;
+-    Lock lock(m);
++    Lock lock(depthShadersMutex);
+     auto entry = depthShaders[&ctx].find(srid);
+     if(entry != depthShaders[&ctx].end())
+         return entry->second;
+@@ -754,3 +756,36 @@ namespace
+         glUniform1f(shader.uMinAmbientLight, ctx.numLightSources ? 0.15f : 0.25f);
+     }
+ }
++
++TAKErr TAK::Engine::Renderer::TerrainShaders_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::set<GLuint> programs;
++    {
++        Lock lock(colorShadersMutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = colorShaders.find(&context);
++        if (found != colorShaders.end()) {
++            for (const auto& entry : found->second) {
++                programs.insert(entry.second.lo.handle);
++                programs.insert(entry.second.md.handle);
++                programs.insert(entry.second.hi.handle);
++            }
++            colorShaders.erase(found);
++        }
++    }
++    {
++        Lock lock(depthShadersMutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = depthShaders.find(&context);
++        if (found != depthShaders.end()) {
++            for (const auto& entry : found->second) {
++                programs.insert(entry.second.lo.handle);
++                programs.insert(entry.second.md.handle);
++                programs.insert(entry.second.hi.handle);
++            }
++            depthShaders.erase(found);
++        }
++    }
++    for (const auto program : programs) if (program) glDeleteProgram(program);
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
+index 2748efb..8114720 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
+@@ -1,3 +1,4 @@
++#include "renderer/RenderContextLifecycle.h"
+ #include "renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h"
+ 
+ #include <cassert>
+@@ -635,6 +636,18 @@ TAKErr GLBatchGeometryFeatureDataStoreRenderer3::releaseImpl() NOTHROWS
+     unmapMappedBuffers();
+     renderer.release();
+     editRenderer.release();
++    // Base release has interrupted and JOINED the query worker and destroyed
++    // its BuilderQueryContext (including icon/texture Ready ID/UV caches).
++    // Drop this renderer's asynchronous image results so none can upload old
++    // completion state after a context rebind. Atlas GPU retirement itself is
++    // scoped to the whole binding, not an individual layer release.
++    {
++        Lock lock(*iconLoader.mutex);
++        for (auto& entry : iconLoader.loading) if (entry.second) entry.second->getFuture().cancel();
++        iconLoader.loading.clear();
++        iconLoader.failed.clear();
++        iconLoader.preloaded = false;
++    }
+     return TE_Ok;
+ }
+ 
+@@ -2027,3 +2040,38 @@ namespace
+         lock.signal();
+     }
+ }
++
++TAKErr TAK::Engine::Renderer::BatchAtlases_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::vector<GLuint> buffers;
++    {
++        Lock lock(discardBuffers.mutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = discardBuffers.value.find(&context);
++        if (found != discardBuffers.value.end()) {
++            buffers.swap(found->second);
++            discardBuffers.value.erase(found);
++        }
++    }
++    if (!buffers.empty()) glDeleteBuffers((GLsizei)buffers.size(), buffers.data());
++    std::shared_ptr<GLTextureAtlas2> atlas;
++    std::shared_ptr<Mutex> atlasMutex;
++    {
++        Lock lock(iconAtlases.mutex.global);
++        TE_CHECKRETURN_CODE(lock.status);
++        const auto found = iconAtlases.value.find(&context);
++        if (found != iconAtlases.value.end()) {
++            atlas = found->second;
++            atlasMutex = iconAtlases.mutex.instance[&context];
++        }
++    }
++    // Keep the shared CPU atlas identity alive for retained renderer owners.
++    // Every layer query worker was joined by release before this scoped hook.
++    if (atlas) {
++        if (!atlasMutex) return TE_IllegalState;
++        Lock lock(*atlasMutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        atlas->release();
++    }
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
+index 326b6be..22c07a9 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
+@@ -1933,6 +1933,13 @@ void GLBatchGeometryRenderer4::release() NOTHROWS
+ 
+     fbo.pixel.reset();
+     fbo.tile.reset();
++    // These are borrowed by-value cache snapshots, not owners of programs.
++    // The per-context shader cache retires the GPU programs after renderables
++    // release. Reacquire all uniform locations/programs on the next draw.
++    pointShader = PointsShader();
++    lineShader = AntiAliasedLinesShader();
++    polygonsShader = PolygonsShader();
++    meshesShader = MeshesShader();
+ }
+ 
+ namespace
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
+index 8acea93..9ffa1be 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
+@@ -1,3 +1,5 @@
++#include "renderer/RenderContextLifecycle.h"
++#include <set>
+ #include "renderer/feature/GLBatchGeometryShaders.h"
+ 
+ #include <cassert>
+@@ -517,3 +519,27 @@ MeshesShader TAK::Engine::Renderer::Feature::GLBatchGeometryShaders_getMeshesSha
+     shaders.meshes[&ctx][key] = shader;
+     return shader;
+ }
++
++TAKErr TAK::Engine::Renderer::BatchShaders_releaseContext(const RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    std::set<GLuint> programs;
++    {
++        Lock lock(mutex);
++        TE_CHECKRETURN_CODE(lock.status);
++        auto collect = [&context, &programs](auto& cache, auto handle) {
++            const auto found = cache.find(&context);
++            if (found == cache.end()) return;
++            for (const auto& entry : found->second) programs.insert(handle(entry.second));
++            cache.erase(found);
++        };
++        collect(shaders.lines, [](const LinesShader& value) { return value.handle; });
++        collect(shaders.antiAliasedLines, [](const AntiAliasedLinesShader& value) { return value.base.handle; });
++        collect(shaders.polygons, [](const PolygonsShader& value) { return value.handle; });
++        collect(shaders.strokedPolygons, [](const StrokedPolygonsShader& value) { return value.base.handle; });
++        collect(shaders.points, [](const PointsShader& value) { return value.handle; });
++        collect(shaders.arrows, [](const ArrowLinesShader& value) { return value.handle; });
++        collect(shaders.meshes, [](const MeshesShader& value) { return value.handle; });
++    }
++    for (const auto program : programs) if (program) glDeleteProgram(program);
++    return TE_Ok;
++}
+diff --git a/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java b/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java
+index daf94c6..f8d363a 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java
++++ b/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java
+@@ -19,12 +19,15 @@ public class GLImage
+ {
+ 
+     private int vertexBufferId;
++    private final RenderContext ownerContext;
++    private final long creationEpoch;
+ 
+     private int _textureId;
+     private float _width;
+     private float _height;
+ 
+     private static Map<List<Float>, Map<RenderContext, Integer>> vboIdCache = new HashMap<>();
++    private static final Map<RenderContext,Long> epochs=new java.util.IdentityHashMap<>();
+ 
+     public final float u0;
+     public final float v0;
+@@ -43,6 +46,12 @@ public class GLImage
+                    float width, float height)
+     {
+ 
++        if (ctx==null) ctx=RenderContext.getCurrent();
++        if (ctx==null || !ctx.isRenderThread() || !ctx.isAttached())
++            throw new IllegalStateException("GLImage needs its owning current context");
++        ownerContext=ctx;
++        synchronized (vboIdCache) { creationEpoch=epochs.getOrDefault(ctx,0L); }
++
+         this.u0 = tx / (float) textureWidth;
+         this.v0 = ty / (float) textureHeight;
+         this.u1 = (tx + tw) / (float) textureWidth;
+@@ -50,13 +59,13 @@ public class GLImage
+ 
+         // set up VBO element
+         List<Float> key = Arrays.asList(tx, ty, tw, th, x, y, width, height);
+-        Map<RenderContext, Integer> vboEntry = vboIdCache.get(key);
+-        if (vboEntry == null)
+-            vboIdCache.put(key, vboEntry = new HashMap<>());
+-        if (vboEntry.containsKey(ctx))
+-        {
+-            vertexBufferId = vboEntry.get(ctx);
+-        } else
++        Integer cached;
++        synchronized (vboIdCache) {
++            Map<RenderContext,Integer> entry=vboIdCache.get(key);
++            cached=entry==null ? null : entry.get(ctx);
++        }
++        if (cached!=null) vertexBufferId=cached;
++        else
+         {
+             float[] vertices = new float[16];
+ 
+@@ -74,7 +83,10 @@ public class GLImage
+             // merge GL_VERTEX_ARRAY and GL_TEXTURE_COORD_ARRAY for a single VBO reference
+             System.arraycopy(texVerts, 0, vertices, 8, 8);
+ 
+-            vboEntry.put(ctx, createVertexBuffer(vertices));
++            int created=createVertexBuffer(vertices);
++            synchronized (vboIdCache) {
++                vboIdCache.computeIfAbsent(key,ignored -> new java.util.IdentityHashMap<>()).put(ctx,created);
++            }
+         }
+ 
+         _textureId = texId;
+@@ -82,6 +94,33 @@ public class GLImage
+         _height = height;
+     }
+ 
++    /** Release one context's shared VBOs; old raw texture images require recreation. */
++    public static void releaseContextResources(RenderContext context)
++    {
++        if (context==null || !context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        java.util.List<Integer> buffers=new java.util.ArrayList<>();
++        synchronized (vboIdCache) {
++            epochs.put(context,epochs.getOrDefault(context,0L)+1);
++            for (Map<RenderContext,Integer> entry:vboIdCache.values()) {
++                Integer buffer=entry.remove(context);
++                if (buffer!=null && buffer!=0) buffers.add(buffer);
++            }
++        }
++        int[] ids=new int[buffers.size()];
++        for(int i=0;i<ids.length;i++) ids[i]=buffers.get(i);
++        if(ids.length!=0) GLES30.glDeleteBuffers(ids.length,ids,0);
++    }
++    private void requireLiveImage()
++    {
++        if (!ownerContext.isRenderThread() || !ownerContext.isAttached())
++            throw new IllegalStateException("Image belongs to a released or non-current context");
++        synchronized (vboIdCache) {
++            if (creationEpoch!=epochs.getOrDefault(ownerContext,0L))
++                throw new IllegalStateException("Recreate raw texture image after context loss");
++        }
++    }
++
+     public void draw(Shader shader)
+     {
+         draw(shader, 1f, 1f, 1f, 1f);
+@@ -89,6 +128,7 @@ public class GLImage
+ 
+     public void draw(Shader shader, float red, float green, float blue, float alpha)
+     {
++        requireLiveImage();
+         if (_textureId != 0)
+         {
+             GLES30.glEnable(GLES30.GL_BLEND);
+diff --git a/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java b/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java
+index c58ddac..9267409 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java
++++ b/takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java
+@@ -75,6 +75,27 @@ public class GLImageCache
+         _atlas.release();
+     }
+ 
++    /** Retire GPU storage without invalidating borrowed Entry identities. */
++    public void releaseContextResources()
++    {
++        java.util.Set<Entry> entries = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Entry, Boolean>());
++        entries.addAll(_atlasItems.values());
++        entries.addAll(_textureItems.values());
++        entries.addAll(_prefetchCache);
++        int[] textureIds = new int[_textureItems.size()];
++        int count = 0;
++        for (Entry entry : _textureItems.values())
++            if (entry._textureId != 0) textureIds[count++] = entry._textureId;
++        if (count != 0) GLES20FixedPipeline.glDeleteTextures(count, textureIds, 0);
++        _atlas.release();
++        for (Entry entry : entries) {
++            if (entry._pending != null) entry._pending.cancel(false);
++            entry._pending = null;
++            entry._textureId = 0;
++            entry._invalid = false;
++        }
++    }
++
+     public void release()
+     {
+         Collection<Entry> entries;
+diff --git a/b/takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java
+new file mode 100644
+index 0000000..d34ea44
+--- /dev/null
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java
+@@ -0,0 +1,15 @@
++// Copyright 2026 uds-takserver authors
++// SPDX-License-Identifier: GPL-3.0-only
++package com.atakmap.map.layer.control;
++
++import com.atakmap.map.MapControl;
++import gov.tak.api.engine.map.RenderContext;
++
++/** Project context-loss lifecycle for an unshared main renderer context.
++ * Stop and release on the old current GL thread before destroying its context.
++ * Rebind on the replacement current GL thread, reconfigure the view, then start.
++ * This operation preserves the renderer identity, not old GL object identities.
++ */
++public interface RenderContextControl extends MapControl {
++    void setRenderContext(RenderContext context);
++}
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java
+index d30841f..42b1536 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java
+@@ -571,6 +571,12 @@ public class GLQuadTileNode4 implements
+         this.derivedUnresolvableData = false;
+     }
+ 
++    /** Context lifecycle hook after all nodes have released their own buffers. */
++    public static void releaseContextResources(gov.tak.api.engine.map.RenderContext context)
++    {
++        NodeCore.releaseContextResources(context);
++    }
++
+     @Override
+     public void release()
+     {
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeContextResources.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeContextResources.java
+index f2cc795..6c95b9d 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeContextResources.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeContextResources.java
+@@ -112,6 +112,15 @@ final class NodeContextResources
+         return discardBuffers[--numNumDiscardBuffers];
+     }
+ 
++    void releaseContextResources()
++    {
++        GLES30.glDeleteBuffers(uniformGriddedTexCoords.length,uniformGriddedTexCoords,0);
++        GLES30.glDeleteBuffers(uniformGriddedIndices.length,uniformGriddedIndices,0);
++        java.util.Arrays.fill(uniformGriddedTexCoords,GLES30.GL_NONE);
++        java.util.Arrays.fill(uniformGriddedIndices,GLES30.GL_NONE);
++        deleteBuffers();
++    }
++
+     void deleteBuffers()
+     {
+         if (numNumDiscardBuffers > 0)
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeCore.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeCore.java
+index b6c1923..49c4a51 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeCore.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeCore.java
+@@ -45,6 +45,18 @@ class NodeCore implements Disposable, TileCacheControl.OnTileUpdateListener
+ 
+     private final static Map<RenderContext, ReferenceCount<NodeContextResources>> resourcesReferences = new IdentityHashMap<>();
+ 
++    static void releaseContextResources(gov.tak.api.engine.map.RenderContext context)
++    {
++        if (context==null || !context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        NodeContextResources value;
++        synchronized (resourcesReferences) {
++            ReferenceCount<NodeContextResources> ref=resourcesReferences.get(context);
++            value=ref==null ? null : ref.value;
++        }
++        if (value!=null) value.releaseContextResources();
++    }
++
+     final NodeInitializer init;
+     Shader shader;
+     final RenderState renderState = new RenderState();
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLMapView.java b/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLMapView.java
+index 1c6b572..563207e 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLMapView.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLMapView.java
+@@ -125,8 +125,13 @@ public class GLMapView implements
+                 removeCameraChangedListener(pointer.raw, cbptr[0]);
+                 cbptr[0] = 0L;
+             }
+-            globeReferences.remove(pointer);
+-            destruct(pointer);
++            Globe retainedGlobe = globeReferences.remove(pointer);
++            try {
++                destruct(pointer);
++            } finally {
++                // Native GLGlobe borrows its model during destruction.
++                java.lang.ref.Reference.reachabilityFence(retainedGlobe);
++            }
+         }
+     };
+ 
+@@ -239,6 +244,12 @@ public class GLMapView implements
+     public final GLAntiMeridianHelper idlHelper = new GLAntiMeridianHelper();
+ 
+     private RenderContext _context;
++    private RenderContextBinding contextBinding;
++    private boolean lifecycleStarted;
++    private boolean lifecycleDisposed;
++    private boolean lifecycleFailed;
++    private volatile boolean lifecycleDisposing;
++    private boolean lifecycleRendering;
+     private RenderSurface _surface;
+     private GLLabelManager _labelManager;
+ 
+@@ -393,14 +404,31 @@ public class GLMapView implements
+         this(surface, surface.getMapView().getGlobe(), left, bottom, right, top);
+     }
+ 
++    /** Construct a rebindable desktop renderer with stable native ownership. */
++    public GLMapView(gov.tak.api.engine.map.RenderContext context, Globe globe,
++                     int left, int bottom, int right, int top)
++    {
++        this(new RenderContextBinding(context), globe, left, bottom, right, top, false);
++    }
++
+     public GLMapView(RenderContext context, Globe globe, int left, int bottom, int right, int top)
+     {
+-        this(context, globe, left, bottom, right, top, false);
++        // TAKX's JOGL context implements this older interface, so Java selects
++        // this overload. Surface-owned legacy views keep their existing owner.
++        this(context instanceof GLMapSurface ? context : new RenderContextBinding(context),
++                globe, left, bottom, right, top, false);
+     }
+ 
+     protected GLMapView(RenderContext context, Globe globe, int left, int bottom, int right, int top, boolean legacy)
+     {
++        if (context instanceof RenderContextBinding && ((RenderContextBinding)context).claimed())
++            context = new RenderContextBinding(context);
+         _context = context;
++        contextBinding = context instanceof RenderContextBinding ? (RenderContextBinding)context : null;
++        if (contextBinding != null) {
++            if (legacy) throw new UnsupportedOperationException("Rebinding requires the globe renderer implementation");
++            contextBinding.claim();
++        }
+         _surface = _context.getRenderSurface();
+         impl = legacy ? IMPL_V1 : IMPL_V2;
+ 
+@@ -448,6 +476,26 @@ public class GLMapView implements
+         this.controlsListeners = Collections.newSetFromMap(new IdentityHashMap<>());
+ 
+         this.rendererControls = Collections2.newIdentityHashSet();
++        if (contextBinding != null) {
++            this.registerControl(null, (com.atakmap.map.layer.control.RenderContextControl) replacement -> {
++                if (lifecycleDisposed || lifecycleDisposing || lifecycleFailed) throw new IllegalStateException("Renderer disposed or rebinding failed");
++                if (lifecycleStarted) throw new IllegalStateException("Stop renderer before rebinding");
++                contextBinding.rebind(replacement);
++                gov.tak.api.engine.map.RenderContext.setCurrent(_context);
++                try {
++                    recreateContextCaches(ctxptr);
++                    com.atakmap.opengl.Shader.recreateContext(_context);
++                    gov.tak.api.engine.Shader.recreateContext(_context);
++                    GLRenderGlobals.recreateContextResources(_context);
++                    com.atakmap.opengl.GLText.resumeContext(_context);
++                } catch (RuntimeException | Error failure) {
++                    // Partial recreation cannot be rendered or retried as success.
++                    // The new current context can still release/dispose its resources.
++                    lifecycleFailed = true;
++                    throw failure;
++                }
++            });
++        }
+ 
+         if (impl == IMPL_V2)
+         {
+@@ -479,14 +527,19 @@ public class GLMapView implements
+         // default collide radius of 10m
+         setCollideRadius(pointer.raw, 10d);
+ 
++        // An unrealized desktop drawable may report zero dimensions. This is
++        // only a provisional CPU scene; the real surface dimensions remain
++        // unchanged and are applied by normal scene validation after reshape.
++        final int initialWidth = Math.max(1, getSurfaceWidth());
++        final int initialHeight = Math.max(1, getSurfaceHeight());
+         // assign current pass/scene `scene` so non-null before sync
+         currentScene.scene = new MapSceneModel(_surface.getDpi(),
+-                getSurfaceWidth(),
+-                getSurfaceHeight(),
++                initialWidth,
++                initialHeight,
+                 ProjectionFactory.getProjection(4326),
+                 new GeoPoint(0, 0),
+-                getSurfaceWidth() / 2f,
+-                getSurfaceHeight() / 2f,
++                initialWidth / 2f,
++                initialHeight / 2f,
+                 0d,
+                 0d,
+                 OSMUtils.mapnikTileResolution(0),
+@@ -598,18 +651,70 @@ public class GLMapView implements
+      */
+     public void dispose()
+     {
+-        //if(this.cleaner != null)
+-        //    this.cleaner.clean();
++        if (contextBinding == null) return; // preserve the legacy surface lifecycle
++        if (lifecycleDisposed) return;
++        if (lifecycleRendering) throw new IllegalStateException("Dispose during renderer draw");
++        contextBinding.requireLifecycleBoundary();
++        lifecycleDisposing=true;
++        if (contextBinding.released()) contextBinding.reopenForTerminalCleanup();
++        stop();
++        release(true);
++        lifecycleDisposed = true;
++        GLRenderGlobals globals = GLRenderGlobals.peek(_context);
++        if (globals != null) globals.dispose();
++        GLRenderGlobals.dispose(_context);
++        // Native children remain alive while label/terrain/control wrappers keep
++        // this view strongly reachable. The terminal native marker makes their
++        // eventual NativePeerManager destruction CPU-only with no dead-context work.
++        contextBinding.terminate();
++        gov.tak.api.engine.map.RenderContext.setCurrent(null);
+     }
+ 
+     public void release()
+     {
++        release(false);
++    }
++
++    private void release(boolean terminal)
++    {
++        if (contextBinding != null && lifecycleRendering)
++            throw new IllegalStateException("Release during renderer draw");
+         this.rwlock.acquireRead();
+         try
+         {
+             if (this.pointer.raw == 0L)
+                 return;
++            if (contextBinding != null) {
++                if (lifecycleStarted) throw new IllegalStateException("Stop renderer before release");
++                if (contextBinding.released()) return;
++                contextBinding.requireCurrent();
++                gov.tak.api.engine.map.RenderContext.setCurrent(_context);
++                contextBinding.beginRelease();
++                com.atakmap.opengl.GLText.retireContext(_context);
++                contextBinding.drain();
++            }
+             release(this.pointer.raw);
++            if (contextBinding != null) {
++                contextBinding.drain();
++                releaseContextCaches(ctxptr, true);
++                contextBinding.drain(); // cancellation continuations, on the old GL context
++                releaseContextCaches(ctxptr, false);
++                com.atakmap.opengl.Shader.releaseContext(_context);
++                gov.tak.api.engine.Shader.releaseContext(_context);
++                com.atakmap.opengl.GLES20FixedPipeline.releaseContext(_context);
++                com.atakmap.opengl.GLText.releaseContext(_context);
++                GLRenderGlobals.releaseContextResources(_context);
++                com.atakmap.android.maps.graphics.GLImage.releaseContextResources(_context);
++                com.atakmap.map.layer.raster.tilereader.opengl.GLQuadTileNode4.releaseContextResources(_context);
++                if (terminal) {
++                    // Drop managed renderable global references only AFTER GPU
++                    // release, breaking callback cycles without freeing borrows.
++                    setBaseMap(this.pointer.raw, null);
++                    setStarsLayer(this.pointer.raw, null);
++                    markContextTerminal(this.pointer.raw);
++                }
++                contextBinding.retire();
++            }
+         } finally
+         {
+             this.rwlock.releaseRead();
+@@ -1347,6 +1452,23 @@ public class GLMapView implements
+      */
+     public void render()
+     {
++        if (contextBinding == null) { renderFrame(); return; }
++        if (lifecycleRendering) throw new IllegalStateException("Reentrant renderer draw");
++        if (lifecycleDisposed || lifecycleDisposing || lifecycleFailed || contextBinding.released())
++            throw new IllegalStateException("Renderer not bound");
++        contextBinding.requireCurrent();
++        contextBinding.pump();
++        lifecycleRendering=true;
++        try { renderFrame(); }
++        finally { lifecycleRendering=false; }
++    }
++
++    private void renderFrame()
++    {
++        if (contextBinding != null) {
++            if (lifecycleDisposed || lifecycleDisposing || lifecycleFailed || contextBinding.released()) throw new IllegalStateException("Renderer not bound");
++            contextBinding.requireCurrent();
++        }
+ 
+         gov.tak.api.engine.map.RenderContext.setCurrent(this.getRenderContext());
+ 
+@@ -1384,16 +1506,30 @@ public class GLMapView implements
+ 
+     public void start()
+     {
++        if (contextBinding != null) {
++            if (lifecycleRendering) throw new IllegalStateException("Start during renderer draw");
++            if (lifecycleDisposed || lifecycleDisposing || lifecycleFailed || contextBinding.released()) throw new IllegalStateException("Renderer not bound");
++            contextBinding.requireCurrent();
++            gov.tak.api.engine.map.RenderContext.setCurrent(_context);
++            contextBinding.pump();
++        }
+         setDisplayDpi(this.pointer.raw, _surface.getDpi(), impl);
+         start(this.pointer.raw);
+         sync(this.pointer.raw, this, false);
+         sync(this.pointer.raw, this, true);
+         this.syncPass = 0;
++        lifecycleStarted = true;
+     }
+ 
+     public void stop()
+     {
++        if (contextBinding != null) {
++            if (lifecycleRendering) throw new IllegalStateException("Stop during renderer draw");
++            contextBinding.requireCurrent();
++            gov.tak.api.engine.map.RenderContext.setCurrent(_context);
++        }
+         stop(this.pointer.raw);
++        lifecycleStarted = false;
+     }
+ 
+     protected void drawRenderables()
+@@ -3546,6 +3682,9 @@ public class GLMapView implements
+     static native Pointer create(long ctxPtr, long mapviewPtr, int left, int bottom, int right, int top, boolean orthoOnly);
+ 
+     static native void render(long ptr);
++    private static native void releaseContextCaches(long contextPtr, boolean workersOnly);
++    private static native void recreateContextCaches(long contextPtr);
++    private static native void markContextTerminal(long rendererPtr);
+ 
+     static native void release(long ptr);
+ 
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLRenderGlobals.java b/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLRenderGlobals.java
+index c9e8a25..80726a0 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLRenderGlobals.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/opengl/GLRenderGlobals.java
+@@ -99,6 +99,36 @@ public class GLRenderGlobals
+         return this.pixel;
+     }
+ 
++    /** Release one renderer binding; other live views retain their caches. */
++    static synchronized void releaseContextResources(RenderContext context)
++    {
++        if (!context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        GLRenderGlobals globals = peek(context);
++        if (globals == null) return;
++        synchronized (globals) {
++            if (globals.textureCache != null) globals.textureCache.clear();
++            if (globals.imageCache != null) globals.imageCache.releaseContextResources();
++            if (globals.nominalIconAtlas != null) globals.nominalIconAtlas.release();
++            if (globals.genericAtlas != null) globals.genericAtlas.release();
++            if (globals.pixel != null) globals.pixel.release();
++            if (globals.smallNinePatch != null) globals.smallNinePatch.releaseContextResources();
++            if (globals.mediumNinePatch != null) globals.mediumNinePatch.releaseContextResources();
++        }
++    }
++
++    static synchronized void recreateContextResources(RenderContext context)
++    {
++        if (!context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        GLRenderGlobals globals = peek(context);
++        if (globals == null) return;
++        synchronized (globals) {
++            if (globals.pixel != null)
++                globals.pixel.load(Bitmap.createBitmap(new int[] {-1}, 1, 1, Bitmap.Config.RGB_565));
++        }
++    }
++
+     synchronized void dispose()
+     {
+         if (this.bitmapLoader != null)
+@@ -170,7 +200,7 @@ public class GLRenderGlobals
+         return ref.value;
+     }
+ 
+-    static void dispose(RenderContext surface)
++    static synchronized void dispose(RenderContext surface)
+     {
+         instances.remove(surface);
+     }
+@@ -235,7 +265,9 @@ public class GLRenderGlobals
+                     break;
+             } else if (o instanceof GLMapView)
+             {
+-                o = ((GLMapView) o).getSurface();
++                // Desktop views have a real RenderContext without an Android
++                // GLMapSurface subtype; do not cast their functional binding.
++                o = ((GLMapView) o).getRenderContext();
+                 if (o != null)
+                     continue;
+             }
+diff --git a/b/takkernel/engine/src/main/java/com/atakmap/map/opengl/RenderContextBinding.java b/takkernel/engine/src/main/java/com/atakmap/map/opengl/RenderContextBinding.java
+new file mode 100644
+index 0000000..bc0e7e4
+--- /dev/null
++++ b/takkernel/engine/src/main/java/com/atakmap/map/opengl/RenderContextBinding.java
+@@ -0,0 +1,209 @@
++// Copyright 2026 uds-takserver authors
++// SPDX-License-Identifier: GPL-3.0-only
++package com.atakmap.map.opengl;
++
++import com.atakmap.map.RenderContext;
++import com.atakmap.map.RenderSurface;
++import gov.tak.api.engine.map.RenderSurface2;
++import java.util.ArrayDeque;
++import java.util.IdentityHashMap;
++import java.util.Map;
++import java.util.Objects;
++
++/** One renderer's stable, functional native context/surface owner. */
++final class RenderContextBinding implements RenderContext {
++    // Experimental ownership contract: native caches retain borrowed CPU objects
++    // keyed by the native peer address. Keep its Java owner alive too, so that
++    // address cannot be recycled for a later renderer. Terminal delegates are
++    // cleared; the small binding/native-peer tombstone remains process-owned.
++    private static final java.util.Set<RenderContextBinding> identities =
++            java.util.Collections.newSetFromMap(new IdentityHashMap<RenderContextBinding, Boolean>());
++    private gov.tak.api.engine.map.RenderContext delegate;
++    private final Surface surface = new Surface();
++    private final ArrayDeque<Task> pending = new ArrayDeque<>();
++    private long generation;
++    private boolean released;
++    private boolean draining;
++    private boolean quiescing;
++    private int callbacks;
++    private boolean terminated;
++    private boolean claimed;
++    private final Runnable activate;
++
++    RenderContextBinding(gov.tak.api.engine.map.RenderContext context) {
++        this(context, null);
++    }
++    // Package-only activation seam for the explicitly non-GL state unit test.
++    RenderContextBinding(gov.tak.api.engine.map.RenderContext context, Runnable testActivation) {
++        activate = testActivation != null ? testActivation :
++                () -> gov.tak.api.engine.map.RenderContext.setCurrent(this);
++        // A second view may be constructed from another view's public context.
++        // Borrow the real delegate, never that first view's retirement state.
++        while (context instanceof RenderContextBinding)
++            context=((RenderContextBinding)context).delegate();
++        delegate = Objects.requireNonNull(context, "render context");
++        if (!context.isMainContext() || context.supportsChildContext())
++            throw new IllegalArgumentException("unshared main context required");
++        synchronized (identities) { identities.add(this); }
++    }
++    synchronized boolean claimed() { return claimed; }
++    synchronized void claim() {
++        if (claimed) throw new IllegalStateException("Binding already owns a renderer");
++        claimed=true;
++    }
++    synchronized gov.tak.api.engine.map.RenderContext delegate() {
++        if (terminated) throw new IllegalStateException("Renderer context is terminally disposed");
++        return delegate;
++    }
++    synchronized void terminate() {
++        if (!released || callbacks != 0 || !pending.isEmpty() || !surface.listeners.isEmpty())
++            throw new IllegalStateException("Context must be quiescent before terminal disposal");
++        terminated = true;
++        delegate = null;
++    }
++    synchronized long generation() { return generation; }
++    synchronized boolean released() { return released; }
++    void requireCurrent() {
++        gov.tak.api.engine.map.RenderContext current = delegate();
++        if (!current.isRenderThread() || !current.isAttached())
++            throw new IllegalStateException("current owning GL thread required");
++    }
++    /** Privileged terminal cleanup of an already GPU-released binding. This
++     * never resumes workers/shaders and rejects all external submissions. */
++    void reopenForTerminalCleanup() {
++        requireCurrent();
++        synchronized (this) {
++            if (terminated || !released || callbacks!=0 || !pending.isEmpty())
++                throw new IllegalStateException("Terminal cleanup requires a quiescent released context");
++            released=false;
++            quiescing=true;
++        }
++    }
++    void requireLifecycleBoundary() {
++        requireCurrent();
++        synchronized (this) {
++            if (callbacks != 0) throw new IllegalStateException("release inside a queued callback");
++        }
++    }
++    void beginRelease() {
++        requireLifecycleBoundary();
++        synchronized (this) {
++            if (released || terminated) throw new IllegalStateException("Context already retired");
++            quiescing = true;
++        }
++    }
++    void pump() {
++        requireCurrent();
++        synchronized (this) { if (callbacks!=0) return; }
++        drain();
++    }
++    void drain() {
++        requireCurrent();
++        synchronized (this) {
++            if (callbacks != 0) throw new IllegalStateException("release inside a queued callback");
++            draining = true;
++        }
++        try {
++            int count = 0;
++            for (;;) {
++                Task task;
++                synchronized (this) { task = pending.peekFirst(); }
++                if (task == null) break;
++                if (++count > 4096) throw new IllegalStateException("render work did not quiesce");
++                task.run();
++            }
++        } finally { synchronized (this) { draining = false; } }
++    }
++    synchronized void retire() {
++        if (!quiescing || !pending.isEmpty() || callbacks != 0) throw new IllegalStateException("outstanding old-context work or no release barrier");
++        released = true;
++        generation++;
++    }
++    synchronized void rebind(gov.tak.api.engine.map.RenderContext replacement) {
++        Objects.requireNonNull(replacement, "replacement context");
++        if (terminated) throw new IllegalStateException("Renderer context is terminally disposed");
++        if (!released || !pending.isEmpty() || callbacks != 0) throw new IllegalStateException("stop/release before rebinding");
++        if (!replacement.isMainContext() || replacement.supportsChildContext())
++            throw new IllegalArgumentException("unshared main context required");
++        if (!replacement.isRenderThread() || !replacement.isAttached())
++            throw new IllegalStateException("replacement current GL thread required");
++        if (!surface.listeners.isEmpty()) throw new IllegalStateException("old surface listeners still registered");
++        delegate = replacement;
++        released = false;
++        quiescing = false;
++    }
++    @Override public synchronized boolean isRenderThread() { return !released && delegate.isRenderThread(); }
++    @Override public void queueEvent(Runnable runnable) {
++        Objects.requireNonNull(runnable, "render work");
++        final Task task;
++        final gov.tak.api.engine.map.RenderContext target;
++        synchronized (this) {
++            if (released) throw new IllegalStateException("render context has been released");
++            if (quiescing && (!delegate.isRenderThread() || !delegate.isAttached()))
++                throw new IllegalStateException("render context is quiescing; no new external work");
++            task = new Task(runnable, generation); pending.addLast(task); target = delegate;
++        }
++        // During release, the owning GL thread drains this queue synchronously.
++        synchronized (this) { if (draining || quiescing) return; }
++        target.queueEvent(task);
++    }
++    private final class Task implements Runnable {
++        private Runnable work;
++        private final long epoch;
++        Task(Runnable work, long epoch) { this.work=work; this.epoch=epoch; }
++        @Override public void run() {
++            final Runnable actual;
++            synchronized (RenderContextBinding.this) {
++                if (work == null) return; // already drained on the old GL thread
++                if (epoch != generation || released) throw new IllegalStateException("stale render work");
++                requireCurrent(); activate.run(); actual=work; work=null; pending.remove(this); callbacks++;
++            }
++            try { actual.run(); }
++            finally { synchronized (RenderContextBinding.this) { callbacks--; } }
++        }
++    }
++    @Override public void requestRefresh() { delegate().requestRefresh(); }
++    @Override public void setFrameRate(float value) { delegate().setFrameRate(value); }
++    @Override public float getFrameRate() { return delegate().getFrameRate(); }
++    @Override public void setContinuousRenderEnabled(boolean value) { delegate().setContinuousRenderEnabled(value); }
++    @Override public boolean isContinuousRenderEnabled() { return delegate().isContinuousRenderEnabled(); }
++    @Override public boolean supportsChildContext() { return false; }
++    @Override public gov.tak.api.engine.map.RenderContext createChildContext() {
++        throw new UnsupportedOperationException("rebindable view contexts do not create shared children");
++    }
++    @Override public void destroyChildContext(gov.tak.api.engine.map.RenderContext child) {
++        throw new IllegalArgumentException("not a child of this view binding");
++    }
++    @Override public synchronized boolean isAttached() { return !released && delegate.isAttached(); }
++    @Override public boolean attach() { return delegate().attach(); }
++    @Override public boolean detach() { return delegate().detach(); }
++    @Override public boolean isMainContext() { return true; }
++    @Override public RenderSurface getRenderSurface() { return surface; }
++
++    private final class Surface implements RenderSurface, RenderSurface2 {
++        private final Map<OnSizeChangedListener, OnSizeChangedListener> listeners = new IdentityHashMap<>();
++        private gov.tak.api.engine.map.RenderSurface actual() { return delegate().getRenderSurface(); }
++        @Override public double getDpi() { return actual().getDpi(); }
++        @Override public int getWidth() { return actual().getWidth(); }
++        @Override public int getHeight() { return actual().getHeight(); }
++        @Override public int getSurfaceWidth() { return actual() instanceof RenderSurface2 ? ((RenderSurface2)actual()).getSurfaceWidth() : actual().getWidth(); }
++        @Override public int getSurfaceHeight() { return actual() instanceof RenderSurface2 ? ((RenderSurface2)actual()).getSurfaceHeight() : actual().getHeight(); }
++        @Override public void addOnSizeChangedListener(OnSizeChangedListener listener) {
++            synchronized (RenderContextBinding.this) {
++                if (listeners.containsKey(listener)) return;
++                final long epoch = generation;
++                OnSizeChangedListener forwarding = (ignored,w,h) -> {
++                    synchronized (RenderContextBinding.this) { if (epoch != generation || released) return; }
++                    listener.onSizeChanged(this,w,h);
++                };
++                listeners.put(listener,forwarding); actual().addOnSizeChangedListener(forwarding);
++            }
++        }
++        @Override public void removeOnSizeChangedListener(OnSizeChangedListener listener) {
++            synchronized (RenderContextBinding.this) {
++                OnSizeChangedListener forwarding=listeners.remove(listener);
++                if (forwarding!=null) actual().removeOnSizeChangedListener(forwarding);
++            }
++        }
++    }
++}
+diff --git a/takkernel/engine/src/main/java/com/atakmap/opengl/GLES20FixedPipeline.java b/takkernel/engine/src/main/java/com/atakmap/opengl/GLES20FixedPipeline.java
+index 64c9177..275e399 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/opengl/GLES20FixedPipeline.java
++++ b/takkernel/engine/src/main/java/com/atakmap/opengl/GLES20FixedPipeline.java
+@@ -126,7 +126,7 @@ public class GLES20FixedPipeline extends GLES30
+         private final ContextSpecifics specifics[] = new ContextSpecifics[CACHE_ARRAY_SIZE];
+         private final HashMap<RenderContext, ContextSpecifics> overflow = new HashMap<>();
+ 
+-        public ContextSpecifics getForContext(RenderContext context)
++        public synchronized ContextSpecifics getForContext(RenderContext context)
+         {
+             if (context == null)
+                 return null_specifics;
+@@ -141,6 +141,13 @@ public class GLES20FixedPipeline extends GLES30
+             return specific;
+         }
+ 
++        synchronized void reset(RenderContext context)
++        {
++            for (int i=0;i<CACHE_ARRAY_SIZE;i++)
++                if (contexts[i]==context) specifics[i]=new ContextSpecifics();
++            if (overflow.containsKey(context)) overflow.put(context,new ContextSpecifics());
++        }
++
+         private ContextSpecifics put(RenderContext context)
+         {
+             ContextSpecifics specific = new ContextSpecifics();
+@@ -158,11 +165,27 @@ public class GLES20FixedPipeline extends GLES30
+         }
+     }
+ 
++    private static final java.util.Set<RenderContextMap> threadMaps =
++            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<RenderContextMap,Boolean>());
++
++    /** Reset only this binding's CPU-side matrices and borrowed VBO state on
++     * every former GL thread. GPU programs are owned by gov Shader. */
++    public static void releaseContext(RenderContext context)
++    {
++        if (context==null || !context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        java.util.List<RenderContextMap> snapshot;
++        synchronized (threadMaps) { snapshot=new java.util.ArrayList<>(threadMaps); }
++        for (RenderContextMap map:snapshot) map.reset(context);
++    }
++
+     private final static ThreadLocal<RenderContextMap> _contextSpecifics = new ThreadLocal<RenderContextMap>()
+     {
+         @Override public RenderContextMap initialValue()
+         {
+-            return new RenderContextMap();
++            RenderContextMap map=new RenderContextMap();
++            synchronized (threadMaps) { threadMaps.add(map); }
++            return map;
+         }
+     };
+ 
+diff --git a/takkernel/engine/src/main/java/com/atakmap/opengl/GLNinePatch.java b/takkernel/engine/src/main/java/com/atakmap/opengl/GLNinePatch.java
+index dbba984..331cf53 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/opengl/GLNinePatch.java
++++ b/takkernel/engine/src/main/java/com/atakmap/opengl/GLNinePatch.java
+@@ -61,6 +61,7 @@ public class GLNinePatch
+     protected float radius;
+ 
+     private GLImageCache.Entry texEntry;
++    private GLImageCache.Entry sourceEntry;
+     private int textureId;
+ 
+     private float textureDataWidth;
+@@ -83,6 +84,7 @@ public class GLNinePatch
+                        float x1, float y1)
+     {
+         this.texEntry = texEntry;
++        this.sourceEntry = texEntry;
+ 
+         this.textureDataWidth = width;
+         this.textureDataHeight = height;
+@@ -115,6 +117,15 @@ public class GLNinePatch
+         this.radius = (float) Math.sqrt(hWidth * hWidth + hHeight * hHeight);
+     }
+ 
++    /** The atlas entry remains owned; its GPU ID/UVs must be resolved again. */
++    public void releaseContextResources()
++    {
++        this.textureId=0;
++        this.texEntry=this.sourceEntry;
++        this.lastTextureWidth=-1;
++        this.lastTextureHeight=-1;
++    }
++
+     private void validateTextureEntry()
+     {
+         this.textureId = this.texEntry.getTextureId();
+diff --git a/takkernel/engine/src/main/java/com/atakmap/opengl/GLText.java b/takkernel/engine/src/main/java/com/atakmap/opengl/GLText.java
+index cc2fc55..634df30 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/opengl/GLText.java
++++ b/takkernel/engine/src/main/java/com/atakmap/opengl/GLText.java
+@@ -33,6 +33,8 @@ public final class GLText
+     protected static final String TAG = "GLText";
+ 
+     private static Map<Long, Map<RenderContext, GLText>> glTextCache = new HashMap<>();
++    private static final java.util.Set<RenderContext> retiredContexts =
++            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<RenderContext,Boolean>());
+ 
+     /**************************************************************************/
+ 
+@@ -43,6 +45,7 @@ public final class GLText
+     private static final int[] sizeBins = new int[] {0, 8, 16, 32, 64, 128};
+ 
+     GLRenderBatch2 spriteBatch;
++    private final RenderContext ownerContext;
+     float[] scratchMatrix;
+ 
+     /**
+@@ -88,6 +91,8 @@ public final class GLText
+      */
+     public synchronized static GLText getInstance(RenderContext ctx, MapTextFormat textFormat)
+     {
++        if (ctx == null || (retiredContexts.contains(ctx) && (!ctx.isRenderThread() || !ctx.isAttached())))
++            throw new IllegalStateException("Cannot intern text for an absent or retired context");
+         final Typeface typeface = textFormat.getTypeface();
+         final int textSize = textFormat.getFontSize();
+ 
+@@ -113,6 +118,7 @@ public final class GLText
+     // initializes all the font metrics so that the getters work
+     private GLText(RenderContext ctx, MapTextFormat mapTextFormat, Typeface typeface, float densityAdjustedTextSize)
+     {
++        ownerContext = ctx;
+         final int glyphRenderFontSize = findBestFontSize(mapTextFormat.getFontSize());
+ 
+         //if(false) pointer = intern(mapTextFormat, null); else
+@@ -127,9 +133,16 @@ public final class GLText
+         scratchMatrix = new float[16];
+     }
+ 
++    private void requireCurrentContext()
++    {
++        if (ownerContext != null && (!ownerContext.isRenderThread() || !ownerContext.isAttached()))
++            throw new IllegalStateException("Text belongs to a released or non-current context");
++    }
++
+     // used by GLTextWidget
+     public void drawSplitString(String text, int[] colors)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         GLES20FixedPipeline.glGetFloatv(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+@@ -141,11 +154,13 @@ public final class GLText
+ 
+     public void batchSplitString(GLRenderBatch batch, String text, float x, float y, int[] colors)
+     {
++        requireCurrentContext();
+         this.batchSplitString(batch.impl, text, x, y, 0f, colors);
+     }
+ 
+     public void batchSplitString(GLRenderBatch2 batch, String text, float x, float y, float z, int[] colors)
+     {
++        requireCurrentContext();
+         int lineNum = 0;
+         final int length = text.length();
+         int lineStart = 0;
+@@ -204,6 +219,7 @@ public final class GLText
+     // used by GLIsoKeyWidget
+     public void drawSplitString(String text, float r, float g, float b, float a)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         GLES20FixedPipeline.glGetFloatv(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+@@ -216,12 +232,14 @@ public final class GLText
+     public void batchSplitString(GLRenderBatch batch, String text, float x, float y, float r,
+                                  float g, float b, float a)
+     {
++        requireCurrentContext();
+         this.batchSplitString(batch.impl, text, x, y, 0f, r, g, b, a);
+     }
+ 
+     public void batchSplitString(GLRenderBatch2 batch, String text, float x, float y, float z, float r,
+                                  float g, float b, float a)
+     {
++        requireCurrentContext();
+         batch(this.pointer, batch.pointer, text, x, y, z, r, g, b, a);
+     }
+ 
+@@ -239,6 +257,7 @@ public final class GLText
+      */
+     public void draw(String text, float r, float g, float b, float a)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         GLES20FixedPipeline.glGetFloatv(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+@@ -264,6 +283,7 @@ public final class GLText
+     public void draw(String text, float r, float g, float b, float a, float scissorX0,
+                      float scissorX1)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         GLES20FixedPipeline.glGetFloatv(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, scratchMatrix, 0);
+@@ -276,6 +296,7 @@ public final class GLText
+ 
+     public void drawSplitString(String text, int[] colors, float[] projectionMatrix, float[] modelViewMatrix)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, projectionMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_MODELVIEW, modelViewMatrix, 0);
+@@ -285,6 +306,7 @@ public final class GLText
+ 
+     public void draw(String text, float r, float g, float b, float a, float[] projectionMatrix, float[] modelViewMatrix)
+     {
++        requireCurrentContext();
+         spriteBatch.begin();
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_PROJECTION, projectionMatrix, 0);
+         spriteBatch.setMatrix(GLES20FixedPipeline.GL_MODELVIEW, modelViewMatrix, 0);
+@@ -295,12 +317,14 @@ public final class GLText
+     public void batch(GLRenderBatch batch, String text, float x, float y, float r, float g,
+                       float b, float a)
+     {
++        requireCurrentContext();
+         this.batch(batch, text, x, y, r, g, b, a, 0.0f, Float.MAX_VALUE);
+     }
+ 
+     public void batch(GLRenderBatch2 batch, String text, float x, float y, float z, float r, float g,
+                       float b, float a)
+     {
++        requireCurrentContext();
+         this.batch(batch, text, x, y, z, r, g, b, a, 0.0f, Float.MAX_VALUE);
+     }
+ 
+@@ -322,6 +346,7 @@ public final class GLText
+     public void batch(GLRenderBatch batch, String text, float x, float y, float r, float g,
+                       float b, float a, float scissorX0, float scissorX1)
+     {
++        requireCurrentContext();
+ 
+         batch(pointer, batch.impl.pointer, text, x, y, 0f, r, g, b, a, scissorX0, scissorX1);
+     }
+@@ -329,6 +354,7 @@ public final class GLText
+     public void batch(GLRenderBatch2 batch, String text, float x, float y, float z, float r, float g,
+                       float b, float a, float scissorX0, float scissorX1)
+     {
++        requireCurrentContext();
+         batch(pointer, batch.pointer, text, x, y, z, r, g, b, a, scissorX0, scissorX1);
+     }
+ 
+@@ -389,20 +415,53 @@ public final class GLText
+         return numLines;
+     }
+ 
+-    public synchronized static void invalidate()
++    /** Context loss: keep borrowed text and batch CPU objects alive. */
++    public synchronized static void releaseContext(RenderContext context)
+     {
+-        for (Map<RenderContext, GLText> ctxCache : glTextCache.values())
+-        {
+-            for (GLText text : ctxCache.values())
+-            {
+-                invalidate(text.pointer);
+-            }
++        if (!context.isRenderThread() || !context.isAttached())
++            throw new IllegalStateException("Owning current GL context required");
++        for (Map<RenderContext, GLText> cache : glTextCache.values()) {
++            GLText text = cache.get(context);
++            if (text != null) invalidate(text.pointer);
+         }
+-        glTextCache.clear();
++        GLRenderBatch2 batch = SPRITE_BATCH.get(context);
++        if (batch != null) batch.release();
++    }
++
++    /** Mark before draining release work, so global invalidation cannot enqueue
++     * new GPU work for a context whose resources are being retired. */
++    public synchronized static void retireContext(RenderContext context) { retiredContexts.add(context); }
++    public synchronized static void resumeContext(RenderContext context) { retiredContexts.remove(context); }
+ 
+-        for (GLRenderBatch2 spriteBatch : SPRITE_BATCH.values())
+-            spriteBatch.dispose();
+-        SPRITE_BATCH.clear();
++    /** Preserve global intent, but run each GPU invalidation on its own owner. */
++    public static void invalidate()
++    {
++        final java.util.Set<RenderContext> owners = java.util.Collections.newSetFromMap(
++                new java.util.IdentityHashMap<RenderContext,Boolean>());
++        synchronized (GLText.class) {
++            for (Map<RenderContext,GLText> cache : glTextCache.values()) owners.addAll(cache.keySet());
++            owners.addAll(SPRITE_BATCH.keySet());
++            owners.removeAll(retiredContexts);
++        }
++        for (final RenderContext owner : owners) {
++            Runnable invalidation = () -> {
++                synchronized (GLText.class) {
++                    if (retiredContexts.contains(owner)) return;
++                    RenderContext.setCurrent(owner);
++                    releaseContext(owner);
++                    invalidateCache();
++                }
++            };
++            if (owner.isRenderThread() && owner.isAttached()) invalidation.run();
++            else {
++                try { owner.queueEvent(invalidation); }
++                catch (IllegalStateException failure) {
++                    synchronized (GLText.class) {
++                        if (!retiredContexts.contains(owner)) throw failure;
++                    }
++                }
++            }
++        }
+     }
+ 
+     public static String localize(String text)
+diff --git a/takkernel/engine/src/main/java/com/atakmap/opengl/Shader.java b/takkernel/engine/src/main/java/com/atakmap/opengl/Shader.java
+index 651d976..272d7ea 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/opengl/Shader.java
++++ b/takkernel/engine/src/main/java/com/atakmap/opengl/Shader.java
+@@ -62,6 +62,11 @@ public class Shader
+     public int aColors = -1;
+ 
+     public Shader()
++    {
++        initialize();
++    }
++
++    private void initialize()
+     {
+         int vsh = GLES20FixedPipeline.GL_NONE;
+         int fsh = GLES20FixedPipeline.GL_NONE;
+@@ -78,6 +83,8 @@ public class Shader
+                 GLES30.glDeleteShader(fsh);
+         }
+ 
++        if (handle == GLES30.GL_NONE)
++            throw new IllegalStateException("Shader program creation failed");
+         uMVP = GLES30.glGetUniformLocation(handle, "uMVP");
+         uTexture = GLES30.glGetUniformLocation(handle, "uTexture");
+         uColor = GLES30.glGetUniformLocation(handle, "uColor");
+@@ -87,13 +94,43 @@ public class Shader
+         aNormals = GLES30.glGetAttribLocation(handle, "aNormals");
+     }
+ 
++    /** Release one binding's GPU program, preserving borrowed Shader objects. */
++    public synchronized static void releaseContext(RenderContext context)
++    {
++        requireCurrent(context);
++        Shader shader = shaders.get(context);
++        if (shader != null && shader.handle != GLES30.GL_NONE) {
++            GLES30.glDeleteProgram(shader.handle);
++            shader.handle = GLES30.GL_NONE;
++            shader.uMVP = shader.uInvModelView = shader.uTexture = shader.uColor = -1;
++            shader.aVertexCoords = shader.aTexCoords = shader.aNormals = shader.aColors = -1;
++        }
++    }
++
++    /** Recreate in place before any borrowed reference can render again. */
++    public synchronized static void recreateContext(RenderContext context)
++    {
++        requireCurrent(context);
++        Shader shader = shaders.get(context);
++        if (shader != null && shader.handle == GLES30.GL_NONE) shader.initialize();
++    }
++
++    private static void requireCurrent(RenderContext context)
++    {
++        if (context != null && (!context.isRenderThread() || !context.isAttached()))
++            throw new IllegalStateException("Owning current GL context required");
++    }
++
+     public synchronized static Shader get(RenderContext ctx)
+     {
++        requireCurrent(ctx);
+         Shader shader = shaders.get(ctx);
+         if (shader == null)
+         {
+             shader = new Shader();
+             shaders.put(ctx, shader);
++        } else if (shader.handle == GLES30.GL_NONE) {
++            shader.initialize();
+         }
+         return shader;
+     }
+diff --git a/takkernel/engine/src/main/java/gov/tak/api/engine/Shader.java b/takkernel/engine/src/main/java/gov/tak/api/engine/Shader.java
+index 0cb5a87..17d9caf 100644
+--- a/takkernel/engine/src/main/java/gov/tak/api/engine/Shader.java
++++ b/takkernel/engine/src/main/java/gov/tak/api/engine/Shader.java
+@@ -15,7 +15,11 @@ public class Shader
+     boolean textured, alphaDiscard, colorPointer, lighting, is2d, point;
+     public final static String TAG = "Shader";
+ 
+-    static Map<RenderContext, Map<Integer, Shader>> shaders = new HashMap<>();
++    static Map<RenderContext, Map<Integer, Shader>> shaders = new java.util.IdentityHashMap<>();
++    // CPU borrows outlive lookup-cache clearing and remain tracked for GPU retirement.
++    private static final Map<RenderContext, java.util.List<Shader>> owned = new java.util.IdentityHashMap<>();
++    private final RenderContext owner;
++    private final int flags;
+ 
+     public static final int FLAG_TEXTURED = 1;
+     public static final int FLAG_ALPHA_DISCARD = 2;
+@@ -44,18 +48,15 @@ public class Shader
+ 
+     private int create(String vertSrc, String fragSrc)
+     {
+-        final int vertShader = loadShader(GLES30.GL_VERTEX_SHADER, vertSrc);
+-        final int fragShader = loadShader(GLES30.GL_FRAGMENT_SHADER, fragSrc);
+-
+-        try
+-        {
+-            return this.createProgram(vertShader, fragShader);
+-        } catch (RuntimeException e)
+-        {
+-            GLES30.glDeleteShader(vertShader);
+-            GLES30.glDeleteShader(fragShader);
++        int vertex = GLES30.GL_NONE, fragment = GLES30.GL_NONE;
++        try {
++            vertex = loadShader(GLES30.GL_VERTEX_SHADER, vertSrc);
++            fragment = loadShader(GLES30.GL_FRAGMENT_SHADER, fragSrc);
++            return createProgram(vertex, fragment);
++        } finally {
++            if (vertex != GLES30.GL_NONE) GLES30.glDeleteShader(vertex);
++            if (fragment != GLES30.GL_NONE) GLES30.glDeleteShader(fragment);
+         }
+-        return -1;
+     }
+ 
+     private static int createProgram(int vertShader, int fragShader)
+@@ -87,15 +88,20 @@ public class Shader
+ 
+     public static Shader create(int flags, RenderContext ctx)
+     {
++        requireCurrent(ctx);
+         synchronized (shaders)
+         {
+             Map<Integer, Shader> ctxShaders = shaders.get(ctx);
+             if (ctxShaders == null)
+                 shaders.put(ctx, ctxShaders = new HashMap<>());
+-            if (!ctxShaders.containsKey(flags))
+-                ctxShaders.put(flags, new Shader(flags));
+-
+-            return ctxShaders.get(flags);
++            if (!ctxShaders.containsKey(flags)) {
++                Shader shader = new Shader(flags, ctx);
++                ctxShaders.put(flags, shader);
++                owned.computeIfAbsent(ctx, ignored -> new java.util.ArrayList<>()).add(shader);
++            }
++            Shader shader = ctxShaders.get(flags);
++            if (shader.handle == GLES30.GL_NONE) shader.initialize();
++            return shader;
+         }
+     }
+ 
+@@ -107,7 +113,14 @@ public class Shader
+         }
+     }
+ 
+-    private Shader(int flags)
++    private Shader(int flags, RenderContext owner)
++    {
++        this.flags = flags;
++        this.owner = owner;
++        initialize();
++    }
++
++    private void initialize()
+     {
+         this.textured = (flags & FLAG_TEXTURED) != 0;
+         this.alphaDiscard = (flags & FLAG_ALPHA_DISCARD) != 0;
+@@ -245,8 +258,40 @@ public class Shader
+         uPointSize = GLES30.glGetUniformLocation(handle, "uPointSize");
+     }
+ 
++    private static void requireCurrent(RenderContext context)
++    {
++        if (context != null && (!context.isRenderThread() || !context.isAttached()))
++            throw new IllegalStateException("Shader needs its owning current GL context");
++    }
++    private void requireReady()
++    {
++        requireCurrent(owner);
++        if (handle <= GLES30.GL_NONE) throw new IllegalStateException("Shader program is retired or failed");
++    }
++    private static java.util.List<Shader> snapshot(RenderContext context)
++    {
++        synchronized (shaders) {
++            java.util.List<Shader> values=owned.get(context);
++            return values==null ? java.util.Collections.emptyList() : new java.util.ArrayList<>(values);
++        }
++    }
++    public static void releaseContext(RenderContext context)
++    {
++        requireCurrent(context);
++        for (Shader shader:snapshot(context)) {
++            if (shader.handle > GLES30.GL_NONE) GLES30.glDeleteProgram(shader.handle);
++            shader.handle=GLES30.GL_NONE;
++        }
++    }
++    public static void recreateContext(RenderContext context)
++    {
++        requireCurrent(context);
++        for (Shader shader:snapshot(context)) if (shader.handle==GLES30.GL_NONE) shader.initialize();
++    }
++
+     public int useProgram(boolean bUse)
+     {
++        requireReady();
+         IntBuffer intbuf = IntBuffer.allocate(1);
+         GLES30.glGetIntegerv(GLES30.GL_CURRENT_PROGRAM, intbuf);
+ 
+@@ -256,71 +301,85 @@ public class Shader
+ 
+     public void setColor4f(float r, float g, float b, float a)
+     {
++        requireReady();
+         GLES30.glUniform4f(getUColor(), r, g, b, a);
+     }
+ 
+     public void setProjection(float[] projection)
+     {
++        requireReady();
+         gov.tak.platform.commons.opengl.GLES30.glUniformMatrix4fv(uProjection, 1, false, projection, 0);
+     }
+ 
+     public void setModelView(float[] modelView)
+     {
++        requireReady();
+         gov.tak.platform.commons.opengl.GLES30.glUniformMatrix4fv(uModelView, 1, false, modelView, 0);
+     }
+ 
+     public int getHandle()
+     {
++        requireReady();
+         return handle;
+     }
+ 
+     public int getUProjection()
+     {
++        requireReady();
+         return uProjection;
+     }
+ 
+     public int getUModelView()
+     {
++        requireReady();
+         return uModelView;
+     }
+ 
+     public int getUTexture()
+     {
++        requireReady();
+         return uTexture;
+     }
+ 
+     public int getUAlphaDiscard()
+     {
++        requireReady();
+         return uAlphaDiscard;
+     }
+ 
+     public int getUColor()
+     {
++        requireReady();
+         return uColor;
+     }
+ 
+     public int getUTextureMx()
+     {
++        requireReady();
+         return uTextureMx;
+     }
+ 
+     public int getAColorPointer()
+     {
++        requireReady();
+         return aColorPointer;
+     }
+ 
+     public int getATextureCoords()
+     {
++        requireReady();
+         return aTextureCoords;
+     }
+ 
+     public int getAVertexCoords()
+     {
++        requireReady();
+         return aVertexCoords;
+     }
+ 
+     public int getUPointSize()
+     {
++        requireReady();
+         return uPointSize;
+     }
+ 
+diff --git a/b/takkernel/engine/src/main/jni/c3dt/RenderContextLifecycle.h b/takkernel/engine/src/main/jni/c3dt/RenderContextLifecycle.h
+new file mode 100644
+index 0000000..1c7de5a
+--- /dev/null
++++ b/takkernel/engine/src/main/jni/c3dt/RenderContextLifecycle.h
+@@ -0,0 +1,10 @@
++// Copyright 2026 uds-takserver authors
++// SPDX-License-Identifier: GPL-3.0-only
++#ifndef TAKENGINEJNI_C3DT_RENDERCONTEXTLIFECYCLE_H
++#define TAKENGINEJNI_C3DT_RENDERCONTEXTLIFECYCLE_H
++#include "core/RenderContext.h"
++#include "util/Error.h"
++namespace TAKEngineJNI {
++TAK::Engine::Util::TAKErr Tileset_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS;
++}
++#endif
+diff --git a/takkernel/engine/src/main/jni/c3dt/jtileset.cpp b/takkernel/engine/src/main/jni/c3dt/jtileset.cpp
+index 02e8269..66e530d 100644
+--- a/takkernel/engine/src/main/jni/c3dt/jtileset.cpp
++++ b/takkernel/engine/src/main/jni/c3dt/jtileset.cpp
+@@ -7,6 +7,7 @@
+ #include "common.h"
+ 
+ #include "c3dt/shaders.h"
++#include "c3dt/RenderContextLifecycle.h"
+ #include "core/RenderContext.h"
+ #include "formats/c3dt/GLTFRenderer.h"
+ #include "formats/c3dt/Tileset.h"
+@@ -22,6 +23,18 @@ using namespace TAKEngineJNI;
+ using namespace TAKEngineJNI::Interop;
+ using namespace TAKEngineJNI::Interop::Formats::Cesium3DTiles;
+ 
++namespace {
++    TAK::Engine::Renderer::RenderContextAssociatedCache<Shaders> shaderMap;
++}
++TAKErr TAKEngineJNI::Tileset_releaseContext(const TAK::Engine::Core::RenderContext& context) NOTHROWS {
++    if (!context.isRenderThread() || !context.isAttached()) return TE_IllegalState;
++    shaderMap.visit(&context, [](Shaders& shader) {
++        if (shader.pid) glDeleteProgram(shader.pid);
++        shader.pid = 0;
++    });
++    return TE_Ok;
++}
++
+ extern "C" JNIEXPORT jobject JNICALL Java_com_atakmap_map_formats_c3dt_Tileset_create
+         (JNIEnv *env, jclass, jstring muri, jobject massetaccessor, jobject mopts)
+ {
+@@ -135,10 +148,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_atakmap_map_formats_c3dt_Tileset_dest
+ extern "C" JNIEXPORT void JNICALL Java_com_atakmap_map_formats_c3dt_Tileset_renderimpl
+         (JNIEnv * env, jclass clazz, jlongArray mvaos, jobjectArray mMVPs, jboolean useShader, jint MVP_u)
+ {
+-    static TAK::Engine::Renderer::RenderContextAssociatedCache<Shaders> shaderMap;
+     TAK::Engine::Core::RenderContext* renderContext = nullptr;
+     TAK::Engine::Core::RenderContext_getCurrent(&renderContext);
+-    Shaders shader = shaderMap.get(renderContext);
++    Shaders& shader = shaderMap.get(renderContext);
++    if (!shader.pid) shader = Shaders();
+ 
+     if(useShader) {
+         glUseProgram(shader.pid);
+diff --git a/takkernel/engine/src/main/jni/jglmapview.cpp b/takkernel/engine/src/main/jni/jglmapview.cpp
+index a5f2671..13abef1 100644
+--- a/takkernel/engine/src/main/jni/jglmapview.cpp
++++ b/takkernel/engine/src/main/jni/jglmapview.cpp
+@@ -1,3 +1,5 @@
++#include "renderer/RenderContextLifecycle.h"
++#include "c3dt/RenderContextLifecycle.h"
+ #include "com_atakmap_map_opengl_GLMapView.h"
+ 
+ #include <core/MapSceneModel2.h>
+@@ -1649,3 +1651,48 @@ namespace
+                     (camtgtz + (dirz*len*camLocAdj)) / view.displayModel->projectionZToNominalMeters);
+     }
+ }
++
++extern "C" JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_releaseContextCaches
++(JNIEnv* env, jclass, jlong ptr, jboolean workersOnly) {
++    auto* context = JLONG_TO_INTPTR(TAK::Engine::Core::RenderContext, ptr);
++    if (!context) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
++    using namespace TAK::Engine::Renderer;
++    if (workersOnly) {
++        ATAKMapEngineJNI_checkOrThrow(env, GLWorkers_retire(*context));
++        return;
++    }
++    TAKErr code = TAKEngineJNI::Tileset_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = GLText2_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = BatchAtlases_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = BatchShaders_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = SlopeShaders_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = HeatMapShaders_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = TerrainShaders_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = GLMapRenderGlobals_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    code = GLES20FixedPipeline_releaseContext(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    ATAKMapEngineJNI_checkOrThrow(env, Shader_releaseContext(*context));
++}
++extern "C" JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_recreateContextCaches
++(JNIEnv* env, jclass, jlong ptr) {
++    auto* context = JLONG_TO_INTPTR(TAK::Engine::Core::RenderContext, ptr);
++    if (!context) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
++    TAKErr code=TAK::Engine::Renderer::GLWorkers_resume(*context);
++    if (ATAKMapEngineJNI_checkOrThrow(env,code)) return;
++    ATAKMapEngineJNI_checkOrThrow(env, TAK::Engine::Renderer::Shader_recreateContext(*context));
++}
++
++extern "C" JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_markContextTerminal
++(JNIEnv* env, jclass, jlong ptr) {
++    auto* renderer=JLONG_TO_INTPTR(GLGlobeBase, ptr);
++    if (!renderer) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
++    ATAKMapEngineJNI_checkOrThrow(env, TAK::Engine::Renderer::RenderContext_markTerminal(*renderer));
++}
+diff --git a/takkernel/engine/src/main/jni/jgltext.cpp b/takkernel/engine/src/main/jni/jgltext.cpp
+index 47a5484..c4756d7 100644
+--- a/takkernel/engine/src/main/jni/jgltext.cpp
++++ b/takkernel/engine/src/main/jni/jgltext.cpp
+@@ -1,6 +1,7 @@
+ #include "com_atakmap_opengl_GLText.h"
+ 
+ #include <renderer/GLText2.h>
++#include "renderer/RenderContextLifecycle.h"
+ #include <util/Memory.h>
+ 
+ #include "common.h"
+@@ -18,13 +19,20 @@ JNIEXPORT jlong JNICALL Java_com_atakmap_opengl_GLText_intern
+   (JNIEnv *env, jclass clazz, jlong ctxPtr, jobject mtextFormat, jobject mglyphRenderer)
+ {
+     const RenderContext *ctx = JLONG_TO_INTPTR(RenderContext, ctxPtr);
++    if (!ctx) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return 0; }
+     TextFormat2Ptr cfmt(new ManagedTextFormat2(*env, mtextFormat, mglyphRenderer), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
+     return INTPTR_TO_JLONG(GLText2_intern(*ctx, std::move(cfmt)));
+ }
+ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_invalidate
+   (JNIEnv *env, jclass clazz, jlong ptr)
+ {
+-    // XXX -
++    RenderContext* current = nullptr;
++    RenderContext_getCurrent(&current);
++    if (!current || !current->isRenderThread() || !current->isAttached()) {
++        ATAKMapEngineJNI_checkOrThrow(env, TE_IllegalState);
++        return;
++    }
++    ATAKMapEngineJNI_checkOrThrow(env, GLText2_invalidate(JLONG_TO_INTPTR(GLText2, ptr)));
+ }
+ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_batch__JJLjava_lang_String_2FFFFFFF
+   (JNIEnv *env, jclass clazz, jlong gltextPtr, jlong glbatchPtr, jstring mtext, jfloat x, jfloat y, jfloat z, jfloat r, jfloat g, jfloat b, jfloat a)
+@@ -59,5 +67,11 @@ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_setTextFormatFactory
+ 
+ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_invalidateCache(JNIEnv *env, jclass clazz) {
+ 
+-    GLText2_invalidateCache();
++    RenderContext* current = nullptr;
++    RenderContext_getCurrent(&current);
++    if (!current || !current->isRenderThread() || !current->isAttached()) {
++        ATAKMapEngineJNI_checkOrThrow(env, TE_IllegalState);
++        return;
++    }
++    ATAKMapEngineJNI_checkOrThrow(env, GLText2_releaseContext(*current));
+ }
+\ No newline at end of file

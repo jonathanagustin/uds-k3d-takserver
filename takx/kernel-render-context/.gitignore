@@ -1,0 +1,3 @@
+# Private host qualification harness; not a portable source recipe.
+/dependency_prepass.py
+/__pycache__/

@@ -94,3 +94,70 @@ preflight does not establish the performance of full recordings. Successful
 commands retain their text metadata streams. Failure exceptions remain compatible
 with the optional phone-compositor fallback and carry only sanitized stderr;
 they do not expose the original command or stdout.
+
+## Publish an immutable recording candidate
+
+A manual recording on `main` now retains a signed candidate without changing a
+release. Review its footage before publishing. The historical `demo` release,
+its signatures and the UI reel's locked historical inputs remain unchanged.
+`sign_only: true` is rejected; it no longer means signing historical assets.
+
+The capture artifact is `demo-video-attempt-N`. Its receipt records the actual
+capture run/attempt, workflow commit, deployed application commit, actual stamped
+package version and output hashes. Configured recording hosts come from the same
+validated environment values passed to the web-recording commands. Requested
+ATAK/upgrade flags are recorded separately from the actual output inventory;
+they do not assert that optional scenes succeeded. Capture accepts only the eleven chapter basenames produced by
+`assemble.sh`, with MP4/JPG clip extensions. Unknown files under the reserved
+`demo-clip-*` prefix fail before upload; raw artifact paths use the same explicit
+allowlist. ZIP entries must be ordinary files or have unspecified type bits.
+The main-only signing job retains `demo-signed-attempt-M`: original MP4s,
+posters, per-video Cosign bundles, the signed source/output manifest and default
+SLSA provenance. A failed signer can reuse capture attempt N during signing
+attempt M; the manifest keeps those identities distinct and never calls reused
+footage a fresh capture.
+
+To publish, dispatch **Demo Video** on `main` with both `publish_run_id` and
+`publish_attempt`, selecting that completed successful signing attempt. This mode
+starts no recording, deployment or signing. The publisher verifies the exact
+artifact archive digest, source identity, inventory, video signatures and SLSA
+provenance before any release write. Files stream through bounded temporary
+storage: 64 MiB per file and 256 MiB per archive/expanded inventory. Archives,
+private command captures, extracted inputs and candidate copies share the
+measured destination filesystem. The reserve covers four 256 MiB allocations,
+4 MiB of control metadata and an additional 2 GiB floor. Each control-command
+stream has a hard 1 MiB file-size limit. Download streams each have a hard
+256 MiB limit; stderr is also polled for an earlier 1 MiB abort, but can grow
+up to the download limit between polls. That overshoot is covered by the reserve. The existing historical MP4 inventory totals about 43 MB; the
+bounds deliberately allow growth but refuse unbounded media. Larger captures
+require an explicit reviewed limit change.
+
+The resulting prerelease is `demo-run-RUN-attempt-M`, targeted at the exact
+producer commit and excluded from package release selection. It remains draft
+until every original signed file has been uploaded and read back by immutable
+asset ID with matching SHA-256. Promotion patches that verified release ID; it
+does not resolve a mutable tag again. Release edits queue without cancelling uploads. Manual captures have a separate
+noncancelling FIFO; only PR preflight uses per-PR latest-only cancellation. No
+workflow-wide cancellation can supersede these publisher safeguards.
+After the first promotion, an identical public retry revalidates the signed
+candidate and trusts GitHub's asset size/SHA-256 metadata; it does not redownload
+every public asset. First promotion always hashes the actual readback bytes.
+A retry uploads only missing matching bytes; differing or unverifiable assets
+stop publication. An identical already-public candidate is a no-op. Neither
+videos nor signature bundles are overwritten, rerendered or regenerated.
+Expired candidate artifacts cannot be reconstructed into the same release.
+
+Publication does not change README links or docs video selection. Keep those on
+the historical release until a separate reviewed change selects the new exact
+release tag and manifest. The docs copier currently selects `demo`; a new
+selection must update its base URL and exact-tag embedding rules together,
+retaining provenance hash checks. Do not point the historical UI-reel lock at
+new footage. For an explicit fresh capture's posters and chapter metadata,
+`python3 demo/sync-assets.py RUN --capture-attempt N` selects its named artifact;
+the legacy invocation still selects `demo-video`. This command edits local docs
+and does not select or publish video URLs.
+
+Offline policy fixtures test state transitions and signature-verifier failures;
+they are not real signing or publication evidence. A successful new producer and
+publisher still need live qualification. Cryptographic checks do not replace
+footage privacy review or prove unrecorded application behavior. See #410.

@@ -40,7 +40,7 @@ class RecorderTests(unittest.TestCase):
     def test_pr_preflight_shares_manual_tools_without_deploy_or_publish_permissions(self):
         workflow = yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(), Loader=yaml.BaseLoader)
         record, preflight = workflow['jobs']['record'], workflow['jobs']['preflight']
-        self.assertEqual(record['if'], "${{ github.event_name == 'workflow_dispatch' && !inputs.sign_only }}")
+        self.assertEqual(record['if'], "github.event_name == 'workflow_dispatch' && needs.mode.outputs.mode == 'record'")
         self.assertEqual(preflight['if'], "github.event_name == 'pull_request'")
         self.assertEqual(preflight['timeout-minutes'], '10')
         self.assertEqual(preflight['permissions'], {'contents':'read'})
@@ -52,13 +52,13 @@ class RecorderTests(unittest.TestCase):
             self.assertEqual(shared, original)  # Shared lint cannot parse aliases across extracted steps.
         for event, sign_only, expected in [('pull_request',False,False), ('pull_request',True,False),
                                            ('workflow_dispatch',False,True), ('workflow_dispatch',True,False)]:
-            expression = record['if'][3:-3].replace('github.event_name',repr(event))
-            expression = expression.replace('!inputs.sign_only',repr(not sign_only)).replace('&&','and')
+            expression = record['if'].replace('github.event_name',repr(event))
+            expression = expression.replace('needs.mode.outputs.mode',repr('rejected' if sign_only else 'record')).replace('&&','and')
             self.assertEqual(eval(expression, {'__builtins__':{}}), expected)
         publish, sign = workflow['jobs']['publish'], workflow['jobs']['sign']
-        self.assertEqual(publish['needs'], 'record')
-        self.assertEqual(publish['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
-        self.assertEqual(sign['needs'], ['record','publish'])
+        self.assertEqual(publish['needs'], 'mode')
+        self.assertIn("needs.mode.outputs.mode == 'publish'", publish['if'])
+        self.assertEqual(sign['needs'], ['mode','record'])
         self.assertIn("github.ref == 'refs/heads/main'", sign['if'])
         self.assertIn("github.event_name == 'workflow_dispatch'", sign['if'])
 

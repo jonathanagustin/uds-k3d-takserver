@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +14,25 @@ import sys
 DEMO = Path(__file__).resolve().parents[1]
 
 
+def check_terminal_dependencies():
+    ttyd = subprocess.check_output(['ttyd','--version'],text=True,timeout=10).strip()
+    if not re.fullmatch(r'ttyd version 1\.7\.7(?:-[a-f0-9]+)?',ttyd):
+        raise ValueError('unexpected ttyd release; VHS requires at least 1.7.2')
+    vhs = subprocess.check_output(['vhs','--version'],text=True,timeout=10).strip()
+    if not re.fullmatch(r'vhs version v?0\.12\.1(?: \([a-f0-9]+\))?',vhs):
+        raise ValueError('unexpected VHS release')
+    # Pinned VHS 0.12.1 checks its real ffmpeg/ttyd/shell dependencies before
+    # reading stdin. Empty input must reach precisely this post-check error;
+    # no browser, recording, output file or remote publishing is started.
+    probe = subprocess.run(['vhs','-'],input='',capture_output=True,text=True,timeout=10,
+                           env={**os.environ,'NO_COLOR':'1','VHS_PUBLISH':'false'})
+    if probe.returncode!=1 or probe.stdout.strip()!='no input provided' or probe.stderr:
+        raise ValueError('VHS dependency preflight failed before recording')
+    return {'ttyd':ttyd,'vhs':vhs,'vhs_dependency_check':'passed before EOF rejection'}
+
+
 def check(output):
+    terminal = check_terminal_dependencies()
     output.mkdir()
     # Short synthetic inputs must fail quickly; do not impose this on production recordings.
     os.environ['DEMO_MEDIA_COMMAND_SECONDS'] = '45'
@@ -63,7 +82,7 @@ def check(output):
             stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != '30/1' or
             not 3 <= float(video['format']['duration']) <= 5):
         raise ValueError('synthetic media output differs')
-    receipt = {'agg':version, 'synthetic_only':True, 'pipeline':'real render-cast, style frame, filters and ffmpeg',
+    receipt = {'terminal_dependencies':terminal, 'agg':version, 'synthetic_only':True, 'pipeline':'real render-cast, style frame, filters and ffmpeg',
                'video':video, 'bytes':framed.stat().st_size}
     (output/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps(receipt, sort_keys=True))

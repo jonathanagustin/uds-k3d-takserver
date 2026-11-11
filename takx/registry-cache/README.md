@@ -109,3 +109,18 @@ exhausted a workspace with 7 GiB free before a container could execute. At least
 12 GiB free is required with `vfs` (3 GiB for other drivers). The owned image was
 removed after that failed feasibility check; no fresh native build was claimed.
 Source-tree validation, pinned CMake acquisition and offline guards passed.
+
+Build failures retain only complete command logs with observed exit status and
+matching size/hash records. The failure-only sanitizer redacts each entire
+stream before upload; it omits interrupted, oversized, unrecorded or
+unsanitizable captures. These diagnostics never count as native qualification
+and contain no recorded command argument vectors. The first hosted attempt
+failed before producing a candidate; its private inner log was not retained,
+so its precise container failure remains unknown.
+
+Independent source review found that GCC backends silently accept `--version`
+without reporting identity. Backend metadata now uses genuine `-version` with
+quiet, syntax-only and explicit null input/output controls. Local GNU 14.2
+metadata probes produced repeatable nonempty identity and no assembly files;
+this is not a pinned-container build qualification or proof of the lost job's
+specific inner failure. The exact version command enters each tool identity.

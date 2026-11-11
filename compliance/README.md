@@ -97,3 +97,9 @@ The source mappings deliberately point at local call sites or verification
 logic when the implementation is upstream-owned. In particular,
 `publish-cert-configmap.sh` is supplied by the TAK image; the mapped cert-init
 Job invokes it but this repository does not vendor that script.
+
+The manual preflight requires the API response for the exact mapped CoreConfig
+path and complete, ordered XML-comment marker pairs. Marker substrings in a
+value, reversed pairs, and unfinished or nested blocks do not establish the
+existing baseline. These checks do not replace the outstanding live comment
+acceptance or activate automatic posting.

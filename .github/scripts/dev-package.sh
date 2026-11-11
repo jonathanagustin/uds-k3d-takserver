@@ -44,12 +44,15 @@ zarf() {
 
 # Runtime reuse inputs omit docs, tests, CI definitions, bundles, and the
 # ATAK/demo/bench trees. The standalone docs site is not a package input.
+# These exact spelling/license/hook configs only configure validation, not
+# package contents. Keep tool pins, checkout attributes and runtime helpers.
 inputs() {
   git ls-files -s -z -- . \
     ':(exclude)docs/**' ':(exclude)docs-site/**' ':(exclude)adr/**' ':(exclude)tests/**' \
     ':(exclude).github/**' ':(exclude)bundle/**' ':(exclude)atak/**' \
     ':(exclude)demo/**' ':(exclude)bench/**' ':(exclude)*.md' \
     ':(exclude)renovate.json' ':(exclude).release-please-manifest.json' \
+    ':(exclude).codespellrc' ':(exclude).license_config.yaml' ':(exclude)hk.pkl' \
     ':(exclude)upstream/atak-civ' ':(exclude)takx/**' ':(exclude)upstream/takx' \
     | python3 -c '
 import sys

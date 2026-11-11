@@ -2,7 +2,7 @@
 
 Every check in this repository runs as a GitHub Actions workflow in [`.github/workflows/`](../.github/workflows/). This page lists each workflow, what starts it, and what it checks. Times are in UTC.
 
-Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds the docs site. Full Core decides in its own `changes` job.
+Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds and deploys documentation independently of package releases. Ordinary `docs:` commits do not open a package release or appear in package release notes; `feat:`, `fix:` and the configured `chore:` entries still do. Full Core decides in its own `changes` job.
 
 ## Pull request checks
 

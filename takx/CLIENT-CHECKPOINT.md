@@ -19,6 +19,10 @@ Our public candidate is Kernel 8.30.5 / CommonCommo 1.17.2 at official ATAK
 and streaming-contact patch. These artifacts have not been renamed to either
 client's required versions.
 
+Actual Kernel database and scene subsets now pass local native integration
+controls. See [SDK integration](SDK-INTEGRATION.md) for the remaining full
+native runtime, JNI and client acceptance stages.
+
 ## Native component checkpoints
 
 The following opt-in source recipes have passed local Linux amd64
@@ -42,7 +46,7 @@ modern API acceptance.
 The SQLCipher profile passed a fresh end-to-end source build and independent
 C controls. Historical SQLCipher/SQLite security acceptance remains open.
 These component results do not
-complete GDAL/Spatialite/Cesium integration, target-image ABI, native Kernel/JNI,
+complete the full GDAL/Spatialite/Cesium runtime integration, target-image ABI, native Kernel/JNI,
 rendering or either TAKX client. Live enrollment and server interoperability
 remain unverified.
 

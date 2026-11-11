@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
 import { docsReleaseTags, publishedReleaseTags, releaseInventoryMode } from './published-releases.mjs';
-import { selectReleaseTags } from './build-versions.mjs';
+import { selectReleaseTags, renderPublishedReleaseBadge } from './build-versions.mjs';
 
 const base = 'https://api.github.com/repos/jonathanagustin/uds-takserver';
 const row = (id, tag, extra = {}) => ({ id, tag_name: tag, draft: false, prerelease: false,
@@ -122,4 +122,44 @@ test('manual Docs rejects non-main or missing tag before building and preserves 
     /run: node --test docs-site\/scripts\/published-releases.test.mjs/);
   assert.match(JSON.parse(readFileSync(path.join(root, 'docs-site/package.json'), 'utf8')).scripts.build,
     /published-releases.test.mjs/);
+});
+
+
+test('actual draft-version badge follows selected published release without changing other SVG bytes', async () => {
+  // Freeze the regression display version without depending on the next release bump.
+  const source = readFileSync(new URL('../public/badges/release.svg', import.meta.url), 'utf8')
+    .replace(/\bv\d+\.\d+\.\d+\b/g, 'v0.13.0');
+  assert.match(source, /release: v0\.13\.0/);
+  const { tags } = await docsReleaseTags(gitTags, { fetcher: api().fetcher, environment: { CI: 'true' } });
+  const latest = selectReleaseTags(tags)[0].ref;
+  assert.equal(latest, 'v0.12.2');
+  const unmarked = '<!-- unmarked v0.13.0 sentinel -->\n';
+  const input = source + unmarked;
+  const actual = renderPublishedReleaseBadge(input, latest, tags);
+  const expected = input.split('\n').map((line) => line.includes('<!-- x-release-please-version -->')
+    ? line.replace('v0.13.0', 'v0.12.2') : line).join('\n');
+  assert.equal(actual, expected);
+  assert.ok(actual.endsWith(unmarked));
+  assert.equal((actual.match(/v0\.12\.2/g) || []).length, 5);
+  assert.throws(() => renderPublishedReleaseBadge(input, 'v0.13.0', tags));
+});
+
+test('badge requires complete version markers and generator binds validated selection only', () => {
+  // Freeze the regression display version without depending on the next release bump.
+  const source = readFileSync(new URL('../public/badges/release.svg', import.meta.url), 'utf8')
+    .replace(/\bv\d+\.\d+\.\d+\b/g, 'v0.13.0');
+  for (const broken of [source.replace('<!-- x-release-please-version -->', ''),
+    source.replace('release: v0.13.0', 'release: unknown'), source + '<!-- x-release-please-version -->'])
+    assert.throws(() => renderPublishedReleaseBadge(broken, 'v0.12.2', ['v0.12.2']));
+  for (const suffix of ['-rc.1', '+meta', '.1']) {
+    const broken = source.replace('release: v0.13.0', `release: v0.13.0${suffix}`);
+    assert.throws(() => renderPublishedReleaseBadge(broken, 'v0.12.2', ['v0.12.2']));
+  }
+  for (const tag of ['main', 'v0.13.0-rc.1', 'v00.12.2', 'v0.13.0'])
+    assert.throws(() => renderPublishedReleaseBadge(source, tag, ['v0.12.2']));
+  const generator = readFileSync(new URL('./build-versions.mjs', import.meta.url), 'utf8');
+  const branch = generator.split("if (mode === 'published') {")[1].split('  const versions =')[0];
+  assert.match(branch, /renderPublishedReleaseBadge\(source, releases\[0\]\.ref, candidates\)/);
+  assert.ok(generator.indexOf('await docsReleaseTags') < generator.indexOf("if (mode === 'published') {"));
+  assert.ok(generator.indexOf('const releases = selectReleaseTags(tags)') < generator.indexOf("if (mode === 'published') {"));
 });

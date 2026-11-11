@@ -50,11 +50,19 @@ class PublishedTagAPI(API):
     def __call__(self, path, payload=None):
         if path.startswith('/releases/tags/') and self.release['draft']:
             self.calls.append((path, payload))
-            raise urllib.error.HTTPError('https://api.github.com/fixture', 404, 'Not Found', {}, None)
+            error = urllib.error.HTTPError('https://api.github.com/fixture', 404, 'Not Found', {}, None)
+            error.close()
+            raise error
         return super().__call__(path, payload)
 
 
 class PromotionTests(unittest.TestCase):
+    def http_error(self, *args):
+        error = urllib.error.HTTPError(*args)
+        # Keep unused injected errors alive until deterministic cleanup too.
+        self.addCleanup(error.close)
+        return error
+
     def test_draft_exact_identity_patches_only_draft_and_rechecks(self):
         api = API()
         self.assertEqual(R.promote(api, 'v0.12.3', '123', SOURCE), 'published')
@@ -205,7 +213,7 @@ class PromotionTests(unittest.TestCase):
             for status, expected in [(404, 404), (99, 'unknown'), (600, 'unknown'),
                                      ('private-status', 'unknown'), (True, 'unknown')]:
                 api = R.API('private-token')
-                error = urllib.error.HTTPError('https://example.invalid/private-url', status,
+                error = self.http_error('https://example.invalid/private-url', status,
                                                'private-reason', {'private-header': 'private-value'},
                                                io.BytesIO(b'private-body'))
                 with self.subTest(operation=operation, status=status), patch.object(
@@ -221,7 +229,7 @@ class PromotionTests(unittest.TestCase):
                'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'private-token',
                'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE,
                'READINESS_MODE': 'check', 'CHECKED_SOURCE_SHA': SOURCE}
-        failures = [(urllib.error.HTTPError('https://example.invalid/private-url', 404, 'private-reason',
+        failures = [(self.http_error('https://example.invalid/private-url', 404, 'private-reason',
                                             {'private-header': 'private-value'}, io.BytesIO(b'private-body')),
                      'HTTP', 404),
                     (urllib.error.URLError('private-transport'), 'transport', 'unknown'),
@@ -238,9 +246,86 @@ class PromotionTests(unittest.TestCase):
                 self.assertEqual(R.main(), 1)
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(stderr.getvalue(),
-                             f'Release readiness API failure: operation=release-id status={status} kind={kind}\n')
+                             f'Release readiness API failure: operation=release-id status={status} kind={kind}'
+                             ' reason=unknown remaining=unknown reset=unknown accepted_contents=unknown\n')
             request.assert_called_once()
             self.assertEqual(request.call_args.args[0].method, 'GET')
+
+    def test_bounded_http_reason_and_header_classification_never_echoes_payload(self):
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'private-token',
+               'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE,
+               'READINESS_MODE': 'check', 'CHECKED_SOURCE_SHA': SOURCE}
+        cases = [
+            (json.dumps({'message': 'Resource not accessible by integration', 'private': 'private-body'}).encode(),
+             'access-denied'),
+            (json.dumps({'message': 'API rate limit exceeded for private-IP. (private-details)'}).encode(),
+             'primary-rate-limit'),
+            (json.dumps({'message': 'You have exceeded a secondary rate limit. private-details'}).encode(),
+             'secondary-rate-limit'),
+            (b'{"message":"Bad credentials"}', 'bad-credentials'),
+            (b'{"message":"private-unknown"}', 'unknown'),
+            (b'private-malformed', 'unknown'),
+            (b'[' * 1100 + b'0' + b']' * 1100, 'unknown'),
+            (b'{"message":"Bad credentials","message":"private-duplicate"}', 'unknown'),
+            (b'{"message":"Resource not accessible by integration","private":"' + b'x' * 5000, 'unknown'),
+        ]
+        for body, reason in cases:
+            for headers, expected in [
+                    ({'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1800000000',
+                      'X-Accepted-GitHub-Permissions': 'contents=read', 'private-header': 'private-value'},
+                     'remaining=0 reset=1800000000 accepted_contents=read'),
+                    ({'X-RateLimit-Remaining': '-1', 'X-RateLimit-Reset': 'private-header',
+                      'X-Accepted-GitHub-Permissions': 'contents=private-secret'},
+                     'remaining=unknown reset=unknown accepted_contents=unknown')]:
+                stream = io.BytesIO(body)
+                error = self.http_error('https://example.invalid/private-url', 403,
+                                               'private-reason', headers, stream)
+                api = R.API('private-token')
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with self.subTest(reason=reason, headers=expected), patch.dict(os.environ, env, clear=True), \
+                        patch.object(R, 'API', return_value=api), \
+                        patch.object(api.opener, 'open', side_effect=error) as request, \
+                        patch.object(error, 'read', wraps=error.read) as read, \
+                        contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    self.assertEqual(R.main(), 1)
+                    read.assert_called_once_with(4097)
+                self.assertEqual(stdout.getvalue(), '')
+                self.assertEqual(stderr.getvalue(), 'Release readiness API failure: operation=release-id'
+                                 f' status=403 kind=HTTP reason={reason} {expected}\n')
+                request.assert_called_once()
+                self.assertEqual(request.call_args.args[0].method, 'GET')
+                self.assertTrue(stream.closed)
+
+    def test_http_error_response_closes_when_bounded_body_read_fails(self):
+        class BrokenBody(io.BytesIO):
+            def read(self, _limit):
+                raise OSError('private-read-failure')
+        body = BrokenBody(b'private-body')
+        error = self.http_error('https://example.invalid/private-url', 403, 'private-reason', {}, body)
+        api = R.API('private-token')
+        with patch.object(api.opener, 'open', side_effect=error), self.assertRaises(R.APIFailure) as caught:
+            api('/releases/123')
+        self.assertTrue(body.closed)
+        self.assertEqual(caught.exception.metadata['reason'], 'unknown')
+        self.assertEqual(str(caught.exception), 'release API failure')
+
+    def test_permission_and_numeric_headers_are_strict_and_bounded(self):
+        for remaining, reset, permission, expected in [
+                ('9999999999', '9999999999', 'metadata=read, contents=write',
+                 (9999999999, 9999999999, 'write')),
+                ('10000000000', '0', 'contents=admin', ('unknown', 0, 'unknown')),
+                ('1e3', '1.5', 'contents=read, contents=write', ('unknown', 'unknown', 'unknown')),
+                (' 0', '+1', 'contents=write; contents=read', ('unknown', 'unknown', 'unknown')),
+                ('1', '2', 'contents=read,' + 'x' * 1024, (1, 2, 'unknown'))]:
+            error = self.http_error('https://example.invalid/private', 403, 'private',
+                    {'X-RateLimit-Remaining': remaining, 'X-RateLimit-Reset': reset,
+                     'X-Accepted-GitHub-Permissions': permission}, io.BytesIO(b'{}'))
+            with self.subTest(expected=expected):
+                meta = R.http_metadata(error)
+                self.assertEqual((meta['remaining'], meta['reset'], meta['accepted_contents']), expected)
+                self.assertEqual(meta['reason'], 'unknown')
 
     def test_main_context_and_api_failures_are_fixed_diagnostics(self):
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()

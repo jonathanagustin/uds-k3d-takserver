@@ -35,14 +35,52 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('release API redirect refused')
 
 
+def http_metadata(error):
+    """Classify bounded error data; never retain upstream text in diagnostics."""
+    result = {'reason': 'unknown', 'remaining': 'unknown', 'reset': 'unknown',
+              'accepted_contents': 'unknown'}
+    headers = error.headers
+    if headers is not None:
+        for name, key in [('X-RateLimit-Remaining', 'remaining'), ('X-RateLimit-Reset', 'reset')]:
+            value = headers.get(name)
+            if isinstance(value, str) and re.fullmatch(r'[0-9]{1,10}', value):
+                result[key] = int(value)
+        value = headers.get('X-Accepted-GitHub-Permissions')
+        if isinstance(value, str) and len(value) <= 1024:
+            parts = [part.strip() for part in value.split(',')]
+            if parts and all(re.fullmatch(r'[a-z_]+=(?:read|write|admin)', part) for part in parts):
+                contents = [part.split('=')[1] for part in parts if part.startswith('contents=')]
+                if len(contents) == 1 and contents[0] in ('read', 'write'):
+                    result['accepted_contents'] = contents[0]
+    try:
+        raw = error.read(4097)
+        if len(raw) > 4096:
+            return result
+        payload = json.loads(raw, object_pairs_hook=unique)
+        message = payload.get('message') if isinstance(payload, dict) else None
+        if message in ('Resource not accessible by integration', 'Resource not accessible by personal access token'):
+            result['reason'] = 'access-denied'
+        elif isinstance(message, str) and re.match(r'^API rate limit exceeded(?:[ .]|$)', message):
+            result['reason'] = 'primary-rate-limit'
+        elif isinstance(message, str) and message.startswith('You have exceeded a secondary rate limit.'):
+            result['reason'] = 'secondary-rate-limit'
+        elif message == 'Bad credentials':
+            result['reason'] = 'bad-credentials'
+    except (ValueError, UnicodeError, OSError, RecursionError):
+        pass
+    return result
+
+
 class APIFailure(ValueError):
     """Carry only fixed diagnostic metadata, never upstream exception text."""
-    def __init__(self, operation, kind, status=None):
+    def __init__(self, operation, kind, status=None, metadata=None):
         require(operation in ('release-id', 'release-tag', 'git-ref', 'git-tag'))
         require(kind in ('HTTP', 'transport', 'timeout'))
         self.operation = operation
         self.kind = kind
         self.status = status if type(status) is int and 100 <= status <= 599 else 'unknown'
+        self.metadata = metadata or {'reason': 'unknown', 'remaining': 'unknown', 'reset': 'unknown',
+                                     'accepted_contents': 'unknown'}
         super().__init__('release API failure')
 
 
@@ -73,7 +111,13 @@ class API:
                 data = response.read(262145)
                 require(len(data) <= 262144)
         except urllib.error.HTTPError as exc:
-            raise APIFailure(operation, 'HTTP', exc.code) from None
+            # HTTPError owns a response stream. Close it before discarding the
+            # exception so deferred cleanup cannot warn with its private reason.
+            try:
+                metadata = http_metadata(exc)
+            finally:
+                exc.close()
+            raise APIFailure(operation, 'HTTP', exc.code, metadata) from None
         except TimeoutError:
             raise APIFailure(operation, 'timeout') from None
         except urllib.error.URLError as exc:
@@ -178,7 +222,9 @@ def main():
         print('Release readiness: ' + outcome)
         return 0
     except APIFailure as exc:
-        print(f'Release readiness API failure: operation={exc.operation} status={exc.status} kind={exc.kind}',
+        print(f'Release readiness API failure: operation={exc.operation} status={exc.status} kind={exc.kind}'
+              f" reason={exc.metadata['reason']} remaining={exc.metadata['remaining']}"
+              f" reset={exc.metadata['reset']} accepted_contents={exc.metadata['accepted_contents']}",
               file=sys.stderr)
         return 1
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, subprocess.SubprocessError):

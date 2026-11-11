@@ -77,3 +77,10 @@ asset is GPL or establish redistribution rights beyond the supplied notices.
 The historical qualified SDK JAR omitted these resources. This source change does
 not modify that artifact or claim a new SDK/runtime qualification. Run the bounded
 package and runtime controls on a fresh output before publishing a rebuilt SDK.
+
+The qualification recipe also opens every locked asset and catalog entry through
+the genuine desktop APIs after stock initialization. It compares all 118 byte
+streams, exercises all 15 GL20FP shader lookups through GLSLUtil, repeats these
+checks at the second package prefix, and rejects an omitted genuine shader.
+These controls require a fresh successful qualification receipt; their source
+presence alone grants no runtime acceptance.

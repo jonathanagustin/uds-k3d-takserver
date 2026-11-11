@@ -1,0 +1,2 @@
+/* Only genuine Xerial JNI entrypoints; the plain SQLite backend stays local. */
+{ global: Java_org_sqlite_*; JNI_OnLoad; JNI_OnUnload; local: *; };

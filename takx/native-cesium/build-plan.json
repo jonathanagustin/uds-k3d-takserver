@@ -1,0 +1,780 @@
+{
+  "schema_version": 1,
+  "port_commit": "1de2026f28ead93ff1773e6e680387643e914ea1",
+  "sources_acquisition": "inputs.lock.json",
+  "configure_common": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DCMAKE_C_STANDARD=99",
+    "-DCMAKE_CXX_STANDARD=17",
+    "-DCMAKE_CXX_EXTENSIONS=OFF",
+    "-DCMAKE_C_COMPILER=<verified-gcc14.2>",
+    "-DCMAKE_CXX_COMPILER=<verified-g++14.2>",
+    "-DCMAKE_INSTALL_PREFIX=<owned-prefix>",
+    "-DCMAKE_INSTALL_LIBDIR=lib",
+    "-DCMAKE_PREFIX_PATH=<owned-prefix>;<actual-sqlcipher-prefix>;<actual-openssl-prefix>;<actual-draco-prefix>",
+    "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF",
+    "-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF"
+  ],
+  "command_shape": {
+    "configure": [
+      "<verified-cmake>",
+      "-S",
+      "<source-subdir>",
+      "-B",
+      "<fresh-owned-build>",
+      "<common+port-options>"
+    ],
+    "build": [
+      "<verified-cmake>",
+      "--build",
+      "<fresh-owned-build>",
+      "--parallel",
+      "1"
+    ],
+    "install": [
+      "<verified-cmake>",
+      "--install",
+      "<fresh-owned-build>"
+    ]
+  },
+  "topological_order": [
+    "picosha2",
+    "stb",
+    "earcut-hpp",
+    "expected-lite",
+    "ms-gsl",
+    "rapidjson",
+    "libmorton",
+    "cpp-httplib",
+    "glm",
+    "asyncplusplus",
+    "fmt",
+    "spdlog",
+    "uriparser",
+    "zlib-ng",
+    "zstd",
+    "ktx",
+    "meshoptimizer",
+    "libjpeg-turbo",
+    "tinyxml2",
+    "libwebp",
+    "catch2",
+    "abseil",
+    "s2geometry",
+    "modp-base64"
+  ],
+  "plans": {
+    "asyncplusplus": {
+      "version": "1.1",
+      "port_version": 2,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "Async++"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "Retain actual installed cmake/Async++ config; port relocates this under share/async++ when vcpkg is used."
+      ],
+      "notes": []
+    },
+    "expected-lite": {
+      "version": "0.8.0",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake-header-only",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DEXPECTED_LITE_OPT_BUILD_TESTS=OFF",
+        "-DEXPECTED_LITE_OPT_BUILD_EXAMPLES=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "nonstd::expected-lite"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "fmt": {
+      "version": "10.2.1",
+      "port_version": 2,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DFMT_CMAKE_DIR=share/fmt",
+        "-DFMT_TEST=OFF",
+        "-DFMT_DOC=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "fmt::fmt",
+        "fmt::fmt-header-only"
+      ],
+      "patches": [
+        "fix-visibility.patch",
+        "fix-write-batch.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "glm": {
+      "version": "1.0.1",
+      "port_version": 3,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DGLM_BUILD_LIBRARY=ON",
+        "-DGLM_BUILD_TESTS=OFF",
+        "-DGLM_BUILD_INSTALL=ON"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "glm::glm",
+        "glm::glm-header-only"
+      ],
+      "patches": [
+        "fix-clang.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "ms-gsl": {
+      "version": "4.0.0",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "cmake-header-only",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DGSL_TEST=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "Microsoft.GSL::GSL"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "rapidjson": {
+      "version": "2023-07-17",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "cmake-header-only",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DRAPIDJSON_BUILD_DOC=OFF",
+        "-DRAPIDJSON_BUILD_EXAMPLES=OFF",
+        "-DRAPIDJSON_BUILD_TESTS=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "Preserve installed lib/cmake/RapidJSON config and its real include paths; vcpkg rewrites hardcoded source/build paths and adds RAPIDJSON_INCLUDE_DIRS from RapidJSON_INCLUDE_DIRS.",
+        "Exact transformations are in portfile.cmake:35-42; direct install may already have valid prefix paths, so audit before applying replacements."
+      ],
+      "notes": [
+        "Cesium consumes actual rapidjson headers; no fake archive target required."
+      ]
+    },
+    "spdlog": {
+      "version": "1.14.1",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DSPDLOG_FMT_EXTERNAL=ON",
+        "-DSPDLOG_INSTALL=ON",
+        "-DSPDLOG_BUILD_SHARED=OFF",
+        "-DSPDLOG_WCHAR_FILENAMES=OFF",
+        "-DSPDLOG_BUILD_EXAMPLE=OFF",
+        "-DSPDLOG_BUILD_BENCH=OFF",
+        "-DSPDLOG_WCHAR_SUPPORT=OFF"
+      ],
+      "depends_on": [
+        "fmt"
+      ],
+      "real_cmake_targets": [
+        "spdlog::spdlog",
+        "spdlog::spdlog_header_only"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "Installed include/spdlog/tweakme.h: replace // #define SPDLOG_FMT_EXTERNAL with #ifndef SPDLOG_FMT_EXTERNAL\n#define SPDLOG_FMT_EXTERNAL\n#endif.",
+        "Remove installed include/spdlog/fmt/bundled to prevent fallback; preserve real imported compile definitions."
+      ],
+      "notes": []
+    },
+    "stb": {
+      "version": "2023-04-11",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "install-real-headers",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [],
+      "patches": [],
+      "required_support_files": [
+        "ports/stb/FindStb.cmake",
+        "ports/stb/vcpkg-cmake-wrapper.cmake"
+      ],
+      "post_install": [
+        "Install all actual top-level *.h from the pinned source into include; retain LICENSE."
+      ],
+      "notes": [
+        "No library or fabricated CMake binary target. Cesium finds the real headers."
+      ]
+    },
+    "uriparser": {
+      "version": "0.9.8",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DURIPARSER_BUILD_DOCS=OFF",
+        "-DURIPARSER_BUILD_TESTS=OFF",
+        "-DURIPARSER_BUILD_TOOLS=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "uriparser::uriparser"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "For static build, installed include/uriparser/UriBase.h replaces defined(URI_STATIC_BUILD) with 1 // defined(URI_STATIC_BUILD), exactly as pinned port.",
+        "Preserve real char and wchar_t components/config installed under lib/cmake/uriparser-<generated version>."
+      ],
+      "notes": []
+    },
+    "abseil": {
+      "version": "20240116.2",
+      "port_version": 3,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DABSL_PROPAGATE_CXX_STD=ON",
+        "-DCMAKE_CXX_STANDARD=17"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "absl::base",
+        "absl::btree",
+        "absl::check",
+        "absl::strings",
+        "absl::log",
+        "absl::status",
+        "absl::flat_hash_map",
+        "absl::flat_hash_set"
+      ],
+      "patches": [
+        "0001-revert-integer-to-string-conversion-optimizations.patch",
+        "0002-Fix-missing-include-random-for-std-uniform_int_distr.patch",
+        "779a356-test-allocator.diff"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Preserve ALL genuine absl targets/export graph, not only this representative list; apply all3 port patches.",
+        "C++17 is required to match S2 and avoid std::string_view ABI mismatch."
+      ]
+    },
+    "draco": {
+      "version": "1.5.7",
+      "port_version": 0,
+      "selected_action": "verify_reuse",
+      "kind": "verified-prefix-reuse",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "draco::draco"
+      ],
+      "patches": [
+        "fix-compile-error-uwp.patch",
+        "fix-uwperror.patch",
+        "fix-pkgconfig.patch",
+        "disable-symlinks.patch",
+        "install-linkage.diff"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Reuse actual prior prefix only after inventory/source/header/features/tool verification; do not silently rebuild or alias another draco."
+      ]
+    },
+    "ktx": {
+      "version": "4.3.1",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DKTX_VERSION_FULL=v4.3.1",
+        "-DKTX_FEATURE_TESTS=OFF",
+        "-DKTX_FEATURE_LOADTEST_APPS=OFF",
+        "-DKTX_FEATURE_STATIC_LIBRARY=ON",
+        "-DKTX_FEATURE_TOOLS=OFF",
+        "-DKTX_FEATURE_VK_UPLOAD=OFF"
+      ],
+      "depends_on": [
+        "zstd"
+      ],
+      "real_cmake_targets": [
+        "KTX::ktx"
+      ],
+      "patches": [
+        "0001-Use-vcpkg-zstd.patch",
+        "0002-Fix-versioning.patch",
+        "0003-mkversion.patch",
+        "0004-quirks.patch",
+        "0005-no-vendored-libs.patch",
+        "0006-fix-ios-install.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [
+        "After applying all6 exact patches remove SOURCE_PATH/other_include/zstd_errors.h, as pinned port.",
+        "Preserve every LICENSES/* plus LICENSE.md."
+      ],
+      "notes": [
+        "Do not acquire Windows-only MSYS/util-linux/dos2unix payloads on Linux.",
+        "Preserve genuine library codecs/transcoder; disabling tool/Vulkan upload extras is the reference feature selection."
+      ]
+    },
+    "modp-base64": {
+      "version": "2020-09-26",
+      "port_version": 2,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": "<port>/modp-base64",
+      "cmake_options": [
+        "-DSOURCE_PATH=<verified-source>"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "modp_b64::modp_b64"
+      ],
+      "patches": [],
+      "required_support_files": [
+        "ports/modp-base64/CMakeLists.txt",
+        "ports/modp-base64/config.h.cmake",
+        "ports/modp-base64/libmodpbase64.def",
+        "ports/modp-base64/modp_b64_data.h"
+      ],
+      "post_install": [
+        "Configure from the VERIFIED PORT CMakeLists.txt/config.h.cmake/libmodpbase64.def, not source root.",
+        "Actual target libmodpbase64 builds full src/modp_b64.c and installs lib/liblibmodpbase64.a plus four real headers.",
+        "Upstream Cesium extern defines imported modp_b64::modp_b64 pointing at that actual archive; no empty target."
+      ],
+      "notes": []
+    },
+    "meshoptimizer": {
+      "version": "0.20",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DMESHOPT_BUILD_GLTFPACK=OFF",
+        "-DMESHOPT_BUILD_SHARED_LIBS=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "meshoptimizer::meshoptimizer"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Do not fetch optional zeux/basis_universal gltfpack-only source."
+      ]
+    },
+    "openssl": {
+      "version": "3.3.1",
+      "port_version": 1,
+      "selected_action": "external_verified_provider",
+      "kind": "verified-provider",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "OpenSSL::Crypto",
+        "OpenSSL::SSL"
+      ],
+      "patches": [
+        "cmake-config.patch",
+        "command-line-length.patch",
+        "script-prefix.patch",
+        "asm-armcap.patch",
+        "windows/install-layout.patch",
+        "windows/install-pdbs.patch",
+        "unix/android-cc.patch",
+        "unix/move-openssldir.patch",
+        "unix/no-empty-dirs.patch",
+        "unix/no-static-libs-for-shared.patch"
+      ],
+      "required_support_files": [
+        "ports/openssl/install-pc-files.cmake",
+        "ports/openssl/openssl.pc.in",
+        "ports/openssl/vcpkg-cmake-wrapper.cmake.in",
+        "ports/openssl/unix/configure",
+        "ports/openssl/unix/remove-deps.cmake"
+      ],
+      "post_install": [],
+      "notes": [
+        "Stock vcpkg3.3.1#1 is NOT built; actual verified OpenSSL3.5.9 prefix selected for Cesium/S2. No version relabel."
+      ]
+    },
+    "s2geometry": {
+      "version": "0.11.1",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DBUILD_EXAMPLES=OFF",
+        "-DBUILD_TESTS=OFF",
+        "-DCMAKE_CXX_STANDARD=17"
+      ],
+      "depends_on": [
+        "abseil",
+        "openssl"
+      ],
+      "real_cmake_targets": [
+        "s2::s2"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "S2 root defaults to14; explicit17 is essential and already source-supported.",
+        "Require actual OpenSSL and absl targets from exact prefixes; no host find fallback."
+      ]
+    },
+    "libjpeg-turbo": {
+      "version": "3.0.3",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DENABLE_STATIC=ON",
+        "-DENABLE_SHARED=OFF",
+        "-DENABLE_EXECUTABLES=OFF",
+        "-DINSTALL_DOCS=OFF",
+        "-DWITH_SIMD=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "libjpeg-turbo::turbojpeg-static",
+        "JPEG::JPEG"
+      ],
+      "patches": [
+        "add-options-for-exes-docs-headers.patch",
+        "workaround_cmake_system_processor.patch"
+      ],
+      "required_support_files": [
+        "ports/libjpeg-turbo/vcpkg-cmake-wrapper.cmake"
+      ],
+      "post_install": [
+        "Port static renaming/config adjustments occur after install: preserve real generated config rather than inventing shared turbojpeg."
+      ],
+      "notes": [
+        "EXPLICIT PROFILE DEVIATION: NASM is absent, so WITH_SIMD=OFF disables architecture optimization only, not JPEG codec support. Record deviation and require genuine JPEG controls later.",
+        "No vcpkg NASM acquisition."
+      ]
+    },
+    "sqlite3": {
+      "version": "3.46.0",
+      "port_version": 2,
+      "selected_action": "external_verified_provider",
+      "kind": "verified-provider",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "SQLCipher::SQLCipher"
+      ],
+      "patches": [
+        "fix-arm-uwp.patch",
+        "add-config-include.patch"
+      ],
+      "required_support_files": [
+        "ports/sqlite3/CMakeLists.txt",
+        "ports/sqlite3/sqlite3-config.in.cmake",
+        "ports/sqlite3/sqlite3-vcpkg-config.h.in",
+        "ports/sqlite3/sqlite3.pc.in"
+      ],
+      "post_install": [],
+      "notes": [
+        "Stock vcpkgSQLite3.46.0#2 is NOT built. Actual SQLCipher4.5.7/SQLite3.45.3 provider replaces the dependency by explicit Cesium CMake patch.",
+        "Do not alias libsqlite3 or claim3.46.0. PRIVATE_CESIUM_SQLITE alone is not a provider."
+      ]
+    },
+    "tinyxml2": {
+      "version": "10.0.0",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-Dtinyxml2_BUILD_TESTING=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "tinyxml2::tinyxml2"
+      ],
+      "patches": [
+        "0001-fix-do-not-force-export-the-symbols-when-building-st.patch",
+        "0002-fix-check-for-TINYXML2_EXPORT-on-non-windows.patch",
+        "0003-fix-Android-SDK-below-24-does-not-support-fseeko.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "libwebp": {
+      "version": "1.4.0",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DWEBP_BUILD_LIBWEBPMUX=ON",
+        "-DWEBP_NEAR_LOSSLESS=ON",
+        "-DWEBP_ENABLE_SIMD=ON",
+        "-DCMAKE_DISABLE_FIND_PACKAGE_SDL=ON",
+        "-DWEBP_BUILD_ANIM_UTILS=OFF",
+        "-DWEBP_BUILD_CWEBP=OFF",
+        "-DWEBP_BUILD_DWEBP=OFF",
+        "-DWEBP_BUILD_EXTRAS=OFF",
+        "-DWEBP_BUILD_GIF2WEBP=OFF",
+        "-DWEBP_BUILD_IMG2WEBP=OFF",
+        "-DWEBP_BUILD_WEBPINFO=OFF",
+        "-DWEBP_BUILD_WEBPMUX=OFF",
+        "-DWEBP_ENABLE_SWAP_16BIT_CSP=OFF",
+        "-DWEBP_UNICODE=OFF",
+        "-DWEBP_BUILD_VWEBP=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "WebP::webp",
+        "WebP::webpdecoder",
+        "WebP::webpdemux",
+        "WebP::libwebpmux",
+        "WebP::sharpyuv"
+      ],
+      "patches": [
+        "0002-cmake-config.patch",
+        "0003-simd.patch",
+        "0008-sdl.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Preserve default libwebpmux/nearlossless/simd; all optional tools disabled, no SDL host discovery."
+      ]
+    },
+    "zlib-ng": {
+      "version": "2.1.5",
+      "port_version": 1,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DZLIB_ENABLE_TESTS=OFF",
+        "-DWITH_NEW_STRATEGIES=ON",
+        "-DWITH_OPTIM=ON",
+        "-DZLIB_COMPAT=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "zlib-ng::zlib-ng"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Genuine native z-ng API and real archive. Cesium extern defines imported target from prefix library; not a zlib1.3 alias.",
+        "Pinned port passes an optional ZLIB_FULL_VERSION variable; do not invent an override when not set by upstream."
+      ]
+    },
+    "picosha2": {
+      "version": "2018-07-30",
+      "port_version": 2,
+      "selected_action": "acquire_source",
+      "kind": "install-real-headers",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "picosha2::picosha2"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "Install actual picosha2.h and LICENSE; upstream Cesium adds a genuine header-only imported interface."
+      ],
+      "notes": []
+    },
+    "earcut-hpp": {
+      "version": "2.2.4",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "install-real-headers",
+      "source_subdir": ".",
+      "cmake_options": [],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "earcut"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [
+        "Install actual include/mapbox/earcut.hpp and LICENSE; upstream Cesium adds real header-only interface, no archive."
+      ],
+      "notes": []
+    },
+    "cpp-httplib": {
+      "version": "0.16.0",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake-header-only",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DHTTPLIB_REQUIRE_BROTLI=OFF",
+        "-DHTTPLIB_REQUIRE_OPENSSL=OFF",
+        "-DHTTPLIB_REQUIRE_ZLIB=OFF",
+        "-DHTTPLIB_USE_OPENSSL_IF_AVAILABLE=OFF",
+        "-DHTTPLIB_USE_ZLIB_IF_AVAILABLE=OFF",
+        "-DHTTPLIB_USE_BROTLI_IF_AVAILABLE=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "httplib::httplib"
+      ],
+      "patches": [
+        "fix-find-brotli.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": [
+        "Matches [core]: no default Brotli, no additional zlib/OpenSSL dependency or discovery."
+      ]
+    },
+    "libmorton": {
+      "version": "0.2.12",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake-header-only",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DBUILD_TESTING=OFF"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "libmorton::libmorton"
+      ],
+      "patches": [],
+      "required_support_files": [],
+      "post_install": [],
+      "notes": []
+    },
+    "zstd": {
+      "version": "1.5.6",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": "build/cmake",
+      "cmake_options": [
+        "-DZSTD_BUILD_SHARED=OFF",
+        "-DZSTD_BUILD_STATIC=ON",
+        "-DZSTD_LEGACY_SUPPORT=1",
+        "-DZSTD_BUILD_TESTS=0",
+        "-DZSTD_BUILD_CONTRIB=0",
+        "-DZSTD_MULTITHREAD_SUPPORT=1",
+        "-DZSTD_BUILD_PROGRAMS=0"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "zstd::libzstd_static",
+        "zstd::libzstd"
+      ],
+      "patches": [
+        "no-static-suffix.patch",
+        "fix-emscripten-and-clang-cl.patch",
+        "fix-windows-rc-compile.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [
+        "Preserve -pthread propagation in config/pkgconfig for multithread static build."
+      ],
+      "notes": [
+        "Actual upstream static export name may be libzstd_static; pinned port normalizes exports. Inspect genuine installed targets and map only real product; do not fabricate a missing binary."
+      ]
+    },
+    "catch2": {
+      "version": "3.6.0",
+      "port_version": 0,
+      "selected_action": "acquire_source",
+      "kind": "cmake",
+      "source_subdir": ".",
+      "cmake_options": [
+        "-DCATCH_INSTALL_DOCS=OFF",
+        "-DCMAKE_CXX_STANDARD=17"
+      ],
+      "depends_on": [],
+      "real_cmake_targets": [
+        "Catch2::Catch2",
+        "Catch2::Catch2WithMain"
+      ],
+      "patches": [
+        "fix-install-path.patch"
+      ],
+      "required_support_files": [],
+      "post_install": [
+        "Pinned port moves with-main library to manual-link via fix-install-path.patch and writes catch.hpp shim including real catch2/catch_all.hpp."
+      ],
+      "notes": [
+        "Configuration package is unconditionally required by Cesium even with CESIUM_TESTS_ENABLED=OFF; do not fake it."
+      ]
+    }
+  },
+  "cesium": {
+    "source_subdir": ".",
+    "options": [
+      "-DVCPKG_MANIFEST_MODE=ON",
+      "-DVCPKG_MANIFEST_INSTALL=OFF",
+      "-DVCPKG_LIBRARY_LINKAGE=static",
+      "-DCESIUM_TESTS_ENABLED=OFF",
+      "-DCESIUM_GLM_STRICT_ENABLED=ON",
+      "-DCESIUM_INSTALL_STATIC_LIBS=ON",
+      "-DCESIUM_INSTALL_HEADERS=ON",
+      "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+      "-DCMAKE_CXX_STANDARD=17"
+    ],
+    "note": "Do not run unmodified top-level configure without a real bounded toolchain/provider integration: source demands CMAKE_TOOLCHAIN_FILE and uses PACKAGE_BUILD_DIR. Supply explicit project integration using actual package targets; no fake toolchain or libraries. Preserve all18 Cesium targets."
+  },
+  "caveat": "Port-derived options/paths, not source-build success. Validate supported options against acquired pinned source CMake before executing; stop on first mismatch. All build/source/license/target products need final hashes and installed CMake target inventory."
+}

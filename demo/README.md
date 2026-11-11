@@ -103,8 +103,11 @@ its signatures and the UI reel's locked historical inputs remain unchanged.
 `sign_only: true` is rejected; it no longer means signing historical assets.
 
 The capture artifact is `demo-video-attempt-N`. Its receipt records the actual
-capture run/attempt, workflow commit, deployed application commit and output
-hashes. Capture accepts only the eleven chapter basenames produced by
+capture run/attempt, workflow commit, deployed application commit, actual stamped
+package version and output hashes. Configured recording hosts come from the same
+validated environment values passed to the web-recording commands. Requested
+ATAK/upgrade flags are recorded separately from the actual output inventory;
+they do not assert that optional scenes succeeded. Capture accepts only the eleven chapter basenames produced by
 `assemble.sh`, with MP4/JPG clip extensions. Unknown files under the reserved
 `demo-clip-*` prefix fail before upload; raw artifact paths use the same explicit
 allowlist. ZIP entries must be ordinary files or have unspecified type bits.
@@ -128,7 +131,9 @@ The resulting prerelease is `demo-run-RUN-attempt-M`, targeted at the exact
 producer commit and excluded from package release selection. It remains draft
 until every original signed file has been uploaded and read back by immutable
 asset ID with matching SHA-256. Promotion patches that verified release ID; it
-does not resolve a mutable tag again. Release edits queue without cancelling uploads.
+does not resolve a mutable tag again. Release edits queue without cancelling uploads. Manual captures have a separate
+noncancelling FIFO; only PR preflight uses per-PR latest-only cancellation. No
+workflow-wide cancellation can supersede these publisher safeguards.
 A retry uploads only missing matching bytes; differing or unverifiable assets
 stop publication. An identical already-public candidate is a no-op. Neither
 videos nor signature bundles are overwritten, rerendered or regenerated.

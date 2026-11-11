@@ -50,6 +50,9 @@ class PublicationTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)
         self.gh=Fake()
+        environment={'DEMO_VERSION':'0.14.1','ATAK':'false','UPGRADE':'false'}
+        environment.update({'DEMO_'+key.upper()+'_HOSTS':' '.join(hosts) for key,hosts in P.TARGETS.items()})
+        environment_patch=patch.dict(os.environ,environment);environment_patch.start();self.addCleanup(environment_patch.stop)
 
     def candidate(self):
         outputs=[]
@@ -60,7 +63,7 @@ class PublicationTests(unittest.TestCase):
         for item in outputs:
             original=dict(item);original['file']={'demo-deploy.mp4':'demo.mp4','demo-operate-and-trust.mp4':'demo-operate.mp4',
                 'demo-clip-sso.mp4':'clips/demo-clip-sso.mp4'}.get(item['file'],item['file']);originals.append(original)
-        value={'schema':1,'capture':{'schema':1,'capture':P.identity(123,1,SHA),'applicationCommit':'b'*40,'outputs':originals},
+        value={'schema':1,'capture':{'schema':1,'capture':P.identity(123,1,SHA),'applicationCommit':'b'*40,'outputs':originals,**P.capture_context()},
                'signing':P.identity(123,2,SHA),'outputs':outputs}
         (self.root/P.MANIFEST).write_text(json.dumps(value))
         subjects=[{'name':item['file'],'digest':{'sha256':item['sha256']}} for item in outputs if item['file'].endswith('.mp4')]
@@ -117,6 +120,20 @@ class PublicationTests(unittest.TestCase):
         self.assertNotIn('clips/demo-clip-operator.txt',names);self.assertNotIn('clips/demo-clip-secrets.json',names)
         value=self.candidate()
         value['capture']['outputs'].append({'file':'clips/demo-clip-operator.txt','bytes':7,'sha256':'0'*64})
+        (self.root/P.MANIFEST).write_text(json.dumps(value))
+        with self.assertRaises(ValueError):P.manifest(self.root)
+
+    def test_capture_version_targets_and_requested_options_are_not_success_claims(self):
+        for name in ('demo.mp4','demo-operate.mp4'):(self.root/name).write_bytes(b'fixture')
+        environment={'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_SHA':SHA,'ATAK':'true','UPGRADE':'true'}
+        with patch.dict(os.environ,environment):P.capture(self.root,'b'*40)
+        receipt=json.loads((self.root/'capture.json').read_text())
+        self.assertEqual(receipt['packageVersion'],'0.14.1');self.assertEqual(receipt['recordingTargets'],P.TARGETS)
+        self.assertEqual(receipt['requested'],{'atak':True,'upgrade':True})
+        self.assertEqual({item['file'] for item in receipt['outputs']},{'demo.mp4','demo-operate.mp4'})
+        for key,bad in [('DEMO_VERSION','unknown'),('DEMO_PRIMARY_HOSTS','private.other.invalid'),('ATAK','yes')]:
+            with patch.dict(os.environ,{**environment,key:bad}),self.subTest(key=key),self.assertRaises(ValueError):P.capture(self.root,'b'*40)
+        value=self.candidate();value['capture']['recordingTargets']['primary']=['other.invalid']
         (self.root/P.MANIFEST).write_text(json.dumps(value))
         with self.assertRaises(ValueError):P.manifest(self.root)
 
@@ -287,7 +304,17 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(output.getvalue(),'');self.assertEqual(error.getvalue(),'')
 
     def test_workflow_privileges_modes_artifacts_and_publication_are_separate(self):
-        jobs=yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(),Loader=yaml.BaseLoader)['jobs']
+        workflow=yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(),Loader=yaml.BaseLoader)
+        self.assertNotIn('concurrency',workflow)
+        jobs=workflow['jobs']
+        self.assertEqual(jobs['record']['concurrency'],{'group':'demo-capture-main','queue':'max','cancel-in-progress':'false'})
+        self.assertEqual(jobs['preflight']['concurrency'],{'group':'demo-preflight-${{ github.event.pull_request.number }}','cancel-in-progress':'true'})
+        for name,hosts in P.TARGETS.items():
+            self.assertEqual(jobs['record']['env']['DEMO_'+name.upper()+'_HOSTS'],' '.join(hosts))
+        web_commands='\n'.join(step.get('run','') for step in jobs['record']['steps'])
+        self.assertIn('./demo/record-web.sh 06-web tour.demo.ts "${DEMO_PRIMARY_HOSTS}"',web_commands)
+        for variable in ('DEMO_CLOUDTAK_HOSTS','DEMO_ATAK_HOSTS','DEMO_SYNC_HOSTS'):
+            self.assertIn('"${'+variable+'}"',web_commands)
         for name in ('record','preflight','mode'):
             self.assertNotIn('write',jobs[name]['permissions'].values())
         self.assertEqual(jobs['sign']['permissions']['contents'],'read')

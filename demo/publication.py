@@ -155,6 +155,28 @@ def extract(gh,run,name,directory):
     return asset
 
 
+TARGETS = {'primary':['takserver.uds.dev','sso.uds.dev'],
+           'cloudtak':['map.uds.dev','sso.uds.dev','takserver.uds.dev'],
+           'atak':['atak.uds.dev','map.uds.dev','sso.uds.dev'],
+           'sync':['atak.uds.dev','map.uds.dev','sso.uds.dev','takserver.uds.dev']}
+
+
+def validate_capture_context(receipt):
+    require(match(receipt['packageVersion'],r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'))
+    require(receipt['recordingTargets']==TARGETS)
+    require(type(receipt['requested']) is dict and set(receipt['requested'])=={'atak','upgrade'} and
+            all(type(value) is bool for value in receipt['requested'].values()))
+
+
+def capture_context():
+    for key in ('ATAK','UPGRADE'):require(os.environ.get(key) in ('true','false'))
+    context={'packageVersion':os.environ.get('DEMO_VERSION',''),
+             'recordingTargets':{name:os.environ.get('DEMO_'+name.upper()+'_HOSTS','').split() for name in TARGETS},
+             'requested':{'atak':os.environ['ATAK']=='true','upgrade':os.environ['UPGRADE']=='true'}}
+    validate_capture_context(context)
+    return context
+
+
 def capture(directory,app_source):
     root=Path(directory);require(match(app_source,r'[0-9a-f]{40}'))
     source=identity(os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],os.environ['GITHUB_SHA'])
@@ -164,7 +186,7 @@ def capture(directory,app_source):
     require(root/'demo.mp4' in paths and root/'demo-operate.mp4' in paths)
     outputs=[info(p,p.relative_to(root).as_posix()) for p in paths]
     require(len(outputs)<=100 and sum(item['bytes'] for item in outputs)<=TOTAL)
-    (root/'capture.json').write_text(json.dumps({'schema':1,'capture':source,'applicationCommit':app_source,'outputs':outputs},sort_keys=True))
+    (root/'capture.json').write_text(json.dumps({'schema':1,'capture':source,'applicationCommit':app_source,'outputs':outputs,**capture_context()},sort_keys=True))
 
 
 def check_inventory(directory,outputs,extras=()):
@@ -188,7 +210,8 @@ def prepare_sign(gh,directory):
         require(match(capture_attempt,r'[1-9][0-9]{0,5}') and int(capture_attempt)<=current['run_attempt'])
         extract(gh,current,'demo-video-attempt-'+capture_attempt,temp)
         receipt=decode((Path(temp)/'capture.json').read_bytes())
-        require(set(receipt)=={'schema','capture','applicationCommit','outputs'} and type(receipt['schema']) is int and receipt['schema']==1)
+        require(set(receipt)=={'schema','capture','applicationCommit','outputs','packageVersion','recordingTargets','requested'} and type(receipt['schema']) is int and receipt['schema']==1)
+        validate_capture_context(receipt)
         capture_source=receipt['capture'];identity(capture_source['run'],capture_source['attempt'],capture_source['workflowCommit'])
         require(capture_source['attempt']==capture_attempt and capture_source['run']==str(current['id']) and capture_source['workflowCommit']==current['head_sha'] and
                 int(capture_source['attempt'])<=current['run_attempt'] and match(receipt['applicationCommit'],r'[0-9a-f]{40}'))
@@ -211,7 +234,8 @@ def manifest(directory):
     require(type(value) is dict and set(value)=={'schema','capture','signing','outputs'} and type(value['schema']) is int and value['schema']==1)
     require(set(value['signing'])=={'run','attempt','workflowCommit'})
     identity(**{'run_id':value['signing']['run'],'attempt':value['signing']['attempt'],'source':value['signing']['workflowCommit']})
-    receipt=value['capture'];require(set(receipt)=={'schema','capture','applicationCommit','outputs'} and type(receipt['schema']) is int and receipt['schema']==1)
+    receipt=value['capture'];require(set(receipt)=={'schema','capture','applicationCommit','outputs','packageVersion','recordingTargets','requested'} and type(receipt['schema']) is int and receipt['schema']==1)
+    validate_capture_context(receipt)
     source=receipt['capture'];require(set(source)=={'run','attempt','workflowCommit'});identity(source['run'],source['attempt'],source['workflowCommit'])
     require(source['run']==value['signing']['run'] and source['workflowCommit']==value['signing']['workflowCommit'] and
             int(source['attempt'])<=int(value['signing']['attempt']) and match(receipt['applicationCommit'],r'[0-9a-f]{40}'))

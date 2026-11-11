@@ -56,10 +56,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: demo-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   VHS_VERSION: 0.12.1
   TTYD_VERSION: 1.7.7
@@ -96,6 +92,10 @@ jobs:
   record:
     needs: mode
     if: github.event_name == 'workflow_dispatch' && needs.mode.outputs.mode == 'record'
+    concurrency:
+      group: demo-capture-main
+      queue: max
+      cancel-in-progress: false
     outputs:
       capture-attempt: ${{ steps.capture.outputs.capture-attempt }}
     # Match Test's temporary hosted-kernel mitigation (#300); explicit overrides remain available.
@@ -108,6 +108,10 @@ jobs:
       packages: read
     env:
       APP_REF: ${{ inputs.app_ref }}
+      DEMO_PRIMARY_HOSTS: takserver.uds.dev sso.uds.dev
+      DEMO_CLOUDTAK_HOSTS: map.uds.dev sso.uds.dev takserver.uds.dev
+      DEMO_ATAK_HOSTS: atak.uds.dev map.uds.dev sso.uds.dev
+      DEMO_SYNC_HOSTS: atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev
       ATAK: ${{ inputs.atak && 'true' || 'false' }}
       # Keep the optional second cluster out of automatic PR recordings.
       UPGRADE: ${{ github.event_name == 'workflow_dispatch' && inputs.upgrade && 'true' || 'false' }}
@@ -328,7 +332,7 @@ jobs:
         shell: bash
 
       - name: Record the web walkthrough
-        run: ./demo/record-web.sh
+        run: ./demo/record-web.sh 06-web tour.demo.ts "${DEMO_PRIMARY_HOSTS}"
         shell: bash
 
       # Only when the CloudTAK chart lets /CloudTAK/Users sign in. A failed
@@ -340,7 +344,7 @@ jobs:
             exit 0
           fi
           if ! DEMO_KEYCLOAK_USER=mapdemo DEMO_KEYCLOAK_GROUPS="/CloudTAK/Users,/TAK/Operators_READ" \
-            ./demo/record-web.sh 07-user cloudtak-user.demo.ts "map.uds.dev sso.uds.dev takserver.uds.dev"; then
+            ./demo/record-web.sh 07-user cloudtak-user.demo.ts "${DEMO_CLOUDTAK_HOSTS}"; then
             rm -f demo/out/07-user.mp4
             echo "::warning::The CloudTAK regular user chapter failed and is left out"
           fi
@@ -368,7 +372,7 @@ jobs:
           ./demo/atak-adb.sh prep
           ./demo/atak-adb.sh record-start 08-atak
           status=0
-          ./demo/record-web.sh 08-atak atak.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev" || status=$?
+          ./demo/record-web.sh 08-atak atak.demo.ts "${DEMO_ATAK_HOSTS}" || status=$?
           ./demo/atak-adb.sh record-stop 08-atak || true
           exit "${status}"
         shell: bash
@@ -380,7 +384,7 @@ jobs:
           if ./demo/atak-adb.sh start; then
             ./demo/atak-adb.sh record-start 09-sync || true
           fi
-          if ! DEMO_DEVICE_RECORDING=1 ./demo/record-web.sh 09-sync atak-sync.demo.ts "atak.uds.dev map.uds.dev sso.uds.dev takserver.uds.dev"; then
+          if ! DEMO_DEVICE_RECORDING=1 ./demo/record-web.sh 09-sync atak-sync.demo.ts "${DEMO_SYNC_HOSTS}"; then
             rm -f demo/out/09-sync.mp4
             echo "::warning::The CloudTAK and ATAK sync chapter failed and is left out"
           fi
@@ -555,6 +559,9 @@ jobs:
   # PRs check the actual recorder/media tools without deploying or publishing.
   preflight:
     if: github.event_name == 'pull_request'
+    concurrency:
+      group: demo-preflight-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
     timeout-minutes: 10
     permissions:

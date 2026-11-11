@@ -6,6 +6,10 @@ an Android importer or claim an end-to-end CommonCommo transfer.
 
 ## Synthetic client fixture
 
+The synthetic fixture files are original work, Copyright 2026 uds-takserver
+authors, licensed under GPL-3.0-only. The checksum-bound manifest is kept
+byte-identical; its license attribution is recorded here.
+
 ```sh
 python3 takx/mission-package/build_fixture.py --output /fresh/synthetic.dpk
 ```

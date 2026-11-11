@@ -57,6 +57,23 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Sanitize complete native build failure logs
+        id: failure-logs
+        if: failure() && !cancelled()
+        timeout-minutes: 2
+        run: |
+          python3 -B takx/registry-cache/capture_failure.py \
+            --input "${RUNNER_TEMP}/draco-producer" --output "${RUNNER_TEMP}/native-failure-sanitized"
+
+      - name: Retain sanitized native build failure logs
+        if: failure() && !cancelled() && steps.failure-logs.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-build-failure-sanitized
+          path: ${{ runner.temp }}/native-failure-sanitized
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     if: github.ref == 'refs/heads/main' && inputs.publish
     needs: build

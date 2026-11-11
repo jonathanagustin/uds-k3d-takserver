@@ -46,6 +46,7 @@ def run(command, root, name, timeout=60, env=None):
     log = root / (name + '.log')
     deadline = min(DEADLINE, time.monotonic() + timeout)
     child = None
+    observed_exit = False
     try:
         with log.open('xb') as stream:
             child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT,
@@ -55,6 +56,7 @@ def run(command, root, name, timeout=60, env=None):
                 if log.stat().st_size > 16 * 1024**2 or time.monotonic() >= deadline:
                     raise ValueError('command exceeded time/log bound; inspect private local log')
                 if child.poll() is not None:
+                    observed_exit = True
                     break
                 time.sleep(0.2)
             if child.returncode:
@@ -66,6 +68,13 @@ def run(command, root, name, timeout=60, env=None):
             except ProcessLookupError:
                 pass
             child.wait()
+        if log.is_file() and not log.is_symlink():
+            # An exited command is complete even on nonzero status. Deadline,
+            # quota and output-limit captures are never complete diagnostics.
+            status = {'schema':'uds-native-command-log-v1', 'complete':observed_exit,
+                      'returncode':child.returncode if child is not None else None,
+                      'bytes':log.stat().st_size, 'sha256':local.file_sha(log)}
+            (root / (name+'.status.json')).write_bytes(local.canonical(status))
     return log.read_bytes()
 
 
@@ -110,8 +119,14 @@ def tools(root):
     result = {}
     for name, path in paths.items():
         path = Path(shutil.which(path) or path).resolve()
+        # GCC backends silently accept --version without printing identity.
+        # Their genuine -version mode needs quiet/syntax-only and explicit null
+        # input/output to avoid timing text or creating a default <stdin>.s.
+        version_command = [str(path), *(['-version','-fsyntax-only','-quiet','-o','/dev/null','/dev/null']
+                                       if name in ('cc1','cc1plus') else ['--version'])]
         result[name] = {'path': str(path), 'sha256': local.file_sha(path),
-                        'version': run([str(path), '--version'], root, 'tool-' + name).decode().strip()}
+                        'version_command':version_command,
+                        'version': run(version_command, root, 'tool-' + name).decode().strip()}
     if (not result['g++']['version'].splitlines()[0].endswith(' 14.2.0') or
             result['cmake']['version'].splitlines()[0] != 'cmake version ' + LOCK['cmake']['version']):
         raise ValueError('unsupported compiler')

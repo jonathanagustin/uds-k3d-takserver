@@ -68,6 +68,38 @@ class FreshGuards(unittest.TestCase):
         changed = copy.deepcopy(original);changed['compile_commands'][0]['command'] += ' -O1'
         self.assertNotEqual(k,fresh.key(changed))
 
+    def test_gcc_backends_use_their_real_version_protocol(self):
+        # Real subprocesses model GCC's silent-success --version behavior;
+        # this is a tool-observation guard, not a native build qualification.
+        directory=self.root/'tools';directory.mkdir()
+        for name in ('gcc','g++','cc1','cc1plus','as','ld','ar','ranlib','make','cmake','python3','readelf'):
+            tool=directory/name
+            tool.write_text('#!'+sys.executable+'\n'+
+                'from pathlib import Path\nimport sys\n'+
+                'root=Path(__file__).parent;name=Path(__file__).name\n'+
+                'if sys.argv[1].startswith("-print-prog-name="):\n'+
+                ' print(root/sys.argv[1].split("=",1)[1])\n'+
+                'elif name in ("cc1","cc1plus"):\n'+
+                ' assert sys.argv[1:]==["-version","-fsyntax-only","-quiet","-o","/dev/null","/dev/null"], "unsafe backend metadata protocol"\n'+
+                ' print("GNU backend version 14.2.0")\n'+
+                'elif name=="cmake":print("cmake version 3.31.6")\n'+
+                'else:print("fixture tool 14.2.0")\n')
+            tool.chmod(0o755)
+        def which(name):
+            path=directory/Path(name).name
+            return str(path) if path.exists() else None
+        with patch.object(producer.shutil,'which',side_effect=which):
+            observed=producer.tools(self.root)
+        for name in ('cc1','cc1plus'):
+            self.assertEqual(observed[name]['version'],'GNU backend version 14.2.0')
+            self.assertEqual(observed[name]['version_command'][1:],
+                             ['-version','-fsyntax-only','-quiet','-o','/dev/null','/dev/null'])
+        self.assertEqual(list(directory.glob('*.s')),[])
+        value=identity();value['tools']=observed
+        fresh.validate_identity(value)
+        value['tools']['cc1']['version']=''
+        with self.assertRaises(ValueError):fresh.validate_identity(value)
+
     def test_fixture_capsule_and_oci_layout_bind_exact_bytes_and_media(self):
         capsule,sha,key = self.capsule()
         restored = self.root / 'restore';m = fresh.restore(capsule,sha,key,restored)

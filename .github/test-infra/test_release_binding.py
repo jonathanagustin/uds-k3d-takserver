@@ -236,6 +236,16 @@ class BindingTests(unittest.TestCase):
             certificate['buildSignerURI']=certificate['subjectAlternativeName']
             with self.assertRaises(ValueError):B.verify_verified_output(bad_prior+current,self.metadata,self.raw)
 
+    def test_hosted_unit_step_discovers_both_release_policy_suites(self):
+        root=Path(__file__).resolve().parents[2]
+        jobs=yaml.load((root/'.github/workflows/unit-tests.yaml').read_text(),Loader=yaml.BaseLoader)['jobs']
+        steps=[step for job in jobs.values() for step in job.get('steps',[])]
+        step=next(step for step in steps if step['name']=='Draft release readiness guards')
+        self.assertIn("-p 'test_release_*.py'",step['run'])
+        self.assertNotIn('if',step)
+        matches={path.name for path in Path(__file__).parent.glob('test_release_*.py')}
+        self.assertTrue({'test_release_binding.py','test_release_readiness.py'} <= matches)
+
     def test_cli_generate_and_safe_invalid_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);meta=root/'metadata.json';index=root/'index.json'

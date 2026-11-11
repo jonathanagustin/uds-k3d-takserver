@@ -121,17 +121,21 @@ def verify_verified_output(output, metadata, raw_index):
         certificate = result['signature']['certificate']
         for key, value in {
             'issuer': 'https://token.actions.githubusercontent.com',
-            'subjectAlternativeName': identity, 'buildSignerURI': identity,
             'buildSignerDigest': workflow['commit'],
             'sourceRepositoryURI': REPOSITORY, 'sourceRepositoryDigest': workflow['commit'],
             'sourceRepositoryIdentifier': '1427088300',
             'sourceRepositoryOwnerIdentifier': '5193877',
         }.items():
             require(certificate.get(key) == value)
+        trusted_identities = (WORKFLOW + '@refs/heads/main',
+                              WORKFLOW + '@refs/tags/' + metadata['release']['tag'])
+        require(certificate.get('subjectAlternativeName') in trusted_identities and
+                certificate.get('buildSignerURI') == certificate['subjectAlternativeName'])
         require(matches(certificate.get('runInvocationURI'),
                         re.escape(REPOSITORY) + r'/actions/runs/[1-9][0-9]*/attempts/[1-9][0-9]*'))
         require(type(result.get('verifiedTimestamps')) is list and bool(result['verifiedTimestamps']))
         if certificate['runInvocationURI'] == invocation:
+            require(certificate['subjectAlternativeName'] == identity)
             candidates.append(result)
     # Never substitute an old attempt or choose the first of duplicate current records.
     require(len(candidates) == 1)

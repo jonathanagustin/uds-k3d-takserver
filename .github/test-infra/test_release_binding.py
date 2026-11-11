@@ -211,6 +211,31 @@ class BindingTests(unittest.TestCase):
         prior[0]['verificationResult']['signature']['certificate']['sourceRepositoryIdentifier']='wrong'
         with self.assertRaises(ValueError):B.verify_verified_output(prior+current,self.metadata,self.raw)
 
+    def test_prior_tag_and_main_records_coexist_but_current_ref_is_exact(self):
+        for prior_ref,current_ref in [('refs/tags/v0.14.0','refs/heads/main'),
+                                      ('refs/heads/main','refs/tags/v0.14.0')]:
+            self.metadata['workflow']['runAttempt']='1'
+            self.metadata['workflow']['ref']=prior_ref
+            prior=self.output()
+            self.metadata['workflow']['runAttempt']='2'
+            self.metadata['workflow']['ref']=current_ref
+            current=self.output()
+            B.verify_verified_output(prior+current,self.metadata,self.raw)
+            B.verify_verified_output(current+prior,self.metadata,self.raw)
+            wrong=copy.deepcopy(current)
+            certificate=wrong[0]['verificationResult']['signature']['certificate']
+            certificate['subjectAlternativeName']=B.WORKFLOW+'@'+prior_ref
+            certificate['buildSignerURI']=certificate['subjectAlternativeName']
+            with self.assertRaises(ValueError):B.verify_verified_output(prior+wrong,self.metadata,self.raw)
+            certificate['buildSignerURI']=B.WORKFLOW+'@'+current_ref
+            with self.assertRaises(ValueError):B.verify_verified_output(prior+wrong,self.metadata,self.raw)
+            # Another release tag is never an allowed prior identity.
+            bad_prior=copy.deepcopy(prior)
+            certificate=bad_prior[0]['verificationResult']['signature']['certificate']
+            certificate['subjectAlternativeName']=B.WORKFLOW+'@refs/tags/v0.13.0'
+            certificate['buildSignerURI']=certificate['subjectAlternativeName']
+            with self.assertRaises(ValueError):B.verify_verified_output(bad_prior+current,self.metadata,self.raw)
+
     def test_cli_generate_and_safe_invalid_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);meta=root/'metadata.json';index=root/'index.json'

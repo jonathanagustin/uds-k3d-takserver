@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "actual_kernel_version": "8.30.5",
+  "profile": "public-kernel-client-interop-v1",
+  "viewport_policy": "public-viewport-fit-v1",
+  "patch_sha256": "958344593447068cad89fde7c8a9a46070ebbebee84dbcb5f5442c36dea01fb0",
+  "files": {
+    "takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java": {
+      "before": "083263482dadcd1e3385010476c100456b4b5e7197ad12812e25589d8b1c3824",
+      "after": "de5952fada0ca5f38091c63488c2366f6a4b5bfea76516fd5aff3e029ce2236e"
+    },
+    "takkernel/shared/src/main/java/gov/tak/api/symbology/ISymbologyProvider.java": {
+      "before": "aa24500c278c28af21ef5e29a448771a4141c8fe3204f8015024b37819368225",
+      "after": "e867c984544e234d2930340de11af918c7b7ebedcf44d0300b0c9d678107fa5c"
+    },
+    "takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525cSymbologyProviderBase.java": {
+      "before": "0d0190f227ec103aefc2af42133017beb9e6dec3afeb794c62b0bfedf4bc3acf",
+      "after": "6d020878c35917bdb2df375964bf2bd3b21269d9d0e238f4b9641506b5180434"
+    },
+    "takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525dSymbologyProviderBase.java": {
+      "before": "a9978036900551fdaafcab8c9405c607333246fdb4f424d1553f10913345020a",
+      "after": "e5eac68c4185fc0d08895e1dca40e13ac1f2408dd58fcbff7c3ba9e8ba0e8cb2"
+    },
+    "takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525Base.java": {
+      "before": "5de88c98f7c28388bc4e5263244c370360781faedae6e240b9c470b4cca6fd64",
+      "after": "c5eb5e6c1240d52ba0dc8c197cba9a353d89c0e2956961e271e9f2a96db21b32"
+    },
+    "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": {
+      "before": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb",
+      "after": "3862556f6b76a00d8b5c228394c773a5428c827af679352c5ff583877a6201a7"
+    },
+    "takkernel/engine/src/main/jni/interop/feature/Interop.cpp": {
+      "before": "b4850c0df45087e472cb091d684a9bfa44ccf297656e43b4ec4fcaf2a9d60ea1",
+      "after": "50bab2559f86d4c26cf2e155b245e1ca6015d1cffc3c1afaeedb2ee340a71150"
+    },
+    "takkernel/engine/src/main/java/com/atakmap/map/layer/model/SceneLayer.java": {
+      "before": "1c4903eb8ec6f134ea4be60188a7fd66c43dc5f8e37abdc3f11eead0f688e680",
+      "after": "073af79b104bacfc9468f200d5165f0171adad27533472c66564809513b7118c"
+    },
+    "takkernel/engine/src/main/jni/jscenelayer.cpp": {
+      "before": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a",
+      "after": "ce13372200af75494fddd784d74eb6cc58dadfe075847b0ab91a455a9c66859a"
+    }
+  },
+  "owned_java": {
+    "java/PublicViewportFit.java": "859974cd29d84c4f2a9d6f7a27b4da9925e51b58e0a5cf6192efe19aebc6a35a"
+  },
+  "native_execution_accepted": false,
+  "multipoint_detail_accepted": false,
+  "private_sdk_equivalence": false,
+  "public_runtime_jars": {
+    "jsvg-1.6.1.jar": {
+      "coordinate": "com.github.weisj:jsvg:1.6.1",
+      "url": "https://repo.maven.apache.org/maven2/com/github/weisj/jsvg/1.6.1/jsvg-1.6.1.jar",
+      "bytes": 588293,
+      "sha256": "bb7e4a0afb9cd1ee2caa2cc7044befe4379080093795c6fb95ce1e475265dc82",
+      "published_sha1": "a84d34480044db51a1448e9c0e32bd284b797288"
+    },
+    "geodesy-1.1.3.jar": {
+      "coordinate": "org.gavaghan:geodesy:1.1.3",
+      "url": "https://repo.maven.apache.org/maven2/org/gavaghan/geodesy/1.1.3/geodesy-1.1.3.jar",
+      "bytes": 12069,
+      "sha256": "d79935a567f876b411b72aa7a7b9e222fb611c0fddf63c84a7f2014740dea12c",
+      "published_sha1": "8744b9e7dd8bccc9790e1993d6e4eb167ed43460"
+    }
+  },
+  "public_runtime_dependency_source": {
+    "url": "https://repo.maven.apache.org/maven2/io/github/missioncommand/mil-sym-java/2.1.5/mil-sym-java-2.1.5.pom",
+    "sha256": "c3741d1ceb5a9a17d1264aa92568312dad7972d04070e24a5240151af3f9914b"
+  }
+}

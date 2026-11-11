@@ -10,6 +10,20 @@ The owned patch changes the real Linux64 preload list to the nine available prov
 
 GDAL's genuine Java initializer calls `System.loadLibrary("gdalalljni")` even after EngineLibrary loads its resource. Start the JVM with `java.library.path` pointing to EngineLibrary's extraction directory. The manifest records its template: `${java.io.tmpdir}/takkernel/engine/<JAR MD5>/lib/linux64`. MD5 is the upstream cache-directory locator; SHA256 inventories establish input identity. Set `java.io.tmpdir` and this library path before starting the JVM. Changing the property after startup is insufficient. No native preload or replacement GDAL availability flag is used.
 
+Consumers must set `java.io.tmpdir` to a fresh, private directory owned by the launching user before JVM startup, and keep it private for the JVM's lifetime. The upstream loader follows filesystem paths in its predictable MD5 extraction cache; this profile does not make extraction into a hostile shared temporary directory safe. For example, start an application with a newly created private directory:
+
+```sh
+umask 077
+SDK_TMP="$(mktemp -d /tmp/kernel-runtime.XXXXXXXX)"
+SDK_JAR="/absolute/path/sdk/kernel-8.30.5-linux-amd64-public-cpu.jar"
+SDK_CACHE_ID="$(md5sum < "$SDK_JAR")"
+SDK_CACHE_ID="${SDK_CACHE_ID%% *}"
+java "-Djava.io.tmpdir=$SDK_TMP" \
+  "-Djava.library.path=$SDK_TMP/takkernel/engine/$SDK_CACHE_ID/lib/linux64" \
+  -cp "$SDK_JAR:/absolute/path/sdk/third-party/*:/absolute/path/application.jar" \
+  your.application.Main
+```
+
 ```sh
 python3 -B takx/sdk-package/build.py --phase qualify \
   --native-proof /data/fresh-kernel-native \

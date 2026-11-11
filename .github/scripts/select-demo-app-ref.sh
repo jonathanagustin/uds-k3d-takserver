@@ -12,7 +12,11 @@ if [[ -n "${APP_REF:-}" ]]; then
   git checkout --detach "${app_sha}"
   git restore --source="${workflow_sha}" --staged --worktree -- \
     demo tests/demo tests/playwright.demo.config.ts tasks.yaml .gitignore .github/workflows/demo.yaml \
-    .github/scripts/published_package_ref.py
+    .github/scripts/published_package_ref.py \
+    assets/tak-on-uds-dark.svg assets/tak-mark-dark.svg \
+    .github/scripts/demo-failure-diagnostics.sh .github/scripts/dump-memory.sh \
+    .github/scripts/redact-then-filter.sh .github/scripts/redact-logs.py \
+    .github/scripts/summarize-coreconfig.py
   expected_sha="${app_sha}"
   echo "Deploying ${app_sha} from ${APP_REF}; recorder files remain at ${workflow_sha}"
 fi

@@ -23,10 +23,12 @@ package creation. It does not build missing application images itself.
 
 For an explicit `app_ref`, HEAD moves to that fetched commit while the recorder,
 demo tests, workflow file, `tasks.yaml`, `.gitignore` and the shared published-package
-resolver remain from the workflow
-commit. Image build directories and submodule pins therefore describe the
-selected application source. The producer lookup uses that fetched SHA; the
-default PR path keeps the PR head SHA rather than the synthetic merge SHA.
+resolver remain from the workflow commit. The two recorder branding assets
+(`tak-on-uds-dark.svg` and `tak-mark-dark.svg`) and failure diagnostics, including
+their redaction helpers, also remain from that commit. Other application assets,
+including `assets/icon.svg`, package definitions and image build directories,
+remain from the selected application source, as do submodule pins. The producer
+lookup uses that fetched SHA; the default PR path keeps the PR head SHA rather than the synthetic merge SHA.
 
 An older ref must contain the supported wait/pin helpers and be compatible with
 the current recorder's task defaults. Missing helpers or unsupported read-only wait protocols fail with an explicit

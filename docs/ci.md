@@ -369,11 +369,23 @@ refuse an invalid selected baseline; they never fall back after a failure.
 
 Native jobs check the expected tag/source before building. The readiness helper
 comes from the invoking workflow SHA, including when backfilling an older tag.
+An isolated metadata job checks draft visibility before native jobs start;
+GitHub requires its `contents: write` permission to view these drafts, but the
+checker refuses API writes. Native builders keep read access to repository
+contents and must match the checked source.
 Already-public releases can be verified again without changing their metadata.
-Prefer rerunning the original Release Please caller after a failed stage.
 Manual draft recovery must supply the exact trusted `release_id` and `source_sha`
 as well as `tag`; incomplete, mismatched or unavailable identity fails before
 building. If Release Please returns a branch name instead of a commit SHA,
-publication stops and requires explicit recovery. No tag is moved. This lifecycle
-has offline contract tests; a future
-real release still needs its actual publication and promotion evidence.
+publication stops and requires explicit recovery. No tag is moved. If recovery
+needs a repaired workflow, dispatch the repaired main branch with the original
+release identity; rerunning an old job retains its old workflow code.
+
+The first complete draft-to-public recovery passed for
+[v0.13.0](https://github.com/jonathanagustin/uds-takserver/releases/tag/v0.13.0):
+both native packages and provenance verified before promotion, followed by
+[release-bound Docs publication](https://github.com/jonathanagustin/uds-takserver/actions/runs/42957480283).
+Its [publisher run](https://github.com/jonathanagustin/uds-takserver/actions/runs/42956280412)
+used workflow commit `3b66fdc7` to build application commit `8a4566ab`.
+The default SLSA provenance records the workflow commit, so these two identities
+must remain distinct when checking a recovered release.

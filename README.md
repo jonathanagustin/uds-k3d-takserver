@@ -287,10 +287,13 @@ The package index also has signed SLSA v1 build provenance, stored in GHCR and i
 ```bash
 VERSION=0.13.0 # x-release-please-version
 gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" \
-  --owner jonathanagustin
+  --owner jonathanagustin \
+  --signer-workflow jonathanagustin/uds-takserver/.github/workflows/release.yaml
 ```
 
 Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`. Releases after 0.5.4 also have `takserver-<version>-upstream.intoto.jsonl`, which holds the signed in-toto statement from that bundle (its DSSE envelope) on one line, for tools that read SLSA provenance in that layout.
+
+For a manual recovery, the provenance records the workflow commit that published the package. That can differ from the application commit named by the release tag. The publisher checks the tag and application source before building. To read the verification bundle directly from GHCR, use a recent GitHub CLI and add `--bundle-from-oci`.
 
 The TAK, CloudTAK, and PostGIS images have signed SLSA v1 build provenance too. Each architecture's image is signed by the workflow run that built it. A multi-arch tag is signed by the run that wrote the index. Images built before that was added, including the ones in 0.5.4 and earlier, have none. To check an image tag listed in `zarf.yaml`:
 

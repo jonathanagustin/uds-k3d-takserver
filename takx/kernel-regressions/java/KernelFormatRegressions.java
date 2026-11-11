@@ -35,7 +35,45 @@ public final class KernelFormatRegressions {
         griddedCoverage(root.resolve("terrain.gpkg"));
         kmlDefaultPointStyle();
         constantElevation(root.resolve("constant-elevation.tif"));
+        objCpuImport(root.resolve("tetrahedron.obj"));
         System.out.println("PASS_UPSTREAM_DTED_DISCOVERY_MBTILES_ROUNDTRIP_GPKG_FLOAT_COVERAGE assertions=" + assertions);
+    }
+    private static void objCpuImport(Path path) throws Exception {
+        // Authored analytic fixture: the public upstream teapot test assets are
+        // absent. This exercises the genuine production OBJ parser/mesh path,
+        // not the unavailable teapot regression or a graphics renderer.
+        String fixture = "# Authored unit tetrahedron with UV coordinates\n"
+            + "o tetrahedron\nv 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+            + "vt 0 0\nvt 1 0\nvt 0 1\n"
+            + "f 1/1 3/2 2/3\nf 1/1 2/2 4/3\nf 1/1 4/2 3/3\nf 2/1 3/2 4/3\n";
+        Files.writeString(path, fixture, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+        com.atakmap.map.layer.model.ModelInfo info = new com.atakmap.map.layer.model.ModelInfo();
+        info.uri = path.toString();
+        info.type = "OBJ";
+        com.atakmap.map.layer.model.Model model =
+            com.atakmap.map.layer.model.obj.ObjModelSpi.INSTANCE.create(info);
+        check(model != null, "actual production OBJ parser imports analytic tetrahedron");
+        try {
+            check(model.getNumMeshes() == 1, "OBJ import yields one genuine mesh");
+            com.atakmap.map.layer.model.Mesh mesh = model.getMesh(0);
+            check(mesh.getNumVertices() == 12 && mesh.getNumFaces() == 4,
+                "tetrahedron has four imported triangles");
+            check(mesh.getNumMaterials() == 0, "untextured OBJ does not invent a material");
+            check(mesh.getDrawMode() == com.atakmap.map.layer.model.Mesh.DrawMode.Triangles,
+                "actual mesh represents triangles");
+            com.atakmap.map.layer.feature.geometry.Envelope bounds = model.getAABB();
+            check(bounds.minX == 0 && bounds.minY == 0 && bounds.minZ == 0
+                    && bounds.maxX == 1 && bounds.maxY == 1 && bounds.maxZ == 1,
+                "imported 3D bounds match independent unit tetrahedron oracle");
+            double[][] expected = {{0,0,0},{0,1,0},{1,0,0}, {0,0,0},{1,0,0},{0,0,1},
+                {0,0,0},{0,0,1},{0,1,0}, {1,0,0},{0,1,0},{0,0,1}};
+            com.atakmap.math.PointD actual = new com.atakmap.math.PointD(0, 0, 0);
+            for (int i = 0; i < expected.length; i++) {
+                mesh.getPosition(i, actual);
+                check(actual.x == expected[i][0] && actual.y == expected[i][1] && actual.z == expected[i][2],
+                    "imported triangle preserves authored XYZ coordinates");
+            }
+        } finally { model.dispose(); }
     }
     private static void constantElevation(Path path) throws Exception {
         // Adaptation of upstream GDAL creation + ElevationChunk batch sampling.

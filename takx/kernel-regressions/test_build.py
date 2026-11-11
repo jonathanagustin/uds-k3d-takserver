@@ -62,7 +62,7 @@ class Guards(unittest.TestCase):
     def test_upstream_provenance_covers_the_three_real_slices(self):
         lock = json.loads(Path(__file__).with_name('upstream.lock.json').read_text())
         self.assertEqual(lock['revision'], b.REVISION)
-        self.assertEqual(len(lock['tests']), 5)
+        self.assertEqual(len(lock['tests']), 6)
         self.assertTrue(all(len(row['blob']) == 40 and len(row['sha256']) == 64 for row in lock['tests']))
         self.assertIn('DTED height decoding', lock['adaptation']['not_covered'])
 

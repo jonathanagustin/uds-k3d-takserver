@@ -58,6 +58,17 @@
         "regression_check"
       ],
       "bytes": 5829
+    },
+    {
+      "path": "takkernel/engine/src/test/cpp/OBJSceneInfoSpiTests.cpp",
+      "blob": "63856d6d537532aa797cb68b8923f6a552b36b63",
+      "sha256": "71927628ad2db7bfff8a78b58a852c54843f4963628770059ff0b8f31e79130b",
+      "bytes": 1469,
+      "scope": "Upstream OBJ scene-info reference only; original teapot fixtures absent",
+      "methods": [
+        "testTeapotOBJInfoLoad",
+        "testZippedTeapotOBJInfoLoad"
+      ]
     }
   ],
   "license_inputs": [
@@ -85,7 +96,8 @@
       "owned Path fixtures and deterministic UTF-8 bytepayloads",
       "native disposables and database handles closed",
       "KML reader and provider closed/unregistered; prior GDAL configuration restored",
-      "Elevation uses a 32x32 constant EPSG:4326 HAE analytic oracle, not original 3601x3601 fractal UTM data or original 34 expected heights"
+      "Elevation uses a 32x32 constant EPSG:4326 HAE analytic oracle, not original 3601x3601 fractal UTM data or original 34 expected heights",
+      "3D uses authored unit tetrahedron OBJ through genuine ObjModelSpi/Model/Mesh; upstream teapot.obj and teapot_inside.zip are absent, so original native scene-info tests are not reproduced"
     ],
     "not_covered": [
       "DTED height decoding",
@@ -95,7 +107,17 @@
       "Android test runtime",
       "full client",
       "KML export, exhaustive geometry and style combinations",
-      "original fractal UTM elevation regression and broad elevation formats"
+      "original fractal UTM elevation regression and broad elevation formats",
+      "upstream teapot scene-info regression and its absent OBJ/ZIP fixtures",
+      "3D textures, materials, scene graph and graphics renderer"
     ]
-  }
+  },
+  "production_reference_inputs": [
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/layer/model/obj/ObjModelSpi.java",
+      "blob": "7c256e8245de743a26afff8ed6f386331e91b3c5",
+      "sha256": "5b8e3e1fd1cf06e9e3f06fd7d29884236c0d00977ad6c41626bc956732a5cb82",
+      "bytes": 17345
+    }
+  ]
 }

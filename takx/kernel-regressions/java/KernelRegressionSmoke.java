@@ -16,6 +16,7 @@ public final class KernelRegressionSmoke {
                 com.atakmap.map.layer.raster.gpkg.GeoPackageTileContainer.class,
                 com.atakmap.map.layer.raster.mbtiles.MBTilesContainer.class,
                 com.atakmap.map.gdal.GdalElevationChunk.class,
+                com.atakmap.map.layer.model.obj.ObjModelSpi.class,
                 com.atakmap.map.layer.feature.ogr.OgrFeatureDataSource.class))
             KernelRuntimeSmoke.check(Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath().equals(component),
                 "regression consumer must originate in the genuine SDK component: " + type.getName());

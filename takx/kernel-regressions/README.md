@@ -1,6 +1,6 @@
 # Public Kernel format regressions
 
-This harness ports five real upstream test slices to the public-source desktop
+This harness adapts real upstream test slices and a bounded authored 3D fixture to the public-source desktop
 SDK. It calls the production Kernel classes, native SQLite/GeoPackage code and
 DTED source factory. It contains no replacement SDK classes or test codec.
 
@@ -29,7 +29,12 @@ GeoTIFF creation and ElevationChunk sampling
 with a 32 × 32 constant geographic HAE raster and an independent analytic height
 oracle. It does not reproduce the original large fractal UTM regression.
 Both new slices are source only, awaiting compile and runtime qualification.
-Broad elevation sampling, 3D and renderer tests are separate remaining
+The CPU 3D import slice writes an authored unit tetrahedron OBJ and calls the
+real production ObjModelSpi/Model/Mesh. It checks four faces, twelve expanded
+vertices, all XYZ coordinates, unit bounds and absence of invented materials.
+The original upstream teapot OBJ/ZIP fixtures are absent from the pinned public
+tree; this is not their scene-info regression. It does not exercise OpenGL.
+Broad elevation sampling, 3D scene/texture and renderer tests are separate remaining
 slices. A source/compile pass is not a native regression pass or a full-client
 qualification.
 

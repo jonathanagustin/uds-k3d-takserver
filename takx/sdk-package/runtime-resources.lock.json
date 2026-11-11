@@ -1,0 +1,1074 @@
+{
+  "schema": 1,
+  "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "namespace": "gov.tak.desktop",
+  "files": [
+    {
+      "source": "takkernel/engine/src/main/assets/Hipparcos_Stars_Mag6x5044.dat",
+      "mode": "100644",
+      "blob": "e6b2dc1340ef7f19f040a0392a3e5f4f69bae6c4",
+      "bytes": 121060,
+      "sha256": "8912fbd7d80fc9cc281f860d0a13d64c9f08f6dba68f924aa56a6ecf4c52dac5",
+      "destination": "assets/Hipparcos_Stars_Mag6x5044.dat",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DODIDSWCA-38.crt",
+      "mode": "100644",
+      "blob": "44d3354f84a6dc1d8e965f8dda44805d856653b8",
+      "bytes": 1663,
+      "sha256": "e6e4744e1812485ee3ecdbac84637c412b69074e42a51329326bbba4fc81d228",
+      "destination": "assets/certs/DODIDSWCA-38.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DODSWCA-54.crt",
+      "mode": "100644",
+      "blob": "cbde8c58afc688644b3216fe26c5b3d37a1235cb",
+      "bytes": 1643,
+      "sha256": "787b2771a30a05e5a4c7d4ed0087430dbd9f08bc60e4451e544ea3900acf6089",
+      "destination": "assets/certs/DODSWCA-54.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DODSWCA-61.crt",
+      "mode": "100644",
+      "blob": "e67ef87515895165467fbeac5f9a5ad168dbf325",
+      "bytes": 1143,
+      "sha256": "78b68ccff51ff2e47281b509e64d55b948e5d2b6303dd1bf4be4429aa5ee615b",
+      "destination": "assets/certs/DODSWCA-61.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DigiCertEVRSACAG2.crt",
+      "mode": "100644",
+      "blob": "63764422b3cb9a839410370fe9ab6e1dfd8488f8",
+      "bytes": 1344,
+      "sha256": "9588ef74199e45acefcccfc0c47010e9f2a37a1dd44c61a4e1c6b334da5af614",
+      "destination": "assets/certs/DigiCertEVRSACAG2.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DigiCertGlobalRootCA.crt",
+      "mode": "100644",
+      "blob": "2f1e5523af47d44e35ea27be89e25a663ea7f99f",
+      "bytes": 947,
+      "sha256": "4348a0e9444c78cb265e058d5e8944b4d84f9662bd26db257f8934a443c70161",
+      "destination": "assets/certs/DigiCertGlobalRootCA.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DigiCertGlobalRootG2.crt",
+      "mode": "100644",
+      "blob": "1e927a7afe06c270670d6bc25c4d465db2e0a7e8",
+      "bytes": 914,
+      "sha256": "cb3ccbb76031e5e0138f8dd39a23f9de47ffc35e43c1144cea27d46a5ab1cb5f",
+      "destination": "assets/certs/DigiCertGlobalRootG2.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DigiCertHighAssuranceEVRootCA.crt",
+      "mode": "100644",
+      "blob": "9e6810ab70cfa112fe066ec8b2122fbf76586317",
+      "bytes": 1367,
+      "sha256": "d98f681c3a7dce812b90bf7c68046827f3bf5607357f1e4918c5dc813b359bf1",
+      "destination": "assets/certs/DigiCertHighAssuranceEVRootCA.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DoDRootCA3.crt",
+      "mode": "100644",
+      "blob": "65639a1b7964d54ce7a2f013f00a1515687f0af6",
+      "bytes": 1257,
+      "sha256": "9ca4000a486094dbcf46f5d5162375789a5e8b564ce754a87e4b90e06db0e177",
+      "destination": "assets/certs/DoDRootCA3.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DoDRootCA5.crt",
+      "mode": "100644",
+      "blob": "2fc296318c795e403cc0a4fe11dd2b6e2762d701",
+      "bytes": 802,
+      "sha256": "07820e449f9543fa02f9f207cd0babb15d82d7f2dea34874e8e85a2a3f55a0a4",
+      "destination": "assets/certs/DoDRootCA5.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/DoDRootCA6.crt",
+      "mode": "100644",
+      "blob": "7be1509422976c98359cc1a65e91a6c8f1b4e3d8",
+      "bytes": 1952,
+      "sha256": "6936a739b3327f15c563d106862c5b9406c6be24cb5656288ada6826783e0ff4",
+      "destination": "assets/certs/DoDRootCA6.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/cert_catalog.json",
+      "mode": "100644",
+      "blob": "3fd35045d4220811fffc11d6eac18d3a504adab1",
+      "bytes": 1648,
+      "sha256": "3c0ab3ea286bead74a1598cc0168f58a98dc6a33ddf1887674f7f21e8ea046e3",
+      "destination": "assets/certs/cert_catalog.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/certs/isrgrootx1.crt",
+      "mode": "100644",
+      "blob": "b85c8037f6b60976b2546fdbae88312c5246d9a3",
+      "bytes": 1939,
+      "sha256": "22b557a27055b33606b6559f37703928d3e4ad79f110b407d04986e1843543d1",
+      "destination": "assets/certs/isrgrootx1.crt",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arial_msdf.json",
+      "mode": "100644",
+      "blob": "725ccb1d7c3c0200061af2dd3f46e53319a82a87",
+      "bytes": 29619,
+      "sha256": "9102fe47a0cca3e2c7a2fe7a8a8acc90067004780dabcb8be078c38bd3fb0a2b",
+      "destination": "assets/fonts/arial_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arial_msdf.png",
+      "mode": "100644",
+      "blob": "9b624a0446f5a33ab14a77b175fd36c517409d91",
+      "bytes": 143643,
+      "sha256": "50023c4cdb7903f27360ca8c0bd5eb69741b9a190ee2cee7d0f49c530fc41e5d",
+      "destination": "assets/fonts/arial_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arialbd_msdf.json",
+      "mode": "100644",
+      "blob": "0f37b860b5e044987334d2b051c0856b63d9f889",
+      "bytes": 29534,
+      "sha256": "d24ae1054e9751c5bd7131f702b70a08f78d71f1fc9702ec77ad4f32b03868bb",
+      "destination": "assets/fonts/arialbd_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arialbd_msdf.png",
+      "mode": "100644",
+      "blob": "d6a0c1f772a8fd5b1c74c57d25e1c705a68f1708",
+      "bytes": 150753,
+      "sha256": "fc2b3bf8a8c756fe0f40f14085900a919965d217a853692d98fb1451c60086fa",
+      "destination": "assets/fonts/arialbd_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arialbi_msdf.json",
+      "mode": "100644",
+      "blob": "8a59d05c6a2488ffe636a0792055d9758e8e3c5a",
+      "bytes": 29312,
+      "sha256": "5379dbd952d6327c3cce172683c0f6a8fe8b484cd868a367f6f2ed4acd7fff73",
+      "destination": "assets/fonts/arialbi_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/arialbi_msdf.png",
+      "mode": "100644",
+      "blob": "259cd25d54658b474f3e486e330d6fc5382e8077",
+      "bytes": 174906,
+      "sha256": "a1fa7d21d1ce50d947cbbe3f2836c06594b9df1499e440b3e0d118fee31c557d",
+      "destination": "assets/fonts/arialbi_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/ariali_msdf.json",
+      "mode": "100644",
+      "blob": "54ac10508cc902609777fc8dea71a31c53f7e67a",
+      "bytes": 29138,
+      "sha256": "f3783a09ed814d6d190a52597388cffa5338bcb514e5be0c0a09bf4eaf7caa5b",
+      "destination": "assets/fonts/ariali_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/ariali_msdf.png",
+      "mode": "100644",
+      "blob": "be7054e83815d58eb7291448f752ff8175c6b92a",
+      "bytes": 176064,
+      "sha256": "684d9cb8319bd0e061a9e4d74c0864359b9d0351ac3076875bd6e4864a5ef116",
+      "destination": "assets/fonts/ariali_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/cour_msdf.json",
+      "mode": "100644",
+      "blob": "12c431e70ece9366e8cd44c0a3aa121d5e691194",
+      "bytes": 24532,
+      "sha256": "a9a8a359f126fe37eada3f6aeccdfb55df6ffc68d25b84b06dd1603e335c9df2",
+      "destination": "assets/fonts/cour_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/cour_msdf.png",
+      "mode": "100644",
+      "blob": "e26cf200de2c3405cf96eaffb03d8683f8e74d0d",
+      "bytes": 156528,
+      "sha256": "f662e1c6d4c9b6bf3aa872efd107d706844e64dcc5c86f28ff95b67a61c42d2e",
+      "destination": "assets/fonts/cour_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/courbd_msdf.json",
+      "mode": "100644",
+      "blob": "a363a21054c9ce674d6c621bab1729b4012c47b7",
+      "bytes": 24562,
+      "sha256": "5a9d8430c73b84a0670d7dcae087810bddd6cabeaafdd56da4bd4e2cb20e5056",
+      "destination": "assets/fonts/courbd_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/courbd_msdf.png",
+      "mode": "100644",
+      "blob": "820bfa60382791772729311e61de83affabc2dfd",
+      "bytes": 162771,
+      "sha256": "7835ba9fa73a976371524b9c81a428fbfa5c9e6d74f977c24165049b94692e28",
+      "destination": "assets/fonts/courbd_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/courbi_msdf.json",
+      "mode": "100644",
+      "blob": "a81ec82fb9a5264db0a58b10560dc74fc8443241",
+      "bytes": 24559,
+      "sha256": "2ff7f09b0e92d701774f1f656ad940c9d69146654d2872d9ffd6b1334105d140",
+      "destination": "assets/fonts/courbi_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/courbi_msdf.png",
+      "mode": "100644",
+      "blob": "21aaf182bcc32fb95f707184fb836a63eda20747",
+      "bytes": 190744,
+      "sha256": "31ac94cf9ab39a3b7717d2dddcb77a413b08e3a4ddaf2fac3ee10ad4771097c7",
+      "destination": "assets/fonts/courbi_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/couri_msdf.json",
+      "mode": "100644",
+      "blob": "2ea8d574f70cf33fc5812dd410deee416b79be98",
+      "bytes": 24555,
+      "sha256": "cbcfa9a965357e96a25be2be8c13fd49093d12353b3ee8ca4238aa67cdcfa3c3",
+      "destination": "assets/fonts/couri_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/couri_msdf.png",
+      "mode": "100644",
+      "blob": "7b302fc0ac3de999d4369e0198e2589d3348a946",
+      "bytes": 181812,
+      "sha256": "2639cec5b4b0d50ba9b25b9a147b6c39d399445a2b41f5e48135656044b85383",
+      "destination": "assets/fonts/couri_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/font_resources.json",
+      "mode": "100644",
+      "blob": "8194ef38e35bc285617a4a6f78ff086a4b014fff",
+      "bytes": 2094,
+      "sha256": "6496f4d2a69c97f55dff55bb8f1f74828287057946d8f24f59caded29024c969",
+      "destination": "assets/fonts/font_resources.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeui_msdf.json",
+      "mode": "100644",
+      "blob": "f3c95867ca7f4da936b2f510e811dc3ae62420ed",
+      "bytes": 44772,
+      "sha256": "24c18173cb41cb3560a1e6c49baef93f1846f36b7f38374d7504bb19c6b2bf00",
+      "destination": "assets/fonts/segoeui_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeui_msdf.png",
+      "mode": "100644",
+      "blob": "bb987821f97d74ce694072849369307ed735a7a2",
+      "bytes": 134703,
+      "sha256": "b184cfb91ae047c767561e42940ccdf0f3437c358b0ef33268bd21654f2d094b",
+      "destination": "assets/fonts/segoeui_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuib_msdf.json",
+      "mode": "100644",
+      "blob": "bc035f2e5e699718f96568241a05c68c8eb6d699",
+      "bytes": 45647,
+      "sha256": "e59438694221c68106f4655bf8f42d8638b3633de9a42f8793341f2799a8d94e",
+      "destination": "assets/fonts/segoeuib_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuib_msdf.png",
+      "mode": "100644",
+      "blob": "90b91e7b348579d29cee7a3a46db01be138d7da9",
+      "bytes": 136571,
+      "sha256": "f45bdf5a4c3f56b23065abfae6741e74dfd5fd5a078eb48fb5a278521781c8bf",
+      "destination": "assets/fonts/segoeuib_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuii_msdf.json",
+      "mode": "100644",
+      "blob": "1d019d85d135d65e37014132a33d6f0e269c40f0",
+      "bytes": 49278,
+      "sha256": "26b227d616f7f67f52f135e2e71b80dcdac6e3e45db8d72bb18b45cd532861c8",
+      "destination": "assets/fonts/segoeuii_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuii_msdf.png",
+      "mode": "100644",
+      "blob": "34af6dcc3e7809559d5cdb72f33a64a121c30a3f",
+      "bytes": 171163,
+      "sha256": "7dc901f970a7327b3cf17aa49ceedcff4e1e6f4e8df4330d3f31d4bd8ea96cbf",
+      "destination": "assets/fonts/segoeuii_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuiz_msdf.json",
+      "mode": "100644",
+      "blob": "f33200390149904e7b581d0bfd444d3ca5968ae1",
+      "bytes": 52400,
+      "sha256": "a7650b498ab19c49207c8988fc1ceca5e2838c232f315303a8da752611d36adc",
+      "destination": "assets/fonts/segoeuiz_msdf.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/fonts/segoeuiz_msdf.png",
+      "mode": "100644",
+      "blob": "d876f62cd97b4a07a98414c79a811ab3358e3046",
+      "bytes": 180339,
+      "sha256": "844e54c85e5b7a058dd116f4c9f97854d815fa452504355ac6da2cf72da0b531",
+      "destination": "assets/fonts/segoeuiz_msdf.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/3d_free_look.png",
+      "mode": "100644",
+      "blob": "19002f49c1f3563929fc39a6ef43ced09912d469",
+      "bytes": 3588,
+      "sha256": "4a478867fcb357d4e2d89de6cc23cee61388e0e43104059c50a0b24619fd9e9e",
+      "destination": "assets/icons/3d_free_look.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/checklist.png",
+      "mode": "100644",
+      "blob": "648fd6bcf996cb6535cf61d50d3b7478f7258c55",
+      "bytes": 14558,
+      "sha256": "cb33c715832918ce591a7c89676d4b8daa198244f017dc363fbbbccc530492d9",
+      "destination": "assets/icons/checklist.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/clear_alarm.png",
+      "mode": "100644",
+      "blob": "1c33b1c95304140a1014b1059b24a0479bb640d2",
+      "bytes": 20444,
+      "sha256": "dcfad5f5ef24c35d8aee960a2fd37164c41245c1beebbabf196752411b29bb06",
+      "destination": "assets/icons/clear_alarm.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/deactivate.png",
+      "mode": "100644",
+      "blob": "ca955b18306fe5faea4da3f20702313a74d77b65",
+      "bytes": 6073,
+      "sha256": "d6dc39782c4450426e0183192a3acd489836b28ff3d145e765e68de490850f7e",
+      "destination": "assets/icons/deactivate.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/delete.png",
+      "mode": "100644",
+      "blob": "9dc35670df35ba5f37372539fbb121cab862607c",
+      "bytes": 2359,
+      "sha256": "fee6d88f3384de02022e4516ab56666c515dae864d7e87d5baa5bed9134e0e09",
+      "destination": "assets/icons/delete.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/generic_doc.png",
+      "mode": "100644",
+      "blob": "330ef6fdfc68d7eae27e4a2105f4e84952858350",
+      "bytes": 1888,
+      "sha256": "77f21150949094a44147c0fa7f610ff139666d3a843a057c88e5ea0aec063dcd",
+      "destination": "assets/icons/generic_doc.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/go_to.png",
+      "mode": "100644",
+      "blob": "98ef6df30b317967996000c19b9d62cf4437ff66",
+      "bytes": 5595,
+      "sha256": "d6af06cb6d46cab6e50503729e69c6163720da220676b687bb1baa942b46c7b4",
+      "destination": "assets/icons/go_to.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/help.png",
+      "mode": "100644",
+      "blob": "ceaeb8f2400fa8c186232a0f05f5ecfa7ce5176b",
+      "bytes": 16410,
+      "sha256": "34cd0e1058e56bfd9d0797da4cc8f0abf17a8303a111d5fb14aff28283ee4c0f",
+      "destination": "assets/icons/help.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/hide.png",
+      "mode": "100644",
+      "blob": "a269335b8519cf0fd9256506a88a859d23566ec2",
+      "bytes": 9210,
+      "sha256": "cda2f084487c538d036a292a8694296d96065076a83cb74db8ef84b817c1cd73",
+      "destination": "assets/icons/hide.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/lock.png",
+      "mode": "100644",
+      "blob": "c24145b0115f5a5d0a3f7aecc633d8a90488f29a",
+      "bytes": 3816,
+      "sha256": "c51054d1cc2b150e1abc8b691ce44f5dd3f9940358dd89d60da906c01540d4f3",
+      "destination": "assets/icons/lock.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/missing_icon.png",
+      "mode": "100644",
+      "blob": "6252592627c442e2cd221a940e35a620d6f668ef",
+      "bytes": 7914,
+      "sha256": "5d7565c92f3d27ed5b67103e6076dae3f41982c3ae43cd8c5f3479bd948a4784",
+      "destination": "assets/icons/missing_icon.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/open_file.png",
+      "mode": "100644",
+      "blob": "df294eee56f39acb8ac96a2219ed8be83f0a4347",
+      "bytes": 12902,
+      "sha256": "f59247ed488612ba2ef89aa410bc4cabb1e119454b383927186f841705371410",
+      "destination": "assets/icons/open_file.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/radial_back.png",
+      "mode": "100644",
+      "blob": "4863d6d9cace7792d6cf6eea830919181eb87de8",
+      "bytes": 381,
+      "sha256": "fe404c213cb752c29a53f6d207023d377bba97dc418b386c3e9db3066b434d69",
+      "destination": "assets/icons/radial_back.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/reference_point.png",
+      "mode": "100644",
+      "blob": "26e48d9ecd3e443466342baed902e8153690972d",
+      "bytes": 468,
+      "sha256": "bfd0f1dc4e2c45a0c47eac1e094357f31312a628a8a9065d1c9c5ae4c1bc0263",
+      "destination": "assets/icons/reference_point.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/send.png",
+      "mode": "100644",
+      "blob": "8d1ad9fae1ff8437fe921723ad2c2502eb05f4a5",
+      "bytes": 3706,
+      "sha256": "15b907c59bcc127d2037c96c1350c83c582cd7e41f3feb896df79831998a4666",
+      "destination": "assets/icons/send.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/settings.png",
+      "mode": "100644",
+      "blob": "869e64c6077905029370f74bd11cb56c1d2d8a73",
+      "bytes": 22451,
+      "sha256": "534a7144a670b8e50f9ed6e0d852f499015135c158a67c38293c3b84b79eacf7",
+      "destination": "assets/icons/settings.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/show.png",
+      "mode": "100644",
+      "blob": "1a271002de6c73cc8f016f5c1959b73377f66355",
+      "bytes": 8347,
+      "sha256": "0cc0b63ad22c4b68b0a35352e3552b7540ce4c4c9b4e8cf8facce1a28538e0dd",
+      "destination": "assets/icons/show.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/sub_menu_indicator.png",
+      "mode": "100644",
+      "blob": "a1419a9af014a1e1bd9dff19a9fe8ea7ee56e9d6",
+      "bytes": 6248,
+      "sha256": "ca9520db081a7790619bc823bbfa7970e7376f3b9bb2da276af091e885f7d1ba",
+      "destination": "assets/icons/sub_menu_indicator.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/icons/undo.png",
+      "mode": "100644",
+      "blob": "cd0d2a65a443dc785db964162acd4f13f79ef556",
+      "bytes": 6039,
+      "sha256": "27b21ea028383e02364f5773cab4b77854dd6bd228157c5e4407b2e8dc52d165",
+      "destination": "assets/icons/undo.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/loresel.sqlite.zip",
+      "mode": "100644",
+      "blob": "5c60bbcf11ea8e41981eb6c4b0deb74e5f4f98d0",
+      "bytes": 132,
+      "sha256": "217b3f00a982b570dba6d64d49a0086c2054f989b8f6979951255301e8597034",
+      "destination": "assets/loresel.sqlite.zip",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/LICENSE.md",
+      "mode": "100644",
+      "blob": "b862282f05eec17ab52a5ce253d2b892fedd6c1c",
+      "bytes": 3223,
+      "sha256": "932694202d771c52089e87f13105e02f2b68341f584b0f3d8adc557c9d7cefa3",
+      "destination": "assets/style/omt/bright/LICENSE.md",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/sprites/osm-liberty.json",
+      "mode": "100644",
+      "blob": "864a181dfab9d24a416958ce9d8f78ef6ea0e42d",
+      "bytes": 42208,
+      "sha256": "0bbd07a4a6e270546ba708ffc514557c5d557a516b2744f9d4f6062a6254852f",
+      "destination": "assets/style/omt/bright/sprites/osm-liberty.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/sprites/osm-liberty.png",
+      "mode": "100644",
+      "blob": "5e3a33747b9375a7ab7bae3502307361aca5cfaa",
+      "bytes": 124331,
+      "sha256": "e27243f7fe49d7afbbc8917e945b28cdfaf73890fc7c8d90b14104cb6980a04b",
+      "destination": "assets/style/omt/bright/sprites/osm-liberty.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/sprites/osm-liberty@2x.json",
+      "mode": "100644",
+      "blob": "d7d123013163e6efb8129d5492e4a6f362fa8535",
+      "bytes": 42424,
+      "sha256": "4b44df4c2ea8c6eb478b519205a20ebe0c8e18b1619ab774faf28c034e9748ae",
+      "destination": "assets/style/omt/bright/sprites/osm-liberty@2x.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/sprites/osm-liberty@2x.png",
+      "mode": "100644",
+      "blob": "5b9e9082c2b9668c14c97dc905ec233fdb2c2e00",
+      "bytes": 295814,
+      "sha256": "61b4363a958b768eb4e56477a756e5685e85ffa2297dba1c854129cbd9074c4a",
+      "destination": "assets/style/omt/bright/sprites/osm-liberty@2x.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/bright/style.json",
+      "mode": "100644",
+      "blob": "122f89ea1008fac77292346f5ffe3176b36a0e52",
+      "bytes": 93612,
+      "sha256": "0b45b6f0e51b0a90dc6ab1711051074f92664aa08d4da500122c11faf11b9cbf",
+      "destination": "assets/style/omt/bright/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/dark/LICENSE.md",
+      "mode": "100644",
+      "blob": "94f88125e0d895fa98296f718433121a60ad26a0",
+      "bytes": 3068,
+      "sha256": "7bc994370067d4160209ea9bc85239403871284c2c930c34ddc792723d05f89f",
+      "destination": "assets/style/omt/dark/LICENSE.md",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/dark/sprite.json",
+      "mode": "100644",
+      "blob": "6ec87af751822ae3e6a86d5e3d80e2166d28f0e2",
+      "bytes": 407,
+      "sha256": "cd1381fba4b34c1e5654b7b95d9ba6b704a9c526a5fec924b7ec2da1c4404376",
+      "destination": "assets/style/omt/dark/sprite.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/dark/sprite.png",
+      "mode": "100644",
+      "blob": "f95fdb612ff2dde905fa89059741d58b796484fb",
+      "bytes": 1015,
+      "sha256": "3605b162b28b0b8354e95b4e20586f313ad90b5f37fd2686fa53bb70d038d3f6",
+      "destination": "assets/style/omt/dark/sprite.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/dark/style.json",
+      "mode": "100644",
+      "blob": "bfb557c82b427c373e510c965274af67375a2505",
+      "bytes": 29590,
+      "sha256": "6ad35325dfd934f18c3b5ee112b2658fa0a1b0e49e978533276a2dafbab64df6",
+      "destination": "assets/style/omt/dark/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/LICENSE.md",
+      "mode": "100644",
+      "blob": "b862282f05eec17ab52a5ce253d2b892fedd6c1c",
+      "bytes": 3223,
+      "sha256": "932694202d771c52089e87f13105e02f2b68341f584b0f3d8adc557c9d7cefa3",
+      "destination": "assets/style/omt/overlay/LICENSE.md",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/sprites/osm-liberty.json",
+      "mode": "100644",
+      "blob": "864a181dfab9d24a416958ce9d8f78ef6ea0e42d",
+      "bytes": 42208,
+      "sha256": "0bbd07a4a6e270546ba708ffc514557c5d557a516b2744f9d4f6062a6254852f",
+      "destination": "assets/style/omt/overlay/sprites/osm-liberty.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/sprites/osm-liberty.png",
+      "mode": "100644",
+      "blob": "5e3a33747b9375a7ab7bae3502307361aca5cfaa",
+      "bytes": 124331,
+      "sha256": "e27243f7fe49d7afbbc8917e945b28cdfaf73890fc7c8d90b14104cb6980a04b",
+      "destination": "assets/style/omt/overlay/sprites/osm-liberty.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/sprites/osm-liberty@2x.json",
+      "mode": "100644",
+      "blob": "d7d123013163e6efb8129d5492e4a6f362fa8535",
+      "bytes": 42424,
+      "sha256": "4b44df4c2ea8c6eb478b519205a20ebe0c8e18b1619ab774faf28c034e9748ae",
+      "destination": "assets/style/omt/overlay/sprites/osm-liberty@2x.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/sprites/osm-liberty@2x.png",
+      "mode": "100644",
+      "blob": "5b9e9082c2b9668c14c97dc905ec233fdb2c2e00",
+      "bytes": 295814,
+      "sha256": "61b4363a958b768eb4e56477a756e5685e85ffa2297dba1c854129cbd9074c4a",
+      "destination": "assets/style/omt/overlay/sprites/osm-liberty@2x.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/omt/overlay/style.json",
+      "mode": "100644",
+      "blob": "eb5b2549030f40f52d994c2cdac47dc8f9ee0869",
+      "bytes": 65713,
+      "sha256": "efbd1fd39db3a0282056b7f035d4c6eb7bccae5d41c3ae8e11e0bb7e90f4542f",
+      "destination": "assets/style/omt/overlay/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/bright/sprite.json",
+      "mode": "100644",
+      "blob": "029c81fca41b3cd0e0919606f98d541ca08df218",
+      "bytes": 8259,
+      "sha256": "39ea1644bda2290616fe130edb8787568b5b18c6b0b1e9ff003722e55f7c5bc0",
+      "destination": "assets/style/rbt/bright/sprite.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/bright/sprite.png",
+      "mode": "100644",
+      "blob": "7072785663429ed7003c065d50803e55aa98f66b",
+      "bytes": 113199,
+      "sha256": "6cd89155243acc81362c0f90dc2f382be767291bc650275c2678c8461219a09f",
+      "destination": "assets/style/rbt/bright/sprite.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/bright/style.json",
+      "mode": "100644",
+      "blob": "a9c42cc254a2a6ac9692534a3114ab4f9ac9f937",
+      "bytes": 193878,
+      "sha256": "5497c3b5dff9cab82a25adf047aa1a2e30a6d560b5e2932ec66ca65cd325b9ed",
+      "destination": "assets/style/rbt/bright/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/dark/sprite.json",
+      "mode": "100644",
+      "blob": "029c81fca41b3cd0e0919606f98d541ca08df218",
+      "bytes": 8259,
+      "sha256": "39ea1644bda2290616fe130edb8787568b5b18c6b0b1e9ff003722e55f7c5bc0",
+      "destination": "assets/style/rbt/dark/sprite.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/dark/sprite.png",
+      "mode": "100644",
+      "blob": "7072785663429ed7003c065d50803e55aa98f66b",
+      "bytes": 113199,
+      "sha256": "6cd89155243acc81362c0f90dc2f382be767291bc650275c2678c8461219a09f",
+      "destination": "assets/style/rbt/dark/sprite.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/dark/style.json",
+      "mode": "100644",
+      "blob": "a9c42cc254a2a6ac9692534a3114ab4f9ac9f937",
+      "bytes": 193878,
+      "sha256": "5497c3b5dff9cab82a25adf047aa1a2e30a6d560b5e2932ec66ca65cd325b9ed",
+      "destination": "assets/style/rbt/dark/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/overlay/sprite.json",
+      "mode": "100644",
+      "blob": "029c81fca41b3cd0e0919606f98d541ca08df218",
+      "bytes": 8259,
+      "sha256": "39ea1644bda2290616fe130edb8787568b5b18c6b0b1e9ff003722e55f7c5bc0",
+      "destination": "assets/style/rbt/overlay/sprite.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/overlay/sprite.png",
+      "mode": "100644",
+      "blob": "7072785663429ed7003c065d50803e55aa98f66b",
+      "bytes": 113199,
+      "sha256": "6cd89155243acc81362c0f90dc2f382be767291bc650275c2678c8461219a09f",
+      "destination": "assets/style/rbt/overlay/sprite.png",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/assets/style/rbt/overlay/style.json",
+      "mode": "100644",
+      "blob": "b97e51c4cbca1229a0c99c72dbd8fcfe016a13d1",
+      "bytes": 212042,
+      "sha256": "5d897c21a0bd5cb302304466d5e340f254e5f2ef8ab83a01ea665f2b87def3cb",
+      "destination": "assets/style/rbt/overlay/style.json",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/drawable/nine_patch_large.png",
+      "mode": "100644",
+      "blob": "cbe747f1c16328a99156fa7e42b91afa832b0212",
+      "bytes": 514,
+      "sha256": "331efaf6be8a9b39e7ad247b05ac948d6d7484559f4b6bd47aead23fd210dcc7",
+      "destination": "resources/drawable/nine_patch_large",
+      "kind": "drawable"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/drawable/nine_patch_med.png",
+      "mode": "100644",
+      "blob": "0cee66d92f9239d1a757cb78cce474a1f9d8c2e7",
+      "bytes": 367,
+      "sha256": "0fbd657fe1219807d56999c4a12b162d192d308d1cb2fc3fc1c0c56a2c34e28b",
+      "destination": "resources/drawable/nine_patch_med",
+      "kind": "drawable"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/drawable/nine_patch_small.png",
+      "mode": "100644",
+      "blob": "e2c7a0190d7d9391eadf90b79dbb465e3673c097",
+      "bytes": 282,
+      "sha256": "25078b974a28c937f8bf47a8aab859d82ae38e0bf67189768cce3ed18fcc8eb5",
+      "destination": "resources/drawable/nine_patch_small",
+      "kind": "drawable"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/drawable/worldmap_3857.png",
+      "mode": "100644",
+      "blob": "a71b459e6dba89d4edf77bf3d7488d01cdaa542d",
+      "bytes": 331724,
+      "sha256": "7f65f9b49f4d31f9252f2904b2ef7e2b93de703d683cfeb30f2c19533a020ce3",
+      "destination": "resources/drawable/worldmap_3857",
+      "kind": "drawable"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/drawable/worldmap_4326.png",
+      "mode": "100644",
+      "blob": "33da9455a9dee9117d18ebe12ec0899b167afc28",
+      "bytes": 217954,
+      "sha256": "f3e00190c88c3268e961f5401e2a7ed7bc5bee486de881b68a702a9afa2e4e10",
+      "destination": "resources/drawable/worldmap_4326",
+      "kind": "drawable"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_color_pointer_vector2d_vsh",
+      "mode": "100644",
+      "blob": "de852a4548f5d969233c0c411fec67a7e363e761",
+      "bytes": 263,
+      "sha256": "5d2f4ef1091425d9fe0a4a0c0cd8e3f5deffffd8650f2e7dd156ab8ee1b48e6c",
+      "destination": "resources/raw/gl20fp_color_pointer_vector2d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_color_pointer_vector3d_vsh",
+      "mode": "100644",
+      "blob": "8f08e26b1e8a31b20bfa50abcc997853ec666058",
+      "bytes": 259,
+      "sha256": "250bafa7bda697a959cb47332037c502a91b740037cb848d23a91159402a6368",
+      "destination": "resources/raw/gl20fp_color_pointer_vector3d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_color_pointer_vector_fsh",
+      "mode": "100644",
+      "blob": "1eff754a3ac436e504e7fbc60acdedd6d36877ba",
+      "bytes": 103,
+      "sha256": "49bf288cb5fccdf82d60f086e2c26774c18617591384d7eb6ccfbf9b541b2c0b",
+      "destination": "resources/raw/gl20fp_color_pointer_vector_fsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_modulated_texture_fsh",
+      "mode": "100644",
+      "blob": "189830e8d5927ab450dcc686e423794d6d8af771",
+      "bytes": 184,
+      "sha256": "bdfa56c5f66f6e2969ed9ac86f1f49eda7299cdcd118183bc6d35ee1ffad7c3f",
+      "destination": "resources/raw/gl20fp_modulated_texture_fsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_point2d_vsh",
+      "mode": "100644",
+      "blob": "7d9c3190a25860adb8ac94d6db29cca48871659c",
+      "bytes": 322,
+      "sha256": "3e5bb666b9227a8a5f9f6cab8d1ac3a24b392d793b73daf02605dd4805bf0fd2",
+      "destination": "resources/raw/gl20fp_point2d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_point3d_vsh",
+      "mode": "100644",
+      "blob": "cd8e969787ecc147c8cce6076a03f8be4985a081",
+      "bytes": 318,
+      "sha256": "8d8ef116212383241dc900c13a5d8476a12db1f90a5b6da90212e5dc50450904",
+      "destination": "resources/raw/gl20fp_point3d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_point_fsh",
+      "mode": "100644",
+      "blob": "d6b2c481b464ea1dff76f12094f4f166a35042d9",
+      "bytes": 160,
+      "sha256": "f3876dcf94136814aedaa0b74e50d537bf0e2397516cb279a3b616747ced9454",
+      "destination": "resources/raw/gl20fp_point_fsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_texture2d_vsh",
+      "mode": "100644",
+      "blob": "433925ce3d1336dc6766b3c44d9521ad5a0c1910",
+      "bytes": 267,
+      "sha256": "47ef30d6923a7cd0fed3ce1f2cd133bfb4a677221b62baf0011f1153d4facefa",
+      "destination": "resources/raw/gl20fp_texture2d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_texture3d_1matrix_vsh",
+      "mode": "100644",
+      "blob": "ac184817177c5aa7f580a177bb264c5cf941b406",
+      "bytes": 217,
+      "sha256": "cc3034e1df86558675f10f4d0161bc98a5ae041ebc2553b0756f29eaa917f111",
+      "destination": "resources/raw/gl20fp_texture3d_1matrix_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_texture3d_v2_vsh",
+      "mode": "100644",
+      "blob": "7a6ed08c8687193529d3892030197b7fbd98436b",
+      "bytes": 351,
+      "sha256": "97a28dd88b56ef724c05f0ddafd6f953a89f59ef0bf495df4bd3c5ed1f68d423",
+      "destination": "resources/raw/gl20fp_texture3d_v2_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_texture3d_vsh",
+      "mode": "100644",
+      "blob": "aa3e5d18ce99cc257a70d2230426c346c1b34569",
+      "bytes": 263,
+      "sha256": "03770b829ff4537715ca98f7c720a8bf600622f18d1fe3e6a5810955bfa58995",
+      "destination": "resources/raw/gl20fp_texture3d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_texture_fsh",
+      "mode": "100644",
+      "blob": "09fee475148743f072085ede39fb54569e6e51c7",
+      "bytes": 154,
+      "sha256": "f55c41b78802076cb13df08be8ef84fc3500593c0cde6832c4b975317f3e06d7",
+      "destination": "resources/raw/gl20fp_texture_fsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_vector2d_vsh",
+      "mode": "100644",
+      "blob": "28a8ed840802e01398ab190afd09d148949d3436",
+      "bytes": 186,
+      "sha256": "4663d5268ea11aef276a13f878be0593a512ccb1d5db9ad0a2694b00fe98623a",
+      "destination": "resources/raw/gl20fp_vector2d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_vector3d_vsh",
+      "mode": "100644",
+      "blob": "93d5ecbcd81120c6ba1f55601d49af1323eeecbc",
+      "bytes": 182,
+      "sha256": "4f400a9d11bf1ca422a359b517970f9440deda7fd777b688b63497601bd6bacf",
+      "destination": "resources/raw/gl20fp_vector3d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/gl20fp_vector_fsh",
+      "mode": "100644",
+      "blob": "844fdaf0f150b93ca8175c9fca049c372a46bee8",
+      "bytes": 103,
+      "sha256": "ef19c6107489614fe34e7590eb1f5f191c4f0cf665c0a73027a39720f5e301b1",
+      "destination": "resources/raw/gl20fp_vector_fsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/renderbatch2d_vsh",
+      "mode": "100644",
+      "blob": "5b4ac2954e61d5a4c9f6ad0fbbfedb9c798e7e44",
+      "bytes": 404,
+      "sha256": "89a20dd096e37a0e7561016c9f7ca349934e4d3de5175529c378f7896300b389",
+      "destination": "resources/raw/renderbatch2d_vsh",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/raw/wmm_cof",
+      "mode": "100644",
+      "blob": "9b1f5c83257825b59bb1a9450026572aa475dc7d",
+      "bytes": 533743,
+      "sha256": "8851d40e57a1d948cb56d49b837612844890a941f93a73846a122b6c1182d504",
+      "destination": "resources/raw/wmm_cof",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/values/strings.xml",
+      "mode": "100644",
+      "blob": "cead1c810473b4c87c1ff48f31f4450f86d75d1f",
+      "bytes": 223,
+      "sha256": "5f73bff83de51ec76c53e87eedf313b3dd97d281b39cb7f7ec72d97dc87ace6f",
+      "destination": "resources/values/strings",
+      "kind": "values"
+    },
+    {
+      "source": "takkernel/engine/src/main/res/values/styles.xml",
+      "mode": "100644",
+      "blob": "6ce89c7ba4394d8cab27953d41456ce234ca37c3",
+      "bytes": 680,
+      "sha256": "0001a98125786f9189ee4b92a66b52e7d4e3af3c51d33ddad34d1e63e847deb3",
+      "destination": "resources/values/styles",
+      "kind": "values"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/cone_down.obj",
+      "mode": "100644",
+      "blob": "f1a39a7d3b6e7e55ca580d530269127242ff89bc",
+      "bytes": 4239,
+      "sha256": "d4e6730f1b0547ce6483eef9b894d7d238769c4ab776b00dc9d3ee2678ff7cea",
+      "destination": "assets/meshes/cone_down.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/cone_up.obj",
+      "mode": "100644",
+      "blob": "4a8c66870eb5f3cb60dfd4d8539baed646b12e8e",
+      "bytes": 4196,
+      "sha256": "b616f4758e1c6198414fee7eb5b5b30cfe9310f13c2a550e5eac0f155132b622",
+      "destination": "assets/meshes/cone_up.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/cube.obj",
+      "mode": "100644",
+      "blob": "c4d834c6b4dc4814d195c321b81bef9b3f726086",
+      "bytes": 522,
+      "sha256": "8cde23403f5ff52285691128389d7956fe07e43b7f905a5756ec3ae45527bc7a",
+      "destination": "assets/meshes/cube.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/cylinder.obj",
+      "mode": "100644",
+      "blob": "341b3bbb2a471283f406d4f042f356a30a0c1107",
+      "bytes": 8310,
+      "sha256": "cbaa79e0ed2c24a34a734489791adbc68d980d14993010097a8c623b5c892010",
+      "destination": "assets/meshes/cylinder.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/dome.obj",
+      "mode": "100644",
+      "blob": "87a89b61030c76d5680cd9b1301a55bf3d326191",
+      "bytes": 24768,
+      "sha256": "8221de96ffdc239946955f08b1b7067fc4f36e4388f775474b56c02be4f429d5",
+      "destination": "assets/meshes/dome.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/pyramid.obj",
+      "mode": "100644",
+      "blob": "92b3455f8f3d28af47d4da040f982b4b0906e49a",
+      "bytes": 724,
+      "sha256": "f4ebadfef7aa3f6d9e7df90cd79fc0454af003f40490e872938902878bfab6d0",
+      "destination": "assets/meshes/pyramid.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/meshes/sphere.obj",
+      "mode": "100644",
+      "blob": "c6155a5f8ff2b7be502bcc5fba353e109a183757",
+      "bytes": 79595,
+      "sha256": "d841bc0b2c30a1e8e23ed4198764b821ec3dcf604ef94db86ef6b5294f4bfc86",
+      "destination": "assets/meshes/sphere.obj",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/assets/roles/roles.sqlite",
+      "mode": "100644",
+      "blob": "523bc718f5f595fa27f1833c939d8f3184b6f1bf",
+      "bytes": 8192,
+      "sha256": "6e82e3d1b902279b27fa64a120aa73d471a2d58597fd75ef17cf47ea95da7022",
+      "destination": "assets/roles/roles.sqlite",
+      "kind": "asset"
+    },
+    {
+      "source": "takkernel/shared/src/main/res/raw/mil2525cd_csv",
+      "mode": "100644",
+      "blob": "f02aca776d1c9bebaef9ca958e67c7a74a297dfa",
+      "bytes": 70929,
+      "sha256": "38cf9dbf4e619e4f4c73a8c19a5da1d6637651d23f01fb23901c9f74c7e54607",
+      "destination": "resources/raw/mil2525cd_csv",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/shared/src/main/res/raw/remote_elevation_cov",
+      "mode": "100644",
+      "blob": "a583ccc1fc60ce343b639ba54cacaad8d13b9876",
+      "bytes": 8098,
+      "sha256": "562801fb8965e338f4225b056408f8d48d6d9f0be414cf8c078b361b91664dca",
+      "destination": "resources/raw/remote_elevation_cov",
+      "kind": "raw"
+    },
+    {
+      "source": "takkernel/shared/src/main/res/raw/symbolconstant2525d",
+      "mode": "100644",
+      "blob": "30027ed51f3ad58df9be0217dcc3d77903f0bb12",
+      "bytes": 533692,
+      "sha256": "073706ad010affbf7c382af5f019461bf10f2329c0a337a5ad1c63b80d5bf693",
+      "destination": "resources/raw/symbolconstant2525d",
+      "kind": "raw"
+    }
+  ],
+  "mapping_recipe": {
+    "path": "takkernel/gradle/buildconfig.gradle",
+    "sha256": "635e982c91344681856bfb6b7f57bf28bc61b1757ae46e3ff4bd995bc5c81e60",
+    "bytes": 9662
+  }
+}

@@ -136,7 +136,7 @@ public final class DesktopContextTest {
         Path cp = Files.createDirectory(data.resolve("classpath"));
         Files.createDirectories(cp.resolve("META-INF")); Files.createDirectories(cp.resolve("res")); Files.createDirectories(cp.resolve("assets/maps"));
         Files.writeString(cp.resolve("META-INF/uds-desktop-resources.properties"),
-            "test.app/string/greeting=res/greeting.txt\ntest.app/array/labels=res/labels.properties\ntest.app/color/accent=res/color.txt\ntest.app/raw/payload=res/payload.bin\n");
+            "test.app/string/greeting=res/greeting.txt\ntest.app/array/labels=res/labels.properties\ntest.app/color/accent=res/color.txt\ntest.app/raw/payload=res/payload.bin\ntest.app/drawable/image=res/payload.bin\n");
         Files.writeString(cp.resolve("res/greeting.txt"), "Hello 世界 %s", StandardCharsets.UTF_8);
         Files.writeString(cp.resolve("res/labels.properties"), "count=3\n0=one\n1=世界\n2=\n", StandardCharsets.UTF_8);
         Files.writeString(cp.resolve("res/color.txt"), "#80402010\n");
@@ -154,6 +154,10 @@ public final class DesktopContextTest {
             String[] labels = r.getStringArray(array); labels[0] = "changed";
             check(Arrays.equals(r.getStringArray(array), new String[]{"one", "世界", ""}), "real defensive array");
             check(r.getColor(r.getIdentifier("accent", "color", "test.app")) == 0x80402010, "ARGB color");
+            int drawable = r.getIdentifier("image", "drawable", "test.app");
+            check(drawable > 0 && r.getIdentifier("image", "drawable", "other.app") == 0, "drawable namespace isolation");
+            try (InputStream input = r.openRawResource(drawable)) { check(Arrays.equals(input.readAllBytes(), new byte[]{0, 1, -1}), "real drawable bytes without getDrawable emulation"); }
+            fails(Resources.NotFoundException.class, () -> r.openRawResourceForPackage("test.app", drawable));
             int raw = r.getIdentifier("payload", "raw", "test.app");
             try (InputStream input = r.openRawResource(raw)) { check(Arrays.equals(input.readAllBytes(), new byte[]{0, 1, -1}), "real raw bytes"); }
             try (InputStream input = context.getAssets().open("maps/map.txt")) {
@@ -170,6 +174,8 @@ public final class DesktopContextTest {
             fails(Resources.NotFoundException.class, () -> r.getColor(r.getIdentifier("accent", "color", "test.app")));
             Files.writeString(cp.resolve("res/labels.properties"), "count=2\n0=only-one\n");
             fails(Resources.NotFoundException.class, () -> r.getStringArray(array));
+            Files.writeString(cp.resolve("META-INF/uds-desktop-resources.properties"), "test.app/layout/image=res/payload.bin\n");
+            fails(Resources.NotFoundException.class, () -> new Resources(loader, "test.app"));
             Files.writeString(cp.resolve("META-INF/uds-desktop-resources.properties"), "test.app/raw/bad=../escape\n");
             fails(Resources.NotFoundException.class, () -> new Resources(loader, "test.app"));
             Files.writeString(cp.resolve("META-INF/uds-desktop-resources.properties"), "test.app/raw/bad=res/missing\n");

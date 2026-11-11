@@ -14,6 +14,8 @@ import sys
 import time
 import zipfile
 HERE=Path(__file__).resolve().parent
+sys.path.insert(0,str(HERE))
+import resource_inputs
 NATIVE=HERE.parent/'kernel-native'
 sys.path.insert(0,str(NATIVE))
 spec=importlib.util.spec_from_file_location('sdk_package_native',NATIVE/'build.py')
@@ -36,8 +38,8 @@ def jar_write(path,entries):
             if jar.read(name)!=data:raise ValueError('archive member bytes differ')
 
 def recipe():
-    files=['build.py','StockLoaderSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch']
-    return {'owned':{n:p.digest(HERE/n) for n in files},'kernel_native':b.recipe()}
+    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch']
+    return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe()}
 
 def verify_native(root,providers):
     raw=p.load(root/'complete.json');current=b.recipe()
@@ -109,14 +111,28 @@ def main():
     if p.digest(stage/'EngineLibrary.java')!=lock['engine_after']:raise ValueError('EngineLibrary patch postimage differs')
     java_input=p.load(roots['kernel_java']/'inputs.json');cp=[roots['kernel_java']/'classes']+[Path(x['path']) for x in java_input['classpath']]
     replacement=out/'replacement-classes';replacement.mkdir()
-    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java'],'compile-real-stock-loader')
+    resources_source=HERE.parent/'compat/src/main/java/android/content/res/Resources.java'
+    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source],'compile-real-stock-loader')
     classes={name:(roots['kernel_java']/'classes'/name).read_bytes() for name in p.inventory(roots['kernel_java']/'classes')}
     replaced=p.inventory(replacement)
-    if set(replaced)!={n for n in classes if re.fullmatch(r'com/atakmap/map/EngineLibrary(?:\$[^/]+)?\.class',n)}:raise ValueError('only existing real EngineLibrary class family may change')
+    if set(replaced)!={n for n in classes if re.fullmatch(r'(?:com/atakmap/map/EngineLibrary|android/content/res/Resources)(?:\$[^/]+)?\.class',n)}:raise ValueError('only existing reviewed loader/resource class families may change')
     classes.update({name:(replacement/name).read_bytes() for name in replaced})
     libraries=native_files(args.native_proof,roots)
     if list(libraries)!=lock['native_order']:raise ValueError('reviewed resource load order differs')
-    natives={'lib'+n+'.so':p.regular(path).read_bytes() for n,path in libraries.items()};entries={**classes,**{'libs/linux64/'+n:data for n,data in natives.items()}}
+    resource_lock=p.load(HERE/'runtime-resources.lock.json')
+    if resource_lock['official_revision']!=lock['official_revision']:raise ValueError('resource revision differs')
+    mapping=resource_lock['mapping_recipe']
+    mapping_bytes=run(['git','--no-lazy-fetch','-C',args.source,'show',lock['official_revision']+':'+mapping['path']],'resource-gradle-mapping',20)
+    if len(mapping_bytes)!=mapping['bytes'] or hashlib.sha256(mapping_bytes).hexdigest()!=mapping['sha256']:raise ValueError('official Gradle mapping differs')
+    resource_tree={}
+    tree=run(['git','--no-lazy-fetch','-C',args.source,'ls-tree','-r','--long',lock['official_revision'],'--',*[root.rstrip('/') for root in resource_inputs.ROOTS]],'resource-tree',20)
+    for row in tree.decode().splitlines():
+        metadata,name=row.split('\t');mode,kind,blob,size=metadata.split()
+        if kind!='blob':raise ValueError('non-blob runtime resource')
+        resource_tree[name]=(mode,blob,int(size))
+    resources=resource_inputs.collect(resource_lock,resource_tree,lambda name:run(['git','--no-lazy-fetch','-C',args.source,'show',lock['official_revision']+':'+name],'resource-'+str(len(commands)),20))
+    natives={'lib'+n+'.so':p.regular(path).read_bytes() for n,path in libraries.items()}
+    entries=resource_inputs.merge(classes,{'libs/linux64/'+n:data for n,data in natives.items()},resources)
     entries['META-INF/MANIFEST.MF']=('Manifest-Version: 1.0\nImplementation-Title: Public-source Kernel CPU JNI component\nImplementation-Version: '+lock['version']+'\n\n').encode()
     native_manifest={n:hashlib.sha256(data).hexdigest() for n,data in natives.items()}
     (out/'native-resources.sha256').write_text(''.join(sha+' '+name+'\n' for name,sha in native_manifest.items()))
@@ -136,7 +152,7 @@ def main():
             dest=headers/'native'/name.removeprefix('takkernel/engine/src/main/cpp/');dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(args.native_proof/'layout'/name,dest)
     for name in p.inventory(roots['kernel_java']/'jni-headers'):
         dest=headers/'jni'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(roots['kernel_java']/'jni-headers'/name,dest)
-    manifest={'version':lock['version'],'official_revision':lock['official_revision'],'abi':lock['abi'],'class_count':len(classes),'class_inventory':{name:hashlib.sha256(data).hexdigest() for name,data in classes.items()},'patched_class_family':replaced,'native_resource_order':lock['native_order'],'native_resources':native_manifest,'dependencies':jar_records,'headers':p.inventory(headers),'notices':p.inventory(licenses),'excluded_features':['proprietary codecs','renderer qualification','client qualification','CommonCommo','stock unmodified Linux preload list','cross-host ABI portability'],'native_elf_audit':elf,'original_native_producer_sha256':record['original_native_producer']['sha256'],'stock_loader_java_library_path':'${java.io.tmpdir}/takkernel/engine/'+hashlib.md5(artifact.read_bytes()).hexdigest()+'/lib/linux64','source_patch':{'before':lock['engine_before'],'after':lock['engine_after'],'patch_sha256':lock['patch_sha256']}}
+    manifest={'version':lock['version'],'official_revision':lock['official_revision'],'abi':lock['abi'],'runtime_resources':{'namespace':resource_lock['namespace'],'source_inventory':resource_lock['files'],'entries':{name:hashlib.sha256(data).hexdigest() for name,data in resources.items()},'unindexed_values_xml':True,'android_values_semantics':False},'resource_adapter_source_sha256':p.digest(resources_source),'class_count':len(classes),'class_inventory':{name:hashlib.sha256(data).hexdigest() for name,data in classes.items()},'patched_class_family':replaced,'native_resource_order':lock['native_order'],'native_resources':native_manifest,'dependencies':jar_records,'headers':p.inventory(headers),'notices':p.inventory(licenses),'excluded_features':['proprietary codecs','renderer qualification','client qualification','CommonCommo','stock unmodified Linux preload list','cross-host ABI portability'],'native_elf_audit':elf,'original_native_producer_sha256':record['original_native_producer']['sha256'],'stock_loader_java_library_path':'${java.io.tmpdir}/takkernel/engine/'+hashlib.md5(artifact.read_bytes()).hexdigest()+'/lib/linux64','source_patch':{'before':lock['engine_before'],'after':lock['engine_after'],'patch_sha256':lock['patch_sha256']}}
     (package/'version-abi-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     record.update(package_inventory=p.inventory(package),manifest=manifest)
     bundle=out/('kernel-'+lock['version']+'-linux-amd64-public-cpu.zip')

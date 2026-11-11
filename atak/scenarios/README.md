@@ -1,8 +1,8 @@
 # Synthetic Android interoperability scenario
 
 This opt-in scenario prepares a small mission package for the existing ATAK-CIV
-KubeVirt/ADB device. It requests a real import and captures the device screen and
-UI XML. It does not turn an import request into a claim that a marker, attachment,
+KubeVirt/ADB device. It stages the package for manual import and captures the device screen and
+UI XML. Staging does not establish that a marker, attachment,
 server connection, or peer exchange worked.
 
 The source baseline is the maintained official
@@ -33,8 +33,12 @@ synthetic remarks, and `files/README.txt`. It requests import and retention
 remain separate: this marker represents a synthetic exercise location.
 
 Offline validation rejects non-synthetic marker UIDs, unlabelled markers, invalid
-coordinates, traversal, duplicate members, and packages over 1 MiB expanded or
-compressed. Its receipt binds the exact package SHA-256 and says `not-run`.
+coordinates, unsafe cross-platform paths, encrypted or special ZIP entries,
+unsupported compression, duplicate members, missing or unlisted payloads, and
+packages over 1 MiB expanded or compressed. Every scenario payload must be
+listed once in the manifest; the CoT marker declares `isCoT=true` and the README
+attachment must exist. This narrower scenario policy does not replace the mission
+lane’s actual Java package-reader admission guard. Its receipt binds the exact package SHA-256 and says `not-run`.
 This checks scenario input, not complete ATAK package compatibility.
 
 ## Actual device gate
@@ -51,11 +55,24 @@ demo/atak-adb.sh scenario /tmp/synthetic-mission.dpk /tmp/android-device-evidenc
 
 For an existing direct ADB connection, use the Python command with
 `--device SERIAL` instead. Both output directories must be fresh. Commands are
-bounded to 45 seconds each. The script uses the same Download-folder import and
-ATAK restart as `atak/driver/drive.sh`; import prompts may still need acceptance.
-A successful command means `import-requested-unverified`, never scenario pass.
+bounded to 45 seconds each. The script stages the file in Download; it does not restart ATAK or infer that
+startup imports an arbitrary package. A successful command means
+`staged-for-manual-import`, never scenario pass. Open ATAK’s Import UI, select
+`Download/atak-synthetic-scenario.dpk`, and accept its import prompts.
 Failure preserves a typed failure receipt without raw subprocess diagnostics.
 Screenshots/UI XML are local test evidence and should be reviewed before sharing.
+
+The existing driver stages its connection package, restarts ATAK, and taps known
+import prompts. That is not an import acknowledgement for this mission fixture.
+At the pinned official revision, `atak/ATAK/app/src/main/AndroidManifest.xml`
+(blob `e2f96c76554adf077efd0ffdc3d19d440ebd7a75`) exports
+`com.atakmap.android.maps.ImportFileActivity` with SEND and content-VIEW filters.
+Its `ImportFileActivity.java`
+(blob `f1c1163ba7ae497e0582c4b7cfafc127ce3d3dac`) requires a parcelable
+`Intent.EXTRA_STREAM`, queries its content resolver for DISPLAY_NAME, copies the
+stream, then forwards an internal import intent. A file push or launcher action
+satisfies none of that contract. This harness deliberately does not fabricate a
+content-provider URI or label Android activity dispatch as app acknowledgement.
 
 Complete these assertions on the actual device before calling the scenario
 qualified: accept the package import, locate `SYNTHETIC-MISSION TEST` at `0,0`,

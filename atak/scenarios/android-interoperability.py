@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Validate synthetic mission input; optionally request its import on a real ATAK device."""
+"""Validate synthetic mission input; optionally stage it for manual import on a real ATAK device."""
 import argparse
 import hashlib
 import json
-from pathlib import Path
+import stat
+from pathlib import Path, PurePosixPath
 import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
@@ -21,8 +22,19 @@ def inspect_package(path):
         names = [entry.filename for entry in entries]
         if len(names) != len(set(names)) or len(names) > 32:
             raise ValueError("duplicate or excessive entries")
-        if any(Path(n).is_absolute() or ".." in Path(n).parts for n in names):
-            raise ValueError("unsafe member path")
+        for entry in entries:
+            name = entry.orig_filename
+            parts = name.split("/")
+            kind = stat.S_IFMT(entry.external_attr >> 16)
+            if (name != entry.filename or "\\" in name or ":" in name
+                    or any(ord(c) < 32 or ord(c) == 127 for c in name)
+                    or PurePosixPath(name).is_absolute()
+                    or any(part in ("", ".", "..") for part in parts)):
+                raise ValueError("unsafe member path")
+            if entry.flag_bits & 1 or kind not in (0, stat.S_IFREG):
+                raise ValueError("encrypted or special ZIP entry")
+            if entry.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+                raise ValueError("unsupported ZIP compression")
         if sum(e.file_size for e in entries) > LIMIT:
             raise ValueError("expanded package exceeds 1 MiB")
         manifest_bytes = archive.read("MANIFEST/manifest.xml")
@@ -31,9 +43,22 @@ def inspect_package(path):
         manifest = ET.fromstring(manifest_bytes)
         if manifest.tag != "MissionPackageManifest" or manifest.get("version") != "2":
             raise ValueError("expected MissionPackageManifest version 2")
+        # This is admission for our synthetic scenario, not a replacement
+        # implementation of the official generic mission package reader.
+        contents = manifest.findall("Contents/Content")
+        references = [content.get("zipEntry") for content in contents]
+        payloads = set(names) - {"MANIFEST/manifest.xml"}
+        if (len(references) != len(set(references)) or set(references) != payloads
+                or any(content.get("ignore", "false") != "false" for content in contents)):
+            raise ValueError("scenario manifest must list each existing payload exactly once")
         cot_names = [n for n in names if n.endswith(".cot")]
-        if not cot_names:
-            raise ValueError("scenario needs a CoT map marker")
+        if not cot_names or "files/README.txt" not in references:
+            raise ValueError("scenario needs a CoT marker and README attachment")
+        for content in contents:
+            parameters = {p.get("name"): p.get("value") for p in content.findall("Parameter")}
+            if (content.get("zipEntry").endswith(".cot")
+                    and parameters.get("isCoT") != "true"):
+                raise ValueError("CoT payload must declare isCoT=true")
         markers = []
         for name in cot_names:
             payload = archive.read(name)
@@ -75,17 +100,16 @@ def main():
             if not installed.startswith("package:"):
                 raise RuntimeError("ATAK-CIV must already be installed")
             receipt["apk_path"] = installed
-            # Same import mechanism as atak/driver/drive.sh. No install, network
-            # provisioning, permission bypass, recording, or UI success inference.
+            # Stage the file only. Startup is not an import acknowledgement.
+            # The existing driver uses a restart plus interactive prompt taps;
+            # we do not infer that arbitrary packages are auto-imported.
             adb("shell", "mkdir", "-p", "/sdcard/Download")
             adb("push", str(args.mission_package), "/sdcard/Download/atak-synthetic-scenario.dpk")
-            adb("shell", "am", "force-stop", package)
-            adb("shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
             adb("shell", "uiautomator", "dump", "/sdcard/android-scenario-ui.xml")
             (args.output / "ui.xml").write_bytes(adb("exec-out", "cat", "/sdcard/android-scenario-ui.xml"))
             (args.output / "screen.png").write_bytes(adb("exec-out", "screencap", "-p"))
-            receipt.update(status="import-requested-unverified", execution="real-adb",
-                           remaining=["accept import prompts", "verify both map markers", "share to connected peer and verify UID/coordinates", "verify mission attachment on device"])
+            receipt.update(status="staged-for-manual-import", execution="real-adb",
+                           remaining=["open ATAK Import and select Download/atak-synthetic-scenario.dpk", "accept import prompts", "verify synthetic map marker", "share to connected peer and verify UID/coordinates", "verify mission attachment on device"])
     except Exception as error:
         receipt.update(status="failed", error_type=type(error).__name__)
         raise

@@ -86,6 +86,17 @@ YAML
     output="${3:?fresh evidence directory}"
     [[ -f "${package}" && ! -e "${output}" ]] || exit 2
     remote="$(k exec -n atak "${pod}" -- mktemp -d /tmp/android-scenario.XXXXXX)"
+    [[ "${remote}" =~ ^/tmp/android-scenario\.[a-zA-Z0-9]{6}$ ]] || {
+      echo "unexpected remote temporary path" >&2
+      exit 2
+    }
+    # shellcheck disable=SC2329 # Invoked by the EXIT trap.
+    cleanup_scenario() {
+      k exec -n atak "${pod}" -- rm -rf -- "${remote}" || true
+    }
+    trap cleanup_scenario EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     k cp atak/scenarios/android-interoperability.py "atak/${pod}:${remote}/scenario.py"
     k cp "${package}" "atak/${pod}:${remote}/scenario.dpk"
     status=0
@@ -94,7 +105,6 @@ YAML
       --output "${remote}/evidence" || status=$?
     mkdir -p "${output}"
     k cp "atak/${pod}:${remote}/evidence/." "${output}/" || status=1
-    k exec -n atak "${pod}" -- rm -rf "${remote}"
     exit "${status}"
     ;;
   zoom)

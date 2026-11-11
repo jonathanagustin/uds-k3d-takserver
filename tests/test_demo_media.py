@@ -97,6 +97,33 @@ class MediaTests(unittest.TestCase):
             self.assertNotIn('PRIVATE_START',error.getvalue())
             self.assertNotIn('PRIVATE_FRAGMENT',error.getvalue())
 
+    def test_unit_media_dependencies_are_explicit_in_the_test_environment(self):
+        workflow = yaml.load((ROOT/'.github/workflows/unit-tests.yaml').read_text(), Loader=yaml.BaseLoader)
+        step = next(s for s in workflow['jobs']['coverage']['steps'] if s['name']=='Config secret redaction')
+        self.assertEqual(step['env']['PYYAML_VERSION'], '6.0.3')
+        self.assertEqual(step['env']['PILLOW_VERSION'], '13.0.0')
+        command = step['run'].splitlines()[0]
+        self.assertIn('uv run --no-project', command)
+        self.assertIn('--with "pyyaml==${PYYAML_VERSION}"', command)
+        self.assertIn('--with "pillow==${PILLOW_VERSION}"', command)
+        self.assertIn('tests.test_demo_media', command)
+
+    def test_docs_browser_keeps_dependency_checks_with_a_finite_install_budget(self):
+        workflow = yaml.load((ROOT/'.github/workflows/docs.yaml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(workflow['jobs']['build']['runs-on'], 'ubuntu-24.04')
+        steps = workflow['jobs']['build']['steps']
+        prepare = next(s for s in steps if s['name']=='Prepare bounded signed Ubuntu package indexes')
+        install = next(s for s in steps if s['name']=='Install the docs browser')
+        browser = next(s for s in steps if s['name']=='Browser tests')
+        self.assertLess(steps.index(prepare), steps.index(install))
+        self.assertLess(steps.index(install), steps.index(browser))
+        self.assertEqual(prepare['run'], 'sudo python3 .github/scripts/ci-apt.py update')
+        self.assertEqual(prepare['timeout-minutes'], '3')
+        self.assertEqual(install['timeout-minutes'], '3')
+        self.assertEqual(install['run'], 'timeout --kill-after=5 150 npx playwright install --with-deps chromium')
+        for event in ('pull_request', 'push'):
+            self.assertIn('.github/scripts/ci-apt.py', workflow['on'][event]['paths'])
+
     def test_verified_musl_pipeline_is_checked_before_cluster_deployment(self):
         workflow = yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(workflow['env']['AGG_SHA256'], 'ddcbf6ca044c8ac3a434dcb9ee89fb9e3be87209982b7c2adb55f782e8f0f390')

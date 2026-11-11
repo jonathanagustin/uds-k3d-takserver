@@ -28,6 +28,7 @@ on:
       - "CONTRIBUTING.md"
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
+      - ".github/scripts/ci-apt.py"
   push:
     branches:
       - main
@@ -40,6 +41,7 @@ on:
       - "CONTRIBUTING.md"
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
+      - ".github/scripts/ci-apt.py"
 
 permissions:
   contents: read
@@ -54,7 +56,7 @@ concurrency:
 jobs:
   build:
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,9 +107,14 @@ jobs:
           DOCS_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         run: npm run build
 
+      - name: Prepare bounded signed Ubuntu package indexes
+        timeout-minutes: 3
+        run: sudo python3 .github/scripts/ci-apt.py update
+
       - name: Install the docs browser
+        timeout-minutes: 3
         working-directory: docs-site
-        run: npx playwright install --with-deps chromium
+        run: timeout --kill-after=5 150 npx playwright install --with-deps chromium
 
       - name: Browser tests
         working-directory: docs-site

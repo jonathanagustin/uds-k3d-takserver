@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.2...v0.13.0) (2026-11-11)
+
+
+### Features
+
+* add opt-in historical UI scene review exports ([#461](https://github.com/jonathanagustin/uds-takserver/issues/461)) ([5fe59be](https://github.com/jonathanagustin/uds-takserver/commit/5fe59bed8d64ebcc409a7029af22e7195e08a0fc))
+
+
+### Documentation
+
+* **takx:** summarize tested native component profiles ([#460](https://github.com/jonathanagustin/uds-takserver/issues/460)) ([2a2b684](https://github.com/jonathanagustin/uds-takserver/commit/2a2b684edbafd3dc28fe56107a038998f2577d8f))
+
 ## [0.12.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.1...v0.12.2) (2026-11-10)
 
 

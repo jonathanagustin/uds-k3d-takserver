@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.13.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.2...v0.13.0) (2026-11-11)
+
+
+### Features
+
+* add opt-in historical UI scene review exports ([#461](https://github.com/jonathanagustin/uds-takserver/issues/461)) ([5fe59be](https://github.com/jonathanagustin/uds-takserver/commit/5fe59bed8d64ebcc409a7029af22e7195e08a0fc))
+
+
+### Documentation
+
+* **takx:** summarize tested native component profiles ([#460](https://github.com/jonathanagustin/uds-takserver/issues/460)) ([2a2b684](https://github.com/jonathanagustin/uds-takserver/commit/2a2b684edbafd3dc28fe56107a038998f2577d8f))
+
+## [0.12.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.1...v0.12.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **deps:** update ATAK viewer node-forge to 1.4.3 ([#450](https://github.com/jonathanagustin/uds-takserver/issues/450)) ([c671ccd](https://github.com/jonathanagustin/uds-takserver/commit/c671ccdf303f3b0303cab0f4947973e94babade9))
+
 ## [0.12.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.0...v0.12.1) (2026-11-10)
 
 

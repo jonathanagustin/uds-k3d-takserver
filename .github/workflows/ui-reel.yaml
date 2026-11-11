@@ -6,6 +6,10 @@ name: UI reel preview
 on:
   workflow_dispatch:
     inputs:
+      export_scenes:
+        description: "Also export three historical UI scene clips as a separate review artifact"
+        type: boolean
+        default: false
       release_tag:
         description: "Existing stable release tag (pair with source_run_id); empty renders only"
         type: string
@@ -34,7 +38,13 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-        run: python3 demo/ui-reel/publish.py --mode-only
+          EXPORT_SCENES: ${{ inputs.export_scenes }}
+        run: |
+          if [[ "${EXPORT_SCENES}" == true && ( -n "${RELEASE_TAG}" || -n "${SOURCE_RUN_ID}" ) ]]; then
+            echo "Scene exports are review-only and cannot be combined with publication"
+            exit 1
+          fi
+          python3 demo/ui-reel/publish.py --mode-only
 
   render:
     needs: mode
@@ -60,9 +70,13 @@ jobs:
             sudo apt-get install -y --no-install-recommends ffmpeg
           fi
       - name: Render from locked historical footage
+        env:
+          EXPORT_SCENES: ${{ inputs.export_scenes }}
         run: |
           python3 -m unittest discover -s demo/ui-reel -p test_render.py
-          python3 demo/ui-reel/render.py
+          args=()
+          if [[ "${EXPORT_SCENES}" == true ]]; then args+=(--export-scenes); fi
+          python3 demo/ui-reel/render.py "${args[@]}"
       - name: Attest the edited video and source manifest
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -79,6 +93,28 @@ jobs:
         with:
           name: ui-reel-preview
           path: demo/out/ui-reel/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attest the historical scene clips and individual manifests
+        if: inputs.export_scenes
+        id: attest-scenes
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            demo/out/ui-reel-scenes/*.mp4
+            demo/out/ui-reel-scenes/*.json
+      - name: Retain the scene provenance bundle
+        if: inputs.export_scenes
+        env:
+          BUNDLE_PATH: ${{ steps.attest-scenes.outputs.bundle-path }}
+        run: cp "${BUNDLE_PATH}" demo/out/ui-reel-scenes/attestation.sigstore.json
+      - name: Upload separate historical scene review artifact
+        if: inputs.export_scenes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-scene-previews
+          path: demo/out/ui-reel-scenes/
           if-no-files-found: error
           retention-days: 14
 

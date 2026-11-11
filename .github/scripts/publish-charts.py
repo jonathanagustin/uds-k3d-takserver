@@ -32,10 +32,14 @@ def sha(data):
     return 'sha256:' + hashlib.sha256(data).hexdigest()
 
 
-def release(repo, tag, main_ref):
+def release(repo, tag, main_ref, expected_source=""):
+    if expected_source and not re.fullmatch(r'[0-9a-f]{40}', expected_source):
+        raise ValueError('Expected an exact release source SHA')
     if not re.fullmatch(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', tag):
         raise ValueError('Expected an existing stable vMAJOR.MINOR.PATCH tag')
     revision = run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], repo).stdout.strip()
+    if expected_source and revision != expected_source:
+        raise ValueError('Release tag does not match the expected source SHA')
     run(['git', 'merge-base', '--is-ancestor', revision, main_ref], repo)
     manifest = json.loads(run(['git', 'show', f'{revision}:.release-please-manifest.json'], repo).stdout)
     if manifest.get('.') != tag[1:]:
@@ -157,6 +161,7 @@ def main():
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--tag', required=True)
     parser.add_argument('--main-ref', default='origin/main')
+    parser.add_argument('--source-sha', default='', help='Expected source SHA from Release Please')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--registry', default='ghcr.io/jonathanagustin/uds-takserver/charts')
     parser.add_argument('--publish', action='store_true')
@@ -166,7 +171,7 @@ def main():
         parser.error('Plain HTTP is restricted to an explicit loopback test registry')
     if not args.plain_http and args.registry != 'ghcr.io/jonathanagustin/uds-takserver/charts':
         parser.error('Unexpected production registry')
-    revision, timestamp = release(args.repo, args.tag, args.main_ref)
+    revision, timestamp = release(args.repo, args.tag, args.main_ref, args.source_sha)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     archives = prepare(args.repo, revision, timestamp, args.tag[1:], output)

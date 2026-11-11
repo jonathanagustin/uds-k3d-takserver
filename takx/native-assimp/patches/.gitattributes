@@ -1,0 +1,2 @@
+# Preserve reviewed vendor patch context and source line endings.
+*.patch -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol

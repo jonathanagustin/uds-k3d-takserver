@@ -16,6 +16,120 @@ SPEC.loader.exec_module(D)
 
 
 class TrialTests(unittest.TestCase):
+    def deployment_fixture(self, directory):
+        driver = self.driver(directory)
+        driver.files = {}
+        for name in ('core', 'detach', 'clean', 'config'):
+            path = Path(directory) / name
+            path.write_text('bound ' + name)
+            driver.files[name] = path
+        driver.state['inputs'] = {name: D.digest(path) for name, path in driver.files.items()}
+        driver.state['steps'] = [{'name': 'bootstrap-exemption', 'status': 'running'}]
+        driver.idle = lambda: None
+        driver.execute = lambda *_args, **_kwargs: None
+        return driver
+
+    def test_initial_core_compatibility_has_exact_command_and_immediate_freshness_guards(self):
+        for stage in ('bootstrap-exemption', 'baseline-bootstrap-exemption'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as temporary:
+                driver = self.deployment_fixture(temporary)
+                driver.state['steps'][0]['name'] = stage
+                events, reads, dispatches = [], [], []
+                driver.guarded = lambda: events.append('guard')
+                def read(argv):
+                    events.append('read')
+                    reads.append(argv)
+                    return ''
+                driver.read_command = read
+                def execute(argv, **kwargs):
+                    events.append('dispatch')
+                    dispatches.append((argv, kwargs))
+                driver.execute = execute
+                driver.deploy('core', 'core-base', bootstrap=True)
+                self.assertEqual(reads, [['kubectl', '--context', 'k3d-uds', 'get', kind, name,
+                                         '-n', 'velero', '--ignore-not-found', '-o', 'json']
+                                        for kind, name in [('daemonset', 'node-agent'), ('deployment', 'velero')]])
+                self.assertEqual(events[-4:], ['read', 'read', 'guard', 'dispatch'])
+                self.assertEqual(dispatches, [(['uds', 'deploy', str(driver.files['core']), '--packages',
+                    'core-base', '--confirm', '--retries', '1', '--no-progress', '--no-log-file',
+                    '--force-conflicts'], {'timeout': 1500, 'env': {'UDS_CONFIG': str(driver.files['config'])}})])
+
+    def test_core_compatibility_rejects_every_other_archive_owner_phase_and_mode(self):
+        cases = [('detach', None, True, False, False), ('core', 'core', True, False, False),
+                 ('core', 'local', True, False, False), ('core', '', True, False, False),
+                 ('core', None, False, False, False), ('core', None, 1, False, False),
+                 ('core', None, True, True, False), ('core', None, True, False, True)]
+        for bundle, owner, bootstrap, late, recovery in cases:
+            with self.subTest(case=(bundle, owner, bootstrap, late, recovery)), tempfile.TemporaryDirectory() as temporary:
+                driver = self.deployment_fixture(temporary)
+                if late:
+                    driver.state['steps'].append({'name': 'deploy-core-agent', 'status': 'running'})
+                driver.state['recoveryOnly'] = recovery
+                with patch.object(driver, 'execute') as execute, patch.object(driver, 'read_command'):
+                    with self.assertRaises(ValueError):
+                        driver.deploy(bundle, 'core-base', owner, bootstrap)
+                    execute.assert_not_called()
+
+    def test_existing_terminating_or_unreadable_velero_refuses_core_force(self):
+        for failure in ('agent', 'server', 'terminating-agent', 'terminating-server', 'agent-read-error', 'server-read-error'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                driver = self.deployment_fixture(temporary)
+                def read(argv):
+                    target = 'agent' if argv[4] == 'daemonset' else 'server'
+                    if failure == target + '-read-error':
+                        raise ValueError('read failed')
+                    if failure in (target, 'terminating-' + target):
+                        return json.dumps({'metadata': {'deletionTimestamp': 'now' if failure.startswith('terminating') else None}})
+                    return ''
+                driver.read_command = read
+                with patch.object(driver, 'execute') as execute, self.assertRaises(ValueError):
+                    driver.deploy('core', 'core-base', bootstrap=True)
+                execute.assert_not_called()
+
+    def test_missing_completed_or_wrong_initial_stage_cannot_enable_core_force(self):
+        for steps in ([], [{'name': 'bootstrap-exemption', 'status': 'passed'}],
+                      [{'name': 'deploy-core-agent', 'status': 'running'}]):
+            with self.subTest(steps=steps), tempfile.TemporaryDirectory() as temporary:
+                driver = self.deployment_fixture(temporary)
+                driver.state['steps'] = steps
+                with patch.object(driver, 'execute') as execute, self.assertRaises(ValueError):
+                    driver.deploy('core', 'core-base', bootstrap=True)
+                execute.assert_not_called()
+
+    def test_hash_or_disposable_identity_change_after_fresh_reads_prevents_dispatch(self):
+        for change in ('core', 'config', 'identity'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                driver = self.deployment_fixture(temporary)
+                checks = []
+                def guard():
+                    checks.append(True)
+                    if change == 'identity' and len(checks) == 3:
+                        raise ValueError('cluster changed')
+                driver.guarded = guard
+                def read(argv):
+                    if argv[4] == 'deployment' and change != 'identity':
+                        driver.files[change].write_text('changed after original hash check')
+                    return ''
+                driver.read_command = read
+                with patch.object(driver, 'execute') as execute, self.assertRaises(ValueError):
+                    driver.deploy('core', 'core-base', bootstrap=True)
+                execute.assert_not_called()
+
+    def test_velero_tak_and_reverse_deployments_always_remain_flag_free(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            driver = self.deployment_fixture(temporary)
+            calls = []
+            driver.execute = lambda argv, **kwargs: calls.append(argv)
+            with patch.object(driver, 'read_command', side_effect=AssertionError('baseline-only read')):
+                for bundle in ('core', 'detach', 'clean'):
+                    for package in ('core-backup-restore', 'takserver'):
+                        for bootstrap in (True, False):
+                            for owner in (None, 'local', 'core'):
+                                driver.deploy(bundle, package, owner, bootstrap)
+            self.assertEqual(len(calls), 36)
+            self.assertTrue(all('--force-conflicts' not in argv and '--take-ownership' not in argv
+                                and '--adopt-existing-resources' not in argv for argv in calls))
+
     def test_distinct_real_backup_names_without_forging_run_identity(self):
         for suffix in ('', 'fresh', 'core', 'local', 'unreviewed'):
             result = subprocess.run(['bash', '-euc', 'run_id=123; attempt=2; source tests/backup-names.sh; printf "%s %s" "$backup_name" "$restore_name"'],
@@ -135,6 +249,8 @@ class TrialTests(unittest.TestCase):
         original = yaml.safe_load((ROOT / 'bundle/full/uds-bundle.yaml').read_text())
         result = candidate.variants(original, exemption)
         self.assertEqual({p['name'] for p in result['core']['packages']}, {'core-base', 'core-backup-restore', 'takserver'})
+        base = next(p for p in result['core']['packages'] if p['name'] == 'core-base')
+        self.assertIn('istio-passthrough-gateway', base['optionalComponents'])
         for name, enabled, config in [('core', True, True), ('detach', False, True), ('clean', False, False)]:
             package = next(p for p in result[name]['packages'] if p['name'] == 'core-backup-restore')
             values = {v['path']: v['value'] for v in package['overrides']['velero']['velero']['values']}

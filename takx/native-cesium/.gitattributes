@@ -1,0 +1,5 @@
+# Preserve immutable upstream port bytes, including patch context and CRLF.
+ports/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol linguist-vendored
+# Generated immutable Git object inventories; owned recipes remain reviewable.
+cesium-tree.json linguist-generated
+metadata.lock.json linguist-generated

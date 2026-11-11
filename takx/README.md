@@ -8,10 +8,24 @@ Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after fu
 
 The optional [desktop compatibility prototype](compat/README.md) supplies real bitmap/Canvas, font, Context/resource, utility, Unix metadata and SQLite behavior. Its checked-in runners compile the complete public Kernel port module and exercise focused consumers. The separate opt-in [public Kernel compiler recipe](kernel-java/README.md) reproduces the engine, port and annotation desktop Java profile with frozen input hashes and zero compiler errors. The explicit `--scope engine-shared` option also compiles all 231 shared sources; neither scope assembles a complete Kernel SDK or compiles either TAKX client. See the [client feasibility checkpoint](CLIENT-CHECKPOINT.md). Its default dependency profile addresses the [recorded direct-dependency advisories](kernel-java/DEPENDENCIES.md), with the historical baseline kept as an explicit option; it is compilation evidence, and complete client/runtime acceptance remains outstanding. This independently implemented slice is not the upstream AndroidPort artifact and is not installed by the server package.
 
+Follow [SDK integration](SDK-INTEGRATION.md) for the native Kernel integration,
+full JNI runtime and client acceptance milestones.
+
 The opt-in [public native dependency profile](native-deps/README.md) source-builds
 Draco 1.5.7 and verifies selected TinyGLTF/Khronos header inputs. Real codec and
 PIC probes cover that dependency only; it does not supply a Kernel SDK, JNI,
 map rendering or either TAKX client.
+The separate [LAS native profile](native-las/README.md) builds public libLAS,
+LASzip and Boost sources with real LAS/LAZ, seek/reset, error and PIC probes.
+The [Assimp native profile](native-assimp/README.md) builds the official core and
+matching Java/JNI bindings, with ordinary model-data and zero-warning JNI checks.
+The [historical PROJ profile](native-proj/README.md) builds unchanged PROJ 4.9.1
+with real coordinate and PIC checks; modern API and security acceptance remain open.
+The [SQLCipher native profile](native-sqlcipher/README.md) builds its Tcl and
+OpenSSL prerequisites from source and checks encrypted databases and PIC linking.
+The [historical GEOS profile](native-geos/README.md) is a bounded static/PIC
+source experiment with real C geometry and malformed-input controls. Its
+component result does not establish Spatialite, target ABI or TAKX acceptance.
 
 The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
 

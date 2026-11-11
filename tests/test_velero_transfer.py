@@ -112,6 +112,24 @@ class TransferTests(unittest.TestCase):
             api.driver().transfer(T.LOCAL, T.CORE)
         self.assertFalse(api.writes)
 
+    def test_every_schedule_requires_explicit_boolean_pause_before_transfer(self):
+        for name in ('velero-udsbackup', 'unknown-schedule'):
+            for paused in (None, False, 'true', 1):
+                api = API()
+                spec = {} if paused is None else {'paused': paused}
+                api.busy['schedules.velero.io']['items'] = [{'metadata': {'name': name}, 'spec': spec}]
+                with self.subTest(name=name, paused=paused), self.assertRaises(ValueError):
+                    api.driver().transfer(T.LOCAL, T.CORE)
+                self.assertFalse(api.writes)
+        api = API()
+        api.busy['schedules.velero.io']['items'] = [{'metadata': {'name': 'velero-udsbackup'}, 'spec': {'paused': True}}]
+        self.assertTrue(api.driver().transfer(T.LOCAL, T.CORE)['changed'])
+        api = API()
+        api.busy['schedules.velero.io']['items'] = [{'metadata': {'name': 'velero-udsbackup', 'deletionTimestamp': 'now'}, 'spec': {'paused': True}}]
+        with self.assertRaises(ValueError):
+            api.driver().transfer(T.LOCAL, T.CORE)
+        self.assertFalse(api.writes)
+
     def test_wrong_owner_uid_incomplete_terminating_agent_refused(self):
         for mutation in (
             lambda ds: ds['metadata'].update(uid='other'),

@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Negative handoff evidence cases; never connect to a cluster or mutate Helm."""
 import copy
+import os
+import hashlib
+import re
+import subprocess
 import importlib.util
 import json
 import io
@@ -91,6 +95,25 @@ class HandoffTests(unittest.TestCase):
         bad = copy.deepcopy(original)
         bad['packages'][0]['ref'] = 'unreviewed'
         with self.assertRaises(ValueError): prepare(bad, exemption)
+
+    def test_all_candidate_variants_pause_only_the_known_schedule_without_changing_defaults(self):
+        original = yaml.safe_load((ROOT / 'bundle/full/uds-bundle.yaml').read_text())
+        before = copy.deepcopy(original)
+        exemption = next(d for d in documents(True) if d['kind'] == 'Exemption')
+        variants = module('candidate').variants(original, exemption)
+        self.assertEqual(original, before)
+        for name, value in variants.items():
+            with self.subTest(variant=name):
+                package = next(p for p in value['packages'] if p['name'] == 'core-backup-restore')
+                values = package['overrides']['velero']['velero']['values']
+                schedules = [v for v in values if v['path'].startswith('schedules')]
+                self.assertEqual(schedules, [{'path': 'schedules.udsbackup.paused', 'value': True}])
+        for path in ('schedules', 'schedules.udsbackup', 'schedules.udsbackup.paused'):
+            value = copy.deepcopy(original)
+            package = next(p for p in value['packages'] if p['name'] == 'core-backup-restore')
+            package['overrides']['velero']['velero']['values'].append({'path': path, 'value': {}})
+            with self.subTest(conflict=path), self.assertRaises(ValueError):
+                prepare(value, exemption)
 
     def test_fresh_forward_and_reverse_are_distinct_accepted_observations(self):
         before = observe.validate(snapshot(True), 'local-before')
@@ -191,6 +214,43 @@ class HandoffTests(unittest.TestCase):
             saved = (directory / 'core-ready.json').read_text()
             self.assertNotIn('DO_NOT_RETAIN', saved + output.getvalue())
             self.assertEqual(json.loads(saved)['daemonsetUID'], 'same-agent')
+
+
+
+
+@unittest.skipUnless(os.environ.get('STAGED_VELERO_CHART_ARCHIVE') and os.environ.get('STAGED_VELERO_CORE_VALUES'),
+                     'opt-in verified official chart/Core values required for real Helm proof')
+class OfficialScheduleRender(unittest.TestCase):
+    def test_real_pinned_chart_pauses_default_schedule_at_creation_without_other_changes(self):
+        archive = Path(os.environ['STAGED_VELERO_CHART_ARCHIVE'])
+        core = Path(os.environ['STAGED_VELERO_CORE_VALUES'])
+        self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(),
+                         'fe4acd70a0123c369e7af7064457b4ffdddebee413e2bb01976a4fe07c471773')
+        self.assertEqual(hashlib.sha256(core.read_bytes()).hexdigest(),
+                         '492018cfaaab198615fba8d448a2a87d568eb18658dac3a4642bdd70ef6aa9a9')
+        # Only bucket credential placeholders need nonsecret fixtures for Helm;
+        # schedule content is consumed unchanged from official Core 1.16 values.
+        text = re.sub(r'{{\.Variables\.[A-Z_]+}}', 'fixture', core.read_text())
+        with tempfile.TemporaryDirectory() as temporary:
+            values = Path(temporary) / 'values.yaml'; values.write_text(text)
+            original = yaml.safe_load((ROOT / 'bundle/full/uds-bundle.yaml').read_text())
+            exemption = next(d for d in documents(True) if d['kind'] == 'Exemption')
+            variants = module('candidate').variants(original, exemption)
+            argv = ['helm', 'template', 'velero', str(archive), '--namespace', 'velero',
+                    '-f', str(values), '--show-only', 'templates/schedule.yaml']
+            baseline = [d for d in yaml.safe_load_all(subprocess.check_output(argv, text=True)) if d]
+            self.assertEqual(len(baseline), 1)
+            self.assertEqual(baseline[0]['metadata']['name'], 'velero-udsbackup')
+            self.assertNotIn('paused', baseline[0]['spec'])
+            for name, candidate in variants.items():
+                package = next(p for p in candidate['packages'] if p['name'] == 'core-backup-restore')
+                entry = next(v for v in package['overrides']['velero']['velero']['values']
+                             if v['path'] == 'schedules.udsbackup.paused')
+                rendered = [d for d in yaml.safe_load_all(subprocess.check_output(
+                    [*argv, '--set', entry['path'] + '=' + str(entry['value']).lower()], text=True)) if d]
+                with self.subTest(variant=name):
+                    self.assertIs(rendered[0]['spec'].pop('paused'), True)
+                    self.assertEqual(rendered, baseline)
 
 
 if __name__ == '__main__':

@@ -34,6 +34,9 @@ def prepare(bundle, exemption):
     custom['value'].append({'name': 'velero-node-agent-bootstrap', 'exemptions': copy.deepcopy(entries)})
     upstream = packages['core-backup-restore']['overrides']['velero']['velero']['values']
     desired = {
+        # Core 1.16 creates this default Schedule. Pause it in every experimental
+        # candidate before creation, rather than racing the idle guard afterward.
+        'schedules.udsbackup.paused': True,
         'deployNodeAgent': True,
         'nodeAgent': {
             'annotations': {'helm.sh/resource-policy': 'keep'},

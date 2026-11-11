@@ -21,6 +21,10 @@ on:
         description: Optional diagnostic-only agent watcher (does not prove health)
         type: boolean
         default: false
+      diagnostic_recipient:
+        description: Optional age X25519 PUBLIC recipient for encrypted failure evidence (never a private key)
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -108,10 +112,12 @@ jobs:
           printf '%s\n' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           ./.github/scripts/pin-image-tags.sh
       - name: Run only the selected staged acceptance
+        id: staged-trial
         timeout-minutes: 225
         run: uv run --no-project --with pyyaml==6.0.3 bash .github/scripts/staged-migrations.sh
       - name: Publish only allowlisted stage evidence, including failures
         if: always()
+        timeout-minutes: 2
         env:
           TRIAL_ARCH: ${{ matrix.arch }}
         run: |
@@ -120,6 +126,7 @@ jobs:
             --output "out/staged-public-${TRIAL_ARCH}" --arch "$TRIAL_ARCH"
       - name: Upload exact-run sanitized acceptance evidence
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-migrations-${{ matrix.arch }}
@@ -128,12 +135,32 @@ jobs:
           retention-days: 14
       - name: Upload optional passive diagnostic evidence
         if: always() && inputs.passive_watch
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-agent-watch-${{ matrix.arch }}
           path: ${{ runner.temp }}/staged-migrations/passive-watch.jsonl
           if-no-files-found: ignore
           retention-days: 14
+      - name: Encrypt optional first failure diagnostic
+        id: encrypt-first-failure
+        if: always() && steps.staged-trial.outcome == 'failure' && inputs.diagnostic_recipient != ''
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          STAGED_AGE_RECIPIENT: ${{ inputs.diagnostic_recipient }}
+          STAGED_TRIAL_OUTCOME: ${{ steps.staged-trial.outcome }}
+        run: python3 .github/test-infra/staged-encrypted-diagnostic.py
+      - name: Upload only encrypted first failure diagnostic
+        if: always() && steps.encrypt-first-failure.outcome == 'success' && steps.encrypt-first-failure.outputs.ready == 'true'
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged-encrypted-first-failure-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/staged-encrypted-diagnostic/first-failure.age
+          if-no-files-found: error
+          retention-days: 7
 
   summary:
     if: always()

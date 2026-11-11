@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "version": "4.9.1",
+  "archives": {
+    "proj-4.9.1": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/proj.tar.gz",
+      "bytes": 876386,
+      "sha256": "fca0388f3f8bc5a1a803d2f6ff30017532367992b30cf144f2d39be88f36c319",
+      "members": 292,
+      "regular_files": 281,
+      "expanded_bytes": 4243599
+    }
+  },
+  "license": {
+    "source": "proj-4.9.1/COPYING",
+    "sha256": "2dcac4af6990093ef48b896bfb81452d46a31b08d46cce34b27e83f93b2e37f6"
+  },
+  "tools": {
+    "gcc": "14.2.0",
+    "make": "4.4.1",
+    "cmake": "3.31.6",
+    "binutils": "2.44"
+  },
+  "source_patches": []
+}

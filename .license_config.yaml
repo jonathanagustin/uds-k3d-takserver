@@ -8,6 +8,8 @@ ignore:
   - "**/*.jar"
   - "LICENSE"
   - "upstream/**"
+  # Checksum-pinned upstream port files retain their original license notices.
+  - "takx/native-cesium/ports/**"
   # Generated mutation reports and rewritten test sandboxes, never source inputs.
   - "takx/compat/mutation/target/**"
   - "pepr/mutation/reports/**"

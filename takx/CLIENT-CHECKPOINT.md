@@ -19,6 +19,42 @@ Our public candidate is Kernel 8.30.5 / CommonCommo 1.17.2 at official ATAK
 and streaming-contact patch. These artifacts have not been renamed to either
 client's required versions.
 
+Actual Kernel database and scene subsets now pass local native integration
+controls. See [SDK integration](SDK-INTEGRATION.md) for the remaining full
+native runtime, JNI and client acceptance stages.
+
+Generated JNI headers now cover the pinned native references. Real GDAL Java
+calls, local ES 3 rendering and a two-provider crypto experiment also pass;
+complete Kernel/CommonCommo loading and client acceptance remain pending.
+
+## Native component checkpoints
+
+The following opt-in source recipes have passed local Linux amd64
+component checks. Ordinary server builds do not run them.
+
+| Component | Tested scope | Source recipe |
+| --- | --- | --- |
+| Draco 1.5.7 | Real codec round-trip, truncated-stream rejection and PIC linking | [Source profile](native-deps/README.md), [#438](https://github.com/jonathanagustin/uds-takserver/pull/438) |
+| libLAS, LASzip and Boost | C/C++ LAS/LAZ data, seek/reset, error-status and PIC checks | [Source profile](native-las/README.md), [#443](https://github.com/jonathanagustin/uds-takserver/pull/443) |
+| Modified Assimp | C/C++ and Java/JNI scene data; zero JNI warnings on valid scenes | [Source profile](native-assimp/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
+| Historical PROJ 4.9.1 | Real forward/inverse coordinates and strict PIC linking | [Source profile](native-proj/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
+| SQLCipher 4.5.7 / SQLite 3.45.3 | Source-built Tcl 8.6.18 and OpenSSL 3.5.9; encrypted create/reopen, exact data, wrong-key rejection and strict PIC linking | [Source profile](native-sqlcipher/README.md) |
+| Historical GEOS 3.4.3 | Real C intersection, distance, buffer and invalid-input controls; official portability patch and strict PIC linking | [Source profile](native-geos/README.md) |
+| MDBTools 1.0.0 | Real MS Access catalog/rows, required API symbols, strict PIC link and actual runtime providers; full Kernel provider pending | [Source profile](native-mdbtools/README.md) |
+
+The Assimp archive is named `4.0.1-mod`, while its modified library reports
+`4.1.0`; neither identity is relabeled. Assimp's positive checks do not establish
+JNI failure-path behavior. The LAS profile documents an uncompressed truncated
+input limitation. Historical versions have not received complete security or
+modern API acceptance.
+
+The SQLCipher profile passed a fresh end-to-end source build and independent
+C controls. Historical SQLCipher/SQLite security acceptance remains open.
+These component results do not
+complete the full GDAL/Spatialite/Cesium runtime integration, target-image ABI, native Kernel/JNI,
+rendering or either TAKX client. Live enrollment and server interoperability
+remain unverified.
+
 ## Current production compiler checkpoint
 
 The public WorldWind [source recipe](worldwind-java/README.md) builds the complete

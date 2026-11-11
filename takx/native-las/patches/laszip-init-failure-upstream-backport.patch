@@ -1,0 +1,77 @@
+--- a/src/lasreadpoint.cpp
++++ b/src/lasreadpoint.cpp
+@@ -333,7 +333,15 @@
+   {
+     if (point_start == 0)
+     {
+-      init_dec();
++      if (!init_dec())
++      {
++        if (last_error == 0)
++        {
++          last_error = new CHAR[128];
++          snprintf(last_error, 128, "cannot read chunk table of LAZ file while seeking");
++        }
++        return FALSE;
++      }
+       chunk_count = 0;
+     }
+     if (chunk_starts)
+@@ -357,7 +365,10 @@
+           dec->done();
+           current_chunk = (tabled_chunks-1);
+           instream->seek(chunk_starts[current_chunk]);
+-          init_dec();
++          if (!init_dec())
++          {
++            return FALSE;
++          }
+           chunk_count = 0;
+         }
+         delta += (chunk_size*(target_chunk-current_chunk) - chunk_count);
+@@ -367,7 +378,10 @@
+         dec->done();
+         current_chunk = target_chunk;
+         instream->seek(chunk_starts[current_chunk]);
+-        init_dec();
++        if (!init_dec())
++        {
++          return FALSE;
++        }
+         chunk_count = 0;
+       }
+       else
+@@ -379,7 +393,15 @@
+     {
+       dec->done();
+       instream->seek(point_start);
+-      init_dec();
++      if (!init_dec())
++      {
++        if (last_error == 0)
++        {
++          last_error = new CHAR[128];
++          snprintf(last_error, 128, "cannot read chunk table of LAZ file while seeking");
++        }
++        return FALSE;
++      }
+       delta = target;
+     }
+     else if (current < target)
+@@ -429,7 +451,15 @@
+             }
+           }
+         }
+-        init_dec();
++        if (!init_dec())
++        {
++          if (last_error == 0)
++          {
++            last_error = new CHAR[128];
++            snprintf(last_error, 128, "cannot read chunk table of LAZ file");
++          }
++          return FALSE;
++        }
+         if (current_chunk == tabled_chunks) // no or incomplete chunk table?
+         {
+           if (current_chunk >= number_chunks)

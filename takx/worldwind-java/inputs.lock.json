@@ -2082,6 +2082,6 @@
   "schema": 1,
   "verifiers": {
     "takx/gis-java/build.py": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
-    "takx/kernel-java/build.py": "a3e07f51d333f8a6d01cb2c655aa763bf87fbb8b0de296f32e96230fea37a077"
+    "takx/kernel-java/build.py": "dba29276f5f3fd9bf396f31c2a58f1bb550834e6724191e653958e61d8fc6627"
   }
 }

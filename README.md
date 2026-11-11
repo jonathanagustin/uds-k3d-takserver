@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="docs-site/public/badges/release.svg" alt="Release"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="https://jonathanagustin.github.io/uds-takserver/badges/release.svg" alt="Release"></a>
   <a href="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml"><img src="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main" alt="Test"></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver"><img src="docs-site/public/badges/openssf-scorecard.svg" alt="OpenSSF Scorecard"></a>
   <a href="https://www.bestpractices.dev/projects/15775"><img src="https://www.bestpractices.dev/projects/15775/badge" alt="OpenSSF Best Practices"></a>
@@ -144,7 +144,7 @@ To work on the repository itself, [mise](https://mise.jdx.dev/) installs every p
 From 0.11 on, releases use `oci://ghcr.io/jonathanagustin/uds-takserver/takserver:<version>-upstream`, with one entry per architecture. Releases through 0.10 keep their original registry coordinates; follow the documentation for that release. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
 
 ```bash
-VERSION=0.12.1 # x-release-please-version
+VERSION=0.13.0 # x-release-please-version
 uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" --confirm
 ```
 
@@ -264,7 +264,7 @@ https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 From v0.4.0 on, each release package is signed keylessly by `.github/workflows/release.yaml` on `main`, and the signature is in the public Sigstore transparency log. Check it before you deploy, once per architecture:
 
 ```bash
-VERSION=0.12.1 # x-release-please-version
+VERSION=0.13.0 # x-release-please-version
 uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" \
   --architecture amd64 \
   --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
@@ -285,12 +285,15 @@ For releases from 0.11 on, put the same check on the package entry, as `core-bas
 The package index also has signed SLSA v1 build provenance, stored in GHCR and in the repository's attestations. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-VERSION=0.12.1 # x-release-please-version
+VERSION=0.13.0 # x-release-please-version
 gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" \
-  --owner jonathanagustin
+  --owner jonathanagustin \
+  --signer-workflow jonathanagustin/uds-takserver/.github/workflows/release.yaml
 ```
 
 Each release also has the same provenance as a Sigstore bundle, `takserver-<version>-upstream.provenance.sigstore.json`. To check against that file instead, add `--bundle <file>`. Releases after 0.5.4 also have `takserver-<version>-upstream.intoto.jsonl`, which holds the signed in-toto statement from that bundle (its DSSE envelope) on one line, for tools that read SLSA provenance in that layout.
+
+For a manual recovery, the provenance records the workflow commit that published the package. That can differ from the application commit named by the release tag. The publisher checks the tag and application source before building. To read the verification bundle directly from GHCR, use a recent GitHub CLI and add `--bundle-from-oci`.
 
 The TAK, CloudTAK, and PostGIS images have signed SLSA v1 build provenance too. Each architecture's image is signed by the workflow run that built it. A multi-arch tag is signed by the run that wrote the index. Images built before that was added, including the ones in 0.5.4 and earlier, have none. To check an image tag listed in `zarf.yaml`:
 

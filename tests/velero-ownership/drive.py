@@ -126,6 +126,16 @@ class Driver:
         T.validate_idle({kind: self.transfer.read(kind) for kind in (*T.TERMINAL, 'schedules.velero.io', 'pods')})
 
     def deploy(self, bundle, package, owner=None, bootstrap=False):
+        # This is the ordinary Core compatibility baseline on a fresh owned
+        # checkpoint, not an ownership-transfer permission for Velero resources.
+        core_compatibility = (bundle == 'core' and package == 'core-base'
+                              and bootstrap is True and owner is None)
+        if package == 'core-base':
+            require(core_compatibility, 'Core compatibility deployment is limited to initial bootstrap')
+            steps = self.state.get('steps', [])
+            require(len(steps) == 1 and steps[0].get('status') == 'running'
+                    and steps[0].get('name') in ('bootstrap-exemption', 'baseline-bootstrap-exemption')
+                    and not self.state.get('recoveryOnly'), 'Core compatibility requires the initial named stage')
         if bootstrap:
             self.guarded()
         else:
@@ -137,7 +147,20 @@ class Driver:
                 '--confirm', '--retries', '1', '--no-progress', '--no-log-file']
         if owner:
             args += ['--set', 'takserver.FILESYSTEM_BACKUP_OWNER=' + owner]
+        if core_compatibility:
+            args += ['--force-conflicts']
         self.guarded()
+        if core_compatibility:
+            # Repeat these reads immediately before dispatch. A read error or
+            # any existing object (including terminating objects) refuses force.
+            for kind, name in (('daemonset', 'node-agent'), ('deployment', 'velero')):
+                existing = self.read_command(['kubectl', '--context', self.context, 'get', kind, name,
+                                              '-n', 'velero', '--ignore-not-found', '-o', 'json'])
+                require(not existing.strip(), 'Core compatibility bootstrap requires no existing Velero agent/server')
+            require(digest(self.files[bundle]) == self.state['inputs'][bundle]
+                    and digest(self.files['config']) == self.state['inputs']['config'],
+                    'deployment input changed before Core compatibility dispatch')
+            self.guarded()
         self.execute(args, timeout=1500, env={'UDS_CONFIG': str(self.files['config'])})
 
     def wait(self):
@@ -296,9 +319,16 @@ def runner(argv, input_text=None, timeout=45, env=None, diagnostics=None):
             os.killpg(child.pid, signal.SIGKILL)
             child.wait(timeout=5)
     if (failure or child.returncode) and diagnostics:
-        descriptor = os.open(diagnostics, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, 'wb') as stream:
-            stream.write(tail)
+        # A secondary failed observation must not replace the first failure.
+        # Never follow an existing file/symlink or a symlinked parent directory.
+        if not any(parent.is_symlink() for parent in Path(diagnostics).parents):
+            try:
+                descriptor = os.open(diagnostics, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(descriptor, 'wb') as stream:
+                    stream.write(tail)
     require(failure is None, failure or 'staged command failed')
     require(child.returncode == 0, 'staged command failed; no automatic rollback attempted')
     return stdout.decode(errors='replace')

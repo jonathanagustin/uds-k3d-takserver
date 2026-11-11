@@ -2,7 +2,7 @@
 
 Every check in this repository runs as a GitHub Actions workflow in [`.github/workflows/`](../.github/workflows/). This page lists each workflow, what starts it, and what it checks. Times are in UTC.
 
-Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds the docs site. Full Core decides in its own `changes` job.
+Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds and deploys documentation independently of package releases. Ordinary `docs:` commits do not open a package release or appear in package release notes; `feat:`, `fix:` and the configured `chore:` entries still do. Full Core decides in its own `changes` job.
 
 ## Pull request checks
 
@@ -112,7 +112,7 @@ Full Core puts that group on `validate-full-core`, per architecture, and only wh
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. When a release is created, it calls the Release workflow, then rebuilds Docs after successful package publication and provenance |
+| Release Please | `release-please.yaml` | pushes to `main` | Opens or updates the release pull request. Creates a draft with its exact Git tag, verifies charts, then calls the package publisher. Promotes the draft only after both signed architecture packages and provenance verify; Docs follows promotion |
 | Release | `release.yaml` | a published release, a call from Release Please, and by hand with an existing tag | Builds the released package with its SBOM on amd64 and arm64, signs it keylessly, publishes it, and attests its build provenance. See [Verify a release](../README.md#verify-a-release) |
 
 ## Other clusters
@@ -226,6 +226,27 @@ records that evidence. This does not quantify minute savings or promise that
 failed compilation is never repeated. No cold builds were dispatched solely to
 demonstrate savings.
 
+## Bounded dev-package publication
+
+Dev-package publication retains the existing archive, input key, repository and
+architecture checks. Existing input-key tags still skip publication before
+requiring a local archive. A missing tag invokes the publisher once with
+`--retries 3`; there is no outer rebuild or workflow retry. The pinned
+[UDS CLI 0.41.0 module](https://github.com/defenseunicorns/uds-cli/blob/v0.41.0/go.mod)
+embeds Zarf 0.89.0, whose
+[publish command](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/cmd/package.go)
+accepts that flag. Its [OCI retry implementation](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/pkg/zoci/retry.go)
+uses three total attempts for the same publication, not three additional jobs.
+
+The local wrapper owns the publication process group, allows 20 minutes, then
+sends TERM with a 10-second grace before KILL. It also cleans up remaining
+descendants after ordinary exit or wrapper termination. Timeout returns 124;
+final nonzero exits propagate, and publisher stdout/stderr remain unchanged.
+Input keys, verification, package creation and architecture validation are
+unchanged. This bounds a publication reliability mitigation for #451; it does
+not establish the cause of the observed registry tagging failure or authorize
+repeating application acceptance.
+
 ## Documentation after release publication
 
 Release Please creates releases with `GITHUB_TOKEN`, which does not start the
@@ -273,3 +294,112 @@ The local barrier leaves the released signed package bytes and verification rule
 unchanged. Keeping one baseline bundle deployment preserves package order and
 cross-package imports and exports. Normal deployment runs the barrier even after
 its standalone deployment; `--resume` is deliberately not used.
+
+## Manual staged failure categories
+
+Manual staged failures publish a small `failure-categories.json` alongside
+progress. It contains only source/run identity, an allowlisted failed step,
+fixed diagnostic pattern IDs and counts capped at 32. The publisher reads at
+most the existing 64 KiB private command tail, refuses nonregular files,
+symlinks, oversized files and invalid text, and classifies the entire retained
+stream before selecting output. It never publishes private tail text, matching
+strings, command arguments, URLs, environments or exception messages. Private
+evidence remains excluded from artifact copying.
+
+The command runner retained this tail **before** redaction; it may begin inside
+a credential or omit the original error. It is therefore unsafe to publish even
+a subsequently redacted excerpt. Categories are diagnostic signatures, not
+causal proof: unrelated output can match a pattern, and `unclassified` means
+no approved signature was present in the retained tail. Missing evidence or a
+category cannot count as acceptance or authorize retries, rollback, bypasses or
+changes to ownership. The structured progress journal remains authoritative
+only for the stage and its recorded result.
+
+The runner creates its first private failure capture exclusively with mode
+0600. Existing files and symlinks are never followed or overwritten, so later
+failed observations cannot replace that retained tail. This still does not
+recover discarded output or establish a causal explanation for that failure.
+
+### Optional encrypted private failure capture
+
+The manual Staged migrations workflow accepts `diagnostic_recipient`, an optional
+age X25519 **public** recipient (`age1…`). Its empty default downloads and installs
+nothing. A successful trial also performs no encryption. Only after the selected
+trial fails can the helper encrypt the fixed regular, non-symlink
+`staged-migrations/owner/PRIVATE-command-failure.txt`, bounded to 64 KiB. It cannot
+select another input file, take a private key or invoke an age plugin. The
+existing fixed JSON categories and all acceptance requirements remain unchanged.
+
+The helper requires this repository's manual main run and a matching checkout
+SHA and failed owner-journal source/run/attempt identity. It verifies the official
+age v1.3.2 release archive and extracted executable,
+and checks executable integrity before and after encryption. HTTPS acquisition
+preserves runner proxy/CA trust; the encryption child receives no inherited
+credentials or loader flags. Execution is bounded to 15 seconds, ciphertext to
+72 KiB and private stderr to 4 KiB. No captured stderr or exception text is
+printed. Only successful encryption and postchecks mark the separate ciphertext
+artifact ready; failed/partial output is removed. The uploaded path is exactly
+`staged-encrypted-diagnostic/first-failure.age`, with seven-day retention.
+
+Official [age v1.3.2](https://github.com/FiloSottile/age/releases/tag/v1.3.2) pins:
+
+| Linux architecture | Archive SHA-256 | Executable SHA-256 |
+| --- | --- | --- |
+| amd64 | `cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10` | `eb7dd1b518f0a307c99cd97782623c5321da049154b04acd2d98d21aa7bc9b2c` |
+| arm64 | `6b8dc4333c53a5a57c9e5834e3a48f92605d7154014cd07269ff3327db5d37f4` | `41b072352f4561018949623c674d16ef704019b9108a9bbdbd21292efebfc94f` |
+
+Generate and retain any identity with official `age-keygen` outside repositories,
+with restrictive permissions. Supply only its public recipient to the workflow.
+Keep decrypted evidence private as well: for example, use `umask 077` and redirect
+`age --decrypt --identity /secure/identity.txt downloaded.age` to a private file,
+never the terminal or an issue. Verify the artifact's run, attempt and source
+through GitHub metadata before interpreting its contents. Encryption protects
+confidentiality; it does not turn diagnostics into acceptance, recover discarded
+tail bytes, establish a causal explanation or authorize another trial.
+
+
+### Release readiness
+
+Release Please creates a draft and its Git tag together. Charts publish first;
+then the existing native publisher signs and verifies both architecture packages
+and verifies provenance for their final index. Only then does its existing
+release writer publish the source-bound draft. A failed stage leaves the draft
+unpublished. Upgrades continue to select published stable releases and still
+refuse an invalid selected baseline; they never fall back after a failure.
+
+Native jobs check the expected tag/source before building. The readiness helper
+comes from the invoking workflow SHA, including when backfilling an older tag.
+An isolated metadata job checks draft visibility before native jobs start;
+GitHub requires its `contents: write` permission to view these drafts, but the
+checker refuses API writes. Native builders keep read access to repository
+contents and must match the checked source.
+Already-public releases can be verified again without changing their metadata.
+Manual draft recovery must supply the exact trusted `release_id` and `source_sha`
+as well as `tag`; incomplete, mismatched or unavailable identity fails before
+building. If Release Please returns a branch name instead of a commit SHA,
+publication stops and requires explicit recovery. No tag is moved. If recovery
+needs a repaired workflow, dispatch the repaired main branch with the original
+release identity; rerunning an old job retains its old workflow code.
+
+The first complete draft-to-public recovery passed for
+[v0.13.0](https://github.com/jonathanagustin/uds-takserver/releases/tag/v0.13.0):
+both native packages and provenance verified before promotion, followed by
+[release-bound Docs publication](https://github.com/jonathanagustin/uds-takserver/actions/runs/42957480283).
+Its [publisher run](https://github.com/jonathanagustin/uds-takserver/actions/runs/42956280412)
+used workflow commit `3b66fdc7` to build application commit `8a4566ab`.
+The default SLSA provenance records the workflow commit, so these two identities
+must remain distinct when checking a recovered release.
+
+### Package render evidence
+
+Unit tests may skip only the Pepr chart build and package-values render after
+verified non-runtime Git evidence. For PRs, the gate binds the actual checkout to
+`GITHUB_SHA` and requires the exact ordered base/head parents. GitHub documents
+that [the PR context SHA identifies the merge-ref commit](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request);
+the cached event `merge_commit_sha` is therefore not used as an authority.
+The gate classifies the union of base-to-source and base-to-checkout changes,
+including both rename endpoints, so neither merge-only runtime changes nor source
+runtime changes reverted by the merge disappear. Missing objects, malformed or
+empty diffs, exceeded bounds, or uncertain identities retain rendering. All other
+Unit validation steps remain unconditional. Fixed diagnostic codes describe
+unavailable evidence without printing payloads, paths, or exception text.

@@ -10,6 +10,9 @@ from pathlib import Path
 import platform
 import re
 import datetime
+import subprocess
+import tempfile
+import stat
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = {'velero': ['velero'], 'identities': ['identities'], 'all': ['velero', 'identities']}
@@ -38,7 +41,103 @@ def selection():
 
 
 def sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def reviewed_bytes(relative):
+    result = subprocess.run(['git', '-c', 'protocol.allow=never', 'show', 'HEAD:' + relative],
+                            cwd=ROOT, capture_output=True, timeout=5,
+                            env={**os.environ, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0'})
+    require(result.returncode == 0 and len(result.stdout) <= 1024 * 1024, 'reviewed source unavailable')
+    return result.stdout
+
+
+def regular_file(path):
+    require(path.is_file() and not any(p.is_symlink() for p in (path, *path.parents)),
+            'staged input must be a regular non-symlink file')
+
+
+def regular(path, limit=1024 * 1024):
+    regular_file(path)
+    require(path.stat().st_size <= limit, 'staged text input exceeds bound')
+    return path.read_bytes()
+
+
+def restore_task_default(directory):
+    """Restore only the exact trusted pin transform after archive/config binding."""
+    import yaml  # Only the dependency-installed manual trial uses this operation.
+
+    selection()
+    head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, timeout=5)
+    require(head.returncode == 0 and head.stdout.decode().strip() == os.environ.get('GITHUB_SHA'),
+            'staged restoration source differs from checkout')
+    plan = json.loads(regular(directory / 'plan.json', 65536))
+    require(set(plan) == {'schema', 'sourceSHA', 'files'} and plan['schema'] == 1
+            and plan['sourceSHA'] == os.environ['GITHUB_SHA']
+            and set(plan['files']) == {'core', 'detach', 'clean', 'config'}, 'valid bound candidate required')
+    bound = {}
+    for key, entry in plan['files'].items():
+        require(set(entry) == {'path', 'sha256'} and re.fullmatch('[a-f0-9]{64}', entry['sha256']),
+                'invalid bound input')
+        relative = Path(entry['path'])
+        require(not relative.is_absolute() and '..' not in relative.parts, 'bound input escapes candidate')
+        path = directory / relative
+        regular_file(path)
+        require(sha(path) == entry['sha256'], 'bound input changed')
+        bound[key] = (path, entry['sha256'])
+    task = ROOT / 'tasks.yaml'
+    actual, reviewed = regular(task), reviewed_bytes('tasks.yaml')
+    helpers = ('.github/container-and-chart/docker/build.sh', '.github/container-and-chart/docker/version.txt',
+               '.github/scripts/pin-image-tags.sh')
+    trusted = {name: reviewed_bytes(name) for name in helpers}
+    require(all(regular(ROOT / name) == data for name, data in trusted.items()), 'unreviewed tag helper')
+    version = trusted[helpers[1]].decode().strip()
+    require(re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', version), 'invalid reviewed image version')
+    env = {key: value for key, value in os.environ.items() if key not in ('BASH_ENV', 'ENV')
+           and not key.startswith('BASH_FUNC_')}
+    result = subprocess.run(['bash', '--noprofile', '--norc', str(ROOT / helpers[0]), '--tag'],
+                            cwd=ROOT, capture_output=True, timeout=10, env=env)
+    require(result.returncode == 0 and len(result.stdout) <= 256, 'trusted image tag unavailable')
+    tag = result.stdout.decode().strip()
+    require(re.fullmatch(re.escape(version) + '-[a-f0-9]{12}', tag), 'unexpected trusted image tag')
+    require(all(regular(ROOT / name) == data for name, data in trusted.items()), 'tag helper changed')
+    old = ('  - name: TAK_IMAGE_TAG\n    default: ' + version + '\n').encode()
+    new = ('  - name: TAK_IMAGE_TAG\n    default: ' + tag + '\n').encode()
+    require(reviewed.count(old) == 1 and actual in (reviewed, reviewed.replace(old, new)),
+            'tasks differ beyond the exact reviewed pin transform')
+    try:
+        config = yaml.safe_load(regular(bound['config'][0], 65536))
+    except yaml.YAMLError:
+        raise ValueError('bound trial config is not valid YAML') from None
+    require(isinstance(config, dict) and set(config) == {'variables'}
+            and isinstance(config['variables'], dict) and set(config['variables']) == {'takserver'},
+            'bound config must contain only reviewed TAK variables')
+    values = config['variables']['takserver']
+    require(isinstance(values, dict) and set(values) == {'DOMAIN', 'TAK_IMAGE_TAG', 'FILESYSTEM_BACKUP',
+                                                       'POSTGRES_STORAGE_CLASS', 'CLOUDTAK_STORAGE_CLASS'}
+            and values['DOMAIN'] == 'uds.dev' and str(values['FILESYSTEM_BACKUP']).lower() == 'true'
+            and values['POSTGRES_STORAGE_CLASS'] == values['CLOUDTAK_STORAGE_CLASS'] == 'local-path-local'
+            and values['TAK_IMAGE_TAG'] == tag, 'bound config differs from reviewed pinned trial contract')
+    require(all(sha(path) == digest for path, digest in bound.values()) and regular(task) == actual,
+            'staged inputs changed before restoration')
+    current = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, timeout=5)
+    require(current.returncode == 0 and current.stdout == head.stdout, 'checkout changed before restoration')
+    if actual != reviewed:
+        descriptor, temporary = tempfile.mkstemp(prefix='.staged-task-', dir=ROOT)
+        try:
+            with os.fdopen(descriptor, 'wb') as output:
+                output.write(reviewed)
+            os.chmod(temporary, task.stat().st_mode & 0o777)
+            os.replace(temporary, task)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+    require(regular(task) == reviewed and all(sha(path) == digest for path, digest in bound.values()),
+            'staged inputs changed during restoration')
+    print('Reviewed task defaults restored; bound archives and pinned config unchanged')
 
 
 def receipt(directory, arch):
@@ -184,6 +283,59 @@ def sanitize_observer(proof, stage):
     return result
 
 
+# Classifications are signatures in an already-retained tail, never causal proof.
+# Neither matches nor surrounding text may leave the private evidence directory.
+FAILURE_PATTERNS = {
+    'package-unavailable': r'manifest unknown|name unknown|package.{0,80}not found|failed to (?:pull|fetch) package',
+    'package-integrity': r'checksum mismatch|invalid archive|invalid tar|not a tar archive|failed to extract|unexpected eof',
+    'cli-arguments': r'unknown flag|unknown command|invalid argument|accepts [0-9]+ arg',
+    'signature-verification': r'failed to verify (?:certificate|signature)|signature verification failed|no matching signatures',
+    'authentication': r'unauthorized|\bforbidden\b|authentication required|access denied|denied: requested access|status(?: code)?[ :]+40[13]|http/[0-9.]+\s+403',
+    'helm-operation': r'helm upgrade failed|helm install failed|upgrade failed:|installation failed:|another operation .{0,80}in progress',
+    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional propert(?:y|ies)|values don.t meet the specifications',
+    'cluster-connectivity': r'kubernetes cluster unreachable|connection refused|unable to connect to the server|no route to host',
+    'tls-certificate': r'x509:|certificate has expired|certificate signed by unknown authority|unknown ca|tls handshake timeout',
+    'admission-webhook': r'failed calling webhook|admission webhook.{0,160}denied|no endpoints available for service',
+    'timeout': r'context deadline exceeded|timed out waiting|i/o timeout|operation timed out',
+}
+
+
+def failure_categories(directory, progress):
+    """Read one bounded regular private file; publish only fixed IDs/counts."""
+    source, run, attempt = (os.environ.get(key, '') for key in
+                            ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'))
+    require(re.fullmatch('[a-f0-9]{40}', source) and re.fullmatch('[1-9][0-9]*', run)
+            and re.fullmatch('[1-9][0-9]*', attempt), 'invalid diagnostic source/run identity')
+    failed = [entry['name'] for entry in progress['ownerSteps']
+              if entry.get('status') == 'failed' and entry.get('name') in OWNER_STEPS]
+    result = {'schema': 1, 'sourceSHA': source, 'runID': run, 'runAttempt': attempt,
+              'failedStep': failed[-1] if failed else 'unavailable',
+              'scope': 'retained-tail-signatures-only', 'status': 'unavailable', 'categories': []}
+    path = directory / 'owner/PRIVATE-command-failure.txt'
+    try:
+        regular_file(path)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+                result['status'] = 'unavailable-oversized-or-nonregular'
+                return result
+            raw = stream.read(65537)
+        if len(raw) > 65536 or b'\0' in raw:
+            result['status'] = 'unavailable-oversized-or-invalid-text'
+            return result
+        text = raw.decode('utf-8', errors='strict')
+        # Entire retained stream is classified before any selection or output.
+        for identifier, pattern in FAILURE_PATTERNS.items():
+            count = len(re.findall(pattern, text, re.IGNORECASE))
+            if count:
+                result['categories'].append({'patternID': identifier, 'count': min(count, 32)})
+        result['status'] = 'classified' if result['categories'] else 'unclassified'
+    except (OSError, ValueError, UnicodeError):
+        pass  # Never publish exception text or captured private content.
+    return result
+
+
 def publish(directory, output, arch):
     """Always publish a small allowlist; never recursively copy private evidence."""
     scenarios, arches = selection()
@@ -224,6 +376,9 @@ def publish(directory, output, arch):
             (public / (stage + '.json')).write_text(json.dumps(allowed, indent=2) + '\n')
         except (ValueError, OSError, KeyError, TypeError, AttributeError):
             continue
+    if not value['accepted']:
+        diagnostic = failure_categories(directory, progress)
+        (public / 'failure-categories.json').write_text(json.dumps(diagnostic, indent=2) + '\n')
     value['publishedProofHashes'] = {path.stem: sha(path) for path in public.glob('*.json')}
     if value['accepted']:
         try:
@@ -241,12 +396,15 @@ def publish(directory, output, arch):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('plan', 'receipt', 'verify', 'publish'))
+    parser.add_argument('operation', choices=('plan', 'receipt', 'verify', 'publish', 'restore-task-default'))
     parser.add_argument('--directory', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--arch', choices=('amd64', 'arm64'))
     args = parser.parse_args()
-    if args.operation == 'plan':
+    if args.operation == 'restore-task-default':
+        require(args.directory is not None, 'bound candidate directory required')
+        restore_task_default(args.directory)
+    elif args.operation == 'plan':
         scenarios, arches = selection()
         print(json.dumps({'include': [{'arch': arch, 'runner': 'ubuntu-22.04' + ('-arm' if arch == 'arm64' else '')}
                                      for arch in arches]}))

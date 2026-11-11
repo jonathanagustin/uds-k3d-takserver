@@ -1,0 +1,11 @@
+--- a/GDALmake.opt.in
++++ b/GDALmake.opt.in
+@@ -598,7 +598,7 @@
+ GDAL_FORMATS := $(GDAL_FORMATS) rik ozi
+ 
+ ifneq ($(PDF_PLUGIN),yes)
+-GDAL_FORMATS := $(GDAL_FORMATS) pdf
++# KernelScene reduced profile: PDF reader and writer are unavailable.
+ endif
+ 
+ endif

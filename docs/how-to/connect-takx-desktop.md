@@ -23,13 +23,16 @@ Record the results in [the compatibility issue](https://github.com/jonathanagust
 
 ## Current build status
 
-The public-source work compiles Kernel Java foundations and a WorldWind project
-variant, but does not supply a launchable TAKX desktop or Kasm session. Real
+Public-source work compiles Kernel Java foundations and a WorldWind project
+variant. Separate Linux amd64 component checks cover Draco, LAS, Assimp,
+historical PROJ, GEOS and SQLCipher with source-built Tcl/OpenSSL prerequisites.
+Target-image ABI and historical-version security acceptance remain open; these
+checks do not supply a linked native Kernel, launchable TAKX desktop or Kasm session. See the [component and client checkpoint](../../takx/CLIENT-CHECKPOINT.md#native-component-checkpoints).
+
 Platform compiler probes still stop at missing native texture-rendering APIs;
-5.8 also has contour and vehicle-model gaps. See the
-[build checkpoint](../../takx/CLIENT-CHECKPOINT.md) and
-[native rendering work](https://github.com/jonathanagustin/uds-takserver/issues/424).
-Use an approved, working installation for the connection checks below.
+5.8 also has contour and vehicle-model gaps. [Native rendering](https://github.com/jonathanagustin/uds-takserver/issues/424)
+and live client/server interoperability remain unverified. Use an approved,
+working installation for the connection checks below.
 
 ## Before you begin
 

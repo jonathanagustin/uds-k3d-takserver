@@ -30,6 +30,11 @@ on:
         default: "10"
         required: false
         type: string
+      jvm_start_metadata:
+        description: "Read existing JVM startup metrics before load; no cold/warm experiment"
+        default: false
+        required: false
+        type: boolean
   schedule:
     - cron: "41 9 * * 1"
   pull_request:
@@ -74,6 +79,8 @@ jobs:
     env:
       TEST_FLAVOR: upstream
       BENCH_STUDY: ${{ github.event.inputs.study || 'short' }}
+      BENCH_JVM_START_METADATA: ${{ github.event_name == 'workflow_dispatch' && inputs.jvm_start_metadata == true && '1' || '0' }}
+      BENCH_JVM_CONTEXT: ${{ github.event_name == 'workflow_dispatch' && inputs.jvm_start_metadata == true && 'k3d-uds' || '' }}
       BENCH_PROFILE: ${{ github.event.inputs.study == 'synthetic-baseline' && 'baseline' || github.event.inputs.profile || 'all' }}
       BENCH_CLIENTS: ${{ github.event.inputs.study == 'synthetic-baseline' && '50' || github.event.inputs.clients || '10' }}
       # Test's package job publishes the dev package for these inputs; pull

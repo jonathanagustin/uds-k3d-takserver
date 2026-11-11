@@ -32,8 +32,6 @@ class Reason(Enum):
     CHECKOUT = 'checkout-mismatch'
     REF = 'ref-mismatch'
     COMMIT = 'commit-unavailable'
-    MERGE_COMMIT = 'merge-commit-unavailable'
-    MERGE = 'merge-sha-mismatch'
     PARENTS = 'merge-parents-mismatch'
     GIT = 'git-evidence-unavailable'
     PATHS = 'changed-paths-unavailable'
@@ -90,13 +88,8 @@ def identities(repo, event, env):
             raise EvidenceUnavailable(Reason.REF)
         request = event['pull_request']
         base, head = commit(repo, request['base']['sha']), commit(repo, request['head']['sha'])
-        # Actions normally checks out a synthetic PR merge, not the source head.
-        try:
-            merge = commit(repo, request['merge_commit_sha'])
-        except (EvidenceUnavailable, KeyError, TypeError):
-            raise EvidenceUnavailable(Reason.MERGE_COMMIT) from None
-        if merge != checkout:
-            raise EvidenceUnavailable(Reason.MERGE)
+        # GITHUB_SHA identifies the checked-out PR merge. The nullable cached
+        # event merge_commit_sha is not authoritative and is deliberately ignored.
         parents = git(repo, 'show', '--no-patch', '--format=%P', checkout).decode().strip().split()
         if parents != [base, head]:
             raise EvidenceUnavailable(Reason.PARENTS)
@@ -141,8 +134,15 @@ def changed_paths(data):
 
 def decision(repo, event, env):
     base, head, checkout = identities(repo, event, env)
-    paths = changed_paths(git(repo, 'diff', '--no-ext-diff', '--no-textconv', '--name-status', '-z',
-                              '--find-renames', base, head, '--'))
+    paths = []
+    # Include source changes even if the merge reverts them, and merge-only
+    # changes even when the source diff contains only documentation.
+    for target in dict.fromkeys((head, checkout)):
+        paths.extend(changed_paths(git(repo, 'diff', '--no-ext-diff', '--no-textconv', '--name-status', '-z',
+                                       '--find-renames', base, target, '--')))
+        if len(paths) > 10000:
+            raise EvidenceUnavailable(Reason.PATHS)
+    paths = sorted(set(paths))
     if any(path in FORCE_FILES or path.startswith(GATE_DIRECTORY) for path in paths):
         return True, 'gate or validation inputs changed'
     classifier = repo / CLASSIFIER

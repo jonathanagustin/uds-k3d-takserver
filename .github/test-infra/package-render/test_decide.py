@@ -134,16 +134,94 @@ class GitEvidenceTests(unittest.TestCase):
         event = {'repository': {'full_name': 'fixture/project'}, 'number': 17,
                  'pull_request': {'base': {'sha': self.base}, 'head': {'sha': head}, 'merge_commit_sha': merge}}
         self.assertFalse(self.evaluate(event))
-        for missing_merge in (None, 'private-invalid-merge'):
-            unavailable = {**event, 'pull_request': {**event['pull_request'], 'merge_commit_sha': missing_merge}}
-            self.event_path.write_text(json.dumps(unavailable))
-            self.assertEqual(GATE.evaluate(self.repo, self.event_path, self.env),
-                             (True, 'evidence unavailable; rendering retained [merge-commit-unavailable]'))
+        for hint in (None, 'private-invalid-merge', self.base):
+            cached = {**event, 'pull_request': {**event['pull_request'], 'merge_commit_sha': hint}}
+            self.assertFalse(self.evaluate(cached))
+        absent = {**event, 'pull_request': dict(event['pull_request'])}
+        del absent['pull_request']['merge_commit_sha']
+        self.assertFalse(self.evaluate(absent))
         self.assertTrue(self.evaluate({**event, 'pull_request': {**event['pull_request'], 'head': {'sha': self.base}}}))
         self.git('checkout', '-q', 'topic')
         self.assertTrue(self.evaluate(event))  # source HEAD is not the expected merge checkout
         self.env['GITHUB_SHA'] = head
         self.assertTrue(self.evaluate(event))
+
+    def pr_fixture(self, changes):
+        self.git('checkout', '-qb', 'topic')
+        head = self.commit(changes)
+        self.git('checkout', '-q', 'main')
+        self.git('merge', '--no-ff', '-qm', 'PR merge', 'topic')
+        merge = self.git('rev-parse', 'HEAD').strip()
+        self.env.update(GITHUB_EVENT_NAME='pull_request', GITHUB_SHA=merge, GITHUB_REF='refs/pull/17/merge')
+        return {'repository': {'full_name': 'fixture/project'}, 'number': 17,
+                'pull_request': {'base': {'sha': self.base}, 'head': {'sha': head}}}
+
+    def replace_merge_tree(self, event, changes):
+        for name, contents in changes.items():
+            self.write(name, contents)
+        self.git('add', '-A')
+        tree = self.git('write-tree').strip()
+        head = event['pull_request']['head']['sha']
+        merge = self.git('commit-tree', tree, '-p', self.base, '-p', head, '-m', 'same parents, different tree').strip()
+        self.git('checkout', '-q', '--detach', merge)
+        self.env['GITHUB_SHA'] = merge
+
+    def test_merge_only_runtime_and_force_inputs_render(self):
+        event = self.pr_fixture({'docs/a.md': 'docs-only source\n'})
+        self.assertFalse(self.evaluate(event))
+        self.replace_merge_tree(event, {'charts/value.yaml': 'merge-only runtime\n'})
+        self.assertTrue(self.evaluate(event))
+        # A forced validation input must render even though runtime paths ignore it.
+        self.replace_merge_tree(event, {'charts/value.yaml': 'initial\n',
+                                        'tests/test_package_values.py': 'merge-only contract\n'})
+        self.assertTrue(self.evaluate(event))
+
+    def test_runtime_source_reverted_by_merge_still_renders(self):
+        event = self.pr_fixture({'charts/value.yaml': 'runtime source\n', 'docs/a.md': 'docs\n'})
+        self.replace_merge_tree(event, {'charts/value.yaml': 'initial\n'})
+        self.assertTrue(self.evaluate(event))
+
+    def test_merge_only_rename_retains_runtime_endpoint(self):
+        event = self.pr_fixture({'docs/a.md': 'docs\n'})
+        (self.repo / 'docs').mkdir(exist_ok=True)
+        self.git('mv', 'charts/value.yaml', 'docs/renamed.yaml')
+        self.replace_merge_tree(event, {})
+        self.assertTrue(self.evaluate(event))
+
+    def test_pr_checkout_diff_must_be_complete(self):
+        event = self.pr_fixture({'docs/a.md': 'docs\n'})
+        real = GATE.git
+        for missing in (b'', b'M\0docs/a.md'):
+            def incomplete(repo, *args):
+                if args[:1] == ('diff',) and args[-2] == self.env['GITHUB_SHA']:
+                    return missing
+                return real(repo, *args)
+            with self.subTest(missing=missing), patch.object(GATE, 'git', side_effect=incomplete):
+                self.assertTrue(self.evaluate(event))
+        self.env['GITHUB_REF'] = 'refs/pull/18/merge'
+        self.assertTrue(self.evaluate(event))
+
+    def test_shallow_exact_merge_with_absent_hint_can_skip(self):
+        event = self.pr_fixture({'docs/a.md': 'docs\n'})
+        merge = self.env['GITHUB_SHA']
+        clone = Path(self.tmp.name) / 'shallow'
+        subprocess.run(['git', 'clone', '-q', '--no-checkout', '--depth=2',
+                        self.repo.as_uri(), str(clone)], env=self.env, check=True, timeout=10)
+        subprocess.run(['git', '-C', str(clone), 'checkout', '-q', '--detach', merge],
+                       env=self.env, check=True, timeout=10)
+        self.event_path.write_text(json.dumps(event))
+        self.assertEqual(GATE.evaluate(clone, self.event_path, self.env),
+                         (False, 'verified non-runtime paths'))
+
+    def test_combined_paths_limit_renders(self):
+        event = self.pr_fixture({'docs/a.md': 'docs\n'})
+        real = GATE.git
+        def large_diff(repo, *args):
+            if args[:1] == ('diff',):
+                return b''.join(b'M\0docs/file-' + str(i).encode() + b'\0' for i in range(5001))
+            return real(repo, *args)
+        with patch.object(GATE, 'git', side_effect=large_diff):
+            self.assertTrue(self.evaluate(event))
 
     def test_bad_paths_and_incomplete_git_records_render(self):
         head = self.commit({'docs/line\nfile.md': 'ordinary file\n'})

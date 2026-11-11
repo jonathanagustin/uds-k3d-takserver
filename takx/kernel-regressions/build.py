@@ -129,13 +129,13 @@ def main():
             not proof.is_relative_to(out) and not out.is_relative_to(HERE.parent), 'fresh disjoint output required')
     cap = CAP if args.phase == 'qualify' else 2 * 1024**2
     require(shutil.disk_usage('/workspace').free >= FLOOR + cap, 'full phase reservation required')
-    out.mkdir(mode=0o700)
-    for name in ('classes', 'tmp', 'home', 'data', 'evidence'):
-        (out / name).mkdir()
     controls = HERE.parent / 'kernel-native'
     sources = sorted((HERE / 'java').glob('*.java')) + [controls / name for name in (
         'KernelRuntimeSmoke.java', 'NativeDatabaseCandidate.java', 'KernelThrowingLoggerCandidate.java')]
     inputs = {str(path): sha(path) for path in [Path(__file__).resolve(), HERE / 'upstream.lock.json', *sources]}
+    out.mkdir(mode=0o700)
+    for name in ('classes', 'tmp', 'home', 'data', 'evidence'):
+        (out / name).mkdir()
     commands = []
     failure = None
     maps = None

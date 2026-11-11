@@ -166,7 +166,7 @@ for name in lint codeql dependency-review commitlint; do
   fi
 done
 
-# Release signing and the protected demo workflow are unchanged.
+# Release signing and protected Demo publication cannot be cancelled by PR validation.
 if grep -F -q 'group: publish-package-${{ inputs.tag || github.event.release.tag_name }}' "${wf}/release.yaml" \
   && grep -F -q 'cancel-in-progress: false' "${wf}/release.yaml" \
   && ! grep -F -q "|| 'gate'" "${wf}/release.yaml"; then
@@ -174,11 +174,39 @@ if grep -F -q 'group: publish-package-${{ inputs.tag || github.event.release.tag
 else
   bad "release concurrency changed"
 fi
-if grep -F -q 'group: demo-${{ github.ref }}' "${wf}/demo.yaml" \
-  && ! grep -F -q "|| 'gate'" "${wf}/demo.yaml"; then
-  ok "demo concurrency is unchanged"
+# A PR may supersede only another preflight. Manual capture and publication
+# have independent FIFO queues; workflow-level cancellation would override them.
+if python3 - "${wf}/demo.yaml" <<'DEMO_CONCURRENCY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text()
+assert not re.search(r"^concurrency:", text, re.M), "global Demo cancellation overrides job queues"
+expected = {
+    "record": {"group": "demo-capture-main", "queue": "max", "cancel-in-progress": "false"},
+    "publish": {"group": "immutable-demo-publication", "queue": "max", "cancel-in-progress": "false"},
+    "preflight": {"group": "demo-preflight-${{ github.event.pull_request.number }}", "cancel-in-progress": "true"},
+}
+for name, policy in expected.items():
+    match = re.search(r"^  " + name + r":\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", text, re.M | re.S)
+    assert match, "missing Demo job: " + name
+    job = match.group(1)
+    block = re.search(r"^    concurrency:\n((?:      [^\n]*\n)+)", job, re.M)
+    assert block, "missing job concurrency: " + name
+    actual = dict(line.strip().split(": ", 1) for line in block.group(1).splitlines())
+    assert actual == policy, "unsafe Demo concurrency: " + name
+    if name == "preflight":
+        assert "if: github.event_name == 'pull_request'" in job
+    else:
+        assert "github.event_name == 'workflow_dispatch'" in job
+    if name == "publish":
+        assert "github.ref == 'refs/heads/main'" in job
+DEMO_CONCURRENCY
+then
+  ok "demo PR preflight is isolated from non-cancelling capture and publication"
 else
-  bad "demo concurrency changed"
+  bad "demo concurrency contract changed"
 fi
 
 # Reusable Docs inherits its caller's workflow name. Publication must share a

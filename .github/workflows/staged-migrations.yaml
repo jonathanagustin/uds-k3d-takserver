@@ -117,6 +117,7 @@ jobs:
         run: uv run --no-project --with pyyaml==6.0.3 bash .github/scripts/staged-migrations.sh
       - name: Publish only allowlisted stage evidence, including failures
         if: always()
+        timeout-minutes: 2
         env:
           TRIAL_ARCH: ${{ matrix.arch }}
         run: |
@@ -125,6 +126,7 @@ jobs:
             --output "out/staged-public-${TRIAL_ARCH}" --arch "$TRIAL_ARCH"
       - name: Upload exact-run sanitized acceptance evidence
         if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-migrations-${{ matrix.arch }}
@@ -133,6 +135,7 @@ jobs:
           retention-days: 14
       - name: Upload optional passive diagnostic evidence
         if: always() && inputs.passive_watch
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-agent-watch-${{ matrix.arch }}

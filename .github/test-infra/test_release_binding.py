@@ -3,6 +3,7 @@
 """Offline policy controls; no cryptographic or publication success is simulated."""
 import copy
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -10,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import yaml
 
 SPEC = importlib.util.spec_from_file_location('binding', Path(__file__).with_name('release-binding.py'))
 B = importlib.util.module_from_spec(SPEC)
@@ -117,6 +120,73 @@ class BindingTests(unittest.TestCase):
         with self.assertRaises(ValueError):B.verify_verified_output(changed,self.metadata,self.raw)
         for output in [[],baseline*2]:
             with self.assertRaises(ValueError):B.verify_verified_output(output,self.metadata,self.raw)
+
+    def test_api_application_source_must_not_be_replaced_by_certificate_source(self):
+        env={'GITHUB_REPOSITORY':B.REPO,'WORKFLOW_SHA':'2'*40,'GITHUB_EVENT_NAME':'workflow_dispatch',
+             'GITHUB_REF':'refs/heads/main','RELEASE_ID':'123','RELEASE_SOURCE_SHA':'1'*40,
+             'CHECKED_SOURCE_SHA':'1'*40,'RELEASE_TAG':'v0.14.0','GITHUB_RUN_ID':'456','GITHUB_RUN_ATTEMPT':'1'}
+        actual=['1'*40]
+        def api(path, payload=None):
+            self.assertIsNone(payload)
+            if path.startswith('/git/ref/'):
+                return {'ref':'refs/tags/v0.14.0','object':{'type':'commit','sha':actual[0]}}
+            return {'id':123,'url':B.REPOSITORY.replace('https://github.com/', 'https://api.github.com/repos/')+'/releases/123',
+                    'tag_name':'v0.14.0','prerelease':False,'draft':True}
+        checked=B.trusted_metadata(self.metadata['indexDigest'],env,api,head='2'*40)
+        self.assertEqual(checked,self.metadata)
+        actual[0]='2'*40
+        with self.assertRaises(ValueError):B.trusted_metadata(self.metadata['indexDigest'],env,api,head='2'*40)
+        actual[0]='1'*40
+        for key,value in [('RELEASE_ID','124'),('CHECKED_SOURCE_SHA','2'*40),('WORKFLOW_SHA','3'*40)]:
+            changed=dict(env);changed[key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):
+                B.trusted_metadata(self.metadata['indexDigest'],changed,api,head='2'*40)
+
+    def test_crypto_exit_status_is_mandatory_and_flags_bind_workflow_not_application(self):
+        commands=[]
+        def runner(command,**kwargs):
+            commands.append(command)
+            kwargs['stdout'].write(json.dumps(self.output()).encode())
+            return subprocess.CompletedProcess(command,1)
+        with self.assertRaises(ValueError):B.verify_live(self.metadata,self.raw,runner)
+        command=commands[0]
+        self.assertEqual(command[command.index('--source-digest')+1],'2'*40)
+        self.assertEqual(command[command.index('--signer-digest')+1],'2'*40)
+        self.assertEqual(command[command.index('--predicate-type')+1],B.PREDICATE)
+        def success(command,**kwargs):
+            kwargs['stdout'].write(json.dumps(self.output()).encode())
+            return subprocess.CompletedProcess(command,0)
+        B.verify_live(self.metadata,self.raw,success)
+
+    def test_registry_raw_bytes_are_digest_checked_and_hosts_are_fixed(self):
+        requests=[]
+        class Opener:
+            def open(inner,request,timeout):
+                requests.append((request.full_url,dict(request.header_items()),timeout))
+                return io.BytesIO(b'{"token":"fixture-token"}' if len(requests)%2 else self.raw)
+        with patch.object(B.urllib.request,'build_opener',return_value=Opener()):
+            self.assertEqual(B.registry_index(self.metadata['indexDigest'],'v0.14.0'),self.raw)
+        self.assertTrue(requests[0][0].startswith('https://ghcr.io/token?'))
+        self.assertEqual(requests[1][0],'https://ghcr.io/v2/'+B.REPO+'/takserver/manifests/0.14.0-upstream')
+        self.assertEqual(requests[1][1]['Authorization'],'Bearer fixture-token')
+        with patch.object(B.urllib.request,'build_opener',return_value=Opener()),self.assertRaises(ValueError):
+            B.registry_index('sha256:'+'0'*64)
+
+    def test_workflow_preserves_slsa_then_binding_verification_before_promotion(self):
+        root=Path(__file__).resolve().parents[2]
+        job=yaml.load((root/'.github/workflows/release.yaml').read_text(),Loader=yaml.BaseLoader)['jobs']['provenance']
+        steps=job['steps'];names=[step['name'] for step in steps]
+        expected=['Attest build provenance','Verify the provenance','Prepare checked application release binding',
+                  'Attest application release binding','Verify application release binding independently',
+                  'Store verified supplementary binding bundle','Publish only the verified draft release']
+        positions=[names.index(name) for name in expected]
+        self.assertEqual(positions,sorted(positions))
+        prepare=steps[names.index(expected[2])]
+        self.assertEqual(prepare['env']['CHECKED_SOURCE_SHA'],'${{ needs.metadata.outputs.source-sha }}')
+        signing=steps[names.index(expected[3])]
+        self.assertEqual(signing['with']['predicate-type'],B.PREDICATE)
+        self.assertEqual(signing['with']['subject-digest'],'${{ steps.index.outputs.digest }}')
+        self.assertNotIn('predicate-type',steps[names.index(expected[0])]['with'])
 
     def test_cli_generate_and_safe_invalid_error(self):
         with tempfile.TemporaryDirectory() as directory:

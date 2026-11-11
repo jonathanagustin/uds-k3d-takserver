@@ -43,7 +43,7 @@ class BindingTests(unittest.TestCase):
             'buildSignerDigest': w['commit'], 'sourceRepositoryURI': B.REPOSITORY,
             'sourceRepositoryDigest': w['commit'], 'sourceRepositoryIdentifier': '1427088300',
             'sourceRepositoryOwnerIdentifier': '5193877',
-            'runInvocationURI': B.REPOSITORY+'/actions/runs/456/attempts/1'}
+            'runInvocationURI': B.REPOSITORY+'/actions/runs/'+w['runID']+'/attempts/'+w['runAttempt']}
         return [{'verificationResult': {'signature': {'certificate': cert},
             'verifiedTimestamps': [{'type': 'transparency-log'}], 'statement': {
                 '_type': 'https://in-toto.io/Statement/v1', 'predicateType': B.PREDICATE,
@@ -153,6 +153,7 @@ class BindingTests(unittest.TestCase):
         self.assertEqual(command[command.index('--source-digest')+1],'2'*40)
         self.assertEqual(command[command.index('--signer-digest')+1],'2'*40)
         self.assertEqual(command[command.index('--predicate-type')+1],B.PREDICATE)
+        self.assertIn('--bundle-from-oci',command)
         def success(command,**kwargs):
             kwargs['stdout'].write(json.dumps(self.output()).encode())
             return subprocess.CompletedProcess(command,0)
@@ -187,6 +188,28 @@ class BindingTests(unittest.TestCase):
         self.assertEqual(signing['with']['predicate-type'],B.PREDICATE)
         self.assertEqual(signing['with']['subject-digest'],'${{ steps.index.outputs.digest }}')
         self.assertNotIn('predicate-type',steps[names.index(expected[0])]['with'])
+
+    def test_rerun_selects_exact_authenticated_attempt_without_old_substitution(self):
+        old=self.output()
+        self.metadata['workflow']['runAttempt']='2'
+        current=self.output()
+        B.verify_verified_output(old+current,self.metadata,self.raw)
+        B.verify_verified_output(current+old,self.metadata,self.raw)
+        for output in [old,old+current+current]:
+            with self.assertRaises(ValueError):B.verify_verified_output(output,self.metadata,self.raw)
+        malformed=copy.deepcopy(current)
+        malformed[0]['verificationResult']['statement']['predicate']['release']['id']='999'
+        with self.assertRaises(ValueError):B.verify_verified_output(old+malformed,self.metadata,self.raw)
+        conflict=copy.deepcopy(current)
+        conflict[0]['verificationResult'].pop('statement')
+        with self.assertRaises((KeyError,ValueError)):B.verify_verified_output(old+conflict,self.metadata,self.raw)
+        # A different certified run is also harmless but cannot replace current.
+        prior=copy.deepcopy(old)
+        prior[0]['verificationResult']['signature']['certificate']['runInvocationURI']=B.REPOSITORY+'/actions/runs/455/attempts/1'
+        B.verify_verified_output(prior+current,self.metadata,self.raw)
+        with self.assertRaises(ValueError):B.verify_verified_output(prior,self.metadata,self.raw)
+        prior[0]['verificationResult']['signature']['certificate']['sourceRepositoryIdentifier']='wrong'
+        with self.assertRaises(ValueError):B.verify_verified_output(prior+current,self.metadata,self.raw)
 
     def test_cli_generate_and_safe_invalid_error(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -111,21 +111,31 @@ def verify_verified_output(output, metadata, raw_index):
     This function cannot authenticate a JSON file or an attestation bundle.
     """
     expected = predicate(metadata, raw_index)
-    require(type(output) is list and len(output) == 1)
-    result = output[0]['verificationResult']
-    certificate = result['signature']['certificate']
+    require(type(output) is list and 1 <= len(output) <= 256)
     workflow = metadata['workflow']
     identity = WORKFLOW + '@' + workflow['ref']
-    for key, value in {
-        'issuer': 'https://token.actions.githubusercontent.com',
-        'subjectAlternativeName': identity, 'buildSignerURI': identity,
-        'buildSignerDigest': workflow['commit'],
-        'sourceRepositoryURI': REPOSITORY, 'sourceRepositoryDigest': workflow['commit'],
-        'sourceRepositoryIdentifier': '1427088300',
-        'sourceRepositoryOwnerIdentifier': '5193877',
-        'runInvocationURI': REPOSITORY + '/actions/runs/' + workflow['runID'] + '/attempts/' + workflow['runAttempt'],
-    }.items():
-        require(certificate.get(key) == value)
+    invocation = REPOSITORY + '/actions/runs/' + workflow['runID'] + '/attempts/' + workflow['runAttempt']
+    candidates = []
+    for entry in output:
+        result = entry['verificationResult']
+        certificate = result['signature']['certificate']
+        for key, value in {
+            'issuer': 'https://token.actions.githubusercontent.com',
+            'subjectAlternativeName': identity, 'buildSignerURI': identity,
+            'buildSignerDigest': workflow['commit'],
+            'sourceRepositoryURI': REPOSITORY, 'sourceRepositoryDigest': workflow['commit'],
+            'sourceRepositoryIdentifier': '1427088300',
+            'sourceRepositoryOwnerIdentifier': '5193877',
+        }.items():
+            require(certificate.get(key) == value)
+        require(matches(certificate.get('runInvocationURI'),
+                        re.escape(REPOSITORY) + r'/actions/runs/[1-9][0-9]*/attempts/[1-9][0-9]*'))
+        require(type(result.get('verifiedTimestamps')) is list and bool(result['verifiedTimestamps']))
+        if certificate['runInvocationURI'] == invocation:
+            candidates.append(result)
+    # Never substitute an old attempt or choose the first of duplicate current records.
+    require(len(candidates) == 1)
+    result = candidates[0]
     statement = result['statement']
     exact(statement, ('_type', 'subject', 'predicateType', 'predicate'))
     require(statement['_type'] == 'https://in-toto.io/Statement/v1')
@@ -204,7 +214,7 @@ def verify_live(metadata, raw, runner=subprocess.run):
                '--owner', REPO.split('/')[0], '--signer-workflow', REPO+'/.github/workflows/release.yaml',
                '--signer-digest', workflow['commit'], '--source-digest', workflow['commit'],
                '--cert-oidc-issuer', 'https://token.actions.githubusercontent.com',
-               '--predicate-type', PREDICATE, '--format=json']
+               '--predicate-type', PREDICATE, '--bundle-from-oci', '--format=json']
     # Files bound capture memory; reject oversized output rather than publish it.
     import tempfile
     def limit_capture():

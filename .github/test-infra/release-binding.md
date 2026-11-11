@@ -42,7 +42,9 @@ from default SLSA provenance before the existing promotion step.
 
 Both API/application checks and certificate/workflow checks must pass. A recovery
 certificate matching the publisher source cannot substitute for the application
-commit resolved from the immutable release tag. Multiple custom attestations in
-readback currently fail closed; rerun/backfill should be reviewed rather than
-silently choosing one. A real approved publication is required to establish live
+commit resolved from the immutable release tag. Authenticated records from prior runs/attempts may coexist, but cannot replace
+the exact certified current run/attempt. Missing, duplicate or conflicting
+current records fail closed; the verifier never selects an arbitrary first
+statement. Bundles are read from OCI storage with `--bundle-from-oci`; this
+retains cryptographic verification without depending on GitHub blob downloads. A real approved publication is required to establish live
 acceptance.

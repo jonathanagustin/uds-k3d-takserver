@@ -125,6 +125,21 @@ class MediaTests(unittest.TestCase):
         for event in ('pull_request', 'push'):
             self.assertIn('.github/scripts/ci-apt.py', workflow['on'][event]['paths'])
 
+    def test_upgrade_chapter_is_manual_only_with_default_preserved(self):
+        workflow=yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(),Loader=yaml.BaseLoader)
+        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['upgrade']['default'],'true')
+        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['upgrade']['type'],'boolean')
+        record=workflow['jobs']['record']
+        expression=record['env']['UPGRADE']
+        self.assertEqual(expression,"${{ github.event_name == 'workflow_dispatch' && inputs.upgrade && 'true' || 'false' }}")
+        for event,requested,expected in [('pull_request',False,'false'),('pull_request',True,'false'),
+                ('push',True,'false'),('workflow_dispatch',False,'false'),('workflow_dispatch',True,'true')]:
+            actual=expression[3:-3].replace('github.event_name',repr(event)).replace('inputs.upgrade',repr(requested))
+            actual=actual.replace('&&','and').replace('||','or')
+            self.assertEqual(eval(actual,{'__builtins__':{}}),expected,(event,requested))
+        upgrade=next(step for step in record['steps'] if step['name']=='Record the upgrade from the last signed release')
+        self.assertIn("env.UPGRADE == 'true'",upgrade['if'])
+
     def test_verified_musl_pipeline_is_checked_before_cluster_deployment(self):
         workflow = yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(workflow['env']['AGG_SHA256'], 'ddcbf6ca044c8ac3a434dcb9ee89fb9e3be87209982b7c2adb55f782e8f0f390')

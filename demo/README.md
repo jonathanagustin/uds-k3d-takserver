@@ -36,6 +36,9 @@ unsupported-source error; this is not universal support for historical release
 refs. No plain-tag fallback or replacement source key is used.
 
 Published-release consumers share `.github/scripts/published_package_ref.py`.
+Automatic pull request recordings skip the optional upgrade chapter. Manual runs
+include it by default; turn off the `upgrade` input to record only the main cluster.
+
 The upgrade chapter resolves its previous release separately from the current
 recording's package; the rendered provenance command uses that same resolved
 current package URI. Publication defaults stay in the renamed namespace.

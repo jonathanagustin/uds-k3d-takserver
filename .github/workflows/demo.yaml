@@ -76,9 +76,8 @@ jobs:
     env:
       APP_REF: ${{ inputs.app_ref }}
       ATAK: ${{ inputs.atak && 'true' || 'false' }}
-      # Pull request runs record the upgrade chapter too, so a change to it
-      # is tested before main publishes it.
-      UPGRADE: ${{ (github.event_name == 'pull_request' || inputs.upgrade) && 'true' || 'false' }}
+      # Keep the optional second cluster out of automatic PR recordings.
+      UPGRADE: ${{ github.event_name == 'workflow_dispatch' && inputs.upgrade && 'true' || 'false' }}
       CACHE: ghcr.io/jonathanagustin/uds-takserver/build-cache
       ATAK_TAG: dev
       DRIVER_IMAGE: ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev

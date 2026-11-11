@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,21 @@ export function selectReleaseTags(tags, limit = 5) {
   }).slice(0, limit).map(({ tag, parts }) => ({
     id: `v${parts[0]}-${parts[1]}`, ref: tag, minor: parts.slice(0, 2).join('.'),
   }));
+}
+
+export function renderPublishedReleaseBadge(svg, tag, publishedTags) {
+  if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag)
+      || !Array.isArray(publishedTags) || !publishedTags.includes(tag))
+    throw new Error('Badge requires a selected published release');
+  let markers = 0;
+  const rendered = svg.replace(/^.*<!-- x-release-please-version -->.*$/gm, (line) => {
+    markers++;
+    const versions = line.match(/\bv(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\b/g);
+    if (versions?.length !== 1) throw new Error('Invalid release badge version marker');
+    return line.replace(versions[0], tag);
+  });
+  if (markers !== 5) throw new Error('Expected five release badge version markers');
+  return rendered;
 }
 
 async function pageSlugs(directory, prefix = '') {
@@ -47,6 +62,13 @@ export async function buildVersions(repoRoot = path.resolve(import.meta.dirname,
   });
   const releases = selectReleaseTags(tags);
   if (!releases.length) throw new Error('No stable v0.7+ release with docs-site/ was found. Fetch tags before building.');
+  // Only the validated publication inventory may relabel the hosted badge.
+  // Explicit offline previews leave the tracked, unverified badge unchanged.
+  if (mode === 'published') {
+    const badge = path.join(siteRoot, 'public/badges/release.svg');
+    const source = await readFile(badge, 'utf8');
+    await writeFile(badge, renderPublishedReleaseBadge(source, releases[0].ref, candidates));
+  }
   const versions = releases.map((release, index) => ({ ...release,
     prefix: index === 0 ? '' : release.id,
     label: index === 0 ? `Latest (${release.minor})` : release.minor,

@@ -32,6 +32,10 @@ For an intentional offline preview, set `DOCS_LOCAL_TAG_PREVIEW=1` when running
 `npm run dev`, `npm run sync` or `npm run build`. This non-CI mode uses local Git
 tags, which may include unpublished drafts; the generator labels it as a local
 preview. CI refuses that mode. It cannot verify a requested release publication.
+Hosted generation also updates only the release badge's five marked version
+fields to the selected published tag. Branding and unmarked SVG content stay
+unchanged; missing or malformed markers fail the build. Offline previews leave
+the tracked badge untouched, so it is not publication evidence in that mode.
 
 The sync script accepts `--repo-root`, `--output-root`, `--url-prefix`, `--git-ref`,
 and `--source-ref`. The optional `--landing-source` selects the current authored

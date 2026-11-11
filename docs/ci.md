@@ -414,3 +414,23 @@ runtime changes reverted by the merge disappear. Missing objects, malformed or
 empty diffs, exceeded bounds, or uncertain identities retain rendering. All other
 Unit validation steps remain unconditional. Fixed diagnostic codes describe
 unavailable evidence without printing payloads, paths, or exception text.
+
+### Bounded APT acquisition
+
+Demo and Docs prepare APT with `sudo python3 .github/scripts/ci-apt.py update`.
+One signed update has a 60-second deadline. If it fails, the helper changes only
+recognized public Ubuntu HTTP endpoints to their official HTTPS counterparts,
+then attempts one more signed update. Legacy lists, Deb822 `URIs` fields and the
+runner's standard mirror lists are supported. Suites, components, architectures,
+`Signed-By`, third-party sources and authenticated URLs keep their existing
+values. Unknown endpoints are not redirected. Symlinks are rejected and source
+replacements are atomic, with rollback if a later replacement fails.
+
+Both failed updates stop the job as an infrastructure acquisition failure; stale
+indexes do not count as success. Demo installs its package list once, with a
+120-second deadline. The helper retains signature and TLS checks. Its owned
+`99zz-uds-ci-acquisition` configuration also gives Playwright's later APT calls
+zero acquisition retries, ten-second network timeouts and strict update errors;
+the Docs browser step has its own outer deadline. Complete package-manager logs
+are scrubbed and redacted before display; incomplete or oversized captures are
+omitted. An official HTTPS alternative is not a guarantee of network availability.

@@ -141,28 +141,8 @@ jobs:
         timeout-minutes: 30
         run: |
           set -euo pipefail
-          apt_opts=(-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          # The Ubuntu mirror serves some runners at a trickle (a 9 MB package
-          # took two minutes), so the install is slow, not hung. Packages
-          # already downloaded are kept between attempts, so each bounded
-          # attempt resumes where the last stopped. sudo resets the
-          # environment, so the non-interactive frontend is passed through
-          # env: otherwise a debconf question waits on input that never comes.
-          apt_try() {
-            local attempt
-            for attempt in 1 2 3 4 5; do
-              if sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
-                timeout --kill-after=10 240 apt-get "${apt_opts[@]}" "$@"; then
-                return 0
-              fi
-              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 5)"
-              pgrep -af '^(/usr/bin/|/usr/lib/apt/)?(apt|apt-get|dpkg|debconf|needrestart|unattended)' | cut -c1-200 || true
-              sleep 5
-            done
-            return 1
-          }
-          apt_try update
-          apt_try install -y -o Dpkg::Use-Pty=0 --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+          sudo python3 .github/scripts/ci-apt.py update
+          sudo python3 .github/scripts/ci-apt.py install ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
             xvfb libnss3-tools python3-pil python3-venv
           curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
           echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
@@ -488,8 +468,13 @@ jobs:
           retention-days: 30
 
       - name: Debug Output
-        if: failure()
-        run: uds run actions:debug-output
+        if: failure() && !cancelled()
+        run: |
+          if command -v uds >/dev/null 2>&1; then
+            uds run actions:debug-output
+          else
+            echo "UDS CLI setup was not reached; package-acquisition diagnostics identify the earlier failure"
+          fi
         shell: bash
 
   # A manual run from main puts the two videos on the fixed "demo" release, so

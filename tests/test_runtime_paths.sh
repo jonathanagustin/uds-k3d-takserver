@@ -93,13 +93,17 @@ check_match ".github/workflows/charts.yaml" ignore
 check_match ".github/scripts/publish-charts.py" ignore
 # Only this standalone read-only checker is excluded, not its producer inputs.
 check_match ".github/scripts/install-reuse-shadow.py" ignore
-# Failure-only Demo capture never participates in install or upgrade behavior.
-check_match ".github/scripts/demo-failure-diagnostics.sh" ignore
-check_match ".github/scripts/demo-failure-diagnostics.sh.bak" relevant
-check_decide false ".github/scripts/demo-failure-diagnostics.sh"
-check_decide true $'.github/scripts/demo-failure-diagnostics.sh\ncharts/takserver/values.yaml'
-check_match ".github/scripts/dump-memory.sh" relevant
-check_match ".github/scripts/redact-logs.py" relevant
+# These exact helpers are exclusive to Docs/Demo, outside application deployment.
+for optional_helper in .github/scripts/ci-apt.py .github/scripts/check-docs-browser.py .github/scripts/docs-browser-smoke.cjs .github/scripts/demo-failure-diagnostics.sh .github/scripts/select-demo-app-ref.sh; do
+  check_match "${optional_helper}" ignore
+  check_decide false "${optional_helper}"
+  check_match "${optional_helper}.bak" relevant
+  check_decide true "${optional_helper}"$'\ncharts/takserver/values.yaml'
+done
+# Shared diagnostics and the actual firewall remain runtime-sensitive.
+for runtime_helper in .github/scripts/dump-memory.sh .github/scripts/redact-logs.py .github/scripts/node-airgap.py; do
+  check_match "${runtime_helper}" relevant
+done
 check_match ".github/scripts/install-reuse-shadow.py.bak" relevant
 check_match ".github/scripts/install-reuse-shadow-other.py" relevant
 # Manual-only orchestration is distinct from shared backup/runtime helpers.

@@ -146,9 +146,25 @@ omits that config too. Both retain the remaining reviewed Velero overrides.
 Relative package/values-file paths are relocated rather than silently changed.
 Binding checks prepared bytes and records actual archive hashes against the
 workflow SHA. The driver rechecks bytes before deploy, uses UDS 0.41 package
-selection and `UDS_CONFIG`, permits one deployment attempt (`--retries 1`),
-and does not use force-conflicts, take-ownership, insecure or signature bypass.
+selection and `UDS_CONFIG`, and permits one deployment attempt (`--retries 1`).
 Zarf treats zero retries as its default; zero would not disable retries.
+
+Only the initial `core` archive's `core-base` bootstrap, with no owner override,
+uses `--force-conflicts` to establish the same Core compatibility baseline as
+the ordinary full-core test. The first named bootstrap stage must be running;
+recovery and later phases cannot use this exception. Immediately before
+dispatch, the driver requires successful reads proving both the Velero server
+and node-agent DaemonSet absent, rehashes the bound archive/config and verifies
+the disposable cluster again. Existing or terminating objects and read errors
+refuse this path. The four-input plan, Core package signatures and optional
+passthrough gateway selection remain intact.
+
+This permits real SSA field-manager migration across the selected Core-base
+charts and their rollback, including the checkpoint's Gateway API transition.
+It is a guarded baseline operation on this fresh disposable cluster; it is not
+a general production migration instruction. Every backup/restore, TAK,
+handoff, transfer and reversal deployment remains flag-free. Separate
+take-ownership/adopt flags, insecure options and signature bypass stay disabled.
 
 The fixed sequence is fresh Core-agent-first installation and real
 backup/restore/API acceptance; conversion to a known local baseline; then

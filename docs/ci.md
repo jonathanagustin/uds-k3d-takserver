@@ -226,6 +226,27 @@ records that evidence. This does not quantify minute savings or promise that
 failed compilation is never repeated. No cold builds were dispatched solely to
 demonstrate savings.
 
+## Bounded dev-package publication
+
+Dev-package publication retains the existing archive, input key, repository and
+architecture checks. Existing input-key tags still skip publication before
+requiring a local archive. A missing tag invokes the publisher once with
+`--retries 3`; there is no outer rebuild or workflow retry. The pinned
+[UDS CLI 0.41.0 module](https://github.com/defenseunicorns/uds-cli/blob/v0.41.0/go.mod)
+embeds Zarf 0.89.0, whose
+[publish command](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/cmd/package.go)
+accepts that flag. Its [OCI retry implementation](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/pkg/zoci/retry.go)
+uses three total attempts for the same publication, not three additional jobs.
+
+The local wrapper owns the publication process group, allows 20 minutes, then
+sends TERM with a 10-second grace before KILL. It also cleans up remaining
+descendants after ordinary exit or wrapper termination. Timeout returns 124;
+final nonzero exits propagate, and publisher stdout/stderr remain unchanged.
+Input keys, verification, package creation and architecture validation are
+unchanged. This bounds a publication reliability mitigation for #451; it does
+not establish the cause of the observed registry tagging failure or authorize
+repeating application acceptance.
+
 ## Documentation after release publication
 
 Release Please creates releases with `GITHUB_TOKEN`, which does not start the

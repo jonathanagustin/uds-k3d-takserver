@@ -34,7 +34,47 @@ public final class KernelFormatRegressions {
         mbtiles(root.resolve("roundtrip.mbtiles"));
         griddedCoverage(root.resolve("terrain.gpkg"));
         kmlDefaultPointStyle();
+        constantElevation(root.resolve("constant-elevation.tif"));
         System.out.println("PASS_UPSTREAM_DTED_DISCOVERY_MBTILES_ROUNDTRIP_GPKG_FLOAT_COVERAGE assertions=" + assertions);
+    }
+    private static void constantElevation(Path path) throws Exception {
+        // Adaptation of upstream GDAL creation + ElevationChunk batch sampling.
+        // A small EPSG:4326 constant raster is an independent analytic oracle;
+        // this does not reproduce the upstream 3601-square fractal/UTM regression.
+        com.atakmap.map.gdal.GdalLibrary.init();
+        org.gdal.gdal.Driver driver = org.gdal.gdal.gdal.GetDriverByName("GTiff");
+        check(driver != null, "genuine GDAL GeoTIFF driver");
+        org.gdal.gdal.Dataset dataset = driver.Create(path.toString(), 32, 32, 1,
+            org.gdal.gdalconst.gdalconstConstants.GDT_Float32);
+        check(dataset != null, "actual GDAL terrain dataset created");
+        try {
+            float[] values = new float[32 * 32];
+            Arrays.fill(values, 125.5f);
+            check(dataset.GetRasterBand(1).WriteRaster(0, 0, 32, 32, values) == 0,
+                "GDAL writes constant terrain samples");
+            check(dataset.SetGeoTransform(new double[]{-77, 0.01, 0, 36, 0, -0.01}) == 0,
+                "GDAL persists geographic transform");
+            check(dataset.SetProjection(com.atakmap.map.gdal.GdalLibrary.getWkt(4326)) == 0,
+                "GDAL persists EPSG:4326");
+        } finally { dataset.delete(); }
+        dataset = com.atakmap.map.gdal.GdalLibrary.openDatasetFromFile(path.toFile());
+        check(dataset != null, "actual elevation raster reopens");
+        com.atakmap.map.elevation.ElevationChunk chunk = null;
+        try {
+            chunk = com.atakmap.map.gdal.GdalElevationChunk.create(dataset, false, "Geotiff", 1000d,
+                com.atakmap.map.elevation.ElevationData.MODEL_TERRAIN, false);
+            check(chunk != null, "genuine elevation chunk accepts raster");
+            double[] points = {-76.90, 35.90, Double.NaN, -76.85, 35.85, Double.NaN,
+                -76.80, 35.80, Double.NaN};
+            check(chunk.sample(points, 0, points.length / 3), "actual geographic batch sampling succeeds");
+            for (int i = 2; i < points.length; i += 3)
+                check(Math.abs(points[i] - 125.5d) < 0.001d, "constant terrain analytic height oracle");
+            check(Math.abs(chunk.sample(35.90, -76.90) - 125.5d) < 0.001d,
+                "single sample agrees with batch on genuine terrain");
+        } finally {
+            if (chunk != null) chunk.dispose();
+            else dataset.delete();
+        }
     }
     private static void kmlDefaultPointStyle() throws Exception {
         com.atakmap.map.gdal.GdalLibrary.init();

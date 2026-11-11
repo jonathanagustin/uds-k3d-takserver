@@ -47,6 +47,17 @@
         "containsDefaultPointStyle"
       ],
       "bytes": 3106
+    },
+    {
+      "scope": "GDAL GeoTIFF creation and actual ElevationChunk sampling; analytic fixture adaptation",
+      "path": "takkernel/engine/src/jreTest/java/com/atakmap/map/gdal/GdalElevationChunkTest.java",
+      "blob": "f1f87750b418571fea44af88ccf7b9f3e4dfbd05",
+      "sha256": "b18499823047907ab07183825afb7e2260a03d0e747193c44d5260f159f5ca60",
+      "methods": [
+        "createTestData",
+        "regression_check"
+      ],
+      "bytes": 5829
     }
   ],
   "license_inputs": [
@@ -73,7 +84,8 @@
       "standalone checked assertions replace JUnit and Android FileUtils",
       "owned Path fixtures and deterministic UTF-8 bytepayloads",
       "native disposables and database handles closed",
-      "KML reader and provider closed/unregistered; prior GDAL configuration restored"
+      "KML reader and provider closed/unregistered; prior GDAL configuration restored",
+      "Elevation uses a 32x32 constant EPSG:4326 HAE analytic oracle, not original 3601x3601 fractal UTM data or original 34 expected heights"
     ],
     "not_covered": [
       "DTED height decoding",
@@ -82,7 +94,8 @@
       "3D rendering",
       "Android test runtime",
       "full client",
-      "KML export, exhaustive geometry and style combinations"
+      "KML export, exhaustive geometry and style combinations",
+      "original fractal UTM elevation regression and broad elevation formats"
     ]
   }
 }

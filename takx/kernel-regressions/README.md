@@ -1,6 +1,6 @@
 # Public Kernel format regressions
 
-This harness ports four real upstream test slices to the public-source desktop
+This harness ports five real upstream test slices to the public-source desktop
 SDK. It calls the production Kernel classes, native SQLite/GeoPackage code and
 DTED source factory. It contains no replacement SDK classes or test codec.
 
@@ -24,8 +24,11 @@ The initial slice checks:
 
 The KML slice verifies the upstream default point SYMBOL style through the real
 OGR reader and in-memory GDAL filesystem. It remains unexecuted until the
-resource-complete SDK qualification is reviewed. General elevation sampling, 3D
-and renderer tests are separate remaining
+resource-complete SDK qualification is reviewed. A fifth slice adapts actual GDAL GeoTIFF creation and ElevationChunk sampling
+with a 32 × 32 constant geographic HAE raster and an independent analytic height
+oracle. It does not reproduce the original large fractal UTM regression.
+Both new slices are source only, awaiting compile and runtime qualification.
+Broad elevation sampling, 3D and renderer tests are separate remaining
 slices. A source/compile pass is not a native regression pass or a full-client
 qualification.
 

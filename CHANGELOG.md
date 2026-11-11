@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.0...v0.14.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* bind released application source in provenance ([f4f9073](https://github.com/jonathanagustin/uds-takserver/commit/f4f9073073c6ffced396b89f4e701f0c7a3b80af))
+
 ## [0.14.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.13.0...v0.14.0) (2026-11-11)
 
 

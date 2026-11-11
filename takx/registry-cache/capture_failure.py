@@ -29,7 +29,7 @@ def capture(root, output):
         if len(statuses)>96: raise ValueError('too many native command logs')
         for path in statuses:
             name = path.name.removesuffix('.status.json')
-            if not re.fullmatch('[a-z0-9-]+', name): raise ValueError('invalid native log name')
+            if not re.fullmatch('[a-z0-9+-]+', name): raise ValueError('invalid native log name')
             status = local.load(path)
             log = scope/(name+'.log')
             record = {'scope':str(scope.relative_to(root)),'name':name,'exported':False}

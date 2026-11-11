@@ -41,6 +41,14 @@ class FailureLogsTests(unittest.TestCase):
         self.assertNotIn('command',json.dumps(index))
         self.assertEqual(index['logs'][0]['returncode'],7)
 
+    def test_actual_gplusplus_tool_log_name_is_exported_safely(self):
+        self.failed_command(name='tool-g++')
+        capture_failure.capture(self.root, self.output)
+        text=(self.output/'host-tool-g++.log').read_text()
+        self.assertIn('[REDACTED]', text)
+        self.assertNotIn('PRIVATE_NATIVE_PASSWORD', text)
+        self.assertTrue(local.load(self.output/'index.json')['logs'][0]['exported'])
+
     def test_timed_out_prefix_is_never_exported(self):
         with self.assertRaises(ValueError):
             producer.run([sys.executable,'-u','-c','import time;print("PRIVATE_PREFIX");time.sleep(5)'],

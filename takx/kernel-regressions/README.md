@@ -24,7 +24,8 @@ The initial slice checks:
 
 The KML slice verifies the upstream default point SYMBOL style through the real
 OGR reader and in-memory GDAL filesystem. It remains unexecuted until the
-resource-complete SDK qualification is reviewed. A fifth slice adapts actual GDAL GeoTIFF creation and ElevationChunk sampling
+resource-complete SDK qualification is reviewed. A fifth slice adapts actual GDAL
+GeoTIFF creation and ElevationChunk sampling
 with a 32 × 32 constant geographic HAE raster and an independent analytic height
 oracle. It does not reproduce the original large fractal UTM regression.
 Both new slices are source only, awaiting compile and runtime qualification.

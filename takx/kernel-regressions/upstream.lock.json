@@ -97,7 +97,8 @@
       "native disposables and database handles closed",
       "KML reader and provider closed/unregistered; prior GDAL configuration restored",
       "Elevation uses a 32x32 constant EPSG:4326 HAE analytic oracle, not original 3601x3601 fractal UTM data or original 34 expected heights",
-      "3D uses authored unit tetrahedron OBJ through genuine ObjModelSpi/Model/Mesh; upstream teapot.obj and teapot_inside.zip are absent, so original native scene-info tests are not reproduced"
+      "3D uses authored unit tetrahedron OBJ through genuine ObjModelSpi/Model/Mesh; upstream teapot.obj and teapot_inside.zip are absent, so original native scene-info tests are not reproduced",
+      "MBTiles SPI reopens writable as original upstream; direct Databases.openDatabase true schema connection separately asserts read-only. DefaultIOProvider ignores SPI read-only options, so no SPI read-only enforcement claim."
     ],
     "not_covered": [
       "DTED height decoding",
@@ -109,7 +110,8 @@
       "KML export, exhaustive geometry and style combinations",
       "original fractal UTM elevation regression and broad elevation formats",
       "upstream teapot scene-info regression and its absent OBJ/ZIP fixtures",
-      "3D textures, materials, scene graph and graphics renderer"
+      "3D textures, materials, scene graph and graphics renderer",
+      "MBTiles SPI read-only enforcement through DefaultIOProvider"
     ]
   },
   "production_reference_inputs": [

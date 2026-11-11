@@ -16,11 +16,18 @@ The initial slice checks:
   intentionally empty files, as in the upstream test; this does **not** test
   decoding elevation samples or prove the returned sort order.
 - MBTiles default-SPI creation, actual SQLite schema compatibility, seven tile
-  byte inserts, updates, disposal and read-only reopen. Opaque tile bytes are the
+  byte inserts, updates, disposal and writable SPI reopen, plus a direct native
+  SQLite read-only schema connection. Opaque tile bytes are the
   upstream database test pattern; this does not test image decoding or every
   MBTiles schema implementation.
 - GeoPackage 256 × 256 float gridded coverage, persisted nondefault offset/scale,
   terrain metadata controls and all decoded elevation samples.
+
+The actual default IO provider ignores the SPI read-only option by calling
+`Databases.openOrCreateDatabase` unconditionally. The original upstream test
+reopens writable; this harness follows that scope and does not claim SPI
+read-only enforcement. The first runtime failure exposing the unsupported extra
+assertion is preserved separately.
 
 The KML slice verifies the upstream default point SYMBOL style through the real
 OGR reader and in-memory GDAL filesystem. It remains unexecuted until the

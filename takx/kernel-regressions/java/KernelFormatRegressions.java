@@ -194,7 +194,10 @@ public final class KernelFormatRegressions {
         } finally { container.dispose(); }
         check(Files.isRegularFile(path), "MBTiles file exists after close");
         DatabaseIface database = Databases.openDatabase(path.toString(), true);
-        try { check(MBTilesContainer.isCompatibleSchema(database), "real native SQLite MBTiles schema"); }
+        try {
+            check(database.isReadOnly(), "direct native SQLite read-only schema connection");
+            check(MBTilesContainer.isCompatibleSchema(database), "real native SQLite MBTiles schema");
+        }
         finally { database.close(); }
         container = MBTilesContainer.SPI.open(path.toString(), null, false);
         check(container != null, "MBTiles reopens through real SPI");
@@ -206,8 +209,11 @@ public final class KernelFormatRegressions {
                 expected.put(Arrays.toString(coordinate), bytes);
             }
         } finally { container.dispose(); }
-        container = MBTilesContainer.SPI.open(path.toString(), null, true);
-        check(container != null && container.isReadOnly(), "updated MBTiles read-only reopen");
+        // Match upstream SPI roundtrip: the actual DefaultIOProvider ignores
+        // DatabaseInformation.OPTION_READONLY; do not invent its enforcement.
+        // Direct native SQLite read-only behavior is checked separately above.
+        container = MBTilesContainer.SPI.open(path.toString(), null, false);
+        check(container != null && !container.isReadOnly(), "updated MBTiles writable SPI reopen");
         try { verifyTiles(container, coordinates, expected); }
         finally { container.dispose(); }
     }

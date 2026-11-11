@@ -38,6 +38,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from media_command import run_media
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import style  # noqa: E402
@@ -54,8 +55,8 @@ KEEP = 3.0
 CROSSFADE = 0.3
 
 
-def run(*args, **kw):
-    return subprocess.run(list(args), check=True, capture_output=True, text=True, **kw)
+def run(*args):
+    return run_media(list(args))
 
 
 def duration_of(video):

@@ -162,8 +162,17 @@ fresh runner and retain the image and kernel notice for the investigation.
 The cluster jobs temporarily compare `ubuntu-22.04` on AMD64 and
 `ubuntu-22.04-arm` on native ARM64 for [#300](https://github.com/jonathanagustin/uds-takserver/issues/300)
 and [#103](https://github.com/jonathanagustin/uds-takserver/issues/103).
-Test, Full Core and Benchmark retain the AMD64 `TEST_RUNNER` override;
-image builds and other workflow runners keep their existing labels.
+Test, Full Core, Benchmark and Demo Video retain the AMD64 `TEST_RUNNER` override;
+Demo Video uses the same Ubuntu 22 default as Test. Its terminal recorder is the
+SHA-256-pinned, dependency-free asciinema 2.4.0 wheel in a separate virtual
+environment. Before deployment, a real CLI check records a 132×34 cast and
+verifies both the dimensions and the recorded command exit code. The distro
+package is not used: Ubuntu 22 ships 2.1.0, which lacks the required size flags. A failed recording retains
+a separate `demo-startup-diagnostics` artifact with redacted runner evidence and
+current/previous TAK application and dependency-wait logs. Captures have time
+and size limits; incomplete or oversized streams are omitted in full. Only a
+finished sanitizer can upload that artifact. Image builds and other workflow
+runners keep their existing labels.
 The metadata-only [AMD64 comparison](https://github.com/jonathanagustin/uds-takserver/actions/runs/42528864369)
 observed kernel `6.8.0-1070-azure` on Ubuntu 22 and `7.0.0-1017-azure`
 on Ubuntu 24; the [ARM64 probe](https://github.com/jonathanagustin/uds-takserver/actions/runs/42529079902)
@@ -405,3 +414,32 @@ runtime changes reverted by the merge disappear. Missing objects, malformed or
 empty diffs, exceeded bounds, or uncertain identities retain rendering. All other
 Unit validation steps remain unconditional. Fixed diagnostic codes describe
 unavailable evidence without printing payloads, paths, or exception text.
+
+### Bounded APT acquisition
+
+Demo and Docs prepare APT with `sudo python3 .github/scripts/ci-apt.py update`.
+One signed update has a 60-second deadline. If it fails, the helper changes only
+recognized public Ubuntu HTTP endpoints to their official HTTPS counterparts,
+then attempts one more signed update. Legacy lists, Deb822 `URIs` fields and the
+runner's standard mirror lists are supported. Suites, components, architectures,
+`Signed-By`, third-party sources and authenticated URLs keep their existing
+values. Unknown endpoints are not redirected. Symlinks are rejected and source
+replacements are atomic, with rollback if a later replacement fails.
+
+Both failed updates stop the job as an infrastructure acquisition failure; stale
+indexes do not count as success. Demo installs its package list once, with a
+120-second deadline. The helper retains signature and TLS checks. Its owned
+`99zz-uds-ci-acquisition` configuration also gives Playwright's later APT calls
+zero acquisition retries, ten-second network timeouts and strict update errors;
+the Docs browser step has its own outer deadline. Complete package-manager logs
+are scrubbed and redacted before display; incomplete or oversized captures are
+omitted. A failed capture reports only fixed error-category counts, allowlisted
+endpoint names and command/timeout metadata. A timeout's bounded terminated
+capture can be classified without printing its incomplete prefix; oversized
+captures are not scanned. These are observations, not proof of a network cause
+or a successful update. An official HTTPS alternative is not a guarantee of
+network availability.
+
+Docs and Demo setup helpers are excluded by exact path from install, upgrade, and
+package triggers. Unit tests still cover them, and their own workflows still run.
+Shared diagnostics, redaction, and node firewall scripts remain runtime inputs.

@@ -19,6 +19,7 @@ DIAGNOSTICS = (
     ".github/workflows/atak-e2e.yaml",
     ".github/workflows/atak-vm.yaml",
     ".github/scripts/dump-memory.sh",
+    ".github/scripts/demo-failure-diagnostics.sh",
     ".github/scripts/runner-wedge-probe.sh",
     ".github/scripts/print-logs.sh",
     "tasks/test.yaml",

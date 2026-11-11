@@ -54,7 +54,7 @@ concurrency:
 env:
   VHS_VERSION: 0.12.1
   AGG_VERSION: 1.9.0
-  AGG_SHA256: f111e315cd71056b116302342553dd765b7297579ed511f111d0cedb442aeda6
+  AGG_SHA256: ddcbf6ca044c8ac3a434dcb9ee89fb9e3be87209982b7c2adb55f782e8f0f390
   # Inter for titles and captions (demo/style.py), from the upstream release.
   INTER_VERSION: "4.1"
   INTER_SHA256: 9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e
@@ -63,7 +63,8 @@ env:
 jobs:
   record:
     if: ${{ !inputs.sign_only }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+    # Match Test's temporary hosted-kernel mitigation (#300); explicit overrides remain available.
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
     timeout-minutes: 240
     permissions:
       actions: read
@@ -92,7 +93,7 @@ jobs:
         run: ./.github/scripts/select-demo-app-ref.sh
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-22.04' || vars.TEST_RUNNER == 'ubuntu-24.04'
         run: ./.github/scripts/trim-runner.sh
 
       # Same steps as the ATAK e2e workflow: the registry build cache keeps
@@ -140,29 +141,9 @@ jobs:
         timeout-minutes: 30
         run: |
           set -euo pipefail
-          apt_opts=(-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          # The Ubuntu mirror serves some runners at a trickle (a 9 MB package
-          # took two minutes), so the install is slow, not hung. Packages
-          # already downloaded are kept between attempts, so each bounded
-          # attempt resumes where the last stopped. sudo resets the
-          # environment, so the non-interactive frontend is passed through
-          # env: otherwise a debconf question waits on input that never comes.
-          apt_try() {
-            local attempt
-            for attempt in 1 2 3 4 5; do
-              if sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a \
-                timeout --kill-after=10 240 apt-get "${apt_opts[@]}" "$@"; then
-                return 0
-              fi
-              echo "::warning::apt-get $1 failed or stalled (attempt ${attempt} of 5)"
-              pgrep -af '^(/usr/bin/|/usr/lib/apt/)?(apt|apt-get|dpkg|debconf|needrestart|unattended)' | cut -c1-200 || true
-              sleep 5
-            done
-            return 1
-          }
-          apt_try update
-          apt_try install -y -o Dpkg::Use-Pty=0 --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
-            xvfb libnss3-tools python3-pil
+          sudo python3 .github/scripts/ci-apt.py update
+          sudo python3 .github/scripts/ci-apt.py install ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+            xvfb libnss3-tools python3-pil python3-venv
           curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
           echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
           sudo mkdir -p /usr/local/share/fonts/inter
@@ -245,11 +226,35 @@ jobs:
       # The deployment is recorded as the video's opening chapter: the same
       # commands as `uds run demo-deploy`, printed as they run, captured with
       # asciinema and rendered later by demo/render-cast.py.
+      - name: Install and check the pinned terminal recorder
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/asciinema"
+          "${RUNNER_TEMP}/asciinema/bin/python" -m pip --isolated install \
+            --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes \
+            --timeout 30 --retries 2 -r demo/tools/asciinema-requirements.txt
+          python3 demo/tools/check-asciinema.py \
+            --recorder "${RUNNER_TEMP}/asciinema/bin/asciinema" \
+            --output "${RUNNER_TEMP}/asciinema-cli-check"
+          echo "${RUNNER_TEMP}/asciinema/bin" >> "${GITHUB_PATH}"
+        shell: bash
+
+      - name: Check the pinned media pipeline before deployment
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          # The GNU 1.9.0 binary needs GLIBC_2.38; the static MUSL build supports Ubuntu 22.
+          curl --fail --silent --show-error --location --max-time 30 --max-filesize 17000000 \
+            -o "${RUNNER_TEMP}/agg" "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-musl"
+          echo "${AGG_SHA256}  ${RUNNER_TEMP}/agg" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/agg" /usr/local/bin/agg
+          python3 demo/tools/check-media.py --output "${RUNNER_TEMP}/demo-media-check"
+        shell: bash
+
       - name: Deploy UDS Core and TAK
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends asciinema
           mkdir -p demo/out
           TERM=xterm-256color FLAVOR=upstream asciinema rec --overwrite -q --cols 132 --rows 34 \
             -c './demo/deploy.sh; echo $? > demo/out/00-deploy.exit' demo/out/00-deploy.cast < /dev/null
@@ -263,9 +268,6 @@ jobs:
       - name: Render the recorded deployment
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/agg "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-gnu"
-          echo "${AGG_SHA256}  /tmp/agg" | sha256sum -c -
-          sudo install -m 0755 /tmp/agg /usr/local/bin/agg
           # Long steps are sped up, then each holds on its last lines for
           # CAST_HOLD seconds so the result can be read.
           CAST_HOLD=5 python3 demo/render-cast.py demo/out/00-deploy.cast demo/out/00-deploy \
@@ -417,6 +419,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Capture failed TAK startup diagnostics
+        id: startup-diagnostics
+        if: failure() && !cancelled()
+        timeout-minutes: 5
+        run: ./.github/scripts/demo-failure-diagnostics.sh "${RUNNER_TEMP}/demo-failure-sanitized"
+        shell: bash
+
+      - name: Retain sanitized startup diagnostics
+        if: failure() && !cancelled() && steps.startup-diagnostics.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-startup-diagnostics
+          path: ${{ runner.temp }}/demo-failure-sanitized/tak-startup.log
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload the separate segments
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -450,8 +468,13 @@ jobs:
           retention-days: 30
 
       - name: Debug Output
-        if: failure()
-        run: uds run actions:debug-output
+        if: failure() && !cancelled()
+        run: |
+          if command -v uds >/dev/null 2>&1; then
+            uds run actions:debug-output
+          else
+            echo "UDS CLI setup was not reached; package-acquisition diagnostics identify the earlier failure"
+          fi
         shell: bash
 
   # A manual run from main puts the two videos on the fixed "demo" release, so

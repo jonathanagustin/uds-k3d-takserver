@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from media_command import run_media
 
 LEGACY_PROMPT = "uds-takserver\x1b[0m \x1b[38;2;203;213;225m$\x1b[0m "
 PROMPT = LEGACY_PROMPT.replace("uds-takserver", "uds-takserver")
@@ -76,15 +77,14 @@ def main():
             for e in part:
                 f.write(json.dumps([round(e[0] - t0, 6), e[1], e[2]]) + "\n")
         gif = Path(f"{prefix}-{n}.gif")
-        subprocess.run([agg, "--font-size", str(FONT_SIZE), "--idle-time-limit", str(IDLE),
+        run_media([agg, "--font-size", str(FONT_SIZE), "--idle-time-limit", str(IDLE),
                         "--speed", f"{speed:.3f}", "--last-frame-duration", HOLD, "--no-loop",
                         *(["--cols", COLS] if COLS else []), *(["--rows", ROWS] if ROWS else []),
-                        "--theme", THEME, "--font-family", "JetBrains Mono", str(seg), str(gif)], check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        "--theme", THEME, "--font-family", "JetBrains Mono", str(seg), str(gif)])
         mp4 = Path(f"{prefix}-{n}.mp4")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(gif), "-an",
+        run_media(["ffmpeg", "-v", "error", "-y", "-i", str(gif), "-an",
                         "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
-                        "-c:v", "libx264", "-crf", "16", str(mp4)], check=True)
+                        "-c:v", "libx264", "-crf", "16", str(mp4)])
         sped = "" if speed <= 1.05 else f", shown about {math.floor(real / target)}x faster"
         caption = f"{label} (real time {human(real)}{sped})"
         if real < 1:

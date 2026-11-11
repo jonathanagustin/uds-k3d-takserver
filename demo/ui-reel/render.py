@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 LOCK = ROOT / "inputs.lock.json"
+BRANDING = ROOT.parents[1] / "assets/tak-on-uds-dark.svg"
 MAX_DOWNLOAD = 256 * 1024 * 1024
 SCENES = (
     ("CloudTAK map", "demo-clip-cloudtak-user.mp4", 27, 4),
@@ -89,6 +90,7 @@ def export_scenes(work, output, lock, versions):
             "purpose": lock["description"],
             "source_input": next(item for item in lock["sources"] if item["file"] == source),
             "font_input": lock["font"],
+            "branding_input": {"file": "assets/tak-on-uds-dark.svg", "sha256": digest(BRANDING)},
             "recipe_sha256": digest(Path(__file__)), "lock_sha256": digest(LOCK),
             "tool_versions": versions,
             "scene": {"label": label, "source": source, "start_seconds": start,
@@ -140,19 +142,22 @@ def render(cache, output, offline=False, export=False):
                 if archive.getinfo(member).file_size > 2 * 1024 * 1024:
                     raise ValueError("Font archive member exceeds the 2 MiB limit")
                 (work / name).write_bytes(archive.read(member))
+        run(["ffmpeg", "-v", "error", "-y", "-i", str(BRANDING),
+             "-vf", "scale=240:-1", "-frames:v", "1", "branding.png"], work)
         for index, (label, name, start, length) in enumerate(SCENES):
             # Relative, fixed names prevent FFmpeg filter/concat path escaping.
             filters = [
                 "crop=1632:784:144:134", "scale=1856:-2:flags=lanczos",
                 "pad=1920:1080:32:112:color=0x0B1220",
-                "drawtext=fontfile=font-title.ttf:text='TAK Server on UDS':fontsize=30:fontcolor=0xF8FAFC:x=40:y=32",
                 f"drawtext=fontfile=font-label.ttf:text='{label}':fontsize=25:fontcolor=0x22D3EE:x=w-tw-40:y=35",
                 "drawtext=fontfile=font-label.ttf:text='UI EDIT PREVIEW  /  RECORDED DEMO FOOTAGE':fontsize=17:fontcolor=0x94A3B8:x=40:y=1033",
                 "fade=t=in:st=0:d=0.12", f"fade=t=out:st={length-.12}:d=0.12",
                 "fps=30", "format=yuv420p",
             ]
             run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-i", str(cache / name),
-                 "-t", str(length), "-an", "-vf", ",".join(filters), "-filter_threads", "2",
+                 "-i", "branding.png", "-t", str(length), "-an",
+                 "-filter_complex", "[0:v]" + ",".join(filters) + "[scene];[scene][1:v]overlay=40:20:format=auto,format=yuv420p[branded]",
+                 "-map", "[branded]", "-filter_complex_threads", "2",
                  "-threads", "2", "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                  f"part{index}.mp4"], work)
         if export:
@@ -170,6 +175,7 @@ def render(cache, output, offline=False, export=False):
     manifest = {
         "purpose": lock["description"], "source_inputs": lock,
         "recipe_sha256": digest(Path(__file__)), "lock_sha256": digest(LOCK),
+        "branding_input": {"file": "assets/tak-on-uds-dark.svg", "sha256": digest(BRANDING)},
         "tool_versions": versions,
         "scenes": [{"label": label, "source": name, "start_seconds": start, "duration_seconds": length}
                    for label, name, start, length in SCENES],

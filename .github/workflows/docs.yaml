@@ -28,6 +28,10 @@ on:
       - "CONTRIBUTING.md"
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
+      - ".github/scripts/ci-apt.py"
+      - ".github/scripts/check-docs-browser.py"
+      - ".github/scripts/docs-browser-smoke.cjs"
+      - ".github/scripts/redact-logs.py"
   push:
     branches:
       - main
@@ -40,6 +44,10 @@ on:
       - "CONTRIBUTING.md"
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
+      - ".github/scripts/ci-apt.py"
+      - ".github/scripts/check-docs-browser.py"
+      - ".github/scripts/docs-browser-smoke.cjs"
+      - ".github/scripts/redact-logs.py"
 
 permissions:
   contents: read
@@ -54,7 +62,7 @@ concurrency:
 jobs:
   build:
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,8 +114,14 @@ jobs:
         run: npm run build
 
       - name: Install the docs browser
+        timeout-minutes: 3
         working-directory: docs-site
-        run: npx playwright install --with-deps chromium
+        run: timeout --kill-after=5 150 npx playwright install chromium
+
+      - name: Check the installed browser before any optional package acquisition
+        timeout-minutes: 6
+        working-directory: docs-site
+        run: python3 ../.github/scripts/check-docs-browser.py
 
       - name: Browser tests
         working-directory: docs-site

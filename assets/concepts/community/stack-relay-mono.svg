@@ -1,12 +1,13 @@
 <!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">TAK on UDS — Relay stack</title>
+  <title id="title">TAK on UDS — Connected stack</title>
   <desc id="desc">Three platform layers share a connected relay that ends in a navigation heading.</desc>
   <g fill="currentColor">
-    <rect x="6" y="13" width="31" height="10" rx="3"/>
-    <rect x="6" y="29" width="31" height="10" rx="3"/>
-    <rect x="6" y="45" width="31" height="10" rx="3"/>
+    <rect x="8" y="16" width="40" height="8" rx="2"/>
+    <rect x="8" y="32" width="40" height="8" rx="2"/>
+    <rect x="8" y="48" width="40" height="8" rx="2"/>
+    <path d="M40 20H48V52H40Z"/>
+    <path d="M56 4 52 32 40 20 28 12Z"/>
   </g>
-  <path d="M34 18H46V50H34M34 34H46" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/>
-  <path fill="currentColor" d="m61 4-7 25-9-9-10-7Z"/>
+  <path fill="currentColor" d="m51 10-2 12-5-6-6-2Z"/>
 </svg>

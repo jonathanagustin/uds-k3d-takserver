@@ -15,9 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 SELECT = ROOT / '.github/scripts/select-demo-app-ref.sh'
 HELPERS = ('.github/scripts/wait-for-tak-images.sh', '.github/scripts/pin-image-tags.sh',
            '.github/container-and-chart/docker/build.sh', '.github/container-and-chart/cloudtak/build.sh', '.github/container-and-chart/postgis/build.sh')
+BRANDING = ('assets/tak-on-uds-dark.svg', 'assets/tak-mark-dark.svg')
+DIAGNOSTICS = ('.github/scripts/demo-failure-diagnostics.sh', '.github/scripts/dump-memory.sh',
+               '.github/scripts/redact-then-filter.sh', '.github/scripts/redact-logs.py',
+               '.github/scripts/summarize-coreconfig.py')
+APP_ASSETS = ('assets/icon.svg', 'zarf.yaml')
 PRESERVED = ('demo/record.sh', 'tests/demo/test.ts', 'tests/playwright.demo.config.ts',
              'tasks.yaml', '.gitignore', '.github/workflows/demo.yaml',
-             '.github/scripts/published_package_ref.py')
+             '.github/scripts/published_package_ref.py', *BRANDING, *DIAGNOSTICS)
 
 
 class ConsumerWorkflowTests(unittest.TestCase):
@@ -105,8 +110,8 @@ class DemoSourceTests(unittest.TestCase):
         self.git('init', '-q')
         self.git('config', 'user.name', 'Fixture')
         self.git('config', 'user.email', 'fixture@example.invalid')
-        for name in (*PRESERVED, *HELPERS, '.github/container-and-chart/docker/Dockerfile'):
-            if name == '.github/scripts/published_package_ref.py':
+        for name in (*PRESERVED, *HELPERS, *APP_ASSETS, '.github/container-and-chart/docker/Dockerfile'):
+            if name in ('.github/scripts/published_package_ref.py', BRANDING[1], DIAGNOSTICS[0]):
                 continue  # Added with the recorder commit, absent from the app ref.
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +129,16 @@ class DemoSourceTests(unittest.TestCase):
         self.app = self.git('rev-parse', 'HEAD')
         self.git('branch', 'app')
         for name in PRESERVED:
-            (self.root / name).write_text('recorder\n')
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('recorder\n')
+            if name in DIAGNOSTICS:
+                path.chmod(0o755)
+        for name in HELPERS:
+            path = self.root / name
+            path.write_text(path.read_text() + '# workflow helper\n')
+        for name in APP_ASSETS:
+            (self.root / name).write_text('workflow asset\n')
         (self.root / '.github/container-and-chart/docker/Dockerfile').write_text('workflow recipe\n')
         (self.root / 'added-after-app.txt').write_text('must disappear\n')
         self.commit(pin='2' * 40)
@@ -153,6 +167,8 @@ class DemoSourceTests(unittest.TestCase):
         self.assertEqual(self.output.read_text().strip(), 'expected-sha=' + 'b' * 40)
 
     def test_custom_ref_changes_head_and_keeps_only_recorder_overlay(self):
+        for name in (BRANDING[1], DIAGNOSTICS[0]):
+            self.assertNotIn(name, self.git('ls-tree', '-r', '--name-only', self.app).splitlines())
         result = self.select('app')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.app)
@@ -162,7 +178,13 @@ class DemoSourceTests(unittest.TestCase):
         self.assertEqual(self.git('rev-parse', 'HEAD:upstream/takserver'), '1' * 40)
         self.assertFalse((self.root / 'added-after-app.txt').exists())
         for name in PRESERVED:
-            self.assertEqual((self.root / name).read_text(), 'recorder\n')
+            self.assertEqual(self.git('hash-object', name),
+                             self.git('rev-parse', f'{self.workflow}:{name}'), name)
+        for name in DIAGNOSTICS:
+            self.assertTrue(os.access(self.root / name, os.X_OK))
+        for name in (*APP_ASSETS, *HELPERS):
+            self.assertEqual(self.git('hash-object', name),
+                             self.git('rev-parse', f'{self.app}:{name}'), name)
         self.assertEqual(self.output.read_text().strip(), 'expected-sha=' + self.app)
 
     def test_executable_legacy_helper_is_not_executed_as_a_capability_probe(self):

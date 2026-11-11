@@ -19,6 +19,31 @@ Our public candidate is Kernel 8.30.5 / CommonCommo 1.17.2 at official ATAK
 and streaming-contact patch. These artifacts have not been renamed to either
 client's required versions.
 
+## Native component checkpoints
+
+The following opt-in source recipes are merged and have passed local Linux amd64
+component checks. Ordinary server builds do not run them.
+
+| Component | Tested scope | Merged recipe |
+| --- | --- | --- |
+| Draco 1.5.7 | Real codec round-trip, truncated-stream rejection and PIC linking | [Source profile](native-deps/README.md), [#438](https://github.com/jonathanagustin/uds-takserver/pull/438) |
+| libLAS, LASzip and Boost | C/C++ LAS/LAZ data, seek/reset, error-status and PIC checks | [Source profile](native-las/README.md), [#443](https://github.com/jonathanagustin/uds-takserver/pull/443) |
+| Modified Assimp | C/C++ and Java/JNI scene data; zero JNI warnings on valid scenes | [Source profile](native-assimp/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
+| Historical PROJ 4.9.1 | Real forward/inverse coordinates and strict PIC linking | [Source profile](native-proj/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
+
+The Assimp archive is named `4.0.1-mod`, while its modified library reports
+`4.1.0`; neither identity is relabeled. Assimp's positive checks do not establish
+JNI failure-path behavior. The LAS profile documents an uncompressed truncated
+input limitation. Historical versions have not received complete security or
+modern API acceptance.
+
+A separate [SQLCipher checkpoint](https://github.com/jonathanagustin/uds-takserver/issues/372)
+records a genuine local encrypted-database component proof; a fresh reusable
+repository recipe is not yet proven or merged. These component results do not
+complete GDAL/Spatialite/Cesium integration, target-image ABI, native Kernel/JNI,
+rendering or either TAKX client. Live enrollment and server interoperability
+remain unverified.
+
 ## Current production compiler checkpoint
 
 The public WorldWind [source recipe](worldwind-java/README.md) builds the complete

@@ -1,0 +1,50 @@
+{
+  "limits": {
+    "archiveBytes": 268435456,
+    "entries": 2048,
+    "entryBytes": 67108864,
+    "manifestBytes": 1048576,
+    "totalBytes": 268435456
+  },
+  "patch": {
+    "file": "patches/takx57-mission-admission.patch",
+    "sha256": "9e38f3be32e529377f09583ec54b4b0524f94410b7964c3b19af028026958dc2"
+  },
+  "platformReceipt": {
+    "newClassNames": [
+      "gov/tak/platform/datapackage/ZipReader$BoundedEntryStream.class"
+    ],
+    "oldPlatformArtifactAllowed": false,
+    "requiredProducer": "genuine-full-platform",
+    "requiredProfileFields": [
+      "profileId",
+      "profileSha256",
+      "patchSha256",
+      "sourceRevision",
+      "platformSourcePostimages",
+      "classInventory",
+      "generatedInventory",
+      "sourceInventory"
+    ]
+  },
+  "profileId": "takx57-mission-admission-v1",
+  "schema": 1,
+  "sourceRevision": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
+  "sources": {
+    "Client/src/main/java/gov/tak/core/comms/takserver/DataPackageManager.java": {
+      "postSha256": "10aff3fbe465fc6ae666abc5660bb2d8511cbeb2c5b23db875968af5c71dc26d",
+      "preSha256": "32d853efa6f015d79e7ecd4e50e5756e0bb66d404bfc37c9635cf58faa8a9ead",
+      "scope": "Client"
+    },
+    "Platform/src/main/java/gov/tak/platform/datapackage/PackageReader.java": {
+      "postSha256": "22cd381a6527826a39bf20dd353ee4d9d08c5ceb90a72516e93acd515e5b309f",
+      "preSha256": "3b20b6ac849f7734acdfafb9e3afc1b14e26c6ece15c2f169589a5d08c10563a",
+      "scope": "Platform"
+    },
+    "Platform/src/main/java/gov/tak/platform/datapackage/ZipReader.java": {
+      "postSha256": "eb2050f2940c24018545c6ed1ef39b284f4c55fd2768c2c53f1af8dd835dd5bb",
+      "preSha256": "4df55032d8d9c50927fb8190ecc33a2e133e5fb535f0f73143cc139be32a2e63",
+      "scope": "Platform"
+    }
+  }
+}

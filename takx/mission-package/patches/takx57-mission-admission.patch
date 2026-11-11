@@ -1,0 +1,328 @@
+--- a/Client/src/main/java/gov/tak/core/comms/takserver/DataPackageManager.java
++++ b/Client/src/main/java/gov/tak/core/comms/takserver/DataPackageManager.java
+@@ -710,6 +710,10 @@
+             throw new MissionPackageTransferException(MissionPackageTransferStatus.FINISHED_DISABLED_LOCALLY);
+         }
+ 
++        // The remote callback contract supplies SHA-256; local/manual import is separate.
++        try { PackageReader.requireExpectedSha256(sha256hash); }
++        catch (IOException invalidHash) { throw new MissionPackageTransferException(MissionPackageTransferStatus.FINISHED_FAILED); }
++
+         // The destination file path.
+         // If it exists, we throw an 'already exists' message.
+         File peerDownloadDir = getPeerImportRootDir();
+@@ -735,24 +739,20 @@
+         if (update.status == MissionPackageTransferStatus.FINISHED_SUCCESS)
+         {
+             PendingTransfer pendingTransfer = pendingTransfers.remove(packageFile);
++            if (pendingTransfer == null) {
++                logger.warn("Rejected mission package completion without a pending transfer");
++                return;
++            }
++            try {
++                PackageReader.validateReceivedPackage(packageFile, pendingTransfer.fileSha256Hash());
++            } catch (IOException | RuntimeException invalidPackage) {
++                logger.warn("Rejected mission package before import: integrity or admission check failed");
++                return;
++            }
+             String callsign = pendingTransfer.ownerCallsign();
+             addTransferLog(packageFile, callsign, null);
+             String receiveMessage = chatDataPackageService.isChatPackage(packageFile) ? "Received chat attachment from user: " + callsign : "Received data package '" + name + "' from user: " + callsign;
+             notificationService.show(new Notification(receiveMessage, Notification.Type.Info));
+-
+-            String expectedHash = pendingTransfer.fileSha256Hash();
+-            if (expectedHash != null)
+-            {
+-                String actualHash = HashingUtils.sha256sum(packageFile);
+-                if (!Objects.equals(expectedHash, actualHash))
+-                {
+-                    logger.warn("The data package '{}' did not match the expected hash of '{}' got '{}'", name, expectedHash, actualHash);
+-                }
+-            } else
+-            {
+-                // Should not occur, as we record the hash when the transfer initializes
+-                logger.warn("The data package '{}' received has no associated hash to validate against", name);
+-            }
+ 
+             // Import the data package
+             try
+--- a/Platform/src/main/java/gov/tak/platform/datapackage/PackageReader.java
++++ b/Platform/src/main/java/gov/tak/platform/datapackage/PackageReader.java
+@@ -11,6 +11,20 @@
+ 
+ import java.io.File;
+ import java.io.IOException;
++import java.io.InputStream;
++import java.nio.file.Files;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.HexFormat;
++import java.util.HashSet;
++import java.util.Set;
++import javax.xml.XMLConstants;
++import javax.xml.parsers.SAXParserFactory;
++import javax.xml.parsers.ParserConfigurationException;
++import javax.xml.transform.sax.SAXSource;
++import org.xml.sax.InputSource;
++import org.xml.sax.XMLReader;
++import org.xml.sax.SAXException;
+ import java.io.StringReader;
+ import java.lang.invoke.MethodHandles;
+ import java.util.List;
+@@ -26,6 +40,8 @@
+ {
+     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+ 
++    public static final long MAX_MANIFEST_BYTES = 1024L * 1024;
++
+     private static final String PACKAGE_MANIFEST_ELEM = "<MissionPackageManifest ";
+ 
+     // Allow the manifest to be in two locations (for better compatibility with older packages)
+@@ -41,6 +57,20 @@
+     public PackageReader(@Nonnull File packageFile) throws IOException
+     {
+         super(packageFile);
++        try {
++            int locations = 0;
++            for (String location : MANIFEST_LOCATIONS) {
++                ZipEntry entry = zipFile.getEntry(location);
++                if (entry == null) continue;
++                locations++;
++                if (entry.isDirectory() || entry.getSize() > MAX_MANIFEST_BYTES)
++                    throw new IOException("Mission manifest exceeds project limit");
++            }
++            if (locations > 1) throw new IOException("Ambiguous mission manifest locations");
++        } catch (IOException | RuntimeException failure) {
++            close();
++            throw failure;
++        }
+     }
+ 
+     /**
+@@ -84,12 +114,85 @@
+ 
+             if (manifestXml == null) throw new IOException("No manifest found in: " + zipFilePath);
+ 
+-            return (PackageManifest) getJaxbContext().createUnmarshaller().unmarshal(new StringReader(manifestXml));
+-        } catch (JAXBException e)
++            PackageManifest manifest = (PackageManifest) getJaxbContext().createUnmarshaller().unmarshal(secureSource(manifestXml));
++            validateManifest(manifest);
++            return manifest;
++        } catch (JAXBException | SAXException | ParserConfigurationException e)
+         {
+             final String message = "Failed to parse package manifest from " + zipFilePath;
+             logger.error(message, e);
+             throw new IOException(message, e);
++        }
++    }
++
++    private static SAXSource secureSource(String xml) throws SAXException, ParserConfigurationException
++    {
++        SAXParserFactory factory = SAXParserFactory.newInstance();
++        factory.setNamespaceAware(true);
++        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++        XMLReader reader = factory.newSAXParser().getXMLReader();
++        reader.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++        reader.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
++        reader.setEntityResolver((publicId, systemId) -> { throw new SAXException("External XML entity refused"); });
++        return new SAXSource(reader, new InputSource(new StringReader(xml)));
++    }
++
++    private void validateManifest(PackageManifest manifest) throws IOException
++    {
++        if (manifest == null || manifest.getVersion() != 2 || manifest.getConfiguration() == null || manifest.getContents() == null ||
++                manifest.getContents().getContents().size() > MAX_ENTRIES)
++            throw new IOException("Invalid mission manifest");
++        Set<String> referenced = new HashSet<>();
++        for (var content : manifest.getContents().getContents()) {
++            // Ignored metadata can refer to content intentionally absent from the archive.
++            if (content.isIgnore()) continue;
++            String name = content.getManifestUid();
++            checkedEntryName(name, false);
++            ZipEntry entry = zipFile.getEntry(name);
++            if (!referenced.add(name) || entry == null || entry.isDirectory())
++                throw new IOException("Invalid mission content inventory");
++        }
++    }
++
++    public static void requireExpectedSha256(String expected) throws IOException
++    {
++        if (expected == null || !expected.matches("[0-9a-fA-F]{64}"))
++            throw new IOException("Remote mission package SHA-256 is required");
++    }
++
++    /** Shared production admission path used by the remote transfer callback. */
++    public static void validateReceivedPackage(File file, String expected) throws IOException
++    {
++        requireExpectedSha256(expected);
++        if (!file.isFile() || file.length() > MAX_ARCHIVE_BYTES) throw new IOException("Invalid received mission package");
++        final MessageDigest digest;
++        try { digest = MessageDigest.getInstance("SHA-256"); }
++        catch (NoSuchAlgorithmException impossible) { throw new IOException("SHA-256 unavailable", impossible); }
++        long count = 0;
++        try (InputStream input = Files.newInputStream(file.toPath())) {
++            byte[] buffer = new byte[8192];
++            int read;
++            while ((read = input.read(buffer)) >= 0) {
++                if (read > MAX_ARCHIVE_BYTES - count) throw new IOException("Received mission package exceeds project limit");
++                count += read; digest.update(buffer, 0, read);
++            }
++        }
++        if (!MessageDigest.isEqual(HexFormat.of().parseHex(expected), digest.digest()))
++            throw new IOException("Received mission package SHA-256 mismatch");
++        try (PackageReader reader = new PackageReader(file)) {
++            PackageManifest manifest = reader.getManifest();
++            // Exercise bounded streams/CRC before the remote callback reports import success.
++            byte[] buffer = new byte[8192];
++            for (var content : manifest.getContents().getContents()) {
++                if (content.isIgnore()) continue;
++                try (InputStream input = reader.getInputStream(content.getManifestUid())) {
++                    while (input.read(buffer) >= 0) { /* bounded stream performs integrity checks */ }
++                }
++            }
+         }
+     }
+ 
+--- a/Platform/src/main/java/gov/tak/platform/datapackage/ZipReader.java
++++ b/Platform/src/main/java/gov/tak/platform/datapackage/ZipReader.java
+@@ -7,12 +7,16 @@
+ 
+ import java.io.File;
+ import java.io.IOException;
++import java.io.FilterInputStream;
+ import java.io.InputStream;
+ import java.lang.invoke.MethodHandles;
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Enumeration;
+ import java.util.List;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.zip.CRC32;
+ import java.util.function.Predicate;
+ import java.util.zip.ZipEntry;
+ import java.util.zip.ZipFile;
+@@ -29,6 +33,12 @@
+     private static final byte[] EMPTY_BYTES = new byte[0];
+     private static final String EMPTY_STRING = "";
+ 
++    // Bounded project profile; public constructor and read API remain unchanged.
++    public static final long MAX_ENTRY_BYTES = 64L * 1024 * 1024;
++    public static final long MAX_ARCHIVE_BYTES = 256L * 1024 * 1024;
++    public static final long MAX_TOTAL_BYTES = 256L * 1024 * 1024;
++    public static final int MAX_ENTRIES = 2048;
++
+     protected final File zipFilePath;
+     protected final ZipFile zipFile;
+ 
+@@ -38,7 +48,92 @@
+     public ZipReader(@Nonnull File zipFilePath) throws IOException
+     {
+         this.zipFilePath = zipFilePath;
+-        zipFile = new ZipFile(zipFilePath);
++        if (zipFilePath.length() > MAX_ARCHIVE_BYTES) throw new IOException("ZIP archive exceeds project limit");
++        ZipFile opened = new ZipFile(zipFilePath);
++        try {
++            validateInventory(opened);
++        } catch (IOException | RuntimeException failure) {
++            opened.close();
++            throw failure;
++        }
++        zipFile = opened;
++    }
++
++    protected static String checkedEntryName(String name, boolean directory) throws IOException
++    {
++        if (name == null || name.isEmpty() || name.length() > 1024 || name.startsWith("/") || name.indexOf('\\') >= 0)
++            throw new IOException("Unsafe ZIP entry name");
++        String canonical = directory && name.endsWith("/") ? name.substring(0, name.length() - 1) : name;
++        for (String segment : canonical.split("/", -1)) {
++            if (segment.isEmpty() || segment.equals(".") || segment.equals("..") || segment.indexOf(':') >= 0 ||
++                    !segment.equals(segment.trim()) || segment.endsWith(".")) throw new IOException("Unsafe ZIP entry name");
++            for (int index = 0; index < segment.length(); index++)
++                if (Character.isISOControl(segment.charAt(index))) throw new IOException("Unsafe ZIP entry name");
++        }
++        return canonical;
++    }
++
++    private static void validateInventory(ZipFile archive) throws IOException
++    {
++        Map<String, Boolean> names = new HashMap<>();
++        long total = 0;
++        Enumeration<? extends ZipEntry> entries = archive.entries();
++        while (entries.hasMoreElements()) {
++            ZipEntry entry = entries.nextElement();
++            if (names.size() >= MAX_ENTRIES) throw new IOException("ZIP entry count exceeds project limit");
++            String canonical = checkedEntryName(entry.getName(), entry.isDirectory());
++            if (names.putIfAbsent(canonical, entry.isDirectory()) != null) throw new IOException("Duplicate ZIP entry name");
++            long size = entry.getSize();
++            if (size < 0 || size > MAX_ENTRY_BYTES || entry.getCrc() < 0 || (entry.isDirectory() && size != 0))
++                throw new IOException("ZIP entry exceeds project limits");
++            if (size > MAX_TOTAL_BYTES - total) throw new IOException("ZIP aggregate exceeds project limit");
++            total += size;
++        }
++        for (String name : names.keySet()) {
++            for (int slash = name.indexOf('/'); slash >= 0; slash = name.indexOf('/', slash + 1))
++                if (Boolean.FALSE.equals(names.get(name.substring(0, slash))))
++                    throw new IOException("ZIP file conflicts with directory path");
++        }
++    }
++
++    private static final class BoundedEntryStream extends FilterInputStream
++    {
++        private long remaining;
++        private final long expectedCrc;
++        private final CRC32 crc = new CRC32();
++        BoundedEntryStream(InputStream source, ZipEntry entry) {
++            super(source); remaining = entry.getSize(); expectedCrc = entry.getCrc();
++        }
++        private int checked(int count, byte[] bytes, int offset) throws IOException {
++            if (count < 0) {
++                if (remaining != 0 || crc.getValue() != expectedCrc) throw new IOException("ZIP entry integrity mismatch");
++            } else {
++                if (count > remaining) throw new IOException("ZIP entry expanded beyond declared size");
++                remaining -= count; crc.update(bytes, offset, count);
++            }
++            return count;
++        }
++        @Override public int read() throws IOException {
++            byte[] one = new byte[1];
++            int count = read(one, 0, 1);
++            return count < 0 ? -1 : one[0] & 0xff;
++        }
++        @Override public int read(byte[] bytes, int offset, int length) throws IOException {
++            java.util.Objects.checkFromIndexSize(offset, length, bytes.length);
++            if (length == 0) return 0;
++            int allowed = (int) Math.min(length, remaining + 1);
++            return checked(in.read(bytes, offset, allowed), bytes, offset);
++        }
++        @Override public long skip(long count) throws IOException {
++            long skipped = 0;
++            byte[] buffer = new byte[8192];
++            while (skipped < count) {
++                int read = read(buffer, 0, (int) Math.min(buffer.length, count - skipped));
++                if (read < 0) break;
++                skipped += read;
++            }
++            return skipped;
++        }
+     }
+ 
+     @Override
+@@ -218,9 +313,9 @@
+     @Nonnull
+     public InputStream getInputStream(@Nonnull String entry) throws IOException
+     {
++        checkedEntryName(entry, false);
+         final ZipEntry zipEntry = zipFile.getEntry(entry);
+-        if (zipEntry == null) throw new IOException("ZipEntry not found: " + entry);
+-
+-        return zipFile.getInputStream(zipEntry);
++        if (zipEntry == null || zipEntry.isDirectory()) throw new IOException("ZIP content entry not found");
++        return new BoundedEntryStream(zipFile.getInputStream(zipEntry), zipEntry);
+     }
+ }

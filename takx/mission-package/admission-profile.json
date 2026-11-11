@@ -1,0 +1,71 @@
+{
+  "extraction": {
+    "cacheIdentity": [
+      "actualArchiveSHA256",
+      "exactEntryPathSHA256"
+    ],
+    "certificateAuthorizationSolved": false,
+    "completion": "exclusive same-directory hardlink; no replacement fallback",
+    "legacyFlatCacheReused": false,
+    "platform": "Linux desktop project profile"
+  },
+  "historicalProfiles": [
+    {
+      "file": "profiles/takx57-mission-admission-v1.json",
+      "sha256": "04678f0f0725c4695d41669783d1cf1332c5ccfd740cb3efa09f1db736d6a07a"
+    }
+  ],
+  "limits": {
+    "archiveBytes": 268435456,
+    "entries": 2048,
+    "entryBytes": 67108864,
+    "manifestBytes": 1048576,
+    "totalBytes": 268435456
+  },
+  "patch": {
+    "file": "patches/takx57-mission-admission-v2.patch",
+    "sha256": "ed67b71029cbe3ad2bfce195630b7481edb52c34522bce9a8a0207acc287fdc8"
+  },
+  "platformReceipt": {
+    "newClassNames": [
+      "gov/tak/platform/datapackage/ZipReader$BoundedEntryStream.class"
+    ],
+    "oldPlatformArtifactAllowed": false,
+    "requiredProducer": "genuine-full-platform",
+    "requiredProfileFields": [
+      "profileId",
+      "profileSha256",
+      "patchSha256",
+      "sourceRevision",
+      "platformSourcePostimages",
+      "classInventory",
+      "generatedInventory",
+      "sourceInventory"
+    ]
+  },
+  "profileId": "takx57-mission-admission-v2",
+  "schema": 1,
+  "sourceRevision": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
+  "sources": {
+    "Client/src/main/java/gov/tak/core/comms/takserver/DataPackageManager.java": {
+      "postSha256": "4a6681025b97e4fc45cdaba2fa9c1537ce7feda822a8e654762960f3075c98b4",
+      "preSha256": "32d853efa6f015d79e7ecd4e50e5756e0bb66d404bfc37c9635cf58faa8a9ead",
+      "scope": "Client"
+    },
+    "Platform/src/main/java/gov/tak/platform/datapackage/PackageImporter.java": {
+      "postSha256": "082ac45cc7a36549ddbb44ea667177c5539e3c2c0698524ed2309241783551e9",
+      "preSha256": "613ac7e51b83e9e654da3a28f94d9569d8c40853d5e471f50c18dbda0ee4bb08",
+      "scope": "Platform"
+    },
+    "Platform/src/main/java/gov/tak/platform/datapackage/PackageReader.java": {
+      "postSha256": "fbfa5312e026497935749c04e29c817b3bf2f352a2946b9dca064c7d1eb79d6a",
+      "preSha256": "3b20b6ac849f7734acdfafb9e3afc1b14e26c6ece15c2f169589a5d08c10563a",
+      "scope": "Platform"
+    },
+    "Platform/src/main/java/gov/tak/platform/datapackage/ZipReader.java": {
+      "postSha256": "eb2050f2940c24018545c6ed1ef39b284f4c55fd2768c2c53f1af8dd835dd5bb",
+      "preSha256": "4df55032d8d9c50927fb8190ecc33a2e133e5fb535f0f73143cc139be32a2e63",
+      "scope": "Platform"
+    }
+  }
+}

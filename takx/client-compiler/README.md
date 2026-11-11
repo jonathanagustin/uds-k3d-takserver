@@ -173,3 +173,32 @@ The pinned official build files establish the following unfulfilled gates:
    or private SDK equivalence is accepted by this compiler recipe.
 
 These are next gates, not failures masked by a synthetic Gradle success.
+
+## Mission-package admission variant
+
+The optional [mission profile](../mission-package/README.md) exports checked
+actual source postimages without changing the frozen baseline lock. To consume
+it, supply all three arguments together:
+
+```sh
+python3 takx/client-compiler/build.py --bindings /verified/client-bindings.json \
+  --mission-admission-projection /verified/source-projection \
+  --mission-platform-proof /verified/full-platform-proof \
+  --mission-platform-receipt-sha256 REVIEWED_RECEIPT_SHA256 \
+  --output /fresh/client-proof
+```
+
+The genuine full Platform producer/verifier is included alongside this recipe;
+see [PLATFORM.md](PLATFORM.md). An old Platform artifact or small class overlay
+cannot satisfy the gate. The old Platform CP entry is replaced in-place and
+only the checked Client postimage is substituted. Input/source-argument and
+profile/artifact postchecks remain mandatory. `--check-inputs` performs no compile.
+A sparse checkout must also materialize the genuine locked
+`takx/native-commoncommo/runner.py`; the current dry-check does not yet test this
+local helper's availability. The first local attempt stopped before javac for
+that checkout omission; its output was preserved separately.
+
+The variant retains the 15 MiB logical output cap and reserves/caps 32 MiB of
+physical allocation above the 2 GiB floor, including the receipt. Heap is 768 MiB,
+two active processors, command deadline 240 seconds. Actual compiler acceptance
+remains distinct from native execution, application/CDI/UI and transfer success.

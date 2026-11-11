@@ -50,6 +50,24 @@ class Guards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'unsafe relative input'):
                 build.resolve('input:' + relative, self.roots)
 
+    def test_mission_profile_without_rebuilt_platform_receipt_never_falls_back(self):
+        self.assertIsNone(build.mission_inputs(self.lock, self.roots, None, None, None))
+        for projection, proof, digest in [(self.root,None,None),(None,self.root,'0'*64),
+                                           (self.root,self.root,None)]:
+            with self.subTest(projection=projection, proof=proof),self.assertRaisesRegex(ValueError,'rebuilt Platform receipt'):
+                build.mission_inputs(self.lock,self.roots,projection,proof,digest)
+
+    def test_platform_classpath_replacement_is_in_place_not_overlay(self):
+        replacement=self.root/'new-platform';replacement.mkdir()
+        refs=['input:classes','input:sources']
+        actual=build.replace_platform_entry(refs,self.roots,'input:classes',replacement)
+        self.assertEqual(actual,[replacement,self.root/'sources'])
+        self.assertNotIn(self.root/'classes',actual);self.assertEqual(len(actual),len(refs))
+        with self.assertRaisesRegex(ValueError,'old Platform must be removed'):
+            build.replace_platform_entry(refs,self.roots,'input:classes',self.root/'classes')
+        with self.assertRaisesRegex(ValueError,'one authoritative'):
+            build.replace_platform_entry(refs+['input:classes'],self.roots,'input:classes',replacement)
+
     def test_qualified_lock_shape(self):
         text = build.LOCK.read_text()
         lock = json.loads(text)

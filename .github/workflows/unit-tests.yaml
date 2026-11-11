@@ -110,6 +110,9 @@ jobs:
       - name: Dump Secret restore helper
         run: bash tests/test_db_dump_secret.sh
 
+      - name: Synthetic mission-package fixture and provenance guards
+        run: python3 -B -m unittest discover -s takx/mission-package -p 'test_*.py' -v
+
       - name: CoreConfig cache listener
         run: python3 -B -m unittest tests.test_cacheconfig_patch -v
 
@@ -154,6 +157,7 @@ jobs:
           python3 -B -m unittest discover -s takx/kernel-native -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/kernel-client-interop -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/client-compiler -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/client-compiler -p 'test_platform_producer.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_resource_inputs.py' -v
           python3 -B -m unittest discover -s takx/native-deps -p 'test_build.py' -v

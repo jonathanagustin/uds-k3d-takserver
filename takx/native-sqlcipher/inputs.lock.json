@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "archives": {
+    "tcl": {
+      "url": "https://prdownloads.sourceforge.net/tcl/tcl8.6.18-src.tar.gz",
+      "sha256": "14f9af32b1767ff718477a8f974ad03c34341097e6b43f4ce54644ee974e268e",
+      "bytes": 11816279,
+      "root": "tcl8.6.18",
+      "members": 2439,
+      "regular_files": 2280,
+      "expanded_bytes": 49541245
+    },
+    "openssl": {
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+      "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a",
+      "bytes": 53279637,
+      "root": "openssl-3.5.9",
+      "members": 6078,
+      "regular_files": 5779,
+      "expanded_bytes": 131230833
+    },
+    "sqlcipher": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/sqlcipher.tar.gz",
+      "sha256": "b670845f28da0a3c717e991e9f18a334e08f6bc977190bbce6be864ca229f96d",
+      "bytes": 19015767,
+      "root": "sqlcipher-4.5.7",
+      "members": 2261,
+      "regular_files": 2196,
+      "expanded_bytes": 117065594
+    }
+  },
+  "licenses": {
+    "tcl8.6.18/license.terms": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+    "tcl8.6.18/libtommath/LICENSE": "2fa64b163659f41965c9815882a8296d3d03ff546b76153e11445f9bdecf955a",
+    "tcl8.6.18/compat/zlib/README": "4026d921213bb2e311d8d42b44ef53361c102d5d45ae32f93f8e52eaee8d068f",
+    "openssl-3.5.9/LICENSE.txt": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+    "sqlcipher-4.5.7/LICENSE.md": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14"
+  },
+  "provenance": {
+    "openssl_commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
+    "openssl_checksum": "publisher-sha256",
+    "openssl_lts_until": "2030-04-08",
+    "tcl_mirror_commit": "515167c897a7c8066abfbd71e8fe7bd8bf3569de",
+    "tcl_fossil": "b0a0551c13a3dbba2dac30ab9b8df30d91cc1dff292f170e19980a5e4168df83",
+    "tcl_checksum": "computed-official-designated-distribution",
+    "sqlcipher_commit": "2d6941f26daa3d270bd7daad36dfba5bd6f3d12f",
+    "sqlcipher_sqlite_version": "3.45.3"
+  },
+  "tools": {
+    "cc": "14.2.0",
+    "make": "4.4.1",
+    "perl": "5.40.1",
+    "ar": "2.44",
+    "ranlib": "2.44",
+    "readelf": "2.44"
+  }
+}

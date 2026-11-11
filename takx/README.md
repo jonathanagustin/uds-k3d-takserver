@@ -18,6 +18,8 @@ The [Assimp native profile](native-assimp/README.md) builds the official core an
 matching Java/JNI bindings, with ordinary model-data and zero-warning JNI checks.
 The [historical PROJ profile](native-proj/README.md) builds unchanged PROJ 4.9.1
 with real coordinate and PIC checks; modern API and security acceptance remain open.
+The [SQLCipher native profile](native-sqlcipher/README.md) builds its Tcl and
+OpenSSL prerequisites from source and checks encrypted databases and PIC linking.
 
 The separate opt-in [GIS Java source recipe](gis-java/README.md) generates the official modified GDAL wrappers and compiles jassimp with a real consumer API probe. It has its own source lock and cache; it neither builds native GIS/JNI libraries nor completes the engine or either client.
 

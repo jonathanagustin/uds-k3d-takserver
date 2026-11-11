@@ -97,3 +97,27 @@ the run. Every category retains its own complete bounded log, exit code,
 assertion marker and strict qualification result. JNI warnings always fail that
 category. The existing 120-second bound applies to each process (six maximum).
 No category outcome is claimed until this revised runner is actually executed.
+
+## Observed qualification results
+
+The source compiles against the genuine resource-complete SDK. Actual native
+runs have **not qualified the complete suite**:
+
+- Runtime 01 passed startup and basic native controls, then rejected an extra
+  MBTiles SPI read-only assertion. The actual default IO provider ignores that
+  option. The corrected test follows the upstream writable SPI roundtrip and
+  separately checks direct native SQLite read-only behavior. Original failure
+  receipt SHA256: `d25810b12995903c48391475f94bc2a919a1d698e3388d08dcf90dda32f30c5a`.
+- Runtime 02 completed DTED/MBTiles and GeoPackage assertions, but GeoPackage
+  encoding emitted checked-JNI warnings in GDAL `Driver_CreateCopy__SWIG_0`.
+  It then failed KML parsing because the reduced GDAL provider lacks a KML
+  reader. Elevation and OBJ were not reached. Receipt SHA256:
+  `533ef2d28f507413e12a4c1ead02e12a6fb41bf34cbab35e8f68b9a808d4c914`.
+
+The GDAL options-vector typemap calls Java enumeration methods without checking
+pending exceptions. The reduced native build explicitly configures both
+`--with-expat=no` and `--with-libkml=no`. These require real source/producer fixes
+and new qualified artifacts; this suite does not replace providers, edit completed
+SDKs or relax checked-JNI rules. The independent-process runner was prepared
+after those failures and remains unexecuted. Compilation and offline provenance
+checks are useful evidence, but do not substitute for passing native regressions.

@@ -249,9 +249,19 @@ else:
                     patch.object(AIRGAP, 'bounded_exec', side_effect=error), patch.object(AIRGAP, 'backend_diagnostic'), contextlib.redirect_stderr(output):
                 with self.assertRaisesRegex(RuntimeError, "node firewall command failed"):
                     AIRGAP.firewall('k3d-node', binding(), '-A', AIRGAP.CHAIN, '-j', 'DROP')
+            self.assertIn('Node firewall operation: append-rule/' + AIRGAP.CHAIN, output.getvalue())
             self.assertIn('iptables v1.8.11: lock timeout', output.getvalue())
             self.assertNotIn('DO_NOT_EMIT', output.getvalue())
             self.assertIn('[REDACTED]', output.getvalue())
+
+    def test_failure_operation_labels_exclude_untrusted_rule_arguments(self):
+        self.assertEqual(AIRGAP.firewall_operation(('-N', AIRGAP.CHAIN)),
+                         'create-chain/' + AIRGAP.CHAIN)
+        self.assertEqual(AIRGAP.firewall_operation(('-I', 'OUTPUT', '1', '-j', AIRGAP.CHAIN)),
+                         'insert-hook/OUTPUT')
+        self.assertEqual(AIRGAP.firewall_operation(('secret-operation', 'private-address')),
+                         'unknown/other')
+        self.assertEqual(AIRGAP.firewall_operation(()), 'unknown/other')
 
     def test_firewall_stderr_is_redacted_before_truncation_and_auth_is_omitted_whole(self):
         detail = AIRGAP.firewall_error_detail('-----BEGIN PRIVATE KEY-----\n' +

@@ -1,0 +1,2 @@
+# Unified patch context represents an empty source line with one space.
+client-contracts.patch whitespace=-blank-at-eol

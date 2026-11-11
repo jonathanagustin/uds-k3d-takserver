@@ -117,3 +117,30 @@ Run offline publisher fixtures (no downloads, rendering or release writes):
 ```sh
 uv run --no-project --with pyyaml==6.0.3 python -B -m unittest discover -s demo/ui-reel -p test_publish.py -v
 ```
+
+
+## Optional historical scene review exports
+
+Pass `--export-scenes` to also create a separate sibling directory (by default
+`demo/out/ui-reel-scenes/`). The existing reel output stays unchanged. Only three
+existing scenes meet the 5–10 second clip brief: `create-map-marker` (6 seconds),
+`share-feature` (6.5 seconds) and `shared-marker` (6 seconds). They reuse the
+already encoded scenes, including the visible recorded-footage caption. No
+footage is extended, looped or relabeled as a new capture.
+
+Each clip has a poster and individual JSON manifest binding the exact locked
+source asset and interval, font input, recipe/lock hashes, tool versions, clip
+and poster hashes/sizes and measured media properties. The font license is
+included. These records do not invent missing original capture-run or application
+version metadata. Offline fixture tests prove wiring and hash contracts, not
+visual quality; inspect every real clip and poster before sharing.
+
+The manual workflow's `export_scenes` input defaults to false. When enabled it
+attests all three clip MP4s and individual manifests and retains the bundle in a
+separate `ui-scene-previews` review artifact. Verify each MP4 and JSON with the
+same repository/workflow signer flags shown above and that artifact's bundle;
+check each poster against its verified manifest. Local exports are unsigned.
+Scene export cannot be combined with release publication. The existing strict
+six-file reel publisher does not accept scene artifacts. Publishing clips,
+vertical reframing, new scenes and fresh deployment/interoperability evidence
+remain separate work.

@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -158,8 +159,10 @@ class PublishTests(unittest.TestCase):
         self.assertNotIn("concurrency", workflow)
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         inputs = workflow[True]["workflow_dispatch"]["inputs"]
-        self.assertEqual(set(inputs), {"release_tag", "source_run_id"})
-        self.assertTrue(all(i["default"] == "" and i["type"] == "string" for i in inputs.values()))
+        self.assertEqual(set(inputs), {"release_tag", "source_run_id", "export_scenes"})
+        self.assertTrue(all(i["default"] == "" and i["type"] == "string" for key, i in inputs.items() if key != "export_scenes"))
+        self.assertEqual(inputs["export_scenes"]["type"], "boolean")
+        self.assertIs(inputs["export_scenes"]["default"], False)
         jobs = workflow["jobs"]
         self.assertEqual(jobs["render"]["permissions"],
                          {"contents": "read", "id-token": "write", "attestations": "write"})
@@ -175,8 +178,34 @@ class PublishTests(unittest.TestCase):
         commands = [s.get("run", "") for s in jobs["publish"]["steps"]]
         self.assertIn("python3 demo/ui-reel/publish.py", commands)
         self.assertFalse(any("render.py" in command for command in commands))
-        self.assertIn("python3 demo/ui-reel/publish.py --mode-only",
-                      [s.get("run", "") for s in jobs["mode"]["steps"]])
+        self.assertTrue(any("python3 demo/ui-reel/publish.py --mode-only" in s.get("run", "")
+                            for s in jobs["mode"]["steps"]))
+
+    def test_scene_artifact_is_opt_in_separate_and_cannot_enter_publisher(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / ".github/workflows/ui-reel.yaml").read_text())
+        steps = workflow["jobs"]["render"]["steps"]
+        scene_steps = [step for step in steps if step.get("if") == "inputs.export_scenes"]
+        self.assertEqual(len(scene_steps), 3)
+        attest, retain, upload = scene_steps
+        self.assertEqual(attest["with"]["subject-path"].splitlines(),
+                         ["demo/out/ui-reel-scenes/*.mp4", "demo/out/ui-reel-scenes/*.json"])
+        self.assertIn("demo/out/ui-reel-scenes/attestation.sigstore.json", retain["run"])
+        self.assertEqual(upload["with"]["name"], "ui-scene-previews")
+        self.assertEqual(upload["with"]["path"], "demo/out/ui-reel-scenes/")
+        normal = next(s for s in steps if s["name"] == "Upload the review artifact")
+        self.assertNotIn("if", normal)
+        self.assertEqual(normal["with"]["path"], "demo/out/ui-reel/")
+        self.assertEqual(len(p.FILES), 6)
+        mode = workflow["jobs"]["mode"]["steps"][-1]["run"]
+        guard = mode.split("python3 demo/ui-reel/publish.py --mode-only")[0]
+        for tag, run, enabled, expected in [("", "", "true", 0), (TAG, RUN_ID, "false", 0),
+                                             (TAG, "", "true", 1), ("", RUN_ID, "true", 1),
+                                             (TAG, RUN_ID, "true", 1)]:
+            result = subprocess.run(["bash", "-e", "-c", guard], capture_output=True,
+                                    env={**os.environ, "RELEASE_TAG": tag, "SOURCE_RUN_ID": run,
+                                         "EXPORT_SCENES": enabled}, timeout=5)
+            self.assertEqual(result.returncode, expected)
 
     def test_modes_are_paired_stable_and_main_only(self):
         self.assertEqual(p.mode("", "", p.REF), "render")

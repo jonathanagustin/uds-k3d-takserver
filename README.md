@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="docs-site/public/badges/release.svg" alt="Release"></a>
+  <a href="https://github.com/jonathanagustin/uds-takserver/releases/latest"><img src="https://jonathanagustin.github.io/uds-takserver/badges/release.svg" alt="Release"></a>
   <a href="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml"><img src="https://github.com/jonathanagustin/uds-takserver/actions/workflows/test.yaml/badge.svg?branch=main" alt="Test"></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/jonathanagustin/uds-takserver"><img src="docs-site/public/badges/openssf-scorecard.svg" alt="OpenSSF Scorecard"></a>
   <a href="https://www.bestpractices.dev/projects/15775"><img src="https://www.bestpractices.dev/projects/15775/badge" alt="OpenSSF Best Practices"></a>

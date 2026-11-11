@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "source_license": "GPL-3.0-only; retain component-specific third-party notices",
+  "tests": [
+    {
+      "scope": "DTED filename discovery",
+      "path": "takkernel/engine/src/jniTest/java/com/atakmap/map/formats/dted/DtedElevationSourceTest.java",
+      "blob": "669dbc1960aaca745b20cc029a2852630dfd20da",
+      "sha256": "bcf02bbffadf1b8502d7816cf6dcc73382d353cdc484eb2c2932b9966f8c8ec4",
+      "methods": [
+        "query_formats_asc",
+        "query_formats_desc",
+        "query_formats"
+      ],
+      "bytes": 2026
+    },
+    {
+      "scope": "GeoPackage float gridded coverage",
+      "path": "takkernel/engine/src/jniTest/java/com/atakmap/map/layer/raster/gpkg/GeoPackageTileContainerTest.java",
+      "blob": "1e61413ac6f43fd0e211a2e11f83c7637b18f322",
+      "sha256": "451e7b4d8c46b079eb52bfaa042f88382ba7af2c56e41505da9859bacfa0f339",
+      "methods": [
+        "open_existing_griddedcoverage"
+      ],
+      "bytes": 9297
+    },
+    {
+      "scope": "MBTiles default SPI byte roundtrips",
+      "path": "takkernel/engine/src/jniTest/java/com/atakmap/map/layer/raster/mbtiles/MBTilesContainerTest.java",
+      "blob": "a3a06db846c517fd70ec1727fa339d5d720bf358",
+      "sha256": "eb1dd3cd3088f6d33a70f98ad5a245374db69552a24b35a5d466b480762c3e70",
+      "methods": [
+        "create_with_null_spec_creates_db",
+        "spi_create_roundtrip",
+        "spi_update_roundtrip"
+      ],
+      "bytes": 10920
+    }
+  ],
+  "license_inputs": [
+    {
+      "path": "LICENSE.md",
+      "blob": "652daaf58c531d8abaa7fc6978d4e87427276c55",
+      "sha256": "3db8b919e1f1cb3dff5114ea875d3a758ff367e6490622780d0f7092daebd8f9"
+    },
+    {
+      "path": "THIRDPARTY.md",
+      "blob": "e22bc9d1fcafba75e1deb2d711c22fe47c99f914",
+      "sha256": "716bcdf3280496641b004f05dd4a7d4e842e8d2e632069c8c5177d8bfb04c7a2"
+    }
+  ],
+  "adaptation": {
+    "preserved": [
+      "actual production SDK classes and SPI/native database paths",
+      "DTED empty-file discovery fixture, not decode",
+      "GeoPackage 256x256 float samples and nondefault offset/scale",
+      "MBTiles seven upstreamcoordinates, update and reopen byte checks"
+    ],
+    "changed": [
+      "standalone checked assertions replace JUnit and Android FileUtils",
+      "owned Path fixtures and deterministic UTF-8 bytepayloads",
+      "native disposables and database handles closed"
+    ],
+    "not_covered": [
+      "DTED height decoding",
+      "other MBTiles schema implementations or invalid mock specs",
+      "KML",
+      "arbitrary elevation sampling",
+      "3D rendering",
+      "Android test runtime",
+      "full client"
+    ]
+  }
+}

@@ -161,7 +161,11 @@ The cluster jobs temporarily compare `ubuntu-22.04` on AMD64 and
 `ubuntu-22.04-arm` on native ARM64 for [#300](https://github.com/jonathanagustin/uds-takserver/issues/300)
 and [#103](https://github.com/jonathanagustin/uds-takserver/issues/103).
 Test, Full Core, Benchmark and Demo Video retain the AMD64 `TEST_RUNNER` override;
-Demo Video uses the same Ubuntu 22 default as Test. A failed recording retains
+Demo Video uses the same Ubuntu 22 default as Test. Its terminal recorder is the
+SHA-256-pinned, dependency-free asciinema 2.4.0 wheel in a separate virtual
+environment. Before deployment, a real CLI check records a 132×34 cast and
+verifies both the dimensions and the recorded command exit code. The distro
+package is not used: Ubuntu 22 ships 2.1.0, which lacks the required size flags. A failed recording retains
 a separate `demo-startup-diagnostics` artifact with redacted runner evidence and
 current/previous TAK application and dependency-wait logs. Captures have time
 and size limits; incomplete or oversized streams are omitted in full. Only a

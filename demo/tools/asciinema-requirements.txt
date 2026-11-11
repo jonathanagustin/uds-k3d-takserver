@@ -1,0 +1,2 @@
+# Official dependency-free wheel, pinned from PyPI's asciinema 2.4.0 release metadata.
+asciinema @ https://files.pythonhosted.org/packages/55/72/d79812aa210d411f7659fde4bbb1d5ef0e80950ff70f98bfdc57e12787dc/asciinema-2.4.0-py3-none-any.whl --hash=sha256:249ccf108509d643ddaf38979dac48c99e9e251f597173d8553a30d7a6423104

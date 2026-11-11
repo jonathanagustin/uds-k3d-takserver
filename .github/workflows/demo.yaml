@@ -163,7 +163,7 @@ jobs:
           }
           apt_try update
           apt_try install -y -o Dpkg::Use-Pty=0 --no-install-recommends ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
-            xvfb libnss3-tools python3-pil
+            xvfb libnss3-tools python3-pil python3-venv
           curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
           echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
           sudo mkdir -p /usr/local/share/fonts/inter
@@ -246,11 +246,23 @@ jobs:
       # The deployment is recorded as the video's opening chapter: the same
       # commands as `uds run demo-deploy`, printed as they run, captured with
       # asciinema and rendered later by demo/render-cast.py.
+      - name: Install and check the pinned terminal recorder
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/asciinema"
+          "${RUNNER_TEMP}/asciinema/bin/python" -m pip --isolated install \
+            --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes \
+            --timeout 30 --retries 2 -r demo/tools/asciinema-requirements.txt
+          python3 demo/tools/check-asciinema.py \
+            --recorder "${RUNNER_TEMP}/asciinema/bin/asciinema" \
+            --output "${RUNNER_TEMP}/asciinema-cli-check"
+          echo "${RUNNER_TEMP}/asciinema/bin" >> "${GITHUB_PATH}"
+        shell: bash
+
       - name: Deploy UDS Core and TAK
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends asciinema
           mkdir -p demo/out
           TERM=xterm-256color FLAVOR=upstream asciinema rec --overwrite -q --cols 132 --rows 34 \
             -c './demo/deploy.sh; echo $? > demo/out/00-deploy.exit' demo/out/00-deploy.cast < /dev/null

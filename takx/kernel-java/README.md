@@ -118,6 +118,20 @@ The default is `--scope engine --profile patched`. Use `--profile baseline` only
 the historical compilation comparison, with a separate new output directory.
 Each receipt names its selected profile and records actual input hashes.
 
+Add `--jni-headers` to generate native-method headers with the same `javac`
+invocation. The recipe records every generated header in `jni-header-hashes.json`
+and checks coverage of generated-header includes across the complete pinned JNI
+source/header set. `jni-header-coverage.json` records each referring source and
+any missing headers; successful compilation with incomplete coverage fails.
+These are inputs for the native Kernel build; generating
+headers does not compile or load JNI. Existing generated directories are never
+reused, and successful requested generation must produce nonempty regular headers.
+The patched `engine-shared` compile generated 118 headers, covering all 109
+header names referenced by the pinned JNI C/C++ source and header set. The same
+compile produced 2,697 classes with zero errors and four warnings.
+
+
+
 `--fetch-dependencies` permits downloading only missing public JARs from the
 locked URLs, with exact size and SHA256 checks. Existing mismatched files fail;
 they are never replaced. Omit the flag for offline use. The recipe does not fetch

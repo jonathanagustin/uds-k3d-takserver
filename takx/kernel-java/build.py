@@ -266,6 +266,56 @@ def quoted_argument(path):
     return '"' + str(path).replace('\\', '\\\\').replace('"', '\\"') + '"\n'
 
 
+def generated_headers(root):
+    """Inventory javac's real flat JNI output; never supply replacement headers."""
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('generated JNI header directory required')
+    result = {}
+    for path in sorted(root.iterdir()):
+        if path.is_symlink() or not path.is_file() or path.suffix != '.h' or not path.stat().st_size:
+            raise ValueError('unexpected generated JNI header output')
+        result[path.name] = digest(path)
+    if not result:
+        raise ValueError('javac generated no JNI headers')
+    return result
+
+
+def jni_header_references(files):
+    required = {}
+    pattern = rb'^\s*#\s*include\s*[<"]((?:com_|gov_|org_|java_|javax_)[A-Za-z0-9_]+\.h)[>"]'
+    for name, data in sorted(files.items()):
+        for header in re.findall(pattern, data, re.M):
+            required.setdefault(header.decode('ascii'), []).append(name)
+    if not required:
+        raise ValueError('actual JNI generated-header references required')
+    return required
+
+
+def native_header_inputs(source):
+    """Read the complete pinned JNI source/header set, not selected examples."""
+    root = 'takkernel/engine/src/main/jni'
+    env = dict(os.environ, GIT_NO_LAZY_FETCH='1')
+    subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', root],
+                   env=env, check=True, timeout=30)
+    raw = subprocess.check_output(['git', '-C', str(source), 'archive', '--format=tar', REVISION, root],
+                                  env=env, timeout=30)
+    if len(raw) > 32 * 1024 * 1024:
+        raise ValueError('JNI reference source archive exceeds bound')
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
+        for item in archive:
+            if not item.name.endswith(('.cpp', '.c', '.h')):
+                continue
+            name = PurePosixPath(item.name)
+            if (not item.isfile() or name.is_absolute() or '..' in name.parts
+                    or not item.name.startswith(root + '/') or item.name in files
+                    or item.size > 2 * 1024 * 1024):
+                raise ValueError('invalid JNI reference source')
+            files[item.name] = archive.extractfile(item).read()
+    return ({name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())},
+            jni_header_references(files))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scope', choices=('engine', 'engine-shared'), default='engine',
@@ -278,6 +328,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True, help='new external proof directory; existing output is refused')
     parser.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), required=not bool(os.environ.get('JAVA_HOME')))
     parser.add_argument('--fetch-dependencies', action='store_true', help='allow missing public JARs to download from locked URLs')
+    parser.add_argument('--jni-headers', action='store_true', help='generate and inventory real native-method headers with javac -h; does not build JNI')
     args = parser.parse_args()
     lock = select_profile(json.loads((HERE / 'inputs.lock.json').read_text()), args.profile, args.scope)
     output = fresh_output(args.output)
@@ -287,6 +338,7 @@ def main():
     if not re.fullmatch(r'javac 17\.[^\n]+', version):
         raise ValueError('JDK 17 javac required')
     sources, original_hashes = upstream_sources(args.source.resolve(), lock)
+    jni_sources, required_headers = native_header_inputs(args.source.resolve()) if args.jni_headers else ({}, {})
     jars = [(public_jar(args.classpath_dir.resolve(), n, e, args.fetch_dependencies),
              {'role': 'exact public dependency', 'url': e['url']}) for n, e in lock['public_jars'].items()]
     gis, gis_receipt = verified_gis(args.gis_build.resolve(), lock); jars.extend(gis)
@@ -324,7 +376,8 @@ def main():
             verified_class_entries(target, lock['gis_java']['artifacts'][source.name]['class_entries'])
         classpath.append({'path': str(target), 'sha256': expected, **metadata})
     inputs = {
-        'schema': 1, 'source_commit': adapter_commit,
+        'schema': 1, 'source_commit': adapter_commit, 'generate_jni_headers': args.jni_headers,
+        'jni_reference_source_hashes': jni_sources, 'required_jni_headers': required_headers,
         'adapter_inventory': [{'path': name, 'sha256': hashlib.sha256(data).hexdigest()} for name, data in adapters.items()],
         'classpath_profile': args.profile, 'source_scope': args.scope, 'upstream_revision': REVISION,
         'engine_sources': 862, 'shared_sources': 231 if args.scope == 'engine-shared' else 0,
@@ -342,6 +395,9 @@ def main():
     (output / 'classpath.txt').write_text(cp + '\n'); (output / 'classes').mkdir()
     command = [str(javac), '-J-Xmx768m', '-J-XX:ActiveProcessorCount=2', '--release', '11', '-encoding', 'UTF-8', '-proc:none',
                '-Xmaxerrs', '3000', '-sourcepath', '', '-cp', cp, '-d', str(output / 'classes'), '@' + str(output / 'sources.args')]
+    if args.jni_headers:
+        (output / 'jni-headers').mkdir()
+        command[-1:-1] = ['-h', str(output / 'jni-headers')]
     (output / 'command.json').write_text(json.dumps(command, indent=2) + '\n')
     with (output / 'stdout.log').open('w') as stdout, (output / 'stderr.log').open('w') as stderr:
         try:
@@ -355,13 +411,25 @@ def main():
     diagnostics = (output / 'stderr.log').read_text()
     classes = {p.relative_to(output / 'classes').as_posix(): digest(p) for p in sorted((output / 'classes').rglob('*.class'))}
     (output / 'class-hashes.json').write_text(json.dumps(classes, indent=2) + '\n')
+    headers = generated_headers(output / 'jni-headers') if args.jni_headers and code == 0 else {}
+    if args.jni_headers:
+        (output / 'jni-header-hashes.json').write_text(json.dumps(headers, indent=2) + '\n')
+        missing = sorted(set(required_headers) - set(headers))
+        (output / 'jni-header-coverage.json').write_text(json.dumps({
+            'upstream_revision': REVISION, 'required_headers': required_headers,
+            'generated_header_hashes': headers, 'missing_headers': missing,
+            'native_built_or_loaded': False}, indent=2) + '\n')
+        if code == 0 and missing:
+            raise ValueError('generated headers missing from complete pinned JNI source requirements: ' + ', '.join(missing))
     summary = {'classpath_profile': args.profile, 'source_scope': args.scope,
                'baseline_matching_public_jars': lock['baseline_matching_public_jars'],
                'exit_code': code, 'errors': len(re.findall(r'^.*?:\d+: error:', diagnostics, re.M)),
                'warnings': len(re.findall(r'^.*?:\d+: warning:', diagnostics, re.M)), 'engine_sources': 862,
                'shared_sources': 231 if args.scope == 'engine-shared' else 0,
                'upstream_sources': len(sources), 'unchanged_upstream_sources': len(sources) - 1, 'adapter_sources': len(adapters),
-               'all_sources': len(frozen), 'compiled_class_files': len(classes), 'exact_public_jars': len(lock['public_jars']),
+               'all_sources': len(frozen), 'compiled_class_files': len(classes), 'generated_jni_headers': len(headers),
+               'required_jni_headers': len(required_headers),
+               'jni_header_generation_requested': args.jni_headers, 'exact_public_jars': len(lock['public_jars']),
                'source_rebuilt_gis_jars': 2, 'gis_classes_identical_to_original_probe': 107, 'native_or_client_acceptance': False}
     (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary)); raise SystemExit(code)

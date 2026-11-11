@@ -1,0 +1,39 @@
+{
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "quictls_version": "3.0.14+quic1",
+  "archive": {
+    "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/openssl.tar.gz",
+    "bytes": 15475729,
+    "sha256": "75b0d9425c914913840d376388d8d8e6105ec8a03a9c33ab56fc3ac0384003a2",
+    "root": "openssl-openssl-3.0.14-quic1",
+    "members": 4880,
+    "regular_files": 4640,
+    "expanded_bytes": 54643560
+  },
+  "patch": {
+    "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/openssl-pgsc.patch",
+    "bytes": 966,
+    "sha256": "d53ed973b1aed04f07dce2b166a7801bedcc25ccc7ce45c1fd709b925e7f7f88",
+    "files": {
+      "Configurations/windows-checker.pm": {
+        "before": "4482231a2685daada6064b7e2dc831121af2f94ddd6cc3d86ad3db892abf5b2e",
+        "after": "75197459f8a8d1226c6e73e07bdf7c1240cfd48142ebdde2f51ee333394b901a"
+      },
+      "Configurations/windows-makefile.tmpl": {
+        "before": "89fb09ec6afe073bad03820f4271a835c4e2dcd5593d3d532a1e0d9c427a9b4b",
+        "after": "f30b7b8a25dfeace4d366f7140ccad6e1f8b6eba6ca8f325e300b5c753a9aa90"
+      }
+    }
+  },
+  "license": {
+    "source": "LICENSE.txt",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  "modern_producer": "native-sqlcipher",
+  "tools": {
+    "gcc": "14.2.0",
+    "make": "4.4.1",
+    "perl": "5.40.1",
+    "binutils": "2.44"
+  }
+}

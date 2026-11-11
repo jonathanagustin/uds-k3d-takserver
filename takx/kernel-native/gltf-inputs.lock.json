@@ -1,0 +1,1070 @@
+{
+  "tinygltf-2.4.1-mod.tar.gz": {
+    "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/tinygltf-2.4.1-mod.tar.gz",
+    "bytes": 5758009,
+    "sha256": "fa32ead8ec963f96ae6bd4a65d5b8b8361740d25e8915f3f226303d1ac2e6f85",
+    "archive_members": 1384,
+    "selected": {
+      "./tinygltf/LICENSE": {
+        "bytes": 1112,
+        "sha256": "2ae461f8c8b78ed77c14e9c3b7e353ba277e44cb3dbfb5a6d380f76f2ae081a2"
+      },
+      "./tinygltf/examples/basic/shaders.h": {
+        "bytes": 126,
+        "sha256": "a48ecece46c11e8d67442010841e1565f7ec48728a7e0aadd7fa59af97244911"
+      },
+      "./tinygltf/examples/basic/window.h": {
+        "bytes": 172,
+        "sha256": "1e3639175f124bb446dee1e157814cfa8c803909440a52b154902f0fec174999"
+      },
+      "./tinygltf/examples/common/LICENSE.lodepng": {
+        "bytes": 886,
+        "sha256": "bdafa318b8e637d600ca1b60545e894881977a16a16b74809c95e805701621e3"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/CommonWindowInterface.h": {
+        "bytes": 2939,
+        "sha256": "02a06019aea994a4725f995519a76b634c4c668ad443b147a8bd9b18c8ba9f5f"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/MacOpenGLWindow.h": {
+        "bytes": 2514,
+        "sha256": "7a32aaee601989521db49dc0776818f564bee6464d8f209efe1d698119671d2e"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/OpenGL2Include.h": {
+        "bytes": 1648,
+        "sha256": "9a92840f698ca235e56bb200c901718530cbb4f5c820f7b5a217342b2ee12524"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/OpenGLInclude.h": {
+        "bytes": 1813,
+        "sha256": "08224009496f88263bb2a99049ea1a39df424812a905dd5dab2156d276bd4162"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/Win32InternalWindowData.h": {
+        "bytes": 1318,
+        "sha256": "a9b09ea3ebbf42eb0ca8713428951e54a0443b3bde522f24b43e03d47a9eac81"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/Win32OpenGLWindow.h": {
+        "bytes": 1753,
+        "sha256": "4367a0a50c59130b4b736b7cf1c5545bbb6e1c35255bcb90227321b809695cc5"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/Win32Window.h": {
+        "bytes": 2543,
+        "sha256": "65f0cb4c966948232accdc97dcb03d2b09300102f6be5ee40d34eb517b9ca925"
+      },
+      "./tinygltf/examples/common/OpenGLWindow/X11OpenGLWindow.h": {
+        "bytes": 2040,
+        "sha256": "bc68bab3cbb759fc087a1f53d4c3240c016dc018a55cf182d4e946f50af2a8a0"
+      },
+      "./tinygltf/examples/common/ThirdPartyLibs/Glew/CustomGL/glew.h": {
+        "bytes": 989121,
+        "sha256": "610976e617d89a1fc9f1154962a920f02fd9b08a48485b842c9dfc57674835e4"
+      },
+      "./tinygltf/examples/common/ThirdPartyLibs/Glew/CustomGL/glxew.h": {
+        "bytes": 71994,
+        "sha256": "1c2082fbe6e7d748199df356b29d362cc1bb5d976aa53e285c843d7f4caeda16"
+      },
+      "./tinygltf/examples/common/ThirdPartyLibs/Glew/CustomGL/wglew.h": {
+        "bytes": 62206,
+        "sha256": "65b26df045611ab696e233452ef3cd1f1dfd88f56b997c625e863fb9d0a7227a"
+      },
+      "./tinygltf/examples/common/glm/glm/common.hpp": {
+        "bytes": 117,
+        "sha256": "f6b4de0ed0dd1b8fd18ee31047dd932bff6f8677a49d8733500dc5317715892a"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_features.hpp": {
+        "bytes": 11461,
+        "sha256": "5c4d6b19e705bdf3b3f1249e4fa2de850ee62d68057b9e7942a78535265550f5"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_fixes.hpp": {
+        "bytes": 427,
+        "sha256": "22508408c83e084cc04bc5d85f2b8bd173c3bac93e0f9e2bad165d0718d9647d"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_noise.hpp": {
+        "bytes": 2814,
+        "sha256": "d7442e91aa9cabcfa201acfa66a8018abb3901839b70a057af0676f4f038295e"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_swizzle.hpp": {
+        "bytes": 49069,
+        "sha256": "6746da2f6ba01d3303301a588a82a72a31542523b14b2a970de225877b5b8c9b"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_swizzle_func.hpp": {
+        "bytes": 34391,
+        "sha256": "39ec102008a3981a10270e1799b3a2a7a0cb0cec73bb81a1a5060f5bbdc807b7"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/_vectorize.hpp": {
+        "bytes": 3374,
+        "sha256": "399c07ba5ee48d4334e50736106a338abc112f3d0e60c9a40f811ab5dbd25b3d"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_common.hpp": {
+        "bytes": 23200,
+        "sha256": "4bc9e260eb5991cf15ad8b72335c1246f42f3140ed2d80e086c2b586b8910bf5"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_exponential.hpp": {
+        "bytes": 5629,
+        "sha256": "ae8274528d22d09dda1b061cea0b15a8efcea3509d5267913635559074c99efc"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_geometric.hpp": {
+        "bytes": 4957,
+        "sha256": "77742f75b0d25cbcc2b6bdd0384f8c05d139883fdf9b4a59cbfdf41baab60d5c"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_integer.hpp": {
+        "bytes": 10397,
+        "sha256": "6922ccb6d7fc5e1f8fd902bbd158488b84fafa85af15ba166d5d70156621b6a3"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_matrix.hpp": {
+        "bytes": 5244,
+        "sha256": "8def59edcde6b664f5c2c91dda2c0f14d7b2450460d9353ac6fb49dc6c1f96cc"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_packing.hpp": {
+        "bytes": 10714,
+        "sha256": "6a74d0267cebba949442c4ec3c99ec459d68eccd74ca9287f1af91b1dbae4109"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_trigonometric.hpp": {
+        "bytes": 9861,
+        "sha256": "929dffc71123c028836b34da01b8a25023a9a7e2e5f02ec3398c3ceb840cd8dd"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/func_vector_relational.hpp": {
+        "bytes": 6040,
+        "sha256": "5f1d0cd720067f39e69bec280aa65364877560fb7b74bff657435fd4094c8a5c"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/precision.hpp": {
+        "bytes": 1145,
+        "sha256": "1fc107d85a7643129a0f13911ca8b5c82a8e5e5b16c1c7836674f09fea219419"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/setup.hpp": {
+        "bytes": 28416,
+        "sha256": "0e9920bb6f82e228846d8b1e7f6c26552e478f236c70b363879633b22588fb70"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_float.hpp": {
+        "bytes": 2667,
+        "sha256": "2a9dda83e848bbff03e687285f3624a9642680ea1a153022cc3d9141ec19a346"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_gentype.hpp": {
+        "bytes": 4723,
+        "sha256": "2c2802a48f03f48c2043f4ef7578521f718fa7bc099734868dc2bde1acd261fc"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_half.hpp": {
+        "bytes": 305,
+        "sha256": "0ced94d49eb7bdcc087185735494c0a1f6e33bea558d4d6152c282d3afbba0aa"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_int.hpp": {
+        "bytes": 9048,
+        "sha256": "0b22babf40b1856fc6e568513f152a32f60541c5fbc44a8df197a86beb10c9c9"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat.hpp": {
+        "bytes": 40916,
+        "sha256": "e18af21f625578aab46918232d0f6c90ef3e97e5c7d025138f571be18137ebb6"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat2x2.hpp": {
+        "bytes": 6212,
+        "sha256": "121c5901ef2aff8b95020444c48158c7a44172b659639c4da1adf3491e709eef"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat2x3.hpp": {
+        "bytes": 5336,
+        "sha256": "8de722eb16068044781a87a8232d94f15b921aa4269f7e67689bbabe131fb831"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat2x4.hpp": {
+        "bytes": 5395,
+        "sha256": "9262050f0a4dc8213aa52a0cd022728987291cdaaa4eaa3350f3f8eb3a98dead"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat3x2.hpp": {
+        "bytes": 5423,
+        "sha256": "2b1a57127efaa5a003e7de432e2a189095425984cb5de2068f679e0ff786202e"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat3x3.hpp": {
+        "bytes": 6369,
+        "sha256": "ed4d05023ae75984d4af01a8a6aa28f7d1ef71411851fb2bd02b852e4616ad03"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat3x4.hpp": {
+        "bytes": 5574,
+        "sha256": "672328fcf1e98876368073253b048eb4c3f8d64169e515556f310cfb0fc768aa"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat4x2.hpp": {
+        "bytes": 5548,
+        "sha256": "2e02489de018d0bebe25a531aed11ee21b84efd4c26956288c99009842b2383e"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat4x3.hpp": {
+        "bytes": 5885,
+        "sha256": "c696ca32e2be41b031e19c19625f34776b70888258a5797d3cdacb63a6e5094f"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_mat4x4.hpp": {
+        "bytes": 6909,
+        "sha256": "9ec05678127ea144e0dd828dd46b37fdeac6d2e0e437f885a5727b30476cfe54"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_vec.hpp": {
+        "bytes": 27122,
+        "sha256": "3f30b2c8f0c36993356a57deb3f93ad26f82bd4f36d7665e021627d35ae11720"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_vec1.hpp": {
+        "bytes": 10006,
+        "sha256": "fff68070d123fc76eed5a5cedf76996825b5faa207ecb75aca8e13455286ee8f"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_vec2.hpp": {
+        "bytes": 13482,
+        "sha256": "6506c6b4ba8b71402d08a43a891eaec2bd15eb24c145c2f5cef1e7d3e99c0598"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_vec3.hpp": {
+        "bytes": 14740,
+        "sha256": "9ca71f0b9097401bbc5e9008b9d7d41dafd7d33fcdf761c8b892566aa0bf08ed"
+      },
+      "./tinygltf/examples/common/glm/glm/detail/type_vec4.hpp": {
+        "bytes": 17686,
+        "sha256": "4e2095b87d96690dad07631e9cb9ae7456f7b5a6ba0a87f2e9505a38aa3d88b0"
+      },
+      "./tinygltf/examples/common/glm/glm/exponential.hpp": {
+        "bytes": 127,
+        "sha256": "7a52cc92b83565e9f8ef0c222b8cfe3cbb95e536877c436f9f08a09dd4815e62"
+      },
+      "./tinygltf/examples/common/glm/glm/ext.hpp": {
+        "bytes": 3971,
+        "sha256": "0ced92ba53c4712a784e95213fda05d823610322f4108335e0a3e231534eba28"
+      },
+      "./tinygltf/examples/common/glm/glm/fwd.hpp": {
+        "bytes": 80493,
+        "sha256": "edcc0dbd8723338460653caeb0f200a49ea4fe45863f5ba6c62f271d62eece03"
+      },
+      "./tinygltf/examples/common/glm/glm/geometric.hpp": {
+        "bytes": 123,
+        "sha256": "6f52ab74e3a86a886b688be3f2ffbe7506b106507bd106dede2708c5b82fe669"
+      },
+      "./tinygltf/examples/common/glm/glm/glm.hpp": {
+        "bytes": 2930,
+        "sha256": "f74a0d129b9b8a19408892ababeab14a1671117b63434299e2e578d15031e300"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/bitfield.hpp": {
+        "bytes": 7991,
+        "sha256": "cfb84bdec1f325e46d72c38a3669d66d12506908f93bb5a5f7960fd1f1a9ead8"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/color_space.hpp": {
+        "bytes": 2240,
+        "sha256": "5978645c471bbd010ee5e5f0e2468356a2a7ac891b1bc5fb15f182da4c1bedf1"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/constants.hpp": {
+        "bytes": 4306,
+        "sha256": "e9b01fc6edbbe37395e0b5bb1708a243031d515584e2bcd4c8a350177d2b39c5"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/epsilon.hpp": {
+        "bytes": 1905,
+        "sha256": "5389c1158d5dcf15df5ffeadd4735dfd49e847eed6c2d95852c3c1b175c74b5c"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/functions.hpp": {
+        "bytes": 1070,
+        "sha256": "18f324b536ae6c2161e35e7c2d334bc0f7b84e5e51999e3212f177c990f6ce22"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/integer.hpp": {
+        "bytes": 4025,
+        "sha256": "7ea01b05c9da11369d102851314c2654c87cb73b380aef521385123b2269d0fc"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/matrix_access.hpp": {
+        "bytes": 1424,
+        "sha256": "9437be1046f13432b41ac90c72b503d0e30b2d17a145c9945e03a128d341e847"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/matrix_integer.hpp": {
+        "bytes": 14515,
+        "sha256": "cd778d4ac93106d1a6c2db04d6323b4debfc29d7a418495e3de2be53b273be42"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/matrix_inverse.hpp": {
+        "bytes": 1481,
+        "sha256": "0ec9115a808239cee4de063081ac13f600ffaaa5a8c941fef55dc54c5bbe4a18"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/matrix_transform.hpp": {
+        "bytes": 19290,
+        "sha256": "9c75d939809fad0fe625f10800ef7e750c327edaa6760a428ca2aa4ed2b48e19"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/noise.hpp": {
+        "bytes": 1688,
+        "sha256": "d53e40afa0453f9a272520db27ea385e9be990814a52c4d3af14de5a0053be58"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/packing.hpp": {
+        "bytes": 36385,
+        "sha256": "00bf173025a0e712a256081cf0b7cd082b3e13476998c0a060dc4236a332074b"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/quaternion.hpp": {
+        "bytes": 13075,
+        "sha256": "70287abbeba9869088082046fbd11020c473acbe47672dd0c166a54b150b5020"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/random.hpp": {
+        "bytes": 2705,
+        "sha256": "1b54a5175ccc9e770d75330d0e955f86377d42e010f4ae65defcc5e6b743f6ef"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/reciprocal.hpp": {
+        "bytes": 3461,
+        "sha256": "7a198aeb19515ee00fa2fd2887049bfd78d69ac63ddb343f79d6dd848d1f8cbc"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/round.hpp": {
+        "bytes": 5787,
+        "sha256": "268b965f39fa79d78c2fc3a162c0fa7af772f7378a1dd08d008d01af9aaaac26"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/type_aligned.hpp": {
+        "bytes": 14344,
+        "sha256": "7dc32073f32feb221f4527e70747b4dac8039fc74307becd58c1d6c04eb410f7"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/type_precision.hpp": {
+        "bytes": 24339,
+        "sha256": "853c611b17fb475253af64ac324420d484b7abe900270518a2789ca0d7d27ec0"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/type_ptr.hpp": {
+        "bytes": 4276,
+        "sha256": "11fe450f19882f5c5c120c0109f09791ba8f26447d9281807f90b6990c262fbe"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/ulp.hpp": {
+        "bytes": 1859,
+        "sha256": "76fb08cef184269bd0d1cbc42e4a3499654b418009a212e7f466440a33a25bc8"
+      },
+      "./tinygltf/examples/common/glm/glm/gtc/vec1.hpp": {
+        "bytes": 5138,
+        "sha256": "33e01bb526359695a210293b09c5546b11929c1ccd475fd7d5c570c48819a19a"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/associated_min_max.hpp": {
+        "bytes": 8846,
+        "sha256": "fa1c25eaf3e1cf5f0370f1e1320f80a1a594599150f76ce48610a3dfb2a9f351"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/bit.hpp": {
+        "bytes": 3355,
+        "sha256": "e83bd9d0afa19aaf187b47d01ac1494779036c5ea18cedaccca8cf85be701b91"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/closest_point.hpp": {
+        "bytes": 1339,
+        "sha256": "10fe8ff57ddde38e97bbee8414dc8f305e122aac18e4e055b19067a185c45ad2"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/color_encoding.hpp": {
+        "bytes": 1445,
+        "sha256": "4d078d89feafcec8cef4b8254ccaff41623326f24efb647ca96b383d499be94a"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/color_space.hpp": {
+        "bytes": 1984,
+        "sha256": "811df6c7e0bfe186c5156eaafd7142b3702381adb8ec32affe9a80c6b5c600ad"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/color_space_YCoCg.hpp": {
+        "bytes": 1870,
+        "sha256": "3a0c1737ea85074031aee8ce9d61438a28b873c2580b3103840bea69caba131a"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/common.hpp": {
+        "bytes": 2088,
+        "sha256": "ac7ebbfbdb2bc0ede411b33e5c83c1e42626b3ee4653096f228c737094787d29"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/compatibility.hpp": {
+        "bytes": 14990,
+        "sha256": "cb245afdb5f328f6969166f37bbf061c2c5994c1e5b73647a86b151d1acb5ff5"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/component_wise.hpp": {
+        "bytes": 2490,
+        "sha256": "cf9f4fbfa83c08d95779ca4e32baa4db22279616a503479f773109262c495edd"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/dual_quaternion.hpp": {
+        "bytes": 9388,
+        "sha256": "0bf9ec71466e1ee10645d8cceac8bb6630290701ed927601b43e0faf2812cd92"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/euler_angles.hpp": {
+        "bytes": 4670,
+        "sha256": "6948dbacae0329b265e1618d6903d9edbabaa76e70c7db221da8b2bb9a607763"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/extend.hpp": {
+        "bytes": 1074,
+        "sha256": "0e86e91ed2d4747f9140e5595b293422c92bc00b1348fa72848404691a1666e9"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/extended_min_max.hpp": {
+        "bytes": 3610,
+        "sha256": "6fac8bc054df7973d583d8d60e4bb9804a7f83131869b5f8ce63e59c10d06eac"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/exterior_product.hpp": {
+        "bytes": 1064,
+        "sha256": "3bf31312a0a86b4de76c1787238498c678bbd9324ffb534661562d48c7412bbc"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/fast_exponential.hpp": {
+        "bytes": 3507,
+        "sha256": "43ca923136a02b46cc12bb2b436dff5a761cf7ad2665c672f4250410d5d4d671"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/fast_square_root.hpp": {
+        "bytes": 3191,
+        "sha256": "e66c03e43bcb983da9da44c235801c75402e0d3f623aa4b5c9f4dd1783cdeb43"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/fast_trigonometry.hpp": {
+        "bytes": 2409,
+        "sha256": "c9ff4f982171d5c75bfaa9e1ab8f20e96476661e8b73559f731b7c3986e4f782"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/gradient_paint.hpp": {
+        "bytes": 1464,
+        "sha256": "dc9490c9aa5601acf732eb0d228a1ad1fe391b8f2324dbb62d983cf5bda557cb"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/handed_coordinate_space.hpp": {
+        "bytes": 1520,
+        "sha256": "ec9eebca6472b52df745b43a40b237aed0c07518726fb57763e61958519707c1"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/hash.hpp": {
+        "bytes": 3359,
+        "sha256": "ed9d84fb55b06f868afef0564c9483588b39a4f26ee24e314da69862f47c5330"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/integer.hpp": {
+        "bytes": 2170,
+        "sha256": "34bc2d768cdd9a2350a9d64053ab8e2bb70c2b801029cc032f0040e8fc7c424c"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/intersect.hpp": {
+        "bytes": 3369,
+        "sha256": "1c1d2d8281ebc79d4b0427f7ef11614794645e1c17ba8d4a9a996e358947dd9d"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/io.hpp": {
+        "bytes": 7151,
+        "sha256": "f624d900b4f7d18941ed3cdae62492e2041ac35ba5f3230d86159613c2914d86"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/log_base.hpp": {
+        "bytes": 1239,
+        "sha256": "e4d34af8d398b861e3a31be0e6d7f5975af08ccc3bc7a9fabcaef7758fae03fc"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_cross_product.hpp": {
+        "bytes": 1329,
+        "sha256": "b96da8a4f467cefa33127abeb5b19e4c4d5e4c9e67623d20b5d2977a487ae8da"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_decompose.hpp": {
+        "bytes": 1400,
+        "sha256": "ecb4ce85410527d94edcecf34f0e73bb191e161874ff261f126b93f3d9241f45"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_factorisation.hpp": {
+        "bytes": 3167,
+        "sha256": "726d82292e209f043832563b26d04f555a63819510c98dbe50d29e87f388a1e8"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_interpolation.hpp": {
+        "bytes": 2019,
+        "sha256": "39bd163f0b896aae38580d21766fe65809edce207a5f3bd88ca8920a3e5a1a53"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_major_storage.hpp": {
+        "bytes": 3804,
+        "sha256": "760d0d2c83e82b17b9152723f6019da93fa2645f9dcd18757b557ed7d973fb15"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_operation.hpp": {
+        "bytes": 2518,
+        "sha256": "07de79fb84b9c3b8037f1fb50169610c3d777dfeb48fe75784df5ee87a1f8e7b"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_query.hpp": {
+        "bytes": 2767,
+        "sha256": "9a4d4c88704713e1746c2c8e55b01d89632df9e0190f7814eedd2b0912cea7ea"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/matrix_transform_2d.hpp": {
+        "bytes": 2542,
+        "sha256": "a610f9df74fce1232d239b248b08badbd91c7dc9f1d5f53cb0ec4bd066fb3e61"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/mixed_product.hpp": {
+        "bytes": 1066,
+        "sha256": "6d89a26e19644ba591091f9b0c892d23e99ff8b3bdabc474d9d732033f2fbbf5"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/norm.hpp": {
+        "bytes": 2465,
+        "sha256": "c70d946bf353495a1fea1a4364668fb1590b4ce4dd76e12777f7fa45f7a58fd4"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/normal.hpp": {
+        "bytes": 1074,
+        "sha256": "83408c15670e7644339e9758de707c2d494ddda8b23f887c18d1a4901ae6dc65"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/normalize_dot.hpp": {
+        "bytes": 1660,
+        "sha256": "77aa51cd18681f97f5706a15ad64a0cadb8e30c7323306d18f104feb22675d13"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/number_precision.hpp": {
+        "bytes": 2325,
+        "sha256": "d055b1b6ea0ec56cfdd04566e9e33019e74a2a6ac4dd051ab620da78133552e2"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/optimum_pow.hpp": {
+        "bytes": 1310,
+        "sha256": "95c516ef2d8812d8856151b2fa3601156dd7294ba3cb47ea6a9cad8954c0e756"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/orthonormalize.hpp": {
+        "bytes": 1329,
+        "sha256": "fa0b75456ec1d84570ac2925730c8e3bc6624761699858a97ad25f1d98a430a6"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/perpendicular.hpp": {
+        "bytes": 1116,
+        "sha256": "e25203e4354ac6bcd3512d2b3e31087cab3a0af6f54cfa64afc091364f1d9a85"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/polar_coordinates.hpp": {
+        "bytes": 1336,
+        "sha256": "78f4367fce25a1cdc373bd43d71954112481738760fedf7d66a08dc81818f20b"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/projection.hpp": {
+        "bytes": 979,
+        "sha256": "f2d0c7f6c44a37d8be79c1e33c918536f5bb35aa476106a125b441849a52cc00"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/quaternion.hpp": {
+        "bytes": 4943,
+        "sha256": "641cb5f8ab8949ebb54be7a5ccf84241e5c4d8cea8a93ddf2835645de3919778"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/range.hpp": {
+        "bytes": 2003,
+        "sha256": "b71c87f6a6d8677dba50eac4f0f0cc9801856f503e603c68e96eb44e7fa4f653"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/raw_data.hpp": {
+        "bytes": 1241,
+        "sha256": "ed22ef309587f7404da028e4b350ad39543b91df1cf7f1d45f02ce09e0505002"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/rotate_normalized_axis.hpp": {
+        "bytes": 2255,
+        "sha256": "6b01c929cbf86830cf50af967df78a41683b1fb8aac95621bc08e53c7d9ffe56"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/rotate_vector.hpp": {
+        "bytes": 3563,
+        "sha256": "865d59f3d92d41c527fbd5d560f146bc3c33ec8eda75c3d99385f83577a7e64c"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/scalar_multiplication.hpp": {
+        "bytes": 2174,
+        "sha256": "0ee709fb20468b56c7f3622d13c1624f9b18966f4118027d96a467204bd36017"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/scalar_relational.hpp": {
+        "bytes": 889,
+        "sha256": "8465019ea0d7c5d6091acd015293aac69f8a06120c2552f59ba291e6d2a33446"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/spline.hpp": {
+        "bytes": 1615,
+        "sha256": "5224c9a84ea3dfc0e05c3b8ab3aa5139e6e3187a88280c13f4a54eb3699b464e"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/std_based_type.hpp": {
+        "bytes": 2009,
+        "sha256": "13e979111b89d96739f47c0471bc5a51e8b3dbc1fcce30267153d4f4cce39a3e"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/string_cast.hpp": {
+        "bytes": 1379,
+        "sha256": "9b824b36ae4ce3256a12ca843e004b4aa1192118ed8c668cc610cc92a32d635c"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/transform.hpp": {
+        "bytes": 1690,
+        "sha256": "2c9e55dbfc3a31199d081c4c1a8c9b5aef13562307fcd834d1fee353f43e1d8a"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/transform2.hpp": {
+        "bytes": 3573,
+        "sha256": "af9338f544eeafbae0b2508798088c1ec1ced9f795fe4d8021faad027c215a34"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/type_aligned.hpp": {
+        "bytes": 33067,
+        "sha256": "f51828646999edad791435d41114cfe1080bb87a497d7b85d1e620bac8de4fa4"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/type_trait.hpp": {
+        "bytes": 4387,
+        "sha256": "1b00e75d8afaf697a69c18bec74b2d7ef04720234998ad9dd356cbd01f35ea14"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/vec_swizzle.hpp": {
+        "bytes": 76113,
+        "sha256": "49418bc5963a107874d6a0292bb345acb7600863d6d73bb9e09bf01c64a1f6e6"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/vector_angle.hpp": {
+        "bytes": 1816,
+        "sha256": "edbf66027a816573959c2d7e1bfe3cf51fe3f849c11f06f380683d46d0a3a563"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/vector_query.hpp": {
+        "bytes": 2591,
+        "sha256": "7086b2a53c20674435bd835884969eccfba4b04efea401c547dbe53539090f2a"
+      },
+      "./tinygltf/examples/common/glm/glm/gtx/wrap.hpp": {
+        "bytes": 1440,
+        "sha256": "e2d1d6615122ec0e26c8880dc6a0c8d45104dcdfe1368eb3fcd6ab38efa0cc0e"
+      },
+      "./tinygltf/examples/common/glm/glm/integer.hpp": {
+        "bytes": 119,
+        "sha256": "fbc3bab034e139d9d2a054a454e8761a024d9be4303a5f853e384848d079cf79"
+      },
+      "./tinygltf/examples/common/glm/glm/mat2x2.hpp": {
+        "bytes": 2922,
+        "sha256": "b8e78d9bae4aac60c286f83d79d416a61cee0941a6c22c8fc77a17fe6a58fddb"
+      },
+      "./tinygltf/examples/common/glm/glm/mat2x3.hpp": {
+        "bytes": 1538,
+        "sha256": "ce777af7f48de8b88afa8e7d32cd588cdd10c8be1caf0ade7cec05e8ed1bd32a"
+      },
+      "./tinygltf/examples/common/glm/glm/mat2x4.hpp": {
+        "bytes": 1539,
+        "sha256": "6758ba5ba1696e917ff7156013dc10e6c6e256404f4bd0c0e1df013d9f65b778"
+      },
+      "./tinygltf/examples/common/glm/glm/mat3x2.hpp": {
+        "bytes": 1535,
+        "sha256": "9b4e8219ee92c65183c3c181410935323c11da3b1ef66f3c8daff19903da77cf"
+      },
+      "./tinygltf/examples/common/glm/glm/mat3x3.hpp": {
+        "bytes": 2922,
+        "sha256": "33d4c0d95db117ae4c976a710f15bc1ac4b4365d0965b6fcbe896979fb93e4f1"
+      },
+      "./tinygltf/examples/common/glm/glm/mat3x4.hpp": {
+        "bytes": 1539,
+        "sha256": "e013364329a54bc75820d3aa0c5a907b0f0c3f711f731872f72d7de34c345012"
+      },
+      "./tinygltf/examples/common/glm/glm/mat4x2.hpp": {
+        "bytes": 1539,
+        "sha256": "f6184306275404f364037af74c38fd2b464a01ff5f7a0279016268239bbc3559"
+      },
+      "./tinygltf/examples/common/glm/glm/mat4x3.hpp": {
+        "bytes": 1539,
+        "sha256": "dc28a3110373af34f15e3bcaac455b819fbb201ba58598eabaaaedd4181dc2b1"
+      },
+      "./tinygltf/examples/common/glm/glm/mat4x4.hpp": {
+        "bytes": 2922,
+        "sha256": "e9de038b4ff1ccc7c024c175a5a726e74737b3bd148a6ce2fe682697ddbc7329"
+      },
+      "./tinygltf/examples/common/glm/glm/matrix.hpp": {
+        "bytes": 117,
+        "sha256": "4c3a7743980107ac3f4400240ffcd52870592a3b5e38be6a118ab211ce176908"
+      },
+      "./tinygltf/examples/common/glm/glm/packing.hpp": {
+        "bytes": 119,
+        "sha256": "0b53da9c10b96f945ecd61a974a6c94c892057f6831b676aad7098d1acbd33a1"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/common.h": {
+        "bytes": 6802,
+        "sha256": "e1cb3fce752093109d4380b9ee58bf89115872d72fe9c708eb0b3a9448a322dc"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/exponential.h": {
+        "bytes": 365,
+        "sha256": "b6867b6f7ef02d4d21bfb557f5598525d8ab4b512e77ce1c910d602ffe3bf6f6"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/geometric.h": {
+        "bytes": 3923,
+        "sha256": "84c341ec44787b520c2d48a02622eea36c6643a9e346fa3dd7301c96f85a443a"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/integer.h": {
+        "bytes": 3690,
+        "sha256": "6447108d6d1a8c1f676b091e2b21ece0f45ed0c5caa8321ec3c618361d108110"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/matrix.h": {
+        "bytes": 39974,
+        "sha256": "e4869d89253dd416f9a890b296d0b16cc442eee84136c3da9b791aca6b38c136"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/packing.h": {
+        "bytes": 129,
+        "sha256": "8445dd14a6bf6793f4e4cf24225fcab80e4058f8e8637ad5294f2b06ef7f4f04"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/platform.h": {
+        "bytes": 13312,
+        "sha256": "6e81c0538d7a03f70a8944b71c6facac4df963f2b637bd20a8c0a461bb4d0efb"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/trigonometric.h": {
+        "bytes": 136,
+        "sha256": "d913a8e77523146df0afc5128079693a56b207647f2d8bcd7376721585e38eef"
+      },
+      "./tinygltf/examples/common/glm/glm/simd/vector_relational.h": {
+        "bytes": 139,
+        "sha256": "c2487e32dcde079ccb5717776e5e0d4bfb056844ab89bfa49e3c031d09371c27"
+      },
+      "./tinygltf/examples/common/glm/glm/trigonometric.hpp": {
+        "bytes": 131,
+        "sha256": "f506e32e78f7d98ca146981418e95855e307f8333ede692c9ad15cfda719a80f"
+      },
+      "./tinygltf/examples/common/glm/glm/vec2.hpp": {
+        "bytes": 113,
+        "sha256": "eed549e3d912c407c2c0e9ea0b7eeed7c1540401f160246647362661310f5b37"
+      },
+      "./tinygltf/examples/common/glm/glm/vec3.hpp": {
+        "bytes": 113,
+        "sha256": "5041b018ca65ae780f4ee0055560ef2df8b9a02436aae45f0426581131f7bab5"
+      },
+      "./tinygltf/examples/common/glm/glm/vec4.hpp": {
+        "bytes": 113,
+        "sha256": "14da5456875751631a0e87a2db4f8ca6e294ca3bd3e38a7c62aa31a14ddc5094"
+      },
+      "./tinygltf/examples/common/glm/glm/vector_relational.hpp": {
+        "bytes": 139,
+        "sha256": "ed0c48a82ed41eb0336fc34a0bfe58469277395bb0a2a8932cd9d79247d56b37"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/clear.hpp": {
+        "bytes": 1805,
+        "sha256": "dda57c95ab3865cccc983f6ded61ed29c988630be431a5d6918269c29feb11cb"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/comparison.hpp": {
+        "bytes": 1015,
+        "sha256": "ff9dd8cc056a1be5e34c946a0d637b75772ef20635bd1788c16f25af5d664c3b"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/convert.hpp": {
+        "bytes": 731,
+        "sha256": "1d7bdbf526a41436687260479b6334a74a167183d4c05a3c8a76736723a17bf9"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/copy.hpp": {
+        "bytes": 2168,
+        "sha256": "68479a0b26faa162a4f2e401222afcd832f8036f808952f6e75b4a964bd4f026"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/clear.hpp": {
+        "bytes": 829,
+        "sha256": "27e5ebefee2d7b7f5a4ff6e998f38266fc4d37b791193e58b094f6485260d933"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/convert_func.hpp": {
+        "bytes": 53257,
+        "sha256": "c62a0dfb8d9abcd962e2575c74bb1a193ec3550762fe1aa480766021bb586c4b"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/coord.hpp": {
+        "bytes": 3279,
+        "sha256": "616772031b0f25d41aafb6743d6aa2a2a7119fe399535208fa7278bab034a498"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/file.hpp": {
+        "bytes": 247,
+        "sha256": "805199c54c7bbebbbbc943851ec0867cf5f70af64fe27af7851287637dcc05b1"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/filter.hpp": {
+        "bytes": 415,
+        "sha256": "f387856e24a8bd77e73bc85ecd295a7b24b108b9612e0cb6940fbc89404cf3c7"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/filter_compute.hpp": {
+        "bytes": 23033,
+        "sha256": "464abbd1fea5d7cae46eb2a6640740f682519744651b707eeb44599bdf4b503c"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/flip.hpp": {
+        "bytes": 287,
+        "sha256": "974a5a630a9fe173b5e40e1bfaf9b467c1d28cb16fd437bd074febcb46b949ed"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/mipmaps_compute.hpp": {
+        "bytes": 6007,
+        "sha256": "9f6a8009fd81a1ac2024e7d49717d5622919dd65087d1da658d2df7afb4230c4"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/storage.hpp": {
+        "bytes": 2218,
+        "sha256": "fbf979df167c3ef8661353c0d25e2dd3b4e39c31bed4567e657c5347b0e46981"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/storage_linear.hpp": {
+        "bytes": 2458,
+        "sha256": "ed571615c49f8a809dfbf6a62d3db9bf440d97d70840cc3b37c1d7bb893c2e41"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/core/workaround.hpp": {
+        "bytes": 12383,
+        "sha256": "fb566b000d0c8e627a290a7cdccf57c1b33073498b5f55ea58c61afa1f14e7cf"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/duplicate.hpp": {
+        "bytes": 3020,
+        "sha256": "e15d400397f6320430bf59e293e2e30110d1fbb69755952ce2dcaae96c490185"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/dx.hpp": {
+        "bytes": 15494,
+        "sha256": "2e0963425c0ede1ac9ef7c61a09f5a529c0ccacd7713f0891cff2b6b434b08ae"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/format.hpp": {
+        "bytes": 9166,
+        "sha256": "e9602e818c1e3f5d60661fe0b7f6e17c93d8e9dece57debafd42b2630185f208"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/generate_mipmaps.hpp": {
+        "bytes": 3316,
+        "sha256": "f9bb2669c5fd776faada4e7832ca3ed8819e539d27f4ea072e627aacd6ea0f4a"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/gl.hpp": {
+        "bytes": 14989,
+        "sha256": "7c51893f0d72ec021eafd12801e497f29fec70651d4f8ee9c8c4d42c9515e273"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/gli.hpp": {
+        "bytes": 3137,
+        "sha256": "9e51bf0ad9ad252c0c40ceed5ea1b8aea97c8681b2b9c2e8bdf3740781cecd48"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/image.hpp": {
+        "bytes": 4100,
+        "sha256": "9ec09160d8a02982b6a4f8f63586e95172f7c7f3881c7a70db0e79cb54cf1fde"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/levels.hpp": {
+        "bytes": 1426,
+        "sha256": "70a5ab609d4cced4e2c79390cc3bf71dd7774756ec99649f8c265b8df5bc28ee"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/load.hpp": {
+        "bytes": 874,
+        "sha256": "df1e9af4df8dcb09903c4999e1673fdaee05825fc46944a42193e3ba1847f273"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/load_dds.hpp": {
+        "bytes": 961,
+        "sha256": "6af07eda655bd27ffdfe543e065364c2d42a3a87ee3d85fdbe21b40f9b426633"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/load_kmg.hpp": {
+        "bytes": 1009,
+        "sha256": "b2b9899a0b3e5a01ab80269cbb6e543f2aa786c4656ad40a649064f743e198c6"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/load_ktx.hpp": {
+        "bytes": 961,
+        "sha256": "58f70a9c50a5e5eee290c1d1c48ed7866a9ecac3a90a2947d58923cfff3d321a"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/make_texture.hpp": {
+        "bytes": 2467,
+        "sha256": "014ce6bc3931a0ad400165b60ff4d9050cea836d2a0d27a97ae57da55a7aea5a"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/reduce.hpp": {
+        "bytes": 4420,
+        "sha256": "e6040381d98aa500b4e344e09654874490c9be2ed00289d073733699a2ca26f4"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler.hpp": {
+        "bytes": 994,
+        "sha256": "592f944702fe833473d73e13455cd77f906635dd643f6e1a10f2bc916436c3bc"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler1d.hpp": {
+        "bytes": 2667,
+        "sha256": "3888de7589576cbf3fbfcb5cb986ad9048df5da98b719653289ed506d5b182cc"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler1d_array.hpp": {
+        "bytes": 2839,
+        "sha256": "111f6a341194ea4107b57c8a987cd3473ca5d0856d902ffc5b74ee5444321729"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler2d.hpp": {
+        "bytes": 2668,
+        "sha256": "4adb969c7c913b5b04a9eebee4fa1d18471ecbb4d2c34920469b6d1926863b89"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler2d_array.hpp": {
+        "bytes": 2838,
+        "sha256": "d39d416cb78020749d4029334fcd92e4064d52d1fc7107c035b56059761179e6"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler3d.hpp": {
+        "bytes": 2668,
+        "sha256": "7b5810c5c4c0f423caf32297b8a2b55b2147b6777a29bdbe42daa0b48ae5f574"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler_cube.hpp": {
+        "bytes": 2791,
+        "sha256": "fa574e8eb8111451b8e93e077ffca84b848445194f4ebb8821f1728c036d6153"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/sampler_cube_array.hpp": {
+        "bytes": 2975,
+        "sha256": "448d938d1ccd349288dd9633dc955568d76b81f614f8a66cd2740fc3f165122a"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/save.hpp": {
+        "bytes": 1078,
+        "sha256": "5cc133fb60c4912efaf8c35ba017d697f2497db899fed400a4b89f59b723a3ff"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/save_dds.hpp": {
+        "bytes": 1468,
+        "sha256": "f5d2ae1aef6392ec3c28ed910ffc18f4b68429c5654afebceafada195204fcc2"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/save_kmg.hpp": {
+        "bytes": 1517,
+        "sha256": "64a5276309d7de3cf79831dfcd3bf52f8579535897bb60ec6392e7ed0b9d3ecf"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/save_ktx.hpp": {
+        "bytes": 1469,
+        "sha256": "ea188ad36c50294c7591d3624c41eca8a676fa460c75af9161ab3269fdf98026"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/target.hpp": {
+        "bytes": 1196,
+        "sha256": "51bb6ffec66cf9e5c65939b5021207eaa11e0aeb09c7002e3d4ab54805ccb575"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture.hpp": {
+        "bytes": 11239,
+        "sha256": "f6740ba5fe73ae9131b4b88e74c3143f15edc2af8d75b84ea84887fef78df9dd"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture1d.hpp": {
+        "bytes": 2107,
+        "sha256": "11706db4888a1b501c58fe4712b6ce125b48106a9b0087b2a759e8947b829a50"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture1d_array.hpp": {
+        "bytes": 2303,
+        "sha256": "a224aa0c17bb82efe1dd1718b4e8d37cc6facac0e45044239156cbb8823a239e"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture2d.hpp": {
+        "bytes": 2137,
+        "sha256": "376a618704d1fe06a03d3784eb99b60e52c88c898ab4b11145a00c090edfaa90"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture2d_array.hpp": {
+        "bytes": 2337,
+        "sha256": "cc56afb0d88467eac4f5933bf584b6c0d18aff2f1735f53b3c1836a20ae81826"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture3d.hpp": {
+        "bytes": 2148,
+        "sha256": "92b5e2ae92d9e97da70677013c6edde589cdee7ec15ba1a7732d496cb597f924"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture_cube.hpp": {
+        "bytes": 2274,
+        "sha256": "f6062c7627f81f96b919bf99eff00973e31df3fc8708bded397c8d9d8e60570f"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/texture_cube_array.hpp": {
+        "bytes": 2500,
+        "sha256": "2767a29ef3f82534c8772e695a9d9285c459de12770529a761985cc2226efad3"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/transform.hpp": {
+        "bytes": 3320,
+        "sha256": "510a84a1bdc174e0339b4eba325e3f34a59c076f148ba7a585479e1bdb3e8c84"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/type.hpp": {
+        "bytes": 1469,
+        "sha256": "bde6fb3e82e1f60d9bc9d8f0ef1bad4adcb6400a42aa32530f165ef71f321189"
+      },
+      "./tinygltf/examples/common/glm/test/external/gli/view.hpp": {
+        "bytes": 3789,
+        "sha256": "f32c73af16dbe686f108df426fffe9d2227a5a9544fa0788d82797046c367a91"
+      },
+      "./tinygltf/examples/common/glm/util/conan-package/lib_licenses/LICENSE1.txt": {
+        "bytes": 1218,
+        "sha256": "fcb758c7b2fb52736b55c285466e9333637fcb37778503d394c7213f6591fabf"
+      },
+      "./tinygltf/examples/common/glm/util/conan-package/lib_licenses/LICENSE2.txt": {
+        "bytes": 1083,
+        "sha256": "4542a845f7f541658c632640a79d710bcb25b1b8b136f5e54585c5426368dc81"
+      },
+      "./tinygltf/examples/common/imgui/ImGuizmo.h": {
+        "bytes": 7291,
+        "sha256": "26b550902410af47bb2f9dee8f41ae1e0e317ffe71b2e25f6de5e189364327b8"
+      },
+      "./tinygltf/examples/common/imgui/imconfig.h": {
+        "bytes": 2240,
+        "sha256": "13b8afcc04d801b4f00f130ea6f3862cba5e1c67d5cd55d12d257a97f6ffcc41"
+      },
+      "./tinygltf/examples/common/imgui/imgui.h": {
+        "bytes": 166085,
+        "sha256": "c506db35cebed8c2a4e47cb812068f6c5ced0bf49401a2ca30bbf47ed51e720c"
+      },
+      "./tinygltf/examples/common/imgui/imgui_impl_btgui.h": {
+        "bytes": 650,
+        "sha256": "56d108f2e7cf7bc1691a63b22b89a8a002148dec6b99906d317cb3f09969f308"
+      },
+      "./tinygltf/examples/common/imgui/imgui_internal.h": {
+        "bytes": 74510,
+        "sha256": "dba0c6530bb2a5f53861e7ac8990e834df4fbd0aa55024cdd1d1c95283ce64af"
+      },
+      "./tinygltf/examples/common/imgui/stb_image.h": {
+        "bytes": 222898,
+        "sha256": "3e08556d97b2e07881df61b72aceb1e89d8c43f70354155749da4c37bde62a6a"
+      },
+      "./tinygltf/examples/common/imgui/stb_rect_pack.h": {
+        "bytes": 17060,
+        "sha256": "dd38b5fe5f6ca73dccf011fb990b8033405b38b8553ab84825ef6fd685947f74"
+      },
+      "./tinygltf/examples/common/imgui/stb_textedit.h": {
+        "bytes": 48747,
+        "sha256": "45bb7e8768d8ee131ad4c690d545087c3b5881c19360e400d7829522483e86b3"
+      },
+      "./tinygltf/examples/common/imgui/stb_truetype.h": {
+        "bytes": 127748,
+        "sha256": "9df741f13ef4dfc25732b1e5d4009a7e3b3d0141168572cdbbd8db4171ecd023"
+      },
+      "./tinygltf/examples/common/lodepng.h": {
+        "bytes": 92650,
+        "sha256": "f433dc5a1cc240d22bf5c40f4ef2dc1451ab8a9216e574275ed57b0cc132c489"
+      },
+      "./tinygltf/examples/common/matrix.h": {
+        "bytes": 425,
+        "sha256": "7df5a4177a1b658ab7edbc493ae51ef9e208fe919aa689b5b86ec6a20a247ff4"
+      },
+      "./tinygltf/examples/common/nativefiledialog/LICENSE": {
+        "bytes": 820,
+        "sha256": "b332d6f507142c66a0e904838b6437e6273734589c22a16b57392b89bfdccb2a"
+      },
+      "./tinygltf/examples/common/nativefiledialog/src/common.h": {
+        "bytes": 388,
+        "sha256": "c8801524e248ca79123a63bfe01881a28dc6c669180e7746540d9534c7a5c0db"
+      },
+      "./tinygltf/examples/common/nativefiledialog/src/include/nfd.h": {
+        "bytes": 1733,
+        "sha256": "e6a914edba9ac5ffda3b97319ef86e331f2db98a71429f226015219fbd8f4b61"
+      },
+      "./tinygltf/examples/common/nativefiledialog/src/nfd_common.h": {
+        "bytes": 615,
+        "sha256": "6dc7474e983cb0792b06a5d9b6294ba4d0ba320d6cf797ba3a37c29160ea5606"
+      },
+      "./tinygltf/examples/common/picojson.h": {
+        "bytes": 27080,
+        "sha256": "aac8095c51b21f6ff8c0f0051c446681a5f91aa1b614a0a91484b023828ecf17"
+      },
+      "./tinygltf/examples/common/stb_image_write.h": {
+        "bytes": 25646,
+        "sha256": "53ab00a1d333e78405a7c940a9bd40539bdf468dfe44ce03703c90d7fd8c63f4"
+      },
+      "./tinygltf/examples/common/tiny_obj_loader.h": {
+        "bytes": 44467,
+        "sha256": "6e45fd0c9c36df9ac0e6413bf8056d477ae6432667cbf3e300cb40d16c920df7"
+      },
+      "./tinygltf/examples/common/tinyexr.h": {
+        "bytes": 469995,
+        "sha256": "1910f055a88c6edc7ea17481c73e9178b6970ee65e3023680182a0287f32a8eb"
+      },
+      "./tinygltf/examples/common/trackball.h": {
+        "bytes": 3289,
+        "sha256": "9291266328fe8f964aa94c10980090c41e8df5cf390f43c826b529985d3cf490"
+      },
+      "./tinygltf/examples/gltfutil/gltfuilconfig.h": {
+        "bytes": 1779,
+        "sha256": "c278be8a06abb22cd7a8e7c170aeeb909e045de84a9c780f5e2bdf59ca91c8a4"
+      },
+      "./tinygltf/examples/gltfutil/stb_image_write.h": {
+        "bytes": 70785,
+        "sha256": "70c399592de544f86ffdf3a3241d5635cd904beb4fa054163d818ef98b16fa94"
+      },
+      "./tinygltf/examples/gltfutil/texture_dumper.h": {
+        "bytes": 663,
+        "sha256": "c9a6de6a8d5346ef6f5b0efae17a334f198aa8ca74ea6716e5f587396116c426"
+      },
+      "./tinygltf/examples/raytrace/gltf-loader.h": {
+        "bytes": 4504,
+        "sha256": "a5692cf550d074ffcf86321cb3ce7207c44489eccac3ee4517ed9a48f9fb1b6a"
+      },
+      "./tinygltf/examples/raytrace/material.h": {
+        "bytes": 1470,
+        "sha256": "be6a4249cdea63afe6b001ddf1cde00cb890effe84fcce1585dbe21b7d829cd9"
+      },
+      "./tinygltf/examples/raytrace/mesh.h": {
+        "bytes": 4883,
+        "sha256": "92ec7d792bfa66c98c3ac0305ae5ab48b2c87edb3feff1939aa08b29e903b462"
+      },
+      "./tinygltf/examples/raytrace/nanort.h": {
+        "bytes": 67963,
+        "sha256": "615712973859592b095227208506683b38739eca3c93bf205fb07782e5288b54"
+      },
+      "./tinygltf/examples/raytrace/nanosg.h": {
+        "bytes": 25850,
+        "sha256": "68178e67bb96357478e6490463718aed02e15ff072346c007e6b221549e62fdd"
+      },
+      "./tinygltf/examples/raytrace/obj-loader.h": {
+        "bytes": 391,
+        "sha256": "9070a23cedddfee02d72d81fe012859866bd2851246cd3137f1ce2abc812afd1"
+      },
+      "./tinygltf/examples/raytrace/render-config.h": {
+        "bytes": 775,
+        "sha256": "022ee6ec39088f415b3638b2dc45bba0f1b878e35fcdfc3e5d00718d8eebd5e5"
+      },
+      "./tinygltf/examples/raytrace/render.h": {
+        "bytes": 1063,
+        "sha256": "4ed813a75ab4703fe4d9519b06853e970cd6eab5fab7d0fbf5f4f1f23aabd3ef"
+      },
+      "./tinygltf/examples/validator/LICENSE.json-schema-validator.MIT": {
+        "bytes": 1167,
+        "sha256": "4294d027a5205eea79a5241b2c1423d556efaa3139df8cea5ac313fb5ffb07bf"
+      },
+      "./tinygltf/examples/validator/LICENSE.jsonhpp.MIT": {
+        "bytes": 1076,
+        "sha256": "6a6115fc4a7239a135f2dce8d33f94cb8a936b8f608ac0f6699fbac278b0dd5b"
+      },
+      "./tinygltf/examples/validator/src/json-schema.hpp": {
+        "bytes": 6032,
+        "sha256": "9a91c56289a7695ed62d7db5082e3d1dfd71a1366db3eb937048cc318e169557"
+      },
+      "./tinygltf/examples/validator/src/json.hpp": {
+        "bytes": 447926,
+        "sha256": "faa2321beb1aa7416d035e7417fcfa59692ac3d8c202728f9bcc302e2d558f57"
+      },
+      "./tinygltf/json.hpp": {
+        "bytes": 709997,
+        "sha256": "8a6dbf3bf01156f438d0ca7e78c2971bca50eec4ca6f0cf59adf3464c43bb9d5"
+      },
+      "./tinygltf/stb_image.h": {
+        "bytes": 262586,
+        "sha256": "599c64066c333d9b125d65f3394de642a42cf4888c3626535dcf62fcfaee1227"
+      },
+      "./tinygltf/stb_image_write.h": {
+        "bytes": 66523,
+        "sha256": "6b0113727bc3b5c3e343c2dd65c507e3af0705354eef1e77b880e67ddd8e1b27"
+      },
+      "./tinygltf/tests/catch.hpp": {
+        "bytes": 376913,
+        "sha256": "c67e01b0f4c7617d6d695d14ad548e88b30cda178466c820ec9dc540d5e58bd9"
+      },
+      "./tinygltf/tiny_gltf.h": {
+        "bytes": 226454,
+        "sha256": "9c53d04d06d1f7c0ac99cd11551e4746ce53003d6874a6e2f9362fe989bd1488"
+      }
+    }
+  },
+  "tinygltfloader-0.9.5-mod.tar.gz": {
+    "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/depends/tinygltfloader-0.9.5-mod.tar.gz",
+    "bytes": 708667,
+    "sha256": "2d9a0196d5346a955f3bbb08f890bb808e92b9980dd79d112611501500d68c43",
+    "archive_members": 48,
+    "selected": {
+      "./tinygltfloader/examples/cyhair_to_gltf/cyhair_loader.h": {
+        "bytes": 3327,
+        "sha256": "3543c82c49f582429cfe003ccbaaca4a7603cca8cd544f74c8e8150d202e218c"
+      },
+      "./tinygltfloader/examples/glview/trackball.h": {
+        "bytes": 3289,
+        "sha256": "9291266328fe8f964aa94c10980090c41e8df5cf390f43c826b529985d3cf490"
+      },
+      "./tinygltfloader/json.hpp": {
+        "bytes": 709997,
+        "sha256": "8a6dbf3bf01156f438d0ca7e78c2971bca50eec4ca6f0cf59adf3464c43bb9d5"
+      },
+      "./tinygltfloader/stb_image.h": {
+        "bytes": 222898,
+        "sha256": "3e08556d97b2e07881df61b72aceb1e89d8c43f70354155749da4c37bde62a6a"
+      },
+      "./tinygltfloader/tiny_gltf_loader.h": {
+        "bytes": 75320,
+        "sha256": "2e2956b363caf90c7425e945b1cb760af268716d5a9c1bf57af1c493aa4a54b6"
+      }
+    }
+  }
+}

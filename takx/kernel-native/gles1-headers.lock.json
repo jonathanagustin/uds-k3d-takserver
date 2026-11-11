@@ -1,0 +1,17 @@
+{
+  "khronos/OpenGL/api/GLES/gl.h": {
+    "git_blob": "3a462b85dd92ca9970d6870437383540d1bd37e0",
+    "bytes": 30603,
+    "sha256": "aa812b835bffab1f5d9c36696e670bf84331a979aa22bb4ca6646cde62806481"
+  },
+  "khronos/OpenGL/api/GLES/glext.h": {
+    "git_blob": "2dfc5c0a0c6c07875e45dcb9625f170eba41a38d",
+    "bytes": 52710,
+    "sha256": "e70a87e73ab6916067335c0d28fa3ccc5b4fb7a282b73392488f1b97e9cb510c"
+  },
+  "khronos/OpenGL/api/GLES/glplatform.h": {
+    "git_blob": "3155ef29d5eed2a2273c1c86d2442f62bc1c5c0e",
+    "bytes": 634,
+    "sha256": "c6bcc0caaf56609c494efb327e8e9e2845630f6b58641ddde71eacd2c2790d21"
+  }
+}

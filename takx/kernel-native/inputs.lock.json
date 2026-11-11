@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "kernel_version": "8.30.5",
+  "platform": "Linux-x86_64",
+  "source_counts": {
+    "core": 483,
+    "jni": 159,
+    "cesium": 173
+  },
+  "native_file_count": 1396,
+  "locks": {
+    "native-sources.lock.json": "7ebdfa726cfd02b5dbe8f3c8fbb9a91e6dad9db8662c412637b6118a61ecd9bb",
+    "gltf-inputs.lock.json": "22ed6363c8fbde6ee3ecc5fcf1221b3db62b297040c1d99da4970775ba7d7c86",
+    "gles1-headers.lock.json": "df52c4b11351263c2f9fd2df81fe4ee77f7d52458c529dc15922a802794884c8"
+  },
+  "patches": {
+    "atomic-counter-platform.patch": {
+      "target": "takkernel/engine/src/main/cpp/util/AtomicCounter_GCC.cpp",
+      "sha256": "def3c88fecea2ae464243174a7cb9fae35c4a91ef0909d2e647e00702e0b0977",
+      "before": "3488a2e6353859f52e3198beab343e83e8730370c7e89335a1911706168dae4b",
+      "after": "53a61d9ec23611ccde1a22a69dc7e50f0854ced1c7d04e62101ff0dc6060c515"
+    },
+    "jni-exception-correctness.patch": {
+      "target": "takkernel/engine/src/main/jni/common.cpp",
+      "sha256": "975ec1f41870793301731ffffafca70b082d30f32e32b2cd0b7293f32866ef85",
+      "before": "d40ad578194550a9d198c0eb82b36f4916ba48141d24406ab132d4f4a3ad745d",
+      "after": "498244e2ac2f54f0f44949a39c78d1233ef6f39a6018f7075eaf69bd7c46d82b"
+    }
+  },
+  "jni_patch_finalized": true,
+  "pending_gate": null,
+  "core_sqlite_exports": [
+    "sqlite3_config",
+    "sqlite3_errstr"
+  ],
+  "sqlcipher_map_sha256": "83dd3584761d46d4e40b7b00a4b911c721303b0472cded367336c98da7982a65",
+  "tools": {
+    "gcc": "14.2.0",
+    "cmake": "3.31.6",
+    "ninja": "1.11.1.git.kitware.jobserver-1",
+    "java_major": 17
+  },
+  "budgets": {
+    "jobs": 1,
+    "configure_seconds": 180,
+    "core_seconds": 1800,
+    "jni_seconds": 1200,
+    "output_bytes": 3221225472
+  },
+  "historical_producer_sources_sha256": "41ba94ad0987fac0ab106a4e7f7d2a8f7fbf85959e56f58e53c4a01ebc593b56",
+  "source_patch_acceptance_scope": "Approved classloader+ManagedLogger changes; independent strict basic, Database2/GDAL, real throwing-listener controls passed; no full SDK/client acceptance"
+}

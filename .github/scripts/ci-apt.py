@@ -25,12 +25,13 @@ DPkg::Lock::Timeout "15";
 OPTIONS = ['-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10',
            '-o', 'Acquire::https::Timeout=10', '-o', 'APT::Update::Error-Mode=any',
            '-o', 'DPkg::Lock::Timeout=15']
-MIRRORS = {'azure.archive.ubuntu.com':'archive.ubuntu.com',
-           'archive.ubuntu.com':'archive.ubuntu.com', 'security.ubuntu.com':'security.ubuntu.com'}
+FALLBACK_HOST = 'mirrors.edge.kernel.org'
+MIRRORS = dict.fromkeys(('azure.archive.ubuntu.com', 'archive.ubuntu.com',
+                         'security.ubuntu.com'), FALLBACK_HOST)
 MIRROR_FILES = {'apt-mirrors.txt', 'apt-mirrors-security.txt'}
 MAX_FILE = 256 * 1024
 MAX_LOG = 4 * 1024 * 1024
-KNOWN_ENDPOINTS = frozenset((*MIRRORS, 'packages.microsoft.com', 'ports.ubuntu.com'))
+KNOWN_ENDPOINTS = frozenset((*MIRRORS, FALLBACK_HOST, 'packages.microsoft.com', 'ports.ubuntu.com'))
 ERROR_CLASSES = {
     'dns_failure': rb'temporary failure resolving|could not resolve|name or service not known|name resolution failed',
     'network_timeout': rb'connection timed out|operation timed out|timeout was reached|connection timeout',

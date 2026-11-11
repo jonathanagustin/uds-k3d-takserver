@@ -419,7 +419,8 @@ unavailable evidence without printing payloads, paths, or exception text.
 
 Demo and Docs prepare APT with `sudo python3 .github/scripts/ci-apt.py update`.
 One signed update has a 60-second deadline. If it fails, the helper changes only
-recognized public Ubuntu HTTP endpoints to their official HTTPS counterparts,
+recognized public Canonical Ubuntu HTTP endpoints to
+`https://mirrors.edge.kernel.org/ubuntu` (including security suites),
 then attempts one more signed update. Legacy lists, Deb822 `URIs` fields and the
 runner's standard mirror lists are supported. Suites, components, architectures,
 `Signed-By`, third-party sources and authenticated URLs keep their existing
@@ -437,8 +438,14 @@ omitted. A failed capture reports only fixed error-category counts, allowlisted
 endpoint names and command/timeout metadata. A timeout's bounded terminated
 capture can be classified without printing its incomplete prefix; oversized
 captures are not scanned. These are observations, not proof of a network cause
-or a successful update. An official HTTPS alternative is not a guarantee of
-network availability.
+or a successful update. Local verification of the mirror's `jammy`,
+`jammy-updates`, `jammy-security` and `jammy-backports` InRelease signatures used
+Ubuntu's signer `F6ECB3762474EDA9D21B7022871920D1991BC93C`, independently sourced
+from [Canonical's immutable key configuration](https://github.com/canonical/chisel-releases/blob/a442b2e7208128df6366f859b7a858c0d3fce925/chisel.yaml).
+Production imports no keys: the runner's trusted keyring and `Signed-By` still
+control acceptance. Mirror registration was not independently confirmed; local
+signature verification does not establish hosted CI reachability or package
+installation success.
 
 Docs and Demo setup helpers are excluded by exact path from install, upgrade, and
 package triggers. Unit tests still cover them, and their own workflows still run.

@@ -1,8 +1,9 @@
 <!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">TAK on UDS — Unified route</title>
+  <title id="title">TAK on UDS — Waypoint relay</title>
   <desc id="desc">A teammate node connects through a U-shaped route to a forward navigation arrow.</desc>
-  <path d="M14 16V40Q14 51 25 51H33Q44 51 44 40V24" fill="none" stroke="#0F172A" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="14" cy="15" r="8" fill="#0F172A"/>
-  <path fill="#4F46E5" d="m59 5-8 28-8-10-10-8Z"/>
+  <path d="M16 16V40Q16 52 28 52H32Q44 52 44 40V20" fill="none" stroke="#0F172A" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="16" cy="16" r="8" fill="#0F172A"/>
+  <path fill="#0F172A" d="M56 4 52 32 40 20 28 12Z"/>
+  <path fill="#4F46E5" d="m51 10-2 12-5-6-6-2Z"/>
 </svg>

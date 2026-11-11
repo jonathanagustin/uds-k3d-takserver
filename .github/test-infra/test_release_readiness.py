@@ -45,6 +45,15 @@ class API:
         return copy.deepcopy(self.release)
 
 
+class PublishedTagAPI(API):
+    """Model GitHub: the published-tag endpoint cannot find this draft."""
+    def __call__(self, path, payload=None):
+        if path.startswith('/releases/tags/') and self.release['draft']:
+            self.calls.append((path, payload))
+            raise urllib.error.HTTPError('https://api.github.com/fixture', 404, 'Not Found', {}, None)
+        return super().__call__(path, payload)
+
+
 class PromotionTests(unittest.TestCase):
     def test_draft_exact_identity_patches_only_draft_and_rechecks(self):
         api = API()
@@ -52,6 +61,43 @@ class PromotionTests(unittest.TestCase):
         self.assertEqual([(p, v) for p, v in api.calls if v is not None],
                          [('/releases/123', {'draft': False})])
         self.assertEqual(api.calls[-1][0], '/git/ref/tags/v0.12.3')
+
+    def test_bound_draft_check_and_promote_do_not_use_published_tag_endpoint(self):
+        for operation in ('check', 'promote'):
+            with self.subTest(operation=operation):
+                api = PublishedTagAPI()
+                with self.assertRaises(urllib.error.HTTPError):
+                    api('/releases/tags/v0.12.3')
+                api.calls.clear()
+                if operation == 'check':
+                    self.assertTrue(R.check_release(api, 'v0.12.3', '123', SOURCE,
+                                                    checked_source=SOURCE)['draft'])
+                    self.assertFalse(any(payload is not None for _, payload in api.calls))
+                else:
+                    self.assertEqual(R.promote(api, 'v0.12.3', '123', SOURCE), 'published')
+                    self.assertEqual([c for c in api.calls if c[1] is not None],
+                                     [('/releases/123', {'draft': False})])
+                self.assertEqual(api.calls[0], ('/releases/123', None))
+                self.assertFalse(any(path.startswith('/releases/tags/') for path, _ in api.calls))
+
+    def test_published_tag_model_refuses_wrong_binding_and_preserves_public_backfill(self):
+        for operation in ('check', 'promote'):
+            for identity in [('', ''), ('123', ''), ('', SOURCE), ('124', SOURCE), ('123', OTHER)]:
+                api = PublishedTagAPI()
+                with self.subTest(operation=operation, identity=identity), self.assertRaises(
+                        (ValueError, urllib.error.HTTPError)):
+                    if operation == 'check':
+                        R.check_release(api, 'v0.12.3', *identity, checked_source=SOURCE)
+                    else:
+                        R.promote(api, 'v0.12.3', *identity)
+                self.assertFalse(any(payload is not None for _, payload in api.calls))
+            api = PublishedTagAPI(public=True)
+            if operation == 'check':
+                self.assertFalse(R.check_release(api, 'v0.12.3', checked_source=SOURCE)['draft'])
+            else:
+                self.assertEqual(R.promote(api, 'v0.12.3'), 'already-public')
+            self.assertEqual(api.calls[0], ('/releases/tags/v0.12.3', None))
+            self.assertFalse(any(payload is not None for _, payload in api.calls))
 
     def test_existing_tag_branch_metadata_is_not_commit_authority(self):
         api = API(); api.release['target_commitish'] = 'main'
@@ -89,7 +135,8 @@ class PromotionTests(unittest.TestCase):
         for field, value in [('id', 124), ('tag_name', 'v0.12.4'), ('draft', False)]:
             api = API()
             def change(current, path, payload):
-                if path == '/releases/123' and payload is None:
+                exact_reads = sum(p == '/releases/123' and v is None for p, v in current.calls)
+                if path == '/releases/123' and payload is None and exact_reads == 2:
                     current.release[field] = value
             api.mutate = change
             with self.subTest(field=field), self.assertRaises(ValueError):

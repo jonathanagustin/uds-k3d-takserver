@@ -6,9 +6,10 @@
 
     demo/sync-assets.py RUN_ID
 
-Run it after a manual Demo Video run from main has published and signed the
-videos, then open a pull request with the result. It downloads the run's
-demo-video artifact (needs gh) and:
+For a new capture use RUN_ID --capture-attempt N, then review a pull request
+with the result. This selects demo-video-attempt-N; the legacy invocation selects
+demo-video. It does not publish or change the selected release URL. It downloads
+the capture artifact (needs gh) and:
 
 - copies the two video posters and each chapter clip's poster to
   docs-site/public/demo/ (the clips themselves stay on the demo release; the
@@ -91,13 +92,19 @@ def update_readme(section, chapter_lines, minutes):
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit(__doc__)
-    run_id = sys.argv[1]
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('run_id')
+    parser.add_argument('--capture-attempt', default='')
+    args = parser.parse_args()
+    run_id = args.run_id
+    if not re.fullmatch(r'[1-9][0-9]*', run_id) or (args.capture_attempt and not re.fullmatch(r'[1-9][0-9]*', args.capture_attempt)):
+        raise SystemExit('Expected positive run and capture attempt IDs')
+    artifact = 'demo-video-attempt-' + args.capture_attempt if args.capture_attempt else 'demo-video'
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(
             ["gh", "run", "download", run_id, "--repo", "jonathanagustin/uds-takserver",
-             "--name", "demo-video", "--dir", tmp],
+             "--name", artifact, "--dir", tmp],
             check=True,
         )
         art = Path(tmp)

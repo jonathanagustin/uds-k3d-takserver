@@ -7,8 +7,8 @@
 # Chrome window (Playwright on an Xvfb display, captured with x11grab),
 # joined with ffmpeg. The MP4 is uploaded as the demo-video
 # artifact, with one short clip per chapter for the doc pages and the stills
-# the docs use. A manual run from main publishes the videos and the clips to
-# the demo release and signs them there. demo/sync-assets.py then copies a
+# the docs use. A manual main recording signs an artifact-only candidate.
+# A separate explicit dispatch publishes that exact candidate immutably. demo/sync-assets.py then copies a
 # run's posters, stills and chapter times into the docs.
 name: Demo Video
 
@@ -30,10 +30,18 @@ on:
         required: false
         default: true
       sign_only:
-        description: Skip the recording and only sign the videos already on the demo release (main only).
+        description: Retired unsafe mode; true is rejected without touching historical assets.
         type: boolean
         required: false
         default: false
+      publish_run_id:
+        description: Publish an existing signed candidate from this completed main Demo run; never record again.
+        required: false
+        default: ""
+      publish_attempt:
+        description: Signing attempt of that candidate (capture attempt remains separately recorded).
+        required: false
+        default: ""
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
@@ -64,8 +72,32 @@ env:
   VHS_SHA256: eb33787a5b1cebf91fe0b18bd231e2d71d36c1ff4babd99ddac1a6ab411efd10
 
 jobs:
+  mode:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - name: Checkout trusted publication policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate recording or publication mode
+        id: mode
+        env:
+          PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+          PUBLISH_ATTEMPT: ${{ inputs.publish_attempt }}
+          LEGACY_SIGN_ONLY: ${{ inputs.sign_only && 'true' || 'false' }}
+        run: python3 demo/publication.py mode
+
   record:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.sign_only }}
+    needs: mode
+    if: github.event_name == 'workflow_dispatch' && needs.mode.outputs.mode == 'record'
+    outputs:
+      capture-attempt: ${{ steps.capture.outputs.capture-attempt }}
     # Match Test's temporary hosted-kernel mitigation (#300); explicit overrides remain available.
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
     timeout-minutes: 240
@@ -413,11 +445,20 @@ jobs:
         run: ./demo/assemble.sh
         shell: bash
 
+      - name: Bind the actual capture source and attempt
+        id: capture
+        env:
+          CAPTURE_APP_SHA: ${{ steps.app-source.outputs.expected-sha }}
+        run: |
+          python3 demo/publication.py capture --directory demo/out --app-source "${CAPTURE_APP_SHA}"
+          echo "capture-attempt=${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+
       - name: Upload the demo video
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: demo-video
+          name: demo-video-attempt-${{ github.run_attempt }}
           path: |
+            demo/out/capture.json
             demo/out/demo.mp4
             demo/out/demo-operate.mp4
             demo/out/*-chapters.txt
@@ -568,143 +609,116 @@ jobs:
         shell: bash
 
 
-  # A manual run from main puts the two videos on the fixed "demo" release, so
-  # the README's download links do not follow the package version. Pull request
-  # runs and runs from other branches never publish. The release is a
-  # prerelease and not "latest", and its tag is not a version, so Release Please
-  # and the upgrade baseline (strict vX.Y.Z tags only) ignore it.
-  publish:
-    needs: record
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      actions: read
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - name: Download the demo videos
-        run: |
-          set -euo pipefail
-          gh run download "${GITHUB_RUN_ID}" --name demo-video --dir videos
-          # The release assets keep the names the README links to.
-          mv videos/demo.mp4 videos/demo-deploy.mp4
-          mv videos/demo-operate.mp4 videos/demo-operate-and-trust.mp4
-          mv videos/clips/demo-clip-*.mp4 videos/
-          ls -l videos
-        shell: bash
-
-      - name: Publish them to the demo release
-        run: |
-          set -euo pipefail
-          if ! gh release view demo >/dev/null 2>&1; then
-            gh release create demo --prerelease --latest=false --target main \
-              --title "Demo videos" \
-              --notes "The two demo videos the README links to. The Demo workflow replaces them on each manual run from main. Not a package release."
-          fi
-          gh release upload demo videos/*.mp4 --clobber
-        shell: bash
-
-  # Signs the videos on the demo release keylessly through Sigstore with this
-  # workflow's identity, the same way as the package releases. It downloads
-  # the assets from the release, so it signs exactly the bytes the README
-  # links to, and it never uploads or changes the videos. Each video and
-  # chapter clip (every .mp4 on the release) gets a Cosign bundle
-  # (<video>.sigstore.json), and all get one SLSA provenance attestation
-  # (demo-videos.intoto.jsonl), which the docs site build reads to copy them.
-  # It runs after publish, or alone with sign_only for the videos already
-  # there. Verify with:
-  #   cosign verify-blob demo-deploy.mp4 --bundle demo-deploy.mp4.sigstore.json \
-  #     --certificate-identity https://github.com/jonathanagustin/uds-takserver/.github/workflows/demo.yaml@refs/heads/main \
-  #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  # Main-only signing writes a candidate artifact, never a release or historical asset.
   sign:
-    needs: [record, publish]
-    if: >-
-      always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-      && (inputs.sign_only || needs.publish.result == 'success')
+    needs: [mode, record]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'record'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
+      actions: read
       id-token: write
       attestations: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Checkout trusted publication policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the verified publication GitHub CLI
+        env:
+          GH_VERSION: 2.103.3
+          GH_ARCHIVE_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location --max-time 120 \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}" -o "${archive}"
+          echo "${GH_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --status
+          tar -xzf "${archive}"
+          echo "${RUNNER_TEMP}/gh_${GH_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
       - name: Install Cosign
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           # renovate: datasource=github-releases depName=sigstore/cosign versioning=semver
           cosign-release: v3.1.4
-
-      - name: Download the videos from the demo release
+      - name: Validate and stage the existing capture
+        env:
+          CAPTURE_ATTEMPT: ${{ needs.record.outputs.capture-attempt }}
+        run: python3 demo/publication.py prepare-sign --directory videos
+      - name: Sign each original video
         run: |
           set -euo pipefail
-          mkdir videos
-          VIDEOS="$(gh release view demo --json assets --jq '[.assets[].name | select(endswith(".mp4"))] | join(" ")')"
-          echo "VIDEOS=${VIDEOS}" >> "${GITHUB_ENV}"
-          for video in ${VIDEOS}; do
-            gh release download demo --pattern "${video}" --dir videos
-            digest="$(gh release view demo --json assets --jq ".assets[] | select(.name == \"${video}\") | .digest")"
-            echo "${digest#sha256:}  videos/${video}" | sha256sum -c -
-            echo "${digest#sha256:}  ${video}" >> digests.txt
-          done
-          cat digests.txt
-        shell: bash
-
-      - name: Sign the videos
-        run: |
-          set -euo pipefail
-          cd videos
-          for video in ${VIDEOS}; do
+          for video in videos/*.mp4; do
             cosign sign-blob --yes --bundle "${video}.sigstore.json" "${video}"
           done
-        shell: bash
-
-      - name: Attest build provenance
+      - name: Attest videos and the capture manifest
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: videos/*.mp4
-
-      - name: Write the provenance as in-toto JSON lines
+          subject-path: |
+            videos/*.mp4
+            videos/demo-manifest.json
+      - name: Retain original signed provenance bytes
         env:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
         run: |
           set -euo pipefail
+          cp "${BUNDLE_PATH}" videos/demo-attestation.sigstore.json
           jq -ce 'select(.dsseEnvelope.payloadType == "application/vnd.in-toto+json") | .dsseEnvelope' \
             "${BUNDLE_PATH}" > videos/demo-videos.intoto.jsonl
-          jq -re '.payload | @base64d | fromjson | .predicateType' videos/demo-videos.intoto.jsonl \
-            | grep -qx 'https://slsa.dev/provenance/v1'
-        shell: bash
+      - name: Verify the complete candidate before retention
+        run: python3 demo/publication.py verify --directory videos
+      - name: Retain the signed candidate for explicit review and publication
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-signed-attempt-${{ github.run_attempt }}
+          path: videos/
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Verify the signatures and the provenance
+  # Explicit publication reuses signed bytes; it never renders or signs again.
+  publish:
+    needs: mode
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: immutable-demo-publication
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+      PUBLISH_ATTEMPT: ${{ inputs.publish_attempt }}
+    steps:
+      - name: Checkout trusted publication policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the verified publication GitHub CLI
         env:
-          IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
+          GH_VERSION: 2.103.3
+          GH_ARCHIVE_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
         run: |
           set -euo pipefail
-          identity="${IDENTITY%@*}@refs/heads/main"
-          cd videos
-          for video in ${VIDEOS}; do
-            cosign verify-blob "${video}" --bundle "${video}.sigstore.json" \
-              --certificate-identity "${identity}" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com
-            gh attestation verify "${video}" --owner "${GITHUB_REPOSITORY_OWNER}" \
-              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/demo.yaml"
-          done
-        shell: bash
-
-      - name: Add the signatures and the provenance to the demo release
-        run: |
-          set -euo pipefail
-          cd videos
-          gh release upload demo ./*.mp4.sigstore.json demo-videos.intoto.jsonl --clobber
-          # The videos on the release must still be the ones that were signed.
-          for video in ${VIDEOS}; do
-            digest="$(gh release view demo --json assets --jq ".assets[] | select(.name == \"${video}\") | .digest")"
-            grep -qx "${digest#sha256:}  ${video}" ../digests.txt
-          done
-        shell: bash
+          cd "${RUNNER_TEMP}"
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location --max-time 120 \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}" -o "${archive}"
+          echo "${GH_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --status
+          tar -xzf "${archive}"
+          echo "${RUNNER_TEMP}/gh_${GH_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          # renovate: datasource=github-releases depName=sigstore/cosign versioning=semver
+          cosign-release: v3.1.4
+      - name: Publish only the reviewed immutable candidate
+        run: python3 demo/publication.py publish

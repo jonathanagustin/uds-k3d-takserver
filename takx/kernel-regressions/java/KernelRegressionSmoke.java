@@ -8,7 +8,7 @@ import java.util.*;
 /** Uses the real packaged EngineLibrary resource loader, not native preloads. */
 public final class KernelRegressionSmoke {
     public static void main(String[] args) throws Exception {
-        KernelRuntimeSmoke.check(args.length == 2, "usage: genuine-component.jar fixture-root");
+        KernelRuntimeSmoke.check(args.length == 3, "usage: genuine-component.jar fixture-root category");
         Path component = Path.of(args[0]).toRealPath();
         for (Class<?> type : List.of(EngineLibrary.class,
                 com.atakmap.map.formats.dted.DtedElevationSource.class,
@@ -22,7 +22,7 @@ public final class KernelRegressionSmoke {
                 "regression consumer must originate in the genuine SDK component: " + type.getName());
         KernelRuntimeSmoke.initializeStrict();
         KernelRuntimeSmoke.basic();
-        KernelFormatRegressions.run(Path.of(args[1]));
+        KernelFormatRegressions.run(Path.of(args[1]), args[2]);
         Set<Path> mapped = new TreeSet<>();
         for (String line : Files.readAllLines(Path.of("/proc/self/maps"))) {
             String[] fields = line.trim().split("\\s+", 6);

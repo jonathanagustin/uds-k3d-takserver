@@ -84,3 +84,16 @@ failure receipt; all recorded outputs become read-only.
 No native test has been run merely by adding this harness. Actual execution needs
 the newly qualified SDK and enough reserved disk space; its receipt records the
 tested slices and preserves the unqualified runtime/elevation/3D boundaries.
+
+## Independent category processes
+
+The prepared runner uses one checked-JNI JVM per category: DTED, MBTiles,
+GeoPackage, KML, elevation and OBJ. Each gets a separate fresh fixture directory.
+Processes run sequentially and share only the new run's stock resource-loader
+extraction, bound to the exact SDK JAR digest. Existing proof caches are not used.
+A category's failed assertion or JNI warning is recorded without hiding the
+remaining categories; budget, deadline, input identity and provider failures stop
+the run. Every category retains its own complete bounded log, exit code,
+assertion marker and strict qualification result. JNI warnings always fail that
+category. The existing 120-second bound applies to each process (six maximum).
+No category outcome is claimed until this revised runner is actually executed.

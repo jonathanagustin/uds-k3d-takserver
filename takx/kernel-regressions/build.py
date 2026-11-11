@@ -139,13 +139,14 @@ def main():
     commands = []
     failure = None
     maps = None
+    categories = {}
     def gate():
         require(allocated(out) + RECEIPT <= cap, 'inclusive output/receipt cap')
         require(shutil.disk_usage('/workspace').free >= FLOOR + RECEIPT, 'physical free floor')
     env = {key: value for key, value in os.environ.items() if not key.startswith(('LD_', 'JAVA_', 'JDK_', 'CCACHE_')) and key not in
            ('_JAVA_OPTIONS', 'CLASSPATH', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY')}
     env.update(TMPDIR=str(out / 'tmp'), LC_ALL='C.UTF-8')
-    def run(argv, label):
+    def run(argv, label, allow_tool_failure=False):
         log = out / 'evidence' / (label + '.log')
         started = time.monotonic()
         def limits():
@@ -191,7 +192,7 @@ def main():
                 commands.append({'argv': list(map(str, argv)), 'exit': child.returncode,
                                  'seconds': time.monotonic() - started, 'log_prefix_truncated': truncated})
         require(not truncated, 'complete child stream required')
-        require(child.returncode == 0, 'first tool failure: ' + label)
+        require(allow_tool_failure or child.returncode == 0, 'first tool failure: ' + label)
         gate()
         return content.decode('utf-8', errors='strict')
     try:
@@ -204,18 +205,32 @@ def main():
         if args.phase == 'qualify':
             # Same genuine resource-loader startup path as the reviewed SDK qualification.
             library_path = out / 'tmp/takkernel/engine' / hashlib.md5(artifact.read_bytes()).hexdigest() / 'lib/linux64'
-            text = run([receipt['jdk_tools']['java']['path'], '-Xcheck:jni', '-Xmx256m', '-XX:ActiveProcessorCount=2',
-                        '-Djava.awt.headless=true', '-Djava.library.path=' + str(library_path),
-                        '-Djava.io.tmpdir=' + str(out / 'tmp'), '-Duser.home=' + str(out / 'home'),
-                        '-DTAK_APP_DATA_PATH=' + str(out / 'data'), '-cp', str(out / 'classes') + os.pathsep + cp,
-                        'KernelRegressionSmoke', artifact, out / 'fixtures'], 'regressions')
-            require(not any(marker in text for marker in ('WARNING in native method', 'WARNING: JNI', 'FATAL ERROR',
-                    'UnsatisfiedLinkError', 'NoClassDefFoundError', 'EngineLibrary: Failed to load')), 'JNI or startup diagnostic')
-            require('PASS_UPSTREAM_DTED_DISCOVERY_MBTILES_ROUNDTRIP_GPKG_FLOAT_COVERAGE' in text and
-                    'PASS_REAL_KERNEL_FORMAT_REGRESSIONS_NO_RENDERER_OR_FULL_CLIENT_CLAIM' in text, 'missing actual regressions')
-            maps = verify_maps(text, library_path, receipt['manifest']['native_resources'], hosts)
+            maps = {}
+            for category in ('dted', 'mbtiles', 'geopackage', 'kml', 'elevation', 'obj'):
+                text = run([receipt['jdk_tools']['java']['path'], '-Xcheck:jni', '-Xmx256m', '-XX:ActiveProcessorCount=2',
+                            '-Djava.awt.headless=true', '-Djava.library.path=' + str(library_path),
+                            '-Djava.io.tmpdir=' + str(out / 'tmp'), '-Duser.home=' + str(out / 'home'),
+                            '-DTAK_APP_DATA_PATH=' + str(out / 'data'), '-cp', str(out / 'classes') + os.pathsep + cp,
+                            'KernelRegressionSmoke', artifact, out / 'fixtures' / category, category],
+                           'regressions-' + category, allow_tool_failure=True)
+                diagnostics = any(marker in text for marker in ('WARNING in native method', 'WARNING: JNI', 'FATAL ERROR',
+                    'UnsatisfiedLinkError', 'NoClassDefFoundError', 'EngineLibrary: Failed to load'))
+                passed = (commands[-1]['exit'] == 0 and not diagnostics and
+                          'PASS_REAL_FORMAT_CATEGORY name=' + category + ' ' in text and
+                          'PASS_REAL_KERNEL_FORMAT_REGRESSIONS_NO_RENDERER_OR_FULL_CLIENT_CLAIM' in text)
+                categories[category] = {'exit': commands[-1]['exit'], 'jni_and_startup_diagnostics_free': not diagnostics,
+                                        'qualified': False, 'assertions_completed':
+                                        'PASS_REAL_FORMAT_CATEGORY name=' + category + ' ' in text}
+                if passed:
+                    maps[category] = verify_maps(text, library_path, receipt['manifest']['native_resources'], hosts)
+                    categories[category]['qualified'] = True
+                else:
+                    failure = failure or 'format category failed assertions or strict JNI/startup gate: ' + category
+                # Recheck identities and budget before the next independent JVM.
+                gate()
+                inspect(proof, args.sdk_proof_sha256)
     except BaseException as error:
-        failure = repr(error)
+        failure = failure or repr(error)
     finally:
         changed = [path for path, digest in inputs.items() if sha(path) != digest]
         try:
@@ -227,6 +242,7 @@ def main():
                   'sdk_proof_sha256': args.sdk_proof_sha256, 'phase': args.phase, 'output_cap_bytes': cap, 'commands': commands,
                   'inputs': inputs, 'changed_inputs': changed, 'mapped_elfs': maps,
                   'output_inventory': {str(path.relative_to(out)): sha(path) for path in out.rglob('*') if path.is_file()},
+                  'category_outcomes': categories,
                   'upstream_regression_scope': ['DTED filename discovery only', 'MBTiles default SPI byte roundtrips', 'GeoPackage float gridded coverage'],
                   'KML_elevation_sampling_3D_renderer_or_full_client_qualified': False}
         data = (json.dumps(result, indent=2) + '\n').encode()

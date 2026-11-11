@@ -26,17 +26,23 @@ public final class KernelFormatRegressions {
         assertions++;
         if (!condition) throw new AssertionError(message);
     }
-    public static void run(Path root) throws Exception {
+    public static void run(Path root, String category) throws Exception {
         check(root.isAbsolute() && !Files.isSymbolicLink(root), "owned absolute fixture root");
+        Files.createDirectories(root.getParent());
         Files.createDirectory(root);
-        dted(root.resolve("dted"), ElevationSource.QueryParameters.Order.ResolutionAsc);
-        dted(root.resolve("dted-reverse"), ElevationSource.QueryParameters.Order.ResolutionDesc);
-        mbtiles(root.resolve("roundtrip.mbtiles"));
-        griddedCoverage(root.resolve("terrain.gpkg"));
-        kmlDefaultPointStyle();
-        constantElevation(root.resolve("constant-elevation.tif"));
-        objCpuImport(root.resolve("tetrahedron.obj"));
-        System.out.println("PASS_UPSTREAM_DTED_DISCOVERY_MBTILES_ROUNDTRIP_GPKG_FLOAT_COVERAGE assertions=" + assertions);
+        switch (category) {
+            case "dted":
+                dted(root.resolve("dted"), ElevationSource.QueryParameters.Order.ResolutionAsc);
+                dted(root.resolve("dted-reverse"), ElevationSource.QueryParameters.Order.ResolutionDesc);
+                break;
+            case "mbtiles": mbtiles(root.resolve("roundtrip.mbtiles")); break;
+            case "geopackage": griddedCoverage(root.resolve("terrain.gpkg")); break;
+            case "kml": kmlDefaultPointStyle(); break;
+            case "elevation": constantElevation(root.resolve("constant-elevation.tif")); break;
+            case "obj": objCpuImport(root.resolve("tetrahedron.obj")); break;
+            default: throw new IllegalArgumentException("unknown format category: " + category);
+        }
+        System.out.println("PASS_REAL_FORMAT_CATEGORY name=" + category + " assertions=" + assertions);
     }
     private static void objCpuImport(Path path) throws Exception {
         // Authored analytic fixture: the public upstream teapot test assets are

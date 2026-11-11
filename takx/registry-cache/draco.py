@@ -230,7 +230,8 @@ def verify(capsule, expected_sha, expected_key):
             manifest['qualification'] != 'experimental-local-only' or
             manifest['registry_qualified'] is not False or manifest['sdk_accepted'] is not False or
             manifest['input_key'] != expected_key or key(manifest['identity']) != expected_key or
-            set(files) != set(manifest['files']) or not FIXED <= files.keys()):
+            set(files) != set(manifest['files']) or not FIXED <= files.keys() or
+            not any(name.startswith('prefix/include/draco/') for name in files)):
         raise ValueError('capsule contract or input key differs')
     for name, data in files.items():
         if manifest['files'][name] != {'bytes': len(data), 'sha256': sha(data), 'mode': 0o644}:

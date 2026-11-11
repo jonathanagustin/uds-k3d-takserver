@@ -59,6 +59,8 @@ def qualify(capsule, expected, input_key, fixture, output, cmake, ninja, cxx):
     for index, relative in enumerate(('first', 'unrelated/deeper/second')):
         restored = output / relative
         manifest = draco.restore(capsule, expected, input_key, restored)
+        if manifest['identity']['recipe']['DracoSourceProbe.cpp'] != draco.file_sha(probe):
+            raise ValueError('codec control differs from candidate producer recipe')
         prefix, build = restored / 'prefix', output / ('build-' + str(index))
         command = [tools['cmake']['path'], '-S', str(source), '-B', str(build), '-G', 'Ninja',
                    '-DCMAKE_MAKE_PROGRAM=' + tools['ninja']['path'], '-DCMAKE_CXX_COMPILER=' + tools['cxx']['path'],

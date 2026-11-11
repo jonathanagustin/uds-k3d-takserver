@@ -95,6 +95,14 @@ PR consumer can use that reader later; no automatic PR restore is wired here.
 No authenticated registry specimen has been qualified yet. The first hosted
 experiment remains required before #482 can close.
 
+A newly created GHCR package can be private even when its source repository is
+public. Anonymous readback deliberately fails until its package visibility is
+public; registry credentials are never a fallback. If the first publication
+stops there, change the package visibility, confirm anonymous access, then rerun
+only the failed publisher job in the same run. Its successful build artifact is
+retained, so this recovery does not rebuild the native component. A run started
+with publishing disabled cannot enable its skipped publisher through a rerun.
+
 The workflow caps build/publication jobs at 12/8 minutes. Local producers refuse
 a small Docker `vfs` workspace before pulling: the pinned eight-layer GCC image
 exhausted a workspace with 7 GiB free before a container could execute. At least

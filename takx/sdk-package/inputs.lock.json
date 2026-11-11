@@ -1,0 +1,23 @@
+{
+  "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "version": "8.30.5",
+  "abi": "Linux x86_64 current validated host ABI",
+  "source_file": "takkernel/engine/src/jre/java/com/atakmap/map/EngineLibrary.java",
+  "engine_before": "1f5b4cc6ee5fb1e9ae93fec7d167011910425cc2a9f5d48b26c590ccb574339d",
+  "engine_after": "cedfeeec1e852d9042637989cf2682bc9e587b560aeb2ca1bf41e5c0e7972936",
+  "patch_sha256": "78c4316ac311787eb9a8dde47fc56a64fa5ccd57c748f3b854812bc5d7523a5b",
+  "native_order": [
+    "GLdispatch",
+    "GLESv2",
+    "las",
+    "las_c",
+    "gdal",
+    "gdalalljni",
+    "assimp",
+    "takengine",
+    "takenginejni"
+  ],
+  "output_limit_bytes": 1073741824,
+  "command_seconds": 120,
+  "total_seconds": 600
+}

@@ -1,0 +1,47 @@
+--- a/EngineLibrary.java
++++ b/EngineLibrary.java
+@@ -85,27 +85,18 @@
+                                 "takenginejni",
+                         }
+         );
+-        /** LINUX64 **/
++        /** LINUX64: explicitly selected public-source CPU/JNI profile. **/
+         libs.put(
+                 OS_LINUX | ARCH_x64,
+                 new String[]
+                         {
+-                                "charset",
+-                                "iconv",
+-                                "crypto",
+-                                "proj",
+-                                "spatialite",
+-                                "tbb",
+-                                "ltidsdk",
+-                                "ssl",
+-                                "ogdi",
++                                "GLdispatch",
++                                "GLESv2",
++                                "las",
++                                "las_c",
+                                 "gdal",
+                                 "gdalalljni",
+                                 "assimp",
+-                                "pri",
+-                                "las",
+-                                "las_c",
+-                                "GLESv2",
+                                 "takengine",
+                                 "takenginejni",
+                         }
+@@ -277,7 +268,11 @@
+                     {
+                         InputStream strm = EngineLibrary.class.getResourceAsStream("/libs/" + libPath + "/" + libname);
+                         if (strm == null)
++                        {
++                            if (key == (OS_LINUX | ARCH_x64))
++                                throw new FileNotFoundException("Required public-source native resource: " + libname);
+                             continue;
++                        }
+                         final File file = new File(nativeLibDir, System.mapLibraryName(lib));
+                         try (FileOutputStream out = new FileOutputStream(file))
+                         {

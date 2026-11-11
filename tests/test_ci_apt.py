@@ -37,19 +37,29 @@ class AptTests(unittest.TestCase):
                     'http://archive.ubuntu.com.evil.test/ubuntu']:
             self.assertEqual(APT.canonical_uri(uri),uri)
 
+    def test_security_suite_and_existing_https_sources_keep_their_policy(self):
+        before = (b'deb [signed-by=/keys/ubuntu.gpg] http://security.ubuntu.com/ubuntu/ jammy-security main restricted\n'
+                  b'deb https://security.ubuntu.com/ubuntu jammy-security main\n'
+                  b'deb https://archive.ubuntu.com/ubuntu jammy-updates universe\n')
+        self.assertEqual(APT.rewrite(before, 'list'), before.replace(
+            b'http://security.ubuntu.com', b'https://mirrors.edge.kernel.org'))
+        capture = b'Could not connect to https://mirrors.edge.kernel.org/ubuntu https://custom.private.test/repo'
+        report = APT.acquisition_diagnostic('update', capture, 'complete', 1, 1, len(capture))
+        self.assertEqual(report['recognized_endpoints'], ['mirrors.edge.kernel.org'])
+
     def test_legacy_options_suites_components_comments_and_custom_repos_preserved(self):
         before = b'# http://azure.archive.ubuntu.com/ubuntu\ndeb [arch=amd64 signed-by=/keys/ubuntu.gpg] http://azure.archive.ubuntu.com/ubuntu jammy main universe # keep\ndeb-src https://custom.example/repo custom main\n'
         after = APT.rewrite(before,'list')
-        self.assertEqual(after,before.replace(b'] http://azure.archive.ubuntu.com',b'] https://archive.ubuntu.com'))
+        self.assertEqual(after,before.replace(b'] http://azure.archive.ubuntu.com',b'] https://mirrors.edge.kernel.org'))
 
     def test_deb822_multiple_uris_continuations_and_inline_signed_key_preserved(self):
         before = b'Types: deb deb-src\nURIs: http://azure.archive.ubuntu.com/ubuntu https://custom.example/repo\n http://security.ubuntu.com/ubuntu\nSuites: jammy jammy-updates\nComponents: main universe\nArchitectures: amd64\nSigned-By:\n -----BEGIN PGP PUBLIC KEY BLOCK-----\n .\n keep-key-bytes\n -----END PGP PUBLIC KEY BLOCK-----\n'
         after = APT.rewrite(before,'sources')
-        self.assertEqual(after,before.replace(b'http://azure.archive.ubuntu.com',b'https://archive.ubuntu.com').replace(b'http://security.ubuntu.com',b'https://security.ubuntu.com'))
+        self.assertEqual(after,before.replace(b'http://azure.archive.ubuntu.com',b'https://mirrors.edge.kernel.org').replace(b'http://security.ubuntu.com',b'https://mirrors.edge.kernel.org'))
 
     def test_mirrorlist_priority_and_comments_preserved(self):
         before = b'# mirrors\nhttp://azure.archive.ubuntu.com/ubuntu\tpriority:1\nhttps://custom.example/repo priority:2\n'
-        self.assertEqual(APT.rewrite(before,'mirror'),before.replace(b'http://azure.archive.ubuntu.com',b'https://archive.ubuntu.com'))
+        self.assertEqual(APT.rewrite(before,'mirror'),before.replace(b'http://azure.archive.ubuntu.com',b'https://mirrors.edge.kernel.org'))
 
     def test_real_atomic_fallback_handles_mirrorfile_and_preserves_mode(self):
         root = self.fixture();source=root/'sources.list'
@@ -57,7 +67,7 @@ class AptTests(unittest.TestCase):
         mirror=root/'apt-mirrors.txt';mirror.write_text('http://azure.archive.ubuntu.com/ubuntu priority:1\n');mirror.chmod(0o640)
         self.assertTrue(APT.fallback(root))
         self.assertEqual(source.read_text(),'deb mirror+file:/etc/apt/apt-mirrors.txt jammy main\n')
-        self.assertIn('https://archive.ubuntu.com',mirror.read_text())
+        self.assertIn('https://mirrors.edge.kernel.org',mirror.read_text())
         self.assertEqual(mirror.stat().st_mode&0o777,0o640)
         self.assertFalse(APT.fallback(root))
 

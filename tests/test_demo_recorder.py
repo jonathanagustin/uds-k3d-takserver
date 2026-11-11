@@ -49,7 +49,7 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(preflight['steps'][0]['with']['persist-credentials'], 'false')
         for shared in preflight['steps'][1:]:
             original = next(step for step in record['steps'] if step['name'] == shared['name'])
-            self.assertIs(shared, original)  # YAML aliases keep exact pins/install commands together.
+            self.assertEqual(shared, original)  # Shared lint cannot parse aliases across extracted steps.
         for event, sign_only, expected in [('pull_request',False,False), ('pull_request',True,False),
                                            ('workflow_dispatch',False,True), ('workflow_dispatch',True,False)]:
             expression = record['if'][3:-3].replace('github.event_name',repr(event))
@@ -65,23 +65,32 @@ class RecorderTests(unittest.TestCase):
     def test_vhs_recording_protocol_uses_real_tape_command_and_disables_publication(self):
         # This fixture exercises argv, shell/tape quoting and exit handling only.
         # It does not run VHS or establish recording/media qualification.
-        with tempfile.TemporaryDirectory(prefix='explicit VHS protocol fixture ') as directory:
+        with tempfile.TemporaryDirectory(prefix="explicit VHS protocol's fixture ") as directory:
             output = Path(directory)
             calls = []
             def fixture_run(command, seconds):
                 calls.append(command)
+                if command[1] == 'validate':
+                    self.assertEqual(seconds, 10)
+                    self.assertEqual(len(command), 3)
+                    self.assertTrue(Path(command[2]).is_file())
+                    return
                 self.assertEqual(command[:3], ['vhs','--publish=false','--output'])
                 self.assertEqual(seconds, 45)
                 self.assertEqual(os.environ['VHS_PUBLISH'], 'false')
                 tape = Path(command[-1]).read_text().splitlines()
                 self.assertEqual(json.loads(tape[0].split(' ',1)[1]), str(ROOT/'demo/settings.tape'))
                 self.assertEqual(tape[-2:], ['Enter','Sleep 2s'])
-                shell_command = json.loads(next(line for line in tape if line.startswith('Type@1ms ')).split(' ',1)[1])
+                typed = next(line for line in tape if line.startswith('Type@1ms ')).split(' ',1)[1]
+                self.assertTrue(typed.startswith('`') and typed.endswith('`'))
+                shell_command = typed[1:-1]
+                self.assertIn("\"$?\"", shell_command)
                 subprocess.run(['bash','-c',shell_command], check=True, stdout=subprocess.DEVNULL)
             with patch.dict(os.environ, {'VHS_PUBLISH':'true'}):
                 tape, video = MEDIA_CHECK.record_vhs(output, fixture_run)
                 self.assertEqual(os.environ['VHS_PUBLISH'], 'true')
-            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[0], ['vhs','validate',str(tape)])
             self.assertEqual((output/'vhs.exit').read_text().strip(), '0')
             self.assertEqual(video, output/'vhs.mp4')
             self.assertTrue(tape.is_file())
@@ -99,11 +108,19 @@ class RecorderTests(unittest.TestCase):
         for status in (None, '1'):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory)
-                def fixture_run(*args, **kwargs):
-                    if status is not None:
+                def fixture_run(command, **kwargs):
+                    if command[1] != 'validate' and status is not None:
                         (output/'vhs.exit').write_text(status)
                 with self.assertRaises((ValueError, FileNotFoundError)):
                     MEDIA_CHECK.record_vhs(output, fixture_run)
+
+    def test_conflicting_vhs_delimiter_is_rejected_before_any_tool_runs(self):
+        with tempfile.TemporaryDirectory(prefix='explicit ` delimiter fixture ') as directory:
+            def must_not_run(*args, **kwargs):
+                self.fail('unsupported tape delimiter must not reach VHS')
+            with self.assertRaisesRegex(ValueError, 'backtick'):
+                MEDIA_CHECK.record_vhs(Path(directory), must_not_run)
+            self.assertFalse((Path(directory)/'vhs.tape').exists())
 
     def test_actual_video_probe_rejects_wrong_codec_geometry_and_duration(self):
         valid = {'streams':[{'codec_name':'h264','width':1632,'height':840,

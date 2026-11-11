@@ -137,8 +137,7 @@ jobs:
           docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
           df -h /
 
-      - &demo-recording-tools
-        name: Install recording tools
+      - name: Install recording tools
         # Before the deploy, while the runner is idle: after it, apt has
         # hung here twice.
         timeout-minutes: 30
@@ -235,8 +234,7 @@ jobs:
       # The deployment is recorded as the video's opening chapter: the same
       # commands as `uds run demo-deploy`, printed as they run, captured with
       # asciinema and rendered later by demo/render-cast.py.
-      - &demo-asciinema-check
-        name: Install and check the pinned terminal recorder
+      - name: Install and check the pinned terminal recorder
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -253,8 +251,7 @@ jobs:
           echo "${RUNNER_TEMP}/recorder-bin" >> "${GITHUB_PATH}"
         shell: bash
 
-      - &demo-media-check
-        name: Check the pinned media pipeline before deployment
+      - name: Check the pinned media pipeline before deployment
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -505,9 +502,71 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - *demo-recording-tools
-      - *demo-asciinema-check
-      - *demo-media-check
+      - name: Install recording tools
+        # Before the deploy, while the runner is idle: after it, apt has
+        # hung here twice.
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          sudo python3 .github/scripts/ci-apt.py update
+          sudo python3 .github/scripts/ci-apt.py install ffmpeg fonts-jetbrains-mono fonts-dejavu-core \
+            xvfb libnss3-tools python3-pil python3-venv
+          curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
+          echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
+          sudo mkdir -p /usr/local/share/fonts/inter
+          sudo unzip -o -j -q /tmp/inter.zip 'extras/ttf/Inter-SemiBold.ttf' 'extras/ttf/Inter-Medium.ttf' -d /usr/local/share/fonts/inter
+          sudo fc-cache -f
+          python3 demo/style.py fonts
+          # The recording browser: no bookmark star or bookmarks bar, no
+          # sign-in, and a toolbar in the demo's background colour.
+          sudo install -D -m 0644 demo/chrome-policy.json /etc/opt/chrome/policies/managed/demo.json
+          google-chrome --version
+          # Chrome keeps its sandbox on (no unsupported-flag bar). Ubuntu 24.04
+          # blocks the unprivileged user namespaces that sandbox uses.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          tarball="vhs_${VHS_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSL -o "/tmp/${tarball}" "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/${tarball}"
+          echo "${VHS_SHA256}  /tmp/${tarball}" | sha256sum -c -
+          tar -xzf "/tmp/${tarball}" -C /tmp
+          sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
+          vhs --version
+          # Ubuntu 22.04 ships ttyd 1.6.3; VHS 0.12.1 requires at least 1.7.2.
+          curl --fail --silent --show-error --location --max-time 30 --max-filesize 1400000 \
+            -o "${RUNNER_TEMP}/ttyd" "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64"
+          echo "${TTYD_SHA256}  ${RUNNER_TEMP}/ttyd" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/ttyd" /usr/local/bin/ttyd
+          ttyd --version
+        shell: bash
+
+      - name: Install and check the pinned terminal recorder
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 -m venv "${RUNNER_TEMP}/asciinema"
+          "${RUNNER_TEMP}/asciinema/bin/python" -m pip --isolated install \
+            --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes \
+            --timeout 30 --retries 2 -r demo/tools/asciinema-requirements.txt
+          python3 demo/tools/check-asciinema.py \
+            --recorder "${RUNNER_TEMP}/asciinema/bin/asciinema" \
+            --output "${RUNNER_TEMP}/asciinema-cli-check"
+          # Export only the recorder; keep media Python and its system Pillow.
+          mkdir -p "${RUNNER_TEMP}/recorder-bin"
+          ln -s "${RUNNER_TEMP}/asciinema/bin/asciinema" "${RUNNER_TEMP}/recorder-bin/asciinema"
+          echo "${RUNNER_TEMP}/recorder-bin" >> "${GITHUB_PATH}"
+        shell: bash
+
+      - name: Check the pinned media pipeline before deployment
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          # The GNU 1.9.0 binary needs GLIBC_2.38; the static MUSL build supports Ubuntu 22.
+          curl --fail --silent --show-error --location --max-time 30 --max-filesize 17000000 \
+            -o "${RUNNER_TEMP}/agg" "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-musl"
+          echo "${AGG_SHA256}  ${RUNNER_TEMP}/agg" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/agg" /usr/local/bin/agg
+          python3 demo/tools/check-media.py --output "${RUNNER_TEMP}/demo-media-check"
+        shell: bash
+
 
   # A manual run from main puts the two videos on the fixed "demo" release, so
   # the README's download links do not follow the package version. Pull request

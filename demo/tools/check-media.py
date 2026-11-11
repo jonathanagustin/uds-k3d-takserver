@@ -54,12 +54,17 @@ def record_vhs(output, run_media):
     # v0.12.1's official root CLI accepts a tape and --output/--publish.
     # VHS_PUBLISH=true can override the flag, so disable both publication paths.
     # Source and Type@ use the same syntax as demo/tapes and settings.tape.
+    # VHS strings do not use JSON backslash-quote escaping. Backticks retain
+    # the shell quotes around $? and paths; refuse a conflicting delimiter.
+    if '`' in command:
+        raise ValueError('backtick in VHS command path is unsupported')
     tape.write_text('Source ' + json.dumps(str(DEMO/'settings.tape')) + '\n' +
                     'Output ' + json.dumps(str(video)) + '\n' +
-                    'Type@1ms ' + json.dumps(command) + '\nEnter\nSleep 2s\n')
+                    'Type@1ms `' + command + '`\nEnter\nSleep 2s\n')
     previous = os.environ.get('VHS_PUBLISH')
     os.environ['VHS_PUBLISH'] = 'false'
     try:
+        run_media(['vhs', 'validate', str(tape)], seconds=10)
         run_media(['vhs', '--publish=false', '--output', str(video), str(tape)], seconds=45)
     finally:
         if previous is None:

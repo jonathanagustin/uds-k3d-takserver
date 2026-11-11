@@ -1,0 +1,15 @@
+{
+  "client57-public-interop-client-replay-03": "/absolute/path/to/client57-public-interop-client-replay-03",
+  "client57-public-interop-compiler-02": "/absolute/path/to/client57-public-interop-compiler-02",
+  "commoncommo-jni-exception-proof": "/absolute/path/to/commoncommo-jni-exception-proof",
+  "kernel-client-interop-public-bitmap-controls-01": "/absolute/path/to/kernel-client-interop-public-bitmap-controls-01",
+  "kernel-client-interop-public-cache": "/absolute/path/to/kernel-client-interop-public-cache",
+  "recovered-uds-takserver": "/absolute/path/to/recovered-uds-takserver",
+  "render-context-java-client-frozen-01": "/absolute/path/to/render-context-java-client-frozen-01",
+  "sdk-kernel-jni-coverage-proof": "/absolute/path/to/sdk-kernel-jni-coverage-proof",
+  "sdk-package-bounded-stock-qualification": "/absolute/path/to/sdk-package-bounded-stock-qualification",
+  "takx-client-compiler-closure": "/absolute/path/to/takx-client-compiler-closure",
+  "takx-client-readiness": "/absolute/path/to/takx-client-readiness",
+  "tools": "/absolute/path/to/tools",
+  "ww-interop-proof": "/absolute/path/to/ww-interop-proof"
+}

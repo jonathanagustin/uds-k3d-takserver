@@ -25,18 +25,25 @@ texture overlays remain separate from preceding solid fills. Existing upstream
 multi-ring tessellation supplies holes unchanged. Hit testing keeps polygon
 geometry rather than treating transparent hatch pixels as absent geometry.
 
-The existing asynchronous icon/bitmap cache is reused for URI loading and atlas
-ownership. Missing textures return the cache's error instead of silently
-substituting a solid fill. Recursive collection/composite/level-of-detail calls must now
-propagate those errors. No separate texture lifetime or global GL_REPEAT change
-is introduced. Context recreation acceptance depends on the independent render
-context feature and remains unproven here.
+A distinct texture callback reuses the actual asynchronous bitmap loader and
+atlas, with a separate ready cache and no default point-icon substitution.
+All active texture styles are preflighted before any part of a feature is
+emitted. Pending or failed texture features emit no partial composite; ordinary
+siblings continue. Each feature records None/Ready/Pending/Failed. Actual load
+completion triggers the existing refresh; an asynchronous texture failure
+triggers one terminal refresh even when ordinary icon fallback is disabled.
+Permanent failures are reported without retrying an unchanged URI or busy-spin.
+Ordinary recursive error behavior remains upstream's behavior. Texture-bearing
+style resets preserve nested level-of-detail limits; a later stroke is separated
+from a textured fill. These changes still require the full runtime gate below.
+No separate atlas lifetime or global GL_REPEAT change is introduced. Context
+recreation acceptance depends on the independent render-context feature.
 
 Small local controls currently pass:
 
 * Real production UV/frame math: repeat, negative coordinates, mixed stretch,
   rotation, north versus screen anchoring, viewport offset and invalid input.
-* Five changed real C++ translation units pass syntax checks using the accepted
+* Six changed real C++ translation units pass syntax checks using the accepted
   compiler/dependency flags. The two actual Java source files compile and emit
   their genuine JNI declarations.
 * The actual production polygon shader renders upstream multi-ring tessellation
@@ -70,3 +77,16 @@ full source tree after the same preimage checks. Other project Kernel patches
 remain separate. Native controls are opt-in and require the reviewed complete
 Kernel/GLES provider inputs; default guards perform no compiler/native/network
 execution.
+
+The opt-in `builder-control.cpp` exercises the real builder with explicit
+callback fixtures: first-pending and terminal-failed texture followed by an
+ordinary solid sibling, pending-to-ready retry, no icon callback substitution,
+both texture/stroke orders and nested level-of-detail bytes. It has passed
+syntax checking only and has not been linked or executed. It does not prove the
+actual asynchronous loader/atlas runtime. The query callback, atlas failure,
+refresh scheduling, siblings and edit-overlay path need a separately reviewed
+full affected-closure native qualification. Public struct/vtable layouts change;
+never mix only the edited objects into an accepted old Core. The existing Ninja
+dependency log identifies 78 affected objects (about 6.65 MiB of current object
+bytes), plus Core/JNI relinks. A new dependency scan is still required. External
+source-built providers can be reused by identity.

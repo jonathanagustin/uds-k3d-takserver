@@ -3,7 +3,7 @@
   "source_repository": "https://github.com/TAK-Product-Center/atak-civ",
   "source_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
   "actual_kernel_version": "8.30.5",
-  "patch_sha256": "1093f6ead6a9aa61c73e4d4b35e183e101ec7e0c4d9c07171e213ecbae280d48",
+  "patch_sha256": "058227ac202f037ec65d4eb1ca8eff612e7326695c45336c320e5a1081013c80",
   "files": {
     "takkernel/engine/src/main/cpp/feature/Style.cpp": {
       "before_sha256": "cccbf189c970f65dd661050eee6d4c427c2cf781788c7f1f26a849546c509f27",
@@ -16,6 +16,14 @@
     "takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag": {
       "before_sha256": "4c86c5e6366f796c9babd564650112ef0b237a07937ab1b32d9b076cfa6fa7ac",
       "after_sha256": "5e3b9dfa1f5593d311c3bc405ccd5ece18112021c6398ade56698287b87507e0"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp": {
+      "before_sha256": "f761b5849a417f063abd523d9d0e71552da0075a0ee1240da6c7b1cdfef2480b",
+      "after_sha256": "a49c53a2e761859914fc9490e82719f95684b3c6a675a0ccec208603fbc3c1b0"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h": {
+      "before_sha256": "335502860018dd2da8c472fb0364d63d12a21edf1bdeb5e4affab5671e3cadc2",
+      "after_sha256": "3efca3d480ab411636d77c7c6f8878c3c29741cdd6e03cd02b63814f95a1c01a"
     },
     "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp": {
       "before_sha256": "e97f70c3d389c59033bdd0397be0685360e5a168d32f07b9faf4617c80f17fbf",
@@ -35,7 +43,11 @@
     },
     "takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp": {
       "before_sha256": "04353f2d85bad40f90f42e9c8f5dadc3e05ff63aaa79e3d4286666acf34f99bc",
-      "after_sha256": "1ab8414e53f21cfe21bbdcd7ae47bf7079efbcdff4bfae854e2f87efc13791af"
+      "after_sha256": "5e9485a68fa3a74c0c1816da6c5c05d218be9dc97c93caef184080e236d12f7d"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.h": {
+      "before_sha256": "3f141e1a85afc8d6a293fd192e7e84bc11c605fc9fd1f290a064f211c4fbcbbd",
+      "after_sha256": "50eaf497449d3b52f838ac6b1b02fc6023244fee2bd923bf35a2af32bd7091bd"
     },
     "takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h": {
       "before_sha256": null,

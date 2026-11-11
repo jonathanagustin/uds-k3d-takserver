@@ -183,6 +183,167 @@ index 1c8f7ac..69b49fb 100644
  }
  )"
 \ No newline at end of file
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
+index 2748efb..3d2afd8 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp
+@@ -66,6 +66,7 @@ namespace
+     {
+         StringMap<AsyncBitmapLoader2::Task> *loading{nullptr};
+         StringSet<StringLess> *failed{nullptr};
++        StringSet<StringLess> *textureUris{nullptr};
+         TAK::Engine::Port::String *defaultIconUri{nullptr};
+         GLTextureAtlas2* atlas{ nullptr };
+         bool defaultIconOnLoadFailure{true};
+@@ -94,6 +95,7 @@ namespace
+     struct FeatureRecord
+     {
+         int64_t fid{ FeatureDataStore2::FEATURE_ID_NONE };
++        GLGeometryBatchBuilder::TextureState textureState{GLGeometryBatchBuilder::TextureState::None};
+         int64_t version{ FeatureDataStore2::FEATURE_VERSION_NONE };
+         std::size_t touch{ 0u };
+         int lod {-1};
+@@ -143,6 +145,7 @@ namespace
+         TAKErr unmapBuffer(const GLuint handle) NOTHROWS override;
+         TAKErr getElevation(double *value, const double latitude, const double longitude) NOTHROWS override;
+         TAKErr getIcon(GLuint *id, float *u0, float *v0, float *u1, float *v1, std::size_t *w, std::size_t *h, float *rotation, bool *isAbsoluteRotation, const char* uri) NOTHROWS override;
++        TAKErr getTexture(GLuint *id, float *u0, float *v0, float *u1, float *v1, std::size_t *w, std::size_t *h, const char *uri) NOTHROWS override;
+         TAKErr addLabel(const GLLabel &label) NOTHROWS override;
+         TAKErr addLabel(GLLabel &&label) NOTHROWS override;
+         uint32_t reserveHitId() NOTHROWS override;
+@@ -154,6 +157,7 @@ namespace
+         std::size_t &activeCtxId;
+         GLGeometryBatchBuilder builder;
+         StringMap<TextureAtlasEntry> iconEntryCache;
++        StringMap<TextureAtlasEntry> textureEntryCache;
+         std::shared_ptr<CallbackExchange> cbex;
+         std::size_t queryCount{ 0u };
+         uint32_t nextHitId{ 0u };
+@@ -197,6 +201,19 @@ namespace
+         FeatureCursor2Filter *queryFilter {nullptr};
+     };
+ 
++    void recordTextureState(BuilderQueryContext &ctx) NOTHROWS
++    {
++        const auto state = ctx.builder.getLastTextureState();
++        if (state == GLGeometryBatchBuilder::TextureState::Pending || state == GLGeometryBatchBuilder::TextureState::Failed) {
++            ctx.current->labels.invalid = true;
++            ctx.current->lod = -1;
++            if (ctx.current->textureState != state)
++                Logger_log(state == GLGeometryBatchBuilder::TextureState::Failed ? TELL_Warning : TELL_Debug,
++                    "Textured feature deferred: state=%s", state == GLGeometryBatchBuilder::TextureState::Pending ? "pending" : "failed");
++        }
++        ctx.current->textureState = state;
++    }
++
+     struct BuilderCallbackBundle
+     {
+         GLuint handle{ GL_NONE };
+@@ -206,6 +223,7 @@ namespace
+         TextureAtlasEntry icon;
+         RenderContext *ctx;
+         bool done{ false };
++        bool allowIconFallback{true};
+         IconLoaderRef iconLoader;
+     };
+ 
+@@ -426,10 +444,12 @@ void GLBatchGeometryFeatureDataStoreRenderer3::draw(const GLGlobeBase &view, con
+                     editor.dirty.features = true;
+                 } else if (it->second->getFuture().getState() == atakmap::util::SharedState::Error) {
+                     iconLoader.failed.insert(it->first);
++                    const bool textureFailed = iconLoader.textureUris.find(it->first) != iconLoader.textureUris.end();
+                     it = iconLoader.loading.erase(it);
+ 
+-                    // mark invalid to refresh buffers
+-                    invalid_ |= iconLoader.defaultIconOnLoadFailure;
++                    // A texture terminal transition needs one refresh, even with ordinary icon fallback disabled.
++                    invalid_ |= iconLoader.defaultIconOnLoadFailure || textureFailed;
++                    editor.dirty.features |= textureFailed;
+                 } else {
+                     it++;
+                 }
+@@ -518,6 +538,7 @@ void GLBatchGeometryFeatureDataStoreRenderer3::draw(const GLGlobeBase &view, con
+                         pushHints |= GLGeometryBatchBuilder::PushHints::TessellationDisabled;
+                 }
+                 editctx.builder.push(*f, (GLGeometryBatchBuilder::PushHints)pushHints);
++                recordTextureState(editctx);
+                 editctx.endFeature();
+             }
+             editctx.builder.flush();
+@@ -663,6 +684,7 @@ TAKErr GLBatchGeometryFeatureDataStoreRenderer3::createQueryContext(QueryContext
+     queryContext->iconLoader.mutex = iconLoader.mutex.get();
+     queryContext->iconLoader.loading = &iconLoader.loading;
+     queryContext->iconLoader.failed = &iconLoader.failed;
++    queryContext->iconLoader.textureUris = &iconLoader.textureUris;
+     queryContext->iconLoader.atlas = iconLoader.atlas.get();
+     queryContext->iconLoader.bitmapLoader = iconLoader.bitmapLoader.value;
+     queryContext->iconLoader.defaultIconUri = &iconLoader.defaultIconUri;
+@@ -1206,6 +1228,7 @@ TAKErr GLBatchGeometryFeatureDataStoreRenderer3::queryImpl(QueryContext &opaque,
+                 pushHints |= GLGeometryBatchBuilder::PushHints::TessellationDisabled;
+         }
+         code = ctx.builder.push(*cursor, (GLGeometryBatchBuilder::PushHints)pushHints);
++        recordTextureState(ctx);
+         ctx.endFeature();
+ 
+         ctx.metrics.resultsSize++;
+@@ -1549,7 +1572,7 @@ namespace
+             auto &loader = bundle->iconLoader;
+             Lock lock(*bundle->iconLoader.mutex);
+             if (loader.failed->find(bundle->iconUri) != loader.failed->end()) {
+-                if(!loader.defaultIconOnLoadFailure)
++                if(!bundle->allowIconFallback || !loader.defaultIconOnLoadFailure)
+                     break;
+                 // icon won't load, try default
+                 if (!(*loader.defaultIconUri)) {
+@@ -1842,6 +1865,36 @@ namespace
+ 
+         return TE_Done;
+     }
++    TAKErr BuilderQueryContext::getTexture(GLuint *id, float *u0, float *v0, float *u1, float *v1,
++        std::size_t *w, std::size_t *h, const char *uri) NOTHROWS
++    {
++        if (!uri || !*uri) return TE_InvalidArg;
++        {
++            Lock lock(*iconLoader.mutex);
++            iconLoader.textureUris->insert(uri);
++            if (iconLoader.failed->find(uri) != iconLoader.failed->end()) return TE_Err;
++        }
++        auto ready = textureEntryCache.find(uri);
++        if (ready == textureEntryCache.end()) {
++            BuilderCallbackBundle arg;
++            arg.iconUri = uri;
++            arg.ctx = &ctx;
++            arg.iconLoader = iconLoader;
++            arg.allowIconFallback = false;
++            cb_getIconImpl(&arg);
++            if (!arg.icon.texid) {
++                Lock lock(*iconLoader.mutex);
++                return iconLoader.failed->find(uri) != iconLoader.failed->end() ? TE_Err : TE_Busy;
++            }
++            textureEntryCache[uri] = arg.icon;
++            ready = textureEntryCache.find(uri);
++        }
++        const auto &image = ready->second;
++        *id=image.texid; *u0=image.u0; *v0=image.v0; *u1=image.u1; *v1=image.v1;
++        *w=image.width; *h=image.height;
++        return TE_Ok;
++    }
++
+     TAKErr BuilderQueryContext::getIcon(GLuint *id, float *u0, float *v0, float *u1, float *v1, std::size_t *w, std::size_t *h, float *rotation, bool *isAbsoluteRotation, const char* uri) NOTHROWS
+     {
+         if (!uri)
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h
+index 7e6e207..3f3c0ca 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.h
+@@ -157,6 +157,7 @@ namespace TAK {
+                     {
+                         Util::StringMap<TAK::Engine::Renderer::AsyncBitmapLoader2::Task> loading;
+                         Util::StringSet<Port::StringLess> failed;
++                        Util::StringSet<Port::StringLess> textureUris;
+                         Port::String defaultIconUri;
+                         std::shared_ptr<TAK::Engine::Renderer::GLTextureAtlas2> atlas;
+                         std::shared_ptr<Thread::Mutex> mutex;
 diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
 index 326b6be..3606ee4 100644
 --- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
@@ -301,7 +462,7 @@ index abf3797..4038594 100644
                      GLuint handle{ GL_NONE };
                      GLint uColor{ -1 };
 diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
-index 28cb8d4..a0b09d9 100644
+index 28cb8d4..70919e2 100644
 --- a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
 +++ b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
 @@ -115,6 +115,7 @@ namespace
@@ -312,7 +473,17 @@ index 28cb8d4..a0b09d9 100644
          struct {
              std::size_t width{ 0u };
              std::size_t height{ 0u };
-@@ -1721,6 +1722,7 @@ namespace
+@@ -377,6 +378,9 @@ namespace
+     struct VertexWriterContext
+     {
+         GLGeometryBatchBuilder *owner{ nullptr };
++        struct TextureBinding { std::shared_ptr<const atakmap::feature::Style> style; GLuint id; std::shared_ptr<GLBatchGeometryRenderer4::PolygonTexture> material; };
++        std::vector<TextureBinding> textures;
++        bool textureFeature{false};
+         GLGeometryBatchBuilder::BatchContext batchContext;
+         double simplifyFactor{ 1e-15 };
+         GLGeometryBatchBuilder::Callback3 *callback{ nullptr };
+@@ -1721,6 +1725,7 @@ namespace
                  sink.writeFloat(primitive[i].y);
                  sink.writeFloat(primitive[i].z);
                  sink.writeInt(hitid);
@@ -320,7 +491,41 @@ index 28cb8d4..a0b09d9 100644
                  sink.writeByte(style.color.fill.r);
                  sink.writeByte(style.color.fill.g);
                  sink.writeByte(style.color.fill.b);
-@@ -2303,6 +2305,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
+@@ -1757,6 +1762,8 @@ namespace
+     TAKErr push(VertexWriterContext &ctx, const std::function<const char *()> &featureNameAccess, const atakmap::feature::Geometry& geom, const double extrude, const TAK::Engine::Feature::AltitudeMode altmode, const atakmap::feature::Style *style, const ProcessLabelsMask processLabels, const GLGeometryBatchBuilder::PushHints hints) NOTHROWS;
+ 
+     TAKErr flushPrimitives(VertexWriterContext &ctx, const atakmap::feature::Geometry &geom, const double extrude, const TAK::Engine::Feature::AltitudeMode altmode, const GLGeometryBatchBuilder::PushHints hints) NOTHROWS;
++    GLGeometryBatchBuilder::TextureState prepareTextures(VertexWriterContext &, const atakmap::feature::Geometry &,
++        TAK::Engine::Feature::AltitudeMode, const atakmap::feature::Style *) NOTHROWS;
+     bool GLGeometryBatchBuilder_init() NOTHROWS;
+ }
+ 
+@@ -1885,6 +1892,7 @@ TAKErr GLGeometryBatchBuilder::push(TAK::Engine::Feature::FeatureDefinition2 &de
+ 
+ TAKErr GLGeometryBatchBuilder::push(TAK::Engine::Feature::FeatureDefinition3 &def, const PushHints pushHints) NOTHROWS
+ {
++    lastTextureState = TextureState::None;
+     TAKErr code(TE_Ok);
+     if (!this->callback)
+         return TE_IllegalState;
+@@ -1996,6 +2004,16 @@ TAKErr GLGeometryBatchBuilder::push(TAK::Engine::Feature::FeatureDefinition3 &de
+     if(pushHints&PushHints::ProcessLabels)
+         processLabelsMask |= ProcessLabelsMask::AutoGenerate|ProcessLabelsMask::ExplicitStyle;
+     TAK::Engine::Feature::Traits traits = def.getTraits();
++    const auto effectiveAltitude = ((pushHints&PushHints::ForceClampToGround) && geom->getType() != atakmap::feature::Geometry::POINT) ? TAK::Engine::Feature::TEAM_ClampToGround : traits.altitudeMode;
++    bool hasTexture = false;
++    if (style) Style_recurse(*style, [&hasTexture](const atakmap::feature::Style &child, const atakmap::feature::Style *) {
++        hasTexture |= child.getClass() == atakmap::feature::TESC_TextureFillStyle;
++        return TE_Ok;
++    });
++    if (hasTexture) lastTextureState = prepareTextures(ctx, *geom, effectiveAltitude, style);
++    if (lastTextureState == TextureState::Pending || lastTextureState == TextureState::Failed)
++        return TE_Ok; // explicit deferred/failed feature, no partial buffers; ordinary siblings continue
++    ctx.textureFeature = lastTextureState == TextureState::Ready;
+     code = ::push(ctx, FeatureDefinition_getName, *geom, traits.extrude, ((pushHints&PushHints::ForceClampToGround) && geom->getType() != atakmap::feature::Geometry::POINT) ? TAK::Engine::Feature::TEAM_ClampToGround : traits.altitudeMode, style, (ProcessLabelsMask)processLabelsMask, pushHints);
+     if(code != TE_Ok)
+         return code;
+@@ -2303,6 +2321,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
          sink.builder->buffer.remaining(&remaining);
          if (!sink.builder->pb.vbo ||
              ctx->style.texid != sink.builder->pb.texid ||
@@ -328,7 +533,7 @@ index 28cb8d4..a0b09d9 100644
              remaining < (ctx->impl.verticesPerEmitPrimitives.out*ctx->impl.vertexSize)) {
  
              // flush builder contents
-@@ -2332,6 +2335,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
+@@ -2332,6 +2351,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
              sink.builder->buffer.setSourceEndian2(TE_PlatformEndian);
              sink.builder->pb.mode = ctx->impl.mode;
              sink.builder->pb.texid = ctx->style.texid;
@@ -336,41 +541,43 @@ index 28cb8d4..a0b09d9 100644
          }
  
          idx = 0u;
-@@ -2365,8 +2369,10 @@ namespace
-     {
-         if (geom.getType() == atakmap::feature::Geometry::COLLECTION) {
-             const auto &gc = static_cast<const atakmap::feature::GeometryCollection &>(geom);
--            for (auto it = gc.contents().first; it != gc.contents().second; it++)
--                push(ctx, featureNameAccess, **it, extrude_, altmode, style_, (ProcessLabelsMask)(processLabels&ProcessLabelsMask::ExplicitStyle), hints);
-+            for (auto it = gc.contents().first; it != gc.contents().second; it++) {
-+                const auto code = push(ctx, featureNameAccess, **it, extrude_, altmode, style_, (ProcessLabelsMask)(processLabels&ProcessLabelsMask::ExplicitStyle), hints);
-+                TE_CHECKRETURN_CODE(code);
-+            }
-             return TE_Ok;
-         }
+@@ -2361,6 +2381,84 @@ namespace
+         return defls;
+     }
  
-@@ -2407,6 +2413,51 @@ namespace
-             ctx.style.composite.basicFill++;
-             break;
-         }
-+        case atakmap::feature::TESC_TextureFillStyle :
-+        {
-+            if (geom.getType() != atakmap::feature::Geometry::POLYGON) return TE_InvalidArg;
-+            // Separate transparent hatch overlay from any preceding solid fill/stroke.
-+            if (ctx.style.composite.basicFill || ctx.style.color.stroke.a) {
-+                const auto code = flushPrimitives(ctx, geom, extrude, altmode, hints);
-+                TE_CHECKRETURN_CODE(code);
-+                ctx.style = FeatureStyle();
-+                ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
-+            }
-+            const auto &impl = static_cast<const atakmap::feature::TextureFillStyle &>(style);
++    void resetFeatureStyle(VertexWriterContext &ctx) NOTHROWS
++    {
++        const auto levels = ctx.style.levelOfDetail;
++        ctx.style = FeatureStyle();
++        if (ctx.textureFeature) ctx.style.levelOfDetail = levels;
++    }
++
++    bool acceptsTextureGeometry(const atakmap::feature::Geometry &geometry) NOTHROWS
++    {
++        if (geometry.getType() == atakmap::feature::Geometry::POLYGON) return true;
++        if (geometry.getType() != atakmap::feature::Geometry::COLLECTION) return false;
++        const auto &collection = static_cast<const atakmap::feature::GeometryCollection &>(geometry);
++        for (auto it=collection.contents().first; it!=collection.contents().second; ++it)
++            if (!acceptsTextureGeometry(**it)) return false;
++        return true;
++    }
++
++    GLGeometryBatchBuilder::TextureState prepareTextures(VertexWriterContext &ctx, const atakmap::feature::Geometry &geom,
++        const TAK::Engine::Feature::AltitudeMode altmode, const atakmap::feature::Style *style) NOTHROWS
++    {
++        using State = GLGeometryBatchBuilder::TextureState;
++        if (!style) return State::None;
++        if (style->getClass() == atakmap::feature::TESC_TextureFillStyle) {
++            if (!acceptsTextureGeometry(geom)) return State::Failed;
++            const auto &impl = static_cast<const atakmap::feature::TextureFillStyle &>(*style);
 +            auto material = std::make_shared<GLBatchGeometryRenderer4::PolygonTexture>();
-+            std::size_t imageWidth, imageHeight; float imageRotation; bool imageAbsolute;
-+            auto code = ctx.callback->getIcon(&ctx.style.texid,
++            GLuint id=GL_NONE;
++            std::size_t imageWidth, imageHeight;
++            auto code = ctx.callback->getTexture(&id,
 +                material->atlas, material->atlas+1, material->atlas+2, material->atlas+3,
-+                &imageWidth, &imageHeight, &imageRotation, &imageAbsolute, impl.getUri());
-+            TE_CHECKRETURN_CODE(code); // cache miss stays observable; never a solid-fill fallback
-+            if (!ctx.style.texid || !imageWidth || !imageHeight) return TE_IllegalState;
++                &imageWidth, &imageHeight, impl.getUri());
++            if (code != TE_Ok) return code == TE_Busy ? State::Pending : State::Failed;
++            if (!id || !imageWidth || !imageHeight) return State::Failed;
 +            material->dimensions[0] = static_cast<float>(impl.getWidth());
 +            material->dimensions[1] = static_cast<float>(impl.getHeight());
 +            material->repeat[0] = impl.getRepeatTypeX(); material->repeat[1] = impl.getRepeatTypeY();
@@ -379,18 +586,80 @@ index 28cb8d4..a0b09d9 100644
 +            GeoPoint2 origin((bounds.minY+bounds.maxY)*0.5, (bounds.minX+bounds.maxX)*0.5, 0.0, HAE);
 +            GeoPoint2 north = origin;
 +            north.latitude = std::min(89.999999, origin.latitude+0.00001);
-+            if (north.latitude == origin.latitude) return TE_InvalidArg;
++            if (north.latitude == origin.latitude) return State::Failed;
 +            const bool sprites = (altmode != TAK::Engine::Feature::TEAM_ClampToGround);
 +            Projection2Ptr projection(nullptr, nullptr);
 +            code = ProjectionFactory3_create(projection, sprites ? ctx.batchContext.spritesSrid : ctx.batchContext.surfaceSrid);
-+            TE_CHECKRETURN_CODE(code);
++            if (code != TE_Ok) return State::Failed;
 +            TAK::Engine::Math::Point2<double> rtc, a, b;
-+            code = projection->forward(&rtc, ctx.batchContext.relativeToCenter); TE_CHECKRETURN_CODE(code);
-+            code = projection->forward(&a, origin); TE_CHECKRETURN_CODE(code);
-+            code = projection->forward(&b, north); TE_CHECKRETURN_CODE(code);
++            code = projection->forward(&rtc, ctx.batchContext.relativeToCenter); if (code != TE_Ok) return State::Failed;
++            code = projection->forward(&a, origin); if (code != TE_Ok) return State::Failed;
++            code = projection->forward(&b, north); if (code != TE_Ok) return State::Failed;
 +            material->origin = TAK::Engine::Math::Point2<double>(a.x-rtc.x, a.y-rtc.y, a.z-rtc.z);
 +            material->north = TAK::Engine::Math::Point2<double>(b.x-rtc.x, b.y-rtc.y, b.z-rtc.z);
-+            ctx.style.polygonTexture = std::move(material);
++            ctx.textures.push_back(VertexWriterContext::TextureBinding{std::shared_ptr<const atakmap::feature::Style>(style->clone()), id, std::move(material)});
++            return State::Ready;
++        }
++        if (style->getClass() == atakmap::feature::TESC_CompositeStyle) {
++            const auto &composite = static_cast<const atakmap::feature::CompositeStyle &>(*style);
++            State result = State::None;
++            for (std::size_t i=0; i<composite.getStyleCount(); i++) {
++                const auto child = prepareTextures(ctx, geom, altmode, &composite.getStyle(i));
++                if (child == State::Failed || result == State::Failed) result = State::Failed;
++                else if (child == State::Pending || result == State::Pending) result = State::Pending;
++                else if (child == State::Ready) result = State::Ready;
++            }
++            return result;
++        }
++        if (style->getClass() == atakmap::feature::TESC_LevelOfDetailStyle) {
++            const auto &lodStyle = static_cast<const atakmap::feature::LevelOfDetailStyle &>(*style);
++            if (!TE_ISNAN(ctx.batchContext.resolution.scene)) {
++                const auto lod = atakmap::raster::osm::OSMUtils::mapnikTileLeveld(ctx.batchContext.resolution.scene, 0.0);
++                const auto child = lodStyle.getStyle(lod);
++                return child ? prepareTextures(ctx, geom, altmode, child.get()) : State::None;
++            }
++            return prepareTextures(ctx, geom, altmode, &lodStyle.getStyle());
++        }
++        return State::None;
++    }
++
+     TAKErr push(VertexWriterContext & ctx, const std::function<const char *()> &featureNameAccess, const atakmap::feature::Geometry &geom, const double extrude_, const TAK::Engine::Feature::AltitudeMode altmode, const atakmap::feature::Style *style_, const ProcessLabelsMask processLabels, const GLGeometryBatchBuilder::PushHints hints) NOTHROWS
+     {
+         if (geom.getType() == atakmap::feature::Geometry::COLLECTION) {
+@@ -2396,7 +2494,11 @@ namespace
+         {
+             if (ctx.style.composite.basicFill) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+             const auto &impl = static_cast<const atakmap::feature::BasicFillStyle &>(style);
+@@ -2407,11 +2509,39 @@ namespace
+             ctx.style.composite.basicFill++;
+             break;
+         }
++        case atakmap::feature::TESC_TextureFillStyle :
++        {
++            const auto binding = std::find_if(ctx.textures.begin(), ctx.textures.end(), [&style](const VertexWriterContext::TextureBinding &v) { return *v.style == style; });
++            if (binding == ctx.textures.end()) return TE_IllegalState;
++            if (geom.getType() != atakmap::feature::Geometry::POLYGON) return TE_InvalidArg;
++            if (ctx.style.composite.basicFill || ctx.style.color.stroke.a) {
++                flushPrimitives(ctx, geom, extrude, altmode, hints);
++
++
++
++            resetFeatureStyle(ctx);
++
++                ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
++            }
++            const auto &impl = static_cast<const atakmap::feature::TextureFillStyle &>(style);
++            ctx.style.texid = binding->id;
++            ctx.style.polygonTexture = binding->material;
 +            ctx.style.color.fill.r = (impl.getColor() >> 16u)&255u;
 +            ctx.style.color.fill.g = (impl.getColor() >> 8u)&255u;
 +            ctx.style.color.fill.b = impl.getColor()&255u;
@@ -401,47 +670,114 @@ index 28cb8d4..a0b09d9 100644
          case atakmap::feature::TESC_BasicPointStyle :
          {
              if (ctx.style.composite.icon) {
-@@ -2477,8 +2528,10 @@ namespace
-             const auto &impl = static_cast<const atakmap::feature::CompositeStyle &>(style);
-             // only allow explicit label processing in recursion
-             const unsigned processLabelsMask = processLabels&ProcessLabelsMask::ExplicitStyle;
--            for (std::size_t i = 0u; i < impl.getStyleCount(); i++)
--                push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(i), (ProcessLabelsMask)processLabelsMask, hints);
-+            for (std::size_t i = 0u; i < impl.getStyleCount(); i++) {
-+                const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(i), (ProcessLabelsMask)processLabelsMask, hints);
-+                TE_CHECKRETURN_CODE(code);
-+            }
-             // labeling is assumed to have occurred during recursion
-             needsLabel = false;
-             break;
-@@ -2782,10 +2835,13 @@ namespace
-             if(!TE_ISNAN(ctx.batchContext.resolution.scene)) {
-                 const auto lod = atakmap::raster::osm::OSMUtils::mapnikTileLeveld(ctx.batchContext.resolution.scene, 0.0);
-                 const auto child = impl.getStyle((double)lod);
--                if(child)
--                    push(ctx, featureNameAccess, geom, extrude, altmode, child.get(), processLabels, hints);
-+                if(child) {
-+                    const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, child.get(), processLabels, hints);
-+                    TE_CHECKRETURN_CODE(code);
-+                }
-             } else {
--                push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(), processLabels, hints);
-+                const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(), processLabels, hints);
-+                TE_CHECKRETURN_CODE(code);
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
              }
-             // pop the LOD
-             ctx.style.levelOfDetail.minimum = minLod;
-@@ -2823,7 +2879,8 @@ namespace
-             ctx.style.composite.pattern ||
+             // empty URI is a signal to fallback on the default icon URI
+@@ -2457,9 +2587,19 @@ namespace
+         {
+             if (ctx.style.composite.basicStroke || ctx.style.composite.pattern || ctx.style.composite.arrow) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
++            if (ctx.style.polygonTexture) {
++                flushPrimitives(ctx, geom, extrude, altmode, hints);
++
++                resetFeatureStyle(ctx);
++
++            }
+             const auto &impl = static_cast<const atakmap::feature::BasicStrokeStyle &>(style);
+             ctx.style.color.stroke.r = (impl.getColor() >> 16u) & 0xFFu;
+             ctx.style.color.stroke.g = (impl.getColor() >> 8u) & 0xFFu;
+@@ -2487,7 +2627,11 @@ namespace
+         {
+             if (ctx.style.composite.icon) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+             // XXX - skip icon for shape type geometries. Probably best to implement this fix at
+@@ -2565,7 +2709,11 @@ namespace
+         {
+             if (ctx.style.composite.mesh) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+             // XXX - skip mesh for shape type geometries. Probably best to implement this fix at
+@@ -2632,7 +2780,11 @@ namespace
+ 
+             if (ctx.style.composite.label) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+ 
+@@ -2717,7 +2869,11 @@ namespace
+         {
+             if (ctx.style.composite.basicStroke || ctx.style.composite.pattern || ctx.style.composite.arrow) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+             const auto &impl = static_cast<const atakmap::feature::PatternStrokeStyle &>(style);
+@@ -2744,7 +2900,11 @@ namespace
+         {
+             if (ctx.style.composite.basicStroke || ctx.style.composite.pattern || ctx.style.composite.arrow) {
+                 flushPrimitives(ctx, geom, extrude, altmode, hints);
+-                ctx.style = FeatureStyle();
++
++
++            resetFeatureStyle(ctx);
++
++
+                 ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+             }
+             const auto &impl = static_cast<const atakmap::feature::ArrowStrokeStyle &>(style);
+@@ -2824,7 +2984,9 @@ namespace
              ctx.style.composite.arrow) {
  
--            flushPrimitives(ctx, geom, extrude, altmode, hints);
-+            const auto code = flushPrimitives(ctx, geom, extrude, altmode, hints);
-+            TE_CHECKRETURN_CODE(code);
-             ctx.style = FeatureStyle();
+             flushPrimitives(ctx, geom, extrude, altmode, hints);
+-            ctx.style = FeatureStyle();
++
++            resetFeatureStyle(ctx);
++
              ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
          }
-@@ -2864,7 +2921,7 @@ namespace
+ 
+@@ -2864,7 +3026,7 @@ namespace
  
          GLGeometryBatchBuilder::VertexWriter vw;
          vw.ctx = &ctx;
@@ -450,6 +786,37 @@ index 28cb8d4..a0b09d9 100644
              if (geom.getType() == atakmap::feature::Geometry::POINT) {
                  auto pointGeom = static_cast<const atakmap::feature::Point &>(geom);
                  // check for occlusion
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.h b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.h
+index 912e5c2..06a353f 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.h
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.h
+@@ -25,6 +25,8 @@ namespace TAK {
+                 class ENGINE_API GLGeometryBatchBuilder
+                 {
+                 public :
++                    enum class TextureState { None, Ready, Pending, Failed };
++                    TextureState getLastTextureState() const NOTHROWS { return lastTextureState; }
+                     enum PushHints {
+                         ProcessLabels = 0x1u,
+                         ForceClampToGround = 0x2u,
+@@ -90,6 +92,7 @@ namespace TAK {
+                      */
+                     Util::TAKErr setBatch(GLBatchGeometryRenderer4 &sink) const NOTHROWS;
+                 private :
++                    TextureState lastTextureState{TextureState::None};
+                     struct Builder {
+                         Util::MemoryOutput2 buffer;
+                         GLBatchGeometryRenderer4::PrimitiveBuffer pb;
+@@ -206,6 +209,9 @@ namespace TAK {
+                      * Adds a label to the feature currently being processed.
+                      */
+                     virtual Util::TAKErr getMesh(std::shared_ptr<const TAK::Engine::Model::Mesh>& mesh, const char* uri) NOTHROWS = 0;
++                    /** Texture URI only: never substitute a default point icon. Busy is pending, other errors terminal. */
++                    virtual Util::TAKErr getTexture(GLuint *id, float *u0, float *v0, float *u1, float *v1,
++                        std::size_t *w, std::size_t *h, const char *uri) NOTHROWS { return Util::TE_Unsupported; }
+                 };
+             }
+         }
 diff --git a/takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h b/takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h
 new file mode 100644
 index 0000000..3484cc4

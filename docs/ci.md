@@ -417,7 +417,8 @@ unavailable evidence without printing payloads, paths, or exception text.
 
 ### Bounded APT acquisition
 
-Demo and Docs prepare APT with `sudo python3 .github/scripts/ci-apt.py update`.
+Demo and any required Docs dependency installation prepare APT with
+`sudo python3 .github/scripts/ci-apt.py update`.
 One signed update has a 60-second deadline. If it fails, the helper changes only
 recognized public Canonical Ubuntu HTTP endpoints to
 `https://mirrors.edge.kernel.org/ubuntu` (including security suites),

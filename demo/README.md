@@ -64,5 +64,11 @@ through `style.py still`. The workflow runs this check before creating a cluster
 It is toolchain evidence, not a recording or proof of a working deployment.
 
 Media-tool failures now reveal complete, redacted stderr. Each capture has a
-three-minute deadline and four-MiB output bounds; incomplete or oversized output
-is omitted in full, and the command remains failed.
+30-minute production deadline, a four-MiB stderr bound, and a 32-MiB
+stdout bound for the per-frame metadata that longer recordings produce; incomplete or oversized output
+is omitted in full, and the command remains failed. The synthetic preflight uses
+a separate 45-second per-command budget and bounded outer CLI calls. A short
+preflight does not establish the performance of full recordings. Successful
+commands retain their text metadata streams. Failure exceptions remain compatible
+with the optional phone-compositor fallback and carry only sanitized stderr;
+they do not expose the original command or stdout.

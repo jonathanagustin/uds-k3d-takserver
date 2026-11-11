@@ -15,6 +15,8 @@ DEMO = Path(__file__).resolve().parents[1]
 
 def check(output):
     output.mkdir()
+    # Short synthetic inputs must fail quickly; do not impose this on production recordings.
+    os.environ['DEMO_MEDIA_COMMAND_SECONDS'] = '45'
     version = subprocess.check_output(['agg', '--version'], text=True, timeout=10).strip()
     if version != 'agg 1.9.0':
         raise ValueError('unexpected terminal renderer')

@@ -1,0 +1,156 @@
+{
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "version": "1.17.2",
+  "archives": [
+    {
+      "path": "takthirdparty/distfiles/nghttp2.tar.bz2",
+      "version": "1.62.1",
+      "sha256": "3966ec82fda7fc380506d372a260d8d9b6e946be4deaef1fecc1a74b4809ae3d",
+      "bytes": 1999855,
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/nghttp2.tar.bz2",
+      "name": "nghttp2",
+      "root": "nghttp2-1.62.1",
+      "licenses": [
+        {
+          "source": "nghttp2-1.62.1/COPYING",
+          "sha256": "6b94f3abc1aabd0c72a7c7d92a77f79dda7c8a0cb3df839a97890b4116a2de2a",
+          "bytes": 1156
+        }
+      ],
+      "members": 1390,
+      "regular_files": 1138,
+      "expanded_bytes": 11976707
+    },
+    {
+      "path": "takthirdparty/distfiles/curl.tar.bz2",
+      "version": "8.9.1",
+      "sha256": "b57285d9e18bf12a5f2309fc45244f6cf9cb14734e7454121099dd0a83d669a3",
+      "bytes": 3278263,
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/curl.tar.bz2",
+      "name": "curl",
+      "root": "curl-8.9.1",
+      "licenses": [
+        {
+          "source": "curl-8.9.1/COPYING",
+          "sha256": "adb1fc06547fd136244179809f7b7c2d2ae6c4534f160aa513af9b6a12866a32",
+          "bytes": 1088
+        }
+      ],
+      "members": 3901,
+      "regular_files": 3862,
+      "expanded_bytes": 21087321
+    },
+    {
+      "path": "takthirdparty/distfiles/ngtcp2.tar.bz2",
+      "version": "1.6.0",
+      "sha256": "3e40cfb92ab710295cb7c07721db28d16c6f251f61420a462c448cf39a59cc29",
+      "bytes": 807796,
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/ngtcp2.tar.bz2",
+      "name": "ngtcp2",
+      "root": "ngtcp2-1.6.0",
+      "licenses": [
+        {
+          "source": "ngtcp2-1.6.0/COPYING",
+          "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513",
+          "bytes": 1080
+        }
+      ],
+      "members": 352,
+      "regular_files": 330,
+      "expanded_bytes": 5860449
+    },
+    {
+      "path": "takthirdparty/distfiles/protobuf.tar.gz",
+      "version": "3.21.0",
+      "sha256": "28e74a8a241a91c0a6aec997d0d6efda9bc0baa0ed7acfaf392555b88bca8b7c",
+      "bytes": 4838725,
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/protobuf.tar.gz",
+      "name": "protobuf",
+      "root": "protobuf-3.21.0",
+      "licenses": [
+        {
+          "source": "protobuf-3.21.0/LICENSE",
+          "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+          "bytes": 1732
+        }
+      ],
+      "members": 1141,
+      "regular_files": 1042,
+      "expanded_bytes": 26819402
+    },
+    {
+      "path": "takthirdparty/distfiles/libmicrohttpd.tar.gz",
+      "version": "1.0.1",
+      "sha256": "a89e09fc9b4de34dde19f4fcb4faaa1ce10299b9908db1132bbfa1de47882b94",
+      "bytes": 2239593,
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libmicrohttpd.tar.gz",
+      "name": "libmicrohttpd",
+      "root": "libmicrohttpd-1.0.1",
+      "licenses": [
+        {
+          "source": "libmicrohttpd-1.0.1/COPYING",
+          "sha256": "7399547209438c93f9b90297954698773d4846cea44cde5ca982c84c45952a3b",
+          "bytes": 24665
+        }
+      ],
+      "members": 536,
+      "regular_files": 506,
+      "expanded_bytes": 12485517
+    }
+  ],
+  "official_patches": {
+    "curl": {
+      "path": "takthirdparty/distfiles/curl-pgsc.patch",
+      "sha256": "f8acc0914f2415c39f02f81fde2acfb958ad41d233a80b90680621bd077b8e27",
+      "bytes": 2324
+    },
+    "protobuf": {
+      "path": "takthirdparty/distfiles/protobuf-pgsc.patch",
+      "sha256": "0b745d006de7e52b379518540d33188b20f5c81bf8ea72538e38101b9737a618",
+      "bytes": 4017
+    }
+  },
+  "tools": {
+    "metadata_url": "https://deb.debian.org/debian/dists/trixie/InRelease",
+    "inrelease_sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675",
+    "packages_sha256": "7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498",
+    "packages_bytes": 9678380,
+    "packages": [
+      {
+        "Package": "ant",
+        "Version": "1.10.15-1",
+        "Filename": "pool/main/a/ant/ant_1.10.15-1_all.deb",
+        "Size": "2162676",
+        "SHA256": "bb011a7a3db4f1c74a87b8e2b29adb822fd79d795b0bad96e025b162f71790bf"
+      },
+      {
+        "Package": "dos2unix",
+        "Version": "7.5.2-1",
+        "Filename": "pool/main/d/dos2unix/dos2unix_7.5.2-1_amd64.deb",
+        "Size": "517828",
+        "SHA256": "866c335c3374c8010a0a01df5b22560bbc3c80cd62f5c17d4bb85fc355dcd0d9"
+      }
+    ]
+  },
+  "license": {
+    "source": "LICENSE.md",
+    "sha256": "3db8b919e1f1cb3dff5114ea875d3a758ff367e6490622780d0f7092daebd8f9",
+    "bytes": 55947
+  },
+  "jni_patch": {
+    "path": "0102-jni-exception-boundaries.patch",
+    "sha256": "c5d305720fecc2ea1774cdc76860c1c89034970b2310e178ba07d0abaeb32a28",
+    "bytes": 4893,
+    "files": {
+      "jni/native/jcommo.cpp": {
+        "before": "c7d7fad7200afe40389b7025c43b204b07d4840be8ead6709b6f7ed81869a7d3",
+        "after": "045faa2fe91c88f56e71f38005599b474cc30a6d52e8c2d83c16df854754808c"
+      },
+      "jni/native/commojni_common.cpp": {
+        "before": "f8db11e9abfda8f18396a387d77da1dc02dd2d699db9bb8576f87938d4fad5d3",
+        "after": "266bbf8f7881549d621f9c9a5cb1095a8651756ce5197989d5230b44db2a6892"
+      }
+    },
+    "scope": "project CommonCommo1.17.2 JNI enum/load failure handling and best-effort logger boundary; not all callback exceptions"
+  }
+}

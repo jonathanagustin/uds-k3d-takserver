@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.13.0...v0.13.1) (2026-11-11)
+
+
+### Documentation
+
+* explain verified release recovery and provenance ([#469](https://github.com/jonathanagustin/uds-takserver/issues/469)) ([0a32c21](https://github.com/jonathanagustin/uds-takserver/commit/0a32c21780ecb6d2694ee7b7026c9c20339238da))
+
 ## [0.13.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.2...v0.13.0) (2026-11-11)
 
 

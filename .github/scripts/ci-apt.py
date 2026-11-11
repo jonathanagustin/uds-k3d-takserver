@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Bound signed CI package acquisition; one exact Ubuntu HTTPS fallback, no stale success."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -28,6 +29,44 @@ MIRRORS = {'azure.archive.ubuntu.com':'archive.ubuntu.com',
            'archive.ubuntu.com':'archive.ubuntu.com', 'security.ubuntu.com':'security.ubuntu.com'}
 MIRROR_FILES = {'apt-mirrors.txt', 'apt-mirrors-security.txt'}
 MAX_FILE = 256 * 1024
+MAX_LOG = 4 * 1024 * 1024
+KNOWN_ENDPOINTS = frozenset((*MIRRORS, 'packages.microsoft.com', 'ports.ubuntu.com'))
+ERROR_CLASSES = {
+    'dns_failure': rb'temporary failure resolving|could not resolve|name or service not known|name resolution failed',
+    'network_timeout': rb'connection timed out|operation timed out|timeout was reached|connection timeout',
+    'connect_failure': rb'could not connect|connection refused|network is unreachable|cannot initiate the connection|connection reset|failed to connect',
+    'tls_failure': rb'certificate verification failed|certificate verify failed|could not handshake|tls connection|ssl connection|certificate is not trusted',
+    'signature_failure': rb'no_pubkey|expkeysig|badsig|signatures couldn.t be verified|signature verification failed|repository[^\n]{0,100}is not signed',
+    'repository_missing': rb'\b404\b[^\n]{0,100}not found|does not have a release file',
+    'integrity_failure': rb'hash sum mismatch|file has unexpected size',
+}
+
+
+def acquisition_diagnostic(operation, capture, reason, child_code, wrapper_code, observed_bytes):
+    """Only fixed enums/counts from the whole bounded terminated capture; no excerpts.
+
+    A timeout capture is incomplete. These are observed strings, not proof that
+    an endpoint or category caused the failed acquisition.
+    """
+    bounded = capture is not None and len(capture) <= MAX_LOG
+    counts = {name: 0 for name in ERROR_CLASSES}
+    endpoints = set()
+    if bounded:
+        for name, pattern in ERROR_CLASSES.items():
+            counts[name] = min(99, len(re.findall(pattern, capture, re.IGNORECASE)))
+        candidates = re.findall(rb'https?://([a-z0-9.-]+)(?=[:/\s]|$)', capture, re.IGNORECASE)
+        candidates += re.findall(rb"(?:resolving|could not resolve)\s+['\"]?([a-z0-9.-]+)", capture, re.IGNORECASE)
+        endpoints = {name.decode('ascii').lower() for name in candidates
+                     if name.decode('ascii').lower() in KNOWN_ENDPOINTS}
+    return {'operation': operation if operation in ('update','install') else 'unknown',
+            'capture_status': reason if reason in ('complete','timeout','output_limit') else 'unavailable',
+            'capture_complete': reason == 'complete', 'capture_examined': bounded,
+            'observed_bytes': min(max(0, observed_bytes), MAX_LOG + 1),
+            'child_returncode': child_code if type(child_code) is int and -128 <= child_code <= 255 else None,
+            'wrapper_returncode': wrapper_code if type(wrapper_code) is int and 0 <= wrapper_code <= 255 else None,
+            'observed_error_counts': counts, 'recognized_endpoints': sorted(endpoints),
+            'observation_only': True}
+
 
 
 def read_regular(path):
@@ -163,22 +202,32 @@ def run_apt(operation, packages=(), seconds=None):
         command += ['-y', '-o', 'Dpkg::Use-Pty=0', '--no-install-recommends', *packages]
     with tempfile.TemporaryDirectory(prefix='uds-ci-apt-') as temporary:
         log = Path(temporary)/'apt.log'
+        reason = 'complete'
         with log.open('xb') as output:
             child = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT,
                 env={**os.environ, 'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_MODE':'a'}, start_new_session=True)
             try:
                 deadline = time.monotonic() + seconds
-                while child.poll() is None and time.monotonic() < deadline and log.stat().st_size <= 4*1024**2:
+                while child.poll() is None and time.monotonic() < deadline and log.stat().st_size <= MAX_LOG:
                     time.sleep(.05)
                 code = child.poll()
-                if code is None or log.stat().st_size > 4*1024**2:
-                    code = 124
+                if log.stat().st_size > MAX_LOG:
+                    reason, code = 'output_limit', 124
+                elif code is None:
+                    reason, code = 'timeout', 124
             finally:
                 try: os.killpg(child.pid, signal.SIGKILL)
                 except ProcessLookupError: pass
                 child.wait()
+        if code != 0:
+            size = log.stat().st_size
+            # No prefix read for an oversized stream. For timeouts, inspect the
+            # whole bounded capture after termination but publish fixed enums only.
+            capture = log.read_bytes() if size <= MAX_LOG else None
+            report = acquisition_diagnostic(operation, capture, reason, child.returncode, code, size)
+            print('ci-apt: acquisition diagnostic ' + json.dumps(report, sort_keys=True))
         # Never publish incomplete or oversized logs, or exception strings containing source credentials.
-        if code != 124 and log.stat().st_size <= 4*1024**2:
+        if code != 124 and log.stat().st_size <= MAX_LOG:
             log.write_text(scrub_uri_credentials(log.read_text()))
             subprocess.run([sys.executable, str(Path(__file__).with_name('redact-logs.py')), '--stdout', str(log)], check=True, timeout=10)
         else:

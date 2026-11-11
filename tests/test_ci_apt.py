@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Exercise APT policy with source fixtures and a local fake apt-get only."""
 import importlib.util
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -125,6 +127,43 @@ print('signed acquisition fixture')
         fake.write_text('#!'+sys.executable+'\nimport time\nprint("private partial",flush=True)\ntime.sleep(5)\n');fake.chmod(0o755)
         with patch.dict(os.environ,{'PATH':str(tools)+os.pathsep+os.environ['PATH']}):
             self.assertEqual(APT.run_apt('update',seconds=.15),124)
+
+    def test_fixed_diagnostics_never_publish_partial_secret_custom_uri_or_address(self):
+        capture = b"Temporary failure resolving 'archive.ubuntu.com'\n<Config password=\"PRIVATE_START\nPRIVATE_FRAGMENT http://custom.private.test/repo?token=PRIVATE_TOKEN\nCould not handshake: certificate verification failed\nNO_PUBKEY 12345678\n404 Not Found\nHash Sum mismatch\nCould not connect to 10.20.30.40\nConnection timed out"
+        report = APT.acquisition_diagnostic('update',capture,'timeout',-9,124,len(capture))
+        self.assertFalse(report['capture_complete']);self.assertTrue(report['capture_examined'])
+        self.assertEqual(report['recognized_endpoints'],['archive.ubuntu.com'])
+        self.assertEqual(report['observed_error_counts'], {name: 2 if name == 'tls_failure' else 1 for name in APT.ERROR_CLASSES})
+        serialized = json.dumps(report)
+        for secret in ('PRIVATE_START','PRIVATE_FRAGMENT','PRIVATE_TOKEN','custom.private.test','10.20.30.40','12345678'):
+            self.assertNotIn(secret,serialized)
+        unknown = APT.acquisition_diagnostic('PRIVATE_OPERATION',None,'PRIVATE_REASON','PRIVATE_CODE','PRIVATE_CODE',APT.MAX_LOG+10)
+        self.assertEqual(unknown['operation'],'unknown');self.assertEqual(unknown['capture_status'],'unavailable')
+        self.assertFalse(unknown['capture_examined']);self.assertEqual(unknown['recognized_endpoints'],[])
+        self.assertNotIn('PRIVATE',json.dumps(unknown))
+
+    def test_terminated_capture_produces_only_fixed_timeout_metadata(self):
+        root=self.fixture();tools=root/'bin';tools.mkdir();fake=tools/'apt-get'
+        fake.write_text('#!'+sys.executable+'\nimport time\nprint('+repr("Temporary failure resolving 'archive.ubuntu.com'")+',flush=True)\nprint("<secret PRIVATE_INCOMPLETE_SECRET",flush=True)\ntime.sleep(5)\n')
+        fake.chmod(0o755)
+        output=io.StringIO()
+        with patch.dict(os.environ,{'PATH':str(tools)+os.pathsep+os.environ['PATH']}), contextlib.redirect_stdout(output):
+            self.assertEqual(APT.run_apt('update',seconds=.15),124)
+        lines=output.getvalue().splitlines()
+        report=json.loads(next(line.split('acquisition diagnostic ',1)[1] for line in lines if 'acquisition diagnostic ' in line))
+        self.assertEqual(report['capture_status'],'timeout');self.assertEqual(report['wrapper_returncode'],124)
+        self.assertEqual(report['child_returncode'],-9);self.assertEqual(report['observed_error_counts']['dns_failure'],1)
+        self.assertIn('omitted incomplete',output.getvalue());self.assertNotIn('PRIVATE_INCOMPLETE_SECRET',output.getvalue())
+
+    def test_output_limit_capture_is_not_scanned_or_published(self):
+        root=self.fixture();tools=root/'bin';tools.mkdir();fake=tools/'apt-get'
+        fake.write_text('#!'+sys.executable+'\nimport time\nprint("PRIVATE_PREFIX"+"x"*1000,flush=True)\ntime.sleep(5)\n');fake.chmod(0o755)
+        output=io.StringIO()
+        with patch.dict(os.environ,{'PATH':str(tools)+os.pathsep+os.environ['PATH']}), patch.object(APT,'MAX_LOG',128), contextlib.redirect_stdout(output):
+            self.assertEqual(APT.run_apt('update',seconds=1),124)
+        report=json.loads(next(line.split('acquisition diagnostic ',1)[1] for line in output.getvalue().splitlines() if 'acquisition diagnostic ' in line))
+        self.assertEqual(report['capture_status'],'output_limit');self.assertFalse(report['capture_examined'])
+        self.assertEqual(report['observed_bytes'],129);self.assertNotIn('PRIVATE_PREFIX',output.getvalue())
 
     def test_demo_uses_shared_bounded_helper_and_guards_missing_uds(self):
         workflow=yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(),Loader=yaml.BaseLoader)

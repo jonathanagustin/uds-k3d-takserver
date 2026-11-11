@@ -433,4 +433,9 @@ indexes do not count as success. Demo installs its package list once, with a
 zero acquisition retries, ten-second network timeouts and strict update errors;
 the Docs browser step has its own outer deadline. Complete package-manager logs
 are scrubbed and redacted before display; incomplete or oversized captures are
-omitted. An official HTTPS alternative is not a guarantee of network availability.
+omitted. A failed capture reports only fixed error-category counts, allowlisted
+endpoint names and command/timeout metadata. A timeout's bounded terminated
+capture can be classified without printing its incomplete prefix; oversized
+captures are not scanned. These are observations, not proof of a network cause
+or a successful update. An official HTTPS alternative is not a guarantee of
+network availability.

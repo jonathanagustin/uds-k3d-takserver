@@ -96,6 +96,9 @@ jobs:
       - name: Runtime path filter
         run: bash tests/test_runtime_paths.sh
 
+      - name: Published documentation inventory contracts
+        run: node --test docs-site/scripts/published-releases.test.mjs
+
       - name: Package rendering evidence and wiring
         env:
           PYYAML_VERSION: 6.0.3

@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { docsReleaseTags } from './published-releases.mjs';
 
 export function selectReleaseTags(tags, limit = 5) {
   const releases = tags.map((tag) => {
@@ -38,7 +39,10 @@ export async function buildVersions(repoRoot = path.resolve(import.meta.dirname,
   const siteRoot = path.resolve(import.meta.dirname, '..');
   const output = path.join(siteRoot, 'src/content/docs');
   const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
-  const tags = git('tag', '--list', 'v*').split('\n').filter((tag) => selectReleaseTags([tag]).length).filter((tag) => {
+  const gitTags = git('tag', '--list').split('\n').filter(Boolean);
+  const { tags: candidates, mode } = await docsReleaseTags(gitTags);
+  console.log(`build-versions: ${mode === 'git-preview' ? 'local Git tag preview (publication not verified)' : 'published release inventory'}`);
+  const tags = candidates.filter((tag) => selectReleaseTags([tag]).length).filter((tag) => {
     try { git('cat-file', '-e', `${tag}:docs-site/`); return true; } catch { return false; }
   });
   const releases = selectReleaseTags(tags);

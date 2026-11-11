@@ -109,6 +109,17 @@ PATTERNS = (
         re.IGNORECASE,
     ),
 )
+# Signed query values can appear in quoted CLI errors rather than a named
+# password field. Preserve the URL/status and other parameters, not its sig.
+# Handle raw/HTML query delimiters and JSON Unicode escapes, including nested
+# JSON backslashes. The lookahead/backreference consumes a whole escape run
+# without quadratic backtracking on long runs of backslashes (Python 3.10 too).
+SIGNED_QUERY = re.compile(
+    r'(?P<prefix>(?:\?|&(?:amp;|#38;|#x26;)?|\\{1,8}u00(?:26|3f))'
+    r'sig(?:=|\\{1,8}u003d))' + NOT_MASK +
+    r'''(?:[^&\s"'\\<>#]|(?=(?P<escape>\\+))(?P=escape)(?!u00(?:26|3f|22|27))(?:/|u[0-9a-f]{4}))+''',
+    re.IGNORECASE,
+)
 # These are not rewritten as text. Leaving them unchanged would publish the
 # original bytes from a successful sanitize, so they are omitted instead.
 UNSUPPORTED_SUFFIXES = (
@@ -150,6 +161,8 @@ def redact_text(text):
     for pattern in (*TLS_PATTERNS, *PATTERNS):
         text, count = pattern.subn(_mask, text)
         total += count
+    text, count = SIGNED_QUERY.subn(lambda match: match['prefix'] + MASK, text)
+    total += count
     return text, total
 
 

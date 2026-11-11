@@ -64,7 +64,7 @@ These are current local relocation observations, not historical producer evidenc
 or a registry push/pull test. It does not rebuild Draco.
 
 Run offline guards with
-`python3 -B -m unittest discover -s takx/registry-cache -p 'test_*.py' -v`.
+`uv run --no-project --with pyyaml==6.0.3 python -B -m unittest discover -s takx/registry-cache -p 'test_*.py' -v`.
 
 ## Fresh registry producer (v2)
 

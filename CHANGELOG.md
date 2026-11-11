@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.13.0...v0.14.0) (2026-11-11)
+
+
+### Features
+
+* **branding:** apply the Connected stack identity ([19065a4](https://github.com/jonathanagustin/uds-takserver/commit/19065a4011681d5d3958f9eb1b359654818ec2cf))
+* **takx:** package the public Kernel resource component ([#488](https://github.com/jonathanagustin/uds-takserver/issues/488)) ([a57062f](https://github.com/jonathanagustin/uds-takserver/commit/a57062f0582cc5807ae007d9fd275ac1f25939cc))
+
 ## [0.13.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.2...v0.13.0) (2026-11-11)
 
 

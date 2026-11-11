@@ -37,6 +37,144 @@ class RecorderTests(unittest.TestCase):
         self.assertIn('asciinema-2.4.0-py3-none-any.whl', requirement)
         self.assertIn('--hash=sha256:249ccf108509d643ddaf38979dac48c99e9e251f597173d8553a30d7a6423104', requirement)
 
+    def test_pr_preflight_shares_manual_tools_without_deploy_or_publish_permissions(self):
+        workflow = yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(), Loader=yaml.BaseLoader)
+        record, preflight = workflow['jobs']['record'], workflow['jobs']['preflight']
+        self.assertEqual(record['if'], "${{ github.event_name == 'workflow_dispatch' && !inputs.sign_only }}")
+        self.assertEqual(preflight['if'], "github.event_name == 'pull_request'")
+        self.assertEqual(preflight['timeout-minutes'], '10')
+        self.assertEqual(preflight['permissions'], {'contents':'read'})
+        self.assertEqual(preflight['runs-on'], record['runs-on'])
+        self.assertEqual(len(preflight['steps']), 4)
+        self.assertEqual(preflight['steps'][0]['with']['persist-credentials'], 'false')
+        for shared in preflight['steps'][1:]:
+            original = next(step for step in record['steps'] if step['name'] == shared['name'])
+            self.assertEqual(shared, original)  # Shared lint cannot parse aliases across extracted steps.
+        for event, sign_only, expected in [('pull_request',False,False), ('pull_request',True,False),
+                                           ('workflow_dispatch',False,True), ('workflow_dispatch',True,False)]:
+            expression = record['if'][3:-3].replace('github.event_name',repr(event))
+            expression = expression.replace('!inputs.sign_only',repr(not sign_only)).replace('&&','and')
+            self.assertEqual(eval(expression, {'__builtins__':{}}), expected)
+        publish, sign = workflow['jobs']['publish'], workflow['jobs']['sign']
+        self.assertEqual(publish['needs'], 'record')
+        self.assertEqual(publish['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
+        self.assertEqual(sign['needs'], ['record','publish'])
+        self.assertIn("github.ref == 'refs/heads/main'", sign['if'])
+        self.assertIn("github.event_name == 'workflow_dispatch'", sign['if'])
+
+    def test_vhs_recording_protocol_uses_real_tape_command_and_disables_publication(self):
+        # This fixture exercises argv, shell/tape quoting and exit handling only.
+        # It does not run VHS or establish recording/media qualification.
+        with tempfile.TemporaryDirectory(prefix="explicit VHS protocol's fixture ") as directory:
+            output = Path(directory)
+            calls = []
+            def fixture_run(command, seconds):
+                calls.append(command)
+                if command[1] == 'validate':
+                    self.assertEqual(seconds, 10)
+                    self.assertEqual(len(command), 3)
+                    self.assertTrue(Path(command[2]).is_file())
+                    return
+                self.assertEqual(command[:3], ['vhs','--publish=false','--output'])
+                self.assertEqual(seconds, 45)
+                self.assertEqual(os.environ['VHS_PUBLISH'], 'false')
+                tape = Path(command[-1]).read_text().splitlines()
+                self.assertEqual(json.loads(tape[0].split(' ',1)[1]), str(ROOT/'demo/settings.tape'))
+                self.assertEqual(tape[-2:], ['Enter','Sleep 2s'])
+                typed = next(line for line in tape if line.startswith('Type@1ms ')).split(' ',1)[1]
+                self.assertTrue(typed.startswith('`') and typed.endswith('`'))
+                shell_command = typed[1:-1]
+                self.assertIn("\"$?\"", shell_command)
+                subprocess.run(['bash','-c',shell_command], check=True, stdout=subprocess.DEVNULL)
+            with patch.dict(os.environ, {'VHS_PUBLISH':'true'}):
+                tape, video = MEDIA_CHECK.record_vhs(output, fixture_run)
+                self.assertEqual(os.environ['VHS_PUBLISH'], 'true')
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[0], ['vhs','validate',str(tape)])
+            self.assertEqual((output/'vhs.exit').read_text().strip(), '0')
+            self.assertEqual(video, output/'vhs.mp4')
+            self.assertTrue(tape.is_file())
+
+    def test_vhs_command_failure_has_no_fallback_and_restores_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            def failed(*args, **kwargs):
+                raise subprocess.CalledProcessError(1, '<explicit VHS fixture>')
+            with patch.dict(os.environ, {'VHS_PUBLISH':'true'}), self.assertRaises(subprocess.CalledProcessError):
+                try:
+                    MEDIA_CHECK.record_vhs(Path(directory), failed)
+                finally:
+                    self.assertEqual(os.environ['VHS_PUBLISH'], 'true')
+            self.assertFalse((Path(directory)/'receipt.json').exists())
+        for status in (None, '1'):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                def fixture_run(command, **kwargs):
+                    if command[1] != 'validate' and status is not None:
+                        (output/'vhs.exit').write_text(status)
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    MEDIA_CHECK.record_vhs(output, fixture_run)
+
+    def test_conflicting_vhs_delimiter_is_rejected_before_any_tool_runs(self):
+        with tempfile.TemporaryDirectory(prefix='explicit ` delimiter fixture ') as directory:
+            def must_not_run(*args, **kwargs):
+                self.fail('unsupported tape delimiter must not reach VHS')
+            with self.assertRaisesRegex(ValueError, 'backtick'):
+                MEDIA_CHECK.record_vhs(Path(directory), must_not_run)
+            self.assertFalse((Path(directory)/'vhs.tape').exists())
+
+    def test_actual_video_probe_rejects_wrong_codec_geometry_and_duration(self):
+        valid = {'streams':[{'codec_name':'h264','width':1632,'height':840,
+                             'pix_fmt':'yuv420p','r_frame_rate':'30/1'}], 'format':{'duration':'2.5'}}
+        with patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(valid)):
+            self.assertEqual(MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6), valid)
+        for field, bad in [('codec_name','vp9'), ('width',640), ('height',360),
+                           ('pix_fmt','yuv444p'), ('r_frame_rate','10/1'), ('duration','30')]:
+            value = json.loads(json.dumps(valid))
+            if field == 'duration':
+                value['format'][field] = bad
+            else:
+                value['streams'][0][field] = bad
+            with self.subTest(field=field), patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(value)):
+                with self.assertRaisesRegex(ValueError, 'media output differs') as failed:
+                    MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6)
+                diagnostic = str(failed.exception)
+                self.assertIn('"observed"', diagnostic)
+                self.assertIn('"expected"', diagnostic)
+                self.assertIn(json.dumps(str(bad)), diagnostic)
+
+    def test_raw_vhs_and_normalized_delivery_keep_separate_exact_frame_rates(self):
+        for stage, expected_rate in [('raw VHS','25/1'), ('normalized delivery','30/1')]:
+            for observed_rate in ('25/1','30/1','24/1'):
+                video = {'streams':[{'codec_name':'h264', 'width':1632, 'height':840,
+                                     'pix_fmt':'yuv420p', 'r_frame_rate':observed_rate}],
+                         'format':{'duration':'2.5'}}
+                options = {'frame_rate':expected_rate} if stage == 'raw VHS' else {}
+                with self.subTest(stage=stage, observed=observed_rate), \
+                        patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(video)):
+                    if observed_rate == expected_rate:
+                        self.assertEqual(MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6,**options), video)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'media output differs') as failed:
+                            MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6,**options)
+                        details = json.loads(str(failed.exception).split('; ',1)[1])
+                        self.assertEqual(details['expected']['r_frame_rate'], expected_rate)
+                        self.assertEqual(details['observed']['r_frame_rate'], observed_rate)
+
+    def test_video_failure_diagnostic_is_bounded_and_excludes_unrequested_metadata(self):
+        video = {'streams':[{'codec_name':'x'*10000, 'width':1632, 'height':840,
+                             'pix_fmt':'yuv420p', 'r_frame_rate':'30/1',
+                             'tags':{'comment':'PRIVATE_UNREQUESTED_TAG'}}],
+                 'format':{'duration':'2.5', 'tags':{'comment':'PRIVATE_FORMAT_TAG'}}}
+        with patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(video)):
+            with self.assertRaises(ValueError) as failed:
+                MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6)
+        diagnostic = str(failed.exception)
+        self.assertLess(len(diagnostic.encode()), 8192)
+        self.assertNotIn('PRIVATE_UNREQUESTED_TAG', diagnostic)
+        self.assertNotIn('PRIVATE_FORMAT_TAG', diagnostic)
+        self.assertNotIn('x'*65, diagnostic)
+        self.assertIn('"duration_range": [1.5, 6]', diagnostic)
+
     def test_exported_recorder_preserves_media_python_and_venv_shebang(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

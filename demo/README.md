@@ -36,8 +36,14 @@ unsupported-source error; this is not universal support for historical release
 refs. No plain-tag fallback or replacement source key is used.
 
 Published-release consumers share `.github/scripts/published_package_ref.py`.
-Automatic pull request recordings skip the optional upgrade chapter. Manual runs
-include it by default; turn off the `upgrade` input to record only the main cluster.
+Pull requests run a media preflight with a ten-minute job limit. They check the
+pinned recording tools, record a short terminal command with VHS, and render and
+join short clips through the production media code. They do not deploy a cluster
+or record the application walkthroughs.
+
+Start a manual Demo Video run for the full cluster and UI recording. Manual runs
+include the upgrade chapter by default; turn off `upgrade` to record only the
+main cluster. Publishing and signing remain limited to manual runs from `main`.
 
 The upgrade chapter resolves its previous release separately from the current
 recording's package; the rendered provenance command uses that same resolved
@@ -54,17 +60,30 @@ binary for that release requires GLIBC 2.38 and cannot run on Ubuntu 22's
 GLIBC 2.35. The same MUSL binary also supports the explicit Ubuntu 24 runner
 override.
 
-With the pinned agg, FFmpeg, Pillow, Inter and JetBrains Mono installed, run:
+With the pinned VHS, ttyd, asciinema and agg, plus Chrome, FFmpeg, Pillow, Inter
+and JetBrains Mono installed, run:
 
 ```sh
 python3 demo/tools/check-media.py --output /new/media-preflight
 ```
 
-This renders a synthetic cast through the real cast renderer, assembly sizing
-filter, branded window frame and caption filter, then checks a 3–5 second
-1920×1080 H.264/30 fps/yuv420p video. It also renders a synthetic screenshot
-through `style.py still`. The workflow runs this check before creating a cluster.
-It is toolchain evidence, not a recording or proof of a working deployment.
+This renders a synthetic cast through the cast renderer, assembly sizing filter,
+branded window frame and caption filter. It also records a short harmless command
+with VHS, using the terminal chapters' settings. The check requires the recorded
+command to exit successfully and validates both videos with FFprobe. It joins the
+clips through the production crossfade code and renders a synthetic screenshot
+through `style.py still`. Videos must use H.264 and yuv420p. The pinned VHS encoder
+places its terminal frames over a `lavfi` background stream with FFmpeg's default
+rate, producing a 25 fps raw recording. The existing assembly sizing filter applies `fps=30`
+before framing. The check requires exactly 25 fps from raw VHS and exactly
+30 fps from the framed and joined videos; those outputs must be 1920×1080.
+
+The preflight runs on pull requests and before a manual deployment. A successful
+check covers the recorder and short media path. Cluster behavior, browser
+walkthroughs and the long final assembly require a full manual recording. Local
+protocol tests use explicit fixtures; the real VHS recording must pass on the
+hosted runner before merging changes to this check. Existing footage, signatures
+and provenance remain unchanged.
 
 Media-tool failures now reveal complete, redacted stderr. Each capture has a
 30-minute production deadline, a four-MiB stderr bound, and a 32-MiB

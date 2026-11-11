@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Render a short synthetic clip through the real terminal and branded frame pipeline."""
+"""Record a short terminal command and check the production media pipeline."""
 import argparse
+import contextlib
+import io
 import importlib.util
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -29,6 +32,57 @@ def check_terminal_dependencies():
     if probe.returncode!=1 or probe.stdout.strip()!='no input provided' or probe.stderr:
         raise ValueError('VHS dependency preflight failed before recording')
     return {'ttyd':ttyd,'vhs':vhs,'vhs_dependency_check':'passed before EOF rejection'}
+
+
+def probe_video(path, width, height, minimum, maximum, frame_rate="30/1"):
+    result = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=codec_name,width,height,pix_fmt,r_frame_rate:format=duration',
+        '-of', 'json', str(path)], timeout=10)
+    video = json.loads(result)
+    stream = video['streams'][0]
+    if (stream['codec_name'] != 'h264' or stream['width'] != width or stream['height'] != height or
+            stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != frame_rate or
+            not minimum <= float(video['format']['duration']) <= maximum):
+        # Only bounded fields requested from our generated clip are diagnostic.
+        # Never emit ffprobe tags, the full payload, stderr or environment.
+        fields = ('codec_name', 'width', 'height', 'pix_fmt', 'r_frame_rate')
+        observed = {name:str(stream.get(name))[:64] for name in fields}
+        observed['duration'] = str(video['format'].get('duration'))[:64]
+        expected = {'codec_name':'h264', 'width':width, 'height':height,
+                    'pix_fmt':'yuv420p', 'r_frame_rate':frame_rate,
+                    'duration_range':[minimum, maximum]}
+        details = json.dumps({'observed':observed, 'expected':expected}, sort_keys=True)
+        raise ValueError('media output differs: ' + path.name[:80] + '; ' + details)
+    return video
+
+
+def record_vhs(output, run_media):
+    """Record a harmless command with the same tape settings as real chapters."""
+    tape, video, exit_file = output/'vhs.tape', output/'vhs.mp4', output/'vhs.exit'
+    command = "printf 'VHS terminal preflight\\n'; printf '%s\\n' \"$?\" > " + shlex.quote(str(exit_file))
+    # v0.12.1's official root CLI accepts a tape and --output/--publish.
+    # VHS_PUBLISH=true can override the flag, so disable both publication paths.
+    # Source and Type@ use the same syntax as demo/tapes and settings.tape.
+    # VHS strings do not use JSON backslash-quote escaping. Backticks retain
+    # the shell quotes around $? and paths; refuse a conflicting delimiter.
+    if '`' in command:
+        raise ValueError('backtick in VHS command path is unsupported')
+    tape.write_text('Source ' + json.dumps(str(DEMO/'settings.tape')) + '\n' +
+                    'Output ' + json.dumps(str(video)) + '\n' +
+                    'Type@1ms `' + command + '`\nEnter\nSleep 2s\n')
+    previous = os.environ.get('VHS_PUBLISH')
+    os.environ['VHS_PUBLISH'] = 'false'
+    try:
+        run_media(['vhs', 'validate', str(tape)], seconds=10)
+        run_media(['vhs', '--publish=false', '--output', str(video), str(tape)], seconds=45)
+    finally:
+        if previous is None:
+            os.environ.pop('VHS_PUBLISH', None)
+        else:
+            os.environ['VHS_PUBLISH'] = previous
+    if exit_file.read_text().strip() != '0':
+        raise ValueError('recorded VHS command failed')
+    return tape, video
 
 
 def check(output):
@@ -73,17 +127,37 @@ def check(output):
     with Image.open(still) as image:
         if image.format != 'PNG' or image.width < 640 or image.height < 360:
             raise ValueError('styled still dimensions differ')
-    result = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
-        '-show_entries', 'stream=codec_name,width,height,pix_fmt,r_frame_rate:format=duration',
-        '-of', 'json', str(framed)], timeout=10)
-    video = json.loads(result)
-    stream = video['streams'][0]
-    if (stream['codec_name'] != 'h264' or stream['width'] != 1920 or stream['height'] != 1080 or
-            stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != '30/1' or
-            not 3 <= float(video['format']['duration']) <= 5):
-        raise ValueError('synthetic media output differs')
-    receipt = {'terminal_dependencies':terminal, 'agg':version, 'synthetic_only':True, 'pipeline':'real render-cast, style frame, filters and ffmpeg',
-               'video':video, 'bytes':framed.stat().st_size}
+    video = probe_video(framed, 1920, 1080, 3, 5)
+    vhs_tape, vhs_video = record_vhs(output, renderer.run_media)
+    # Pinned VHS uses a default-rate lavfi margin background in the MP4
+    # overlay; the hosted raw output is exactly 25 fps. Production sizing below
+    # explicitly normalizes to 30 fps before either framed/joined contract.
+    vhs = probe_video(vhs_video, style.CONTENT_W, style.CONTENT_H, 1.5, 6, frame_rate='25/1')
+    vhs_base, vhs_framed = output/'vhs-base.mp4', output/'vhs-framed.mp4'
+    renderer.run_media(['ffmpeg', '-v', 'error', '-y', '-i', str(vhs_video), '-an',
+        '-vf', f'scale={size}:force_original_aspect_ratio=decrease:flags=lanczos,pad={size}:(ow-iw)/2:(oh-ih)/2:color={style.BG},fps={style.FPS},format=yuv420p',
+        '-c:v', 'libx264', '-crf', '16', str(vhs_base)])
+    subprocess.run([sys.executable, str(DEMO/'filters.py'), 'render', 'terminal', str(vhs_tape),
+                    str(vhs_base), str(vhs_framed), str(work)], check=True, timeout=60)
+    vhs_frame = probe_video(vhs_framed, 1920, 1080, 1.5, 6)
+    # Exercise the production two-clip crossfade/concat code, not assemble.sh's
+    # cluster-specific chapter list or its long final delivery encode.
+    import filters
+    joined = output/'joined.mp4'
+    starts = io.StringIO()
+    with contextlib.redirect_stdout(starts):
+        filters.join(str(joined), [str(framed), str(vhs_framed)])
+    expected = float(video['format']['duration']) + float(vhs_frame['format']['duration']) - filters.CROSSFADE
+    joined_video = probe_video(joined, 1920, 1080, expected - .2, expected + .2)
+    chapter_starts = [float(value) for value in starts.getvalue().splitlines()]
+    if len(chapter_starts) != 2 or chapter_starts[0] != 0 or abs(chapter_starts[1] -
+            (float(video['format']['duration']) - filters.CROSSFADE)) > .1:
+        raise ValueError('production join chapter timing differs')
+    receipt = {'terminal_dependencies':terminal, 'agg':version, 'synthetic_only':True,
+               'actual_terminal_recording':True, 'vhs_recorded_exit':0,
+               'pipeline':'real asciicast renderer, VHS recording, style, filters, crossfade join and ffmpeg',
+               'video':video, 'vhs_video':vhs, 'joined_video':joined_video,
+               'chapter_starts':chapter_starts, 'bytes':joined.stat().st_size}
     (output/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps(receipt, sort_keys=True))
 

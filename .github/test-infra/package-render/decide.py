@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Skip only package rendering after complete, verified non-runtime Git evidence."""
 import argparse
+from enum import Enum
 import json
 import os
 from pathlib import Path
@@ -23,57 +24,84 @@ FORCE_FILES = {WORKFLOW, CLASSIFIER, 'tests/test_runtime_paths.sh',
 MAX_BYTES = 2 * 1024 * 1024
 
 
+class Reason(Enum):
+    UNKNOWN = 'unclassified-unavailable'
+    EVENT = 'event-unavailable'
+    IDENTITY = 'identity-unavailable'
+    REPOSITORY = 'repository-mismatch'
+    CHECKOUT = 'checkout-mismatch'
+    REF = 'ref-mismatch'
+    COMMIT = 'commit-unavailable'
+    MERGE_COMMIT = 'merge-commit-unavailable'
+    MERGE = 'merge-sha-mismatch'
+    PARENTS = 'merge-parents-mismatch'
+    GIT = 'git-evidence-unavailable'
+    PATHS = 'changed-paths-unavailable'
+    CLASSIFIER = 'classifier-unavailable'
+
+
 class EvidenceUnavailable(Exception):
     """Unusable optimization evidence always retains rendering."""
+
+    def __init__(self, reason=Reason.IDENTITY):
+        self.reason = reason if isinstance(reason, Reason) else Reason.IDENTITY
+        super().__init__()
 
 
 def git(repo, *arguments):
     env = dict(os.environ, GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1', GIT_OPTIONAL_LOCKS='0')
-    result = subprocess.run(['git', '--no-replace-objects', '-C', str(repo), *arguments],
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            timeout=20, check=True, env=env)
+    try:
+        result = subprocess.run(['git', '--no-replace-objects', '-C', str(repo), *arguments],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=20, check=True, env=env)
+    except (OSError, subprocess.SubprocessError):
+        raise EvidenceUnavailable(Reason.GIT) from None
     if len(result.stdout) > MAX_BYTES:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.GIT)
     return result.stdout
 
 
 def commit(repo, value):
     if not isinstance(value, str) or not re.fullmatch('[0-9a-f]{40}', value) or value == '0' * 40:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.COMMIT)
     if git(repo, 'cat-file', '-t', value) != b'commit\n':
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.COMMIT)
     if git(repo, 'rev-parse', '--verify', value).decode().strip() != value:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.COMMIT)
     return value
 
 
 def identities(repo, event, env):
     if event['repository']['full_name'] != env['GITHUB_REPOSITORY']:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.REPOSITORY)
     actual = git(repo, 'rev-parse', '--verify', 'HEAD').decode().strip()
     checkout = commit(repo, env['GITHUB_SHA'])
     if actual != checkout or Path(git(repo, 'rev-parse', '--show-toplevel').decode().strip()).resolve() != repo:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.CHECKOUT)
     if env['GITHUB_EVENT_NAME'] == 'push':
         if event['ref'] != env['GITHUB_REF'] or not event['ref'].startswith('refs/heads/'):
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.REF)
         base, head = commit(repo, event['before']), commit(repo, event['after'])
         if head != checkout:
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.CHECKOUT)
     elif env['GITHUB_EVENT_NAME'] == 'pull_request':
         number = event['number']
         if type(number) is not int or number <= 0 or env['GITHUB_REF'] != f'refs/pull/{number}/merge':
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.REF)
         request = event['pull_request']
         base, head = commit(repo, request['base']['sha']), commit(repo, request['head']['sha'])
         # Actions normally checks out a synthetic PR merge, not the source head.
-        if commit(repo, request['merge_commit_sha']) != checkout:
-            raise EvidenceUnavailable()
+        try:
+            merge = commit(repo, request['merge_commit_sha'])
+        except (EvidenceUnavailable, KeyError, TypeError):
+            raise EvidenceUnavailable(Reason.MERGE_COMMIT) from None
+        if merge != checkout:
+            raise EvidenceUnavailable(Reason.MERGE)
         parents = git(repo, 'show', '--no-patch', '--format=%P', checkout).decode().strip().split()
         if parents != [base, head]:
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.PARENTS)
     else:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.IDENTITY)
     return base, head, checkout
 
 
@@ -82,13 +110,13 @@ def valid_path(raw):
     if (not path or len(raw) > 4096 or path.startswith('/') or '\\' in path or
             any(part in ('', '.', '..') for part in path.split('/')) or
             any(unicodedata.category(char).startswith('C') for char in path)):
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.PATHS)
     return path
 
 
 def changed_paths(data):
     if not data or len(data) > MAX_BYTES or not data.endswith(b'\0'):
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.PATHS)
     fields = data[:-1].split(b'\0')
     paths, index = [], 0
     while index < len(fields):
@@ -99,15 +127,15 @@ def changed_paths(data):
         elif re.fullmatch('[RC][0-9]{1,3}', status) and int(status[1:]) <= 100:
             count = 2
         else:
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.PATHS)
         if index + count > len(fields):
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.PATHS)
         paths.extend(valid_path(value) for value in fields[index:index + count])
         index += count
         if len(paths) > 10000:
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.PATHS)
     if not paths:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.PATHS)
     return paths
 
 
@@ -119,31 +147,36 @@ def decision(repo, event, env):
         return True, 'gate or validation inputs changed'
     classifier = repo / CLASSIFIER
     if classifier.is_symlink() or not classifier.is_file() or classifier.read_bytes() != git(repo, 'show', checkout + ':' + CLASSIFIER):
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.CLASSIFIER)
     changed = '\n'.join(paths)
     if len(changed.encode()) > 64000:
-        raise EvidenceUnavailable()
+        raise EvidenceUnavailable(Reason.CLASSIFIER)
     child_env = {**env, 'CHANGED': changed}
     child_env.pop('GITHUB_OUTPUT', None)
-    result = subprocess.run(['bash', str(classifier), 'decide'], cwd=repo, env=child_env,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            timeout=20, check=True)
+    try:
+        result = subprocess.run(['bash', str(classifier), 'decide'], cwd=repo, env=child_env,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=20, check=True)
+    except (OSError, subprocess.SubprocessError):
+        raise EvidenceUnavailable(Reason.CLASSIFIER) from None
     if result.stdout == b'runtime=false\n':
         return False, 'verified non-runtime paths'
     if result.stdout == b'runtime=true\n':
         return True, 'runtime paths changed'
-    raise EvidenceUnavailable()
+    raise EvidenceUnavailable(Reason.CLASSIFIER)
 
 
 def evaluate(repo, event_path, env):
     try:
         path = Path(event_path)
         if path.stat().st_size > MAX_BYTES:
-            raise EvidenceUnavailable()
+            raise EvidenceUnavailable(Reason.EVENT)
         event = json.loads(path.read_text())
         return decision(repo.resolve(), event, env)
-    except (EvidenceUnavailable, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
-        return True, 'evidence unavailable; rendering retained'
+    except EvidenceUnavailable as error:
+        return True, 'evidence unavailable; rendering retained [' + error.reason.value + ']'
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return True, 'evidence unavailable; rendering retained [' + Reason.UNKNOWN.value + ']'
 
 
 def main():

@@ -29,6 +29,9 @@ on:
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
       - ".github/scripts/ci-apt.py"
+      - ".github/scripts/check-docs-browser.py"
+      - ".github/scripts/docs-browser-smoke.cjs"
+      - ".github/scripts/redact-logs.py"
   push:
     branches:
       - main
@@ -42,6 +45,9 @@ on:
       - "CHANGELOG.md"
       - ".github/workflows/docs.yaml"
       - ".github/scripts/ci-apt.py"
+      - ".github/scripts/check-docs-browser.py"
+      - ".github/scripts/docs-browser-smoke.cjs"
+      - ".github/scripts/redact-logs.py"
 
 permissions:
   contents: read
@@ -107,14 +113,15 @@ jobs:
           DOCS_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         run: npm run build
 
-      - name: Prepare bounded signed Ubuntu package indexes
-        timeout-minutes: 3
-        run: sudo python3 .github/scripts/ci-apt.py update
-
       - name: Install the docs browser
         timeout-minutes: 3
         working-directory: docs-site
-        run: timeout --kill-after=5 150 npx playwright install --with-deps chromium
+        run: timeout --kill-after=5 150 npx playwright install chromium
+
+      - name: Check the installed browser before any optional package acquisition
+        timeout-minutes: 6
+        working-directory: docs-site
+        run: python3 ../.github/scripts/check-docs-browser.py
 
       - name: Browser tests
         working-directory: docs-site

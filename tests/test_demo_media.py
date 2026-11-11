@@ -107,20 +107,21 @@ class MediaTests(unittest.TestCase):
         self.assertIn('--with "pyyaml==${PYYAML_VERSION}"', command)
         self.assertIn('--with "pillow==${PILLOW_VERSION}"', command)
         self.assertIn('tests.test_demo_media', command)
+        self.assertIn('tests.test_docs_browser', command)
 
     def test_docs_browser_keeps_dependency_checks_with_a_finite_install_budget(self):
         workflow = yaml.load((ROOT/'.github/workflows/docs.yaml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(workflow['jobs']['build']['runs-on'], 'ubuntu-24.04')
         steps = workflow['jobs']['build']['steps']
-        prepare = next(s for s in steps if s['name']=='Prepare bounded signed Ubuntu package indexes')
+        prepare = next(s for s in steps if s['name']=='Check the installed browser before any optional package acquisition')
         install = next(s for s in steps if s['name']=='Install the docs browser')
         browser = next(s for s in steps if s['name']=='Browser tests')
-        self.assertLess(steps.index(prepare), steps.index(install))
-        self.assertLess(steps.index(install), steps.index(browser))
-        self.assertEqual(prepare['run'], 'sudo python3 .github/scripts/ci-apt.py update')
-        self.assertEqual(prepare['timeout-minutes'], '3')
+        self.assertLess(steps.index(install), steps.index(prepare))
+        self.assertLess(steps.index(prepare), steps.index(browser))
+        self.assertEqual(prepare['run'], 'python3 ../.github/scripts/check-docs-browser.py')
+        self.assertEqual(prepare['timeout-minutes'], '6')
         self.assertEqual(install['timeout-minutes'], '3')
-        self.assertEqual(install['run'], 'timeout --kill-after=5 150 npx playwright install --with-deps chromium')
+        self.assertEqual(install['run'], 'timeout --kill-after=5 150 npx playwright install chromium')
         for event in ('pull_request', 'push'):
             self.assertIn('.github/scripts/ci-apt.py', workflow['on'][event]['paths'])
 

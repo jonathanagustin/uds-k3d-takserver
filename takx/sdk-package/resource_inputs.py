@@ -32,7 +32,7 @@ def merge(*groups):
         result.update(group)
     return result
 
-def collect(lock, tree, read):
+def collect(lock, tree, read, payload=None):
     """tree is the exact Git production-root file inventory; read returns blob bytes."""
     expected = {item['source']: item for item in lock['files']}
     if len(expected) != len(lock['files']) or set(tree) != set(expected):
@@ -48,8 +48,20 @@ def collect(lock, tree, read):
         data = read(source)
         if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
             raise ValueError('resource bytes differ')
+        materialized = item.get('lfs_payload')
         if data.startswith(b'version https://git-lfs.github.com/spec/v1\n'):
-            raise ValueError('unmaterialized Git LFS resource pointer')
+            if not materialized or not re.fullmatch(r'[0-9a-f]{64}', materialized['sha256']) or not isinstance(materialized['bytes'], int) or materialized['bytes'] <= 0:
+                raise ValueError('unreviewed Git LFS resource pointer')
+            canonical = ('version https://git-lfs.github.com/spec/v1\noid sha256:'+materialized['sha256']+'\nsize '+str(materialized['bytes'])+'\n').encode()
+            if data != canonical:
+                raise ValueError('Git LFS pointer identity differs')
+            if payload is None:
+                raise ValueError('declared Git LFS payload store required')
+            data = payload(materialized['sha256'])
+            if len(data) != materialized['bytes'] or hashlib.sha256(data).hexdigest() != materialized['sha256']:
+                raise ValueError('Git LFS payload bytes differ')
+        elif materialized:
+            raise ValueError('locked Git LFS pointer is absent')
         entries = merge(entries, {dest: data})
         if kind in ('raw', 'drawable'):
             if kind == 'drawable' and PurePosixPath(source).suffix != '.png':

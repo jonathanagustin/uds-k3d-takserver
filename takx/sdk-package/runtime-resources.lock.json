@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
   "namespace": "gov.tak.desktop",
   "files": [
@@ -523,7 +523,11 @@
       "bytes": 132,
       "sha256": "217b3f00a982b570dba6d64d49a0086c2054f989b8f6979951255301e8597034",
       "destination": "assets/loresel.sqlite.zip",
-      "kind": "asset"
+      "kind": "asset",
+      "lfs_payload": {
+        "sha256": "12e71980bdeffb9bb48db5976e9e10a0af635f7fc7834915db3baab9c195aa31",
+        "bytes": 1067496
+      }
     },
     {
       "source": "takkernel/engine/src/main/assets/style/omt/bright/LICENSE.md",

@@ -74,10 +74,11 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for n in ['native-proof','providers','source','output']:parser.add_argument('--'+n,type=Path,required=True)
     parser.add_argument('--java-home',type=Path,required=True)
+    parser.add_argument('--resource-payloads',type=Path,help='Declared offline store: one regular file named by each reviewed LFS SHA-256')
     parser.add_argument('--phase',choices=['verify','package','qualify'],default='verify')
     for n,default in [('git','git'),('patch','patch'),('nm','nm'),('readelf','readelf')]:parser.add_argument('--'+n,default=default)
     args=parser.parse_args();lock=p.load(HERE/'inputs.lock.json');providers=p.load(args.providers);roots={k:p.root_of(providers,k) for k in providers}
-    inputs=[HERE.parent.parent,args.native_proof,args.source,args.providers,args.java_home,*p.declared_paths(providers)]
+    inputs=[HERE.parent.parent,args.native_proof,args.source,args.providers,args.java_home,*p.declared_paths(providers),*([args.resource_payloads] if args.resource_payloads else [])]
     out=b.disjoint(args.output,inputs);before=recipe();raw,verified=verify_native(args.native_proof,providers)
     java=args.java_home.resolve()
     for name in ['java','javac']:
@@ -130,9 +131,17 @@ def main():
         metadata,name=row.split('\t');mode,kind,blob,size=metadata.split()
         if kind!='blob':raise ValueError('non-blob runtime resource')
         resource_tree[name]=(mode,blob,int(size))
-    resources=resource_inputs.collect(resource_lock,resource_tree,lambda name:run(['git','--no-lazy-fetch','-C',args.source,'show',lock['official_revision']+':'+name],'resource-'+str(len(commands)),20))
+    payload_root=b.external(args.resource_payloads) if args.resource_payloads else None
+    payload_sizes={item['lfs_payload']['sha256']:item['lfs_payload']['bytes'] for item in resource_lock['files'] if item.get('lfs_payload')}
+    def payload(sha):
+        if payload_root is None:raise ValueError('declared resource payload store required')
+        source=p.regular(payload_root/sha)
+        if source.stat().st_size!=payload_sizes[sha]:raise ValueError('resource payload size differs')
+        return source.read_bytes()
+    resources=resource_inputs.collect(resource_lock,resource_tree,lambda name:run(['git','--no-lazy-fetch','-C',args.source,'show',lock['official_revision']+':'+name],'resource-'+str(len(commands)),20),payload)
+    record['resource_payloads']={sha:{'path':str(payload_root/sha),'sha256':sha,'bytes':size} for sha,size in payload_sizes.items()}
     expected_resources=out/'runtime-resources.sha256'
-    expected_resources.write_text(''.join(item['sha256']+' '+item['kind']+' '+item['destination']+'\n' for item in resource_lock['files']))
+    expected_resources.write_text(''.join(item.get('lfs_payload',item)['sha256']+' '+item['kind']+' '+item['destination']+'\n' for item in resource_lock['files']))
     natives={'lib'+n+'.so':p.regular(path).read_bytes() for n,path in libraries.items()}
     entries=resource_inputs.merge(classes,{'libs/linux64/'+n:data for n,data in natives.items()},resources)
     entries['META-INF/MANIFEST.MF']=('Manifest-Version: 1.0\nImplementation-Title: Public-source Kernel CPU JNI component\nImplementation-Version: '+lock['version']+'\n\n').encode()
@@ -228,6 +237,10 @@ def main():
     for name,tool in record['tools'].items():
         if p.digest(Path(tool['path']))!=tool['sha256']:raise ValueError('metadata tool changed')
     if p.digest(Path(record['interpreter']['path']))!=record['interpreter']['sha256']:raise ValueError('interpreter changed')
+    for item in resource_lock['files']:
+        if item.get('lfs_payload'):
+            declared=item['lfs_payload'];actual=payload(declared['sha256'])
+            if len(actual)!=declared['bytes'] or hashlib.sha256(actual).hexdigest()!=declared['sha256']:raise ValueError('resource payload changed')
     if recipe()!=before or p.load(args.native_proof/'complete.json')!=raw or p.inventory(package)!=record['package_inventory']:raise ValueError('recipe/original proof/package changed')
     for n,path in libraries.items():
         if p.digest(path)!=native_manifest['lib'+n+'.so']:raise ValueError('original native input changed')

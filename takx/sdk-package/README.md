@@ -48,7 +48,12 @@ python3 -B -m unittest discover -s takx/sdk-package -p test_build.py -v
 ### Public runtime resources
 
 The assembler projects all 118 files (6,666,272 source bytes) in the pinned
-Kernel engine/shared production `res` and `assets` trees. The resource lock binds
+Kernel engine/shared production `res` and `assets` trees. One upstream Git LFS
+pointer is separately bound to its genuine 1,067,496-byte payload; actual runtime
+resource bytes total 7,733,636. Supply `--resource-payloads` with an explicit offline
+store whose regular filename is the locked SHA-256. The packager makes no network
+request and refuses missing or changed payloads and changed pointer identities.
+Git blob hashes/sizes remain distinct from materialized payload hashes/sizes. The resource lock binds
 Git blobs, SHA-256, file modes, sizes, and JAR destinations. It follows the pinned
 `takkernel/gradle/buildconfig.gradle` mapping: `res` becomes `resources`, with the
 final filename extension removed; `assets` becomes `assets`, retaining filenames.

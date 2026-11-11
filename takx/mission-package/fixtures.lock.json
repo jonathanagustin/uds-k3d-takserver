@@ -1,0 +1,18 @@
+{
+  "files": {
+    "README.txt": {
+      "bytes": 165,
+      "sha256": "a2e07b0073ca4d449eb51b8771ae42e2d67723ca8d9e785fd085797b093a3a3b"
+    },
+    "manifest.xml": {
+      "bytes": 843,
+      "sha256": "21dc2957d240d7e453be19a29a74a248048ed759a55db6f34f3bc53af5a0831a"
+    },
+    "point.cot": {
+      "bytes": 468,
+      "sha256": "322d0c2b8348e1104ac328de08a300368066becea89d284dcab4fd32c5c8a6ad"
+    }
+  },
+  "kind": "original synthetic data; no upstream captures",
+  "schema": 1
+}

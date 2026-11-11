@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic conformance data; no real users, locations or captured messages. -->
+<MissionPackageManifest version="2">
+  <Configuration>
+    <Parameter name="name" value="Synthetic mission package TEST"/>
+    <Parameter name="uid" value="00000000-0000-4000-8000-000000000410"/>
+    <Parameter name="onReceiveImport" value="true"/>
+    <Parameter name="onReceiveDelete" value="false"/>
+  </Configuration>
+  <Contents>
+    <Content zipEntry="cot/synthetic-android-mission-point.cot" ignore="false">
+      <Parameter name="uid" value="synthetic-android-mission-point"/>
+      <Parameter name="isCoT" value="true"/>
+    </Content>
+    <Content zipEntry="files/README.txt" ignore="false">
+      <Parameter name="name" value="Synthetic package notes"/>
+    </Content>
+  </Contents>
+</MissionPackageManifest>

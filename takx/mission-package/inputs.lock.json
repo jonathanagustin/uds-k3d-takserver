@@ -1,0 +1,101 @@
+{
+  "dependencies": {
+    "com.sun.istack--istack-commons-runtime-4.0.1.jar": {
+      "bytes": 29896,
+      "sha256": "9f91115f449384886f572bd62c8812ee1004273d4b5c85cac65179ad4c16990f"
+    },
+    "jakarta.activation--jakarta.activation-api-2.0.1.jar": {
+      "bytes": 47824,
+      "sha256": "118e66670e3b0baaad3c98cfec8147f6961e0665dde940d605020f2290e461c3"
+    },
+    "jakarta.annotation--jakarta.annotation-api-2.1.1.jar": {
+      "bytes": 26141,
+      "sha256": "5f65fdaf424eee2b55e1d882ba9bb376be93fb09b37b808be6e22e8851c909fe"
+    },
+    "jakarta.xml.bind--jakarta.xml.bind-api-3.0.1.jar": {
+      "bytes": 128941,
+      "sha256": "b8fb4bee3ff5b5c1ef77144d8411316018d7bbd41fcf1ede0646f7978546b867"
+    },
+    "org.apache.commons--commons-lang3-3.20.0.jar": {
+      "bytes": 713862,
+      "sha256": "69e5c9fa35da7a51a5fd2099dfe56a2d8d32cf233e2f6d770e796146440263f4"
+    },
+    "org.glassfish.jaxb--jaxb-core-3.0.1.jar": {
+      "bytes": 139681,
+      "sha256": "a34373c8e87565b51f1087f979394b12a26b367874b8356668984c03ddfee422"
+    },
+    "org.glassfish.jaxb--jaxb-runtime-3.0.1.jar": {
+      "bytes": 931735,
+      "sha256": "5a35b2e40976161d64874f4e2f6ff48333774e7b4ae3461c6bd4ef7f9e3766ce"
+    },
+    "org.glassfish.jaxb--txw2-3.0.1.jar": {
+      "bytes": 71977,
+      "sha256": "74f9b6f63c8c109587d5249bde99abf6e7c0075571f89a397662fdaa30a76888"
+    },
+    "org.slf4j--slf4j-api-2.0.17.jar": {
+      "bytes": 69908,
+      "sha256": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"
+    }
+  },
+  "readerByteEquivalentAt5_8": {
+    "revision": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
+    "scope": "eleven reader/model source files only; no full5.8 qualification"
+  },
+  "referenceSemantics": {
+    "commonCommoSources": {
+      "commoncommo/core/impl/missionpackagemanager.cpp": {
+        "sha256": "3ac6374be7d180ff116c04dc8aed0b34d27a9cb3ab2bd897e29ca7bbea335f8c"
+      },
+      "commoncommo/core/include/missionpackage.h": {
+        "sha256": "a8ca2e2a8ec77c995e2b73c9a45e257c07e59ef384f923b24d758af60c1401c2"
+      }
+    },
+    "repository": "https://github.com/TAK-Product-Center/atak-civ",
+    "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "sources": {
+      "atak/ATAK/app/src/main/java/com/atakmap/android/missionpackage/file/MissionPackageBuilder.java": {
+        "gitBlob": "a0355932ad5ca1dc76f08cf6ae5dd591ac311168",
+        "sha256": "83b0cec3917cbcd7e6193a9c9fe4434ec7352401a1f26ce6746f6e53e72e0572"
+      },
+      "atak/ATAK/app/src/main/java/com/atakmap/android/missionpackage/file/MissionPackageConfiguration.java": {
+        "gitBlob": "db351d6668a050c0b50beee2dc8f859e2db12878",
+        "sha256": "5f307254b2e872166d71e9f477a4205447dfba0babe7372f6c8e937f9c3e38bd"
+      },
+      "atak/ATAK/app/src/main/java/com/atakmap/android/missionpackage/file/MissionPackageContent.java": {
+        "gitBlob": "d2b89e6330f8fb019810df3251596642c45eb8e4",
+        "sha256": "59c674239508bdb80e6501d9041b84c9c967d69868583853e806bbf235da7eb4"
+      },
+      "atak/ATAK/app/src/main/java/com/atakmap/android/missionpackage/file/MissionPackageExtractor.java": {
+        "gitBlob": "86ee2cbaf2a035502cc8572e4ceb9a5669604534",
+        "sha256": "c612079b8bb119b545b755172d2e6f8faa0206ecdd04bb4486b8b02a5056ae70"
+      },
+      "atak/ATAK/app/src/main/java/com/atakmap/android/missionpackage/file/MissionPackageManifest.java": {
+        "gitBlob": "ebf44b0bc2fae746730d26f16924492310db030b",
+        "sha256": "93312f442448e5ef7bdac728242063a86fe4416c7880013a0a60f528f655e500"
+      }
+    }
+  },
+  "schema": 1,
+  "takx": {
+    "integrationSources": {
+      "Client/src/main/java/gov/tak/core/comms/commo/MissionPackageIOHandler.java": "d8e1ab8a03cf84dffd83d409681cc3fc511e82c7a341e7094b7d77919059735a",
+      "Client/src/main/java/gov/tak/core/comms/takserver/DataPackageManager.java": "32d853efa6f015d79e7ecd4e50e5756e0bb66d404bfc37c9635cf58faa8a9ead",
+      "Platform/src/main/java/gov/tak/platform/datapackage/PackageImporter.java": "613ac7e51b83e9e654da3a28f94d9569d8c40853d5e471f50c18dbda0ee4bb08"
+    },
+    "repository": "https://github.com/TAK-Product-Center/TAKX",
+    "revision": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
+    "sources": {
+      "Platform/src/main/java/gov/tak/platform/datapackage/PackageReader.java": "3b20b6ac849f7734acdfafb9e3afc1b14e26c6ece15c2f169589a5d08c10563a",
+      "Platform/src/main/java/gov/tak/platform/datapackage/PreferencesReader.java": "b27e62baffe36e6370e150c101ff5db808864482334e4fa9ab66a957cd37270b",
+      "Platform/src/main/java/gov/tak/platform/datapackage/ZipReader.java": "4df55032d8d9c50927fb8190ecc33a2e133e5fb535f0f73143cc139be32a2e63",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/ElementWithParameters.java": "9976c86de9f7a591ee6734829939999e83871f90c9ad7adf86441f08228a8a2a",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/PackageConfiguration.java": "d86fc68910901801c230e1620448290a62293e89a49bdebe500ffd35b929b6ca",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/PackageManifest.java": "289a7e05b5cfbdf631c0632b247df19ce329061e14c8631f124b5b3ba9abacfe",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/PackageManifestContent.java": "fe0323e8eb597e4be1e1a472f7588ea8171dfaaa3fc9ca9b4a50c0cbeda97ec6",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/PackageManifestContents.java": "7abb7d0908b9eb18eb5622ecc6a7d22845c92d1c4f804a42e2611884ba2d2e89",
+      "Platform/src/main/java/gov/tak/platform/datapackage/content/Parameter.java": "862497c371b389b9ffa9ec844dfc3616afe2edd612b5043ce5898916832303ec",
+      "Platform/src/main/java/gov/takx/api/annotation/UseClientClassLoader.java": "59c0778b2c25b2250df8178f6bd39d523b0a86c4b4ef4319914558e3e5c06d5f",
+      "Platform/src/main/java/gov/takx/commons/utils/StringUtils.java": "f1f60b4a52251b8efac2bf8d1334d838268593d70c0f34824f215ec43252aca0"
+    }
+  }
+}

@@ -466,7 +466,28 @@ jobs:
             demo/out/preview.gif
             demo/out/demo-deploy.jpg
             demo/out/demo-operate-and-trust.jpg
-            demo/out/clips/demo-clip-*
+            demo/out/clips/demo-clip-deploy.mp4
+            demo/out/clips/demo-clip-deploy.jpg
+            demo/out/clips/demo-clip-package-ready.mp4
+            demo/out/clips/demo-clip-package-ready.jpg
+            demo/out/clips/demo-clip-sso.mp4
+            demo/out/clips/demo-clip-sso.jpg
+            demo/out/clips/demo-clip-cloudtak-user.mp4
+            demo/out/clips/demo-clip-cloudtak-user.jpg
+            demo/out/clips/demo-clip-atak-device.mp4
+            demo/out/clips/demo-clip-atak-device.jpg
+            demo/out/clips/demo-clip-airgap.mp4
+            demo/out/clips/demo-clip-airgap.jpg
+            demo/out/clips/demo-clip-policy.mp4
+            demo/out/clips/demo-clip-policy.jpg
+            demo/out/clips/demo-clip-sync.mp4
+            demo/out/clips/demo-clip-sync.jpg
+            demo/out/clips/demo-clip-secure.mp4
+            demo/out/clips/demo-clip-secure.jpg
+            demo/out/clips/demo-clip-upgrade.mp4
+            demo/out/clips/demo-clip-upgrade.jpg
+            demo/out/clips/demo-clip-self-healing.mp4
+            demo/out/clips/demo-clip-self-healing.jpg
             demo/out/shots/*.webp
           if-no-files-found: error
           retention-days: 30

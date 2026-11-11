@@ -104,7 +104,11 @@ its signatures and the UI reel's locked historical inputs remain unchanged.
 
 The capture artifact is `demo-video-attempt-N`. Its receipt records the actual
 capture run/attempt, workflow commit, deployed application commit and output
-hashes. The main-only signing job retains `demo-signed-attempt-M`: original MP4s,
+hashes. Capture accepts only the eleven chapter basenames produced by
+`assemble.sh`, with MP4/JPG clip extensions. Unknown files under the reserved
+`demo-clip-*` prefix fail before upload; raw artifact paths use the same explicit
+allowlist. ZIP entries must be ordinary files or have unspecified type bits.
+The main-only signing job retains `demo-signed-attempt-M`: original MP4s,
 posters, per-video Cosign bundles, the signed source/output manifest and default
 SLSA provenance. A failed signer can reuse capture attempt N during signing
 attempt M; the manifest keeps those identities distinct and never calls reused
@@ -123,7 +127,8 @@ require an explicit reviewed limit change.
 The resulting prerelease is `demo-run-RUN-attempt-M`, targeted at the exact
 producer commit and excluded from package release selection. It remains draft
 until every original signed file has been uploaded and read back by immutable
-asset ID with matching SHA-256. Release edits queue without cancelling uploads.
+asset ID with matching SHA-256. Promotion patches that verified release ID; it
+does not resolve a mutable tag again. Release edits queue without cancelling uploads.
 A retry uploads only missing matching bytes; differing or unverifiable assets
 stop publication. An identical already-public candidate is a no-op. Neither
 videos nor signature bundles are overwritten, rerendered or regenerated.

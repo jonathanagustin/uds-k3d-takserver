@@ -26,8 +26,11 @@ INTOTO = 'demo-videos.intoto.jsonl'
 TOTAL = 256 * 1024**2
 FILE = 64 * 1024**2
 JSON_LIMIT = 1024**2
+CLIPS = ('deploy','package-ready','sso','cloudtak-user','atak-device','airgap',
+         'policy','sync','secure','upgrade','self-healing')
+CLIP_FILES = tuple('clips/demo-clip-'+name+'.'+extension for name in CLIPS for extension in ('mp4','jpg'))
 PATTERNS = ('demo.mp4','demo-operate.mp4','*-chapters.txt','poster.png','preview.gif',
-            'demo-deploy.jpg','demo-operate-and-trust.jpg','clips/demo-clip-*','shots/*.webp')
+            'demo-deploy.jpg','demo-operate-and-trust.jpg','shots/*.webp') + CLIP_FILES
 
 
 def require(value):
@@ -144,7 +147,7 @@ def extract(gh,run,name,directory):
             require(0<len(entries)<=128 and len(set(names))==len(names) and
                     sum(entry.file_size for entry in entries)<=TOTAL)
             for entry in entries:
-                require(not entry.is_dir() and not stat.S_ISLNK(entry.external_attr>>16) and
+                require(not entry.is_dir() and stat.S_IFMT(entry.external_attr>>16) in (0,stat.S_IFREG) and
                         0<entry.file_size<=FILE and match(entry.filename,r'[A-Za-z0-9][A-Za-z0-9_.-]*(?:/[A-Za-z0-9][A-Za-z0-9_.-]*)?'))
                 path=Path(directory)/entry.filename;path.parent.mkdir(parents=True,exist_ok=True)
                 require(not path.exists() and not path.is_symlink())
@@ -155,6 +158,8 @@ def extract(gh,run,name,directory):
 def capture(directory,app_source):
     root=Path(directory);require(match(app_source,r'[0-9a-f]{40}'))
     source=identity(os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],os.environ['GITHUB_SHA'])
+    for path in (root/'clips').glob('demo-clip-*'):
+        require(path.relative_to(root).as_posix() in CLIP_FILES and path.is_file() and not path.is_symlink())
     paths=sorted({p for pattern in PATTERNS for p in root.glob(pattern) if p.is_file()})
     require(root/'demo.mp4' in paths and root/'demo-operate.mp4' in paths)
     outputs=[info(p,p.relative_to(root).as_posix()) for p in paths]
@@ -332,7 +337,7 @@ def publish(gh,run_id,attempt,directory):
     require(gh.api('repos/'+REPO+'/git/ref/tags/'+release_tag)['object']==tag_record['object'])
     current=gh.api(release_path)
     require(current['tag_name']==release_tag and current['id']==release['id'] and current['draft'] is True and current['prerelease'] is True and current['target_commitish']==run['head_sha'])
-    gh.command(['release','edit',release_tag,'--draft=false','--latest=false','--repo',REPO],json_output=False)
+    gh.command(['api','--method','PATCH',release_path,'-F','draft=false','-f','make_latest=false'])
     final=gh.api(release_path)
     require(final['tag_name']==release_tag and final['id']==release['id'] and final['draft'] is False and final['prerelease'] is True and final['target_commitish']==run['head_sha'])
     require(gh.api('repos/'+REPO+'/git/ref/tags/'+release_tag)['object']==tag_record['object'])

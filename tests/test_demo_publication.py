@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import warnings
@@ -98,6 +99,27 @@ class PublicationTests(unittest.TestCase):
         (self.root/'unexpected').write_text('extra')
         with self.assertRaises(ValueError):P.check_inventory(self.root,receipt['outputs'],('capture.json',))
 
+    def test_unknown_clip_extension_or_basename_rejected_before_capture_upload(self):
+        for name in ('demo.mp4','demo-operate.mp4'):(self.root/name).write_bytes(b'fixture')
+        (self.root/'clips').mkdir()
+        for name in ('demo-clip-sso.mp4','demo-clip-sso.jpg','demo-clip-operator.txt','demo-clip-secrets.json'):
+            (self.root/'clips'/name).write_bytes(b'fixture')
+        with patch.dict(os.environ,{'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_SHA':SHA}),self.assertRaises(ValueError):P.capture(self.root,'b'*40)
+        self.assertFalse((self.root/'capture.json').exists())
+        (self.root/'clips/demo-clip-operator.txt').unlink();(self.root/'clips/demo-clip-secrets.json').unlink()
+        unknown=self.root/'clips/demo-clip-unknown.mp4';unknown.write_bytes(b'fixture')
+        with patch.dict(os.environ,{'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_SHA':SHA}),self.assertRaises(ValueError):P.capture(self.root,'b'*40)
+        unknown.unlink()
+        with patch.dict(os.environ,{'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_SHA':SHA}):P.capture(self.root,'b'*40)
+        receipt=json.loads((self.root/'capture.json').read_text())
+        names={item['file'] for item in receipt['outputs']}
+        self.assertIn('clips/demo-clip-sso.mp4',names);self.assertIn('clips/demo-clip-sso.jpg',names)
+        self.assertNotIn('clips/demo-clip-operator.txt',names);self.assertNotIn('clips/demo-clip-secrets.json',names)
+        value=self.candidate()
+        value['capture']['outputs'].append({'file':'clips/demo-clip-operator.txt','bytes':7,'sha256':'0'*64})
+        (self.root/P.MANIFEST).write_text(json.dumps(value))
+        with self.assertRaises(ValueError):P.manifest(self.root)
+
     def test_signed_candidate_keeps_capture_attempt_distinct_from_signing(self):
         value=self.candidate();actual=P.verify_candidate(self.gh,self.root,run())
         self.assertEqual(actual,value);self.assertEqual(actual['capture']['capture']['attempt'],'1')
@@ -164,10 +186,11 @@ class PublicationTests(unittest.TestCase):
             blob=zipped(entries);asset['size_in_bytes']=len(blob);asset['digest']='sha256:'+hashlib.sha256(blob).hexdigest()
             with tempfile.TemporaryDirectory() as temp,patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()),self.assertRaises(ValueError):
                 P.extract(self.gh,run(),'candidate',temp)
-        symlink=zipfile.ZipInfo('linked.mp4');symlink.create_system=3;symlink.external_attr=(stat.S_IFLNK|0o777)<<16
-        blob=zipped([(symlink,b'outside')]);asset['size_in_bytes']=len(blob);asset['digest']='sha256:'+hashlib.sha256(blob).hexdigest()
-        with tempfile.TemporaryDirectory() as temp,patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()),self.assertRaises(ValueError):
-            P.extract(self.gh,run(),'candidate',temp)
+        for file_type in (stat.S_IFLNK,stat.S_IFIFO,stat.S_IFSOCK,stat.S_IFCHR):
+            special=zipfile.ZipInfo('special.mp4');special.create_system=3;special.external_attr=(file_type|0o777)<<16
+            blob=zipped([(special,b'outside')]);asset['size_in_bytes']=len(blob);asset['digest']='sha256:'+hashlib.sha256(blob).hexdigest()
+            with self.subTest(file_type=file_type),tempfile.TemporaryDirectory() as temp,patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()),self.assertRaises(ValueError):
+                P.extract(self.gh,run(),'candidate',temp)
         blob=zipped([('fixture.mp4',b'fixture')]);asset['size_in_bytes']=len(blob);asset['digest']='sha256:'+hashlib.sha256(blob).hexdigest()
         with tempfile.TemporaryDirectory() as temp,patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()),patch.object(P,'FILE',4),self.assertRaises(ValueError):
             P.extract(self.gh,run(),'candidate',temp)
@@ -224,8 +247,10 @@ class PublicationTests(unittest.TestCase):
                     if self.fail_second and self.uploads==2:raise ValueError('simulated interrupted upload')
                     path=Path(command[3]);test.assertNotIn(path.name,self.stored)
                     self.stored[path.name]={'id':100+len(self.stored),'data':path.read_bytes()};return b''
-                if command[:2]==['release','edit']:
-                    self.release['draft']=False;return b''
+                if command[:3]==['api','--method','PATCH']:
+                    test.assertEqual(command[3],'repos/'+P.REPO+'/releases/77')
+                    test.assertIn('draft=false',command);test.assertIn('make_latest=false',command)
+                    self.release['draft']=False;return copy.deepcopy(self.release)
                 if command[0]=='api' and '/releases/assets/' in command[1]:
                     asset_id=int(command[1].split('/')[-1]);data=next(item['data'] for item in self.stored.values() if item['id']==asset_id)
                     output.write(data);output.flush();return None
@@ -247,6 +272,10 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(all('--clobber' not in command for command in gh.commands))
         self.assertFalse(any('sign-blob' in command or 'assemble.sh' in command for command in gh.commands))
         self.assertEqual(set(gh.stored),{path.name for path in self.root.iterdir()})
+        promotions=[command for command in gh.commands if command[:3]==['api','--method','PATCH']]
+        self.assertEqual(len(promotions),1)
+        self.assertEqual(promotions[0][3],'repos/'+P.REPO+'/releases/77')
+        self.assertFalse(any(command[:2]==['release','edit'] for command in gh.commands))
 
     def test_real_subprocess_failure_never_exposes_private_child_output(self):
         binary=self.root/'gh'
@@ -262,6 +291,12 @@ class PublicationTests(unittest.TestCase):
         for name in ('record','preflight','mode'):
             self.assertNotIn('write',jobs[name]['permissions'].values())
         self.assertEqual(jobs['sign']['permissions']['contents'],'read')
+        record_steps=jobs['record']['steps']
+        upload=next(step for step in record_steps if step['name']=='Upload the demo video')
+        clip_paths={path.strip() for path in upload['with']['path'].splitlines() if '/clips/' in path}
+        self.assertEqual(clip_paths,{'demo/out/'+name for name in P.CLIP_FILES})
+        self.assertEqual(set(P.CLIPS),set(re.findall(r'^chapter ([a-z0-9-]+) ',(ROOT/'demo/assemble.sh').read_text(),re.M)))
+        self.assertLess(next(i for i,step in enumerate(record_steps) if step['name']=='Bind the actual capture source and attempt'),record_steps.index(upload))
         self.assertNotIn('id-token',jobs['publish']['permissions'])
         self.assertEqual(jobs['publish']['concurrency'],{'group':'immutable-demo-publication','queue':'max','cancel-in-progress':'false'})
         self.assertIn("needs.mode.outputs.mode == 'publish'",jobs['publish']['if'])

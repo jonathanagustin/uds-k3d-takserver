@@ -80,6 +80,23 @@ YAML
     echo "adb could not connect to ${device}" >&2
     exit 1
     ;;
+  scenario)
+    # Explicit opt-in only: use the existing real device and driver pod.
+    package="${2:?mission package path}"
+    output="${3:?fresh evidence directory}"
+    [[ -f "${package}" && ! -e "${output}" ]] || exit 2
+    remote="$(k exec -n atak "${pod}" -- mktemp -d /tmp/android-scenario.XXXXXX)"
+    k cp atak/scenarios/android-interoperability.py "atak/${pod}:${remote}/scenario.py"
+    k cp "${package}" "atak/${pod}:${remote}/scenario.dpk"
+    status=0
+    k exec -n atak "${pod}" -- python3 "${remote}/scenario.py" \
+      --mission-package "${remote}/scenario.dpk" --device "${device}" \
+      --output "${remote}/evidence" || status=$?
+    mkdir -p "${output}"
+    k cp "atak/${pod}:${remote}/evidence/." "${output}/" || status=1
+    k exec -n atak "${pod}" -- rm -rf "${remote}"
+    exit "${status}"
+    ;;
   zoom)
     a shell uiautomator dump /sdcard/demo-ui.xml >/dev/null 2>&1
     xy="$(a exec-out cat /sdcard/demo-ui.xml | python3 -c 'import re, sys, xml.etree.ElementTree as ET

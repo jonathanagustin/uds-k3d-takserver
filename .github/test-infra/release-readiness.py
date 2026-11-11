@@ -111,7 +111,13 @@ class API:
                 data = response.read(262145)
                 require(len(data) <= 262144)
         except urllib.error.HTTPError as exc:
-            raise APIFailure(operation, 'HTTP', exc.code, http_metadata(exc)) from None
+            # HTTPError owns a response stream. Close it before discarding the
+            # exception so deferred cleanup cannot warn with its private reason.
+            try:
+                metadata = http_metadata(exc)
+            finally:
+                exc.close()
+            raise APIFailure(operation, 'HTTP', exc.code, metadata) from None
         except TimeoutError:
             raise APIFailure(operation, 'timeout') from None
         except urllib.error.URLError as exc:

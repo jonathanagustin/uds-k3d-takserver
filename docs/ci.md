@@ -439,3 +439,7 @@ capture can be classified without printing its incomplete prefix; oversized
 captures are not scanned. These are observations, not proof of a network cause
 or a successful update. An official HTTPS alternative is not a guarantee of
 network availability.
+
+Docs and Demo setup helpers are excluded by exact path from install, upgrade, and
+package triggers. Unit tests still cover them, and their own workflows still run.
+Shared diagnostics, redaction, and node firewall scripts remain runtime inputs.

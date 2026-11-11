@@ -226,16 +226,6 @@ def backend_diagnostic(node, binding):
     print("Airgap backend diagnostic: " + json.dumps(report, sort_keys=True), file=sys.stderr)
 
 
-def firewall_operation(args):
-    """Fixed diagnostic labels only; never include rule addresses or caller text."""
-    operations = {"-N": "create-chain", "-A": "append-rule", "-I": "insert-hook",
-                  "-L": "list-chain", "-C": "check-hook", "-D": "delete-hook",
-                  "-F": "flush-chain", "-X": "delete-chain"}
-    operation = operations.get(args[0], "unknown") if args else "unknown"
-    chain = args[1] if len(args) > 1 and args[1] in (CHAIN, "OUTPUT", "FORWARD") else "other"
-    return operation + "/" + chain
-
-
 def firewall(node, tool, *args, check=True):
     binding = validate_binding(tool)
     try:
@@ -245,7 +235,6 @@ def firewall(node, tool, *args, check=True):
             result.check_returncode()
         return result
     except (subprocess.SubprocessError, RuntimeError, OSError, UnicodeError) as error:
-        print('Node firewall operation: ' + firewall_operation(args), file=sys.stderr)
         print('Node firewall command failed; sanitized stderr: ' +
               firewall_error_detail(getattr(error, 'stderr', None)), file=sys.stderr)
         backend_diagnostic(node, binding)

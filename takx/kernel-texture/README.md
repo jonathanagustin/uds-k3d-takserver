@@ -53,8 +53,11 @@ Small local controls currently pass:
 
 The pixel control uses an owned asymmetric texture fixture. It does not yet
 exercise URI decoding, asynchronous atlas loading, the complete batch builder /
-renderer object lifecycle or a TAKX drawable. No linked JNI style round-trip,
-complete native feature qualification or live client acceptance has passed yet.
+renderer object lifecycle or a TAKX drawable. The separate composed Native03 +
+CPU04 qualification now passes the five Texture CPU JNI methods and native clone
+ownership/getter checks under `-Xcheck:jni`; see [qualification evidence and
+limits](QUALIFICATION.md). It does not establish the composite/parser serialization
+round-trip, complete native texture feature or live client acceptance.
 Perspective/horizon behavior, surface render-to-texture pixel density, global
 wrap/pole behavior, atlas eviction/context recovery and performance remain
 acceptance gates. A vertex behind the camera or a degenerate texture frame is an
@@ -85,8 +88,12 @@ both texture/stroke orders and nested level-of-detail bytes. It has passed
 syntax checking only and has not been linked or executed. It does not prove the
 actual asynchronous loader/atlas runtime. The query callback, atlas failure,
 refresh scheduling, siblings and edit-overlay path need a separately reviewed
-full affected-closure native qualification. Public struct/vtable layouts change;
-never mix only the edited objects into an accepted old Core. The existing Ninja
-dependency log identifies 78 affected objects (about 6.65 MiB of current object
-bytes), plus Core/JNI relinks. A new dependency scan is still required. External
-source-built providers can be reused by identity.
+full builder/renderer runtime qualification. Public struct/vtable layouts change;
+never mix only the edited objects into an accepted old Core. The historical
+standalone Ninja estimate identified 78 affected objects (about 6.65 MiB of then
+current object bytes), plus Core/JNI relinks. The actual composed Native03 build
+compiled **108 affected objects** and relinked Core/JNI with the other reviewed
+project overlays. That is a composed-variant closure result, not a new standalone
+Texture build or an execution of `builder-control.cpp`. A standalone variant
+still needs its own dependency scan. External source-built providers can be
+reused by identity.

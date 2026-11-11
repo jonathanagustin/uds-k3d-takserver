@@ -238,9 +238,72 @@ class PromotionTests(unittest.TestCase):
                 self.assertEqual(R.main(), 1)
             self.assertEqual(stdout.getvalue(), '')
             self.assertEqual(stderr.getvalue(),
-                             f'Release readiness API failure: operation=release-id status={status} kind={kind}\n')
+                             f'Release readiness API failure: operation=release-id status={status} kind={kind}'
+                             ' reason=unknown remaining=unknown reset=unknown accepted_contents=unknown\n')
             request.assert_called_once()
             self.assertEqual(request.call_args.args[0].method, 'GET')
+
+    def test_bounded_http_reason_and_header_classification_never_echoes_payload(self):
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'private-token',
+               'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE,
+               'READINESS_MODE': 'check', 'CHECKED_SOURCE_SHA': SOURCE}
+        cases = [
+            (json.dumps({'message': 'Resource not accessible by integration', 'private': 'private-body'}).encode(),
+             'access-denied'),
+            (json.dumps({'message': 'API rate limit exceeded for private-IP. (private-details)'}).encode(),
+             'primary-rate-limit'),
+            (json.dumps({'message': 'You have exceeded a secondary rate limit. private-details'}).encode(),
+             'secondary-rate-limit'),
+            (b'{"message":"Bad credentials"}', 'bad-credentials'),
+            (b'{"message":"private-unknown"}', 'unknown'),
+            (b'private-malformed', 'unknown'),
+            (b'[' * 1100 + b'0' + b']' * 1100, 'unknown'),
+            (b'{"message":"Bad credentials","message":"private-duplicate"}', 'unknown'),
+            (b'{"message":"Resource not accessible by integration","private":"' + b'x' * 5000, 'unknown'),
+        ]
+        for body, reason in cases:
+            for headers, expected in [
+                    ({'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1800000000',
+                      'X-Accepted-GitHub-Permissions': 'contents=read', 'private-header': 'private-value'},
+                     'remaining=0 reset=1800000000 accepted_contents=read'),
+                    ({'X-RateLimit-Remaining': '-1', 'X-RateLimit-Reset': 'private-header',
+                      'X-Accepted-GitHub-Permissions': 'contents=private-secret'},
+                     'remaining=unknown reset=unknown accepted_contents=unknown')]:
+                stream = io.BytesIO(body)
+                error = urllib.error.HTTPError('https://example.invalid/private-url', 403,
+                                               'private-reason', headers, stream)
+                api = R.API('private-token')
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with self.subTest(reason=reason, headers=expected), patch.dict(os.environ, env, clear=True), \
+                        patch.object(R, 'API', return_value=api), \
+                        patch.object(api.opener, 'open', side_effect=error) as request, \
+                        patch.object(error, 'read', wraps=error.read) as read, \
+                        contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    self.assertEqual(R.main(), 1)
+                    read.assert_called_once_with(4097)
+                self.assertEqual(stdout.getvalue(), '')
+                self.assertEqual(stderr.getvalue(), 'Release readiness API failure: operation=release-id'
+                                 f' status=403 kind=HTTP reason={reason} {expected}\n')
+                request.assert_called_once()
+                self.assertEqual(request.call_args.args[0].method, 'GET')
+
+    def test_permission_and_numeric_headers_are_strict_and_bounded(self):
+        for remaining, reset, permission, expected in [
+                ('9999999999', '9999999999', 'metadata=read, contents=write',
+                 (9999999999, 9999999999, 'write')),
+                ('10000000000', '0', 'contents=admin', ('unknown', 0, 'unknown')),
+                ('1e3', '1.5', 'contents=read, contents=write', ('unknown', 'unknown', 'unknown')),
+                (' 0', '+1', 'contents=write; contents=read', ('unknown', 'unknown', 'unknown')),
+                ('1', '2', 'contents=read,' + 'x' * 1024, (1, 2, 'unknown'))]:
+            error = urllib.error.HTTPError('https://example.invalid/private', 403, 'private',
+                    {'X-RateLimit-Remaining': remaining, 'X-RateLimit-Reset': reset,
+                     'X-Accepted-GitHub-Permissions': permission}, io.BytesIO(b'{}'))
+            with self.subTest(expected=expected):
+                meta = R.http_metadata(error)
+                self.assertEqual((meta['remaining'], meta['reset'], meta['accepted_contents']), expected)
+                self.assertEqual(meta['reason'], 'unknown')
 
     def test_main_context_and_api_failures_are_fixed_diagnostics(self):
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()

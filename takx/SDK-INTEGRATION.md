@@ -33,6 +33,10 @@ profiles document runtime prerequisites and their limits. The
 cover the remaining dependency builds and backend isolation. Native builds are
 opt-in; ordinary CI runs offline guards.
 
+The [local Draco cache](registry-cache/README.md) packages a verified component
+and tests relocation at two prefixes. Registry publishing and publisher
+authentication remain separate work in [#482](https://github.com/jonathanagustin/uds-takserver/issues/482).
+
 These results do not yet provide a complete Java SDK or desktop installer.
 The legacy Kernel database check does not validate modern Database2 encrypted
 opening. The graphics result uses the existing host Mesa stack; the crypto

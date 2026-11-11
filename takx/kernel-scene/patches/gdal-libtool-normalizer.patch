@@ -1,0 +1,11 @@
+--- a/GNUmakefile
++++ b/GNUmakefile
+@@ -67,7 +67,7 @@
+ 	    -rpath $(INST_LIB) \
+ 	    -no-undefined \
+ 	    -version-info $(LIBGDAL_CURRENT):$(LIBGDAL_REVISION):$(LIBGDAL_AGE)
+-	case $(LIBGDAL) in *.la) dos2unix $(LIBGDAL) ;; esac
++	case $(LIBGDAL) in *.la) $(KERNEL_SCENE_PYTHON) -I -B $(KERNEL_SCENE_NORMALIZER) $(LIBGDAL) ;; esac
+ ifeq ($(MACOSX_FRAMEWORK),yes)
+ 	install_name_tool -id ${OSX_VERSION_FRAMEWORK_PREFIX}/GDAL .libs/libgdal.dylib
+ endif

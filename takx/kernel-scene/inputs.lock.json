@@ -1,0 +1,452 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "gdal": {
+    "sha256": "a170207c0548cadec57e3a6e57727f66d4b64bf4a9a3ddd6c6bd0bf2479260e2",
+    "bytes": 14568775,
+    "members": 3983,
+    "regular_files": 3671,
+    "expanded_bytes": 83718192
+  },
+  "libkml": {
+    "sha256": "39692c0184933424e35ef69e5101f1ff0d664f2b50b972887cfc15fda032d1cb",
+    "bytes": 18346890,
+    "members": 2721,
+    "regular_files": 2343,
+    "expanded_bytes": 45848352
+  },
+  "patches": {
+    "gdal-disable-pdf.patch": {
+      "sha256": "3210c295244077fb94ad005ee1eae9ce500afe506e3de82dd5983d664def0355",
+      "before": "aa8a94236b9fe153ee7b383381d0821bd44e2cbff147edbb21500d4cfab69c2a",
+      "after": "dec8c939a61ec588ce176f1d5ba98e96c4d7131ca3414812f0887eeef3fd4ec2"
+    },
+    "libkml-pgsc.patch": {
+      "sha256": "f8048d5f203888986302aedae8aeb586c983673a5457746229b1262490f30144"
+    },
+    "minizip-zlib-crc-type.patch": {
+      "sha256": "2e8743a3ac4b56070658ce9c80a1a12b0a46202588acec95d54750f4b2d40a58",
+      "images": {
+        "unzip.c": {
+          "before_sha256": "9c47581f0bf0c29acb3f5668d9a7496fa4585dda385db3ebb25dff3452f4a853",
+          "after_sha256": "198909baf3a17d297b1802b096f9d57e3bbc30d029433c79587313fc6259bb6e",
+          "bytes": 53118
+        },
+        "zip.c": {
+          "before_sha256": "de26c2627c025b74752a163828216c165f3cbb3e68b54c18661db845f6887a31",
+          "after_sha256": "0193a4779d14c3fc82229995579702d67fdefd1ae1f6e4756cddad223659443f",
+          "bytes": 37361
+        },
+        "crypt.h": {
+          "before_sha256": "194cde690b4171e236e680fd9e77c538cb08ed5a3b5cc6b3d3216c3505dc087b",
+          "after_sha256": "333ebc90fa3ea8d6be8540415729bdfab26064c76cd0d894978d5c64a31b6b8c",
+          "bytes": 4688
+        }
+      }
+    },
+    "gdal-libtool-normalizer.patch": {
+      "sha256": "05a39a7b9599a9e001a6ca0ef09d041d11858b0dee20eae5c1c42bd670371186",
+      "before_sha256": "4eab8a17f0adfc39cb931bc4a4c53cfeba045273d2379f7f9cc47281c4a01458",
+      "after_sha256": "7e2f93432d530ff7575905977fea73e56ca78423225a10e5e62aa38c15e08b43"
+    }
+  },
+  "profile": "Kernel 8.30.5 ASSIMPScene native subset with reduced GDAL 2.4.4; not full SDK",
+  "jobs": 1,
+  "stage_seconds": 1200,
+  "output_bytes": 4294967296,
+  "configure": [
+    "--disable-shared",
+    "--enable-static",
+    "--with-threads=yes",
+    "--with-libtiff=internal",
+    "--with-geotiff=internal",
+    "--with-jpeg=internal",
+    "--with-png=internal",
+    "--with-gif=internal",
+    "--without-jpeg12",
+    "--with-proj5-api=no",
+    "--with-liblzma=no",
+    "--with-zstd=no",
+    "--with-pg=no",
+    "--with-grass=no",
+    "--with-libgrass=no",
+    "--with-cfitsio=no",
+    "--with-dds=no",
+    "--with-gta=no",
+    "--with-ogdi=no",
+    "--with-fme=no",
+    "--with-sosi=no",
+    "--with-mongocxx=no",
+    "--with-hdf4=no",
+    "--with-hdf5=no",
+    "--with-kea=no",
+    "--with-netcdf=no",
+    "--with-jasper=no",
+    "--with-openjpeg=no",
+    "--with-fgdb=no",
+    "--with-ecw=no",
+    "--with-kakadu=no",
+    "--with-mrsid=no",
+    "--with-jp2mrsid=no",
+    "--with-mrsid_lidar=no",
+    "--with-jp2lura=no",
+    "--with-msg=no",
+    "--with-oci=no",
+    "--with-mysql=no",
+    "--with-ingres=no",
+    "--with-xerces=no",
+    "--with-expat=no",
+    "--with-libkml=no",
+    "--with-odbc=no",
+    "--with-dods-root=no",
+    "--with-curl=no",
+    "--with-xml2=no",
+    "--with-spatialite=no",
+    "--with-sqlite3=no",
+    "--with-rasterlite2=no",
+    "--with-pcre=no",
+    "--with-teigha=no",
+    "--with-idb=no",
+    "--with-sde=no",
+    "--with-epsilon=no",
+    "--with-webp=no",
+    "--with-geos=no",
+    "--with-sfcgal=no",
+    "--with-opencl=no",
+    "--with-freexl=no",
+    "--with-poppler=no",
+    "--with-podofo=no",
+    "--with-pdfium=no",
+    "--with-perl=no",
+    "--with-python=no",
+    "--with-java=no",
+    "--with-hdfs=no",
+    "--with-mdb=no",
+    "--with-rasdaman=no",
+    "--with-armadillo=no",
+    "--with-cryptopp=no",
+    "--with-crypto=no",
+    "--without-libiconv-prefix"
+  ],
+  "kernel_tus": [
+    "model/ASSIMPSceneSpi.cpp",
+    "model/Scene.cpp",
+    "model/SceneNode.cpp",
+    "model/SceneBuilder.cpp",
+    "model/SceneGraphBuilder.cpp",
+    "model/Mesh.cpp",
+    "model/MeshBuilder.cpp",
+    "model/Material.cpp",
+    "model/VertexDataLayout.cpp",
+    "model/ResourceMapper.cpp",
+    "math/Matrix2.cpp",
+    "feature/Envelope2.cpp",
+    "port/String.cpp",
+    "port/StringBuilder.cpp",
+    "port/Platform.cpp",
+    "util/Memory.cpp",
+    "util/MemBuffer2.cpp",
+    "util/DataInput2.cpp",
+    "util/DataOutput2.cpp",
+    "util/IO.cpp",
+    "util/IO2.cpp",
+    "util/ZipFile.cpp",
+    "util/ProtocolHandler.cpp",
+    "util/ConfigOptions.cpp",
+    "util/Logging.cpp",
+    "util/Logging2.cpp",
+    "util/ProcessingCallback.cpp",
+    "thread/Mutex.cpp",
+    "thread/Lock.cpp",
+    "thread/RWMutex.cpp",
+    "thread/impl/ThreadImpl_common.cpp",
+    "thread/impl/ThreadImpl_libpthread.cpp",
+    "util/MemBuffer.cpp",
+    "thread/Monitor.cpp",
+    "thread/Cond.cpp"
+  ],
+  "licenses": {
+    "gdal": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+    "libkml": "e7952c5e1745f629c235c7aacd066fc36034d37571a964b9142d7fb95b5523eb"
+  },
+  "libkml_patch_postimages": {
+    "Makefile.am": {
+      "bytes": 145,
+      "sha256": "bc03245f5f09204d4997805ed45e95d00e598e0af6bf6309a5f800e362f200b2"
+    },
+    "configure.ac": {
+      "bytes": 7815,
+      "sha256": "cb744d6a9a39d0dcaa3b1399cd956af11725b95d6ff6c266b859d30266d16450"
+    },
+    "src/kml/base/color32.h": {
+      "bytes": 6446,
+      "sha256": "021fce6cb66d5a73aa56e3bebcfb1556d19182b5fedf8e700582cbbad61b29a8"
+    },
+    "src/kml/base/date_time.cc": {
+      "bytes": 3533,
+      "sha256": "ad5b3a48fa1ccf4f32657fb186491e224be3ef733b5fc47bb6018e62dce80330"
+    },
+    "src/kml/base/file_posix.cc": {
+      "bytes": 2541,
+      "sha256": "d70cb63458b5fefcf1c7eaf659a77b2ba79951110efb5ebf457dcd5817fe6951"
+    },
+    "src/kml/base/file_win32.cc": {
+      "bytes": 3628,
+      "sha256": "9a6f06f516fb3d7694b07ef9a743ed3f97106052c4c8349177f2c3d8482a8757"
+    },
+    "src/kml/base/util.h": {
+      "bytes": 2466,
+      "sha256": "9aa876cc3c344104b1cf644ccbc108da19ad56811c7a43f79a85f6b12cfbcd9d"
+    },
+    "src/kml/engine/kml_file.cc": {
+      "bytes": 8551,
+      "sha256": "725875400cbd69d4e3b8404823858fc7352cf6a2a03335d4f38487e52f688603"
+    },
+    "src/kml/regionator/regionator_util.cc": {
+      "bytes": 6715,
+      "sha256": "db5ecbc91ce515f36bcfaa164b27ea80c22e697af8430c4533ce4c886bffb1e9"
+    },
+    "src/kml/regionator/regionator_util.cc.orig": {
+      "bytes": 6712,
+      "sha256": "4165580ce1a40cc63b19f463d5fee983cdb21cc3f70199ffb5ecd00d93d93f69"
+    },
+    "src/kml/xsd/xsd_element.cc": {
+      "bytes": 2858,
+      "sha256": "024dd79a0f58229faf8052649c2b4c70b6b6a46bc3a09e5602ec325f620eefaf"
+    },
+    "src/kml/xsd/xsd_element.cc.orig": {
+      "bytes": 2854,
+      "sha256": "fde6c35c8c435cab19934e3df5320cff204542d307ee6e8eaa355f6527cb778c"
+    },
+    "src/kml/xsd/xsd_element.h": {
+      "bytes": 4046,
+      "sha256": "b1da9dc34b79b161b9330a0274075036de35cd2dd97379308a54c207e3296ec1"
+    },
+    "src/kml/xsd/xsd_element.h.orig": {
+      "bytes": 4042,
+      "sha256": "af7772308383a7413c371b0a6dcc5bde5297566ddb1b7c62b995fac51bf316f8"
+    },
+    "third_party/Makefile.am": {
+      "bytes": 6074,
+      "sha256": "e0ce6a002c33443dee15d9db61caa839df2cb6b404cd083cf343c82da7589e6a"
+    },
+    "third_party/boost_1_34_1/boost/config/compiler/visualc.hpp": {
+      "bytes": 6111,
+      "sha256": "b088c8f50aea289ef104ca57a91a3732cf7655efbd05160d078a4d67c03e7da7"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/ioapi.c": {
+      "bytes": 3700,
+      "sha256": "e744f58e735d50f8e765be1c8e04bb7161b0f05a31e399df6f61f50dba7319cd"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/ioapi.h": {
+      "bytes": 2835,
+      "sha256": "7864ceed3d843d967de3a9f32726517df69874d48f36fb6759ab694c67839741"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/iowin32.c": {
+      "bytes": 6417,
+      "sha256": "2add4cc0431ea22d3f5d14ee6ad20dcd12b1b5b8183be01ecd2bcedc22394233"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/unzip.c": {
+      "bytes": 53124,
+      "sha256": "9c47581f0bf0c29acb3f5668d9a7496fa4585dda385db3ebb25dff3452f4a853"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/unzip.h": {
+      "bytes": 14059,
+      "sha256": "1c31984e23e4a39b245b8c5a5a8bda72254ff61d6f37909708a73d7553f0e393"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zip.c": {
+      "bytes": 37367,
+      "sha256": "de26c2627c025b74752a163828216c165f3cbb3e68b54c18661db845f6887a31"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zip.h": {
+      "bytes": 8853,
+      "sha256": "20646fb1441ff7a464446a542895fce4478b944a7669f6534664234aa6103d12"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zlibextern.h": {
+      "bytes": 223,
+      "sha256": "3a589182af07b53ed7a0e8f5c92eb3a593551deb4ba2c0b06dff769f0ba52cce"
+    }
+  },
+  "libkml_patch_preimages": {
+    "Makefile.am": {
+      "bytes": 154,
+      "sha256": "31bb5a805c2ff7f545d5963a67c6c7feeb78f9c227938bef61c07b6af01d81df"
+    },
+    "configure.ac": {
+      "bytes": 7735,
+      "sha256": "bba355de4ec032647c2b3ccb6976f12a108798a8834532619c59b3a4ad709d50"
+    },
+    "src/kml/base/color32.h": {
+      "bytes": 6386,
+      "sha256": "658a1733f246446c03ede3f22e1bdd514b7ff11126ff4ce16cc8e3037b79e72a"
+    },
+    "src/kml/base/date_time.cc": {
+      "bytes": 3077,
+      "sha256": "ad234c6f42b826d3ddf779af79e085260e9328d3ceefbccdc4ff19a643deb790"
+    },
+    "src/kml/base/file_posix.cc": {
+      "bytes": 2521,
+      "sha256": "274fcd51e49e39ff3792aa0a58fd9963dbd67be1c72dcc4f48a4e57b7550926d"
+    },
+    "src/kml/base/file_win32.cc": {
+      "bytes": 3626,
+      "sha256": "3d9a99b1c241338f410198bd39ec4234f83c00dfb6ac74b53b51727da4ace870"
+    },
+    "src/kml/base/util.h": {
+      "bytes": 2411,
+      "sha256": "7263a49ac99bfcd21281dd0616ff82f1471f5bf80662c917a11bda2fcd957583"
+    },
+    "src/kml/engine/kml_file.cc": {
+      "bytes": 8548,
+      "sha256": "bf700fafc3395752fce1454175dea475d3332a65264a430f3c2f239d24129736"
+    },
+    "src/kml/regionator/regionator_util.cc": {
+      "bytes": 6712,
+      "sha256": "4165580ce1a40cc63b19f463d5fee983cdb21cc3f70199ffb5ecd00d93d93f69"
+    },
+    "src/kml/regionator/regionator_util.cc.orig": null,
+    "src/kml/xsd/xsd_element.cc": {
+      "bytes": 2854,
+      "sha256": "fde6c35c8c435cab19934e3df5320cff204542d307ee6e8eaa355f6527cb778c"
+    },
+    "src/kml/xsd/xsd_element.cc.orig": null,
+    "src/kml/xsd/xsd_element.h": {
+      "bytes": 4042,
+      "sha256": "af7772308383a7413c371b0a6dcc5bde5297566ddb1b7c62b995fac51bf316f8"
+    },
+    "src/kml/xsd/xsd_element.h.orig": null,
+    "third_party/Makefile.am": {
+      "bytes": 6812,
+      "sha256": "fe31be8825cd0e18ac544932afb691e09c46865277135043153d75f2e96cca5e"
+    },
+    "third_party/boost_1_34_1/boost/config/compiler/visualc.hpp": {
+      "bytes": 5765,
+      "sha256": "7e8e84291e7679b3b9804bc10025653afef5ddb39088002256a5564f6eab6686"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/ioapi.c": {
+      "bytes": 3694,
+      "sha256": "9938411830837cd4fb2f728a5dbe5c11e7feff224d7549fd59bb64d16658a6f0"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/ioapi.h": {
+      "bytes": 2768,
+      "sha256": "ad4c8a7e6defa944a361404979fe7f518c22f27b085767546e755446141b5c3d"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/iowin32.c": {
+      "bytes": 6411,
+      "sha256": "7030913367f49427f3ab2731a82ada233d67619db148045e5832b2df78f7739a"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/unzip.c": {
+      "bytes": 53118,
+      "sha256": "c32ed31756848225af639d745e8995c5159461d7926d5e4ddfaefe7e11fbded0"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/unzip.h": {
+      "bytes": 13985,
+      "sha256": "edfd99271905d91001da5b0b719a58f5c33207a50041b53d4fc15edc4f6e3777"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zip.c": {
+      "bytes": 37361,
+      "sha256": "ad2ad187b4cac452a68150e332751f980bebc6da7da37cd597ed66ee0cd68883"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zip.h": {
+      "bytes": 8847,
+      "sha256": "01902df758e723672c6a68b33f1c6aacc036062a05484c4cffd46dd482935961"
+    },
+    "third_party/zlib-1.2.3/contrib/minizip/zlibextern.h": null
+  },
+  "configure_summary": {
+    "LIBZ support": "external",
+    "LIBLZMA support": "no",
+    "ZSTD support": "no",
+    "cryptopp support": "no",
+    "crypto/openssl support": "no",
+    "GRASS support": "no",
+    "CFITSIO support": "no",
+    "PCRaster support": "internal",
+    "LIBPNG support": "internal",
+    "DDS support": "no",
+    "GTA support": "no",
+    "LIBTIFF support": "internal (BigTIFF=yes)",
+    "LIBGEOTIFF support": "internal",
+    "LIBJPEG support": "internal",
+    "12 bit JPEG": "no",
+    "12 bit JPEG-in-TIFF": "no",
+    "LIBGIF support": "internal",
+    "JPEG-Lossless/CharLS": "no",
+    "OGDI support": "no",
+    "HDF4 support": "no",
+    "HDF5 support": "no",
+    "Kea support": "no",
+    "NetCDF support": "no",
+    "Kakadu support": "no",
+    "JasPer support": "no",
+    "OpenJPEG support": "no",
+    "ECW support": "no",
+    "MrSID support": "no",
+    "MrSID/MG4 Lidar support": "no",
+    "JP2Lura support": "no",
+    "MSG support": "no",
+    "GRIB support": "yes",
+    "EPSILON support": "no",
+    "WebP support": "no",
+    "cURL support (wms/wcs/...)": "no",
+    "PostgreSQL support": "no",
+    "MRF support": "yes",
+    "LERC support": "yes",
+    "MySQL support": "no",
+    "Ingres support": "no",
+    "Xerces-C support": "no",
+    "NAS support": "no",
+    "Expat support": "no",
+    "libxml2 support": "no",
+    "Google libkml support": "no",
+    "ODBC support": "no",
+    "PGeo support": "no",
+    "FGDB support": "no",
+    "MDB support": "no",
+    "PCIDSK support": "internal",
+    "OCI support": "no",
+    "GEORASTER support": "no",
+    "SDE support": "no",
+    "Rasdaman support": "no",
+    "DODS support": "no",
+    "SQLite support": "no",
+    "PCRE support": "no",
+    "SpatiaLite support": "no",
+    "RasterLite2 support": "no",
+    "Teigha (DWG and DGNv8)": "no",
+    "INFORMIX DataBlade support": "no",
+    "GEOS support": "no",
+    "SFCGAL support": "no",
+    "QHull support": "internal",
+    "Poppler support": "no",
+    "Podofo support": "no",
+    "PDFium support": "no",
+    "OpenCL support": "no",
+    "Armadillo support": "no",
+    "FreeXL support": "no",
+    "SOSI support": "no",
+    "MongoDB support": "no",
+    "HDFS support": "no"
+  },
+  "normalizer_sha256": "54375a0b2252b05cfdaf9ad90e8ddf62922268c2de36dd0013cfc2e30a33cfc9",
+  "kernel_large_input": {
+    "path": "formats/wmm/EGM9615.h",
+    "bytes": 8416818,
+    "sha256": "cdea160e717847703dc17d7d2d7868499aa3aee22dc701537536fbf1f11bc834"
+  },
+  "kernel_added_tus": {
+    "util/MemBuffer.cpp": {
+      "sha256": "e723cf92536e9c3d3299131e5b6ba11feda92e918080ce77d244e47607f0caa1",
+      "bytes": 1033
+    },
+    "thread/Monitor.cpp": {
+      "sha256": "d8b451cbd9c0fd580509d62cb98d1392bfaf813f94e2415ea97eb76b6acbcaaf",
+      "bytes": 1015
+    },
+    "thread/Cond.cpp": {
+      "sha256": "908e5534f8e97ecc99c086d7a487981737ba09f99f4760ebc606dad2d5b1836d",
+      "bytes": 896
+    }
+  },
+  "gdal_stage_seconds": 2400
+}

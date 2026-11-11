@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "archives": {
+    "libiconv": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libiconv.tar.gz",
+      "sha256": "ccf536620a45458d26ba83887a983b96827001e92a13847b45e4925cc8913178",
+      "bytes": 5264188,
+      "root": "libiconv-1.15",
+      "members": 946,
+      "regular_files": 913,
+      "expanded_bytes": 19708717
+    },
+    "libxml2": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libxml2.tar.xz",
+      "sha256": "0805d7c180cf09caad71666c7a458a74f041561a532902454da5047d83948138",
+      "bytes": 2581308,
+      "root": "libxml2-2.13.3",
+      "members": 4149,
+      "regular_files": 4051,
+      "expanded_bytes": 28786264
+    },
+    "libspatialite": {
+      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libspatialite.tar.gz",
+      "sha256": "88900030a4762904a7880273f292e5e8ca6b15b7c6c3fb88ffa9e67ee8a5a499",
+      "bytes": 4440660,
+      "root": "libspatialite-4.3.0a",
+      "members": 4887,
+      "regular_files": 4842,
+      "expanded_bytes": 29699825
+    }
+  },
+  "patches": {
+    "libiconv": {
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libiconv-pgsc.patch",
+      "bytes": 8241,
+      "sha256": "8ad21428e491349f33ab346745b81c0c78d39d7e53577129ba6becc8a6f2610b",
+      "normalization": {},
+      "files": {
+        "Makefile.in": {
+          "before": "ea779258de2ba20171598f7bc6060e41009492de4c0535a63919d8eda7ac14ca",
+          "after": "1933e773876555cf753b985beeacfdc87cc585ce3948bf85361ec98e430c898a"
+        },
+        "configure": {
+          "before": "b1ac352d10b02c57a22942205347e44faf087d1f895c6acd4d8e4768030f9d78",
+          "after": "f6a7b068739735d1668327fe2caba743762b806da8b703051ee9ee4ee37db2ce"
+        },
+        "preload/configure": {
+          "before": "8971b20e4ee41db2e8cc2ae28e810ba4e4db8c8091e2c0065e4e3a5f24ea45cb",
+          "after": "430c4f23ff0721bb339d91f92709cf217ef5131dcd781d9dd2c318d772fb1f79"
+        },
+        "libcharset/configure": {
+          "before": "23617177552404d718469b719c31105865fed4d48185280fdfeb00aa81f1acba",
+          "after": "7ddf06a7eb85d311d7bc73f29400c9701ced87c3cc1d8d6db608a6fb19fa76cc"
+        }
+      }
+    },
+    "libspatialite": {
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libspatialite-pgsc.patch",
+      "bytes": 22643,
+      "sha256": "44b02d5e1506d93036b1823ac4b257a2fc642d80a7b9d9b2248dae5b68f068cb",
+      "normalization": {
+        "old_context": " \t| d10v | d30v | dlx | dsp16xx | dvp \\\n",
+        "new_context": " \t| d10v | d30v | dlx | dsp16xx \\\n",
+        "sha256": "2bd6c395c2d9adab613d04819081c978fa57d263b3258804c64c35b19a91a99a",
+        "bytes": 22637
+      },
+      "files": {
+        "nmake.opt": {
+          "before": "4aaec219f2d70f8908293acdcf09bdb24e1690befb44ccfd9a89034872f22975",
+          "after": "9220828983681a767a864724c8d4b62fb67af09d8aa2db9cc46d203ecfe95cda"
+        },
+        "configure": {
+          "before": "d6996cf29e4a3163d8ed1e1f091e675c1b3032c74aaa438da87e9a557bfda521",
+          "after": "823cb89571a6f9aff9e8f1265cb61550765b0766664e04a48caca0df5e8f162b"
+        },
+        "config.sub": {
+          "before": "4b046cb76957a1a683f30014263c0672b02d8425086a721e6ef25aede80ff861",
+          "after": "78a05606b48e92e319eaf36c3d94f8ab446643441ab14d7b59607880fd26ed8b"
+        },
+        "config-msvc.h": {
+          "before": "07b5fa85ae2df044cb184ac68f26669fd9da3c3c79082acedf3d38c4c54376a3",
+          "after": "90b34ccad20342342c5ade0c04143164ed72a5298afb2a633b32f7f4567a7e02"
+        },
+        "makefile.vc": {
+          "before": "3aaadb5e3135997a8accc0877d7c96c9fd700f84cb95f94e44238bc41f75566a",
+          "after": "4855741e941b5ccefd223c26d14e0f53cf672918ad108e60c5fcf14f2c8ba9a9"
+        },
+        "src/Makefile.in": {
+          "before": "879c10636e1806f9188121e0206587edc9984bc963e5123c5ab9a3f66583140f",
+          "after": "b95c035d605846c9c33e6a76266aa7374bf0a0c18d228e5f03e7ea86e61bf098"
+        },
+        "src/gaiageo/gg_extras.c": {
+          "before": "925842a8f6c0561c2ae83334db5470b3fb4eadb9387ac4d382ea9510bc571b47",
+          "after": "f7cc362f9b2a171d68626a7b4818958e3a13e4c3f6204722e24e7869ea65df58"
+        },
+        "src/gaiageo/gg_shape.c": {
+          "before": "78d423d79aa17ad143c3ac4f240dfc261372d775b1536b870f7c83aeca5ff781",
+          "after": "fcb68a8f52c1b972aec577293dae248ef1f0caca07d5e6f1faad7b45249e87db"
+        },
+        "src/gaiaaux/gg_utf8.c": {
+          "before": "868d40c7593a7821d02b7bdd8db4e10a2f5621d82e7f2ca27d9fcd8bd36c867d",
+          "after": "7d20f72736248f9efc84d9132021c031e8480c317ce1ebea623569ae2a46378e"
+        },
+        "src/spatialite/spatialite.c": {
+          "before": "77c906bd579583a61972b495339d4ee2fb2a06c9b43336e73d77948bd517bed8",
+          "after": "ab3e77c6c72fe53dda2c4da858e54e0a5db28dde677b760d0262e1fd93b9f677"
+        },
+        "src/wfs/wfs_in.c": {
+          "before": "05842a2aa4555d2466703a92ef3d74db6b5bfca544aa7a0fbb605e8a52b5a153",
+          "after": "38a4c3340a9232ab0f68d5ceca781fe07ee28ce7450ab94ab28e73c12d9fa307"
+        }
+      }
+    }
+  },
+  "licenses": {
+    "libiconv-1.15/COPYING.LIB": "56bdea73b6145ef6ac5259b3da390b981d840c24cb03b8e1cbc678de7ecfa18d",
+    "libiconv-1.15/COPYING": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "libxml2-2.13.3/Copyright": "c99aae1afe013e50b8b3701e089222b351258043c3025b64053a233fd25b4be7",
+    "libspatialite-4.3.0a/COPYING": "b81965482914858383484d7e63b5de1d0c4647fa7f527e78d4499e4a7b76aab5"
+  },
+  "dependencies": {
+    "proj": {
+      "producer": "native-proj",
+      "profile": "historical-proj-native",
+      "version": "4.9.1"
+    },
+    "geos": {
+      "producer": "native-geos",
+      "profile": "historical-geos-native",
+      "version": "3.4.3"
+    },
+    "sqlcipher": {
+      "producer": "native-sqlcipher",
+      "sqlite_version": "3.45.3",
+      "sqlcipher_version": "4.5.7",
+      "openssl_version": "3.5.9"
+    },
+    "zlib": {
+      "producer": "native-assimp",
+      "profile": "public-assimp-native",
+      "actual_core_version": "4.1.0",
+      "zlib_version": "1.3.1"
+    }
+  },
+  "tools": {
+    "gcc": "14.2.0",
+    "make": "4.4.1",
+    "binutils": "2.44"
+  }
+}

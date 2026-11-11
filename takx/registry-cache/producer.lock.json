@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "image": "docker.io/library/gcc@sha256:82549aa8f90ada3236a8be70c74543132a76662ef33f0c3271ed802b81584a82",
+  "image_config": "sha256:b68c134517a27e91bb2568eb4b46073dfb48d9aa740423ec13b0da6442d643fb",
+  "image_compressed_bytes": 508823790,
+  "cmake": {
+    "url": "https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz",
+    "bytes": 55010959,
+    "sha256": "5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf",
+    "version": "3.31.6"
+  },
+  "source": {
+    "repository": "https://github.com/TAK-Product-Center/atak-civ",
+    "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "tree": "cdb45ced759d4f6bf697cb3885830bfc47ec6996",
+    "files": 984,
+    "bytes": 84642797,
+    "version": "1.5.7",
+    "patches": []
+  }
+}

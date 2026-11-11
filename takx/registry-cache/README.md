@@ -1,9 +1,11 @@
 # Experimental local Draco cache
 
-Package a verified Draco 1.5.7 producer into a small relocatable component. This
-is the local foundation for [#482](https://github.com/jonathanagustin/uds-takserver/issues/482).
-It does **not** publish to a registry, authenticate a publisher or qualify a
-complete SDK. Existing native profiles and CI defaults remain unchanged.
+Local commands package a verified Draco 1.5.7 producer into a small relocatable
+component, the foundation for [#482](https://github.com/jonathanagustin/uds-takserver/issues/482).
+These commands do **not** publish to a registry, authenticate a publisher or
+qualify a complete SDK. Existing native profiles remain unchanged. The separate v2 manual
+workflow below adds an optional trusted publisher; ordinary PR CI does not build
+or publish native components.
 
 The payload contains the real static archive, 201 installed Draco headers, four
 upstream CMake package files and the upstream license. It excludes executables,
@@ -41,8 +43,8 @@ current observations cannot replace historical evidence. The contract therefore
 refuses registry-qualified or SDK-accepted capsules. A future registry consumer
 needs complete target/tool/environment identity, immutable dependency digests,
 verified protected-workflow provenance and a separate trusted writer policy.
-Untrusted PRs must remain read-only. No signing grant or workflow token changes
-are introduced here.
+Untrusted PRs must remain read-only. The local commands introduce no signing
+grants or workflow token changes.
 
 ## Local relocation controls
 
@@ -63,3 +65,39 @@ or a registry push/pull test. It does not rebuild Draco.
 
 Run offline guards with
 `python3 -B -m unittest discover -s takx/registry-cache -p 'test_*.py' -v`.
+
+## Fresh registry producer (v2)
+
+`native-cache.yaml` is a separate manual workflow, restricted to main. Publishing
+is off by default. Its first job builds genuine Draco from the pinned official
+Git tree inside a pinned GCC image with network access disabled and no job
+credentials mounted. Before and after compilation it binds actual compiler
+backends, binutils, build tools, source and provider identities. It records the
+complete archive closure and real fixture/roundtrip/PIC controls.
+
+```sh
+python3 takx/registry-cache/producer.py build \
+  --source /official/pinned-checkout --output /new/fresh-producer \
+  --cache /verified/tool-cache
+```
+
+The fresh v2 schema and `registry-v2-*` key never upgrade old local receipts.
+Only the dependent publisher job receives package/signing grants. It stages an
+immutable OCI subject, signs publisher provenance and explicit native
+qualification, verifies both against the exact repository/workflow/main/source,
+and reads the subject back without registry credentials. Two new prefix
+consumers must pass before the key tag is promoted. A different subject for an
+existing key fails closed. No PR or scheduled writer is introduced.
+
+The reader requires an explicitly approved producer source SHA; it does not
+trust a source revision merely because unsigned metadata names it. A read-only
+PR consumer can use that reader later; no automatic PR restore is wired here.
+No authenticated registry specimen has been qualified yet. The first hosted
+experiment remains required before #482 can close.
+
+The workflow caps build/publication jobs at 12/8 minutes. Local producers refuse
+a small Docker `vfs` workspace before pulling: the pinned eight-layer GCC image
+exhausted a workspace with 7 GiB free before a container could execute. At least
+12 GiB free is required with `vfs` (3 GiB for other drivers). The owned image was
+removed after that failed feasibility check; no fresh native build was claimed.
+Source-tree validation, pinned CMake acquisition and offline guards passed.

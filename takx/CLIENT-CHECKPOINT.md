@@ -21,15 +21,16 @@ client's required versions.
 
 ## Native component checkpoints
 
-The following opt-in source recipes are merged and have passed local Linux amd64
+The following opt-in source recipes have passed local Linux amd64
 component checks. Ordinary server builds do not run them.
 
-| Component | Tested scope | Merged recipe |
+| Component | Tested scope | Source recipe |
 | --- | --- | --- |
 | Draco 1.5.7 | Real codec round-trip, truncated-stream rejection and PIC linking | [Source profile](native-deps/README.md), [#438](https://github.com/jonathanagustin/uds-takserver/pull/438) |
 | libLAS, LASzip and Boost | C/C++ LAS/LAZ data, seek/reset, error-status and PIC checks | [Source profile](native-las/README.md), [#443](https://github.com/jonathanagustin/uds-takserver/pull/443) |
 | Modified Assimp | C/C++ and Java/JNI scene data; zero JNI warnings on valid scenes | [Source profile](native-assimp/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
 | Historical PROJ 4.9.1 | Real forward/inverse coordinates and strict PIC linking | [Source profile](native-proj/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
+| SQLCipher 4.5.7 / SQLite 3.45.3 | Source-built Tcl 8.6.18 and OpenSSL 3.5.9; encrypted create/reopen, exact data, wrong-key rejection and strict PIC linking | [Source profile](native-sqlcipher/README.md) |
 
 The Assimp archive is named `4.0.1-mod`, while its modified library reports
 `4.1.0`; neither identity is relabeled. Assimp's positive checks do not establish
@@ -37,9 +38,9 @@ JNI failure-path behavior. The LAS profile documents an uncompressed truncated
 input limitation. Historical versions have not received complete security or
 modern API acceptance.
 
-A separate [SQLCipher checkpoint](https://github.com/jonathanagustin/uds-takserver/issues/372)
-records a genuine local encrypted-database component proof; a fresh reusable
-repository recipe is not yet proven or merged. These component results do not
+The SQLCipher profile passed a fresh end-to-end source build and independent
+C controls. Historical SQLCipher/SQLite security acceptance remains open.
+These component results do not
 complete GDAL/Spatialite/Cesium integration, target-image ABI, native Kernel/JNI,
 rendering or either TAKX client. Live enrollment and server interoperability
 remain unverified.

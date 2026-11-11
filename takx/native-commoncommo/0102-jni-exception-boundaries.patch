@@ -1,0 +1,128 @@
+--- a/jni/native/jcommo.cpp
++++ b/jni/native/jcommo.cpp
+@@ -26,25 +26,40 @@
+                jglobalobjectref *nativeToJObjMap,
+                int enumIdx, int enumVal)
+ {
+-    if (enumIdx >= numLevels)
++    if (enumIdx < 0 || enumIdx >= numLevels || env->ExceptionCheck())
+         return false;
+-    
++
++    // Only release references after the preceding JNI result was validated.
+     jobject enumObj = env->GetObjectArrayElement(jenumValues, (jsize)enumIdx);
++    if (env->ExceptionCheck() || !enumObj)
++        return false;
+     jstring jname = (jstring)env->CallObjectMethod(enumObj, method_enumName);
++    if (env->ExceptionCheck() || !jname) {
++        env->DeleteLocalRef(enumObj);
++        return false;
++    }
+     jint jval = env->CallIntMethod(enumObj, method_enumVal);
++    if (env->ExceptionCheck()) {
++        env->DeleteLocalRef(jname);
++        env->DeleteLocalRef(enumObj);
++        return false;
++    }
+     const char *name = env->GetStringUTFChars(jname, NULL);
+-    if (!name)
++    if (!name) {
++        env->DeleteLocalRef(jname);
++        env->DeleteLocalRef(enumObj);
+         return false;
+-    
++    }
++
+     bool ret = jval == enumVal && strcmp(name, enumName) == 0;
+     env->ReleaseStringUTFChars(jname, name);
+-    
+     if (ret && nativeToJObjMap) {
+         nativeToJObjMap[enumVal] = env->NewGlobalRef(enumObj);
+         if (!nativeToJObjMap[enumVal])
+-            return false;
+-    }
+-    
++            ret = false;
++    }
++    env->DeleteLocalRef(jname);
++    env->DeleteLocalRef(enumObj);
+     return ret;
+ }
+ 
+@@ -85,6 +100,9 @@
+     JNIEnv *env = NULL;
+     LocalJNIEnv localEnv(&env);
+     if (!env)
++        return;
++    // Never clear or operate under an exception already pending on the caller.
++    if (env->ExceptionCheck())
+         return;
+     
+     jobject jlevel = nativeLevelsToJava[level];
+@@ -131,6 +149,10 @@
+     }
+ 
+     env->CallVoidMethod(jlogger, jmethod_log, jlevel, jtype, jmessage, jdetail);
++    // Logging is a best-effort callback boundary, like the async CoT listener.
++    // Do not leave a user logger exception pending on a native worker/caller.
++    if (env->ExceptionCheck())
++        env->ExceptionClear();
+ }
+ 
+ bool CommoLoggerJNI::reflectionInit(JNIEnv *env)
+@@ -2352,6 +2374,8 @@
+     ret = ret && CHECK_ADDRMODE(0, PHYS_ADDR);
+     ret = ret && CHECK_ADDRMODE(1, NAME);
+ #undef CHECK_ADDRMODE
++    if (!ret)
++        goto cleanup;
+ 
+     // Check mapping of native streaming transport to java equivalent
+     LOOKUP_CLASS(class_streamingTransport, COMMO_PACKAGE "StreamingTransport", true);
+@@ -2382,18 +2406,18 @@
+     ret = ret && CHECK_TRANSPORT(2, QUIC);
+ #undef CHECK_TRANSPORT
+ 
+-    ret = ret && CommoLoggerJNI::reflectionInit(env);
+-    ret = ret && MissionPackageIOJNI::reflectionInit(env);
+-    ret = ret && SimpleFileIOJNI::reflectionInit(env);
+-    ret = ret && EnrollmentIOJNI::reflectionInit(env);
+-    ret = ret && CloudIOJNI::reflectionInit(env);
+-    ret = ret && InterfaceStatusListenerJNI::reflectionInit(env);
+-    ret = ret && ContactListenerJNI::reflectionInit(env);
+-    ret = ret && CoTListenerJNI::reflectionInit(env);
+-    ret = ret && GenericDataListenerJNI::reflectionInit(env);
+-    ret = ret && CoTFailListenerJNI::reflectionInit(env);
+-    ret = ret && CoTDetailExtenderJNI::reflectionInit(env);
+-    ret = ret && JNIFileIOProvider::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && CommoLoggerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && MissionPackageIOJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && SimpleFileIOJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && EnrollmentIOJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && CloudIOJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && InterfaceStatusListenerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && ContactListenerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && CoTListenerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && GenericDataListenerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && CoTFailListenerJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && CoTDetailExtenderJNI::reflectionInit(env);
++    ret = ret && !env->ExceptionCheck() && JNIFileIOProvider::reflectionInit(env);
+ 
+ cleanup:
+     return ret;
+--- a/jni/native/commojni_common.cpp
++++ b/jni/native/commojni_common.cpp
+@@ -37,7 +37,12 @@
+     if (vm->GetEnv(&env_vp, JNI_VERSION_1_6) != JNI_OK)
+         return JNI_ERR;
+         
+-    if (!CommoJNI::reflectionInit((JNIEnv *)env_vp))
++    JNIEnv *env = (JNIEnv *)env_vp;
++    if (env->ExceptionCheck())
++        return JNI_ERR;
++    if (!CommoJNI::reflectionInit(env))
++        return JNI_ERR;
++    if (env->ExceptionCheck())
+         return JNI_ERR;
+ 
+     return JNI_VERSION_1_6;

@@ -19,6 +19,7 @@ for both client versions and their remaining API differences.
 | Graphics prerequisite | Source-built GLES dispatch rendered an ES 3 pixel on host Mesa | Kernel renderer, target platform and hardware paths |
 | GDAL Java JNI | Five real wrappers share one GDAL engine; Java raster, coordinates, interrupt and error checks passed | Full Kernel integration and supported-format coverage |
 | JNI build headers | 118 generated headers cover all 109 names required by pinned native sources | Compile and load the complete Kernel JNI target |
+| CommonCommo | Source-built Core plus corrected JNI passed lifecycle, routing, TLS identity and throwing-logger controls with zero JNI warnings | Joined Kernel runtime, QUIC peer and TAK Server interoperability |
 | Combined runtime | Two isolated crypto groups passed both load orders and encryption checks | Actual Kernel/CommonCommo loading, routing and QUIC transport |
 | TAKX client | Pending | Compilation, startup, rendering and server interoperability |
 
@@ -35,7 +36,9 @@ opt-in; ordinary CI runs offline guards.
 These results do not yet provide a complete Java SDK or desktop installer.
 The legacy Kernel database check does not validate modern Database2 encrypted
 opening. The graphics result uses the existing host Mesa stack; the crypto
-experiment does not complete a QUIC handshake or load CommonCommo.
+experiment does not complete a QUIC handshake or join Kernel with CommonCommo.
+The [CommonCommo profile](native-commoncommo/README.md) records its separate
+functional controls and the verified JNI-only continuation.
 Track the complete work in [#477](https://github.com/jonathanagustin/uds-takserver/issues/477).
 
 ## SDK acceptance

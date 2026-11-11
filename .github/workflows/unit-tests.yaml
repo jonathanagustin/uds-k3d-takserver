@@ -158,6 +158,7 @@ jobs:
           python3 -B -m unittest discover -s takx/native-cesium -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-kml -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-curl -p 'test_*.py' -v
+          python3 -B -m unittest discover -s takx/native-commoncommo -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/sqlite-jdbc -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/native-sqlcipher -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-geos -p 'test_build.py' -v

@@ -1,0 +1,2 @@
+# Preserve exact upstream context in the checksum-pinned source patch.
+0102-jni-exception-boundaries.patch -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol

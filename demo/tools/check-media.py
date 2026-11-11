@@ -43,7 +43,16 @@ def probe_video(path, width, height, minimum, maximum):
     if (stream['codec_name'] != 'h264' or stream['width'] != width or stream['height'] != height or
             stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != '30/1' or
             not minimum <= float(video['format']['duration']) <= maximum):
-        raise ValueError('media output differs: ' + path.name)
+        # Only bounded fields requested from our generated clip are diagnostic.
+        # Never emit ffprobe tags, the full payload, stderr or environment.
+        fields = ('codec_name', 'width', 'height', 'pix_fmt', 'r_frame_rate')
+        observed = {name:str(stream.get(name))[:64] for name in fields}
+        observed['duration'] = str(video['format'].get('duration'))[:64]
+        expected = {'codec_name':'h264', 'width':width, 'height':height,
+                    'pix_fmt':'yuv420p', 'r_frame_rate':'30/1',
+                    'duration_range':[minimum, maximum]}
+        details = json.dumps({'observed':observed, 'expected':expected}, sort_keys=True)
+        raise ValueError('media output differs: ' + path.name[:80] + '; ' + details)
     return video
 
 

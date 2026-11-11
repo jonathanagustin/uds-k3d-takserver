@@ -135,8 +135,27 @@ class RecorderTests(unittest.TestCase):
             else:
                 value['streams'][0][field] = bad
             with self.subTest(field=field), patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(value)):
-                with self.assertRaisesRegex(ValueError, 'media output differs'):
+                with self.assertRaisesRegex(ValueError, 'media output differs') as failed:
                     MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6)
+                diagnostic = str(failed.exception)
+                self.assertIn('"observed"', diagnostic)
+                self.assertIn('"expected"', diagnostic)
+                self.assertIn(json.dumps(str(bad)), diagnostic)
+
+    def test_video_failure_diagnostic_is_bounded_and_excludes_unrequested_metadata(self):
+        video = {'streams':[{'codec_name':'x'*10000, 'width':1632, 'height':840,
+                             'pix_fmt':'yuv420p', 'r_frame_rate':'30/1',
+                             'tags':{'comment':'PRIVATE_UNREQUESTED_TAG'}}],
+                 'format':{'duration':'2.5', 'tags':{'comment':'PRIVATE_FORMAT_TAG'}}}
+        with patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(video)):
+            with self.assertRaises(ValueError) as failed:
+                MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6)
+        diagnostic = str(failed.exception)
+        self.assertLess(len(diagnostic.encode()), 8192)
+        self.assertNotIn('PRIVATE_UNREQUESTED_TAG', diagnostic)
+        self.assertNotIn('PRIVATE_FORMAT_TAG', diagnostic)
+        self.assertNotIn('x'*65, diagnostic)
+        self.assertIn('"duration_range": [1.5, 6]', diagnostic)
 
     def test_exported_recorder_preserves_media_python_and_venv_shebang(self):
         with tempfile.TemporaryDirectory() as directory:

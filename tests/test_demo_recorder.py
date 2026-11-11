@@ -142,6 +142,24 @@ class RecorderTests(unittest.TestCase):
                 self.assertIn('"expected"', diagnostic)
                 self.assertIn(json.dumps(str(bad)), diagnostic)
 
+    def test_raw_vhs_and_normalized_delivery_keep_separate_exact_frame_rates(self):
+        for stage, expected_rate in [('raw VHS','25/1'), ('normalized delivery','30/1')]:
+            for observed_rate in ('25/1','30/1','24/1'):
+                video = {'streams':[{'codec_name':'h264', 'width':1632, 'height':840,
+                                     'pix_fmt':'yuv420p', 'r_frame_rate':observed_rate}],
+                         'format':{'duration':'2.5'}}
+                options = {'frame_rate':expected_rate} if stage == 'raw VHS' else {}
+                with self.subTest(stage=stage, observed=observed_rate), \
+                        patch.object(MEDIA_CHECK.subprocess, 'check_output', return_value=json.dumps(video)):
+                    if observed_rate == expected_rate:
+                        self.assertEqual(MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6,**options), video)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'media output differs') as failed:
+                            MEDIA_CHECK.probe_video(Path('fixture.mp4'),1632,840,1.5,6,**options)
+                        details = json.loads(str(failed.exception).split('; ',1)[1])
+                        self.assertEqual(details['expected']['r_frame_rate'], expected_rate)
+                        self.assertEqual(details['observed']['r_frame_rate'], observed_rate)
+
     def test_video_failure_diagnostic_is_bounded_and_excludes_unrequested_metadata(self):
         video = {'streams':[{'codec_name':'x'*10000, 'width':1632, 'height':840,
                              'pix_fmt':'yuv420p', 'r_frame_rate':'30/1',

@@ -72,8 +72,11 @@ branded window frame and caption filter. It also records a short harmless comman
 with VHS, using the terminal chapters' settings. The check requires the recorded
 command to exit successfully and validates both videos with FFprobe. It joins the
 clips through the production crossfade code and renders a synthetic screenshot
-through `style.py still`. Videos must use H.264, 30 fps and yuv420p; framed clips
-and the joined output must be 1920×1080.
+through `style.py still`. Videos must use H.264 and yuv420p. The pinned VHS encoder
+places its terminal frames over a `lavfi` background stream with FFmpeg's default
+rate, producing a 25 fps raw recording. The existing assembly sizing filter applies `fps=30`
+before framing. The check requires exactly 25 fps from raw VHS and exactly
+30 fps from the framed and joined videos; those outputs must be 1920×1080.
 
 The preflight runs on pull requests and before a manual deployment. A successful
 check covers the recorder and short media path. Cluster behavior, browser

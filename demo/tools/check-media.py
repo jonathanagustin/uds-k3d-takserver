@@ -34,14 +34,14 @@ def check_terminal_dependencies():
     return {'ttyd':ttyd,'vhs':vhs,'vhs_dependency_check':'passed before EOF rejection'}
 
 
-def probe_video(path, width, height, minimum, maximum):
+def probe_video(path, width, height, minimum, maximum, frame_rate="30/1"):
     result = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
         '-show_entries', 'stream=codec_name,width,height,pix_fmt,r_frame_rate:format=duration',
         '-of', 'json', str(path)], timeout=10)
     video = json.loads(result)
     stream = video['streams'][0]
     if (stream['codec_name'] != 'h264' or stream['width'] != width or stream['height'] != height or
-            stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != '30/1' or
+            stream['pix_fmt'] != 'yuv420p' or stream['r_frame_rate'] != frame_rate or
             not minimum <= float(video['format']['duration']) <= maximum):
         # Only bounded fields requested from our generated clip are diagnostic.
         # Never emit ffprobe tags, the full payload, stderr or environment.
@@ -49,7 +49,7 @@ def probe_video(path, width, height, minimum, maximum):
         observed = {name:str(stream.get(name))[:64] for name in fields}
         observed['duration'] = str(video['format'].get('duration'))[:64]
         expected = {'codec_name':'h264', 'width':width, 'height':height,
-                    'pix_fmt':'yuv420p', 'r_frame_rate':'30/1',
+                    'pix_fmt':'yuv420p', 'r_frame_rate':frame_rate,
                     'duration_range':[minimum, maximum]}
         details = json.dumps({'observed':observed, 'expected':expected}, sort_keys=True)
         raise ValueError('media output differs: ' + path.name[:80] + '; ' + details)
@@ -129,7 +129,10 @@ def check(output):
             raise ValueError('styled still dimensions differ')
     video = probe_video(framed, 1920, 1080, 3, 5)
     vhs_tape, vhs_video = record_vhs(output, renderer.run_media)
-    vhs = probe_video(vhs_video, style.CONTENT_W, style.CONTENT_H, 1.5, 6)
+    # Pinned VHS uses a default-rate lavfi margin background in the MP4
+    # overlay; the hosted raw output is exactly 25 fps. Production sizing below
+    # explicitly normalizes to 30 fps before either framed/joined contract.
+    vhs = probe_video(vhs_video, style.CONTENT_W, style.CONTENT_H, 1.5, 6, frame_rate='25/1')
     vhs_base, vhs_framed = output/'vhs-base.mp4', output/'vhs-framed.mp4'
     renderer.run_media(['ffmpeg', '-v', 'error', '-y', '-i', str(vhs_video), '-an',
         '-vf', f'scale={size}:force_original_aspect_ratio=decrease:flags=lanczos,pad={size}:(ow-iw)/2:(oh-ih)/2:color={style.BG},fps={style.FPS},format=yuv420p',

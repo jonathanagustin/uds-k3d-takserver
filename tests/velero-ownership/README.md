@@ -241,3 +241,22 @@ Zarf package and a 1.8-KiB OCI-layout bundle, verifying relative local-package
 resolution, actual archive names and the OCI manifest digest. It pulled no
 images/packages and deployed nothing. It does not validate the large Core
 candidate's admission, SSA ownership behavior or actual restore paths.
+
+
+### Paused schedules in the disposable candidate
+
+Core 1.16 enables the `udsbackup` schedule (`velero-udsbackup` in chart 12.2.1).
+Every experimental core/detach/clean candidate sets only
+`schedules.udsbackup.paused: true` before creating the backup server. This
+preserves its cron/template and prevents automatic work from racing the guarded
+manual acceptance. The default server/full bundle is unchanged. Existing or
+parent-path schedule overrides require review rather than replacement. The idle
+guard still refuses any unpaused, unknown pause value or terminating schedule;
+no schedules or backups are deleted and no live pause bypass is added.
+
+A real offline render can be repeated with the pinned Helm and verified official
+chart/Core values supplied as `STAGED_VELERO_CHART_ARCHIVE` and
+`STAGED_VELERO_CORE_VALUES` when running `tests.test_velero_handoff`. The test
+checks input hashes, the actual schedule name and `spec.paused: true` in all
+three variants, preserving every other rendered schedule field. This render is
+not live owner handoff or backup/restore acceptance.

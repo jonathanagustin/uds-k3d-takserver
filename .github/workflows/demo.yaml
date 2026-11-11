@@ -54,7 +54,7 @@ concurrency:
 env:
   VHS_VERSION: 0.12.1
   AGG_VERSION: 1.9.0
-  AGG_SHA256: f111e315cd71056b116302342553dd765b7297579ed511f111d0cedb442aeda6
+  AGG_SHA256: ddcbf6ca044c8ac3a434dcb9ee89fb9e3be87209982b7c2adb55f782e8f0f390
   # Inter for titles and captions (demo/style.py), from the upstream release.
   INTER_VERSION: "4.1"
   INTER_SHA256: 9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e
@@ -260,6 +260,18 @@ jobs:
           echo "${RUNNER_TEMP}/asciinema/bin" >> "${GITHUB_PATH}"
         shell: bash
 
+      - name: Check the pinned media pipeline before deployment
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          # The GNU 1.9.0 binary needs GLIBC_2.38; the static MUSL build supports Ubuntu 22.
+          curl --fail --silent --show-error --location --max-time 30 --max-filesize 17000000 \
+            -o "${RUNNER_TEMP}/agg" "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-musl"
+          echo "${AGG_SHA256}  ${RUNNER_TEMP}/agg" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/agg" /usr/local/bin/agg
+          python3 demo/tools/check-media.py --output "${RUNNER_TEMP}/demo-media-check"
+        shell: bash
+
       - name: Deploy UDS Core and TAK
         run: |
           set -euo pipefail
@@ -276,9 +288,6 @@ jobs:
       - name: Render the recorded deployment
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/agg "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-gnu"
-          echo "${AGG_SHA256}  /tmp/agg" | sha256sum -c -
-          sudo install -m 0755 /tmp/agg /usr/local/bin/agg
           # Long steps are sped up, then each holds on its last lines for
           # CAST_HOLD seconds so the result can be read.
           CAST_HOLD=5 python3 demo/render-cast.py demo/out/00-deploy.cast demo/out/00-deploy \

@@ -43,3 +43,26 @@ current package URI. Publication defaults stay in the renamed namespace.
 For a short edit of existing UI footage without deploying a cluster, use the
 [manual UI reel recipe](ui-reel/README.md). It retains historical source hashes
 and does not replace published media.
+
+## Check media tools before a deployment
+
+The workflow pins the official agg 1.9.0 **MUSL** binary by SHA-256. The GNU
+binary for that release requires GLIBC 2.38 and cannot run on Ubuntu 22's
+GLIBC 2.35. The same MUSL binary also supports the explicit Ubuntu 24 runner
+override.
+
+With the pinned agg, FFmpeg, Pillow, Inter and JetBrains Mono installed, run:
+
+```sh
+python3 demo/tools/check-media.py --output /new/media-preflight
+```
+
+This renders a synthetic cast through the real cast renderer, assembly sizing
+filter, branded window frame and caption filter, then checks a 3–5 second
+1920×1080 H.264/30 fps/yuv420p video. It also renders a synthetic screenshot
+through `style.py still`. The workflow runs this check before creating a cluster.
+It is toolchain evidence, not a recording or proof of a working deployment.
+
+Media-tool failures now reveal complete, redacted stderr. Each capture has a
+three-minute deadline and four-MiB output bounds; incomplete or oversized output
+is omitted in full, and the command remains failed.

@@ -8,6 +8,13 @@ Evaluate both pinned official TAKX 5.7 and 5.8 profiles, preferring 5.8 after fu
 
 The optional [desktop compatibility prototype](compat/README.md) supplies real bitmap/Canvas, font, Context/resource, utility, Unix metadata and SQLite behavior. Its checked-in runners compile the complete public Kernel port module and exercise focused consumers. The separate opt-in [public Kernel compiler recipe](kernel-java/README.md) reproduces the engine, port and annotation desktop Java profile with frozen input hashes and zero compiler errors. The explicit `--scope engine-shared` option also compiles all 231 shared sources; neither scope assembles a complete Kernel SDK or compiles either TAKX client. See the [client feasibility checkpoint](CLIENT-CHECKPOINT.md). Its default dependency profile addresses the [recorded direct-dependency advisories](kernel-java/DEPENDENCIES.md), with the historical baseline kept as an explicit option; it is compilation evidence, and complete client/runtime acceptance remains outstanding. This independently implemented slice is not the upstream AndroidPort artifact and is not installed by the server package.
 
+The opt-in [TAKX 5.7 full Client compiler recipe](client-compiler/README.md)
+replays the qualified 1,678-source compilation against explicit digest-verified
+complete Platform/aspect and project-profile prerequisites. Its local evidence
+contains zero compiler errors, 2,815 classes and one real EventBus index. The
+portable recipe performs no downloads, native work or client execution; full
+Gradle, assembled resources/modules, weaving and runtime gates remain open.
+
 Follow [SDK integration](SDK-INTEGRATION.md) for the native Kernel integration,
 full JNI runtime and client acceptance milestones.
 

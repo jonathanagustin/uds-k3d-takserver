@@ -1,8 +1,7 @@
 {
   "schema": 1,
-  "patch": "0200-takx-nasa-text-renderer.patch",
-  "patch_sha256": "d4188bfd5d14230dcd4a8d663d4f0a087c3fa4b395290125c9fe1b5115950876",
-  "patched_path": "Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java",
+  "patch": "project-interop-consumers.patch",
+  "patch_sha256": "a4d30df8cc80f23dc0b78e6bd878366c215c0ff39d39192c0cd41af2dbd45fe2",
   "nasa_revision": "9ccf6b8ed2ae452ef51e7b1739a7ffd4ef78a403",
   "profiles": {
     "5.8": {
@@ -108,6 +107,11 @@
           "path": "Platform/src/main/java/gov/takx/platform/ui/FontUtils.java",
           "sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace",
           "staged_sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/layers/mapsforge/AbstractMapsforgeTiledImageLayer.java",
+          "sha256": "c43135dfd647f51617743fb86918de68f7f5e9668de48d95e31b6480ae6b1504",
+          "staged_sha256": "f7e67a885d9aff1cde944e87aa5e0656c59740cd6c049c73f1e8ecbd68e8b209"
         }
       ]
     },
@@ -214,8 +218,17 @@
           "path": "Platform/src/main/java/gov/takx/platform/ui/FontUtils.java",
           "sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace",
           "staged_sha256": "c3d6cbf03c15955e86a5a8493879289c13c9dcf24d72aa25af43ffa72b86aace"
+        },
+        {
+          "path": "Client/src/main/java/gov/takx/core/globe/layers/mapsforge/AbstractMapsforgeTiledImageLayer.java",
+          "sha256": "c43135dfd647f51617743fb86918de68f7f5e9668de48d95e31b6480ae6b1504",
+          "staged_sha256": "f7e67a885d9aff1cde944e87aa5e0656c59740cd6c049c73f1e8ecbd68e8b209"
         }
       ]
     }
-  }
+  },
+  "patched_paths": [
+    "Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java",
+    "Client/src/main/java/gov/takx/core/globe/layers/mapsforge/AbstractMapsforgeTiledImageLayer.java"
+  ]
 }

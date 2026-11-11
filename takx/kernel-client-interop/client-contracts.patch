@@ -1,0 +1,287 @@
+--- a/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java
++++ b/takkernel/shared/src/main/java/gov/tak/api/cot/detail/RolesManager.java
+@@ -235,13 +235,32 @@
+ 
+     private Bitmap createIcon(String abbreviation, String baseIconURI, Context context)
+     {
++        return createIconFromAssets(abbreviation, baseIconURI, path -> context.getAssets().open(path));
++    }
++
++    /** Project asset-manager overload; fresh mutable icon, preserving the existing getIcon cache. */
++    public gov.tak.api.commons.graphics.Bitmap createIcon(String abbreviation, String baseIconURI,
++            gov.tak.api.commons.resources.IAssetManager assets)
++    {
++        Bitmap composed = createIconFromAssets(abbreviation, baseIconURI, assets);
++        if (composed == null) return null;
++        int width = composed.getWidth(), height = composed.getHeight();
++        int[] argb = new int[Math.multiplyExact(width, height)];
++        composed.getPixels(argb, 0, width, 0, 0, width, height);
++        return new gov.tak.api.commons.graphics.Bitmap(argb, 0, width, width, height);
++    }
++
++    private Bitmap createIconFromAssets(String abbreviation, String baseIconURI,
++            gov.tak.api.commons.resources.IAssetManager assets)
++    {
+         Bitmap bitmap = null;
+ 
+         try {
+ 
+-            InputStream in = context.getAssets().open(baseIconURI);
+-            bitmap = BitmapFactory.decodeStream(in);
+-            in.close();
++            try (InputStream in = assets.open(baseIconURI)) {
++                bitmap = BitmapFactory.decodeStream(in);
++            }
++
+         }
+         catch (Exception e)
+         {
+--- a/takkernel/shared/src/main/java/gov/tak/api/symbology/ISymbologyProvider.java
++++ b/takkernel/shared/src/main/java/gov/tak/api/symbology/ISymbologyProvider.java
+@@ -60,6 +60,9 @@
+          * If {@code 0}, a default size will be selected. Defaults to {@link 0}
+          */
+         public int fontSize = 0;
++
++        /** Project font family request. Null retains the existing serif default. */
++        @Nullable public String fontName = null;
+ 
+         /**
+          * If non-{@code null} returns the symbol's icon center point offset for rendered single
+--- a/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525cSymbologyProviderBase.java
++++ b/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525cSymbologyProviderBase.java
+@@ -411,14 +411,14 @@
+         if (clippedPoints == null)
+         {
+             String controlPointsStr = controlPointsToString(controlPoints);
+-            kml = interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, "serif", 0, fontSize);
++            kml = interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+         }
+         else
+         {
+             kml = "";
+             for(int i=0;i < clippedPoints.size(); ++i) {
+                 String controlPointsStr = controlPointsToString(clippedPoints.get(i).toArray(new IGeoPoint[0]));
+-                kml += interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, "serif", 0, fontSize);
++                kml += interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+             }
+         }
+ 
+@@ -574,7 +574,7 @@
+                 code,
+                 getModifiers(sym, attrs, true, (hints != null) ? hints.controlPoint : null),
+                 symRenderAttribs,
+-                (hints != null) ? hints.iconCenterOffset : null, "serif", 0, fontSize);
++                (hints != null) ? hints.iconCenterOffset : null, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+     }
+ 
+     @Override
+@@ -742,7 +742,7 @@
+                     5869879.2,
+                     null,
+                     modifiers,
+-                    attributes, "serif", 0, fontSize);
++                    attributes, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+             Short dashPattern = SOLID_STROKE_DASH_PATTERN;
+             // inspect the shapes to derive the pattern
+             for (ShapeInfo shape : interop.getSymbolShapes(mSymbol)) {
+--- a/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525dSymbologyProviderBase.java
++++ b/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525dSymbologyProviderBase.java
+@@ -330,14 +330,14 @@
+         if (clippedPoints == null)
+         {
+             String controlPointsStr = controlPointsToString(controlPoints);
+-            kml = interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, "serif", 0, fontSize);
++            kml = interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+         }
+         else
+         {
+             kml = "";
+             for(int i=0;i < clippedPoints.size(); ++i) {
+                 String controlPointsStr = controlPointsToString(clippedPoints.get(i).toArray(new IGeoPoint[0]));
+-                kml += interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes,"serif", 0, fontSize);
++                kml += interop.renderMultiPointSymbol(id, name, description, symbolCode, controlPointsStr, altitudeMode, scale, bbox, modifiers, attributes,(hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+             }
+         }
+ 
+@@ -463,7 +463,7 @@
+                 getModifiers(info, attrs, true, (hints != null) ? hints.controlPoint : null),
+                 symRenderAttribs,
+                 centerOffset,
+-                "serif",
++                (hints != null && hints.fontName != null ? hints.fontName : "serif"),
+                 0,
+                 fontSize);
+         if(bitmap != null && hints != null && hints.iconCenterOffset != null) {
+@@ -668,7 +668,7 @@
+                     5869879.2,
+                     null,
+                     modifiers,
+-                    attributes, "serif", 0, fontSize);
++                    attributes, (hints != null && hints.fontName != null ? hints.fontName : "serif"), 0, fontSize);
+             Short dashPattern = SOLID_STROKE_DASH_PATTERN;
+             final float[] dashArray = this.interop.getStrokeDashArray(mSymbol);
+             if(dashArray != null) {
+--- a/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525Base.java
++++ b/takkernel/shared/src/main/java/gov/tak/platform/symbology/milstd2525/MilStd2525Base.java
+@@ -25,6 +25,12 @@
+     final static MilStd2525dSymbologyProvider dProvider = new MilStd2525dSymbologyProvider();
+ 
+     MilStd2525Base(){}
++
++    /** Project public-viewport-fit-v1 policy, not a private SDK algorithm. */
++    public static double getDefaultResolutionFromPoints(int width, int height,
++            java.util.Collection<? extends gov.tak.api.engine.map.coords.IGeoPoint> points) {
++        return PublicViewportFit.resolution(width, height, points);
++    }
+ 
+     static String cleanupC(final String orig) {
+         String upper = orig.toUpperCase();
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java
+@@ -101,5 +101,8 @@
+     {
+         public FeatureQueryParameters filter;
+         public boolean labelsEnabled = true;
++        /** Project bridge: preserve current native default flags and honor requested additional flags. */
++        public int labelHints = com.atakmap.map.opengl.GLLabelManager.HINT_WEIGHTED_FLOAT
++                | com.atakmap.map.opengl.GLLabelManager.HINT_AUTO_SURFACE_OFFSET_ADJUST;
+     }
+ } // FeatureLayer3
+--- a/takkernel/engine/src/main/jni/interop/feature/Interop.cpp
++++ b/takkernel/engine/src/main/jni/interop/feature/Interop.cpp
+@@ -177,6 +177,7 @@
+     {
+         jclass id;
+         jfieldID labelsEnabled;
++        jfieldID labelHints;
+         jfieldID filter;
+     } GLBatchGeometryFeatureDataStoreRenderer2_Options_class;
+ 
+@@ -880,9 +881,13 @@
+ {
+     if(!moptions)
+         return TE_InvalidArg;
+-    checkInit(env);
++    if (!checkInit(env) || env.ExceptionCheck()) return TE_Err;
+     coptions.labelsEnabled = env.GetBooleanField(moptions, GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelsEnabled);
++    if (env.ExceptionCheck()) return TE_Err;
++    coptions.labelHints = static_cast<unsigned>(env.GetIntField(moptions, GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelHints));
++    if (env.ExceptionCheck()) return TE_Err;
+     Java::JNILocalRef mfilter(env, env.GetObjectField(moptions, GLBatchGeometryFeatureDataStoreRenderer2_Options_class.filter));
++    if (env.ExceptionCheck()) return TE_Err;
+ 
+     if (mfilter) {
+         TAK::Engine::Feature::FeatureDataStore2::FeatureQueryParameters cparams;
+@@ -1103,8 +1108,13 @@
+         }
+ 
+         GLBatchGeometryFeatureDataStoreRenderer2_Options_class.id = ATAKMapEngineJNI_findClass(&env, "com/atakmap/map/layer/feature/FeatureLayer3$Options");
++        if (env.ExceptionCheck() || !GLBatchGeometryFeatureDataStoreRenderer2_Options_class.id) return false;
+         GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelsEnabled = env.GetFieldID(GLBatchGeometryFeatureDataStoreRenderer2_Options_class.id, "labelsEnabled", "Z");
++        if (env.ExceptionCheck() || !GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelsEnabled) return false;
++        GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelHints = env.GetFieldID(GLBatchGeometryFeatureDataStoreRenderer2_Options_class.id, "labelHints", "I");
++        if (env.ExceptionCheck() || !GLBatchGeometryFeatureDataStoreRenderer2_Options_class.labelHints) return false;
+         GLBatchGeometryFeatureDataStoreRenderer2_Options_class.filter = env.GetFieldID(GLBatchGeometryFeatureDataStoreRenderer2_Options_class.id, "filter", "Lcom/atakmap/map/layer/feature/FeatureDataStore2$FeatureQueryParameters;");
++        if (env.ExceptionCheck() || !GLBatchGeometryFeatureDataStoreRenderer2_Options_class.filter) return false;
+ 
+         struct
+         {
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/model/SceneLayer.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/model/SceneLayer.java
+@@ -1,6 +1,9 @@
+ package com.atakmap.map.layer.model;
+ 
+ import android.util.Pair;
++import com.atakmap.interop.Pointer;
++import com.atakmap.map.layer.feature.FeatureCursor;
++import com.atakmap.map.layer.feature.FeatureDataStore2;
+ 
+ import com.atakmap.interop.Interop;
+ import com.atakmap.map.MapRenderer;
+@@ -111,6 +114,27 @@
+         setVisible(Layer_interop.getPointer(impl), uri, visible);
+     }
+ 
++    /** Project ID bridge; URI visibility overload remains unchanged. */
++    public boolean isVisible(long id) { return isItemVisible(Layer_interop.getPointer(impl), id); }
++    public void setVisible(long id, boolean visible) { setItemVisible(Layer_interop.getPointer(impl), id, visible); }
++    public FeatureCursor query(FeatureDataStore2.FeatureQueryParameters params) {
++        Interop<FeatureCursor> cursorInterop = Interop.findInterop(FeatureCursor.class);
++        if (cursorInterop == null) throw new IllegalStateException("native feature cursor interop unavailable");
++        Pointer pointer = queryFeatures(Layer_interop.getPointer(impl), params);
++        if (pointer == null) throw new IllegalStateException("native scene query failed");
++        FeatureCursor cursor = null;
++        try {
++            cursor = cursorInterop.create(pointer, this);
++            if (cursor == null) throw new IllegalStateException("native cursor construction failed");
++            return cursor;
++        } finally {
++            if (cursor == null) cursorInterop.destruct(pointer);
++        }
++    }
++    private static native boolean isItemVisible(long ptr, long id);
++    private static native void setItemVisible(long ptr, long id, boolean visible);
++    private static native Pointer queryFeatures(long ptr, FeatureDataStore2.FeatureQueryParameters params);
++
+     public void shutdown()
+     {
+         shutdown(Layer_interop.getPointer(impl));
+--- a/takkernel/engine/src/main/jni/jscenelayer.cpp
++++ b/takkernel/engine/src/main/jni/jscenelayer.cpp
+@@ -11,6 +11,8 @@
+ #include "common.h"
+ #include "interop/JNIStringUTF.h"
+ #include "interop/core/Interop.h"
++#include "interop/feature/Interop.h"
++#include "interop/Pointer.h"
+ #include "interop/java/JNILocalRef.h"
+ 
+ using namespace TAK::Engine::Core;
+@@ -196,4 +198,44 @@
+         LegacyAdapters_find(impl, layer);
+         return impl ? static_cast<SceneLayer *>(impl.get()) : nullptr;
+     }
+-}
+\ No newline at end of file
++}
++// Project bridges use distinct native names to preserve the existing URI setter ABI.
++extern "C" JNIEXPORT jboolean JNICALL
++Java_com_atakmap_map_layer_model_SceneLayer_isItemVisible(JNIEnv *env, jclass, jlong ptr, jlong id)
++{
++    if (!ptr) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return false; }
++    auto impl = getLayer(*JLONG_TO_INTPTR(atakmap::core::Layer, ptr));
++    if (!impl) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return false; }
++    return impl->isVisible(id);
++}
++extern "C" JNIEXPORT void JNICALL
++Java_com_atakmap_map_layer_model_SceneLayer_setItemVisible(JNIEnv *env, jclass, jlong ptr, jlong id, jboolean visible)
++{
++    if (!ptr) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
++    auto impl = getLayer(*JLONG_TO_INTPTR(atakmap::core::Layer, ptr));
++    if (!impl) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
++    ATAKMapEngineJNI_checkOrThrow(env, impl->setVisible(id, visible));
++}
++extern "C" JNIEXPORT jobject JNICALL
++Java_com_atakmap_map_layer_model_SceneLayer_queryFeatures(JNIEnv *env, jclass, jlong ptr, jobject mparams)
++{
++    if (!ptr) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return nullptr; }
++    auto impl = getLayer(*JLONG_TO_INTPTR(atakmap::core::Layer, ptr));
++    if (!impl) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return nullptr; }
++    FeatureDataStore2::FeatureQueryParameters params;
++    if (mparams) {
++        TAKErr code = TAKEngineJNI::Interop::Feature::Interop_marshal(&params, *env, mparams);
++        if (env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code)) return nullptr;
++    }
++    FeatureCursorPtr cursor(nullptr, nullptr);
++    TAKErr code = impl->query(cursor, params);
++    if (ATAKMapEngineJNI_checkOrThrow(env, code)) return nullptr;
++    if (!cursor) { ATAKMapEngineJNI_checkOrThrow(env, TE_IllegalState); return nullptr; }
++    // Retain the unique cursor until allocation succeeds; do not leak it on JVM OOM.
++    jobject pointer = env->NewObject(Pointer_class.id, Pointer_class.ctor__JJIJ,
++        INTPTR_TO_JLONG(cursor.get()), INTPTR_TO_JLONG(cursor.get()),
++        com_atakmap_interop_Pointer_UNIQUE, INTPTR_TO_JLONG(cursor.get_deleter()));
++    if (env->ExceptionCheck() || !pointer) return nullptr;
++    cursor.release();
++    return pointer;
++}

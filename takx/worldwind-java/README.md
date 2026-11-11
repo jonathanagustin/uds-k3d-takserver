@@ -93,3 +93,40 @@ and [5.8](https://github.com/TAK-Product-Center/TAKX/tree/af54a3e1fe8796b6e109e2
 `gradle/standardTestSetup.gradle`, `TestSupport/build.gradle` and root
 `build.gradle` establish a test-suite dependency, not a production runtime gap.
 Its source implementation remains unestablished by this work.
+
+## Optional project interop profile
+
+Add `--interop` to the same build command to produce
+`uds-takserver-worldwind-java-interop.jar`, identified as
+`project-standard-gdal-rgb-interop`. This is a project extension of NASA 2.2.1,
+not the unavailable `2.2.1-TAKX-4` artifact. The default profile stays unchanged.
+`interop.lock.json` binds the additional patch and each official preimage and
+project postimage. The build still compiles every upstream Java source.
+
+The extra profile supplies four functional integrations:
+
+- `PointPlacemark.makeOrderedRenderableFactory` consumes an eligible placemark
+  after NASA computes its bounds and tests its frustum. The current
+  `OrderedPlacemark` is published under its class-name AVList key before the
+  callback. With no callback, the normal ordered queue is unchanged. An installed
+  callback owns rendering exclusively; it runs synchronously on the caller's
+  render thread for each eligible call, including pick and draw passes.
+- `DrawContextImpl.awtPointToGLpoint` converts logical AWT pixels to framebuffer
+  pixels while keeping the top-left origin. The default is identity; TAKX's
+  override supplies surface scaling. Point and rectangle framebuffer reads and
+  both pick-frustum builders call the hook before their existing Y inversion.
+  Rectangles scale both corners, including their width and height.
+- `GraticuleSupport.render` dispatches selected, styled text through a protected
+  `renderText` hook. Its default still calls NASA's text renderer.
+- `BasicTreeLayout.setScreenLocation(Point)` uses the existing pixel/inset-pixel
+  `Offset` convention, preserving the top and left margins across viewport sizes.
+
+`InteropControl.java` exercises these real production classes with explicitly
+mocked view, draw-context and GL interfaces. It checks normal and intercepted
+placemark dispatch, computed-bound publication, visibility/frustum gates,
+point/rectangle picking at 1×, 2× and unequal fractional scales, graticule label
+selection/font/opacity, and tree offsets after resizing. It creates no real GL
+context and does not establish graphics, TAKX dependency injection, EDT handoff,
+or complete application acceptance. Compile it against the new interop JAR and
+the same verified JOGL/gluegen pair, then run
+`gov.nasa.worldwind.render.InteropControl` with `-Djava.awt.headless=true`.

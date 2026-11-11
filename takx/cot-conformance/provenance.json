@@ -1,0 +1,75 @@
+{
+  "repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "codec_version": "1.17.2",
+  "files": {
+    "official/takproto/README.txt": {
+      "source": "takproto/README.txt",
+      "sha256": "dd41f6c4db3170accc9af82b531f6d98085e647b883d7fa2ec8425fb30528bd4"
+    },
+    "official/takcot/README.md": {
+      "source": "takcot/README.md",
+      "sha256": "2b11252f04b41603b6166aaea74c63ac5444719142136a05774789a1f94d7298"
+    },
+    "official/takcot/mitre/CoT Base-Event Schema  (PUBLIC RELEASE).xsd": {
+      "source": "takcot/mitre/CoT Base-Event Schema  (PUBLIC RELEASE).xsd",
+      "sha256": "4ab1ce0f7e5d3f5396f0b3e19b993e68847dabf5f4e3f37af0b7cb0235d31983"
+    },
+    "official/takcot/xsd/details/__chat.xsd": {
+      "source": "takcot/xsd/details/__chat.xsd",
+      "sha256": "09d405c0a332dadc66de85ea0bb03443db49329965a0905a3811bb82af7f4c90"
+    },
+    "official/takcot/examples/Marker - Spot.cot": {
+      "source": "takcot/examples/Marker - Spot.cot",
+      "sha256": "21bda61780e23f3b28860de8a08b4482346f16c612e90323f8cbb970718621d9"
+    },
+    "official/LICENSE.md": {
+      "source": "LICENSE.md",
+      "sha256": "3db8b919e1f1cb3dff5114ea875d3a758ff367e6490622780d0f7092daebd8f9"
+    },
+    "official/THIRDPARTY.md": {
+      "source": "THIRDPARTY.md",
+      "sha256": "716bcdf3280496641b004f05dd4a7d4e842e8d2e632069c8c5177d8bfb04c7a2"
+    },
+    "official/commoncommo/core/impl/protobuf/contact.proto": {
+      "source": "commoncommo/core/impl/protobuf/contact.proto",
+      "sha256": "3d91be53435db54762342f0488cf6b23c2cecf291eee92be4898382415a5619c"
+    },
+    "official/commoncommo/core/impl/protobuf/cotevent.proto": {
+      "source": "commoncommo/core/impl/protobuf/cotevent.proto",
+      "sha256": "c751d1600851845528e66b9fa18f4a924e2c919428a0ed24dc8983e045c941da"
+    },
+    "official/commoncommo/core/impl/protobuf/detail.proto": {
+      "source": "commoncommo/core/impl/protobuf/detail.proto",
+      "sha256": "cf95245dbb4dfa50c5eb21d5aaed223b92ffe2fd882105dc80b8dc89c51130f0"
+    },
+    "official/commoncommo/core/impl/protobuf/group.proto": {
+      "source": "commoncommo/core/impl/protobuf/group.proto",
+      "sha256": "015d7dfd911c783897a9ff9eb7080ba4efb10a3e16159c2d56b2c1d2bad95bcb"
+    },
+    "official/commoncommo/core/impl/protobuf/precisionlocation.proto": {
+      "source": "commoncommo/core/impl/protobuf/precisionlocation.proto",
+      "sha256": "d38fa7ef8559f227717214ea3f984b6209b35ce96e1f429c956693e48fd82143"
+    },
+    "official/commoncommo/core/impl/protobuf/status.proto": {
+      "source": "commoncommo/core/impl/protobuf/status.proto",
+      "sha256": "023acd68798aaa1f4e7b1f0a8dc3ba0a335cdc1e200d8b185ba5bf87373f6da2"
+    },
+    "official/commoncommo/core/impl/protobuf/takcontrol.proto": {
+      "source": "commoncommo/core/impl/protobuf/takcontrol.proto",
+      "sha256": "71db4f10cb58ea0bdc16a64a5147c4f0aacec70422da929ec5009359bfe6f2dd"
+    },
+    "official/commoncommo/core/impl/protobuf/takmessage.proto": {
+      "source": "commoncommo/core/impl/protobuf/takmessage.proto",
+      "sha256": "03607dbd0dbd146a7110cef660d26b513df8215079ea0ed42959c2f2ef7aad0e"
+    },
+    "official/commoncommo/core/impl/protobuf/takv.proto": {
+      "source": "commoncommo/core/impl/protobuf/takv.proto",
+      "sha256": "73466344963e819a349a21e0869017334fb202253d546b6e354394e7f351a817"
+    },
+    "official/commoncommo/core/impl/protobuf/track.proto": {
+      "source": "commoncommo/core/impl/protobuf/track.proto",
+      "sha256": "31f2e5c1f7814be1fbbba6df5fed43fe5993f0079e8af40714d16998629d3aa3"
+    }
+  }
+}

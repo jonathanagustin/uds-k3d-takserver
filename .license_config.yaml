@@ -16,3 +16,5 @@ ignore:
   - "pepr/mutation/.stryker-tmp/**"
   # Upstream method body. The patch test matches these bytes from the first character.
   - "tests/fixtures/distributed-configuration-init.java"
+  # Checksum-pinned official CoT/protobuf snapshots retain their original notices.
+  - "takx/cot-conformance/official/**"

@@ -19,6 +19,7 @@ for both client versions and their remaining API differences.
 | SQLite JDBC | Its embedded backend is isolated; both crypto load orders passed | Joined SDK/JDBC runtime |
 | CommonCommo | Lifecycle, routing, TLS identity and throwing-logger controls passed with zero JNI warnings | QUIC peer and TAK Server interoperability |
 | Joined runtime | Kernel database/GDAL and Commo controls passed in one JVM, in both native load and Java initialization orders | SDK packaging and application-level coverage |
+| Component package | Stock Kernel resource loader passed four fresh JVM controls, relocation and a missing-resource check | Renderer, CommonCommo integration and other host ABIs |
 | TAKX client | Pending | Compilation, startup, rendering and server interoperability |
 
 Start with the [complete native profile](kernel-native/README.md). Its fresh
@@ -36,7 +37,10 @@ The [local Draco cache](registry-cache/README.md) packages a verified component
 and tests relocation at two prefixes. Registry publishing and publisher
 authentication remain separate work in [#482](https://github.com/jonathanagustin/uds-takserver/issues/482).
 
-These results do not yet provide a packaged SDK or desktop installer. The native
+The [component package](sdk-package/README.md) assembles the verified Kernel
+classes, native resources, headers and notices. Its stock-loader controls use a
+private extraction directory and verify the actual mapped libraries. This is
+not yet a complete SDK or desktop installer. The native
 profile validates modern Database2 encryption; the graphics result still uses
 host Mesa. Joined checks cover Kernel 8.30.5 and CommonCommo 1.17.2 loopback
 controls, including clean JVM shutdown. They do not establish QUIC peer, renderer

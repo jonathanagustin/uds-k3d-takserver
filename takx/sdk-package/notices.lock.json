@@ -1,0 +1,1414 @@
+{
+  "files": [
+    {
+      "provider": "sqlcipher",
+      "path": "source/openssl-3.5.9/LICENSE.txt",
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "bytes": 10175
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/openssl-3.5.9/external/perl/Text-Template-1.56/LICENSE",
+      "sha256": "9837f05336ef3cbacb6a96e1672a0426d81ad01191f214b8d48e22ca62338181",
+      "bytes": 18412
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/openssl-3.5.9/util/perl/OpenSSL/copyright.pm",
+      "sha256": "04213b69dbebc8ba0dd8a6216af1d9422f9b63619c1cf2f1d8aa107b83bbb608",
+      "bytes": 1145
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/sqlcipher-4.5.7/LICENSE.md",
+      "sha256": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14",
+      "bytes": 1468
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/sqlcipher-4.5.7/autoconf/tea/license.terms",
+      "sha256": "66e056b6e8687f32af30d5187611b98b12a8f46f07aaf62f43585f276e8f0ac9",
+      "bytes": 257
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/compat/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/compat/zlib/LICENSE",
+      "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+      "bytes": 1002
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/compat/zlib/contrib/dotzlib/LICENSE_1_0.txt",
+      "sha256": "36266a8fd073568394cb81cdb2b124f7fdae2c64c1a7ed09db34b4d22efa2951",
+      "bytes": 1359
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/compat/zlib/contrib/minizip/LICENSE.Info-Zip",
+      "sha256": "fc686023047ce5ce3a18a9b8a777156f0e475929d3de06bac279f3c025d2b2ca",
+      "bytes": 3509
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/doc/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/library/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/libtommath/LICENSE",
+      "sha256": "2fa64b163659f41965c9815882a8296d3d03ff546b76153e11445f9bdecf955a",
+      "bytes": 1257
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/macosx/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/itcl4.3.7/doc/license.terms",
+      "sha256": "ad02cfa25db921ee30a1ab68d30e2ad8bf2e174c394237eb55ddd6968ded8032",
+      "bytes": 1513
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/itcl4.3.7/license.terms",
+      "sha256": "b61edfaeead97546bc62b1f205b046f2e440b83bfc517bc0932b93bc3d505865",
+      "bytes": 2503
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/sqlite3.53.0/license.terms",
+      "sha256": "66e056b6e8687f32af30d5187611b98b12a8f46f07aaf62f43585f276e8f0ac9",
+      "bytes": 257
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/tdbc1.1.13/license.terms",
+      "sha256": "fafd6456aa4b7c80c190df86de5bdfab82c8c227a0c348662432c75ceeb2238d",
+      "bytes": 2157
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/tdbcmysql1.1.13/license.terms",
+      "sha256": "fafd6456aa4b7c80c190df86de5bdfab82c8c227a0c348662432c75ceeb2238d",
+      "bytes": 2157
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/tdbcodbc1.1.13/license.terms",
+      "sha256": "fafd6456aa4b7c80c190df86de5bdfab82c8c227a0c348662432c75ceeb2238d",
+      "bytes": 2157
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/tdbcpostgres1.1.13/license.terms",
+      "sha256": "d3aa1cf53b96e69469d46c62bceeebadaa3ecb9699b73962bb207246f4288a08",
+      "bytes": 2157
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/tdbcsqlite3-1.1.13/license.terms",
+      "sha256": "37186e29fd02702179f7c5e9fc630840429319281fcf5a282caaf7fcb0a1c7f4",
+      "bytes": 2166
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/pkgs/thread2.8.13/license.terms",
+      "sha256": "0a03981c40f7813ce6ddbdfce9882020bcfd696ea044b21ef07619ed9b86abae",
+      "bytes": 2231
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/tests/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "sqlcipher",
+      "path": "source/tcl8.6.18/win/license.terms",
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "bytes": 2255
+    },
+    {
+      "provider": "geos",
+      "path": "source/geos-3.4.3/COPYING",
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "bytes": 26530
+    },
+    {
+      "provider": "geos",
+      "path": "source/geos-3.4.3/cmake/modules/COPYING-CMAKE-SCRIPTS",
+      "sha256": "46cde7dc11e64c78d650b4851b88f6704b4665ff60f22a1caf68ceb15e217e5b",
+      "bytes": 1327
+    },
+    {
+      "provider": "proj",
+      "path": "source/proj-4.9.1/COPYING",
+      "sha256": "2dcac4af6990093ef48b896bfb81452d46a31b08d46cce34b27e83f93b2e37f6",
+      "bytes": 1725
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/LICENSE",
+      "sha256": "a26ccc3dbf2f58ea99c100945a8a126fa0f9f4d7fd2b49aa8bdb8e09355864d8",
+      "bytes": 3791
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/contrib/clipper/License.txt",
+      "sha256": "710f22ccbfde6bef1898116376c7e32030c2940c72e1eaa0a89b980c9552a541",
+      "bytes": 1575
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/contrib/gtest/LICENSE",
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138",
+      "bytes": 1475
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/contrib/openddlparser/LICENSE",
+      "sha256": "656597ef86119e4a526fb8621e0112b95051cf9d63a311b09b3a73346da00ead",
+      "bytes": 1079
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/contrib/poly2tri/LICENSE",
+      "sha256": "a4d34b9e99a7f11d095ba330da5a4723ec00b019ae1ba42cba46ad1d89902c4e",
+      "bytes": 1533
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/contrib/rapidjson/license.txt",
+      "sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32",
+      "bytes": 5152
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/packaging/windows-innosetup/LICENSE.rtf",
+      "sha256": "0a8f31c79a9691928200d1a1c2616307290f39ab4798bf69e33a6d6ade093a75",
+      "bytes": 2260
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/samples/DevIL/COPYING",
+      "sha256": "c30420c13bcc5c7dc428693c4d72dc60d3cf9209af34c6a4402a74b3d9574fa6",
+      "bytes": 26421
+    },
+    {
+      "provider": "assimp",
+      "path": "source/assimp/test/models-nonbsd/Ogre/OgreSDK/LICENSE",
+      "sha256": "df6294031f26c4401ce713be0b0b3c5da27c2f1b7278a0d9833d111273174183",
+      "bytes": 1135
+    },
+    {
+      "provider": "assimp",
+      "path": "source/zlib-1.3.1/LICENSE",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+      "bytes": 1002
+    },
+    {
+      "provider": "assimp",
+      "path": "source/zlib-1.3.1/contrib/dotzlib/LICENSE_1_0.txt",
+      "sha256": "36266a8fd073568394cb81cdb2b124f7fdae2c64c1a7ed09db34b4d22efa2951",
+      "bytes": 1359
+    },
+    {
+      "provider": "las",
+      "path": "source/LASzip/COPYING",
+      "sha256": "dbc8eab1421212bf7b392ea00619f6b8286df50b702d21f6e7382805828a1cef",
+      "bytes": 26530
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/LICENSE.txt",
+      "sha256": "255ba531725caaed436a919896e69a1bcadefcc98eaa030b64710e33b4ea3f18",
+      "bytes": 14198
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/doc/copyright.txt",
+      "sha256": "d83d38e50cc4853ba88caeaeb6307997e391f61c06c8a2250342968ce9a4f913",
+      "bytes": 208
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/assign/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/beast/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/beast/test/bench/parser/nodejs-parser/LICENSE-MIT",
+      "sha256": "2996a1c43ee757f9c997a829d82bdd584052323e73cf02ff8126c6fbd95c2d87",
+      "bytes": 1251
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/beast/test/extern/zlib-1.2.11/contrib/dotzlib/LICENSE_1_0.txt",
+      "sha256": "8d8291caf1cee26d23acf3eb67c9f9a2d58f1c681b16a4fbe8cbfb9e3c0b5a9b",
+      "bytes": 1337
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/callable_traits/LICENSE.md",
+      "sha256": "754f0d4ecb5f254feaa1b0d3e4180696a8af2abcc2969e5abf590834a63610e5",
+      "bytes": 1373
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/compute/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/concept_check/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/contract/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/date_time/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/date_time/xmldoc/license.xml",
+      "sha256": "477ea844df37c895dbf0aa39f935631965b0bc963024d6ca36215294cf0ed7ee",
+      "bytes": 1467
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/describe/doc/describe/copyright.adoc",
+      "sha256": "57daa9ed4573bd40f4bd5f21e9d9ebcdd56b0145d25666c202a5e799ac804053",
+      "bytes": 337
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/dynamic_bitset/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/exception/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/format/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/geometry/doc/copyright_note_policy.txt",
+      "sha256": "521a8764f0025b076bc492805d4b2bb3d8f9eceb0bc781b61611c18c8c77af09",
+      "bytes": 1762
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/geometry/doc/src/copyright_block.qbk",
+      "sha256": "e91652ee33d62e6afbafd86ab29c2407ea1ae0a557809f0be84fd66f135f1787",
+      "bytes": 578
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/geometry/doc/src/docutils/tools/doxygen_xml2qbk/contrib/rapidxml-1.13/license.txt",
+      "sha256": "6094a09542ee0835df4c212203ae0a19c93b47a24d78ccf4951b0282268570ae",
+      "bytes": 2752
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/gil/LICENSE.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hana/LICENSE.md",
+      "sha256": "41f7e1f40b970e151d7f517e3ea1a7e4d02244629a9121fa80f35853bd8b8c3b",
+      "bytes": 1372
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/histogram/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/LICENSE.md",
+      "sha256": "859bddbbef21decf692e6bd16bd8a6c96cde1b989fa88ddd63bd2bde98b58b2e",
+      "bytes": 1373
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/doc/html/LICENSE.html",
+      "sha256": "1e8ab38c844c2331da8c86794e142f844895206a59d69a287b953a088e84afda",
+      "bytes": 3931
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/doc/html/_sources/LICENSE.md.txt",
+      "sha256": "859bddbbef21decf692e6bd16bd8a6c96cde1b989fa88ddd63bd2bde98b58b2e",
+      "bytes": 1373
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/doc/html/_sources/doc/src/license.md.txt",
+      "sha256": "bebd6881aed727d47ba90806b67624093a829badd5b49644e00314564324f10c",
+      "bytes": 1476
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/doc/html/doc/src/license.html",
+      "sha256": "71a8512cd809aad19ce3958563a5a16f8f7556a7a21da97d9fb95af705d36848",
+      "bytes": 4318
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/hof/doc/src/license.md",
+      "sha256": "bebd6881aed727d47ba90806b67624093a829badd5b49644e00314564324f10c",
+      "bytes": 1476
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/iostreams/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/json/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/lambda2/doc/lambda2/copyright.adoc",
+      "sha256": "7f24a51417f22cdda73a8508d613326288dbbbfb941778da5716748c234286bc",
+      "bytes": 343
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/leaf/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/logic/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/math/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/math/doc/sf/license.qbk",
+      "sha256": "cd1fa4b1126b015d9705f52d2f71b0824a7844410cdc57fadf26699e6b386017",
+      "bytes": 218
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/move/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/mpl/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/nowide/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/nowide/doc/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/numeric/interval/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/outcome/doc/src/themes/boostdoc/LICENSE",
+      "sha256": "2ab1c8959787745969d6245ac256253efc1202eb0dfa060c18857de45c15adfe",
+      "bytes": 2597
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/outcome/doc/src/themes/boostdoc/layouts/shortcodes/notice.html",
+      "sha256": "45e98f4e4f0b1e7a602dff1950ef7b08652fe9f6962cbb5b2d7fd8244165d84b",
+      "bytes": 335
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/pfr/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/pool/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/property_map/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/ptr_container/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/python/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/qvm/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/rational/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/safe_numerics/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/signals2/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/static_string/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/stl_interfaces/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/system/doc/system/copyright.adoc",
+      "sha256": "0d1ae65aa7421f442261616eb0f8450cc7cc02c24c5b22e16e37bdab7b7cf91d",
+      "bytes": 435
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/test/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/tokenizer/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/uuid/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/variant2/doc/variant2/copyright.adoc",
+      "sha256": "bc83b50aad002dac1754419d136cfc4f33b4db6df72088a9c76b29f1f0283816",
+      "bytes": 399
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/yap/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/libs/yap/example/autodiff_library/LICENSE",
+      "sha256": "bd1684bf806817f26f02585bc992fe5f5ea8788896398234b8a8187328af550b",
+      "bytes": 1074
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/boost_install/test/iostreams/bzip2-1.0.8/LICENSE",
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "bytes": 1896
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/boost_install/test/iostreams/zlib-1.2.11/contrib/dotzlib/LICENSE_1_0.txt",
+      "sha256": "8d8291caf1cee26d23acf3eb67c9f9a2d58f1c681b16a4fbe8cbfb9e3c0b5a9b",
+      "bytes": 1337
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/boostbook/xsl/caramel/LICENSE",
+      "sha256": "2f59ce71dd2b1538db0976cf0886685de2cead1dbf1ddebabd90c7df21e469e7",
+      "bytes": 3090
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/docca/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/inspect/copyright_check.cpp",
+      "sha256": "c31b259287510e3c04f78bb7b36796d45834dc1d86f528eff59381d2a3746e0f",
+      "bytes": 1000
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/inspect/copyright_check.hpp",
+      "sha256": "5f5945fabdc65a3444bd858fc5088d9042ceaafa062ef2883acc61d6e676483b",
+      "bytes": 1037
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/inspect/license_check.cpp",
+      "sha256": "9ff54c34e5db5121c98ec80b3cb9dd9539090589a4bd201ac45e88cf62423fbc",
+      "bytes": 1398
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/inspect/license_check.hpp",
+      "sha256": "f1598455d2cb69634f6db48596e010fcf49db8f25a5d21ed3fcb2a402f0a485f",
+      "bytes": 1113
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/quickbook/test/doc-info/copyright-fail1.quickbook",
+      "sha256": "bd89d709133ae673668ff52ce725d364062124527af052223710294a464f2de4",
+      "bytes": 86
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/quickbook/test/doc-info/copyright-fail2.quickbook",
+      "sha256": "3fc858792098fb0172da4a237ac1f48a03bc4d80249b218db5702e3149c593b2",
+      "bytes": 89
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/quickbook/test/doc-info/copyright1.gold",
+      "sha256": "4f43931d49ac37272a68e190ba7c42b1917d8af0426ef4391d9c8fcde8bdb7e7",
+      "bytes": 683
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/quickbook/test/doc-info/copyright1.gold-html",
+      "sha256": "beb6239569d319f950914ee1d7002cb4e8bf7c952b4def3a218338cda1c4ff79",
+      "bytes": 303
+    },
+    {
+      "provider": "las",
+      "path": "source/libLAS/find_package/boost/tools/quickbook/test/doc-info/copyright1.quickbook",
+      "sha256": "36e530006d690a0c5511b2bbedf4b190bd68f098b443bbf2d8479ef5e8e3e324",
+      "bytes": 132
+    },
+    {
+      "provider": "mdb",
+      "path": "source/mdbtools-1.0.0/COPYING",
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "bytes": 18092
+    },
+    {
+      "provider": "mdb",
+      "path": "source/mdbtools-1.0.0/COPYING.LIB",
+      "sha256": "b7993225104d90ddd8024fd838faf300bea5e83d91203eab98e29512acebd69c",
+      "bytes": 25383
+    },
+    {
+      "provider": "draco",
+      "path": "source/draco/LICENSE",
+      "sha256": "d3709b0fb4b8a94bbb1d02b8a2e484f258b0d9c5c5a01f940391f3fe662cd1a4",
+      "bytes": 13898
+    },
+    {
+      "provider": "spatial",
+      "path": "libiconv-source/libiconv-1.15/COPYING",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "bytes": 35147
+    },
+    {
+      "provider": "spatial",
+      "path": "libiconv-source/libiconv-1.15/COPYING.LIB",
+      "sha256": "56bdea73b6145ef6ac5259b3da390b981d840c24cb03b8e1cbc678de7ecfa18d",
+      "bytes": 25291
+    },
+    {
+      "provider": "spatial",
+      "path": "libiconv-source/libiconv-1.15/libcharset/COPYING.LIB",
+      "sha256": "56bdea73b6145ef6ac5259b3da390b981d840c24cb03b8e1cbc678de7ecfa18d",
+      "bytes": 25291
+    },
+    {
+      "provider": "spatial",
+      "path": "libspatialite-source/libspatialite-4.3.0a/COPYING",
+      "sha256": "b81965482914858383484d7e63b5de1d0c4647fa7f527e78d4499e4a7b76aab5",
+      "bytes": 26152
+    },
+    {
+      "provider": "spatial",
+      "path": "libspatialite-source/libspatialite-4.3.0a/src/control_points/COPYING",
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "bytes": 18092
+    },
+    {
+      "provider": "spatial",
+      "path": "libxml2-source/libxml2-2.13.3/Copyright",
+      "sha256": "c99aae1afe013e50b8b3701e089222b351258043c3025b64053a233fd25b4be7",
+      "bytes": 1273
+    },
+    {
+      "provider": "cesium",
+      "path": "source/abseil/LICENSE",
+      "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747",
+      "bytes": 11361
+    },
+    {
+      "provider": "cesium",
+      "path": "source/catch2/LICENSE.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "cesium",
+      "path": "source/cesium/LICENSE",
+      "sha256": "69849221bfb90053de2134ef5e6d540287b4b98062326492f1f96f5da685524b",
+      "bytes": 10174
+    },
+    {
+      "provider": "cesium",
+      "path": "source/libwebp/COPYING",
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+      "bytes": 1496
+    },
+    {
+      "provider": "cesium",
+      "path": "source/modp-base64/COPYING",
+      "sha256": "1fecc108ae7078aab437014074370f3a8a58bcb231596e5c4e59f6cc4083b10d",
+      "bytes": 13
+    },
+    {
+      "provider": "cesium",
+      "path": "source/modp-base64/LICENSE",
+      "sha256": "4e1a83a6d23c41c6a710d86c44efa41de3cb6991635949822a1f836fb3bd39a2",
+      "bytes": 1082
+    },
+    {
+      "provider": "cesium",
+      "path": "source/s2geometry/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "provider": "cesium",
+      "path": "source/s2geometry/NOTICE",
+      "sha256": "5b5bb92c704c1efa680a62fedcbda2933355613d7d694190383773e49e5c1913",
+      "bytes": 148
+    },
+    {
+      "provider": "cesium",
+      "path": "source/tinyxml2/LICENSE.txt",
+      "sha256": "9332252e9b9e46db8285d4a3f0bf25f139bf1dca6781b956d57f2302efca6432",
+      "bytes": 808
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/LICENSE.TXT",
+      "sha256": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+      "bytes": 18164
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/alg/internal_libqhull/COPYING.txt",
+      "sha256": "7839af0cb456f93ed30a12de1264bd6d02171f6ee00f1c2758a9b79c5517a80d",
+      "bytes": 1635
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/gif/giflib/COPYING",
+      "sha256": "0c9b7990ecdca88b676db232c226548ac408b279f550d424d996f0d83591dd8e",
+      "bytes": 1088
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/grib/degrib/LICENSE.TXT",
+      "sha256": "ebc0e3db515bae2a665cfbc27e2f7a205d16f47f55251d6f837d5b5d92974818",
+      "bytes": 1979
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/mrf/libLERC/LICENSE.TXT",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/mrf/libLERC/NOTICE.TXT",
+      "sha256": "0890008075cc0fe3afb10b8ec44f5938672ca802198a331acf43d1751e6e851d",
+      "bytes": 786
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/pcraster/libcsf/COPYING",
+      "sha256": "e2de6081270d702ecb09599ff1d60a1f88a1076c10e622177ea2abcd1c3caa0d",
+      "bytes": 1666
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/frmts/png/libpng/LICENSE",
+      "sha256": "bb55467b6c1bfc72ac2f94cfe1eda37aa8e68b2a0dff1be69dd8adee28949949",
+      "bytes": 4170
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/ogr/ogrsf_frmts/geojson/libjson/COPYING",
+      "sha256": "74c1e6ca5eba76b54d0ad00d4815c8315c1b3bc45ff99de61d103dc92486284c",
+      "bytes": 2205
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/ogr/ogrsf_frmts/shape/COPYING",
+      "sha256": "7eb803a70990017a1c4e38a8342d7413c5dfeec3ed1ac407e15ae2c274e560ff",
+      "bytes": 25267
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/third_party/LercLib/LICENSE",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/gdal/gdal/third_party/LercLib/NOTICE",
+      "sha256": "8d1552bcf478484366d1a136acdd1b7ec56ad3a1457e8ca2c627731cc1ccd070",
+      "bytes": 807
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/libkml/libkml-1.3/COPYING",
+      "sha256": "e7952c5e1745f629c235c7aacd066fc36034d37571a964b9142d7fb95b5523eb",
+      "bytes": 1437
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/libkml/libkml-1.3/LICENSE",
+      "sha256": "b7f75dd666d3831eb1143c8b86900db93a2e786d90ae8ac08671b16b66840ebd",
+      "bytes": 1439
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/libkml/libkml-1.3/third_party/boost_1_34_1/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/libkml/libkml-1.3/third_party/googletest-r108/COPYING",
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138",
+      "bytes": 1475
+    },
+    {
+      "provider": "gdal_jni",
+      "path": "source-reference/libkml/libkml-1.3/third_party/uriparser-0.7.5/COPYING",
+      "sha256": "e0d52731486ffe5a368de7ab15758fdd4c90164c40954c7b73e0e13e86297a73",
+      "bytes": 1732
+    },
+    {
+      "provider": "gles",
+      "path": "source/libglvnd-1.7.0/src/util/cJSON/LICENSE",
+      "sha256": "f6f207863675ca5a5128fd120b9aef4f4bbab73ffa57e5f771ccffc8e3cc56b7",
+      "bytes": 1119
+    },
+    {
+      "provider": "gles",
+      "path": "source/libglvnd-1.7.0/src/util/uthash/LICENSE",
+      "sha256": "e9b9aac8421b6d29176c6f23f6f7a907194245e35ef99ace10839734961cfaa2",
+      "bytes": 1141
+    },
+    {
+      "provider": "kml",
+      "path": "source/expat/COPYING",
+      "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+      "bytes": 1144
+    },
+    {
+      "provider": "kml",
+      "path": "source/libkml/COPYING",
+      "sha256": "e7952c5e1745f629c235c7aacd066fc36034d37571a964b9142d7fb95b5523eb",
+      "bytes": 1437
+    },
+    {
+      "provider": "kml",
+      "path": "source/libkml/LICENSE",
+      "sha256": "b7f75dd666d3831eb1143c8b86900db93a2e786d90ae8ac08671b16b66840ebd",
+      "bytes": 1439
+    },
+    {
+      "provider": "kml",
+      "path": "source/libkml/third_party/boost_1_34_1/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "kml",
+      "path": "source/libkml/third_party/googletest-r108/COPYING",
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138",
+      "bytes": 1475
+    },
+    {
+      "provider": "kml",
+      "path": "source/libkml/third_party/uriparser-0.7.5/COPYING",
+      "sha256": "e0d52731486ffe5a368de7ab15758fdd4c90164c40954c7b73e0e13e86297a73",
+      "bytes": 1732
+    },
+    {
+      "provider": "curl",
+      "path": "source/COPYING",
+      "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681",
+      "bytes": 1088
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/asyncplusplus/LICENSE",
+      "sha256": "cfd9b9cfc85de17b05900d2870413ff80e7427bc9c156cd5d189b1ce9158b9ef",
+      "bytes": 1060
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/cpp-httplib/LICENSE",
+      "sha256": "4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b",
+      "bytes": 1075
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/earcut-hpp/LICENSE",
+      "sha256": "828f2aed51b6526881a236758ec9b08cd69928fbfc70346d9d44a0b3a3444fe1",
+      "bytes": 738
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/earcut-hpp/test/comparison/libtess2/LICENSE.txt",
+      "sha256": "582c43ef2eb5aba92c6fb92913194a966989ffb044aef5dee0e37590029a86a5",
+      "bytes": 1577
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/expected-lite/LICENSE.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/fmt/LICENSE",
+      "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+      "bytes": 1431
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/glm/copying.txt",
+      "sha256": "62d2d642c7d054d4fb4c9b42faad617d6c88fcd91e317f8035aa9f277cc159c3",
+      "bytes": 2865
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSE.md",
+      "sha256": "0f92b4ce771585dfebc963ede074a30b4431b9e327911db44097d83ccf372128",
+      "bytes": 1523
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSES/LicenseRef-Cesium-Trademark-Terms.txt",
+      "sha256": "21d6bec6d5c9a4a52429f4c59489abbe9093703d4abfd5ea5ffd2e9cf5934448",
+      "bytes": 2916
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSES/LicenseRef-ETCSLA.txt",
+      "sha256": "8981db93abcb592e59b519efca75a3573af98a6390e93aa45cc0c4c8edb1c819",
+      "bytes": 6341
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSES/LicenseRef-HI-Trademark.txt",
+      "sha256": "4f937797a70963a7d03dc55960770dccb04726816cd2e440e5135448f20be03a",
+      "bytes": 333
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSES/LicenseRef-Kodak.txt",
+      "sha256": "1dd8d9721d8f047dc1e4c6fe261a5bd70df7262289c44b1cdd962c1d9b54f984",
+      "bytes": 363
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/LICENSES/LicenseRef-PNGSuite.txt",
+      "sha256": "612c7319dd68c7b9f9522fcee166191745ee8244b0e1801b6fd658f788839f86",
+      "bytes": 460
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/NOTICE.md",
+      "sha256": "0f92b4ce771585dfebc963ede074a30b4431b9e327911db44097d83ccf372128",
+      "bytes": 1523
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/cmake/License.rtf",
+      "sha256": "05e668bc36f61552264f4180f0ef7b62475654d3e795ede831c9c3b22aa9bea4",
+      "bytes": 1706
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/cmake/License.rtf.license",
+      "sha256": "d33158565e581afd9cf51a8e0f46df8fc13e2d095583950bd0fe7133a9873cf0",
+      "bytes": 93
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/interface/python_binding/LICENSE",
+      "sha256": "4a464abaf2fe2604dee861dfcfc454c2dd02e4936c38bffa99540ae1ed4b1ae4",
+      "bytes": 9583
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/astc-encoder/LICENSE.txt",
+      "sha256": "494accc32e50eb523a0e384d0ae6d4b702db867a89d6971216760e92b240ee12",
+      "bytes": 10139
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/astc-encoder/Test/Images/HDRIHaven/LICENSE.txt",
+      "sha256": "f7230d5a427449430ec09e331f751ae8a7e26cafdc0af89c02e5312e4320de9b",
+      "bytes": 7244
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/astc-encoder/Test/Images/Khronos/LICENSE.txt",
+      "sha256": "edc930ca714966b56089c5a3e9a790366f9bf37e1749fb17e6dcf40b8783251f",
+      "bytes": 1346
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/basisu/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/basisu/OpenCL/license.txt",
+      "sha256": "df135be675b332dfdc8cca0b73e355d5d23aad79fd0f309f350e644f243afb06",
+      "bytes": 263
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/basisu/zstd/LICENSE",
+      "sha256": "2c1a7fa704df8f3a606f6fc010b8b5aaebf403f3aeec339a12048f1ba7331a0b",
+      "bytes": 1530
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/lib/dfdutils/LICENSE.adoc",
+      "sha256": "8ee9fdaf365c301bb413656765fc85c5424a807c50e35a8ae622b99f4ea22244",
+      "bytes": 269
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ktx/other_projects/fmt/LICENSE",
+      "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+      "bytes": 1431
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/libjpeg-turbo/LICENSE.md",
+      "sha256": "e548c96c0c09397c94b5c5531836c02ff2c403f1f2b130cad8e3ec9439b5a7cc",
+      "bytes": 5620
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/libjpeg-turbo/java/doc/legal/LICENSE",
+      "sha256": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
+      "bytes": 19274
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/libjpeg-turbo/release/License.rtf",
+      "sha256": "d26120ab237f87dea10aa4fa7fd4243cadffd26e54eb2f3903d5fb0f8ed336b2",
+      "bytes": 2178
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/libmorton/LICENSE",
+      "sha256": "acf95f184b179dfce0809d7a4e92e6140f2611d76358bc56dd34158e33935527",
+      "bytes": 1069
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/meshoptimizer/LICENSE.md",
+      "sha256": "af0399f6fe106205872fd58c25f5a33fdefd34754b6d96d3f6b4307eb17d05ed",
+      "bytes": 1079
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/ms-gsl/LICENSE",
+      "sha256": "4c21dc82a1c7186ea754fd59d504c00947953a3401fe8e24eaa44109ef8e2555",
+      "bytes": 1157
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/picosha2/LICENSE",
+      "sha256": "6c30eb1f37554ec4199cb82a8c86d9e7a852da78a757832bebb03ac9ddc44ff1",
+      "bytes": 1064
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/rapidjson/bin/jsonschema/LICENSE",
+      "sha256": "837402bd25fad9b704265801ca3f92566a98157c1f9a7acd6f446299ba1c305a",
+      "bytes": 1057
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/rapidjson/contrib/natvis/LICENSE",
+      "sha256": "394faaedb93c1da8ecbd61322518834908fee64381117e01a611bf9fac20baa6",
+      "bytes": 2175
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/rapidjson/license.txt",
+      "sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32",
+      "bytes": 5152
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/spdlog/LICENSE",
+      "sha256": "4ccecab18d1ff0b61174fe3d6c430541625d3ddb865b0d5887db296f883c76e7",
+      "bytes": 1354
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/stb/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "bytes": 2510
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/stb/data/herringbone/license.txt",
+      "sha256": "100868556be0b9e6df6593886e9e1f7746cac63e1ad6b3a655e36bd23ad4f4fd",
+      "bytes": 200
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/tinyxml2/LICENSE.txt",
+      "sha256": "9332252e9b9e46db8285d4a3f0bf25f139bf1dca6781b956d57f2302efca6432",
+      "bytes": 808
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/uriparser/COPYING",
+      "sha256": "287f09e6546a9610f949f89e8fb937cacfeabd7bfaa8c8a0c18312193bf04ad3",
+      "bytes": 1734
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/uriparser/test/COPYING",
+      "sha256": "278c725b20339da63f93314ba6204e72cdab93501aaff6f909471fd1ffe26053",
+      "bytes": 26435
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/zlib-ng/LICENSE.md",
+      "sha256": "d3c80be055d94d798eaa786116e84fa0b010bc11420b5d2060d978ea77845436",
+      "bytes": 867
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/zstd/COPYING",
+      "sha256": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505",
+      "bytes": 18091
+    },
+    {
+      "provider": "cesium_ancestor",
+      "path": "source/zstd/LICENSE",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+      "bytes": 1549
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/LICENSE.TXT",
+      "sha256": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+      "bytes": 18164
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/alg/internal_libqhull/COPYING.txt",
+      "sha256": "7839af0cb456f93ed30a12de1264bd6d02171f6ee00f1c2758a9b79c5517a80d",
+      "bytes": 1635
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/gif/giflib/COPYING",
+      "sha256": "0c9b7990ecdca88b676db232c226548ac408b279f550d424d996f0d83591dd8e",
+      "bytes": 1088
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/grib/degrib/LICENSE.TXT",
+      "sha256": "ebc0e3db515bae2a665cfbc27e2f7a205d16f47f55251d6f837d5b5d92974818",
+      "bytes": 1979
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/mrf/libLERC/LICENSE.TXT",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/mrf/libLERC/NOTICE.TXT",
+      "sha256": "0890008075cc0fe3afb10b8ec44f5938672ca802198a331acf43d1751e6e851d",
+      "bytes": 786
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/pcraster/libcsf/COPYING",
+      "sha256": "e2de6081270d702ecb09599ff1d60a1f88a1076c10e622177ea2abcd1c3caa0d",
+      "bytes": 1666
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/frmts/png/libpng/LICENSE",
+      "sha256": "bb55467b6c1bfc72ac2f94cfe1eda37aa8e68b2a0dff1be69dd8adee28949949",
+      "bytes": 4170
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/ogr/ogrsf_frmts/geojson/libjson/COPYING",
+      "sha256": "74c1e6ca5eba76b54d0ad00d4815c8315c1b3bc45ff99de61d103dc92486284c",
+      "bytes": 2205
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/ogr/ogrsf_frmts/shape/COPYING",
+      "sha256": "7eb803a70990017a1c4e38a8342d7413c5dfeec3ed1ac407e15ae2c274e560ff",
+      "bytes": 25267
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/third_party/LercLib/LICENSE",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-build/third_party/LercLib/NOTICE",
+      "sha256": "8d1552bcf478484366d1a136acdd1b7ec56ad3a1457e8ca2c627731cc1ccd070",
+      "bytes": 807
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "gdal-install/share/gdal/LICENSE.TXT",
+      "sha256": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+      "bytes": 18164
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/LICENSE.TXT",
+      "sha256": "b82e6cca0b13f5db2f22ab667f22254fb1f4b135ea73d5bd6238ef89aff31f6c",
+      "bytes": 18164
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/alg/internal_libqhull/COPYING.txt",
+      "sha256": "7839af0cb456f93ed30a12de1264bd6d02171f6ee00f1c2758a9b79c5517a80d",
+      "bytes": 1635
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/gif/giflib/COPYING",
+      "sha256": "0c9b7990ecdca88b676db232c226548ac408b279f550d424d996f0d83591dd8e",
+      "bytes": 1088
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/grib/degrib/LICENSE.TXT",
+      "sha256": "ebc0e3db515bae2a665cfbc27e2f7a205d16f47f55251d6f837d5b5d92974818",
+      "bytes": 1979
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/mrf/libLERC/LICENSE.TXT",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/mrf/libLERC/NOTICE.TXT",
+      "sha256": "0890008075cc0fe3afb10b8ec44f5938672ca802198a331acf43d1751e6e851d",
+      "bytes": 786
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/pcraster/libcsf/COPYING",
+      "sha256": "e2de6081270d702ecb09599ff1d60a1f88a1076c10e622177ea2abcd1c3caa0d",
+      "bytes": 1666
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/frmts/png/libpng/LICENSE",
+      "sha256": "bb55467b6c1bfc72ac2f94cfe1eda37aa8e68b2a0dff1be69dd8adee28949949",
+      "bytes": 4170
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/ogr/ogrsf_frmts/geojson/libjson/COPYING",
+      "sha256": "74c1e6ca5eba76b54d0ad00d4815c8315c1b3bc45ff99de61d103dc92486284c",
+      "bytes": 2205
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/ogr/ogrsf_frmts/shape/COPYING",
+      "sha256": "7eb803a70990017a1c4e38a8342d7413c5dfeec3ed1ac407e15ae2c274e560ff",
+      "bytes": 25267
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/third_party/LercLib/LICENSE",
+      "sha256": "77a8b761727c75e2167b15bfdf61b2c0bcf8792271228bebe80779106ad00671",
+      "bytes": 9198
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/gdal/gdal/third_party/LercLib/NOTICE",
+      "sha256": "8d1552bcf478484366d1a136acdd1b7ec56ad3a1457e8ca2c627731cc1ccd070",
+      "bytes": 807
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/libkml/libkml-1.3/COPYING",
+      "sha256": "e7952c5e1745f629c235c7aacd066fc36034d37571a964b9142d7fb95b5523eb",
+      "bytes": 1437
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/libkml/libkml-1.3/LICENSE",
+      "sha256": "b7f75dd666d3831eb1143c8b86900db93a2e786d90ae8ac08671b16b66840ebd",
+      "bytes": 1439
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/libkml/libkml-1.3/third_party/boost_1_34_1/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/libkml/libkml-1.3/third_party/googletest-r108/COPYING",
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138",
+      "bytes": 1475
+    },
+    {
+      "provider": "gdal_dependency",
+      "path": "source/libkml/libkml-1.3/third_party/uriparser-0.7.5/COPYING",
+      "sha256": "e0d52731486ffe5a368de7ab15758fdd4c90164c40954c7b73e0e13e86297a73",
+      "bytes": 1732
+    },
+    {
+      "provider": "gles",
+      "path": "source/libglvnd-1.7.0/src/GLdispatch/GLdispatch.c",
+      "sha256": "4a26f895f5693780254cac535b3bf9a941e93e96ca6103bc0d3d74842d4d2549",
+      "bytes": 23013
+    }
+  ],
+  "official_git": [
+    {
+      "path": "LICENSE.md",
+      "sha256": "3db8b919e1f1cb3dff5114ea875d3a758ff367e6490622780d0f7092daebd8f9",
+      "bytes": 55947
+    },
+    {
+      "path": "THIRDPARTY.md",
+      "sha256": "716bcdf3280496641b004f05dd4a7d4e842e8d2e632069c8c5177d8bfb04c7a2",
+      "bytes": 5311
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "source_repository": "https://github.com/TAK-Product-Center/atak-civ",
+  "source_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "actual_kernel_version": "8.30.5",
+  "patch_sha256": "1093f6ead6a9aa61c73e4d4b35e183e101ec7e0c4d9c07171e213ecbae280d48",
+  "files": {
+    "takkernel/engine/src/main/cpp/feature/Style.cpp": {
+      "before_sha256": "cccbf189c970f65dd661050eee6d4c427c2cf781788c7f1f26a849546c509f27",
+      "after_sha256": "ea38c6a40545fabc32797c486f0cd58834663a3c2f0e8481997551915aab69d6"
+    },
+    "takkernel/engine/src/main/cpp/feature/Style.h": {
+      "before_sha256": "c88f32014854e89b06eba37577de64361e963195c67f22427bb33ed9d758f53f",
+      "after_sha256": "53afed867f9631584968259f635d4d52c288fd6fc995505f2c50a5b94ca15740"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag": {
+      "before_sha256": "4c86c5e6366f796c9babd564650112ef0b237a07937ab1b32d9b076cfa6fa7ac",
+      "after_sha256": "5e3b9dfa1f5593d311c3bc405ccd5ece18112021c6398ade56698287b87507e0"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp": {
+      "before_sha256": "e97f70c3d389c59033bdd0397be0685360e5a168d32f07b9faf4617c80f17fbf",
+      "after_sha256": "9489daa1f2b2f149cbb601631e1073efcf33f0f5ffed16d2f602bb60878a740d"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.h": {
+      "before_sha256": "8fabd417c4d64db5ef5ae6d7f786eef8126b07fb7118f6a419ba0a69f0e18182",
+      "after_sha256": "1d9c8c8ae23e3510136f6de724be09f77fb6d48c973df3fafb116db1a980289e"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp": {
+      "before_sha256": "68bd9466a02fb85c430fc043adbcf0c3a0ffaa34fab8beaa47759d30f8e095a2",
+      "after_sha256": "8c27b0fb92cce8e9ca6780082ca5b6258eb9ce17adaa88f7623b1e008faca9fd"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.h": {
+      "before_sha256": "ea6973110ee5f1a8db02b4f356e1d0d913a61c6007fd86daa1c02479afa4c845",
+      "after_sha256": "0194034d22c2ac4e850a884638b6e81b5d984268b5a46d8233ceea4927d0bdb1"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp": {
+      "before_sha256": "04353f2d85bad40f90f42e9c8f5dadc3e05ff63aaa79e3d4286666acf34f99bc",
+      "after_sha256": "1ab8414e53f21cfe21bbdcd7ae47bf7079efbcdff4bfae854e2f87efc13791af"
+    },
+    "takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h": {
+      "before_sha256": null,
+      "after_sha256": "5fb78648d06c8cc568182356104a307495d569b8d49d92ec2590b6436b85a3dd"
+    },
+    "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": {
+      "before_sha256": "29d34d8d2d5bba994fc3cb39a12d9ffb27d938ceb50f7bb34c5450aa1a7ba46e",
+      "after_sha256": "d5cb7d787f6b187b6ba32274d688a5336e9d61c537b17005bab5bde34b758463"
+    },
+    "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": {
+      "before_sha256": null,
+      "after_sha256": "63be9ff34dd5ac5523f4fdf9caafc3abce2a83d561e01d3962a4d83490fa8337"
+    },
+    "takkernel/engine/src/main/jni/jstyle.cpp": {
+      "before_sha256": "f96336e2a2521d946a0f544cbf3d94203a01eea875be460b567f5e5ee5a3756b",
+      "after_sha256": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b"
+    }
+  },
+  "takx_source_commits": {
+    "5.7": "0b59a9bb2d0e90dc35c9edfff1c2056daab2b713",
+    "5.8": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31"
+  },
+  "feature_acceptance": false,
+  "private_sdk_equivalence": false
+}

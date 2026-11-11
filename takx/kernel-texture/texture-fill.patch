@@ -1,0 +1,614 @@
+diff --git a/takkernel/engine/src/main/cpp/feature/Style.cpp b/takkernel/engine/src/main/cpp/feature/Style.cpp
+index 1d1d1f1..f819fcf 100644
+--- a/takkernel/engine/src/main/cpp/feature/Style.cpp
++++ b/takkernel/engine/src/main/cpp/feature/Style.cpp
+@@ -7,6 +7,9 @@
+ #include <functional>
+ #include <iomanip>
+ #include <iostream>
++#include <limits>
++#include <locale>
++#include <cmath>
+ #include <regex>
+ #include <sstream>
+ 
+@@ -174,8 +177,9 @@ Style* Style::parseStyle (const char* styleOGR)
+         Symbol* tmpSymbol = (tool.get() && tool->getType() == DrawingTool::SYMBOL) ? static_cast<Symbol *>(tool.get()) : nullptr;
+ 
+         if (tmpBrush) {
+-            styles.emplace_back (std::unique_ptr<Style>(wrapLodStyle(tmpBrush->minLod, tmpBrush->maxLod,
+-                   std::unique_ptr<Style>(new BasicFillStyle (tmpBrush->foreColor)))));
++            std::unique_ptr<Style> fill(TextureFillStyle::parseProjectBrush(tmpBrush->names, tmpBrush->foreColor));
++            if (!fill) fill.reset(new BasicFillStyle(tmpBrush->foreColor));
++            styles.emplace_back(wrapLodStyle(tmpBrush->minLod, tmpBrush->maxLod, std::move(fill)));
+         } else if (tmpPen) {
+             if(tmpPen->arrowRadius > 0.f) {
+                 int16_t pattern = (int16_t)0xFFFF;
+@@ -525,6 +529,65 @@ bool BasicFillStyle::equalsImpl(const Style &other) const NOTHROWS
+     return color == test.color;
+ }
+ 
++TextureFillStyle::TextureFillStyle(const char *uri_, unsigned int color_, int rx, int ry,
++                                 int w, int h, float degrees, bool north) :
++    Style(TESC_TextureFillStyle), uri(uri_), color(color_), repeatX(rx), repeatY(ry),
++    width(w), height(h), rotation(degrees), absolute(north)
++{
++    if (!uri_ || !*uri_ || std::strlen(uri_) > 8192u ||
++        (rx != Repeat && rx != Stretch) || (ry != Repeat && ry != Stretch) ||
++        w <= 0 || h <= 0 || w > 32768 || h > 32768 || !std::isfinite(degrees))
++        throw std::invalid_argument("invalid texture fill parameters");
++}
++Style *TextureFillStyle::clone() const { return new TextureFillStyle(*this); }
++bool TextureFillStyle::equalsImpl(const Style &other) const NOTHROWS
++{
++    if (other.getClass() != getClass()) return false;
++    const auto &b = static_cast<const TextureFillStyle &>(other);
++    return std::strcmp(uri, b.uri) == 0 && color == b.color && repeatX == b.repeatX &&
++        repeatY == b.repeatY && width == b.width && height == b.height &&
++        rotation == b.rotation && absolute == b.absolute;
++}
++TAKErr TextureFillStyle::toOGR(Port::String &value) const NOTHROWS
++{
++    try {
++        // Explicit project extension in an OGR BRUSH id. Hex URI avoids delimiters/escaping ambiguity.
++        std::ostringstream out;
++        out.imbue(std::locale::classic());
++        out << "BRUSH(id:\"uds-tak-texture-v1:";
++        const char *hex = "0123456789abcdef";
++        for (const unsigned char *p = reinterpret_cast<const unsigned char *>(static_cast<const char *>(uri)); *p; ++p)
++            out << hex[*p >> 4] << hex[*p & 15];
++        out << ':' << repeatX << ':' << repeatY << ':' << width << ':' << height << ':'
++            << std::setprecision(std::numeric_limits<float>::max_digits10) << rotation << ':'
++            << (absolute ? 1 : 0) << "\",fc:" << OGR_Color(color) << ')';
++        value = out.str().c_str();
++        return TE_Ok;
++    } catch (...) { return TE_Err; }
++}
++TextureFillStyle *TextureFillStyle::parseProjectBrush(const char *name, unsigned int color)
++{
++    const std::string prefix("uds-tak-texture-v1:");
++    if (!name || std::strncmp(name, prefix.c_str(), prefix.size()) != 0) return nullptr;
++    std::istringstream input(name + prefix.size());
++    input.imbue(std::locale::classic());
++    std::string encoded, text;
++    if (!std::getline(input, encoded, ':') || encoded.empty() || encoded.size() > 16384u || encoded.size()%2)
++        throw std::invalid_argument("invalid texture URI encoding");
++    for (std::size_t i = 0; i < encoded.size(); i += 2) {
++        auto nibble = [](char ch) -> int { return ch >= '0' && ch <= '9' ? ch-'0' : ch >= 'a' && ch <= 'f' ? ch-'a'+10 : -1; };
++        const int a = nibble(encoded[i]), b = nibble(encoded[i+1]);
++        if (a < 0 || b < 0 || !(a || b)) throw std::invalid_argument("invalid texture URI encoding");
++        text.push_back(static_cast<char>((a<<4)|b));
++    }
++    int rx, ry, w, h, north; float degrees; char a,b,c,d,e;
++    if (!(input >> rx >> a >> ry >> b >> w >> c >> h >> d >> degrees >> e >> north) ||
++        a != ':' || b != ':' || c != ':' || d != ':' || e != ':' ||
++        (north != 0 && north != 1) || input.peek() != std::char_traits<char>::eof())
++        throw std::invalid_argument("invalid texture fill encoding");
++    return new TextureFillStyle(text.c_str(), color, rx, ry, w, h, degrees, north != 0);
++}
++
+ BasicPointStyle::BasicPointStyle (unsigned int color, float size) :
+     Style(TESC_BasicPointStyle),
+     color (color),
+diff --git a/takkernel/engine/src/main/cpp/feature/Style.h b/takkernel/engine/src/main/cpp/feature/Style.h
+index a3c07c1..690dab3 100644
+--- a/takkernel/engine/src/main/cpp/feature/Style.h
++++ b/takkernel/engine/src/main/cpp/feature/Style.h
+@@ -29,6 +29,7 @@ namespace atakmap                       // Open atakmap namespace.
+             TESC_ArrowStrokeStyle,
+             TESC_LevelOfDetailStyle,
+             TESC_MeshPointStyle,
++            TESC_TextureFillStyle, // project 8.30 extension; preceding identifiers unchanged
+         };
+ 
+         enum StrokeExtrusionMode
+@@ -87,6 +88,7 @@ namespace atakmap                       // Open atakmap namespace.
+             friend class BasicPointStyle;
+             friend class LabelPointStyle;
+             friend class BasicFillStyle;
++            friend class TextureFillStyle;
+             friend class BasicStrokeStyle;
+             friend class CompositeStyle;
+             friend class PatternStrokeStyle;
+@@ -115,6 +117,33 @@ namespace atakmap                       // Open atakmap namespace.
+             unsigned int color;
+         };
+ 
++        /** Public-source project texture fill, dimensions in display pixels and rotation in degrees. */
++        class ENGINE_API TextureFillStyle : public Style
++        {
++        public:
++            enum RepeatType { Repeat = 0, Stretch = 1 };
++            TextureFillStyle(const char *uri, unsigned int color, int repeatX, int repeatY,
++                             int width, int height, float rotation, bool absolute);
++            const char *getUri() const NOTHROWS { return uri; }
++            unsigned int getColor() const NOTHROWS { return color; }
++            int getRepeatTypeX() const NOTHROWS { return repeatX; }
++            int getRepeatTypeY() const NOTHROWS { return repeatY; }
++            int getWidth() const NOTHROWS { return width; }
++            int getHeight() const NOTHROWS { return height; }
++            float getRotation() const NOTHROWS { return rotation; }
++            bool isAbsolute() const NOTHROWS { return absolute; }
++            TAK::Engine::Util::TAKErr toOGR(TAK::Engine::Port::String &) const NOTHROWS override;
++            Style *clone() const override;
++            static TextureFillStyle *parseProjectBrush(const char *name, unsigned int color);
++        private:
++            bool equalsImpl(const Style &) const NOTHROWS override;
++            TAK::Engine::Port::String uri;
++            unsigned int color;
++            int repeatX, repeatY, width, height;
++            float rotation;
++            bool absolute;
++        };
++
+         class ENGINE_API BasicPointStyle : public Style
+         {
+         public:
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag b/takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag
+index 1c8f7ac..69b49fb 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag
++++ b/takkernel/engine/src/main/cpp/renderer/feature/BatchGeometryPolygons.frag
+@@ -1,6 +1,14 @@
+ R"(#version 300 es
+ precision highp float;
+ uniform vec4 u_color;
++uniform bool uTextureEnabled;
++uniform sampler2D uTexture;
++uniform vec4 uTextureAtlas;
++uniform vec2 uTextureOrigin;
++uniform vec2 uTextureRotation; // cosine, sine of inverse sample rotation
++uniform vec2 uTextureDimensions;
++uniform vec4 uTextureBounds;
++uniform ivec2 uTextureRepeat;
+ uniform vec3 uLightingNormal;
+ 
+ in vec4 v_color;
+@@ -30,5 +38,18 @@ void main(void) {
+ 
+   //fragColor = polyColor * mix(vec4(1.0), vec4(lighting, 1.0), step(0.01, vLightingFactor));
+   fragColor = polyColor * vec4(lighting, 1.0);
++  if (uTextureEnabled) {
++    vec2 p = gl_FragCoord.xy - uTextureOrigin;
++    p = mat2(uTextureRotation.x, uTextureRotation.y, -uTextureRotation.y, uTextureRotation.x) * p;
++    vec2 repeatUv = p / uTextureDimensions;
++    vec2 stretchUv = (p - uTextureBounds.xy) / (uTextureBounds.zw - uTextureBounds.xy);
++    vec2 uv = vec2(uTextureRepeat.x == 0 ? fract(repeatUv.x) : clamp(stretchUv.x, 0.0, 1.0),
++                   uTextureRepeat.y == 0 ? fract(repeatUv.y) : clamp(stretchUv.y, 0.0, 1.0));
++    // Atlas-safe repetition: wrap inside this image, never repeat the entire shared atlas.
++    vec2 halfTexel = 0.5 / vec2(textureSize(uTexture, 0));
++    vec2 low = uTextureAtlas.xy + halfTexel;
++    vec2 high = uTextureAtlas.zw - halfTexel;
++    fragColor *= texture(uTexture, mix(low, high, uv));
++  }
+ }
+ )"
+\ No newline at end of file
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
+index 326b6be..3606ee4 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp
+@@ -1,4 +1,5 @@
+ #include "renderer/feature/GLBatchGeometryRenderer4.h"
++#include "renderer/feature/TextureFillMath.h"
+ 
+ #include <cassert>
+ #include <map>
+@@ -1431,11 +1432,13 @@ TAKErr GLBatchGeometryRenderer4::drawPolygonBuffers(const GLGlobeBase::State &vi
+     }
+     glUseProgram(shader.handle);
+ 
++    float matrixF[16u];
++    GLint viewport[4];
++    glGetIntegerv(GL_VIEWPORT, viewport);
+     // MVP
+     {
+         Matrix2 mvp;
+         // projection
+-        float matrixF[16u];
+         atakmap::renderer::GLMatrix::orthoM(matrixF, (float)view.left, (float)view.right, (float)view.bottom, (float)view.top, (float)view.scene.camera.near, (float)view.scene.camera.far);
+         for(std::size_t i = 0u; i < 16u; i++)
+             mvp.set(i%4, i/4, matrixF[i]);
+@@ -1503,6 +1506,30 @@ TAKErr GLBatchGeometryRenderer4::drawPolygonBuffers(const GLGlobeBase::State &vi
+         glEnableVertexAttribArray(shader.aMaxLevelOfDetail);
+ 
+     for (const auto &buffer : buf) {
++        glUniform1i(shader.uTextureEnabled, 0);
++        if (!drawForHitTest && buffer.primitive.polygonTexture) {
++            const auto &texture = *buffer.primitive.polygonTexture;
++            TextureFillFrame frame;
++            std::array<double,2> origin, north, vertex;
++            if (!TextureFillFrame::project(origin, matrixF, texture.origin.x, texture.origin.y, texture.origin.z, viewport) ||
++                !TextureFillFrame::project(north, matrixF, texture.north.x, texture.north.y, texture.north.z, viewport) ||
++                !frame.initialize(origin, north, texture.rotation, texture.absolute)) return TE_IllegalState;
++            for (const auto &p : texture.vertices) {
++                if (!TextureFillFrame::project(vertex, matrixF, p.x, p.y, p.z, viewport)) return TE_IllegalState;
++                frame.include(vertex);
++            }
++            if (!frame.valid()) return TE_IllegalState;
++            glActiveTexture(GL_TEXTURE0);
++            glBindTexture(GL_TEXTURE_2D, buffer.primitive.texid);
++            glUniform1i(shader.uTexture, 0);
++            glUniform4fv(shader.uTextureAtlas, 1, texture.atlas);
++            glUniform2f(shader.uTextureOrigin, frame.origin[0], frame.origin[1]);
++            glUniform2f(shader.uTextureRotation, frame.cosine, frame.sine);
++            glUniform2fv(shader.uTextureDimensions, 1, texture.dimensions);
++            glUniform2i(shader.uTextureRepeat, texture.repeat[0], texture.repeat[1]);
++            glUniform4f(shader.uTextureBounds, frame.bounds[0], frame.bounds[1], frame.bounds[2], frame.bounds[3]);
++            glUniform1i(shader.uTextureEnabled, 1);
++        }
+         glBindBuffer(GL_ARRAY_BUFFER, buffer.primitive.vbo);
+         // XXX - VAOs
+         glVertexAttribPointer(shader.aPosition, buffer.layout.vertex.polygons.position);
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.h b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.h
+index bc21288..65484cf 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.h
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.h
+@@ -232,12 +232,23 @@ namespace TAK {
+                         Arrows,
+                         Meshes,
+                     };
++                    struct PolygonTexture {
++                        float atlas[4]{0.f, 0.f, 1.f, 1.f};
++                        float dimensions[2]{1.f, 1.f};
++                        int repeat[2]{0, 0};
++                        float rotation{0.f};
++                        bool absolute{false};
++                        Math::Point2<double> origin;
++                        Math::Point2<double> north;
++                        std::vector<Math::Point2<float>> vertices;
++                    };
+                     struct PrimitiveBuffer {
+                         GLuint vbo{ GL_NONE };
+                         GLuint ibo{ GL_NONE };
+                         GLsizei count{ 0u };
+                         GLenum mode{ GL_NONE };
+                         GLuint texid{ GL_NONE };
++                        std::shared_ptr<PolygonTexture> polygonTexture;
+                     };
+                     struct BatchState {
+                         TAK::Engine::Core::GeoPoint2 centroid;
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
+index 8acea93..e829288 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp
+@@ -343,6 +343,14 @@ PolygonsShader TAK::Engine::Renderer::Feature::GLBatchGeometryShaders_getPolygon
+     shader.handle = prog.program;
+ 
+     glUseProgram(shader.handle);
++    shader.uTextureEnabled = glGetUniformLocation(shader.handle, "uTextureEnabled");
++    shader.uTextureAtlas = glGetUniformLocation(shader.handle, "uTextureAtlas");
++    shader.uTextureOrigin = glGetUniformLocation(shader.handle, "uTextureOrigin");
++    shader.uTextureRotation = glGetUniformLocation(shader.handle, "uTextureRotation");
++    shader.uTextureDimensions = glGetUniformLocation(shader.handle, "uTextureDimensions");
++    shader.uTextureBounds = glGetUniformLocation(shader.handle, "uTextureBounds");
++    shader.uTextureRepeat = glGetUniformLocation(shader.handle, "uTextureRepeat");
++    shader.uTexture = glGetUniformLocation(shader.handle, "uTexture");
+     shader.u_mvp = glGetUniformLocation(shader.handle, "u_mvp");
+     shader.uViewport = glGetUniformLocation(shader.handle, "uViewport");
+     shader.uIgnoreIds = glGetUniformLocation(shader.handle, "uIgnoreIds");
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.h b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.h
+index abf3797..4038594 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.h
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.h
+@@ -69,6 +69,9 @@ namespace TAK {
+                 };
+                 struct ENGINE_API PolygonsShader
+                 {
++                    GLint uTextureEnabled{-1}, uTexture{-1}, uTextureAtlas{-1};
++                    GLint uTextureOrigin{-1}, uTextureRotation{-1}, uTextureDimensions{-1};
++                    GLint uTextureBounds{-1}, uTextureRepeat{-1};
+                     //Renderer::Shader2 base;
+                     GLuint handle{ GL_NONE };
+                     GLint uColor{ -1 };
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
+index 28cb8d4..a0b09d9 100644
+--- a/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/feature/GLGeometryBatchBuilder.cpp
+@@ -115,6 +115,7 @@ namespace
+             float v1{ 0.f };
+         } texCoords;
+         GLuint texid{ GL_NONE };
++        std::shared_ptr<GLBatchGeometryRenderer4::PolygonTexture> polygonTexture;
+         struct {
+             std::size_t width{ 0u };
+             std::size_t height{ 0u };
+@@ -1721,6 +1722,7 @@ namespace
+                 sink.writeFloat(primitive[i].y);
+                 sink.writeFloat(primitive[i].z);
+                 sink.writeInt(hitid);
++                if (style.polygonTexture) style.polygonTexture->vertices.push_back(primitive[i]);
+                 sink.writeByte(style.color.fill.r);
+                 sink.writeByte(style.color.fill.g);
+                 sink.writeByte(style.color.fill.b);
+@@ -2303,6 +2305,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
+         sink.builder->buffer.remaining(&remaining);
+         if (!sink.builder->pb.vbo ||
+             ctx->style.texid != sink.builder->pb.texid ||
++            ctx->style.polygonTexture != sink.builder->pb.polygonTexture ||
+             remaining < (ctx->impl.verticesPerEmitPrimitives.out*ctx->impl.vertexSize)) {
+ 
+             // flush builder contents
+@@ -2332,6 +2335,7 @@ void GLGeometryBatchBuilder::VertexWriter::point(const TAK::Engine::Math::Point2
+             sink.builder->buffer.setSourceEndian2(TE_PlatformEndian);
+             sink.builder->pb.mode = ctx->impl.mode;
+             sink.builder->pb.texid = ctx->style.texid;
++            sink.builder->pb.polygonTexture = ctx->style.polygonTexture;
+         }
+ 
+         idx = 0u;
+@@ -2365,8 +2369,10 @@ namespace
+     {
+         if (geom.getType() == atakmap::feature::Geometry::COLLECTION) {
+             const auto &gc = static_cast<const atakmap::feature::GeometryCollection &>(geom);
+-            for (auto it = gc.contents().first; it != gc.contents().second; it++)
+-                push(ctx, featureNameAccess, **it, extrude_, altmode, style_, (ProcessLabelsMask)(processLabels&ProcessLabelsMask::ExplicitStyle), hints);
++            for (auto it = gc.contents().first; it != gc.contents().second; it++) {
++                const auto code = push(ctx, featureNameAccess, **it, extrude_, altmode, style_, (ProcessLabelsMask)(processLabels&ProcessLabelsMask::ExplicitStyle), hints);
++                TE_CHECKRETURN_CODE(code);
++            }
+             return TE_Ok;
+         }
+ 
+@@ -2407,6 +2413,51 @@ namespace
+             ctx.style.composite.basicFill++;
+             break;
+         }
++        case atakmap::feature::TESC_TextureFillStyle :
++        {
++            if (geom.getType() != atakmap::feature::Geometry::POLYGON) return TE_InvalidArg;
++            // Separate transparent hatch overlay from any preceding solid fill/stroke.
++            if (ctx.style.composite.basicFill || ctx.style.color.stroke.a) {
++                const auto code = flushPrimitives(ctx, geom, extrude, altmode, hints);
++                TE_CHECKRETURN_CODE(code);
++                ctx.style = FeatureStyle();
++                ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
++            }
++            const auto &impl = static_cast<const atakmap::feature::TextureFillStyle &>(style);
++            auto material = std::make_shared<GLBatchGeometryRenderer4::PolygonTexture>();
++            std::size_t imageWidth, imageHeight; float imageRotation; bool imageAbsolute;
++            auto code = ctx.callback->getIcon(&ctx.style.texid,
++                material->atlas, material->atlas+1, material->atlas+2, material->atlas+3,
++                &imageWidth, &imageHeight, &imageRotation, &imageAbsolute, impl.getUri());
++            TE_CHECKRETURN_CODE(code); // cache miss stays observable; never a solid-fill fallback
++            if (!ctx.style.texid || !imageWidth || !imageHeight) return TE_IllegalState;
++            material->dimensions[0] = static_cast<float>(impl.getWidth());
++            material->dimensions[1] = static_cast<float>(impl.getHeight());
++            material->repeat[0] = impl.getRepeatTypeX(); material->repeat[1] = impl.getRepeatTypeY();
++            material->rotation = impl.getRotation(); material->absolute = impl.isAbsolute();
++            const auto bounds = geom.getEnvelope();
++            GeoPoint2 origin((bounds.minY+bounds.maxY)*0.5, (bounds.minX+bounds.maxX)*0.5, 0.0, HAE);
++            GeoPoint2 north = origin;
++            north.latitude = std::min(89.999999, origin.latitude+0.00001);
++            if (north.latitude == origin.latitude) return TE_InvalidArg;
++            const bool sprites = (altmode != TAK::Engine::Feature::TEAM_ClampToGround);
++            Projection2Ptr projection(nullptr, nullptr);
++            code = ProjectionFactory3_create(projection, sprites ? ctx.batchContext.spritesSrid : ctx.batchContext.surfaceSrid);
++            TE_CHECKRETURN_CODE(code);
++            TAK::Engine::Math::Point2<double> rtc, a, b;
++            code = projection->forward(&rtc, ctx.batchContext.relativeToCenter); TE_CHECKRETURN_CODE(code);
++            code = projection->forward(&a, origin); TE_CHECKRETURN_CODE(code);
++            code = projection->forward(&b, north); TE_CHECKRETURN_CODE(code);
++            material->origin = TAK::Engine::Math::Point2<double>(a.x-rtc.x, a.y-rtc.y, a.z-rtc.z);
++            material->north = TAK::Engine::Math::Point2<double>(b.x-rtc.x, b.y-rtc.y, b.z-rtc.z);
++            ctx.style.polygonTexture = std::move(material);
++            ctx.style.color.fill.r = (impl.getColor() >> 16u)&255u;
++            ctx.style.color.fill.g = (impl.getColor() >> 8u)&255u;
++            ctx.style.color.fill.b = impl.getColor()&255u;
++            ctx.style.color.fill.a = (impl.getColor() >> 24u)&255u;
++            ctx.style.composite.basicFill++;
++            break;
++        }
+         case atakmap::feature::TESC_BasicPointStyle :
+         {
+             if (ctx.style.composite.icon) {
+@@ -2477,8 +2528,10 @@ namespace
+             const auto &impl = static_cast<const atakmap::feature::CompositeStyle &>(style);
+             // only allow explicit label processing in recursion
+             const unsigned processLabelsMask = processLabels&ProcessLabelsMask::ExplicitStyle;
+-            for (std::size_t i = 0u; i < impl.getStyleCount(); i++)
+-                push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(i), (ProcessLabelsMask)processLabelsMask, hints);
++            for (std::size_t i = 0u; i < impl.getStyleCount(); i++) {
++                const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(i), (ProcessLabelsMask)processLabelsMask, hints);
++                TE_CHECKRETURN_CODE(code);
++            }
+             // labeling is assumed to have occurred during recursion
+             needsLabel = false;
+             break;
+@@ -2782,10 +2835,13 @@ namespace
+             if(!TE_ISNAN(ctx.batchContext.resolution.scene)) {
+                 const auto lod = atakmap::raster::osm::OSMUtils::mapnikTileLeveld(ctx.batchContext.resolution.scene, 0.0);
+                 const auto child = impl.getStyle((double)lod);
+-                if(child)
+-                    push(ctx, featureNameAccess, geom, extrude, altmode, child.get(), processLabels, hints);
++                if(child) {
++                    const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, child.get(), processLabels, hints);
++                    TE_CHECKRETURN_CODE(code);
++                }
+             } else {
+-                push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(), processLabels, hints);
++                const auto code = push(ctx, featureNameAccess, geom, extrude, altmode, &impl.getStyle(), processLabels, hints);
++                TE_CHECKRETURN_CODE(code);
+             }
+             // pop the LOD
+             ctx.style.levelOfDetail.minimum = minLod;
+@@ -2823,7 +2879,8 @@ namespace
+             ctx.style.composite.pattern ||
+             ctx.style.composite.arrow) {
+ 
+-            flushPrimitives(ctx, geom, extrude, altmode, hints);
++            const auto code = flushPrimitives(ctx, geom, extrude, altmode, hints);
++            TE_CHECKRETURN_CODE(code);
+             ctx.style = FeatureStyle();
+             ctx.style.label.color.background = ctx.labelDefaults.backgroundColor;
+         }
+@@ -2864,7 +2921,7 @@ namespace
+ 
+         GLGeometryBatchBuilder::VertexWriter vw;
+         vw.ctx = &ctx;
+-        if (ctx.style.color.fill.a && (ctx.style.texid || ctx.style.mesh.meshPtr)) {
++        if (ctx.style.color.fill.a && !ctx.style.polygonTexture && (ctx.style.texid || ctx.style.mesh.meshPtr)) {
+             if (geom.getType() == atakmap::feature::Geometry::POINT) {
+                 auto pointGeom = static_cast<const atakmap::feature::Point &>(geom);
+                 // check for occlusion
+diff --git a/takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h b/takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h
+new file mode 100644
+index 0000000..3484cc4
+--- /dev/null
++++ b/takkernel/engine/src/main/cpp/renderer/feature/TextureFillMath.h
+@@ -0,0 +1,48 @@
++#ifndef TAK_ENGINE_RENDERER_TEXTUREFILLMATH_H
++#define TAK_ENGINE_RENDERER_TEXTUREFILLMATH_H
++#include <array>
++#include <cmath>
++#include <limits>
++namespace TAK { namespace Engine { namespace Renderer { namespace Feature {
++struct TextureFillFrame {
++    std::array<double, 2> origin;
++    double cosine, sine;
++    std::array<double, 4> bounds{{std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
++                                -std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()}};
++    static bool project(std::array<double,2> &out, const float *m, double x, double y, double z, const int *viewport) {
++        const double w=m[3]*x+m[7]*y+m[11]*z+m[15];
++        if (!std::isfinite(w) || w <= 0.0 || viewport[2] <= 0 || viewport[3] <= 0) return false;
++        out={{viewport[0]+((m[0]*x+m[4]*y+m[8]*z+m[12])/w+1.0)*viewport[2]*0.5,
++              viewport[1]+((m[1]*x+m[5]*y+m[9]*z+m[13])/w+1.0)*viewport[3]*0.5}};
++        return std::isfinite(out[0]) && std::isfinite(out[1]);
++    }
++    bool initialize(const std::array<double,2> &a, const std::array<double,2> &north, double degrees, bool absolute) {
++        origin=a;
++        const double dx=north[0]-a[0],dy=north[1]-a[1];
++        if (!std::isfinite(degrees) || (absolute && std::hypot(dx,dy)<1e-9)) return false;
++        const double angle=degrees*(3.14159265358979323846/180.0)+(absolute ? std::atan2(dx,dy):0.0);
++        cosine=std::cos(angle); sine=std::sin(angle);
++        return true;
++    }
++    std::array<double,2> rotate(const std::array<double,2> &p) const {
++        const double x=p[0]-origin[0],y=p[1]-origin[1];
++        return {{cosine*x-sine*y,sine*x+cosine*y}};
++    }
++    void include(const std::array<double,2> &p) {
++        const auto q=rotate(p);
++        for (int i=0;i<2;i++) { if(q[i]<bounds[i])bounds[i]=q[i]; if(q[i]>bounds[i+2])bounds[i+2]=q[i]; }
++    }
++    bool valid() const { return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) && bounds[2]>bounds[0] && bounds[3]>bounds[1]; }
++    bool sample(std::array<double,2> &uv,const std::array<double,2> &p,const int *repeat,const float *dimensions) const {
++        if (!valid()) return false;
++        const auto q=rotate(p);
++        for(int i=0;i<2;i++) {
++            if (repeat[i]==0 && dimensions[i]>0) { const double t=q[i]/dimensions[i];uv[i]=t-std::floor(t); }
++            else if(repeat[i]==1) { const double t=(q[i]-bounds[i])/(bounds[i+2]-bounds[i]); uv[i]=t<0?0:t>1?1:t; }
++            else return false;
++        }
++        return true;
++    }
++};
++}}}}
++#endif
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java
+index fe9a5b3..2f25c09 100644
+--- a/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java
+@@ -98,6 +98,8 @@ public abstract class Style implements Disposable
+         } else if (styleClass == styleClasses.BasicFillStyle)
+         {
+             return new BasicFillStyle(pointer, owner);
++        } else if (styleClass == styleClasses.TextureFillStyle) {
++            return new TextureFillStyle(pointer, owner);
+         } else if (styleClass == styleClasses.BasicPointStyle)
+         {
+             return new BasicPointStyle(pointer, owner);
+@@ -140,6 +142,7 @@ public abstract class Style implements Disposable
+     {
+         public int BasicStrokeStyle = getTESC_BasicStrokeStyle();
+         public int BasicFillStyle = getTESC_BasicFillStyle();
++        public int TextureFillStyle = com.atakmap.map.layer.feature.style.TextureFillStyle.nativeClass();
+         public int BasicPointStyle = getTESC_BasicPointStyle();
+         public int IconPointStyle = getTESC_IconPointStyle();
+         public int MeshPointStyle = getTESC_MeshPointStyle();
+diff --git a/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java b/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java
+new file mode 100644
+index 0000000..d9256b8
+--- /dev/null
++++ b/takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java
+@@ -0,0 +1,33 @@
++package com.atakmap.map.layer.feature.style;
++
++import com.atakmap.interop.Pointer;
++
++/**
++ * Project public-source texture fill. Width/height are positive display pixels;
++ * rotation is clockwise degrees. Absolute rotation is relative to map north,
++ * otherwise to the screen. This does not claim private Kernel binary compatibility.
++ */
++public final class TextureFillStyle extends Style {
++    public static final int REPEATTYPE_REPEAT = 0;
++    public static final int REPEATTYPE_STRETCH = 1;
++
++    public TextureFillStyle(String uri, int color, int repeatTypeX, int repeatTypeY,
++                            int width, int height, float rotation, boolean isAbsolute) {
++        this(create(uri, color, repeatTypeX, repeatTypeY, width, height, rotation, isAbsolute), null);
++    }
++    TextureFillStyle(Pointer pointer, Object owner) { super(pointer, owner); }
++    public String getUri() { rwlock.acquireRead(); try { return uri(pointer.raw); } finally { rwlock.releaseRead(); } }
++    public int getColor() { return integer(0); }
++    public int getRepeatTypeX() { return integer(1); }
++    public int getRepeatTypeY() { return integer(2); }
++    public int getWidth() { return integer(3); }
++    public int getHeight() { return integer(4); }
++    public float getRotation() { rwlock.acquireRead(); try { return rotation(pointer.raw); } finally { rwlock.releaseRead(); } }
++    public boolean isAbsolute() { return integer(5) != 0; }
++    private int integer(int field) { rwlock.acquireRead(); try { return integer(pointer.raw, field); } finally { rwlock.releaseRead(); } }
++    static native int nativeClass();
++    private static native Pointer create(String uri, int color, int rx, int ry, int width, int height, float rotation, boolean absolute);
++    private static native String uri(long ptr);
++    private static native int integer(long ptr, int field);
++    private static native float rotation(long ptr);
++}
+diff --git a/takkernel/engine/src/main/jni/jstyle.cpp b/takkernel/engine/src/main/jni/jstyle.cpp
+index 6b2302c..f3ad1e1 100644
+--- a/takkernel/engine/src/main/jni/jstyle.cpp
++++ b/takkernel/engine/src/main/jni/jstyle.cpp
+@@ -866,3 +866,43 @@ JNIEXPORT jobject JNICALL Java_com_atakmap_map_layer_feature_ogr_style_FeatureSt
+     Style_parseStyle(cstyle, cstyleStr);
+     return cstyle ? NewPointer(env, std::move(cstyle)) : nullptr;
+ }
++
++// Public-source project texture fill; real Style ownership and native class dispatch.
++extern "C" {
++JNIEXPORT jint JNICALL Java_com_atakmap_map_layer_feature_style_TextureFillStyle_nativeClass(JNIEnv *, jclass)
++{ return TESC_TextureFillStyle; }
++JNIEXPORT jobject JNICALL Java_com_atakmap_map_layer_feature_style_TextureFillStyle_create(
++    JNIEnv *env, jclass, jstring juri, jint color, jint rx, jint ry, jint width, jint height, jfloat rotation, jboolean absolute)
++{
++    if (!juri) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return nullptr; }
++    JNIStringUTF uri(*env, juri);
++    if (env->ExceptionCheck()) return nullptr;
++    try {
++        StylePtr result(new TextureFillStyle(uri, color, rx, ry, width, height, rotation, absolute), Style::destructStyle);
++        return NewPointer(env, std::move(result));
++    } catch (const std::invalid_argument &) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); }
++      catch (...) { ATAKMapEngineJNI_checkOrThrow(env, TE_Err); }
++    return nullptr;
++}
++JNIEXPORT jstring JNICALL Java_com_atakmap_map_layer_feature_style_TextureFillStyle_uri(JNIEnv *env, jclass, jlong ptr)
++{
++    const Style *s = JLONG_TO_INTPTR(Style, ptr);
++    if (!s || s->getClass() != TESC_TextureFillStyle) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return nullptr; }
++    return env->NewStringUTF(static_cast<const TextureFillStyle *>(s)->getUri());
++}
++JNIEXPORT jint JNICALL Java_com_atakmap_map_layer_feature_style_TextureFillStyle_integer(JNIEnv *env, jclass, jlong ptr, jint field)
++{
++    const Style *s = JLONG_TO_INTPTR(Style, ptr);
++    if (!s || s->getClass() != TESC_TextureFillStyle) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return 0; }
++    const auto &t = static_cast<const TextureFillStyle &>(*s);
++    switch (field) {
++    case 0: return t.getColor(); case 1: return t.getRepeatTypeX(); case 2: return t.getRepeatTypeY();
++    case 3: return t.getWidth(); case 4: return t.getHeight(); case 5: return t.isAbsolute();
++    default: ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return 0;
++    }
++}
++JNIEXPORT jfloat JNICALL Java_com_atakmap_map_layer_feature_style_TextureFillStyle_rotation(JNIEnv *env, jclass, jlong ptr)
++{
++    STYLE_IMPL_ACCESSOR_BODY(TextureFillStyle, getRotation)
++}
++}

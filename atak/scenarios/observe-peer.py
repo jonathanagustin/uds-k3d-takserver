@@ -84,7 +84,7 @@ def main():
                "remaining": ["verify Android import/map/attachment in UI", "correlate manual Android Share with this observation", "verify reverse-direction update on Android"]}
     def expired(signum, frame):
         raise TimeoutError("overall peer deadline exceeded")
-    signal.signal(signal.SIGALRM, expired)
+    previous_alarm_handler = signal.signal(signal.SIGALRM, expired)
     signal.alarm(args.seconds)
     started = time.monotonic()
     try:
@@ -102,6 +102,7 @@ def main():
         raise SystemExit("peer verification failed: " + type(error).__name__) from None
     finally:
         signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous_alarm_handler)
         receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
         (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
 

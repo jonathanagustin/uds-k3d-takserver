@@ -1,6 +1,8 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 import importlib.util
+import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 import tempfile
 import stat
@@ -126,7 +128,7 @@ class ScenarioInputTest(unittest.TestCase):
                 return payload
             with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario, "run_bounded", side_effect=protocol) as run:
                 scenario.main()
-            receipt = __import__("json").loads((output / "receipt.json").read_text())
+            receipt = json.loads((output / "receipt.json").read_text())
             self.assertEqual(receipt["status"], "staged-for-manual-import")
             calls = [call.args[0] for call in run.call_args_list]
             self.assertTrue(any("push" in call for call in calls))
@@ -140,7 +142,7 @@ class ScenarioInputTest(unittest.TestCase):
             with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario, "run_bounded", side_effect=subprocess.TimeoutExpired("adb", 45)):
                 with self.assertRaises(SystemExit):
                     scenario.main()
-            receipt = __import__("json").loads((output / "receipt.json").read_text())
+            receipt = json.loads((output / "receipt.json").read_text())
             self.assertEqual(receipt["status"], "failed")
             self.assertEqual(receipt["error_type"], "TimeoutExpired")
 
@@ -163,7 +165,7 @@ class ScenarioInputTest(unittest.TestCase):
                         with self.assertRaises(SystemExit): scenario.main()
                     else:
                         scenario.main()
-                receipt = __import__("json").loads((output / "receipt.json").read_text())
+                receipt = json.loads((output / "receipt.json").read_text())
                 self.assertEqual(receipt["status"], "failed" if mismatch or b"Status: ok" not in ack else "android-import-activity-dispatched-unverified")
                 commands = [call.args[0] for call in run.call_args_list]
                 if mismatch: self.assertFalse(any("am" in c for c in commands))
@@ -211,3 +213,39 @@ class PeerObservationTest(unittest.TestCase):
         import time
         with self.assertRaises(RuntimeError): peer.observe(self.Stream([]), self.markers, time.monotonic() + 1)
         with self.assertRaises(TimeoutError): peer.observe(self.Stream([]), self.markers, time.monotonic() - 1)
+
+
+    def test_network_failures_preserve_sanitized_failure_receipt(self):
+        # Explicit TLS/connect mocks only: no DNS lookup or network connection.
+        from unittest.mock import patch, MagicMock
+        import ssl
+        for stage in ("credentials", "connect", "handshake"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                package = ScenarioInputTest().package(directory)
+                output = Path(directory) / "peer-out"
+                context = MagicMock()
+                if stage == "credentials":
+                    context.load_cert_chain.side_effect = FileNotFoundError("PRIVATE-CREDENTIAL-PATH")
+                if stage == "handshake":
+                    context.wrap_socket.side_effect = ssl.SSLError("PRIVATE-HANDSHAKE-DETAIL")
+                argv = ["observe-peer", "--mission-package", str(package), "--host", "example.invalid", "--ca", "PRIVATE-CA-PATH", "--cert", "PRIVATE-CERT-PATH", "--key", "PRIVATE-KEY-PATH", "--seconds", "1", "--output", str(output)]
+                with patch("sys.argv", argv), patch.object(peer.ssl, "create_default_context", return_value=context), patch.object(peer.socket, "create_connection", side_effect=ConnectionRefusedError("PRIVATE-CONNECT-DETAIL") if stage == "connect" else None) as connect:
+                    with self.assertRaises(SystemExit) as failure:
+                        peer.main()
+                receipt_text = (output / "receipt.json").read_text()
+                self.assertNotIn("PRIVATE", receipt_text + str(failure.exception))
+                receipt = json.loads(receipt_text)
+                self.assertEqual(receipt["status"], "failed")
+                self.assertFalse(receipt["sends_cot"])
+                self.assertNotIn("received_matching_uids", receipt)
+                if stage == "credentials": connect.assert_not_called()
+                elif stage == "connect": context.wrap_socket.assert_not_called()
+                else: context.wrap_socket.assert_called_once()
+
+    def test_unrelated_or_malformed_stream_never_qualifies_fixture(self):
+        import time
+        unrelated = self.event.replace(b"synthetic-android-test", b"synthetic-other-client")
+        with self.assertRaises(RuntimeError):
+            peer.observe(self.Stream([unrelated]), self.markers, time.monotonic() + 1)
+        with self.assertRaises(ET.ParseError):
+            peer.observe(self.Stream([b"<event><broken></event>"]), self.markers, time.monotonic() + 1)

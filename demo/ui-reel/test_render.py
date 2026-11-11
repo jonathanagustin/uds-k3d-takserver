@@ -171,6 +171,19 @@ class SceneExportTests(unittest.TestCase):
             self.assertEqual(sentinel.read_bytes(), b"keep")
             self.assertFalse(output.exists())
 
+    def test_media_probe_rejects_nonfinite_and_nonpositive_durations(self):
+        for duration in ("NaN", "Infinity", "-Infinity", "0", "-1"):
+            probe = {"streams": [{"codec_type": "video", "codec_name": "h264",
+                                   "width": 1920, "height": 1080}],
+                     "format": {"duration": duration}}
+            with self.subTest(duration=duration), patch.object(
+                    REEL.subprocess, "check_output", return_value=json.dumps(probe)):
+                with self.assertRaisesRegex(ValueError, "duration contract"):
+                    REEL.probe_video(Path("clip.mp4"), 6)
+        probe["format"]["duration"] = "6.02"
+        with patch.object(REEL.subprocess, "check_output", return_value=json.dumps(probe)):
+            self.assertEqual(REEL.probe_video(Path("clip.mp4"), 6), probe)
+
     def test_clip_media_contract_rejects_wrong_duration_or_audio(self):
         for probe in ({"streams": [{"codec_type": "audio"}], "format": {"duration": "6"}},
                       {"streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920,

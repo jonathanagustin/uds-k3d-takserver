@@ -6,6 +6,7 @@
 import argparse
 import hashlib
 import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -106,10 +107,12 @@ def probe_video(video, duration):
         "ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name,width,height",
         "-of", "json", str(video)], text=True))
     streams = probe["streams"]
+    measured_duration = float(probe["format"]["duration"])
     if (len(streams) != 1 or streams[0].get("codec_type") != "video"
             or streams[0].get("codec_name") != "h264"
             or (streams[0].get("width"), streams[0].get("height")) != (1920, 1080)
-            or abs(float(probe["format"]["duration"]) - duration) > .05):
+            or not math.isfinite(measured_duration) or measured_duration <= 0
+            or abs(measured_duration - duration) > .05):
         raise ValueError("Output failed the silent 1080p H.264 duration contract")
     return probe
 

@@ -24,6 +24,9 @@ SCENES = (
     ("Shared marker", "demo-clip-sync.mp4", 74, 6),
 )
 
+# Only existing scenes whose durations meet the separate 5–10 second clip brief.
+SCENE_EXPORTS = ((1, "create-map-marker"), (2, "share-feature"), (4, "shared-marker"))
+
 
 def digest(path):
     with path.open("rb") as stream:
@@ -70,7 +73,48 @@ def run(command, directory):
     subprocess.run(command, cwd=directory, check=True, timeout=180)
 
 
-def render(cache, output, offline=False):
+def export_scenes(work, output, lock, versions):
+    """Copy the already rendered historical scenes into a separate review set."""
+    output.mkdir(parents=True, exist_ok=True)
+    for index, slug in SCENE_EXPORTS:
+        label, source, start, length = SCENES[index]
+        video = output / (slug + ".mp4")
+        poster = output / (slug + ".jpg")
+        shutil.copyfile(work / f"part{index}.mp4", video)
+        run(["ffmpeg", "-v", "error", "-y", "-ss", "1", "-i", str(video),
+             "-frames:v", "1", str(poster)], work)
+        probe = probe_video(video, length)
+        manifest = {
+            "purpose": lock["description"],
+            "source_input": next(item for item in lock["sources"] if item["file"] == source),
+            "font_input": lock["font"],
+            "recipe_sha256": digest(Path(__file__)), "lock_sha256": digest(LOCK),
+            "tool_versions": versions,
+            "scene": {"label": label, "source": source, "start_seconds": start,
+                      "duration_seconds": length},
+            "outputs": [{"file": path.name, "sha256": digest(path), "bytes": path.stat().st_size}
+                        for path in (video, poster)],
+            "probe": probe,
+            "acceptance": "Historical footage edit only; no new deployment, TAKX, or live interoperability acceptance",
+        }
+        (output / (slug + ".json")).write_text(json.dumps(manifest, indent=2) + "\n")
+    shutil.copyfile(work / "Inter-LICENSE.txt", output / "Inter-LICENSE.txt")
+
+
+def probe_video(video, duration):
+    probe = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name,width,height",
+        "-of", "json", str(video)], text=True))
+    streams = probe["streams"]
+    if (len(streams) != 1 or streams[0].get("codec_type") != "video"
+            or streams[0].get("codec_name") != "h264"
+            or (streams[0].get("width"), streams[0].get("height")) != (1920, 1080)
+            or abs(float(probe["format"]["duration"]) - duration) > .05):
+        raise ValueError("Output failed the silent 1080p H.264 duration contract")
+    return probe
+
+
+def render(cache, output, offline=False, export=False):
     lock = json.loads(LOCK.read_text())
     cache.mkdir(parents=True, exist_ok=True)
     items = [*lock["sources"], lock["font"]]
@@ -82,6 +126,9 @@ def render(cache, output, offline=False):
     versions = {name: tool_version(name) for name in ("ffmpeg", "ffprobe")}
     if output.exists() and any(output.iterdir()):
         raise ValueError("Output directory must be empty; use a new directory for each edit")
+    scenes_output = output.with_name(output.name + "-scenes")
+    if export and scenes_output.exists() and any(scenes_output.iterdir()):
+        raise ValueError("Scene output directory must be empty")
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ui-reel-") as temporary:
         work = Path(temporary)
@@ -105,6 +152,8 @@ def render(cache, output, offline=False):
                  "-t", str(length), "-an", "-vf", ",".join(filters), "-filter_threads", "2",
                  "-threads", "2", "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                  f"part{index}.mp4"], work)
+        if export:
+            export_scenes(work, scenes_output, lock, versions)
         (work / "parts.txt").write_text("".join(f"file 'part{i}.mp4'\n" for i in range(len(SCENES))))
         video = output / "uds-takserver-ui-preview.mp4"
         run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "1", "-i", "parts.txt",
@@ -114,15 +163,7 @@ def render(cache, output, offline=False):
         run(["ffmpeg", "-v", "error", "-y", "-i", str(video), "-vf",
              "fps=5/26,scale=480:-1,tile=5x1", "-frames:v", "1", str(output / "review-strip.jpg")], work)
         shutil.copyfile(work / "Inter-LICENSE.txt", output / "Inter-LICENSE.txt")
-    probe = json.loads(subprocess.check_output([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name,width,height",
-        "-of", "json", str(video)], text=True))
-    streams = probe["streams"]
-    if (len(streams) != 1 or streams[0].get("codec_type") != "video"
-            or streams[0].get("codec_name") != "h264"
-            or (streams[0].get("width"), streams[0].get("height")) != (1920, 1080)
-            or abs(float(probe["format"]["duration"]) - 26) > .05):
-        raise ValueError("Output failed the 26-second, silent 1080p H.264 contract")
+    probe = probe_video(video, 26)
     manifest = {
         "purpose": lock["description"], "source_inputs": lock,
         "recipe_sha256": digest(Path(__file__)), "lock_sha256": digest(LOCK),
@@ -143,8 +184,9 @@ def main():
     parser.add_argument("--cache", type=Path, default=ROOT.parent / "out/ui-reel-inputs")
     parser.add_argument("--output", type=Path, default=ROOT.parent / "out/ui-reel")
     parser.add_argument("--offline", action="store_true", help="require all locked inputs in cache; never download")
+    parser.add_argument("--export-scenes", action="store_true", help="also export three historical clips to a separate sibling directory")
     args = parser.parse_args()
-    render(args.cache.resolve(), args.output.resolve(), args.offline)
+    render(args.cache.resolve(), args.output.resolve(), args.offline, args.export_scenes)
 
 
 if __name__ == "__main__":

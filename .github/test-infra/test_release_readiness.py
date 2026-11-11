@@ -368,6 +368,48 @@ class PromotionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             json.loads('{"draft":true,"draft":false}', object_pairs_hook=R.unique)
 
+    def test_api_defaults_read_only_and_explicit_writer_keeps_payload_guards(self):
+        for write in (False, True):
+            api = R.API('fixture', allow_write=write)
+            with patch.object(api.opener, 'open') as request:
+                if not write:
+                    with self.assertRaises(ValueError):
+                        api('/releases/123', {'draft': False})
+                    request.assert_not_called()
+                else:
+                    response = request.return_value.__enter__.return_value
+                    response.status = 200
+                    response.read.return_value = b'{}'
+                    self.assertEqual(api('/releases/123', {'draft': False}), {})
+                    self.assertEqual(request.call_args.args[0].method, 'PATCH')
+                    request.reset_mock()
+                    with self.assertRaises(ValueError):
+                        api('/releases/123', {'draft': True})
+                    request.assert_not_called()
+        api = R.API('fixture')
+        with patch.object(api.opener, 'open') as request, self.assertRaises(ValueError):
+            api('/releases/123', {'draft': False})
+        request.assert_not_called()
+
+    def test_main_selects_api_capability_only_after_context_and_mode_validation(self):
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'fixture',
+               'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE,
+               'CHECKED_SOURCE_SHA': SOURCE}
+        for mode in ('check', 'promote', 'invalid'):
+            api = API()
+            with patch.dict(os.environ, {**env, 'READINESS_MODE': mode}, clear=True), \
+                    patch.object(R, 'API', return_value=api) as constructor, \
+                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(R.main(), 1 if mode == 'invalid' else 0)
+            if mode == 'invalid':
+                constructor.assert_not_called()
+                self.assertEqual(api.calls, [])
+            else:
+                constructor.assert_called_once_with('fixture', allow_write=mode == 'promote')
+                self.assertEqual(any(payload is not None for _, payload in api.calls), mode == 'promote')
+
 
 class ChartSourceTests(unittest.TestCase):
     def test_expected_source_checked_at_resolved_tag_before_other_work(self):
@@ -428,15 +470,30 @@ class WiringTests(unittest.TestCase):
         self.assertFalse(steps[0]['with']['persist-credentials'])
         native = release['publish']['steps']
         names = [step['name'] for step in native]
-        self.assertLess(names.index('Verify release availability identity before building'),
-                        names.index('Free runner disk space'))
-        checker = native[names.index('Checkout trusted readiness checker')]
+        self.assertNotIn('Checkout trusted readiness checker', names)
+        self.assertFalse(any('release-readiness.py' in step.get('run', '') for step in native))
+        self.assertEqual(release['publish']['needs'], 'metadata')
+        metadata = release['metadata']
+        self.assertEqual(metadata['permissions'], {'contents': 'write'})
+        self.assertEqual(metadata['timeout-minutes'], 5)
+        self.assertNotIn('needs', metadata)
+        self.assertNotIn('always()', metadata['if'])
+        self.assertEqual(metadata['if'], release['publish']['if'])
+        self.assertEqual(len(metadata['steps']), 2)
+        checker, check = metadata['steps']
         self.assertEqual(checker['with']['ref'], '${{ github.workflow_sha }}')
-        self.assertEqual(checker['with']['path'], '.release-publisher')
+        self.assertEqual(checker['with']['fetch-depth'], 0)
         self.assertFalse(checker['with']['persist-credentials'])
-        check = native[names.index('Verify release availability identity before building')]
+        self.assertEqual(checker['with']['sparse-checkout'], '.github/test-infra/release-readiness.py')
         self.assertEqual(check['env']['READINESS_MODE'], 'check')
-        self.assertIn('git rev-parse HEAD', check['run'])
+        self.assertIn('git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}"', check['run'])
+        self.assertLess(check['run'].index('python3 .github/test-infra/release-readiness.py'),
+                        check['run'].index('echo "source-sha='))
+        self.assertEqual(metadata['outputs']['source-sha'], '${{ steps.check.outputs.source-sha }}')
+        for job in release.values():
+            self.assertNotIn('continue-on-error', job)
+            for step in job['steps']:
+                self.assertNotIn('continue-on-error', step)
         self.assertEqual(release['publish']['strategy']['max-parallel'], 1)
         self.assertEqual([x['arch'] for x in release['publish']['strategy']['matrix']['include']], ['amd64', 'arm64'])
         self.assertEqual(release['provenance']['permissions'], {
@@ -450,6 +507,46 @@ class WiringTests(unittest.TestCase):
         for identity, source, success in [('123', head, True), ('123', OTHER, False), ('123', '', False), ('', head, False), ('', '', True)]:
             with self.subTest(identity=identity, source=source):
                 result = subprocess.run(['python3', '-c', script], cwd=ROOT,
-                    env={**os.environ, 'RELEASE_ID': identity, 'RELEASE_SOURCE_SHA': source}, capture_output=True)
+                    env={**os.environ, 'RELEASE_ID': identity, 'RELEASE_SOURCE_SHA': source,
+                         'VERIFIED_SOURCE_SHA': head}, capture_output=True)
                 self.assertEqual(result.returncode == 0, success)
         self.assertEqual(step['env']['RELEASE_SOURCE_SHA'], '${{ inputs.source_sha }}')
+
+    def test_native_local_guard_rejects_missing_or_changed_metadata_source(self):
+        step = self.workflow('release.yaml')['jobs']['publish']['steps'][1]
+        script = step['run'].split("python3 - <<'PY_CHECK'\n", 1)[1].split('\nPY_CHECK', 1)[0]
+        self.assertEqual(step['env']['VERIFIED_SOURCE_SHA'], '${{ needs.metadata.outputs.source-sha }}')
+        for verified in ('', OTHER, 'private-invalid'):
+            result = subprocess.run(['python3', '-c', script], cwd=ROOT,
+                env={**os.environ, 'RELEASE_ID': '', 'RELEASE_SOURCE_SHA': '',
+                     'VERIFIED_SOURCE_SHA': verified}, capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_metadata_shell_emits_only_checked_source_after_success(self):
+        step = self.workflow('release.yaml')['jobs']['metadata']['steps'][1]
+        script = step['run']
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(['git', 'init', '-q', str(repo)], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(repo), '-c', 'user.name=fixture', '-c',
+                            'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'],
+                           check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(repo), 'tag', 'v0.12.3'], check=True, capture_output=True)
+            head = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD']).decode().strip()
+            helper = repo / '.github/test-infra/release-readiness.py'
+            helper.parent.mkdir(parents=True)
+            # Stub only the helper result to exercise the actual workflow shell.
+            # Real helper API/source/context contracts are tested separately.
+            helper.write_text("import os,sys\n"
+                              "assert os.environ['CHECKED_SOURCE_SHA'] == os.environ['EXPECTED_SHA']\n"
+                              "sys.exit(int(os.environ['HELPER_EXIT']))\n")
+            for tag, helper_exit, success in [('v0.12.3', '0', True), ('v0.12.3', '1', False),
+                                               ('v0.12.4', '0', False), ('v0.12.3;false', '0', False)]:
+                output = repo / 'output'
+                output.unlink(missing_ok=True)
+                result = subprocess.run(['bash', '-c', script], cwd=repo, capture_output=True, timeout=10,
+                    env={**os.environ, 'RELEASE_TAG': tag, 'GITHUB_OUTPUT': str(output),
+                         'HELPER_EXIT': helper_exit, 'EXPECTED_SHA': head})
+                self.assertEqual(result.returncode == 0, success)
+                self.assertEqual(output.read_text() if output.exists() else '',
+                                 f'source-sha={head}\n' if success else '')

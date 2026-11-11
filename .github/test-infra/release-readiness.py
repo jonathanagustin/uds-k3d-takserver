@@ -85,7 +85,9 @@ class APIFailure(ValueError):
 
 
 class API:
-    def __init__(self, token):
+    def __init__(self, token, *, allow_write=False):
+        require(type(allow_write) is bool)
+        self.allow_write = allow_write
         require(bool(token))
         self.token = token
         self.opener = urllib.request.build_opener(NoRedirect())
@@ -95,6 +97,7 @@ class API:
                                  r'|/git/ref/tags/v[0-9]+\.[0-9]+\.[0-9]+'
                                  r'|/git/tags/[0-9a-f]{40}', path)))
         if payload is not None:
+            require(self.allow_write)
             require(bool(re.fullmatch(r'/releases/[1-9][0-9]*', path)) and payload == {'draft': False})
         operation = ('release-tag' if path.startswith('/releases/tags/') else
                      'release-id' if path.startswith('/releases/') else
@@ -207,11 +210,11 @@ def main():
         require(event in ('push', 'release', 'workflow_dispatch'))
         if os.environ.get('RELEASE_ID') or os.environ.get('RELEASE_SOURCE_SHA'):
             require(event in ('push', 'workflow_dispatch') and ref == 'refs/heads/main')
-        api = API(os.environ.get('GH_TOKEN', ''))
-        args = (api, os.environ.get('RELEASE_TAG', ''), os.environ.get('RELEASE_ID', ''),
-                os.environ.get('RELEASE_SOURCE_SHA', ''))
         mode = os.environ.get('READINESS_MODE', 'promote')
         require(mode in ('check', 'promote'))
+        api = API(os.environ.get('GH_TOKEN', ''), allow_write=mode == 'promote')
+        args = (api, os.environ.get('RELEASE_TAG', ''), os.environ.get('RELEASE_ID', ''),
+                os.environ.get('RELEASE_SOURCE_SHA', ''))
         if mode == 'check':
             checked = os.environ.get('CHECKED_SOURCE_SHA', '')
             require(bool(SHA.fullmatch(checked)))

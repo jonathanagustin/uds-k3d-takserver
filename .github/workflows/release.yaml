@@ -43,7 +43,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  metadata:
+    # GitHub denied draft visibility to the builder's read token despite ample
+    # quota. Keep this coarse visibility permission away from application code.
+    permissions:
+      contents: write
+    if: github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      source-sha: ${{ steps.check.outputs.source-sha }}
+    steps:
+      - name: Checkout trusted readiness checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          sparse-checkout: .github/test-infra/release-readiness.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify release metadata without API writes
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+          READINESS_MODE: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          CHECKED_SOURCE_SHA="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          export CHECKED_SOURCE_SHA
+          python3 .github/test-infra/release-readiness.py
+          echo "source-sha=${CHECKED_SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+
   publish:
+    needs: metadata
     permissions:
       contents: read
       packages: write
@@ -78,6 +116,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
           RELEASE_ID: ${{ inputs.release_id }}
           RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+          VERIFIED_SOURCE_SHA: ${{ needs.metadata.outputs.source-sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -89,12 +128,16 @@ jobs:
           # A pre-existing tag must never redirect a new draft's package bytes.
           python3 - <<'PY_CHECK'
           import os, re, subprocess
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
+          verified = os.environ['VERIFIED_SOURCE_SHA']
+          if not re.fullmatch(r'[0-9a-f]{40}', verified) or actual != verified:
+              raise SystemExit('Verified release metadata source mismatch')
           identity = os.environ['RELEASE_ID']
           source = os.environ['RELEASE_SOURCE_SHA']
           if identity or source:
               valid = (re.fullmatch(r'[1-9][0-9]*', identity)
                        and re.fullmatch(r'[0-9a-f]{40}', source)
-                       and subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == source)
+                       and actual == source)
               if not valid:
                   raise SystemExit('Release source identity mismatch')
           PY_CHECK
@@ -102,28 +145,6 @@ jobs:
           manifest="$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')"
           test "${version}" = "${manifest}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Checkout trusted readiness checker
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .release-publisher
-          sparse-checkout: .github/test-infra/release-readiness.py
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-
-      - name: Verify release availability identity before building
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
-          RELEASE_ID: ${{ inputs.release_id }}
-          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
-          READINESS_MODE: check
-        run: |
-          CHECKED_SOURCE_SHA="$(git rev-parse HEAD)"
-          export CHECKED_SOURCE_SHA
-          python3 .release-publisher/.github/test-infra/release-readiness.py
 
       - name: Install UDS CLI
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2

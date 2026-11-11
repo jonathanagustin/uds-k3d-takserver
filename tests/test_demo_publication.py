@@ -232,7 +232,14 @@ class PublicationTests(unittest.TestCase):
         self.gh.command=lambda args,out,limit:out.write(blob)
         environment={'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'2','GITHUB_SHA':SHA,'CAPTURE_ATTEMPT':'1'}
         with tempfile.TemporaryDirectory() as destination,patch.dict(os.environ,environment),patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()):
-            P.prepare_sign(self.gh,destination);value=P.manifest(destination)
+            original_directory=tempfile.TemporaryDirectory
+            def colocated(*args,**kwargs):
+                self.assertEqual(Path(kwargs['dir']),Path(destination))
+                temporary=original_directory(*args,**kwargs)
+                self.assertEqual(Path(temporary.name).stat().st_dev,Path(destination).stat().st_dev)
+                return temporary
+            with patch.object(P.tempfile,'TemporaryDirectory',side_effect=colocated):P.prepare_sign(self.gh,destination)
+            value=P.manifest(destination)
             self.assertEqual(value['capture']['capture']['attempt'],'1');self.assertEqual(value['signing']['attempt'],'2')
             self.assertEqual(value['capture']['applicationCommit'],'b'*40)
         environment['CAPTURE_ATTEMPT']='2'
@@ -284,8 +291,11 @@ class PublicationTests(unittest.TestCase):
             self.assertFalse(gh.release['draft'])
             self.assertEqual(gh.stored[next(iter(saved))],saved[next(iter(saved))])
             upload_count=gh.uploads
+            readbacks=sum(command[0]=='api' and '/releases/assets/' in command[1] for command in gh.commands)
+            self.assertEqual(readbacks,len(gh.stored))
             with tempfile.TemporaryDirectory() as destination:P.publish(gh,'123','2',destination)
             self.assertEqual(gh.uploads,upload_count)
+            self.assertEqual(sum(command[0]=='api' and '/releases/assets/' in command[1] for command in gh.commands),readbacks)
         self.assertTrue(all('--clobber' not in command for command in gh.commands))
         self.assertFalse(any('sign-blob' in command or 'assemble.sh' in command for command in gh.commands))
         self.assertEqual(set(gh.stored),{path.name for path in self.root.iterdir()})
@@ -302,6 +312,41 @@ class PublicationTests(unittest.TestCase):
         with patch.dict(os.environ,{'PATH':str(self.root)+os.pathsep+os.environ['PATH']}),contextlib.redirect_stdout(output),contextlib.redirect_stderr(error):
             with self.assertRaisesRegex(ValueError,'policy rejected'):P.GitHub().command(['api','fixture'])
         self.assertEqual(output.getvalue(),'');self.assertEqual(error.getvalue(),'')
+
+    def test_private_cli_tempfiles_share_destination_filesystem_and_have_hard_caps(self):
+        binary=self.root/'gh'
+        binary.write_text('#!'+sys.executable+'\nimport json; print(json.dumps({"ok":True}))\n');binary.chmod(0o755)
+        original=tempfile.TemporaryFile;observed=[]
+        @contextlib.contextmanager
+        def tracked(*args,**kwargs):
+            self.assertEqual(Path(kwargs['dir']),self.root)
+            with original(*args,**kwargs) as stream:
+                self.assertEqual(os.fstat(stream.fileno()).st_dev,self.root.stat().st_dev)
+                try:yield stream
+                finally:observed.append(os.fstat(stream.fileno()).st_size)
+        with patch.dict(os.environ,{'PATH':str(self.root)+os.pathsep+os.environ['PATH']}),patch.object(P.tempfile,'TemporaryFile',side_effect=tracked):
+            self.assertEqual(P.GitHub(self.root).command(['api','fixture']),{'ok':True})
+            binary.write_text('#!'+sys.executable+'\nimport os\nos.write(1,b"X"*1024)\nos.write(2,b"Y"*1024)\n')
+            observed.clear()
+            with self.assertRaises(ValueError):P.GitHub(self.root).command(['api','fixture'],limit=64)
+        self.assertEqual(len(observed),2)
+        self.assertTrue(all(size<=64 for size in observed))
+
+    def test_archive_allocation_is_colocated_and_reserve_covers_all_streams(self):
+        archive=io.BytesIO()
+        with zipfile.ZipFile(archive,'w') as zipped:zipped.writestr('fixture.mp4',b'fixture')
+        blob=archive.getvalue()
+        asset={'id':3,'name':'candidate','expired':False,'size_in_bytes':len(blob),'digest':'sha256:'+hashlib.sha256(blob).hexdigest(),
+               'workflow_run':{'id':123,'repository_id':1427088300,'head_repository_id':1427088300,'head_branch':'main','head_sha':SHA}}
+        self.gh.pages=lambda path:[{'artifacts':[asset]}];self.gh.command=lambda args,out,limit:out.write(blob)
+        original=tempfile.TemporaryFile;devices=[]
+        def tracked(*args,**kwargs):
+            self.assertEqual(Path(kwargs['dir']),self.root)
+            stream=original(*args,**kwargs);devices.append(os.fstat(stream.fileno()).st_dev);return stream
+        with patch.object(P.tempfile,'TemporaryFile',side_effect=tracked),patch.object(P.shutil,'disk_usage',return_value=type('Disk',(),{'free':10*1024**3})()) as usage:
+            P.extract(self.gh,run(),'candidate',self.root)
+        self.assertEqual(devices,[self.root.stat().st_dev]);usage.assert_called_once_with(self.root)
+        self.assertGreaterEqual(P.RESERVE,2*1024**3+4*P.TOTAL+4*P.JSON_LIMIT)
 
     def test_workflow_privileges_modes_artifacts_and_publication_are_separate(self):
         workflow=yaml.load((ROOT/'.github/workflows/demo.yaml').read_text(),Loader=yaml.BaseLoader)

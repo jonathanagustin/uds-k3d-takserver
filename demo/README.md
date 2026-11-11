@@ -122,8 +122,13 @@ To publish, dispatch **Demo Video** on `main` with both `publish_run_id` and
 starts no recording, deployment or signing. The publisher verifies the exact
 artifact archive digest, source identity, inventory, video signatures and SLSA
 provenance before any release write. Files stream through bounded temporary
-storage: 64 MiB per file, 256 MiB per archive/expanded inventory, and an additional
-2 GiB disk floor. The existing historical MP4 inventory totals about 43 MB; the
+storage: 64 MiB per file and 256 MiB per archive/expanded inventory. Archives,
+private command captures, extracted inputs and candidate copies share the
+measured destination filesystem. The reserve covers four 256 MiB allocations,
+4 MiB of control metadata and an additional 2 GiB floor. Each control-command
+stream has a hard 1 MiB file-size limit. Download streams each have a hard
+256 MiB limit; stderr is also polled for an earlier 1 MiB abort, but can grow
+up to the download limit between polls. That overshoot is covered by the reserve. The existing historical MP4 inventory totals about 43 MB; the
 bounds deliberately allow growth but refuse unbounded media. Larger captures
 require an explicit reviewed limit change.
 
@@ -134,6 +139,9 @@ asset ID with matching SHA-256. Promotion patches that verified release ID; it
 does not resolve a mutable tag again. Release edits queue without cancelling uploads. Manual captures have a separate
 noncancelling FIFO; only PR preflight uses per-PR latest-only cancellation. No
 workflow-wide cancellation can supersede these publisher safeguards.
+After the first promotion, an identical public retry revalidates the signed
+candidate and trusts GitHub's asset size/SHA-256 metadata; it does not redownload
+every public asset. First promotion always hashes the actual readback bytes.
 A retry uploads only missing matching bytes; differing or unverifiable assets
 stop publication. An identical already-public candidate is a no-op. Neither
 videos nor signature bundles are overwritten, rerendered or regenerated.

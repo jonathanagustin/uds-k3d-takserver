@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import resource
 import shutil
 import signal
 import stat
@@ -26,6 +27,9 @@ INTOTO = 'demo-videos.intoto.jsonl'
 TOTAL = 256 * 1024**2
 FILE = 64 * 1024**2
 JSON_LIMIT = 1024**2
+# Co-located worst case: ZIP + child stderr + expanded inputs + candidate,
+# plus bounded control metadata, while retaining the disk floor.
+RESERVE = 2 * 1024**3 + 4 * TOTAL + 4 * JSON_LIMIT
 CLIPS = ('deploy','package-ready','sso','cloudtak-user','atak-device','airgap',
          'policy','sync','secure','upgrade','self-healing')
 CLIP_FILES = tuple('clips/demo-clip-'+name+'.'+extension for name in CLIPS for extension in ('mp4','jpg'))
@@ -85,11 +89,16 @@ def tag(source):
 
 
 class GitHub:
+    def __init__(self,directory=None):
+        self.directory=directory
+
     def command(self,args,output=None,limit=JSON_LIMIT,json_output=True,program='gh'):
         # Stream bounded binary downloads; never echo subprocess diagnostics/URLs.
-        with tempfile.TemporaryFile() as stderr,tempfile.TemporaryFile() as temporary:
+        require(type(limit) is int and 0<limit<=TOTAL)
+        def hard_file_limit():resource.setrlimit(resource.RLIMIT_FSIZE,(limit,limit))
+        with tempfile.TemporaryFile(dir=self.directory) as stderr,tempfile.TemporaryFile(dir=self.directory) as temporary:
             stdout=output or temporary
-            process=subprocess.Popen([program,*args],stdout=stdout,stderr=stderr,start_new_session=True)
+            process=subprocess.Popen([program,*args],stdout=stdout,stderr=stderr,start_new_session=True,preexec_fn=hard_file_limit)
             deadline=time.monotonic()+120
             try:
                 while process.poll() is None:
@@ -134,8 +143,8 @@ def extract(gh,run,name,directory):
     for key,value in {'id':run['id'],'repository_id':1427088300,'head_repository_id':1427088300,
                       'head_branch':'main','head_sha':run['head_sha']}.items():
         require(asset['workflow_run'].get(key)==value)
-    require(shutil.disk_usage(directory).free>2*1024**3+3*TOTAL)
-    with tempfile.TemporaryFile() as archive:
+    require(shutil.disk_usage(directory).free>RESERVE)
+    with tempfile.TemporaryFile(dir=directory) as archive:
         gh.command(['api','repos/'+REPO+'/actions/artifacts/'+str(asset['id'])+'/zip'],archive,TOTAL)
         archive.flush()
         require(os.fstat(archive.fileno()).st_size==asset['size_in_bytes'])
@@ -205,7 +214,7 @@ def check_inventory(directory,outputs,extras=()):
 def prepare_sign(gh,directory):
     current=run_identity(gh,os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],False)
     require(current['head_sha']==os.environ['GITHUB_SHA'])
-    with tempfile.TemporaryDirectory() as temp:
+    with tempfile.TemporaryDirectory(dir=directory) as temp:
         capture_attempt=os.environ.get('CAPTURE_ATTEMPT','')
         require(match(capture_attempt,r'[1-9][0-9]{0,5}') and int(capture_attempt)<=current['run_attempt'])
         extract(gh,current,'demo-video-attempt-'+capture_attempt,temp)
@@ -354,7 +363,7 @@ def publish(gh,run_id,attempt,directory):
     require(set(assets(gh,release['id'],files))==set(files))
     # Hash-confirm each actual uploaded asset using immutable IDs before promotion.
     for name,asset_id in assets(gh,release['id'],files).items():
-        with tempfile.TemporaryFile() as stream:
+        with tempfile.TemporaryFile(dir=directory) as stream:
             gh.command(['api','repos/'+REPO+'/releases/assets/'+str(asset_id),'-H','Accept: application/octet-stream'],stream,FILE)
             stream.seek(0);require(hashlib.file_digest(stream,'sha256').hexdigest()==files[name]['sha256'])
     require(run_identity(gh,run_id,attempt)['head_sha']==run['head_sha'])
@@ -384,13 +393,14 @@ def main():
             require(os.environ.get('GITHUB_REF')==REF)
             if args.operation=='publish':
                 with tempfile.TemporaryDirectory() as temp:
-                    publish(GitHub(),os.environ.get('PUBLISH_RUN_ID',''),os.environ.get('PUBLISH_ATTEMPT',''),temp)
+                    publish(GitHub(temp),os.environ.get('PUBLISH_RUN_ID',''),os.environ.get('PUBLISH_ATTEMPT',''),temp)
             else:
                 directory=Path(args.directory);directory.mkdir(parents=True,exist_ok=True)
-                if args.operation=='prepare-sign':prepare_sign(GitHub(),directory)
+                if args.operation=='prepare-sign':prepare_sign(GitHub(directory),directory)
                 else:
-                    run=run_identity(GitHub(),os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],False)
-                    verify_candidate(GitHub(),directory,run)
+                    client=GitHub(directory)
+                    run=run_identity(client,os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],False)
+                    verify_candidate(client,directory,run)
         return 0
     except (ValueError,KeyError,TypeError,AttributeError,OSError,subprocess.SubprocessError,zipfile.BadZipFile):
         print('Demo publication refused; no historical asset changed or success inferred',file=__import__('sys').stderr)

@@ -94,7 +94,9 @@ def check_release(api, tag, release_id='', source='', checked_source=''):
     require(bool(TAG.fullmatch(tag)))
     require((release_id == '' and source == '') or
             (bool(re.fullmatch(r'[1-9][0-9]*', release_id)) and bool(SHA.fullmatch(source))))
-    record = api('/releases/tags/' + tag)
+    # The tag endpoint exposes published releases; a bound draft must be read
+    # by its exact supplied ID. Validation below still binds tag and Git source.
+    record = api('/releases/' + release_id if release_id else '/releases/tags/' + tag)
     validate(record, tag, release_id, source)
     actual = source_at_tag(api, tag)
     if source:

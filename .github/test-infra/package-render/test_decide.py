@@ -134,6 +134,11 @@ class GitEvidenceTests(unittest.TestCase):
         event = {'repository': {'full_name': 'fixture/project'}, 'number': 17,
                  'pull_request': {'base': {'sha': self.base}, 'head': {'sha': head}, 'merge_commit_sha': merge}}
         self.assertFalse(self.evaluate(event))
+        for missing_merge in (None, 'private-invalid-merge'):
+            unavailable = {**event, 'pull_request': {**event['pull_request'], 'merge_commit_sha': missing_merge}}
+            self.event_path.write_text(json.dumps(unavailable))
+            self.assertEqual(GATE.evaluate(self.repo, self.event_path, self.env),
+                             (True, 'evidence unavailable; rendering retained [merge-commit-unavailable]'))
         self.assertTrue(self.evaluate({**event, 'pull_request': {**event['pull_request'], 'head': {'sha': self.base}}}))
         self.git('checkout', '-q', 'topic')
         self.assertTrue(self.evaluate(event))  # source HEAD is not the expected merge checkout
@@ -187,6 +192,42 @@ class GitEvidenceTests(unittest.TestCase):
             return real_run(command, **kwargs)
         with patch.object(GATE.subprocess, 'run', side_effect=unknown):
             self.assertTrue(self.evaluate(event))
+
+    def test_uncertainty_reasons_are_fixed_and_private(self):
+        head = self.commit({'docs/a.md': 'docs\n'})
+        event = self.push_event(head)
+        self.event_path.write_text(json.dumps(event))
+        private = 'PRIVATE-secret-url-or-path'
+        cases = [
+            ({**event, 'repository': {'full_name': private}}, 'repository-mismatch'),
+            ({**event, 'before': private}, 'commit-unavailable'),
+        ]
+        for value, code in cases:
+            with self.subTest(code=code):
+                self.event_path.write_text(json.dumps(value))
+                render, reason = GATE.evaluate(self.repo, self.event_path, self.env)
+                self.assertTrue(render)
+                self.assertEqual(reason, f'evidence unavailable; rendering retained [{code}]')
+                self.assertNotIn(private, reason)
+        self.event_path.write_text(json.dumps(event))
+        for error in (ValueError(private), subprocess.CalledProcessError(1, [private], output=private)):
+            with self.subTest(error=type(error).__name__), patch.object(GATE, 'decision', side_effect=error):
+                render, reason = GATE.evaluate(self.repo, self.event_path, self.env)
+                self.assertTrue(render)
+                self.assertEqual(reason, 'evidence unavailable; rendering retained [unclassified-unavailable]')
+                self.assertNotIn(private, reason)
+        # Arbitrary exception text must never become a public reason code.
+        with patch.object(GATE, 'decision', side_effect=GATE.EvidenceUnavailable(private)):
+            self.assertEqual(GATE.evaluate(self.repo, self.event_path, self.env),
+                             (True, 'evidence unavailable; rendering retained [identity-unavailable]'))
+
+    def test_real_git_failure_has_fixed_reason(self):
+        head = self.commit({'docs/a.md': 'docs\n'})
+        event = self.push_event(head)
+        event['before'] = 'f' * 40
+        self.event_path.write_text(json.dumps(event))
+        self.assertEqual(GATE.evaluate(self.repo, self.event_path, self.env),
+                         (True, 'evidence unavailable; rendering retained [git-evidence-unavailable]'))
 
     def test_cli_writes_only_its_own_fixed_output(self):
         head = self.commit({'docs/a.md': 'docs\n'})

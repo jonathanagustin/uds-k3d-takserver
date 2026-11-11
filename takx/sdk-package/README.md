@@ -44,3 +44,48 @@ Offline guards launch no compiler, JVM or native library:
 ```sh
 python3 -B -m unittest discover -s takx/sdk-package -p test_build.py -v
 ```
+
+### Public runtime resources
+
+The assembler projects all 118 files (6,666,272 source bytes) in the pinned
+Kernel engine/shared production `res` and `assets` trees. One upstream Git LFS
+pointer is separately bound to its genuine 1,067,496-byte payload; actual runtime
+resource bytes total 7,733,636. Supply `--resource-payloads` with an explicit offline
+store whose regular filename is the locked SHA-256. The packager makes no network
+request and refuses missing or changed payloads and changed pointer identities.
+Git blob hashes/sizes remain distinct from materialized payload hashes/sizes. The resource lock binds
+Git blobs, SHA-256, file modes, sizes, and JAR destinations. It follows the pinned
+`takkernel/gradle/buildconfig.gradle` mapping: `res` becomes `resources`, with the
+final filename extension removed; `assets` becomes `assets`, retaining filenames.
+Missing, added, changed, nonregular, colliding, or unmaterialized Git LFS
+pointer inputs stop assembly.
+
+The desktop catalog indexes 20 raw resources and five PNG drawable byte resources
+under `gov.tak.desktop`. IDs are assigned deterministically by the existing
+catalog reader; they are not Android or private SDK R values. The reviewed
+Resources class family is recompiled beside EngineLibrary using the same qualified
+JDK, target release, and frozen classpath. `getIdentifier` and `openRawResource`
+provide drawable bytes; this adds no `getDrawable` API. Package-owned raw URI
+resolution remains raw-only. A custom context owner must match the catalog owner.
+Two values XML files are retained verbatim but unindexed; Android values/style
+semantics remain unsupported.
+
+Assets include fonts, styles, certificates, icons, meshes, and the upstream roles
+database. Their presence does not qualify each consumer or a renderer. All three
+bundled OMT style license files are retained at their original asset destinations,
+in addition to the existing package notice inventory. The pinned font directory
+contains Arial, Courier, and Segoe MSDF atlases without a font-specific notice;
+the official app third-party notice has no matching font attribution. Attribution
+coverage for those bytes is unresolved; this change does not assert that every
+asset is GPL or establish redistribution rights beyond the supplied notices.
+
+The historical qualified SDK JAR omitted these resources. This source change does
+not modify that artifact or claim a new SDK/runtime qualification. Run the bounded
+package and runtime controls on a fresh output before publishing a rebuilt SDK.
+
+The qualification recipe also opens every locked asset and catalog entry through
+the genuine desktop APIs after stock initialization. It compares all 118 byte
+streams, exercises all 15 GL20FP shader lookups through GLSLUtil, repeats these
+checks at the second package prefix, and rejects an omitted genuine shader.
+These controls require a fresh successful qualification receipt; their source
+presence alone grants no runtime acceptance.

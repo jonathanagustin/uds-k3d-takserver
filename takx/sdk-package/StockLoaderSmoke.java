@@ -21,6 +21,7 @@ public final class StockLoaderSmoke {
       Runtime.getRuntime().halt(0);
     }
     KernelRuntimeSmoke.initializeStrict();KernelRuntimeSmoke.basic();
+    RuntimeResourcesSmoke.run(jar,Path.of(args[3]));
     if(args[1].equals("database")) {
       NativeDatabaseCandidate.run(Path.of(System.getProperty("TAK_APP_DATA_PATH")));
       org.gdal.gdal.gdal.AllRegister();

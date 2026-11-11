@@ -41,7 +41,7 @@ public class Resources {
             for (String key : new TreeSet<>(catalog.stringPropertyNames())) {
                 String[] parts = key.split("/", -1);
                 if (parts.length != 3 || !parts[0].matches("[A-Za-z_][A-Za-z0-9_.]*") ||
-                    !Set.of("string", "array", "color", "raw").contains(parts[1]) ||
+                    !Set.of("string", "array", "color", "raw", "drawable").contains(parts[1]) ||
                     !parts[2].matches("[A-Za-z_][A-Za-z0-9_]*"))
                     throw new IOException("Invalid or unsupported desktop resource catalog key");
                 String path = AssetManager.safePath(catalog.getProperty(key));

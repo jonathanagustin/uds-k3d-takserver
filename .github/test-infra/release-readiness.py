@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import urllib.request
+import urllib.error
 
 REPO = 'jonathanagustin/uds-takserver'
 BASE = 'https://api.github.com/repos/' + REPO
@@ -34,6 +35,17 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('release API redirect refused')
 
 
+class APIFailure(ValueError):
+    """Carry only fixed diagnostic metadata, never upstream exception text."""
+    def __init__(self, operation, kind, status=None):
+        require(operation in ('release-id', 'release-tag', 'git-ref', 'git-tag'))
+        require(kind in ('HTTP', 'transport', 'timeout'))
+        self.operation = operation
+        self.kind = kind
+        self.status = status if type(status) is int and 100 <= status <= 599 else 'unknown'
+        super().__init__('release API failure')
+
+
 class API:
     def __init__(self, token):
         require(bool(token))
@@ -46,15 +58,29 @@ class API:
                                  r'|/git/tags/[0-9a-f]{40}', path)))
         if payload is not None:
             require(bool(re.fullmatch(r'/releases/[1-9][0-9]*', path)) and payload == {'draft': False})
+        operation = ('release-tag' if path.startswith('/releases/tags/') else
+                     'release-id' if path.startswith('/releases/') else
+                     'git-ref' if path.startswith('/git/ref/') else 'git-tag')
         request = urllib.request.Request(BASE + path,
             data=json.dumps(payload).encode() if payload is not None else None,
             method='PATCH' if payload is not None else 'GET',
             headers={'Authorization': 'Bearer ' + self.token, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json'})
-        with self.opener.open(request, timeout=20) as response:
-            require(response.status == 200)
-            data = response.read(262145)
-            require(len(data) <= 262144)
+        try:
+            with self.opener.open(request, timeout=20) as response:
+                if response.status != 200:
+                    raise APIFailure(operation, 'HTTP', response.status)
+                data = response.read(262145)
+                require(len(data) <= 262144)
+        except urllib.error.HTTPError as exc:
+            raise APIFailure(operation, 'HTTP', exc.code) from None
+        except TimeoutError:
+            raise APIFailure(operation, 'timeout') from None
+        except urllib.error.URLError as exc:
+            kind = 'timeout' if isinstance(exc.reason, TimeoutError) else 'transport'
+            raise APIFailure(operation, kind) from None
+        except OSError:
+            raise APIFailure(operation, 'transport') from None
         result = json.loads(data, object_pairs_hook=unique)
         require(isinstance(result, dict))
         return result
@@ -151,6 +177,10 @@ def main():
             outcome = promote(*args)
         print('Release readiness: ' + outcome)
         return 0
+    except APIFailure as exc:
+        print(f'Release readiness API failure: operation={exc.operation} status={exc.status} kind={exc.kind}',
+              file=sys.stderr)
+        return 1
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, subprocess.SubprocessError):
         print('Release readiness verification failed; no success inferred', file=sys.stderr)
         return 1

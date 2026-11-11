@@ -197,6 +197,51 @@ class PromotionTests(unittest.TestCase):
         with patch.object(api.opener, 'open', return_value=response), self.assertRaises(ValueError):
             api('/releases/123')
 
+    def test_api_failure_metadata_is_fixed_for_each_valid_operation(self):
+        for path, operation in [('/releases/123', 'release-id'),
+                                ('/releases/tags/v0.12.3', 'release-tag'),
+                                ('/git/ref/tags/v0.12.3', 'git-ref'),
+                                ('/git/tags/' + SOURCE, 'git-tag')]:
+            for status, expected in [(404, 404), (99, 'unknown'), (600, 'unknown'),
+                                     ('private-status', 'unknown'), (True, 'unknown')]:
+                api = R.API('private-token')
+                error = urllib.error.HTTPError('https://example.invalid/private-url', status,
+                                               'private-reason', {'private-header': 'private-value'},
+                                               io.BytesIO(b'private-body'))
+                with self.subTest(operation=operation, status=status), patch.object(
+                        api.opener, 'open', side_effect=error), self.assertRaises(R.APIFailure) as caught:
+                    api(path)
+                self.assertEqual((caught.exception.operation, caught.exception.kind, caught.exception.status),
+                                 (operation, 'HTTP', expected))
+                self.assertEqual(str(caught.exception), 'release API failure')
+
+    def test_main_api_errors_never_print_upstream_secrets_or_success(self):
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'WORKFLOW_SHA': head, 'GH_TOKEN': 'private-token',
+               'RELEASE_TAG': 'v0.12.3', 'RELEASE_ID': '123', 'RELEASE_SOURCE_SHA': SOURCE,
+               'READINESS_MODE': 'check', 'CHECKED_SOURCE_SHA': SOURCE}
+        failures = [(urllib.error.HTTPError('https://example.invalid/private-url', 404, 'private-reason',
+                                            {'private-header': 'private-value'}, io.BytesIO(b'private-body')),
+                     'HTTP', 404),
+                    (urllib.error.URLError('private-transport'), 'transport', 'unknown'),
+                    (urllib.error.URLError(TimeoutError('private-timeout')), 'timeout', 'unknown'),
+                    (TimeoutError('private-timeout'), 'timeout', 'unknown'),
+                    (OSError('private-os-error'), 'transport', 'unknown')]
+        for error, kind, status in failures:
+            api = R.API('private-token')
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with self.subTest(kind=kind, error=type(error).__name__), patch.dict(os.environ, env, clear=True), \
+                    patch.object(R, 'API', return_value=api), \
+                    patch.object(api.opener, 'open', side_effect=error) as request, \
+                    contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                self.assertEqual(R.main(), 1)
+            self.assertEqual(stdout.getvalue(), '')
+            self.assertEqual(stderr.getvalue(),
+                             f'Release readiness API failure: operation=release-id status={status} kind={kind}\n')
+            request.assert_called_once()
+            self.assertEqual(request.call_args.args[0].method, 'GET')
+
     def test_main_context_and_api_failures_are_fixed_diagnostics(self):
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
         env = {'GITHUB_REPOSITORY': R.REPO, 'GITHUB_EVENT_NAME': 'workflow_dispatch',

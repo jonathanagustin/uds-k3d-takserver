@@ -14,6 +14,8 @@ for both client versions and their remaining API differences.
 | Stage | Local result | Remaining acceptance |
 | --- | --- | --- |
 | Native components | Kernel database/scene and MDBTools controls passed | Complete native dependency graph and Kernel provider integration |
+| Dependency graph | All 18 Cesium targets compiled; LibKML and Curl passed native controls | Complete Kernel/JNI integration and runtime coverage |
+| SQLite JDBC | Genuine JNI exports isolated from the embedded SQLite backend; both crypto load orders passed | Combined SDK runtime |
 | Graphics prerequisite | Source-built GLES dispatch rendered an ES 3 pixel on host Mesa | Kernel renderer, target platform and hardware paths |
 | GDAL Java JNI | Five real wrappers share one GDAL engine; Java raster, coordinates, interrupt and error checks passed | Full Kernel integration and supported-format coverage |
 | JNI build headers | 118 generated headers cover all 109 names required by pinned native sources | Compile and load the complete Kernel JNI target |
@@ -24,7 +26,10 @@ Reproduce the native checks with the [database](kernel-spatial-db/README.md),
 [scene](kernel-scene/README.md) and [MDBTools](native-mdbtools/README.md) profiles.
 The [Java compiler](kernel-java/README.md), [GLES](native-gles/README.md),
 [GDAL JNI](native-gdal-jni/README.md) and [crypto](native-crypto/README.md)
-profiles document runtime prerequisites and their limits. Native builds are
+profiles document runtime prerequisites and their limits. The
+[Cesium](native-cesium/README.md), [LibKML](native-kml/README.md),
+[Curl](native-curl/README.md) and [SQLite JDBC](sqlite-jdbc/README.md) profiles
+cover the remaining dependency builds and backend isolation. Native builds are
 opt-in; ordinary CI runs offline guards.
 
 These results do not yet provide a complete Java SDK or desktop installer.

@@ -1,0 +1,4 @@
+# Generated checksum inventory; owned build recipes remain reviewable.
+source-postimages.json linguist-generated
+# Preserve checksum-pinned upstream patch bytes.
+patches/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol linguist-vendored

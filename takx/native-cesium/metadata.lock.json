@@ -1,0 +1,1004 @@
+[
+  {
+    "path": "ports/fmt/fix-visibility.patch",
+    "git_blob": "f4c808fac5a146bddc225e9c2eb79098bfd4ce74",
+    "bytes": 576,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/fmt/fix-visibility.patch",
+    "sha256": "9102cfd44cdf319ca9f04e488be039964269a731ffd271e74e322ec99d7d6cd5"
+  },
+  {
+    "path": "ports/fmt/fix-write-batch.patch",
+    "git_blob": "6bec3b8e4b694711521d36fe38f80ed74f54744a",
+    "bytes": 522,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/fmt/fix-write-batch.patch",
+    "sha256": "5658d7b2362cddca318c21de795877c17cffbe62603860507291dccc40d537f3"
+  },
+  {
+    "path": "ports/fmt/portfile.cmake",
+    "git_blob": "cdc1487951316660fa1dce246b97176264951105",
+    "bytes": 1006,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/fmt/portfile.cmake",
+    "sha256": "f2f017f8a1b27d2f42e8d9f689c8cc8c8d24493b8be2d8311ce26833e4233456"
+  },
+  {
+    "path": "ports/fmt/usage",
+    "git_blob": "e5a9d70480699d79085ffe83e56da11c11e8c933",
+    "bytes": 265,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/fmt/usage",
+    "sha256": "ece096518c58df58cfc60f5ad8120d248a86383482455f539d91b8ca6eac14a7"
+  },
+  {
+    "path": "ports/fmt/vcpkg.json",
+    "git_blob": "d0806b79b28c16b3a52dec1a9fda9ea83dd415f6",
+    "bytes": 415,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/fmt/vcpkg.json",
+    "sha256": "c93a4ba2b439ba97b019538558398ad3bb809e4cae2ccb37faf42245209710e8"
+  },
+  {
+    "path": "ports/abseil/0001-revert-integer-to-string-conversion-optimizations.patch",
+    "git_blob": "e8d324f827b36fe18233ebbf313911384e1064b8",
+    "bytes": 54537,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/abseil/0001-revert-integer-to-string-conversion-optimizations.patch",
+    "sha256": "bb3268f711e0ae0c33e53bee28b94aa36ce62620bb00dc2f198733b62c015a9d"
+  },
+  {
+    "path": "ports/abseil/0002-Fix-missing-include-random-for-std-uniform_int_distr.patch",
+    "git_blob": "efe007f1e09893526e82b138396ab0740eaee5c2",
+    "bytes": 759,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/abseil/0002-Fix-missing-include-random-for-std-uniform_int_distr.patch",
+    "sha256": "bcab8c17f86ed4a60f61a708e3754b90af8e38352ff8eb2b3825a6ad40cc3272"
+  },
+  {
+    "path": "ports/abseil/779a356-test-allocator.diff",
+    "git_blob": "97f51dc5c99b15a4835e4d9fed2b3b28c7882607",
+    "bytes": 298,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/abseil/779a356-test-allocator.diff",
+    "sha256": "62500ac86af899d938e35a73664f6ea347f671167dbe0e5981b2a1bd64ff2fe8"
+  },
+  {
+    "path": "ports/abseil/portfile.cmake",
+    "git_blob": "08ab2f3cdd802a07bfa89853e72145f0ca649216",
+    "bytes": 2154,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/abseil/portfile.cmake",
+    "sha256": "55ffaab1a72aca272c52bf93fa344b93ef3ee3c331f658c86da38b2426f93c7e"
+  },
+  {
+    "path": "ports/abseil/vcpkg.json",
+    "git_blob": "a39e14a09369d8432878b4b36971bc3b44a4e35e",
+    "bytes": 1210,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/abseil/vcpkg.json",
+    "sha256": "cbb1de064bac9c2e1a1874b3e9062f897aa9587e7d5152fff844ab7bba67614f"
+  },
+  {
+    "path": "ports/libjpeg-turbo/add-options-for-exes-docs-headers.patch",
+    "git_blob": "37b9e0cab70adca47458338c53fbabee7fefc48b",
+    "bytes": 8463,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/add-options-for-exes-docs-headers.patch",
+    "sha256": "5c93ee62645786820dcca65d7158d39a355c3c7ac31f1d07e0a52d26e7875598"
+  },
+  {
+    "path": "ports/libjpeg-turbo/portfile.cmake",
+    "git_blob": "b9b3d37c6054c5eeda5d0d7efd9b320a86545e1f",
+    "bytes": 4578,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/portfile.cmake",
+    "sha256": "1a7b8c646c6ba9d4aa1ad90d6ef7cec98727a8003cc15013ca7334842b193386"
+  },
+  {
+    "path": "ports/libjpeg-turbo/usage",
+    "git_blob": "6d70f46ff968505a128093e6f256a30911fa8226",
+    "bytes": 436,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/usage",
+    "sha256": "f6ff243d0aba5bc85904527de17fc8a341a3568b0b19e3ac63b95029125b9e68"
+  },
+  {
+    "path": "ports/libjpeg-turbo/vcpkg-cmake-wrapper.cmake",
+    "git_blob": "d63c58b0aaac9a82e79912d9776538f6af90973b",
+    "bytes": 1837,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/vcpkg-cmake-wrapper.cmake",
+    "sha256": "d257c0a541dd60c4b6eb6f46a5e9f128a64a6ec40f3b8b5bc8ab753e7a935c61"
+  },
+  {
+    "path": "ports/libjpeg-turbo/vcpkg.json",
+    "git_blob": "85b5a7bd017e95f054f055ed3c92d7d133d94055",
+    "bytes": 807,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/vcpkg.json",
+    "sha256": "72c77395fe1daceda5b6d67f1b465b49c007ae99b73257e1f69d50cb35aa2589"
+  },
+  {
+    "path": "ports/libjpeg-turbo/workaround_cmake_system_processor.patch",
+    "git_blob": "9abe2ce49e88ccb90a31fda3c7798e5fb0460d99",
+    "bytes": 525,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libjpeg-turbo/workaround_cmake_system_processor.patch",
+    "sha256": "1fd13c06d27a2fcef233fe209ba0c856ed76311be59ae72e15d1c58fe36eab04"
+  },
+  {
+    "path": "ports/asyncplusplus/portfile.cmake",
+    "git_blob": "cd8bf8b615d43ef7ee3b24d8fcfc5d76e2475dae",
+    "bytes": 699,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/asyncplusplus/portfile.cmake",
+    "sha256": "358629fa6f0cad7342b906549d128b4551544f20993197b8cc9bf2ee40c77239"
+  },
+  {
+    "path": "ports/asyncplusplus/vcpkg.json",
+    "git_blob": "6b59776559240dd94729f4d687e142431d7bb6da",
+    "bytes": 343,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/asyncplusplus/vcpkg.json",
+    "sha256": "a2488460f9a64cd6c372f4cf1225056051cb5297988a5cac090a8412d4dc1ab9"
+  },
+  {
+    "path": "ports/earcut-hpp/portfile.cmake",
+    "git_blob": "b1007c8839fc3c6b933640a6506175975e2e6b70",
+    "bytes": 548,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/earcut-hpp/portfile.cmake",
+    "sha256": "a7c891ec107695466b1980307fd00990cc13627d091165aca72e652af4b547d6"
+  },
+  {
+    "path": "ports/earcut-hpp/vcpkg.json",
+    "git_blob": "1ad0baf505bcea6509eff574b636d02b0cfb99af",
+    "bytes": 233,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/earcut-hpp/vcpkg.json",
+    "sha256": "51a2e57933c851a88b278a6292c48b3fb773bd9bf7e1d8d6b6cc19f9cf586f08"
+  },
+  {
+    "path": "ports/ms-gsl/portfile.cmake",
+    "git_blob": "5713e346a84e6ea5a2625020e956e0d3c3d2d932",
+    "bytes": 722,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ms-gsl/portfile.cmake",
+    "sha256": "1111194d640e760f4044653e004606f5705120fee6a1ef6768a33ca75cfabb4e"
+  },
+  {
+    "path": "ports/ms-gsl/vcpkg.json",
+    "git_blob": "8d70ddbcd39889328f5bc49e3462651227368471",
+    "bytes": 368,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ms-gsl/vcpkg.json",
+    "sha256": "dac667ac94055fd95ec4c437352788ef6c08da8050955c2480750bdd3e6a5ab0"
+  },
+  {
+    "path": "ports/glm/fix-clang.patch",
+    "git_blob": "e7c7b4138ca729d0332dd88bebd6035ef1a51376",
+    "bytes": 816,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/glm/fix-clang.patch",
+    "sha256": "11175e50d673af29546980307e6a1dfab07cb73259a0672a6c9b2b42508c287b"
+  },
+  {
+    "path": "ports/glm/portfile.cmake",
+    "git_blob": "00ba3076543a05e0ac1bcd951a77b4a59cc618c4",
+    "bytes": 849,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/glm/portfile.cmake",
+    "sha256": "4c42ae3b630892e6556e00a08208f5ffbc9c3fdea36dee666788043692b641c8"
+  },
+  {
+    "path": "ports/glm/usage",
+    "git_blob": "0f63af2a73f92b154de2691f3d1cfaae85ac4a17",
+    "bytes": 265,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/glm/usage",
+    "sha256": "2e9da7655db7eb2a2b58bb857e20ddfb46c0483235d2c868e819f72d10b18287"
+  },
+  {
+    "path": "ports/glm/vcpkg.json",
+    "git_blob": "cd29c8f060f11aeedfd2741d97851d78f2791039",
+    "bytes": 321,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/glm/vcpkg.json",
+    "sha256": "e667d77bbd9bc58bcb5eed3017574428bbe6debb8f6c46354b9482465010fe62"
+  },
+  {
+    "path": "ports/expected-lite/portfile.cmake",
+    "git_blob": "b3244c692351054848c451f647cb81a119405c90",
+    "bytes": 703,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/expected-lite/portfile.cmake",
+    "sha256": "dd51eeef40f416dfbfeb202dbc6389a27dd4f0542cecb4580fee0f186ef228c3"
+  },
+  {
+    "path": "ports/expected-lite/vcpkg.json",
+    "git_blob": "d8c6d9228645e551e2bd461020ed4de197f95536",
+    "bytes": 384,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/expected-lite/vcpkg.json",
+    "sha256": "6a9cc0cbeea26b31a351de08e431b0d4a0e88b7c777a5da7fd78b16d8becb888"
+  },
+  {
+    "path": "ports/s2geometry/portfile.cmake",
+    "git_blob": "2ccf9a15c044f1160ecf755e8186f43a7a8c4c4f",
+    "bytes": 797,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/s2geometry/portfile.cmake",
+    "sha256": "da9695458e39712c9ffe93881e99a8c99316c00f33f0daa3f5e27f24c68416b4"
+  },
+  {
+    "path": "ports/s2geometry/usage",
+    "git_blob": "15efb61e74ca3ff4f48fda78eb7d613599a4471d",
+    "bytes": 136,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/s2geometry/usage",
+    "sha256": "38e5f00836239bb938fd18dac687dbcb8ca40321f9f8fb6113cc255c30e47083"
+  },
+  {
+    "path": "ports/s2geometry/vcpkg.json",
+    "git_blob": "a0def43e8e751bf7691a187c1c90495b9a2bd795",
+    "bytes": 469,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/s2geometry/vcpkg.json",
+    "sha256": "dbf15efe40c755b83e127ca2b899d22263caee408ccf6061373db09431b38b61"
+  },
+  {
+    "path": "ports/uriparser/portfile.cmake",
+    "git_blob": "9633d03eaa2b0688df93006b2b3292b92ecb1eaf",
+    "bytes": 1761,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/uriparser/portfile.cmake",
+    "sha256": "e3f7dd0b8c3f5240f7b566d4943a4fac86cd897a3f5deaa393d966923f10d862"
+  },
+  {
+    "path": "ports/uriparser/usage",
+    "git_blob": "d3fb0cd4c457e6857b70642b91f6bbf3db791b6f",
+    "bytes": 164,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/uriparser/usage",
+    "sha256": "7ed66a81f955138beaea32993fd038561d7e7d1da2edc4efc8cb488fe0cbf96f"
+  },
+  {
+    "path": "ports/uriparser/vcpkg.json",
+    "git_blob": "284e10ffe6d89d6b6a2463340e9ac0aef0c929a7",
+    "bytes": 463,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/uriparser/vcpkg.json",
+    "sha256": "7ff9ca1a8113e30002a73fc5c7ac55dee51b891573d8ed65c44ec3cd3a427953"
+  },
+  {
+    "path": "ports/catch2/fix-install-path.patch",
+    "git_blob": "c89dacdb58556b7626a0baab6c96d76411a0759e",
+    "bytes": 1103,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/catch2/fix-install-path.patch",
+    "sha256": "d67374154f1910e41937173e9871991dfd5e43f43cca19a2fec10d3392000275"
+  },
+  {
+    "path": "ports/catch2/portfile.cmake",
+    "git_blob": "57d8480f25b9df5f8beabdd7c5011902855f3932",
+    "bytes": 1460,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/catch2/portfile.cmake",
+    "sha256": "acf52a0f356fff3d7158f077fed6eeaf2b71fbb6794d9485406714fc2853a71d"
+  },
+  {
+    "path": "ports/catch2/vcpkg.json",
+    "git_blob": "29b887d6bb6437ad3034d1bb1eaef56e49072378",
+    "bytes": 367,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/catch2/vcpkg.json",
+    "sha256": "5e75b13dc9c1b686721656ef79e15ec279740de351e27e862f8e0919c347f693"
+  },
+  {
+    "path": "ports/stb/FindStb.cmake",
+    "git_blob": "4ffa8b1ff478c7b7a152ef362f3d3d6f9230b34c",
+    "bytes": 671,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/stb/FindStb.cmake",
+    "sha256": "d6d9e778ddb6e7b5d13c63a63872a7a5ddba00b1cef675a7cc7c91a9a9508d91"
+  },
+  {
+    "path": "ports/stb/portfile.cmake",
+    "git_blob": "6eda59677a4a64a4bec5fd9c70ecf13751a657a7",
+    "bytes": 849,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/stb/portfile.cmake",
+    "sha256": "4bcb5ded7fcb24cc0d9830bacc8a7be53d082ac1f8d0f74fb90ba1ac2ef5f92e"
+  },
+  {
+    "path": "ports/stb/usage",
+    "git_blob": "ac75766bfa09ee298e270a17b39e29a682f0d768",
+    "bytes": 135,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/stb/usage",
+    "sha256": "cf896a6d0956431ce01388ad6f62f7f7aa3d9c5e0d23f7da7f9ee3568c61f78a"
+  },
+  {
+    "path": "ports/stb/vcpkg-cmake-wrapper.cmake",
+    "git_blob": "e787d29f05cbe3d96d1d522fc6c2f179e556c69c",
+    "bytes": 176,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/stb/vcpkg-cmake-wrapper.cmake",
+    "sha256": "7580cacc3272d0ccedc17f9303524ec1a11c43f0476318fe840816478b8def40"
+  },
+  {
+    "path": "ports/stb/vcpkg.json",
+    "git_blob": "e1057165f79d04030b26a5d1c3e4eb85f81c91b1",
+    "bytes": 209,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/stb/vcpkg.json",
+    "sha256": "d0e54a471d7d555299e391b22c6d83a1c9c4213e960452957839ef55dbe57a0b"
+  },
+  {
+    "path": "ports/modp-base64/CMakeLists.txt",
+    "git_blob": "ddc02e3ba55d7448e5e35ac98c91e8b435dacc45",
+    "bytes": 745,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/CMakeLists.txt",
+    "sha256": "2103372f5f8ea8b46aad126f2cd4a6fec40312a63fb0c92f7ebb892dbf0dd2d4"
+  },
+  {
+    "path": "ports/modp-base64/config.h.cmake",
+    "git_blob": "da32c24811a9648bbc4925d3853da4e6f4a220cc",
+    "bytes": 56,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/config.h.cmake",
+    "sha256": "2408ae5457d68ccf9c90238381cf89908442e4a561e5e8f1a9d6b953aadd6e4b"
+  },
+  {
+    "path": "ports/modp-base64/libmodpbase64.def",
+    "git_blob": "defd83b1589aeb296f62d6260cf811dcae23ac24",
+    "bytes": 84,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/libmodpbase64.def",
+    "sha256": "b4a26efcd79386541c53239787e7e90b6b09e3a7d1970b12b5d52a3059f9c6c3"
+  },
+  {
+    "path": "ports/modp-base64/modp_b64_data.h",
+    "git_blob": "e3c54b4bc81d7181337956e145cedff27009c4d7",
+    "bytes": 30315,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/modp_b64_data.h",
+    "sha256": "d416fe9f492b2b99760a6b74602d012b42147762cbe27af0ba08a50ff051afd9"
+  },
+  {
+    "path": "ports/modp-base64/portfile.cmake",
+    "git_blob": "ffa84b9c455cc7b3ab27b85dfdb3901d902e93e8",
+    "bytes": 557,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/portfile.cmake",
+    "sha256": "1b4892035a607b9fdf51f406a9aa29cc6a04ce23f6fc478a805735569aed5d6d"
+  },
+  {
+    "path": "ports/modp-base64/vcpkg.json",
+    "git_blob": "db2242219419de8441c4689627790f4c82e4dbf8",
+    "bytes": 305,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/modp-base64/vcpkg.json",
+    "sha256": "0070f781c774595d50ede16e1ef1ef38becaa8137f95ed123ea81894683ba065"
+  },
+  {
+    "path": "ports/draco/disable-symlinks.patch",
+    "git_blob": "df39449e23c1279d8dea123c3aa6e9b904df9863",
+    "bytes": 1041,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/disable-symlinks.patch",
+    "sha256": "d2c7a7fc05ef02117d74c65f1c2581d5089853fa78ba85d3aea9a40a6e5b8331"
+  },
+  {
+    "path": "ports/draco/fix-compile-error-uwp.patch",
+    "git_blob": "ca68cb5986e585ca2ed821ef6ef2ea985599a97e",
+    "bytes": 770,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/fix-compile-error-uwp.patch",
+    "sha256": "413c08c6698987a1cd8aa04148635b425d462df7ee1b04c49676adefc132aeeb"
+  },
+  {
+    "path": "ports/draco/fix-pkgconfig.patch",
+    "git_blob": "b4e3f2100907e64047126be2ea61a5a104b7ce8c",
+    "bytes": 455,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/fix-pkgconfig.patch",
+    "sha256": "1f415acc888ac56571d99909916220cc6c91e72e717487ac5b37f94b960a3c4b"
+  },
+  {
+    "path": "ports/draco/fix-uwperror.patch",
+    "git_blob": "54e2cc9ab32697d55a49b539d5a6b0fe7d374201",
+    "bytes": 358,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/fix-uwperror.patch",
+    "sha256": "a04c2e0c0e4b50b28f8692e80457a00bdb11b9dd3fc2cf6c7020837b26c59a8f"
+  },
+  {
+    "path": "ports/draco/install-linkage.diff",
+    "git_blob": "c34a60f11cea1aca22f98f9455019086c603e664",
+    "bytes": 583,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/install-linkage.diff",
+    "sha256": "10912e893e2b3e8086d5c1070f8200d6e05d93682e7f1b6aacdcd08933b76a07"
+  },
+  {
+    "path": "ports/draco/portfile.cmake",
+    "git_blob": "82c5eb59e4976e0ef0d141412a5220d557b235c1",
+    "bytes": 1093,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/portfile.cmake",
+    "sha256": "f2043256794ac650959ae80296e88e170e74bca84a31885ad7735ce2f0acf254"
+  },
+  {
+    "path": "ports/draco/vcpkg.json",
+    "git_blob": "d248165a9dd6b71affc77f84da28d58069fe0979",
+    "bytes": 447,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/draco/vcpkg.json",
+    "sha256": "e7e081a28555034de94c1627a87803b63d295f6e45c3ded0b23e4b2566185116"
+  },
+  {
+    "path": "ports/libwebp/0002-cmake-config.patch",
+    "git_blob": "ad191405eec5d1ce14ab062f722bee14b92eaa99",
+    "bytes": 1226,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/0002-cmake-config.patch",
+    "sha256": "55567849c38d3231032cb0aff6c067e1e2ca1c6515823880a6c4a885780c0ba3"
+  },
+  {
+    "path": "ports/libwebp/0003-simd.patch",
+    "git_blob": "3c362364db19a322d0376010e7994ba5b1d94553",
+    "bytes": 955,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/0003-simd.patch",
+    "sha256": "4ca73353afbfefc31147d62d7f035e151b981f9cda6636151a84a3ca51cd39d9"
+  },
+  {
+    "path": "ports/libwebp/0008-sdl.patch",
+    "git_blob": "7622ca4d8f6d268275ce70fbb028b829b5fac9c7",
+    "bytes": 1881,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/0008-sdl.patch",
+    "sha256": "2f05c20f07165ac556ef7c67c25af0e461d3cbd8539d5769296ace52b37b9311"
+  },
+  {
+    "path": "ports/libwebp/portfile.cmake",
+    "git_blob": "519ff89e6ccd0ac2c58277dc9cdfd459b9a29ddd",
+    "bytes": 2465,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/portfile.cmake",
+    "sha256": "1df3a5f842f9fdfd2906a214e2fe743edca053894ac85537684632bca28b03f9"
+  },
+  {
+    "path": "ports/libwebp/usage",
+    "git_blob": "da6b265263a9816c7e693602ea28d95e31fe12b1",
+    "bytes": 409,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/usage",
+    "sha256": "4898bdd3351dcd0868d2f0786ab114c8b161dda8db6cd84f7fe93bf0639f08d1"
+  },
+  {
+    "path": "ports/libwebp/vcpkg.json",
+    "git_blob": "6f0f96ad60c9acb6eaf1bb9f5b730da6295d5e13",
+    "bytes": 4870,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libwebp/vcpkg.json",
+    "sha256": "2ceb5f9ee69defc689ad0c011790b0419e79a465fde66190b8c6b89585439613"
+  },
+  {
+    "path": "ports/ktx/0001-Use-vcpkg-zstd.patch",
+    "git_blob": "71a587bd6ed5f7aacf7004bbfe0b60c416f29f98",
+    "bytes": 4449,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0001-Use-vcpkg-zstd.patch",
+    "sha256": "44d95d0724f37b8a664e8bd742e29343db5264de4901649c2cb9daa33e90a69e"
+  },
+  {
+    "path": "ports/ktx/0002-Fix-versioning.patch",
+    "git_blob": "1e5098806a752bc9bfc23d8f7e4a61d4ffce0f2e",
+    "bytes": 561,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0002-Fix-versioning.patch",
+    "sha256": "a3b482708c49efbb1b39fedd7a321c05b9f3d89f30362338765e398f31903438"
+  },
+  {
+    "path": "ports/ktx/0003-mkversion.patch",
+    "git_blob": "ee8b3c4afb973aaaf90a67a7aa8eb404ced53032",
+    "bytes": 673,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0003-mkversion.patch",
+    "sha256": "f61692e560771e10421b9daf15e506a610a5f2cdf00faf4a497937b042cae61a"
+  },
+  {
+    "path": "ports/ktx/0004-quirks.patch",
+    "git_blob": "afc34236dd99f899e1acad5bb94df4139d641f05",
+    "bytes": 764,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0004-quirks.patch",
+    "sha256": "7cf9e647c57ce0edf2e200aef5b207caaec475decef320d7b0ce6d8a6eec1114"
+  },
+  {
+    "path": "ports/ktx/0005-no-vendored-libs.patch",
+    "git_blob": "77cdd8518dae6bba34561766f2a563f708337471",
+    "bytes": 545,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0005-no-vendored-libs.patch",
+    "sha256": "6ed8b4c341e0888bc8cabd215e2a6c580f33e3957310188f0c5ca844383ba301"
+  },
+  {
+    "path": "ports/ktx/0006-fix-ios-install.patch",
+    "git_blob": "f81cfb4664b5c01a08caec33505995e3b2fa8c5a",
+    "bytes": 361,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/0006-fix-ios-install.patch",
+    "sha256": "1c224e79e0c3caff4a7d3d970992154ff451ce661c119f40deab2fbb5aba7921"
+  },
+  {
+    "path": "ports/ktx/portfile.cmake",
+    "git_blob": "f3fd26900bf98e88cbe5201d168e07a789a69602",
+    "bytes": 2696,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/portfile.cmake",
+    "sha256": "6691611817d2756bf07f415757ad1edeb18ead71de994b40019229435d2235dc"
+  },
+  {
+    "path": "ports/ktx/vcpkg.json",
+    "git_blob": "b4d4a0151fd717b3ae16a00c34563fb90aba74d7",
+    "bytes": 830,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/ktx/vcpkg.json",
+    "sha256": "c033adb75db654343d82144a2332df5497f3102f32a0bd0047fc6432ac5d5be8"
+  },
+  {
+    "path": "ports/meshoptimizer/portfile.cmake",
+    "git_blob": "4a34d18fef003e6106d4d883ea60a7296d9b505e",
+    "bytes": 1658,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/meshoptimizer/portfile.cmake",
+    "sha256": "5075b7cdb8283c474d61a0f3e4b4fe904b22d825c117a47e2e62cab1e7c589ba"
+  },
+  {
+    "path": "ports/meshoptimizer/vcpkg.json",
+    "git_blob": "5873046852cab01e6f346f8a745da8fb165df7ae",
+    "bytes": 486,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/meshoptimizer/vcpkg.json",
+    "sha256": "0526703157627d1db390c291f7b8cacdb85cd3f9ec46b803fef92c3085cd175e"
+  },
+  {
+    "path": "ports/picosha2/portfile.cmake",
+    "git_blob": "80db0c35f7d7e7fcfc9a68952b1360b3b44659ac",
+    "bytes": 468,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/picosha2/portfile.cmake",
+    "sha256": "71a5f739b58bf772f02f734f79c5cecc69b80eaa261588249bfb92c5d3529363"
+  },
+  {
+    "path": "ports/picosha2/vcpkg.json",
+    "git_blob": "56ab0dcd0cd7f1dfc5fc0454411cdf018d4dd892",
+    "bytes": 190,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/picosha2/vcpkg.json",
+    "sha256": "a35038f484c91b3506dc25684c1d1ea7aee6a3fe786f6d0f4043ab1246f08ee4"
+  },
+  {
+    "path": "ports/cpp-httplib/fix-find-brotli.patch",
+    "git_blob": "e01297071e04410564af1df4c32baac17e50c996",
+    "bytes": 2665,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/cpp-httplib/fix-find-brotli.patch",
+    "sha256": "07cee9d662c8971529e9931a4a6eeeafacde6b24c5c651b1c59eb5c873c299cb"
+  },
+  {
+    "path": "ports/cpp-httplib/portfile.cmake",
+    "git_blob": "869abbd89d50225e3e75afc4d77cf60fe04629e2",
+    "bytes": 1077,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/cpp-httplib/portfile.cmake",
+    "sha256": "4d2e3e05083921cc24dcbe91286a201d5f33cfcb41359cb16b583bafa07710f4"
+  },
+  {
+    "path": "ports/cpp-httplib/usage",
+    "git_blob": "8ee7571a36a0518bc77358eb841a3ea986712ca4",
+    "bytes": 136,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/cpp-httplib/usage",
+    "sha256": "49fe832473d47b628fa83b3c60809433047de90b51d26a360cbb8abf4610ca46"
+  },
+  {
+    "path": "ports/cpp-httplib/vcpkg.json",
+    "git_blob": "639721e02a9c5485e01d753bf558870881dc0100",
+    "bytes": 845,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/cpp-httplib/vcpkg.json",
+    "sha256": "b93aac1fadbcc062c01e414cfb2edfbb735d068ea8a9d9e7727f8ab0c01f5480"
+  },
+  {
+    "path": "ports/vcpkg-cmake-config/copyright",
+    "git_blob": "2e4eac8264fa4c34ce9b676ffdedf5444b84fac1",
+    "bytes": 1096,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-config/copyright",
+    "sha256": "04b60f99a43bfd7fefdc8364b24aac704a2160cef969b75ba6a38b62dc4c4b70"
+  },
+  {
+    "path": "ports/vcpkg-cmake-config/portfile.cmake",
+    "git_blob": "fc3dbafd51847b5a4d427455c73a7f77527cd676",
+    "bytes": 495,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-config/portfile.cmake",
+    "sha256": "832b34e63f5af41ad1b2e4aa79c5bfa507a005b120b51548e674accc706837d7"
+  },
+  {
+    "path": "ports/vcpkg-cmake-config/vcpkg-port-config.cmake",
+    "git_blob": "980d411315c71709ca25c619776a128165022bf1",
+    "bytes": 68,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-config/vcpkg-port-config.cmake",
+    "sha256": "72bc3093337e633bdd19fe5d4dd1f38ca1918def49608d676a9c98c686d38b1e"
+  },
+  {
+    "path": "ports/vcpkg-cmake-config/vcpkg.json",
+    "git_blob": "6106d323a6678871cc2538de418439b09c492f65",
+    "bytes": 190,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-config/vcpkg.json",
+    "sha256": "3964c3d0e6b39c7f42cebd5949cccdc7eb6feb83ee434fe73756c954b173c5c2"
+  },
+  {
+    "path": "ports/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake",
+    "git_blob": "83a1858fae67f87965b3865bfe764ba9fccab674",
+    "bytes": 14648,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake",
+    "sha256": "f3880578674f1bdbc54b67c5fc3787aaab8ee8bcf4e3e6e008204bf4ab67aa0b"
+  },
+  {
+    "path": "ports/zlib-ng/portfile.cmake",
+    "git_blob": "3b0fc717b9556a61d1445c1402e5de92c9a1bc6d",
+    "bytes": 2105,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zlib-ng/portfile.cmake",
+    "sha256": "ba94b8299744d75729acd12cd3ecc0f8ea23d51b87fdb9e4b7a34d893235cd30"
+  },
+  {
+    "path": "ports/zlib-ng/vcpkg.json",
+    "git_blob": "c1cebd7350a5f4c2b545998cc014f72356f47b11",
+    "bytes": 311,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zlib-ng/vcpkg.json",
+    "sha256": "9ac208c986cc44fb8ab277f6fae851c707a3ad6916d531d6f19c1d3ae8589a95"
+  },
+  {
+    "path": "ports/openssl/asm-armcap.patch",
+    "git_blob": "148a718077090e13cd3d9e759553f2a18a70608f",
+    "bytes": 2641,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/asm-armcap.patch",
+    "sha256": "aa8c092866283ca97c7b39664cb816c6f4f3e9df51a2b06ede1054187e75ca70"
+  },
+  {
+    "path": "ports/openssl/cmake-config.patch",
+    "git_blob": "4478f0725948f16eb02c0ee4c92180a6149725c4",
+    "bytes": 2101,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/cmake-config.patch",
+    "sha256": "11c01cd2ebcca46cf1f54abd1edc1e3b4776c35552eed7ee9d4fbab6b7e6159b"
+  },
+  {
+    "path": "ports/openssl/command-line-length.patch",
+    "git_blob": "08fb51be53171e5b2837190b3e154579ac911757",
+    "bytes": 629,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/command-line-length.patch",
+    "sha256": "a1935f6eb38f49e424eaf5dd13b31f0ef46a30f531f9d7e149aac344051a1cbb"
+  },
+  {
+    "path": "ports/openssl/install-pc-files.cmake",
+    "git_blob": "04897faed78b2b2589275df808989200e87a7962",
+    "bytes": 1047,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/install-pc-files.cmake",
+    "sha256": "001f4b55b3da7b4faa0910b906f9c587055abaa99edac9cfb3669a06b5387d44"
+  },
+  {
+    "path": "ports/openssl/openssl.pc.in",
+    "git_blob": "f7fa9d185f1702aa2a49d6ca47e63e6e300ff7a5",
+    "bytes": 132,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/openssl.pc.in",
+    "sha256": "add49223f08228831ced1bc35fc2c56a4ab0fe9741e1fb2bdc86c6d3da4b326a"
+  },
+  {
+    "path": "ports/openssl/portfile.cmake",
+    "git_blob": "8073ab38029a01e858ddea35ba924c1763d97420",
+    "bytes": 2804,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/portfile.cmake",
+    "sha256": "303b734c283b5cb5c37214373f6f8192e6c72162fe59cd94b741c9ca985c23f0"
+  },
+  {
+    "path": "ports/openssl/script-prefix.patch",
+    "git_blob": "70f0859ca866358f815ed57027f8f5c79f560ca3",
+    "bytes": 741,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/script-prefix.patch",
+    "sha256": "a18b53acdea8180aa24c4abbe85c4269e4d092c6eba4f946d5feafa7ca2a163d"
+  },
+  {
+    "path": "ports/openssl/usage",
+    "git_blob": "14e12e95695af65c000ebd3462588632490077a9",
+    "bytes": 195,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/usage",
+    "sha256": "2f31595ba815f7c986ea9fed0f198f7a2691dc027f9e1a39dd3093753ed8bc79"
+  },
+  {
+    "path": "ports/openssl/vcpkg-cmake-wrapper.cmake.in",
+    "git_blob": "5008112c35cfc12b53f84e9c46f1b42c9331aee3",
+    "bytes": 3224,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/vcpkg-cmake-wrapper.cmake.in",
+    "sha256": "b29a6ba88f6f26f03a70cf57c31beb6de58ba0306ce8f3028f52fef4b86aec13"
+  },
+  {
+    "path": "ports/openssl/vcpkg.json",
+    "git_blob": "db5592b8579cc2399dd089ed117ee1e114874f3e",
+    "bytes": 963,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/vcpkg.json",
+    "sha256": "3595eb2e778fe1524f4680d2cf4724e97391a0db358fd0ba3b37bbe1240cffaa"
+  },
+  {
+    "path": "ports/zstd/fix-emscripten-and-clang-cl.patch",
+    "git_blob": "c8dae329e4908474f4740d1b73014446d7f1626c",
+    "bytes": 1487,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/fix-emscripten-and-clang-cl.patch",
+    "sha256": "041a4839df3d92f1590fcac90a6be6be7821bd2095557b182245114e003231f4"
+  },
+  {
+    "path": "ports/zstd/fix-windows-rc-compile.patch",
+    "git_blob": "7abde739199aef21a1532da41678ce4c8ec65eb0",
+    "bytes": 759,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/fix-windows-rc-compile.patch",
+    "sha256": "24080a83a9d7b19b431fc499972f404e86fa96b188315d3fb8bca932da88fe66"
+  },
+  {
+    "path": "ports/zstd/no-static-suffix.patch",
+    "git_blob": "89916f45e35696d4d24fb42cab08ed55ef2c5e1f",
+    "bytes": 523,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/no-static-suffix.patch",
+    "sha256": "639fedd3fc4cf634e4ae63ad0077e547a91d3fef1dd26a59f0e817378c5cc434"
+  },
+  {
+    "path": "ports/zstd/portfile.cmake",
+    "git_blob": "8b6058f3dd1e32d2dc2a4a37a4c0ba37307f5080",
+    "bytes": 2326,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/portfile.cmake",
+    "sha256": "d71625895a1ab3ff63bc8ea66b5d5b7ffb1a38e42c099efe7056122a679f0de6"
+  },
+  {
+    "path": "ports/zstd/usage",
+    "git_blob": "ea1dc0ac7806e9e3fed5eea27839fba217a96738",
+    "bytes": 119,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/usage",
+    "sha256": "dd373e885aea14820e812e58de22d2e8d83f42248d695d6877fe17bd0f3ff455"
+  },
+  {
+    "path": "ports/zstd/vcpkg.json",
+    "git_blob": "db3c87d44dc45c57bfe32039e487c4ff62fd3332",
+    "bytes": 478,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/zstd/vcpkg.json",
+    "sha256": "9b5eef0d52e96174f408df225a3b8519b7dcad05c2a25dfad346ae4955b5dca8"
+  },
+  {
+    "path": "ports/vcpkg-cmake-get-vars/portfile.cmake",
+    "git_blob": "4f3183adfd34ee525e5b92b4a5c5f8a0931fb9ef",
+    "bytes": 597,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-get-vars/portfile.cmake",
+    "sha256": "bbcf9d6b88dd539617f4cfc1f76acbbe9a6e31fc373d79c1c626278768ea2e2a"
+  },
+  {
+    "path": "ports/vcpkg-cmake-get-vars/vcpkg-port-config.cmake",
+    "git_blob": "d5b5c2b1ca7406e28ff6a8cf6edb271123db13cb",
+    "bytes": 140,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-get-vars/vcpkg-port-config.cmake",
+    "sha256": "4fd4c2e909bbdf069eb3c59b4b847b0b386cdb41840714e12b34b7eff41f9e22"
+  },
+  {
+    "path": "ports/vcpkg-cmake-get-vars/vcpkg.json",
+    "git_blob": "f6ed57a494766b754c97878dadf91258778ffd2a",
+    "bytes": 233,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-get-vars/vcpkg.json",
+    "sha256": "90ff3bf8d338ffa039b69e800a1758c30f939085efcf1dfcee4d975871475a09"
+  },
+  {
+    "path": "ports/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake",
+    "git_blob": "8ce706bdf965ed77265014669fd7094bf1034a9e",
+    "bytes": 1804,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake",
+    "sha256": "da894e0dafa6ef0acdc641f12b02633f273322d86a6d2e7065dc56134478cea3"
+  },
+  {
+    "path": "ports/rapidjson/portfile.cmake",
+    "git_blob": "698fe0d545370075d6c354afc5496773525f24f6",
+    "bytes": 1890,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/rapidjson/portfile.cmake",
+    "sha256": "e51514972f8091c5ca3652d36dd7085bca8cd728d7158437743bb161fdb64afe"
+  },
+  {
+    "path": "ports/rapidjson/vcpkg.json",
+    "git_blob": "5d1579f29cd5167c1a32d822b9f9cbfd0a74d77e",
+    "bytes": 400,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/rapidjson/vcpkg.json",
+    "sha256": "e003a19faf326d9e5ee55544c904e38b0483d0d72420ba6b6129927e7c72bc61"
+  },
+  {
+    "path": "ports/spdlog/portfile.cmake",
+    "git_blob": "688759cf5d87658b11268355946c28f5ed308a3f",
+    "bytes": 2300,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/spdlog/portfile.cmake",
+    "sha256": "a915354a24cf870a60c874f18b69bdded2ac8d8a7ab00e6a4d0dfd1ef9c97d76"
+  },
+  {
+    "path": "ports/spdlog/usage",
+    "git_blob": "d0ce6557992d8869e8d62b164c3d190d6771b0c4",
+    "bytes": 286,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/spdlog/usage",
+    "sha256": "bdc67ce7fb7be263e7fdf3c57815f8f9f6142aca5d8f4da5e5597f25a6163bc6"
+  },
+  {
+    "path": "ports/spdlog/vcpkg.json",
+    "git_blob": "c8ec29f109d8395ada3555088dab4d2175663838",
+    "bytes": 612,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/spdlog/vcpkg.json",
+    "sha256": "39d97ac1cf204f86fb3289578fdb1dfea90ef7e5a219582c3ea964c6c7d700ef"
+  },
+  {
+    "path": "ports/sqlite3/CMakeLists.txt",
+    "git_blob": "1144965d11899f01f01daae5fa4e06bbe26ef12d",
+    "bytes": 2618,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/CMakeLists.txt",
+    "sha256": "db133f80084dbbaccbc61c314d437412a5cc31b49378b19b7748f63269e3435a"
+  },
+  {
+    "path": "ports/sqlite3/add-config-include.patch",
+    "git_blob": "7942c9cf36cb71fc9b9a15684824d4cc89d9db0e",
+    "bytes": 538,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/add-config-include.patch",
+    "sha256": "15a6fc0818d6407b468e3c869627445f1af09ef94ecf5c792eee71bc30ca7e68"
+  },
+  {
+    "path": "ports/sqlite3/fix-arm-uwp.patch",
+    "git_blob": "03e0929653676cbc2f8971fc58cfd57153505172",
+    "bytes": 1146,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/fix-arm-uwp.patch",
+    "sha256": "f4397f84d931cccb44a038194c895e28c749f1825ab45db4b5dccd6e3b6b5967"
+  },
+  {
+    "path": "ports/sqlite3/portfile.cmake",
+    "git_blob": "726df3b99a33327c4917de0921e23877a0b9dd38",
+    "bytes": 3619,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/portfile.cmake",
+    "sha256": "3d9829e3689f46e74e3af8698cce9381fd24bd479e893c58531c415c6b290ad8"
+  },
+  {
+    "path": "ports/sqlite3/sqlite3-config.in.cmake",
+    "git_blob": "fac63e6c058a2f8f56974dbc31ce60015df3e4b6",
+    "bytes": 166,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/sqlite3-config.in.cmake",
+    "sha256": "7a44f5805ced746c4dcb497055bce06e45eb3ecb3506465fcde4d442a2179d96"
+  },
+  {
+    "path": "ports/sqlite3/sqlite3-vcpkg-config.h.in",
+    "git_blob": "d46d6e1c3fe3265f099a900acc10f1833ff1af5a",
+    "bytes": 1122,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/sqlite3-vcpkg-config.h.in",
+    "sha256": "9bfd209bc336dd0514c7ed9e7e70b8d1f70224fee7c300224b163ac1c365becd"
+  },
+  {
+    "path": "ports/sqlite3/sqlite3.pc.in",
+    "git_blob": "d265632d1199305845402e95ca992c8e41481d01",
+    "bytes": 269,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/sqlite3.pc.in",
+    "sha256": "7d0eef3b49bc8c7fbb6a06b449855060ab5d9b4ab37d1781a0269dda8421a391"
+  },
+  {
+    "path": "ports/sqlite3/usage",
+    "git_blob": "7f79c6d461531aa63ca2c8325e64bea34cc29aa6",
+    "bytes": 192,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/usage",
+    "sha256": "1cd1a4fe57d9caf51321f363f1d395074ac7d0c14b7035a5d2c218670be4b5b3"
+  },
+  {
+    "path": "ports/sqlite3/vcpkg.json",
+    "git_blob": "3f42f734a63fb12edffca8f045d2ea33b652bbdf",
+    "bytes": 1985,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/sqlite3/vcpkg.json",
+    "sha256": "e22b98b26761db51c2e51c179d680839f9133519e37320ed043730f55840aa97"
+  },
+  {
+    "path": "ports/vcpkg-cmake/portfile.cmake",
+    "git_blob": "0b7dd502017ef7ccffa2638e29f203fee7b3d964",
+    "bytes": 655,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/portfile.cmake",
+    "sha256": "a711531b7f13b7da16fa1f25d7c5737a423d4a126465dc9e6689a0f043fcc1aa"
+  },
+  {
+    "path": "ports/vcpkg-cmake/vcpkg-port-config.cmake",
+    "git_blob": "f2a973d4ebcba6e628422e9a7d56cec1ba55285b",
+    "bytes": 189,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/vcpkg-port-config.cmake",
+    "sha256": "f0a30f77c8f5e3ac40436fe2518a61ad067f2955c7ef3be6d6a0ca4b81cd2a45"
+  },
+  {
+    "path": "ports/vcpkg-cmake/vcpkg.json",
+    "git_blob": "fa484eafc5a76aead90876e9d3aff0a2d023be8d",
+    "bytes": 180,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/vcpkg.json",
+    "sha256": "6fd546b781a1aa5df572bdd31672cf222e55698aa5bf7d3e5c11abf1ae56a45b"
+  },
+  {
+    "path": "ports/vcpkg-cmake/vcpkg_cmake_build.cmake",
+    "git_blob": "47933b3fe9f89c801eb570a9b8655fda88914cba",
+    "bytes": 3858,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/vcpkg_cmake_build.cmake",
+    "sha256": "6d1c27080fe3e768b5e7b968d6a28a37db154ebcb214297de25f10b6713511e1"
+  },
+  {
+    "path": "ports/vcpkg-cmake/vcpkg_cmake_configure.cmake",
+    "git_blob": "acd510f5145ba02c7b07de513048bf7450520dba",
+    "bytes": 15511,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/vcpkg_cmake_configure.cmake",
+    "sha256": "a8bc92be2faf621d6183ed1f3eb2ac3b103f4418b95f8695cf0dc7f7c5e8f724"
+  },
+  {
+    "path": "ports/vcpkg-cmake/vcpkg_cmake_install.cmake",
+    "git_blob": "2bd8b4ea75ff35e7f5b4b1775f561cb224c42060",
+    "bytes": 577,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake/vcpkg_cmake_install.cmake",
+    "sha256": "3ae7886dc8434fac6f1e61190cc355fdec5fbd4f60758e2de20423cf49c91369"
+  },
+  {
+    "path": "ports/tinyxml2/0001-fix-do-not-force-export-the-symbols-when-building-st.patch",
+    "git_blob": "ef334ec1b125be38a808cb0ebf7f817af2ae83e1",
+    "bytes": 1311,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/tinyxml2/0001-fix-do-not-force-export-the-symbols-when-building-st.patch",
+    "sha256": "08c2b7d4ba4ee1dd45f26847c022a4db1496edb6a3bdabc519ac4a330573aa8e"
+  },
+  {
+    "path": "ports/tinyxml2/0002-fix-check-for-TINYXML2_EXPORT-on-non-windows.patch",
+    "git_blob": "7f2f750deb6dd3dbf1e6acaec7f5f5480d08d3ee",
+    "bytes": 674,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/tinyxml2/0002-fix-check-for-TINYXML2_EXPORT-on-non-windows.patch",
+    "sha256": "aae8bfad827d265c3cfffebd583da39e299068b68b8795233bf2b5ed9d7b2273"
+  },
+  {
+    "path": "ports/tinyxml2/0003-fix-Android-SDK-below-24-does-not-support-fseeko.patch",
+    "git_blob": "4de71c5692de2d49b67fa0c7f69b67fac16f2cb7",
+    "bytes": 778,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/tinyxml2/0003-fix-Android-SDK-below-24-does-not-support-fseeko.patch",
+    "sha256": "9a4752addbb190beac73841c43a9406bec303d907b3b329cd9bb5b534a8b26b7"
+  },
+  {
+    "path": "ports/tinyxml2/portfile.cmake",
+    "git_blob": "8ebf8601aeeafd20538e9a6d2e892de4c50b01f0",
+    "bytes": 875,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/tinyxml2/portfile.cmake",
+    "sha256": "d4acb9ba939d6580f674a1f222c8d18c359d12a4881ed50ad1a0858ea046ebf0"
+  },
+  {
+    "path": "ports/tinyxml2/vcpkg.json",
+    "git_blob": "211f0036796079d28e072b970c2b57f3568a01c8",
+    "bytes": 349,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/tinyxml2/vcpkg.json",
+    "sha256": "d575e087674ddc9f5270cdf3f2c57d35ef127a30cc58268c98e8287ad474bc8c"
+  },
+  {
+    "path": "ports/libmorton/portfile.cmake",
+    "git_blob": "46e3dd457f22158b5c33221a81517006fdf601e8",
+    "bytes": 634,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libmorton/portfile.cmake",
+    "sha256": "0f4774e006eb45fb9ce31b30b7d2615065079a6983c644c4946800b43882f946"
+  },
+  {
+    "path": "ports/libmorton/vcpkg.json",
+    "git_blob": "084c22d588738a57f760394914d96d8e98a5e169",
+    "bytes": 303,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/libmorton/vcpkg.json",
+    "sha256": "5aa09ba1fa76d203dcbc202f0a798bc01563d045f415b5d11f0244e8e7bc1f6a"
+  },
+  {
+    "path": "ports/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt",
+    "git_blob": "a6433e8e869d6074960124f508e23efdc2650d1f",
+    "bytes": 9886,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt",
+    "sha256": "75a1291434249775e2f82942e9e04b41efef3e8cded19c30a9940c691ad9148f"
+  },
+  {
+    "path": "ports/openssl/unix/android-cc.patch",
+    "git_blob": "f4c3d68343114e9b410c9ef26c5753a965ddce86",
+    "bytes": 704,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/android-cc.patch",
+    "sha256": "a3cde12ca3c7c7894e73d300e0ccf728de28b87afde13776e7d7267979c3ead2"
+  },
+  {
+    "path": "ports/openssl/unix/configure",
+    "git_blob": "2d49b3d166b41ab78dca644464afdcd8fc9a27e3",
+    "bytes": 565,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/configure",
+    "sha256": "96ef16490c8a7c240a0c96de7e641c93843d0b78400b4de7dc2c7d2e500f3480"
+  },
+  {
+    "path": "ports/openssl/unix/move-openssldir.patch",
+    "git_blob": "2a39bdbe74511035c519ea41dd30f27684f8264f",
+    "bytes": 628,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/move-openssldir.patch",
+    "sha256": "9e62ad861f8421e5b732bf488b7199131ac17a57f295f50c697d2591f5845e0e"
+  },
+  {
+    "path": "ports/openssl/unix/no-empty-dirs.patch",
+    "git_blob": "7cf0cf05fa9273705eb8f21e083a7eee7a1c232e",
+    "bytes": 1128,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/no-empty-dirs.patch",
+    "sha256": "a03d46642c903c9eb09184eabc553ce1467e000c28a9e7d7e92d995970004a62"
+  },
+  {
+    "path": "ports/openssl/unix/no-static-libs-for-shared.patch",
+    "git_blob": "d6aa34cfe241e426c15de0aeed7e2db85e6c1c96",
+    "bytes": 543,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/no-static-libs-for-shared.patch",
+    "sha256": "dc51d597ad7477fc56c2a394c84493c87a4de2b84898497dda2754dd0fd8cb53"
+  },
+  {
+    "path": "ports/openssl/unix/portfile.cmake",
+    "git_blob": "98c5dcb549d2bece031f7856740fc222040f2d6f",
+    "bytes": 5717,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/portfile.cmake",
+    "sha256": "d0ed522a7c951719b07b56ccbc83e0b1815efe0cbf102f7d40ebc0b6e39b0d29"
+  },
+  {
+    "path": "ports/openssl/unix/remove-deps.cmake",
+    "git_blob": "a57c70fe91e944ef9baf137d9d3b495cad6a1b72",
+    "bytes": 314,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/unix/remove-deps.cmake",
+    "sha256": "6f9560155faa36f82e249d20b80d28edebd546c55db144b8dabbe0affea6ab14"
+  },
+  {
+    "path": "ports/openssl/windows/install-layout.patch",
+    "git_blob": "be9df768b3846728a8e5473816fa02aec1923338",
+    "bytes": 766,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/windows/install-layout.patch",
+    "sha256": "06bf9d3f9d78a99d6472bd8a63442065a90cf413af5c4e2946348bece1ce50f2"
+  },
+  {
+    "path": "ports/openssl/windows/install-pdbs.patch",
+    "git_blob": "552545407e0c4cbd16215403e3464e74ec46b82d",
+    "bytes": 2103,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/windows/install-pdbs.patch",
+    "sha256": "e913fdc775b5e7be3eb71bfc223d51c3d8fd7e933410493efdbc53c5a1e1f3b7"
+  },
+  {
+    "path": "ports/openssl/windows/portfile.cmake",
+    "git_blob": "d35f3097240dc318e10fff1bac9dcc966409aad2",
+    "bytes": 5893,
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/ports/openssl/windows/portfile.cmake",
+    "sha256": "7f262ffb0219b3a0e2db7b172bec9ccad299898ac934f8de1e449fb749052582"
+  },
+  {
+    "path": "ports/LICENSE.txt",
+    "git_blob": "4d23e0e39b2531c41499e7b1c5ec0efffd15c6b6",
+    "bytes": 1073,
+    "sha256": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+    "url": "https://raw.githubusercontent.com/microsoft/vcpkg/1de2026f28ead93ff1773e6e680387643e914ea1/LICENSE.txt",
+    "role": "verbatim license for vendored pinned port recipes and support files"
+  }
+]

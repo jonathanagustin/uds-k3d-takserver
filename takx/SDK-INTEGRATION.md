@@ -48,6 +48,13 @@ or TAK Server interoperability. See the [CommonCommo profile](native-commoncommo
 for its separate source build and verified JNI continuation.
 Track the complete work in [#477](https://github.com/jonathanagustin/uds-takserver/issues/477).
 
+The [client interop source profile](kernel-client-interop/README.md) adds real
+role-icon, font and viewport behavior, plus Java/JNI bridges to existing native
+label and scene APIs. Its headless controls pass; the new JNI paths still need
+runtime qualification. The [WorldWind interop profile](worldwind-java/README.md)
+adds rendering and picking hooks with real-class dispatch and coordinate tests.
+Headed rendering, thread handoff and client launch remain separate checks.
+
 ## SDK acceptance
 
 Package the verified Java classes, native runtimes, resources and required

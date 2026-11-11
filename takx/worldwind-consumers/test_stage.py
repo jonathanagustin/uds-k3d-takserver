@@ -110,18 +110,18 @@ class StagingGuards(unittest.TestCase):
             self.run_stage()
         self.assertFalse(self.output.exists())
 
-    def test_checked_in_patch_has_one_pinned_import_change(self):
+    def test_checked_in_patch_has_two_pinned_import_changes(self):
         lock = json.loads((HERE / "sources.lock.json").read_text())
-        patch = (HERE.parent / "patches" / lock["patch"]).read_bytes()
+        patch = (HERE / lock["patch"]).read_bytes()
         self.assertEqual(MODULE.digest(patch), lock["patch_sha256"])
         lines = patch.decode().splitlines()
         self.assertEqual([s for s in lines if s.startswith("-") and not s.startswith("---")],
-                         ["-import com.jogamp.opengl.util.awt.TextRenderer;"])
+                         ["-import com.jogamp.opengl.util.awt.TextRenderer;"] * 2)
         self.assertEqual([s for s in lines if s.startswith("+") and not s.startswith("+++")],
-                         ["+import gov.nasa.worldwind.render.TextRenderer;"])
+                         ["+import gov.nasa.worldwind.render.TextRenderer;"] * 2)
         for profile in lock["profiles"].values():
             changed = [s["path"] for s in profile["sources"] if s["sha256"] != s["staged_sha256"]]
-            self.assertEqual(changed, [lock["patched_path"]])
+            self.assertEqual(changed, lock["patched_paths"])
 
 
 @unittest.skipUnless(os.environ.get("TAKX_SOURCE_DIR"), "set TAKX_SOURCE_DIR for exact official-source staging")
@@ -130,7 +130,7 @@ class OfficialSource(unittest.TestCase):
         lock = json.loads((HERE / "sources.lock.json").read_text())
         with tempfile.TemporaryDirectory() as temp:
             receipt = MODULE.stage(Path(os.environ["TAKX_SOURCE_DIR"]), Path(temp) / "out",
-                                   lock, HERE.parent / "patches" / lock["patch"])
+                                   lock, HERE / lock["patch"])
             self.assertIn(receipt["profile"], lock["profiles"])
 
 

@@ -59,6 +59,16 @@ class IntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'complete examples'):
             recipe.validate(bad)
 
+    def test_interop_is_explicit_and_bound_to_official_preimages(self):
+        contract = recipe.interop_contract()
+        self.assertEqual(contract['profile'], 'project-standard-gdal-rgb-interop')
+        for name, record in contract['files'].items():
+            self.assertEqual(record['before_sha256'], self.lock['files'][name])
+            self.assertNotEqual(record['before_sha256'], record['after_sha256'])
+        with patch.object(recipe, 'digest', return_value='0' * 64):
+            with self.assertRaisesRegex(ValueError, 'interop profile integrity'):
+                recipe.interop_contract()
+
     def test_timeout_retains_diagnostics_and_removes_partial_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

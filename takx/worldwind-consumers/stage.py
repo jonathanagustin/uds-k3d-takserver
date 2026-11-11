@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Stage the pinned production consumer slice with one explicit import patch."""
+"""Stage the pinned production consumer slice with explicit NASA renderer import patches."""
 import argparse
 import hashlib
 import json
@@ -78,7 +78,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     lock = json.loads((HERE / "sources.lock.json").read_text())
-    receipt = stage(args.source, args.output, lock, HERE.parent / "patches" / lock["patch"])
+    receipt = stage(args.source, args.output, lock, HERE / lock["patch"])
     print(json.dumps({"profile": receipt["profile"], "sources": len(receipt["sources"])}))
 
 

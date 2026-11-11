@@ -1,0 +1,150 @@
+--- a/src/gov/nasa/worldwind/render/PointPlacemark.java
++++ b/src/gov/nasa/worldwind/render/PointPlacemark.java
+@@ -735,6 +735,9 @@
+      *
+      * @param dc the current draw context.
+      */
++    /** Project interop: an installed owner consumes eligible placemarks instead of the WW ordered queue. */
++    public static volatile java.util.function.BiConsumer<PointPlacemark, DrawContext> makeOrderedRenderableFactory;
++
+     protected void makeOrderedRenderable(DrawContext dc)
+     {
+         // The code in this method determines whether to queue an ordered renderable for the placemark
+@@ -780,7 +783,16 @@
+ 
+         if (this.intersectsFrustum(dc, opm) || this.isDrawLine(dc, opm))
+         {
+-            dc.addOrderedRenderable(opm); // add the image ordered renderable
++            java.util.function.BiConsumer<PointPlacemark, DrawContext> factory = makeOrderedRenderableFactory;
++            if (factory != null)
++            {
++                this.setValue(OrderedPlacemark.class.getName(), opm);
++                factory.accept(this, dc);
++            }
++            else
++            {
++                dc.addOrderedRenderable(opm); // unchanged default ordered rendering
++            }
+         }
+ 
+         if (dc.isPickingMode())
+--- a/src/gov/nasa/worldwind/layers/GraticuleSupport.java
++++ b/src/gov/nasa/worldwind/layers/GraticuleSupport.java
+@@ -155,6 +155,12 @@
+         }
+ 
+         // Render text labels
++        this.renderText(dc, text);
++    }
++
++    /** Project extension dispatch; default behavior retains the NASA renderer. */
++    protected void renderText(DrawContext dc, Collection<GeographicText> text)
++    {
+         this.textRenderer.render(dc, text);
+     }
+ 
+--- a/src/gov/nasa/worldwind/util/tree/BasicTreeLayout.java
++++ b/src/gov/nasa/worldwind/util/tree/BasicTreeLayout.java
+@@ -1356,6 +1356,15 @@
+      *
+      * @param screenLocation New screen location.
+      */
++    /** Upper-left AWT pixel location, matching the existing (tree, x, y) constructor. */
++    public void setScreenLocation(Point screenLocation)
++    {
++        if (screenLocation == null)
++            throw new IllegalArgumentException("screen location is null");
++        this.setScreenLocation(new Offset((double) screenLocation.x, (double) screenLocation.y,
++            AVKey.PIXELS, AVKey.INSET_PIXELS));
++    }
++
+     public void setScreenLocation(Offset screenLocation)
+     {
+         frame.setScreenLocation(screenLocation);
+--- a/src/gov/nasa/worldwind/render/DrawContextImpl.java
++++ b/src/gov/nasa/worldwind/render/DrawContextImpl.java
+@@ -538,6 +538,21 @@
+     }
+ 
+     /** {@inheritDoc} */
++    /** Project hook: AWT logical pixels to framebuffer pixels, retaining the top-left origin.
++     * Callers perform their existing GL Y inversion exactly once after this hook.
++     */
++    public int[] awtPointToGLpoint(Point point)
++    {
++        return point == null ? null : new int[] {point.x, point.y};
++    }
++
++    protected Rectangle awtRectangleToGLrectangle(Rectangle rectangle)
++    {
++        int[] first = this.awtPointToGLpoint(new Point(rectangle.x, rectangle.y));
++        int[] last = this.awtPointToGLpoint(new Point(rectangle.x + rectangle.width, rectangle.y + rectangle.height));
++        return new Rectangle(first[0], first[1], last[0] - first[0], last[1] - first[1]);
++    }
++
+     public int getPickColorAtPoint(Point point)
+     {
+         if (point == null)
+@@ -549,8 +564,9 @@
+ 
+         // Translate the point from AWT screen coordinates to OpenGL screen coordinates.
+         Rectangle viewport = this.getView().getViewport();
+-        int x = point.x;
+-        int y = viewport.height - point.y - 1;
++        int[] framebufferPoint = this.awtPointToGLpoint(point);
++        int x = framebufferPoint[0];
++        int y = viewport.height - framebufferPoint[1] - 1;
+ 
+         // Read the framebuffer color at the specified point in OpenGL screen coordinates as a 24-bit RGB value.
+         if (this.pixelColors == null || this.pixelColors.capacity() < 3)
+@@ -580,7 +596,8 @@
+         // Transform the rectangle from AWT screen coordinates to OpenGL screen coordinates and compute its intersection
+         // with the viewport. Transformation to GL coordinates must be done prior to computing the intersection, because
+         // the viewport is in GL coordinates. The resultant rectangle represents the area that's valid to read from GL.
+-        Rectangle r = new Rectangle(rectangle.x, viewport.height - rectangle.y - 1, rectangle.width, rectangle.height);
++        Rectangle scaled = this.awtRectangleToGLrectangle(rectangle);
++        Rectangle r = new Rectangle(scaled.x, viewport.height - scaled.y - 1, scaled.width, scaled.height);
+         r = r.intersection(viewport);
+ 
+         if (r.isEmpty()) // Return null if the rectangle is empty.
+@@ -1185,7 +1202,9 @@
+             double viewportHeight = viewport.getHeight() <= 0.0 ? 1.0 : viewport.getHeight();
+ 
+             //Get the pick point and translate screen center to zero
+-            Point ptCenter = new Point(getPickPoint());
++            int[] framebufferPoint = this.awtPointToGLpoint(getPickPoint());
++            Point scaledPickPoint = new Point(framebufferPoint[0], framebufferPoint[1]);
++            Point ptCenter = new Point(scaledPickPoint);
+             ptCenter.y = (int) viewportHeight - ptCenter.y;
+             ptCenter.translate((int) (-viewportWidth / 2), (int) (-viewportHeight / 2));
+ 
+@@ -1213,8 +1232,8 @@
+                 getView().getNearClipDistance(), getView().getFarClipDistance());
+ 
+             //Create the screen rectangle associated with this frustum
+-            Rectangle rectScreen = new Rectangle(getPickPoint().x - offsetX,
+-                (int) viewportHeight - getPickPoint().y - offsetY,
++            Rectangle rectScreen = new Rectangle(scaledPickPoint.x - offsetX,
++                (int) viewportHeight - scaledPickPoint.y - offsetY,
+                 pickPointFrustumDimension.width,
+                 pickPointFrustumDimension.height);
+ 
+@@ -1241,7 +1260,8 @@
+ 
+         // Get the pick rectangle, transform it from AWT screen coordinates to OpenGL screen coordinates, then translate
+         // it such that the screen's center is at the origin.
+-        Rectangle pr = new Rectangle(this.getPickRectangle());
++        Rectangle scaledPickRectangle = this.awtRectangleToGLrectangle(this.getPickRectangle());
++        Rectangle pr = new Rectangle(scaledPickRectangle);
+         pr.y = (int) viewportHeight - pr.y;
+         pr.translate((int) (-viewportWidth / 2), (int) (-viewportHeight / 2));
+ 
+@@ -1264,7 +1284,7 @@
+ 
+         // Create the screen rectangle in OpenGL screen coordinates associated with this frustum. We translate the
+         // specified pick rectangle from AWT coordinates to GL coordinates by inverting the y axis.
+-        Rectangle screenRect = new Rectangle(this.getPickRectangle());
++        Rectangle screenRect = new Rectangle(scaledPickRectangle);
+         screenRect.y = (int) viewportHeight - screenRect.y;
+ 
+         this.pickFrustumList.add(new PickPointFrustum(frustum, screenRect));

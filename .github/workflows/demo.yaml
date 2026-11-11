@@ -237,7 +237,10 @@ jobs:
           python3 demo/tools/check-asciinema.py \
             --recorder "${RUNNER_TEMP}/asciinema/bin/asciinema" \
             --output "${RUNNER_TEMP}/asciinema-cli-check"
-          echo "${RUNNER_TEMP}/asciinema/bin" >> "${GITHUB_PATH}"
+          # Export only the recorder; keep media Python and its system Pillow.
+          mkdir -p "${RUNNER_TEMP}/recorder-bin"
+          ln -s "${RUNNER_TEMP}/asciinema/bin/asciinema" "${RUNNER_TEMP}/recorder-bin/asciinema"
+          echo "${RUNNER_TEMP}/recorder-bin" >> "${GITHUB_PATH}"
         shell: bash
 
       - name: Check the pinned media pipeline before deployment

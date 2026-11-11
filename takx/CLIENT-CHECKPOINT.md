@@ -36,6 +36,7 @@ component checks. Ordinary server builds do not run them.
 | Historical PROJ 4.9.1 | Real forward/inverse coordinates and strict PIC linking | [Source profile](native-proj/README.md), [#448](https://github.com/jonathanagustin/uds-takserver/pull/448) |
 | SQLCipher 4.5.7 / SQLite 3.45.3 | Source-built Tcl 8.6.18 and OpenSSL 3.5.9; encrypted create/reopen, exact data, wrong-key rejection and strict PIC linking | [Source profile](native-sqlcipher/README.md) |
 | Historical GEOS 3.4.3 | Real C intersection, distance, buffer and invalid-input controls; official portability patch and strict PIC linking | [Source profile](native-geos/README.md) |
+| MDBTools 1.0.0 | Real MS Access catalog/rows, required API symbols, strict PIC link and actual runtime providers; full Kernel provider pending | [Source profile](native-mdbtools/README.md) |
 
 The Assimp archive is named `4.0.1-mod`, while its modified library reports
 `4.1.0`; neither identity is relabeled. Assimp's positive checks do not establish

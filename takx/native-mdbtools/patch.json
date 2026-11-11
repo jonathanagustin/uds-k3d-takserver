@@ -1,0 +1,115 @@
+{
+  "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/mdbtools-pgsc.patch",
+  "bytes": 102450,
+  "sha256": "8c5e6faf6c95b026d834b7094d4f7a4bafc0f55222312a3bc7aac691309c3839",
+  "files": {
+    "configure": {
+      "before": "9fa7435ba0f359dc67e0b76919e8e8e05b0d960a8b36617847672fff1985af58",
+      "after": "75a5f44a5ec2c669de5b0c809f34a99f351e77b253c1ae33ab30ffa3db54e7ec"
+    },
+    "include/mdbtools.h": {
+      "before": "c0918527a2894f0cf2c22514ff894c215634548696b7cf248c4099b44f15a8c5",
+      "after": "3acdf89facf9b1d10acc5bde639e76cddbb8690aa9f63aa2dbf5eec9e5f880e4"
+    },
+    "include/mdbtools.h.in": {
+      "before": "b3e94798d86eb9745ee22a10e8b0eb98ab3c4c5c9e528638893c0e87c1565213",
+      "after": "c845364a1449eef545bbeb0ba354f0d2ec688545a2ad97c6fafbda4349823ac1"
+    },
+    "include/mdbfakeglib.h": {
+      "before": "b6566f7d2a88df6b4516d4f3826ef991205b29b2e088307815e6a440499c24ee",
+      "after": "d5b65bf13d7b52663800a441ba103e501b2ab7fd971384d27af7a638680a0f73"
+    },
+    "include/mdbsql.h": {
+      "before": "4876c233797a5f1dc1c1fa2772ba78e2f1f10f49981ad8b81c1b2cb856cf321c",
+      "after": "5f0ecfd52fbc50c3096df8c46a27f465a8cadd6986f49659014337314357dd75"
+    },
+    "msvc/mdbtools.sln": {
+      "before": null,
+      "after": "c1ac1340b0a195cfffa13eb29f286529ed02ff36d007f12f6e37572f561abc90"
+    },
+    "msvc/mdb-sql/mdb-sql.vcxproj": {
+      "before": null,
+      "after": "9c9176b54eafa18b44117fb16a8c0d90c6d6dff7b36a71d4d85d9f1fef1686d9"
+    },
+    "msvc/mdb-sql/mdb-sql.vcxproj.filters": {
+      "before": null,
+      "after": "4eff4bdbafebd264c2258b064aeb52d7a790df9b8e9f0d37960b55e2af0cbedf"
+    },
+    "msvc/mdb-sql/mdb-sql.vcxproj.user": {
+      "before": null,
+      "after": "c06a75b13f855a94d46616796e024c52b499f8f92cf00ccb571ddbc6ff574676"
+    },
+    "msvc/libmdbsql/libmdbsql.vcxproj.user": {
+      "before": null,
+      "after": "c06a75b13f855a94d46616796e024c52b499f8f92cf00ccb571ddbc6ff574676"
+    },
+    "msvc/libmdbsql/libmdbsql.vcxproj.filters": {
+      "before": null,
+      "after": "5c3d5b9b79261e3968fd30ac488addff9fb1b84a1adc5d9f2bb05a68d346b1f5"
+    },
+    "msvc/libmdbsql/libmdbsql.vcxproj": {
+      "before": null,
+      "after": "43e728579cfd72a8304a20fc034c89258550c3439f4cfd6021c9c57633d4260c"
+    },
+    "msvc/libmdb/libmdb.vcxproj.filters": {
+      "before": null,
+      "after": "d57db44da7b19447f4cc6064806cefc0cc07fce88636e9e4f8e3491ad1e0fb21"
+    },
+    "msvc/libmdb/libmdb.vcxproj": {
+      "before": null,
+      "after": "17bd0732da6ae16b01e2b249a6bbd4e664c16a4c04b87fc37150bee5ae516309"
+    },
+    "msvc/libmdb/libmdb.vcxproj.user": {
+      "before": null,
+      "after": "c06a75b13f855a94d46616796e024c52b499f8f92cf00ccb571ddbc6ff574676"
+    },
+    "src/libmdb/table.c": {
+      "before": "278d3c381c08ae6b22010e4ddd06bd4907ae31fcc91cda24a1c77bc876599a14",
+      "after": "880e0f79a4e61acec91e6d0036a17b7465ee1936299446ed4ef0f2a522bc7223"
+    },
+    "src/libmdb/backend.c": {
+      "before": "79749c9fc8c8459e164de0cc54e4c864712c5f8e391cd47488b15a0e0ea12c7b",
+      "after": "7003fc9a0cad8c9a5e7fb53696a77041a392090e5a3fa184f82af6f04e3f6382"
+    },
+    "src/libmdb/catalog.c": {
+      "before": "0ca43912b42afda168617acb00f86a29afe6f8ee739691e71e633a79bf2f7e96",
+      "after": "01cbc1c6afed8e199c080485e1b610c478ee2c14ab40a3f5c4754700b3e78e20"
+    },
+    "src/libmdb/write.c": {
+      "before": "4ce617d3f6de86c171880bfd212290829a963960d6fa752bc6ff5be2640bcb90",
+      "after": "56dff60c236cbb4c0b90a204fedbc2c3ebaf7820add23f77ea0090ad7503831d"
+    },
+    "src/libmdb/fakeglib.c": {
+      "before": "1126b8ef49dc1992c3468c438af819f954993b8a30a596b3accc03ea8b6966fb",
+      "after": "16711d027ff9b002f695f79c168684dc50a40e251795bee5cb82d9c99884405e"
+    },
+    "src/libmdb/options.c": {
+      "before": "f7a800f77eb8940eed7b12efc8ddafefdd98235a7981bd81bbd4ab46893d9fc4",
+      "after": "48de61a63a6b5c5ccf1485ab6dda9807f254ae10e3672eb0105cf550a2a9d940"
+    },
+    "src/libmdb/file.c": {
+      "before": "169392d363dbefad5abc2e4d26bd8d6328f1120ca5a2e586ea5a5a803ce82484",
+      "after": "a239eb23f4655ed89405aa91d1535dafeb957fe45870237a22caf591f0681c21"
+    },
+    "src/libmdb/money.c": {
+      "before": "b4ff6ba2cd367c0462ae574d0e0b2fb7d375a009eb7f4f8c9d3f151c9ecece11",
+      "after": "e6bb989c3503db6189b0e84d90f3940def7c4c08eb9a649b119118c492da76da"
+    },
+    "src/libmdb/index.c": {
+      "before": "1a8e428052f7945a25f22e5b6f985c1d5d5f6cdd7e2f3745bee9c0f6ebe9f8c0",
+      "after": "b494a250d7769872de460ff73f2de0899fde28b59b422aee94a69242559292c5"
+    },
+    "src/libmdb/dump.c": {
+      "before": "e98cb5686ea3d668f5a4f4e2ad4a6ddc8b94d1b2487c56a659299a1c9ea22639",
+      "after": "a119e6819231ba686350b4e0b1328a1ca54187fc536e0803a49391c0b7841a8d"
+    },
+    "src/sql/lexer.c": {
+      "before": "e6c08e9a624e0b7a36238893efc3a2e70303c0c140a1edd1189dc3ade543d086",
+      "after": "53a822b9250afedeb36671de4515b061df28dea494f6e7292137c765751041e3"
+    },
+    "src/util/mdb-sql.c": {
+      "before": "bf77b0457f1ad29ed7738a02dd3b91a0487ed46f613f4595136762e045678efd",
+      "after": "e33a3b39fa859b83613418535f87b4df3367f7862e3aa85ad24a7ec35f8fbd7a"
+    }
+  }
+}

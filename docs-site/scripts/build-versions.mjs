@@ -32,7 +32,7 @@ export function renderPublishedReleaseBadge(svg, tag, publishedTags) {
   let markers = 0;
   const rendered = svg.replace(/^.*<!-- x-release-please-version -->.*$/gm, (line) => {
     markers++;
-    const versions = line.match(/\bv(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\b/g);
+    const versions = line.match(/\bv(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\b(?![-+.])/g);
     if (versions?.length !== 1) throw new Error('Invalid release badge version marker');
     return line.replace(versions[0], tag);
   });

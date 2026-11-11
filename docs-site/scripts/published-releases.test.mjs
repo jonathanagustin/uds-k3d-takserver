@@ -151,6 +151,10 @@ test('badge requires complete version markers and generator binds validated sele
   for (const broken of [source.replace('<!-- x-release-please-version -->', ''),
     source.replace('release: v0.13.0', 'release: unknown'), source + '<!-- x-release-please-version -->'])
     assert.throws(() => renderPublishedReleaseBadge(broken, 'v0.12.2', ['v0.12.2']));
+  for (const suffix of ['-rc.1', '+meta', '.1']) {
+    const broken = source.replace('release: v0.13.0', `release: v0.13.0${suffix}`);
+    assert.throws(() => renderPublishedReleaseBadge(broken, 'v0.12.2', ['v0.12.2']));
+  }
   for (const tag of ['main', 'v0.13.0-rc.1', 'v00.12.2', 'v0.13.0'])
     assert.throws(() => renderPublishedReleaseBadge(source, tag, ['v0.12.2']));
   const generator = readFileSync(new URL('./build-versions.mjs', import.meta.url), 'utf8');

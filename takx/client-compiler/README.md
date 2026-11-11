@@ -17,6 +17,11 @@ source. Its interrupted predecessor's Client output is **not** a prerequisite.
 The pinned receipt and original helpers are retained as input evidence; this
 recipe never executes those helpers or their embedded historical paths.
 
+The portable recipe was also run against that checkpoint in fresh output. It
+returned exit 0 and produced identical hashes for all 2,815 classes and the
+generated source. Its receipt is SHA-256
+`bc9a5fdba7c837fdaa1acebc3f8fdba831293a8ca790a012432ca35bf73d9c52`.
+
 ## Explicit inputs and offline use
 
 Copy `bindings.example.json` outside the repository and replace every value with

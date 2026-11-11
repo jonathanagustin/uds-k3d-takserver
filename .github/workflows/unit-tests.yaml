@@ -222,4 +222,4 @@ jobs:
       - name: Draft release readiness guards
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s .github/test-infra -p test_release_readiness.py -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s .github/test-infra -p 'test_release_*.py' -v

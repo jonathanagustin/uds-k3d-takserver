@@ -221,7 +221,7 @@ jobs:
   #     --owner jonathanagustin
   # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
   provenance:
-    needs: publish
+    needs: [metadata, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -314,6 +314,60 @@ jobs:
           gh attestation verify "oci://${SUBJECT}" \
             --owner "${GITHUB_REPOSITORY_OWNER}" \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yaml"
+      - name: Prepare checked application release binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+          CHECKED_SOURCE_SHA: ${{ needs.metadata.outputs.source-sha }}
+          INDEX_DIGEST: ${{ steps.index.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/test-infra/release-binding.py prepare \
+            --digest "${INDEX_DIGEST}" --metadata "${RUNNER_TEMP}/release-binding-metadata.json" \
+            --index "${RUNNER_TEMP}/release-binding-index.json" > "${RUNNER_TEMP}/release-binding-predicate.json"
+
+      - name: Attest application release binding
+        id: binding
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.index.outputs.name }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          predicate-type: https://github.com/jonathanagustin/uds-takserver/attestations/release-binding/v1
+          predicate-path: ${{ runner.temp }}/release-binding-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify application release binding independently
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+          CHECKED_SOURCE_SHA: ${{ needs.metadata.outputs.source-sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/test-infra/release-binding.py verify-live \
+            --metadata "${RUNNER_TEMP}/release-binding-metadata.json" \
+            --index "${RUNNER_TEMP}/release-binding-index.json"
+
+      - name: Store verified supplementary binding bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          BUNDLE_PATH: ${{ steps.binding.outputs.bundle-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="${RUNNER_TEMP}/takserver-${RELEASE_TAG#v}-upstream.release-binding.sigstore.json"
+          cp "${BUNDLE_PATH}" "${bundle}"
+          gh release upload "${RELEASE_TAG}" "${bundle}" --clobber --repo "${GITHUB_REPOSITORY}"
+
       - name: Publish only the verified draft release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -461,9 +461,11 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(jobs['publish']['with']['release_id'], '${{ needs.release-please.outputs.release-id }}')
         self.assertEqual(jobs['release-please']['outputs']['source-sha'], '${{ steps.release.outputs.sha }}')
         release = self.workflow('release.yaml')['jobs']
-        self.assertEqual(release['provenance']['needs'], 'publish')
+        self.assertEqual(release['provenance']['needs'], ['metadata', 'publish'])
         steps = release['provenance']['steps']
-        self.assertEqual(steps[-2]['name'], 'Verify the provenance')
+        self.assertEqual(steps[-2]['name'], 'Store verified supplementary binding bundle')
+        names = [step['name'] for step in steps]
+        self.assertLess(names.index('Verify the provenance'), names.index('Verify application release binding independently'))
         self.assertEqual(steps[-1]['run'], 'python3 .github/test-infra/release-readiness.py')
         self.assertNotIn('if', steps[-1]); self.assertNotIn('continue-on-error', steps[-1])
         self.assertEqual(steps[0]['with']['ref'], '${{ github.workflow_sha }}')

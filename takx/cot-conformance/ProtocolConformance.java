@@ -34,7 +34,10 @@ public final class ProtocolConformance {
     }
     // Semantic XML comparison: attribute order/quote/empty-element formatting may change.
     static String tree(Node n) {
-        if (n.getNodeType() == Node.TEXT_NODE) return n.getTextContent().trim();
+        if (n.getNodeType() == Node.TEXT_NODE) {
+            String text = n.getTextContent();
+            return text.isBlank() ? "" : text;
+        }
         if (n.getNodeType() != Node.ELEMENT_NODE) return "";
         TreeMap<String,String> attrs = new TreeMap<>();
         for (int i=0; i<n.getAttributes().getLength(); i++) {
@@ -116,6 +119,7 @@ public final class ProtocolConformance {
             for(String name:List.of("unregistered","remarks","contact"))
                 require(tree(before.getElementsByTagName(name).item(0)).equals(tree(after.getElementsByTagName(name).item(0))),"round-trip "+name);
             require(after.getDocumentElement().getAttribute("uid").equals("synthetic-conformance"),"event UID");
+            require(after.getElementsByTagName("nested").item(0).getTextContent().equals("  Ω preserve & text 漢字  "),"unknown nested significant whitespace and Unicode preserved exactly");
             for(String variant:List.of(source.replace("callsign=\"SYNTHETIC\"", "extra=\"unknown\" callsign=\"SYNTHETIC\""), source.replace("</detail>","<contact callsign='SECOND'/></detail>"))) {
                 Document original=xml(variant), restored=xml(c.takprotoToCotXml(c.cotXmlToTakproto(variant,1)));
                 NodeList x=original.getElementsByTagName("contact"), y=restored.getElementsByTagName("contact");

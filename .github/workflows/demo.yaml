@@ -53,6 +53,8 @@ concurrency:
 
 env:
   VHS_VERSION: 0.12.1
+  TTYD_VERSION: 1.7.7
+  TTYD_SHA256: 8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
   AGG_VERSION: 1.9.0
   AGG_SHA256: ddcbf6ca044c8ac3a434dcb9ee89fb9e3be87209982b7c2adb55f782e8f0f390
   # Inter for titles and captions (demo/style.py), from the upstream release.
@@ -142,7 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo python3 .github/scripts/ci-apt.py update
-          sudo python3 .github/scripts/ci-apt.py install ffmpeg ttyd fonts-jetbrains-mono fonts-dejavu-core \
+          sudo python3 .github/scripts/ci-apt.py install ffmpeg fonts-jetbrains-mono fonts-dejavu-core \
             xvfb libnss3-tools python3-pil python3-venv
           curl -fsSL -o /tmp/inter.zip "https://github.com/rsms/inter/releases/download/v${INTER_VERSION}/Inter-${INTER_VERSION}.zip"
           echo "${INTER_SHA256}  /tmp/inter.zip" | sha256sum -c -
@@ -163,6 +165,12 @@ jobs:
           tar -xzf "/tmp/${tarball}" -C /tmp
           sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
           vhs --version
+          # Ubuntu 22.04 ships ttyd 1.6.3; VHS 0.12.1 requires at least 1.7.2.
+          curl --fail --silent --show-error --location --max-time 30 --max-filesize 1400000 \
+            -o "${RUNNER_TEMP}/ttyd" "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64"
+          echo "${TTYD_SHA256}  ${RUNNER_TEMP}/ttyd" | sha256sum -c -
+          sudo install -m 0755 "${RUNNER_TEMP}/ttyd" /usr/local/bin/ttyd
+          ttyd --version
         shell: bash
 
       - name: Install Docker Compose
@@ -430,6 +438,7 @@ jobs:
         shell: bash
 
       - name: Retain sanitized startup diagnostics
+        timeout-minutes: 3
         if: failure() && !cancelled() && steps.startup-diagnostics.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -439,6 +448,7 @@ jobs:
           retention-days: 7
 
       - name: Upload the separate segments
+        timeout-minutes: 10
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

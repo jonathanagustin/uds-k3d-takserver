@@ -108,6 +108,7 @@ class FailureLogsTests(unittest.TestCase):
         steps=workflow['jobs']['build']['steps']
         sanitize=next(s for s in steps if s.get('id')=='failure-logs')
         upload=next(s for s in steps if s['name']=='Retain sanitized native build failure logs')
+        self.assertEqual(upload['timeout-minutes'],3)
         self.assertIn('failure()',sanitize['if'])
         self.assertIn('!cancelled()',sanitize['if'])
         self.assertIn("steps.failure-logs.outcome == 'success'",upload['if'])

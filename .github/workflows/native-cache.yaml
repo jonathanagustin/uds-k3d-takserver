@@ -66,6 +66,7 @@ jobs:
             --input "${RUNNER_TEMP}/draco-producer" --output "${RUNNER_TEMP}/native-failure-sanitized"
 
       - name: Retain sanitized native build failure logs
+        timeout-minutes: 3
         if: failure() && !cancelled() && steps.failure-logs.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

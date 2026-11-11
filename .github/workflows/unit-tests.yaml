@@ -121,7 +121,7 @@ jobs:
           PYYAML_VERSION: 6.0.3
           PILLOW_VERSION: 13.0.0
         run: |
-          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" --with "pillow==${PILLOW_VERSION}" python -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate tests.test_demo_failure_diagnostics tests.test_demo_recorder tests.test_demo_media -v
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" --with "pillow==${PILLOW_VERSION}" python -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate tests.test_demo_failure_diagnostics tests.test_demo_recorder tests.test_demo_media tests.test_ci_apt -v
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
           bash tests/test_api_smoke_diag.sh

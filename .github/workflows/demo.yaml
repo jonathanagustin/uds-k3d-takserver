@@ -1,7 +1,8 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# Deploys the bundle on k3d, then records a short demo video: terminal
+# PRs run short recorder/media checks. Manual runs deploy the bundle on k3d
+# and record a demo video: terminal
 # chapters with VHS, the Keycloak SSO and TAK web UI walkthrough in a real
 # Chrome window (Playwright on an Xvfb display, captured with x11grab),
 # joined with ffmpeg. The MP4 is uploaded as the demo-video
@@ -64,7 +65,7 @@ env:
 
 jobs:
   record:
-    if: ${{ !inputs.sign_only }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.sign_only }}
     # Match Test's temporary hosted-kernel mitigation (#300); explicit overrides remain available.
     runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
     timeout-minutes: 240
@@ -136,7 +137,8 @@ jobs:
           docker ps -a --filter name=buildx_buildkit -q | xargs -r docker rm -f
           df -h /
 
-      - name: Install recording tools
+      - &demo-recording-tools
+        name: Install recording tools
         # Before the deploy, while the runner is idle: after it, apt has
         # hung here twice.
         timeout-minutes: 30
@@ -233,7 +235,8 @@ jobs:
       # The deployment is recorded as the video's opening chapter: the same
       # commands as `uds run demo-deploy`, printed as they run, captured with
       # asciinema and rendered later by demo/render-cast.py.
-      - name: Install and check the pinned terminal recorder
+      - &demo-asciinema-check
+        name: Install and check the pinned terminal recorder
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -250,7 +253,8 @@ jobs:
           echo "${RUNNER_TEMP}/recorder-bin" >> "${GITHUB_PATH}"
         shell: bash
 
-      - name: Check the pinned media pipeline before deployment
+      - &demo-media-check
+        name: Check the pinned media pipeline before deployment
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -488,6 +492,22 @@ jobs:
             echo "UDS CLI setup was not reached; package-acquisition diagnostics identify the earlier failure"
           fi
         shell: bash
+
+  # PRs check the actual recorder/media tools without deploying or publishing.
+  preflight:
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - *demo-recording-tools
+      - *demo-asciinema-check
+      - *demo-media-check
 
   # A manual run from main puts the two videos on the fixed "demo" release, so
   # the README's download links do not follow the package version. Pull request

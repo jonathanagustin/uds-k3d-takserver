@@ -1,13 +1,13 @@
 # Pinned TAKX consumers of public NASA WorldWind
 
-This optional source staging tool applies one explicit import patch to a bounded
+This optional source staging tool applies two explicit import corrections to a bounded
 production consumer slice. It does not build a client or replace the declared
 `gov.nasa:worldwind:2.2.1-TAKX-4` artifact. Blacksmith is test infrastructure and is
 not an input to this production probe.
 
 ## Source contract
 
-`sources.lock.json` pins all 20 consumed Java files and their staged hashes for:
+`sources.lock.json` pins all 21 consumed Java files and their staged hashes for:
 
 | Official TAKX profile | Exact revision |
 | --- | --- |
@@ -15,17 +15,20 @@ not an input to this production probe.
 | 5.8 | `af54a3e1fe8796b6e109e2e5925dbef524ea7e31` |
 
 The sources are from [TAK-Product-Center/TAKX](https://github.com/TAK-Product-Center/TAKX).
-Nineteen files are identical across profiles; each profile's `ShapefileFeatureCursor`
+Twenty files are identical across profiles; each profile's `ShapefileFeatureCursor`
 is retained unchanged. The slice includes window, globe, annotation/image, marker,
 shape cursor, input and layer adapters, the six earlier leaf consumers and two real
-font helpers. These are selected production consumers, not an entire module.
+font helpers. These are selected production consumers, not an entire module. The current
+21-source staging extends the earlier slice with the second renderer consumer.
 
-The only modified file is `Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java`.
-`0200-takx-nasa-text-renderer.patch` replaces the JOGL `TextRenderer` import with
+The modified files are
+`Platform/src/main/java/gov/takx/platform/globe/AOverlayLayer.java` and
+`Client/src/main/java/gov/takx/core/globe/layers/mapsforge/AbstractMapsforgeTiledImageLayer.java`.
+`project-interop-consumers.patch` replaces their JOGL `TextRenderer` imports with
 `gov.nasa.worldwind.render.TextRenderer`. No methods, features or sources are removed.
 Stock NASA v2.2.1 at `9ccf6b8ed2ae452ef51e7b1739a7ffd4ef78a403` declares that actual
-return type in `OGLTextRenderer.getOrCreateTextRenderer`. The consumer retains its
-factory/cache and `begin3DRendering`, `setColor`, `draw`, `end3DRendering` calls.
+return type in `OGLTextRenderer.getOrCreateTextRenderer`. The consumers retain their
+factory/cache, color, draw, and begin/end rendering calls.
 
 NASA includes the real renderer implementation. Comparison against official JOGL
 2.5.0 revision `70f62ca5d121e5e71548246d468b5e7baa5faf25` shows the same operations in
@@ -98,3 +101,11 @@ An additional exact-source staging test is opt-in; run once for each pinned chec
 TAKX_SOURCE_DIR=/path/to/pinned/TAKX \
   python3 -B -m unittest discover -s takx/worldwind-consumers -p 'test_stage.py' -v
 ```
+
+
+The historical 20-source compiler evidence remains unchanged. Current staging
+has been checked against both official profiles; it does not itself claim that
+the expanded 21-source slice or full Client module compiles. The optional
+[WorldWind interop profile](../worldwind-java/README.md#optional-project-interop-profile)
+provides separate functional hooks needed by additional Client callers. Its
+mocked behavioral controls do not establish a working native renderer or client.

@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "profile": "project-standard-gdal-rgb-interop",
+  "source_revision": "9ccf6b8ed2ae452ef51e7b1739a7ffd4ef78a403",
+  "patch_sha256": "0e2810343a1107c8d9fa3b860d0b268404e76ca9a89344fad4f3f367c115b40d",
+  "files": {
+    "src/gov/nasa/worldwind/render/PointPlacemark.java": {
+      "before_sha256": "669bebb317042d5f31dae78d673800c7031028a1b99ce8b6c47a896b322d8594",
+      "after_sha256": "94f5f3f981b6e287669d32dae9cb3477a4605df6aba37034b348fd2d01bfe6fe"
+    },
+    "src/gov/nasa/worldwind/layers/GraticuleSupport.java": {
+      "before_sha256": "a7cb057c03fb2b96a12bee07d5c7e8acae88397f2732979ab931b6b979f30375",
+      "after_sha256": "9329fe88f9588da32c9bcbffc60c7959169ad4354fb32edee427549df92453a5"
+    },
+    "src/gov/nasa/worldwind/util/tree/BasicTreeLayout.java": {
+      "before_sha256": "7db2c80cfebc0e2306e6acd3019ba2a013c155ef5e196fa311ffbfd215159582",
+      "after_sha256": "4733ad1db0526672ea3ca7645cb8cbb4efb1ab2f763592380f11b711982e1a79"
+    },
+    "src/gov/nasa/worldwind/render/DrawContextImpl.java": {
+      "before_sha256": "a91eb8eb4002381fdf4cfb5bf34657b0689ca829504bb1b1fc90c9a1a00dac0e",
+      "after_sha256": "0452d0c6ec27d57ef844e1f956ca4024b5a6a43241a07d6188deb929f1b67e2c"
+    }
+  },
+  "feature_acceptance": false,
+  "private_sdk_equivalence": false
+}

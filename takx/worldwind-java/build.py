@@ -55,6 +55,32 @@ def validate(lock):
         raise ValueError('complete examples and core sources required')
 
 
+def interop_contract():
+    lock = json.loads((HERE / 'interop.lock.json').read_text())
+    if (lock.get('schema') != 1 or lock.get('source_revision') != REVISION or
+            lock.get('profile') != 'project-standard-gdal-rgb-interop' or
+            digest(HERE / 'project-interop.patch') != lock.get('patch_sha256') or
+            set(lock.get('files', {})) != {'src/gov/nasa/worldwind/render/PointPlacemark.java',
+                'src/gov/nasa/worldwind/render/DrawContextImpl.java',
+                'src/gov/nasa/worldwind/layers/GraticuleSupport.java',
+                'src/gov/nasa/worldwind/util/tree/BasicTreeLayout.java'}):
+        raise ValueError('interop profile integrity mismatch')
+    return lock
+
+
+def apply_interop(source, lock):
+    for name, entry in lock['files'].items():
+        if digest(source / name) != entry['before_sha256']:
+            raise ValueError('interop source preimage mismatch')
+    subprocess.run(['git', 'apply', '--check', str(HERE / 'project-interop.patch')], cwd=source,
+                   check=True, capture_output=True, timeout=30)
+    subprocess.run(['git', 'apply', str(HERE / 'project-interop.patch')], cwd=source,
+                   check=True, capture_output=True, timeout=30)
+    for name, entry in lock['files'].items():
+        if digest(source / name) != entry['after_sha256']:
+            raise ValueError('interop source postimage mismatch')
+
+
 def snapshot(source, lock):
     def git(*args):
         return subprocess.check_output(['git', '-C', str(source), *args], timeout=30)
@@ -115,9 +141,15 @@ def main():
     parser.add_argument('--public-jars', type=Path, required=True)
     parser.add_argument('--gis-build', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--interop', action='store_true', help='Explicit project rendering/picking hooks; not the private TAKX artifact')
     args = parser.parse_args()
     lock = json.loads((HERE / 'inputs.lock.json').read_text())
     validate(lock)
+    interop = interop_contract() if args.interop else None
+    if interop:
+        lock['profile'] = interop['profile']
+        lock['project_inputs']['project-interop.patch'] = interop['patch_sha256']
+        lock['interop'] = interop
     data = snapshot(args.source.resolve(), lock)
     # Reuse the foundation validator: source receipt, toolchain/input key,
     # complete output hashes and the reviewed compiled GIS class inventory.
@@ -146,6 +178,8 @@ def main():
         target.write_bytes(value)
     subprocess.run(['git', 'apply', '--check', str(HERE / 'standard-gdal.patch')], cwd=src, check=True)
     subprocess.run(['git', 'apply', str(HERE / 'standard-gdal.patch')], cwd=src, check=True)
+    if interop:
+        apply_interop(src, interop)
     helper = src / 'src/gov/nasa/worldwind/util/gdal/ProjectPaletteColorModel.java'
     shutil.copyfile(HERE / helper.name, helper)
     classes = out / 'classes'
@@ -158,16 +192,17 @@ def main():
     command = [str(javac), '-J-Xmx768m', '--release', '17', '-encoding', 'UTF-8', '-proc:none',
                '-Xmaxerrs', '100', '-cp', __import__('os').pathsep.join(map(str, jars)),
                '-d', 'classes', '@sources.args']
+    identity = 'uds-takserver-worldwind-java-interop' if interop else 'uds-takserver-worldwind-java'
     inputs = {'lock': lock, 'recipe_sha256': digest(Path(__file__)), 'javac': version,
               'javac_binary': {'path': str(javac), 'sha256': digest(javac)},
               'command': command,
               'gis_receipt': gis_receipt, 'native_built_or_loaded': False,
-              'artifact_identity': 'uds-takserver-worldwind-java',
+              'artifact_identity': identity,
               'dependency_hashes': {p.name: digest(p) for p in jars}}
     (out / 'build-inputs.json').write_text(json.dumps(inputs, indent=2, sort_keys=True) + '\n')
     state = {'java_sources': len(sources),
-             'source_scope': {'upstream_total': 1726, 'upstream_unchanged': 1725,
-                              'upstream_patched': 1, 'project_helpers': 1},
+             'source_scope': {'upstream_total': 1726, 'upstream_unchanged': 1721 if interop else 1725,
+                              'upstream_patched': 5 if interop else 1, 'project_helpers': 1},
              'native_built_or_loaded': False,
              'inputs_sha256': digest(out / 'build-inputs.json')}
     code = compile_checked(command, out, {p: inputs['dependency_hashes'][p.name] for p in jars}, state)
@@ -180,12 +215,12 @@ def main():
                 entries['META-INF/upstream-notices/' + p] = value
         entries['META-INF/project-LICENSE.txt'] = (REPO / 'LICENSE').read_bytes()
         entries['META-INF/uds-takserver-worldwind-profile.json'] = json.dumps({
-            'identity': 'uds-takserver-worldwind-java', 'profile': lock['profile'],
+            'identity': identity, 'profile': lock['profile'],
             'source_revision': REVISION, 'native_runtime_verified': False,
             'combined_variant_spdx': 'GPL-3.0-only',
             'upstream_licenses': 'META-INF/upstream-notices/',
             'project_inputs': lock['project_inputs']}, sort_keys=True).encode()
-        artifact = out / 'uds-takserver-worldwind-java.jar'
+        artifact = out / (identity + '.jar')
         write_jar(artifact, entries)
         state['artifact'] = {'name': artifact.name, 'sha256': digest(artifact), 'entries': len(entries)}
     (out / 'build-state.json').write_text(json.dumps(state, indent=2, sort_keys=True) + '\n')

@@ -20,7 +20,7 @@ class ScenarioInputTest(unittest.TestCase):
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr("MANIFEST/manifest.xml", '<MissionPackageManifest version="2"><Contents><Content zipEntry="cot/point.cot"><Parameter name="isCoT" value="true"/></Content><Content zipEntry="files/README.txt"/></Contents></MissionPackageManifest>')
             archive.writestr("files/README.txt", "Synthetic TEST attachment")
-            archive.writestr("cot/point.cot", f'<event uid="{uid}"><point lat="{lat}" lon="0"/><detail><contact callsign="TEST MARKER"/></detail></event>')
+            archive.writestr("cot/point.cot", f'<event uid="{uid}" type="a-f-G-U-C"><point lat="{lat}" lon="0"/><detail><contact callsign="TEST MARKER"/></detail></event>')
             if extra:
                 archive.writestr(extra, "unsafe")
         return path
@@ -41,7 +41,7 @@ class ScenarioInputTest(unittest.TestCase):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as directory:
             package = self.package(directory)
-            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--output", str(Path(directory) / "out")]), patch.object(scenario.subprocess, "run", side_effect=AssertionError("offline must not execute")):
+            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--output", str(Path(directory) / "out")]), patch.object(scenario, "run_bounded", side_effect=AssertionError("offline must not execute")):
                 scenario.main()
             self.assertIn('"execution": "not-run"', (Path(directory) / "out/receipt.json").read_text())
 
@@ -123,8 +123,8 @@ class ScenarioInputTest(unittest.TestCase):
                     payload = b"<hierarchy/>"
                 else:
                     payload = b""
-                return subprocess.CompletedProcess(command, 0, payload, b"")
-            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario.subprocess, "run", side_effect=protocol) as run:
+                return payload
+            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario, "run_bounded", side_effect=protocol) as run:
                 scenario.main()
             receipt = __import__("json").loads((output / "receipt.json").read_text())
             self.assertEqual(receipt["status"], "staged-for-manual-import")
@@ -137,9 +137,77 @@ class ScenarioInputTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             package = self.package(directory)
             output = Path(directory) / "out"
-            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario.subprocess, "run", side_effect=subprocess.TimeoutExpired("adb", 45)):
-                with self.assertRaises(subprocess.TimeoutExpired):
+            with patch("sys.argv", ["scenario", "--mission-package", str(package), "--device", "mock-device", "--output", str(output)]), patch.object(scenario, "run_bounded", side_effect=subprocess.TimeoutExpired("adb", 45)):
+                with self.assertRaises(SystemExit):
                     scenario.main()
             receipt = __import__("json").loads((output / "receipt.json").read_text())
             self.assertEqual(receipt["status"], "failed")
             self.assertEqual(receipt["error_type"], "TimeoutExpired")
+
+
+    def test_explicit_import_uri_protocol_mock_requires_hash_and_dispatch_ack(self):
+        from unittest.mock import patch
+        for mismatch, ack in ((False, b"Status: ok\n"), (True, b"Status: ok\n"), (False, b"Error: denied\n")):
+            with self.subTest(mismatch=mismatch, ack=ack), tempfile.TemporaryDirectory() as directory:
+                package = self.package(directory)
+                output = Path(directory) / "out"
+                def protocol(command, **kwargs):
+                    if command[-1] == "get-state": return b"device\n"
+                    if "path" in command: return b"package:/test.apk\n"
+                    if "content" in command: return b"wrong" if mismatch else package.read_bytes()
+                    if "am" in command: return ack
+                    return b""
+                argv = ["scenario", "--mission-package", str(package), "--device", "mock-device", "--import-content-uri", "content://media/external/file/123", "--output", str(output)]
+                with patch("sys.argv", argv), patch.object(scenario, "run_bounded", side_effect=protocol) as run:
+                    if mismatch or b"Status: ok" not in ack:
+                        with self.assertRaises(SystemExit): scenario.main()
+                    else:
+                        scenario.main()
+                receipt = __import__("json").loads((output / "receipt.json").read_text())
+                self.assertEqual(receipt["status"], "failed" if mismatch or b"Status: ok" not in ack else "android-import-activity-dispatched-unverified")
+                commands = [call.args[0] for call in run.call_args_list]
+                if mismatch: self.assertFalse(any("am" in c for c in commands))
+                elif b"Status: ok" in ack:
+                    dispatch = next(c for c in commands if "am" in c)
+                    self.assertIn("android.intent.extra.STREAM", dispatch)
+                    self.assertIn("android.intent.action.SEND", dispatch)
+
+    def test_bounded_real_subprocess_guards(self):
+        import sys
+        with self.assertRaises(ValueError):
+            scenario.run_bounded([sys.executable, "-c", "print('x'*1024)"], limit=16)
+        with self.assertRaises(TimeoutError):
+            scenario.run_bounded([sys.executable, "-c", "import time;time.sleep(.2)"], timeout=.02)
+        self.assertEqual(scenario.run_bounded([sys.executable, "-c", "print('ok')"]), b"ok\n")
+
+
+peer_spec = importlib.util.spec_from_file_location("peer", Path(__file__).resolve().parents[1] / "atak/scenarios/observe-peer.py")
+peer = importlib.util.module_from_spec(peer_spec)
+peer_spec.loader.exec_module(peer)
+
+
+class PeerObservationTest(unittest.TestCase):
+    # Explicit socket protocol fixtures, never a live peer qualification.
+    markers = [{"uid": "synthetic-android-test", "type": "a-f-G-U-C", "lat": 0.0, "lon": 0.0, "callsign": "TEST MARKER"}]
+    event = b'<event uid="synthetic-android-test" type="a-f-G-U-C"><point lat="0" lon="0"/><detail><contact callsign="TEST MARKER"/></detail></event>'
+
+    class Stream:
+        def __init__(self, chunks): self.chunks = iter(chunks)
+        def settimeout(self, timeout): pass
+        def recv(self, size): return next(self.chunks, b"")
+
+    def test_fragmented_received_marker(self):
+        import time
+        result = peer.observe(self.Stream([b'<?xml version="1.0"?>' + self.event[:40], self.event[40:]]), self.markers, time.monotonic() + 1)
+        self.assertEqual(result["received_matching_uids"], ["synthetic-android-test"])
+
+    def test_wrong_point_type_and_receive_budget_fail(self):
+        import time
+        for payload in (self.event.replace(b'lat="0"', b'lat="1"'), self.event.replace(b'a-f-G-U-C', b'a-h-G-U-C'), b'x' * (peer.LIMIT + 1), b'<!DOCTYPE x>' + self.event):
+            with self.subTest(payload=payload[:30]), self.assertRaises(ValueError):
+                peer.observe(self.Stream([payload]), self.markers, time.monotonic() + 1)
+
+    def test_no_observation_is_not_success(self):
+        import time
+        with self.assertRaises(RuntimeError): peer.observe(self.Stream([]), self.markers, time.monotonic() + 1)
+        with self.assertRaises(TimeoutError): peer.observe(self.Stream([]), self.markers, time.monotonic() - 1)

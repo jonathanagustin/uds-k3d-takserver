@@ -11,24 +11,27 @@ for both client versions and their remaining API differences.
 
 ## Integration stages
 
-| Stage | What must work | Status |
+| Stage | Local result | Remaining acceptance |
 | --- | --- | --- |
-| Kernel database | Legacy Kernel database APIs with Spatialite, SQLCipher, GEOS, PROJ, XML and character conversion | Local functional, provider and strict-link checks passed |
-| Kernel scene reader | Actual Kernel scene and mesh APIs with Assimp, GDAL and ZIP support | Local factory, mesh, provider and strict-link checks passed |
-| MDBTools dependency | Real source-built MS Access reader required by the full Kernel target | Local catalog, row, PIC and provider checks passed; full Kernel provider integration pending |
-| JNI build headers | Real `javac -h` output covering the complete pinned native source references | 118 generated headers cover all 109 required names; native compilation/loading pending |
-| Full native runtime | Complete Kernel and JNI targets with their real dependencies | Pending |
-| Java SDK | Actual initialization followed by engine and GDAL JNI calls | Pending |
-| TAKX client | Compilation, startup, rendering and server interoperability | Pending |
+| Native components | Kernel database/scene and MDBTools controls passed | Complete native dependency graph and Kernel provider integration |
+| Graphics prerequisite | Source-built GLES dispatch rendered an ES 3 pixel on host Mesa | Kernel renderer, target platform and hardware paths |
+| GDAL Java JNI | Five real wrappers share one GDAL engine; Java raster, coordinates, interrupt and error checks passed | Full Kernel integration and supported-format coverage |
+| JNI build headers | 118 generated headers cover all 109 names required by pinned native sources | Compile and load the complete Kernel JNI target |
+| Combined runtime | Two isolated crypto groups passed both load orders and encryption checks | Actual Kernel/CommonCommo loading, routing and QUIC transport |
+| TAKX client | Pending | Compilation, startup, rendering and server interoperability |
 
-See the [MDBTools dependency](native-mdbtools/README.md),
-[database profile](kernel-spatial-db/README.md) and
-[scene profile](kernel-scene/README.md) for reproducible commands and limits.
+Reproduce the native checks with the [database](kernel-spatial-db/README.md),
+[scene](kernel-scene/README.md) and [MDBTools](native-mdbtools/README.md) profiles.
+The [Java compiler](kernel-java/README.md), [GLES](native-gles/README.md),
+[GDAL JNI](native-gdal-jni/README.md) and [crypto](native-crypto/README.md)
+profiles document runtime prerequisites and their limits. Native builds are
+opt-in; ordinary CI runs offline guards.
 
-The first two stages produce local C++ integration artifacts. They do not yet
-provide a loadable Java SDK or a desktop installer. Track the complete work in
-[#477](https://github.com/jonathanagustin/uds-takserver/issues/477).
-The legacy database check does not validate modern Database2 encrypted opening.
+These results do not yet provide a complete Java SDK or desktop installer.
+The legacy Kernel database check does not validate modern Database2 encrypted
+opening. The graphics result uses the existing host Mesa stack; the crypto
+experiment does not complete a QUIC handshake or load CommonCommo.
+Track the complete work in [#477](https://github.com/jonathanagustin/uds-takserver/issues/477).
 
 ## SDK acceptance
 

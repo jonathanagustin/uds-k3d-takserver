@@ -23,6 +23,10 @@ Actual Kernel database and scene subsets now pass local native integration
 controls. See [SDK integration](SDK-INTEGRATION.md) for the remaining full
 native runtime, JNI and client acceptance stages.
 
+Generated JNI headers now cover the pinned native references. Real GDAL Java
+calls, local ES 3 rendering and a two-provider crypto experiment also pass;
+complete Kernel/CommonCommo loading and client acceptance remain pending.
+
 ## Native component checkpoints
 
 The following opt-in source recipes have passed local Linux amd64

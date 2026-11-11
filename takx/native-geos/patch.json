@@ -1,0 +1,19 @@
+{
+  "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/geos-pgsc.patch",
+  "bytes": 1865,
+  "sha256": "8b29c9170e5cdad979658a72ba914dd9b7508ed6be4c8414add246defb080995",
+  "files": {
+    "nmake.opt": {
+      "before": "9b24c7e15f2845648963e61f3d05d7fb9b5aeaf7232602d33a6cf9978ca88c81",
+      "after": "aa86d75650bd385ba14d47f019eba4a9ae91feee2a50985be271153906877747"
+    },
+    "ltmain.sh": {
+      "before": "2304d53af1f63b76a11651efdd18578adf2bda1ffc2c257100cba374b55f284b",
+      "after": "d871b7e34d853431d1575c028d07b4b7871f19f621cd66e533c829b6fcea45e0"
+    },
+    "config.sub": {
+      "before": "e308ae7f7f524bd790f8d4457c7c0a30f8403ffff4dd0b7d4388daca24275db4",
+      "after": "2d8f2f8722d5523627f681111b6aea62f79b84ea6f40093b452a899670f15484"
+    }
+  }
+}

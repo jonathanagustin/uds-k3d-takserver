@@ -25,7 +25,7 @@ Record the results in [the compatibility issue](https://github.com/jonathanagust
 
 Public-source work compiles Kernel Java foundations and a WorldWind project
 variant. Separate Linux amd64 component checks cover Draco, LAS, Assimp,
-historical PROJ and SQLCipher with source-built Tcl/OpenSSL prerequisites.
+historical PROJ, GEOS and SQLCipher with source-built Tcl/OpenSSL prerequisites.
 Target-image ABI and historical-version security acceptance remain open; these
 checks do not supply a linked native Kernel, launchable TAKX desktop or Kasm session. See the [component and client checkpoint](../../takx/CLIENT-CHECKPOINT.md#native-component-checkpoints).
 

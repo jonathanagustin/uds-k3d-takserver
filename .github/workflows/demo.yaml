@@ -63,7 +63,8 @@ env:
 jobs:
   record:
     if: ${{ !inputs.sign_only }}
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-24.04' }}
+    # Match Test's temporary hosted-kernel mitigation (#300); explicit overrides remain available.
+    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
     timeout-minutes: 240
     permissions:
       actions: read
@@ -92,7 +93,7 @@ jobs:
         run: ./.github/scripts/select-demo-app-ref.sh
 
       - name: Trim the runner
-        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-24.04'
+        if: vars.TEST_RUNNER == '' || vars.TEST_RUNNER == 'ubuntu-22.04' || vars.TEST_RUNNER == 'ubuntu-24.04'
         run: ./.github/scripts/trim-runner.sh
 
       # Same steps as the ATAK e2e workflow: the registry build cache keeps
@@ -416,6 +417,22 @@ jobs:
             demo/out/shots/*.webp
           if-no-files-found: error
           retention-days: 30
+
+      - name: Capture failed TAK startup diagnostics
+        id: startup-diagnostics
+        if: failure() && !cancelled()
+        timeout-minutes: 5
+        run: ./.github/scripts/demo-failure-diagnostics.sh "${RUNNER_TEMP}/demo-failure-sanitized"
+        shell: bash
+
+      - name: Retain sanitized startup diagnostics
+        if: failure() && !cancelled() && steps.startup-diagnostics.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-startup-diagnostics
+          path: ${{ runner.temp }}/demo-failure-sanitized/tak-startup.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload the separate segments
         if: always()

@@ -160,8 +160,13 @@ fresh runner and retain the image and kernel notice for the investigation.
 The cluster jobs temporarily compare `ubuntu-22.04` on AMD64 and
 `ubuntu-22.04-arm` on native ARM64 for [#300](https://github.com/jonathanagustin/uds-takserver/issues/300)
 and [#103](https://github.com/jonathanagustin/uds-takserver/issues/103).
-Test, Full Core and Benchmark retain the AMD64 `TEST_RUNNER` override;
-image builds and other workflow runners keep their existing labels.
+Test, Full Core, Benchmark and Demo Video retain the AMD64 `TEST_RUNNER` override;
+Demo Video uses the same Ubuntu 22 default as Test. A failed recording retains
+a separate `demo-startup-diagnostics` artifact with redacted runner evidence and
+current/previous TAK application and dependency-wait logs. Captures have time
+and size limits; incomplete or oversized streams are omitted in full. Only a
+finished sanitizer can upload that artifact. Image builds and other workflow
+runners keep their existing labels.
 The metadata-only [AMD64 comparison](https://github.com/jonathanagustin/uds-takserver/actions/runs/42528864369)
 observed kernel `6.8.0-1070-azure` on Ubuntu 22 and `7.0.0-1017-azure`
 on Ubuntu 24; the [ARM64 probe](https://github.com/jonathanagustin/uds-takserver/actions/runs/42529079902)

@@ -389,3 +389,17 @@ Its [publisher run](https://github.com/jonathanagustin/uds-takserver/actions/run
 used workflow commit `3b66fdc7` to build application commit `8a4566ab`.
 The default SLSA provenance records the workflow commit, so these two identities
 must remain distinct when checking a recovered release.
+
+### Package render evidence
+
+Unit tests may skip only the Pepr chart build and package-values render after
+verified non-runtime Git evidence. For PRs, the gate binds the actual checkout to
+`GITHUB_SHA` and requires the exact ordered base/head parents. GitHub documents
+that [the PR context SHA identifies the merge-ref commit](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request);
+the cached event `merge_commit_sha` is therefore not used as an authority.
+The gate classifies the union of base-to-source and base-to-checkout changes,
+including both rename endpoints, so neither merge-only runtime changes nor source
+runtime changes reverted by the merge disappear. Missing objects, malformed or
+empty diffs, exceeded bounds, or uncertain identities retain rendering. All other
+Unit validation steps remain unconditional. Fixed diagnostic codes describe
+unavailable evidence without printing payloads, paths, or exception text.

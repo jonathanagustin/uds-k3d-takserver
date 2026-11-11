@@ -21,6 +21,30 @@ LOCK = json.loads((HERE / 'inputs.lock.json').read_text())
 
 
 class CompilerGuards(unittest.TestCase):
+    def test_jni_references_include_all_packages_and_sources(self):
+        files = {'one.cpp': b'#include "com_atakmap_Test.h"\n// #include "com_Comment.h"\n#include "common.h"\n',
+                 'two.h': b' # include <gov_tak_Test.h>\n#include "com_atakmap_Test.h"\n'}
+        self.assertEqual(BUILD.jni_header_references(files), {
+            'com_atakmap_Test.h': ['one.cpp', 'two.h'], 'gov_tak_Test.h': ['two.h']})
+        with self.assertRaises(ValueError): BUILD.jni_header_references({'empty.cpp': b'#include "common.h"\n'})
+
+    def test_generated_headers_bind_real_files_and_reject_invalid_outputs(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            with self.assertRaises(ValueError): BUILD.generated_headers(root)
+            header = root / 'fixture_Native.h'
+            header.write_bytes(b'JNIEXPORT void JNICALL Java_fixture_Native_run(void);\n')
+            self.assertEqual(BUILD.generated_headers(root), {header.name: BUILD.digest(header)})
+            for kind in ('empty', 'directory', 'symlink', 'unexpected'):
+                with self.subTest(kind=kind):
+                    bad = root / ('bad.txt' if kind == 'unexpected' else 'bad.h')
+                    if kind == 'directory': bad.mkdir()
+                    elif kind == 'symlink': bad.symlink_to(header)
+                    else: bad.write_bytes(b'x' if kind == 'unexpected' else b'')
+                    with self.assertRaises(ValueError): BUILD.generated_headers(root)
+                    if bad.is_dir(): bad.rmdir()
+                    else: bad.unlink()
+
     def test_complete_pinned_source_and_classpath_inventory(self):
         BUILD.validate_lock(LOCK)
         self.assertEqual(sum(LOCK['modules'].values()), 945)

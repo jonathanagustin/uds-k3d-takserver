@@ -16,6 +16,7 @@ for both client versions and their remaining API differences.
 | Kernel database | Legacy Kernel database APIs with Spatialite, SQLCipher, GEOS, PROJ, XML and character conversion | Local functional, provider and strict-link checks passed |
 | Kernel scene reader | Actual Kernel scene and mesh APIs with Assimp, GDAL and ZIP support | Local factory, mesh, provider and strict-link checks passed |
 | MDBTools dependency | Real source-built MS Access reader required by the full Kernel target | Local catalog, row, PIC and provider checks passed; full Kernel provider integration pending |
+| JNI build headers | Real `javac -h` output covering the complete pinned native source references | 118 generated headers cover all 109 required names; native compilation/loading pending |
 | Full native runtime | Complete Kernel and JNI targets with their real dependencies | Pending |
 | Java SDK | Actual initialization followed by engine and GDAL JNI calls | Pending |
 | TAKX client | Compilation, startup, rendering and server interoperability | Pending |

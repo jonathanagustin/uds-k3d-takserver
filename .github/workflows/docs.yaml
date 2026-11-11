@@ -10,6 +10,12 @@ on:
         description: Stable tag whose package publication completed
         type: string
         required: true
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published stable release tag to verify before rebuilding
+        type: string
+        required: true
   release:
     types: [published]
   pull_request:
@@ -58,10 +64,19 @@ jobs:
           ref: ${{ (github.event_name == 'release' || inputs.release_tag != '') && 'main' || github.ref }}
           fetch-tags: true
 
-      - name: Verify the published release source
-        if: inputs.release_tag != ''
+      - name: Require manual publication from main
+        if: github.event_name == 'workflow_dispatch'
         env:
+          DOCS_REF: ${{ github.ref }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          test "$DOCS_REF" = refs/heads/main
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
+      - name: Verify the published release source
+        if: inputs.release_tag != '' || github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +100,9 @@ jobs:
         working-directory: docs-site
         env:
           ASTRO_TELEMETRY_DISABLED: 1
+          NODE_USE_ENV_PROXY: 1
+          GH_TOKEN: ${{ github.token }}
+          DOCS_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
         run: npm run build
 
       - name: Install the docs browser

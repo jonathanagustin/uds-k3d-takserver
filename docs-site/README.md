@@ -11,7 +11,7 @@ organize existing pages: slugs, version topics, search isolation and historical
 routes remain unchanged. Groups without pages in a release are omitted, and the
 active group opens while unrelated groups stay collapsed.
 
-`npm run build` builds release documentation and the current checkout together.
+`npm run build` builds published release documentation and the current checkout together.
 The site root uses the current authored project landing, with its guide links
 and version/search context pointing to the newest stable release. Only that
 landing is shared: every released guide still comes from its tag, and archived
@@ -19,11 +19,20 @@ version homes retain their own source or fallback shell. The root landing edits
 `main/docs-site/src/home.mdx`; released guides link to their tag.
 `/main/` contains unreleased documentation and displays a banner. Up to five release minors are retained,
 using only the newest patch per minor from v0.7 onward; older minors use paths
-such as `/v0-8/`. Pre-release and non-version tags are excluded.
+such as `/v0-8/`. Draft releases, pre-releases and non-version tags are excluded.
+Git tags alone do not establish publication: the generator reads this repository's
+published GitHub release inventory. A missing/invalid API response or missing
+published Git tag fails the build, including in CI; it never falls back to an
+unverified older inventory.
 
 `scripts/build-versions.mjs` creates temporary detached worktrees for the release
 tags, runs the current `scripts/sync-docs.mjs` against each source tree, and removes
 the worktrees afterward. Fetch all tags before building (`git fetch --tags`).
+For an intentional offline preview, set `DOCS_LOCAL_TAG_PREVIEW=1` when running
+`npm run dev`, `npm run sync` or `npm run build`. This non-CI mode uses local Git
+tags, which may include unpublished drafts; the generator labels it as a local
+preview. CI refuses that mode. It cannot verify a requested release publication.
+
 The sync script accepts `--repo-root`, `--output-root`, `--url-prefix`, `--git-ref`,
 and `--source-ref`. The optional `--landing-source` selects the current authored
 home for the latest root only. It copies README, the existing `docs/` reference pages,
@@ -38,7 +47,12 @@ selector retains the current page when it exists in the destination version and
 otherwise opens that version's home. Pagefind indexes each page with a version
 filter, and the search dialog locks queries to the currently selected version.
 
-The Docs workflow builds on main pushes and published releases. Release events
+The Docs workflow builds on main pushes and published releases. A manual run
+from `main` can refresh a recovered release after promotion; supply its published
+stable `release_tag`. The generator checks that exact tag through the published
+release API as well as the inventory, and the workflow retains its Git ancestry
+check. Draft, missing and prerelease requests fail before site generation.
+ Release events
 use the main renderer and fetch all tags, so publishing a release moves the
 latest documentation to the root without copying snapshots into the repository.
 

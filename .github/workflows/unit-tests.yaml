@@ -118,7 +118,7 @@ jobs:
 
       - name: Config secret redaction
         run: |
-          python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate tests.test_demo_failure_diagnostics -v
+          python3 -B -m unittest tests.test_redact_logs tests.test_summarize_coreconfig tests.test_log_upload_gate tests.test_demo_failure_diagnostics tests.test_demo_recorder -v
           bash tests/test_stage_sanitized_logs.sh
           bash tests/test_redact_order.sh
           bash tests/test_api_smoke_diag.sh

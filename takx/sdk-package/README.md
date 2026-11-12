@@ -89,3 +89,23 @@ streams, exercises all 15 GL20FP shader lookups through GLSLUtil, repeats these
 checks at the second package prefix, and rejects an omitted genuine shader.
 These controls require a fresh successful qualification receipt; their source
 presence alone grants no runtime acceptance.
+
+### Default database provider read-only options
+
+The assembler applies a narrow pinned patch to the genuine upstream
+`DefaultIOProvider` source and replaces its complete existing class family inside
+the assembled JAR. Read-only file requests use the existing genuine
+`Databases.openDatabase(path, true)` API; zero-option writable open/create and
+other provider policies remain unchanged. Source preimage, postimage, patch bytes,
+and the complete resulting class inventory are bound in the package manifest.
+
+Database qualification includes native read-only reads, rejected writes, unchanged
+rows after writable reopen, and a missing-file request that creates no database.
+It repeats these controls through the real provider and MBTiles SPI, including
+rejected tile writes and preserved writable updates, at both package prefixes.
+The corrected controls passed in fresh JVMs against the exact already assembled
+read-only candidate, including both package prefixes and the existing resource,
+JNI, database, and logger checks. This was qualification-only reuse after a test
+oracle correction, with fresh runtime data and native extraction; it did not
+rebuild the artifact or native libraries. The earlier resource-complete SDK
+artifact and failed-oracle evidence remain unchanged.

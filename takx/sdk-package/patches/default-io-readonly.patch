@@ -1,0 +1,13 @@
+--- a/DefaultIOProvider.java
++++ b/DefaultIOProvider.java
+@@ -369,7 +369,9 @@
+         if (scheme == null || !scheme.equals("file"))
+             return null;
+ 
+-        DatabaseIface db = Databases.openOrCreateDatabase(uri.getPath());
++        DatabaseIface db = (dbi.options & DatabaseInformation.OPTION_READONLY) != 0
++                ? Databases.openDatabase(uri.getPath(), true)
++                : Databases.openOrCreateDatabase(uri.getPath());
+ 
+         // XXX - not interested in refactoring all of this into
+         //       MapCoreInterfaces at this time, especially as the "default"

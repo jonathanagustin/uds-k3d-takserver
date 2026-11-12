@@ -19,5 +19,11 @@
   ],
   "output_limit_bytes": 1073741824,
   "command_seconds": 120,
-  "total_seconds": 600
+  "total_seconds": 600,
+  "default_io_readonly": {
+    "source_file": "takkernel/engine/src/main/java/com/atakmap/coremap/io/DefaultIOProvider.java",
+    "before": "c2d2943fa95f61c062b1e240cb9dd5985728f65c38db183222e81ccc01ef0607",
+    "after": "8dcefd5d360c69fc7122d257f2152fae6d74e3666d37c99315973f57086c1d42",
+    "patch_sha256": "0e2690a9b32a6dcc43cc5c8f40e7f430e3a9157bb5530612795a11844fdc3633"
+  }
 }

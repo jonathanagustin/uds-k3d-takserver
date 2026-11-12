@@ -38,7 +38,7 @@ def jar_write(path,entries):
             if jar.read(name)!=data:raise ValueError('archive member bytes differ')
 
 def recipe():
-    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch']
+    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java']
     return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe()}
 
 def verify_native(root,providers):
@@ -110,13 +110,18 @@ def main():
     if p.digest(stage/'EngineLibrary.java')!=lock['engine_before'] or p.digest(HERE/'patches/engine-library-public-linux.patch')!=lock['patch_sha256']:raise ValueError('EngineLibrary patch preimage differs')
     run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/engine-library-public-linux.patch'],'patch-stock-loader',30)
     if p.digest(stage/'EngineLibrary.java')!=lock['engine_after']:raise ValueError('EngineLibrary patch postimage differs')
+    readonly=lock['default_io_readonly'];provider_source=stage/'DefaultIOProvider.java'
+    shutil.copyfile(p.regular(roots['kernel_java']/'stage'/readonly['source_file']),provider_source)
+    if p.digest(provider_source)!=readonly['before'] or p.digest(HERE/'patches/default-io-readonly.patch')!=readonly['patch_sha256']:raise ValueError('DefaultIOProvider patch preimage differs')
+    run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/default-io-readonly.patch'],'patch-default-io-readonly',30)
+    if p.digest(provider_source)!=readonly['after']:raise ValueError('DefaultIOProvider patch postimage differs')
     java_input=p.load(roots['kernel_java']/'inputs.json');cp=[roots['kernel_java']/'classes']+[Path(x['path']) for x in java_input['classpath']]
     replacement=out/'replacement-classes';replacement.mkdir()
     resources_source=HERE.parent/'compat/src/main/java/android/content/res/Resources.java'
-    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source],'compile-real-stock-loader')
+    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source,provider_source],'compile-real-stock-loader')
     classes={name:(roots['kernel_java']/'classes'/name).read_bytes() for name in p.inventory(roots['kernel_java']/'classes')}
     replaced=p.inventory(replacement)
-    if set(replaced)!={n for n in classes if re.fullmatch(r'(?:com/atakmap/map/EngineLibrary|android/content/res/Resources)(?:\$[^/]+)?\.class',n)}:raise ValueError('only existing reviewed loader/resource class families may change')
+    if set(replaced)!={n for n in classes if re.fullmatch(r'(?:com/atakmap/map/EngineLibrary|android/content/res/Resources|com/atakmap/coremap/io/DefaultIOProvider)(?:\$[^/]+)?\.class',n)}:raise ValueError('only existing reviewed loader/resource class families may change')
     classes.update({name:(replacement/name).read_bytes() for name in replaced})
     libraries=native_files(args.native_proof,roots)
     if list(libraries)!=lock['native_order']:raise ValueError('reviewed resource load order differs')
@@ -163,7 +168,7 @@ def main():
             dest=headers/'native'/name.removeprefix('takkernel/engine/src/main/cpp/');dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(args.native_proof/'layout'/name,dest)
     for name in p.inventory(roots['kernel_java']/'jni-headers'):
         dest=headers/'jni'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(roots['kernel_java']/'jni-headers'/name,dest)
-    manifest={'version':lock['version'],'official_revision':lock['official_revision'],'abi':lock['abi'],'runtime_resources':{'namespace':resource_lock['namespace'],'source_inventory':resource_lock['files'],'entries':{name:hashlib.sha256(data).hexdigest() for name,data in resources.items()},'unindexed_values_xml':True,'android_values_semantics':False},'resource_adapter_source_sha256':p.digest(resources_source),'class_count':len(classes),'class_inventory':{name:hashlib.sha256(data).hexdigest() for name,data in classes.items()},'patched_class_family':replaced,'native_resource_order':lock['native_order'],'native_resources':native_manifest,'dependencies':jar_records,'headers':p.inventory(headers),'notices':p.inventory(licenses),'excluded_features':['proprietary codecs','renderer qualification','client qualification','CommonCommo','stock unmodified Linux preload list','cross-host ABI portability'],'native_elf_audit':elf,'original_native_producer_sha256':record['original_native_producer']['sha256'],'stock_loader_java_library_path':'${java.io.tmpdir}/takkernel/engine/'+hashlib.md5(artifact.read_bytes()).hexdigest()+'/lib/linux64','source_patch':{'before':lock['engine_before'],'after':lock['engine_after'],'patch_sha256':lock['patch_sha256']}}
+    manifest={'version':lock['version'],'official_revision':lock['official_revision'],'abi':lock['abi'],'runtime_resources':{'namespace':resource_lock['namespace'],'source_inventory':resource_lock['files'],'entries':{name:hashlib.sha256(data).hexdigest() for name,data in resources.items()},'unindexed_values_xml':True,'android_values_semantics':False},'default_io_readonly_patch':readonly,'resource_adapter_source_sha256':p.digest(resources_source),'class_count':len(classes),'class_inventory':{name:hashlib.sha256(data).hexdigest() for name,data in classes.items()},'patched_class_family':replaced,'native_resource_order':lock['native_order'],'native_resources':native_manifest,'dependencies':jar_records,'headers':p.inventory(headers),'notices':p.inventory(licenses),'excluded_features':['proprietary codecs','renderer qualification','client qualification','CommonCommo','stock unmodified Linux preload list','cross-host ABI portability'],'native_elf_audit':elf,'original_native_producer_sha256':record['original_native_producer']['sha256'],'stock_loader_java_library_path':'${java.io.tmpdir}/takkernel/engine/'+hashlib.md5(artifact.read_bytes()).hexdigest()+'/lib/linux64','source_patch':{'before':lock['engine_before'],'after':lock['engine_after'],'patch_sha256':lock['patch_sha256']}}
     (package/'version-abi-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     record.update(package_inventory=p.inventory(package),manifest=manifest)
     bundle=out/('kernel-'+lock['version']+'-linux-amd64-public-cpu.zip')
@@ -172,7 +177,7 @@ def main():
     if runner.disk_bytes(out)>lock['output_limit_bytes']:raise ValueError('package output bound exceeded')
     if args.phase=='qualify':
         runtime_classes=out/'runtime-classes';runtime_classes.mkdir();class_path=[artifact,*[package/v['path'] for v in jar_records]]
-        controls=[NATIVE/n for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']]+[HERE/'StockLoaderSmoke.java',HERE/'RuntimeResourcesSmoke.java']
+        controls=[NATIVE/n for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']]+[HERE/'StockLoaderSmoke.java',HERE/'RuntimeResourcesSmoke.java',HERE/'DefaultIoReadonlySmoke.java']
         run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,class_path)),'-d',runtime_classes,*controls],'compile-stock-loader-controls')
         # Only exact validated JDK/host inputs may accompany the nine packaged providers.
         # Do not permit any original installed provider merely because its proof is valid.
@@ -199,7 +204,7 @@ def main():
             library_path=stock_tmp/'takkernel/engine'/hashlib.md5(selected_jar.read_bytes()).hexdigest()/'lib/linux64'
             text=run([java/'bin/java','-Djava.library.path='+str(library_path),'-Xcheck:jni','-Xmx256m','-XX:ActiveProcessorCount=2','-Djava.awt.headless=true','-Duser.home='+str(app/'home'),'-Djava.io.tmpdir='+str(stock_tmp),'-DTAK_APP_DATA_PATH='+str(app/'data'),'-cp',os.pathsep.join(map(str,[runtime_classes,*selected_class_path])),'StockLoaderSmoke',selected_jar,mode,out/'native-resources.sha256',expected_resources],'stock-'+phase).decode()
             required=['PASS_GENUINE_118_RESOURCES_91_ASSETS_25_CATALOG_15_STOCK_GLSL','PASS_STOCK_ENGINE_RESOURCE_LOADER_SCOPED_COMPONENT','PASS_ENGINE_INITIALIZER_AND_NATIVE_CONFIG_GDAL','PASS_KERNEL_JNI_MATRIX_POINT_WKB_NATIVE_PROJECTION']
-            if mode=='database':required+=['PASS_PREPARED_NATIVE_DATABASE2_ENCRYPTED_OPEN_REOPEN_WRONG_KEY_CONTROL','PASS_REAL_GDAL_MEM_EXACT_WRITE_READ']
+            if mode=='database':required+=['PASS_REAL_DEFAULT_IO_READONLY_WRITE_REJECTION_NO_CREATE_MBTILES','PASS_PREPARED_NATIVE_DATABASE2_ENCRYPTED_OPEN_REOPEN_WRONG_KEY_CONTROL','PASS_REAL_GDAL_MEM_EXACT_WRITE_READ']
             if phase=='logger':required+=['PASS_REAL_THROWING_LOGGER_BASELINE_REJECTION_MATCH_AND_CORRECT_KEY_RECOVERY']
             if any(n not in text for n in required) or audit.strict_jni_diagnostics(text) or any(n in text for n in ['EngineLibrary: Failed to load','UnsatisfiedLinkError','NoClassDefFoundError']):raise ValueError('real strict stock loader control failed: '+phase)
             extraction=re.findall(r'^EXTRACTION_DIRECTORY (.+)$',text,re.M)

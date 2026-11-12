@@ -23,6 +23,7 @@ public final class StockLoaderSmoke {
     KernelRuntimeSmoke.initializeStrict();KernelRuntimeSmoke.basic();
     RuntimeResourcesSmoke.run(jar,Path.of(args[3]));
     if(args[1].equals("database")) {
+      DefaultIoReadonlySmoke.run(jar,Path.of(System.getProperty("TAK_APP_DATA_PATH")));
       NativeDatabaseCandidate.run(Path.of(System.getProperty("TAK_APP_DATA_PATH")));
       org.gdal.gdal.gdal.AllRegister();
       org.gdal.gdal.Dataset mem=org.gdal.gdal.gdal.GetDriverByName("MEM").Create("",3,2,1,org.gdal.gdalconst.gdalconstConstants.GDT_Byte);

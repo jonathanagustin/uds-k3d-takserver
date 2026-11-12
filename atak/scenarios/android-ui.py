@@ -16,7 +16,7 @@ spec.loader.exec_module(scenario)
 def select(tree, *, rid=None, text=None):
     matches = []
     for node in tree.iter('node'):
-        if node.get('enabled') != 'true':
+        if node.get('enabled') != 'true' or node.get('visible-to-user') == 'false':
             continue
         if rid and not node.get('resource-id', '').endswith(':id/' + rid):
             continue
@@ -128,11 +128,26 @@ class AndroidUI:
         self.tap(text='OK')
         self.tap(text='Copy')
 
+    def hide_keyboard(self):
+        state = self.adb('shell', 'dumpsys', 'input_method').decode(errors='replace')
+        if re.search(r'\bmInputShown=true\b|\bmIsInputViewShown=true\b', state):
+            self.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+
     def details(self, callsign):
         self.tool('Overlays')
-        self.tap(rid='hierarchy_search_btn')
+        try:
+            select(self.tree(), rid='hierarchy_search')
+        except LookupError:
+            self.tap(rid='hierarchy_search_btn')
+        existing = self.find(rid='hierarchy_search').get('text', '')
+        if len(existing) > 80:
+            raise ValueError('unexpected hierarchy query length')
         self.tap(rid='hierarchy_search')
+        self.adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
+        if existing:
+            self.adb('shell', 'input', 'keyevent', *(['KEYCODE_DEL'] * len(existing)))
         self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
+        self.hide_keyboard()
         self.tap(rid='hierarchy_manager_list_item_title', text=callsign)
         actual = self.find(rid='cotInfoNameEdit').get('text')
         if actual != callsign:
@@ -163,6 +178,7 @@ class AndroidUI:
         self.tap(rid='cotInfoNameTitle')
         if self.find(rid='cotInfoNameEdit').get('text') != callsign:
             raise ValueError('Android callsign edit not visible')
+        self.hide_keyboard()
         return int(self.adb('shell', 'date', '+%s').strip())
 
     def share_dialog(self):

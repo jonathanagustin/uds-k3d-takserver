@@ -156,6 +156,19 @@ class ActualUIStates(unittest.TestCase):
         self.assertEqual(adb.call_count, 6)
         self.assertTrue(all('swipe' in call.args for call in adb.call_args_list))
 
+    def test_return_search_replaces_retained_query_and_only_hides_active_ime(self):
+        device = ui.AndroidUI('/unused')
+        search = ET.Element('node', text='OLD')
+        actual = ET.Element('node', text='TEST RETURN')
+        with patch.object(device, 'tool'), patch.object(device, 'tree', return_value=self.node(rid='hierarchy_search')), patch.object(device, 'find', side_effect=[search, actual]), patch.object(device, 'tap') as tap, patch.object(device, 'adb', return_value=b'mInputShown=true') as adb:
+            device.details('TEST RETURN')
+        self.assertIn(unittest.mock.call('shell', 'input', 'keyevent', 'KEYCODE_DEL', 'KEYCODE_DEL', 'KEYCODE_DEL'), adb.call_args_list)
+        self.assertIn(unittest.mock.call('shell', 'input', 'keyevent', 'KEYCODE_BACK'), adb.call_args_list)
+        self.assertNotIn(unittest.mock.call(rid='hierarchy_search_btn'), tap.call_args_list)
+        with patch.object(device, 'adb', return_value=b'mInputShown=false') as adb:
+            device.hide_keyboard()
+        self.assertEqual(adb.call_count, 1)
+
     def test_empty_screenshot_is_not_map_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             device = ui.AndroidUI(directory)

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.1...v0.14.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* **demo:** publish signed recordings without overwriting history ([#501](https://github.com/jonathanagustin/uds-takserver/issues/501)) ([cef6b8a](https://github.com/jonathanagustin/uds-takserver/commit/cef6b8a4610fd1bc52f1a1f933175016452a48c3))
+* **sdk:** preserve default database read-only requests ([#508](https://github.com/jonathanagustin/uds-takserver/issues/508)) ([9a10729](https://github.com/jonathanagustin/uds-takserver/commit/9a10729fa96a3bbe9de8e920d0519fd4d5160ee0))
+* **takx:** package official Kernel runtime resources ([#504](https://github.com/jonathanagustin/uds-takserver/issues/504)) ([23ac099](https://github.com/jonathanagustin/uds-takserver/commit/23ac099983930857769bee0066b3ea6a951fee38))
+* **takx:** validate mission packages before import ([#507](https://github.com/jonathanagustin/uds-takserver/issues/507)) ([c80744a](https://github.com/jonathanagustin/uds-takserver/commit/c80744a3dda94a957194051acecca6a23b7a374c))
+
 ## [0.14.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.0...v0.14.1) (2026-11-11)
 
 

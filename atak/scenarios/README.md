@@ -262,3 +262,20 @@ Runtime/VM/APK/driver/deployment/workflow changes still trigger it; source-only
 documentation changes do not. Offline Unit tests cover UI state failures,
 retained-event freshness, TLS identity rejection before application reads,
 partial controller failures, owned-process cleanup and these path filters.
+
+## Avoiding duplicate post-merge runs
+
+Pull requests and manual runs always perform the complete device qualification.
+A main push may reuse a completed same-repository PR run only when its successful
+deployment, device, scenario and cleanup evidence binds the exact integrated Git
+tree. The source head and the actual checkout merge-tree are recorded separately.
+The read-only admission job also checks unchanged producer/publisher semantics
+and device/package keys across the push, all four keyed images, and matching
+plain release digests for the three published device images and package.
+
+Missing, expired, ambiguous, stale or inaccessible API/artifact/registry evidence
+selects the full run. Direct pushes select the full run. A reused run publishes
+nothing; stale release tags require the normal main test/publisher path. The
+tiny seven-day proof contains source/tree/key identifiers and fixed scenario
+status, with no captures, credentials or personal data. This is GitHub API-bound
+workflow evidence, not a standalone signed provenance claim.

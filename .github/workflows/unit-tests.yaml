@@ -113,6 +113,9 @@ jobs:
       - name: Dump Secret restore helper
         run: bash tests/test_db_dump_secret.sh
 
+      - name: ATAK post-merge reuse policy
+        run: python3 -B -m unittest discover -s tests -p 'test_atak_push_reuse.py' -v
+
       - name: Synthetic mission-package fixture and provenance guards
         run: python3 -B -m unittest discover -s takx/mission-package -p 'test_*.py' -v
 

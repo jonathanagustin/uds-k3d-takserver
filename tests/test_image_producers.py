@@ -4,6 +4,7 @@
 """Queue contracts and real build-script registry reuse, without hosted builds."""
 import concurrent.futures
 import fcntl
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ProducerQueues(unittest.TestCase):
+    def test_atak_filters_include_every_hosted_scenario_runtime_input(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/atak-e2e.yaml').read_text())
+        events = workflow.get('on', workflow.get(True))
+        runtime = ['atak/scenarios/android-interoperability.py', 'atak/scenarios/observe-peer.py', 'atak/scenarios/android-ui.py', 'takx/mission-package/build_fixture.py', 'takx/mission-package/fixtures.lock.json', 'takx/mission-package/fixtures/manifest.xml', 'takx/mission-package/fixtures/point.cot', 'takx/mission-package/fixtures/README.txt']
+        expected = ['atak/**', '!atak/scenarios/**', *runtime, '.github/workflows/atak-e2e.yaml']
+        for event in ('pull_request', 'push'):
+            patterns = events[event]['paths']
+            self.assertEqual(patterns, expected)
+            def included(path):
+                answer = False
+                for pattern in patterns:
+                    if fnmatch.fnmatchcase(path, pattern.lstrip('!')):
+                        answer = not pattern.startswith('!')
+                return answer
+            self.assertFalse(included('atak/scenarios/README.md'))
+            for path in [*runtime, 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
+                with self.subTest(event=event, path=path): self.assertTrue(included(path))
+        self.assertIn('workflow_dispatch', events)
+        step = next(step for step in workflow['jobs']['e2e']['steps'] if step.get('name') == 'ATAK device end to end')
+        self.assertEqual(step['env']['ATAK_INTEROP_SCENARIO'], 'true')
+        script = (ROOT / 'atak/ci/e2e.sh').read_text()
+        self.assertIn('${ATAK_INTEROP_SCENARIO:-false}', script)
+        self.assertIn('timeout --signal=TERM --kill-after=5s 475s ./atak/ci/interoperability.sh', script)
+
     def test_optional_apk_producers_share_a_queue_and_recheck_after_admission(self):
         standalone = yaml.safe_load((ROOT / ".github/workflows/atak.yaml").read_text())["jobs"]["apk"]
         device = yaml.safe_load((ROOT / ".github/workflows/atak-e2e.yaml").read_text())["jobs"]["images"]

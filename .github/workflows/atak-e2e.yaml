@@ -16,12 +16,32 @@ on:
   pull_request:
     paths:
       - "atak/**"
+      # Only inactive scenario docs are excluded; runtime helpers stay active.
+      - "!atak/scenarios/**"
+      - "atak/scenarios/android-interoperability.py"
+      - "atak/scenarios/observe-peer.py"
+      - "atak/scenarios/android-ui.py"
+      - "takx/mission-package/build_fixture.py"
+      - "takx/mission-package/fixtures.lock.json"
+      - "takx/mission-package/fixtures/manifest.xml"
+      - "takx/mission-package/fixtures/point.cot"
+      - "takx/mission-package/fixtures/README.txt"
       - ".github/workflows/atak-e2e.yaml"
   # Publishes the device images under the ATAK release tag after a merge.
   push:
     branches: [main]
     paths:
       - "atak/**"
+      # Only inactive scenario docs are excluded; runtime helpers stay active.
+      - "!atak/scenarios/**"
+      - "atak/scenarios/android-interoperability.py"
+      - "atak/scenarios/observe-peer.py"
+      - "atak/scenarios/android-ui.py"
+      - "takx/mission-package/build_fixture.py"
+      - "takx/mission-package/fixtures.lock.json"
+      - "takx/mission-package/fixtures/manifest.xml"
+      - "takx/mission-package/fixtures/point.cot"
+      - "takx/mission-package/fixtures/README.txt"
       - ".github/workflows/atak-e2e.yaml"
 
 permissions:
@@ -263,6 +283,7 @@ jobs:
 
       - name: ATAK device end to end
         env:
+          ATAK_INTEROP_SCENARIO: "true"
           ATAK_PACKAGE: ${{ steps.device.outputs.package }}
           PKG_DIR: ${{ runner.temp }}/atak-package
         run: |

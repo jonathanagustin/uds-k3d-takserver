@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+"""Bounded UI actions for the pinned official ATAK file browser and marker panes."""
+import importlib.util
+import re
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location('scenario', Path(__file__).with_name('android-interoperability.py'))
+scenario = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(scenario)
+
+
+def select(tree, *, rid=None, text=None):
+    matches = []
+    for node in tree.iter('node'):
+        if node.get('enabled') != 'true':
+            continue
+        if rid and not node.get('resource-id', '').endswith(':id/' + rid):
+            continue
+        if text and text not in (node.get('text'), node.get('content-desc')):
+            continue
+        bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
+        if bounds and int(bounds[3]) > int(bounds[1]) and int(bounds[4]) > int(bounds[2]):
+            matches.append(node)
+    if len(matches) != 1:
+        raise LookupError('expected one enabled UI node')
+    return matches[0]
+
+
+class AndroidUI:
+    def __init__(self, output, device='atak-device-adb.atak.svc.cluster.local:5555', pod='atak-demo-adb'):
+        self.output = Path(output)
+        self.prefix = ['uds', 'zarf', 'tools', 'kubectl', 'exec', '-n', 'atak', pod, '--', 'adb', '-s', device]
+
+    def adb(self, *command):
+        return scenario.run_bounded(self.prefix + list(command), timeout=12)
+
+    def apk_identity(self):
+        installed = self.adb('shell', 'pm', 'path', 'com.atakmap.app.civ').decode().strip()
+        match = re.fullmatch(r'package:([/A-Za-z0-9._=+-]+)', installed)
+        if match is None:
+            raise ValueError('expected one installed ATAK base APK')
+        actual = self.adb('shell', 'sha256sum', match[1]).decode().split()[0]
+        image = scenario.run_bounded(self.prefix[:-3] + ['sha256sum', '/atak-civ.apk'], timeout=12).decode().split()[0]
+        if not re.fullmatch('[0-9a-f]{64}', actual) or actual != image:
+            raise ValueError('installed ATAK APK differs from the existing driver image')
+        return actual
+
+    def tree(self):
+        self.adb('shell', 'uiautomator', 'dump', '/sdcard/scenario-ui.xml')
+        payload = self.adb('exec-out', 'cat', '/sdcard/scenario-ui.xml')
+        if b'certificate invalid' in payload.lower() or b'unable to validate' in payload.lower():
+            raise ValueError('certificate prompt blocks scenario')
+        return ET.fromstring(payload)
+
+    def find(self, seconds=10, **selector):
+        deadline = time.monotonic() + seconds
+        while True:
+            try:
+                return select(self.tree(), **selector)
+            except LookupError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.25)
+
+    def tap(self, **selector):
+        node = self.find(**selector)
+        x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+        self.adb('shell', 'input', 'tap', str((x1+x2)//2), str((y1+y2)//2))
+
+    def capture(self, name):
+        self.output.mkdir(parents=True, exist_ok=True)
+        self.adb('shell', 'uiautomator', 'dump', '/sdcard/scenario-ui.xml')
+        (self.output / (name + '.xml')).write_bytes(self.adb('exec-out', 'cat', '/sdcard/scenario-ui.xml'))
+        image = self.adb('exec-out', 'screencap', '-p')
+        if not image.startswith(b'\x89PNG\r\n\x1a\n') or not image.endswith(b'\x00\x00\x00\x00IEND\xaeB`\x82'):
+            raise ValueError('device screenshot is not a complete PNG')
+        if sum(p.stat().st_size for p in self.output.glob('*') if p.is_file()) + len(image) > 12*1024*1024:
+            raise ValueError('UI evidence budget exceeded')
+        (self.output / (name + '.png')).write_bytes(image)
+
+    def tool(self, name):
+        # NavButton icons have no textual accessibility label in this source.
+        # Use the native, labelled All Tools list instead of guessing an icon.
+        self.tap(rid='tak_nav_menu_button')
+        self.tap(text='All tools & plugins')
+        for _ in range(6):
+            try:
+                select(self.tree(), text=name)
+                self.tap(text=name)
+                return
+            except LookupError:
+                listing = self.find(rid='tools_list')
+                x1, y1, x2, y2 = map(int, re.findall(r'\d+', listing.get('bounds')))
+                self.adb('shell', 'input', 'swipe', str((x1+x2)//2), str(y1+4*(y2-y1)//5), str((x1+x2)//2), str(y1+(y2-y1)//5), '300')
+        raise LookupError('tool absent from bounded All Tools scan')
+
+    def confirm_file_selected(self, filename):
+        tree = self.tree()
+        node = select(tree, rid='importManagerBrowserFileName', text=filename)
+        parents = {child: parent for parent in tree.iter() for child in parent}
+        while node in parents:
+            node = parents[node]
+            boxes = [child for child in node.iter('node') if child.get('resource-id', '').endswith(':id/importManagerBrowserFileSelected')]
+            if boxes:
+                if len(boxes) != 1 or boxes[0].get('checked') != 'true':
+                    raise ValueError('exact package row is not selected')
+                return
+        raise ValueError('package selection checkbox absent')
+
+    def import_package(self):
+        self.tool('Import')
+        self.tap(text='Local SD')
+        self.tap(rid='phone')
+        for _ in range(5):
+            current = self.find(rid='importBrowserCurrentDirectory').get('text', '').rstrip('/')
+            if current in ('/sdcard', '/storage/emulated/0', '/storage/self/primary'):
+                break
+            self.tap(rid='importManagerFileBrowserUpButton')
+        else:
+            raise ValueError('file browser did not reach shared storage')
+        self.tap(rid='importManagerBrowserFileName', text='Download')
+        self.tap(rid='importManagerBrowserFileName', text='atak-synthetic-scenario.dpk')
+        self.confirm_file_selected('atak-synthetic-scenario.dpk')
+        self.tap(text='OK')
+        self.tap(text='Copy')
+
+    def details(self, callsign):
+        self.tool('Overlays')
+        self.tap(rid='hierarchy_search_btn')
+        self.tap(rid='hierarchy_search')
+        self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
+        self.tap(rid='hierarchy_manager_list_item_title', text=callsign)
+        actual = self.find(rid='cotInfoNameEdit').get('text')
+        if actual != callsign:
+            raise ValueError('wrong marker detail pane')
+
+    def verify_point(self, callsign, lat, lon, evidence):
+        if self.find(rid='cotInfoNameEdit').get('text') != callsign:
+            raise ValueError('wrong callsign in marker pane')
+        self.tap(rid='cotInfoCoordButton')
+        self.tap(text='DD')
+        actual_lat = float(self.find(rid='coordDialogDDLatText').get('text'))
+        actual_lon = float(self.find(rid='coordDialogDDLonText').get('text'))
+        if abs(actual_lat-lat) > .0000005 or abs(actual_lon-lon) > .0000005:
+            raise ValueError('Android coordinates differ from expected point')
+        self.capture(evidence + '-coordinates')
+        self.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        self.tap(rid='cotInfoPanButton')
+        self.capture(evidence + '-map')
+
+    def rename(self, callsign):
+        current = self.find(rid='cotInfoNameEdit').get('text', '')
+        if not 1 <= len(current) <= 80 or not re.fullmatch(r'[A-Za-z0-9 -]{1,80}', callsign):
+            raise ValueError('unsupported synthetic callsign')
+        self.tap(rid='cotInfoNameEdit')
+        self.adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
+        self.adb('shell', 'input', 'keyevent', *(['KEYCODE_DEL'] * len(current)))
+        self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
+        self.tap(rid='cotInfoNameTitle')
+        if self.find(rid='cotInfoNameEdit').get('text') != callsign:
+            raise ValueError('Android callsign edit not visible')
+        return int(self.adb('shell', 'date', '+%s').strip())
+
+    def share_dialog(self):
+        self.tap(rid='cotInfoSendButton')
+        self.find(rid='contact_list_button_send_to_all', text='Broadcast')
+
+    def broadcast(self):
+        # Deliberately choose the real all/server Broadcast target, never the
+        # silent observer (which has not advertised itself as a contact).
+        self.tap(rid='contact_list_button_send_to_all', text='Broadcast')

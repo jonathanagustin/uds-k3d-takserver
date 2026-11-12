@@ -163,3 +163,91 @@ attachment opening and Android map display remain separate actual-client gates.
 The offline socket and ADB tests are explicit protocol mocks, not an emulator or
 network qualification. No local APK, active device or peer credentials were
 used to qualify this source implementation.
+
+
+## Hosted e2e extension (source implemented; not runtime qualified)
+
+The existing hosted ATAK e2e step sets `ATAK_INTEROP_SCENARIO=true`, making
+`atak/ci/e2e.sh` invoke `atak/ci/interoperability.sh` once after its baseline
+device and SSO checks. Other callers, including manual demo recording, retain
+their existing baseline unless explicitly opting into this test. It reuses that cluster, installed APK,
+existing driver image and gateway port-forward. It adds no cluster, APK build,
+image build, recording job or workflow permissions. Image input keys remain
+unchanged. The outer timeout is 475 seconds plus a five-second kill grace: an
+**eight-minute maximum increment**. Bootstrap has an 80-second aggregate limit;
+UI staging/import has 150 seconds; fresh outbound observation has 120 seconds;
+reverse sending/UI verification has 100 seconds. The outer limit includes
+failure handling and cleanup, so phases cannot extend the total budget.
+
+Bootstrap creates a one-day synthetic peer TakClient in the device's server
+group, reads its existing controller-issued CA/client credentials into an owned
+0700 temporary directory, and obtains the **public deployed server certificate**
+from authenticated Kubernetes Secret `takserver-certs`, key `takserver.pem`.
+Its exact DER SHA-256 supplies the explicit leaf pin. The observer's ordinary
+CLI still defaults to CA plus hostname verification. Explicit pin mode retains
+`CERT_REQUIRED`, verifies the CA chain and then the exact DER leaf before
+readiness or application reads. It does not learn a pin from the network and
+has no fallback to an unverified connection. Separate `--connect-host` and
+`--host` allow the existing `127.0.0.1:28443` gateway forward with streaming SNI.
+Credentials never enter the evidence directory or command output. Cleanup
+removes them first, sanitizes text evidence before upload, deletes the temporary
+TakClient and stops the temporary ADB pod. Owned observer/tool process groups are
+killed on failure or interruption. Cleanup failure makes the overall run fail
+and is recorded separately; it cannot leave a successful final qualification.
+
+The actual acceptance phases are:
+
+1. Build the canonical package from the mission lane's locked fixture sources.
+   Check the official Android gitlink is still `9f6893d`; compare the installed
+   device APK SHA-256 with `/atak-civ.apk` in the already-selected driver image.
+   Stage the package, open the native navigation menu and **All tools & plugins**
+   (the icon toolbar has no textual accessibility labels in this source), then
+   use **Import → Local SD → Download → selected
+   DPK → OK → Copy** UI route. No launcher action, private broadcast or invented
+   content URI stands in for import. Find the actual marker in Overlays, open
+   its detail pane, inspect both numeric DD fields at `0,0`, pan to it and save
+   actual coordinate/map screenshots. Empty/incomplete PNG output fails.
+2. Connect the read-only observer **before** editing Android's callsign. It
+   publishes readiness and drains pre-share data. Edit the actual marker to add
+   an unpredictable eight-hex-digit challenge and open its Share dialog. The
+   observer drains to quiet and acknowledges arming. After Android's own clock
+   advances at least two seconds beyond the edit, publish its clock cutoff and
+   tap the real `contact_list_button_send_to_all` **Broadcast** target. The
+   silent observer is never assumed to appear in Contacts. Require the fixture
+   UID/type/point, challenged callsign and CoT timestamp at or beyond the cutoff.
+   Older retained events cannot satisfy this check. Pre-share bytes and the
+   accepted event/cutoff times are recorded; the observer sends no CoT/heartbeat.
+3. The separate `atak/ci/reverse-marker.py` explicitly sends exactly one new
+   synthetic CoT with the same UID, fresh times, point `0.001,0.002` and a
+   `RETURN` callsign suffix. Reopen the actual Android marker pane and verify
+   that changed callsign and both numeric coordinates, then pan and capture
+   actual map evidence. A successful socket send alone is not return acceptance.
+
+The fresh-time predicate is source-backed at official revision `9f6893d`:
+`ContactPresenceDropdown.java` calls `CotEventFactory.createCotEvent(target)`
+on Share; `Marker.isSupported` does not expose CotEvent, so the factory's marker
+fallback sets time/start to a new `CoordinatedTime` (factory lines 118–121).
+`ImportManagerView.importLocalFile` takes the real selected file into
+`promptImportAction`; its file-row click toggles the selection checkbox.
+`MapTouchController.goTo(select=true)` opens the hierarchy-selected point's
+actual details. UI resource IDs and labels come from the same pinned source.
+Missing or ambiguous controls, certificate prompts, source/APK mismatch, clock
+mismatch, absent peer data and partial phases fail; there is no skipped-scene
+success or coordinate guessing.
+
+The final status deliberately describes the observed combination:
+`ui-import-broadcast-action-fresh-challenge-and-return-verified`. It requires all
+three phases, not just dispatch or baseline e2e. UI Broadcast plus a fresh
+Android-only challenge establishes the tested sequence; it is not a universal
+claim about attribution of unrelated auto-broadcast traffic. Attachment opening
+and other peer/client/platform versions remain outside these acceptance gates.
+No hosted scenario execution, new footage or new interoperability success has
+yet qualified this source extension.
+
+The workflow excludes inactive scenario documentation but explicitly reincludes
+all three runtime scenario scripts. Changes to the consumed mission builder,
+fixture lock and three exact fixture files also trigger the existing e2e run.
+Runtime/VM/APK/driver/deployment/workflow changes still trigger it; source-only
+documentation changes do not. Offline Unit tests cover UI state failures,
+retained-event freshness, TLS identity rejection before application reads,
+partial controller failures, owned-process cleanup and these path filters.

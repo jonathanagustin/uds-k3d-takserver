@@ -224,6 +224,7 @@ class PeerObservationTest(unittest.TestCase):
                 package = ScenarioInputTest().package(directory)
                 output = Path(directory) / "peer-out"
                 context = MagicMock()
+                context.verify_mode = ssl.CERT_REQUIRED
                 if stage == "credentials":
                     context.load_cert_chain.side_effect = FileNotFoundError("PRIVATE-CREDENTIAL-PATH")
                 if stage == "handshake":

@@ -79,6 +79,7 @@ jobs:
       - name: Install UDS CLI
         if: github.event_name == 'push'
         continue-on-error: true
+        timeout-minutes: 1
         uses: defenseunicorns/setup-uds@d6add59d4c2ca789ed7c92741e91bd340b4e950b # v1.0.2
         with:
           version: v0.41.0
@@ -97,7 +98,7 @@ jobs:
   # already in GHCR it finishes in under a minute.
   images:
     needs: admission
-    if: ${{ !cancelled() && needs.admission.outputs.reuse != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ !cancelled() && (needs.admission.result != 'success' || needs.admission.outputs.reuse != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     # ATAK's standalone APK job uses this same queue. Different input sets
     # also serialize; each admitted producer rechecks its own immutable tags.
     concurrency:
@@ -146,7 +147,7 @@ jobs:
 
   e2e:
     needs: admission
-    if: ${{ !cancelled() && needs.admission.outputs.reuse != 'true' }}
+    if: ${{ !cancelled() && (needs.admission.result != 'success' || needs.admission.outputs.reuse != 'true') }}
     # Supersede only consumers. A workflow-level gate would also cancel the
     # immutable image producer while it is warming the shared APK cache.
     concurrency:

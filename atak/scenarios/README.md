@@ -191,9 +191,20 @@ has no fallback to an unverified connection. Separate `--connect-host` and
 `--host` allow the existing `127.0.0.1:28443` gateway forward with streaming SNI.
 Credentials never enter the evidence directory or command output. Cleanup
 removes them first, sanitizes text evidence before upload, deletes the temporary
-TakClient and stops the temporary ADB pod. Owned observer/tool process groups are
+TakClient and helper pod only after checking their per-run ownership label.
+The helper uses a fresh `atak-scenario-<16-hex-owner>` name and create-only
+admission, refusing an existing name. The normal `atak-demo-adb` recording pod
+is neither reused nor deleted. `DOMAIN`, `DEVICE_GROUP` and `DRIVER_IMAGE` are
+explicitly propagated from e2e through the nested scenario/driver calls. Owned observer/tool process groups are
 killed on failure or interruption. Cleanup failure makes the overall run fail
 and is recorded separately; it cannot leave a successful final qualification.
+Resource cleanup has a 15-second aggregate deadline. Deletion uses an exact UID
+precondition and zero grace for these owned test resources, then polls for
+actual TakClient and pod absence. `cleanup_verified=true` therefore requires
+`owned_resources_absent=true`, not merely an accepted `--wait=false` request.
+A replacement or foreign-labelled object is never deleted; pending finalizers,
+API errors or incomplete cleanup fail the run. This receipt describes those
+resource checks, not certificate revocation-history verification.
 
 The actual acceptance phases are:
 

@@ -31,6 +31,7 @@ peer = load('peer', 'atak/scenarios/observe-peer.py')
 ui = load('ui', 'atak/scenarios/android-ui.py')
 hosted = load('hosted', 'atak/ci/interoperability.py')
 reverse = load('reverse', 'atak/ci/reverse-marker.py')
+cleanup = load('cleanup', 'atak/ci/cleanup-scenario.py')
 
 
 class TLSIdentity(unittest.TestCase):
@@ -191,12 +192,13 @@ class OrchestrationAndCleanup(unittest.TestCase):
             uds = root/'uds'
             uds.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\ncase "$*" in *" wait "*) exit 1;; esac\n')
             uds.chmod(0o755)
-            env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], RUNNER_TEMP=str(root), CALL_LOG=str(root/'calls'))
+            env = dict(os.environ, DRIVER_IMAGE='test-driver:dev', DOMAIN='uds.dev', DEVICE_GROUP='Operators', PATH=str(root)+os.pathsep+os.environ['PATH'], RUNNER_TEMP=str(root), CALL_LOG=str(root/'calls'))
             result = subprocess.run(['bash', 'atak/ci/interoperability.sh', str(root/'out')], cwd=ROOT, env=env, capture_output=True, timeout=10)
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(list(root.glob('atak-scenario.*')))
-            self.assertIn('delete takclient atak-peer-', (root/'calls').read_text())
-            self.assertIn('delete pod -n atak atak-demo-adb', (root/'calls').read_text())
+            self.assertIn('get takclient atak-peer-', (root/'calls').read_text())
+            self.assertIn('get pod atak-scenario-', (root/'calls').read_text())
+            self.assertNotIn('atak-demo-adb', (root/'calls').read_text())
 
     def test_cleanup_failure_cannot_leave_success_or_mask_first_failure(self):
         for original in ('failed', 'ui-import-broadcast-action-fresh-challenge-and-return-verified'):
@@ -206,9 +208,9 @@ class OrchestrationAndCleanup(unittest.TestCase):
                 output.mkdir()
                 (output/'receipt.json').write_text(json.dumps({'status':original, 'error_type':'FirstFailure'}))
                 uds = root/'uds'
-                uds.write_text('#!/bin/sh\ncase "$*" in *" wait "*|*" delete takclient "*) exit 1;; esac\n')
+                uds.write_text('#!/bin/sh\ncase "$*" in *" wait "*) exit 1;; *" get takclient "*) printf "abc-def\\tforeign\\n";; esac\n')
                 uds.chmod(0o755)
-                env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], RUNNER_TEMP=str(root))
+                env = dict(os.environ, DRIVER_IMAGE='test-driver:dev', DOMAIN='uds.dev', DEVICE_GROUP='Operators', PATH=str(root)+os.pathsep+os.environ['PATH'], RUNNER_TEMP=str(root))
                 result = subprocess.run(['bash', 'atak/ci/interoperability.sh', str(output)], cwd=ROOT, env=env, capture_output=True, timeout=10)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(json.loads((output/'cleanup.json').read_text())['cleanup_verified'])
@@ -252,7 +254,7 @@ class OrchestrationAndCleanup(unittest.TestCase):
                 output = root/'out'
                 actions = []
                 class Device:
-                    def __init__(self, path): pass
+                    def __init__(self, path, pod=None): pass
                     def apk_identity(self): return 'a'*64
                     def import_package(self):
                         actions.append('import')
@@ -277,7 +279,7 @@ class OrchestrationAndCleanup(unittest.TestCase):
                 process.wait.return_value = 1 if failure == 'observer' else 0
                 def ready(path, process): actions.append(path.stem)
                 argv = ['scenario', '--mission-package', str(package), '--output', str(output), '--host', 'example.invalid', '--ca', 'PRIVATE-ca', '--cert', 'PRIVATE-cert', '--key', 'PRIVATE-key', '--server-leaf-sha256', '0'*64]
-                with patch('sys.argv', argv), patch.object(hosted.ui_module, 'AndroidUI', Device), patch.object(hosted, 'run', side_effect=lambda command, **kwargs: b'9f6893dd657feacc35ec5de03dad721c2e44170e\n' if command[0] == 'git' else b'') as commands, patch.object(hosted.subprocess, 'Popen', return_value=process), patch.object(hosted, 'wait_file', side_effect=ready), patch.object(hosted, 'stop_observer') as stop, patch.object(hosted.secrets, 'token_hex', return_value='aabbccdd'):
+                with patch.dict(os.environ, ATAK_ADB_OWNER='0123456789abcdef', ATAK_ADB_POD='atak-scenario-0123456789abcdef'), patch('sys.argv', argv), patch.object(hosted.ui_module, 'AndroidUI', Device), patch.object(hosted, 'run', side_effect=lambda command, **kwargs: b'9f6893dd657feacc35ec5de03dad721c2e44170e\n' if command[0] == 'git' else b'') as commands, patch.object(hosted.subprocess, 'Popen', return_value=process), patch.object(hosted, 'wait_file', side_effect=ready), patch.object(hosted, 'stop_observer') as stop, patch.object(hosted.secrets, 'token_hex', return_value='aabbccdd'):
                     if failure:
                         with self.assertRaises(SystemExit): hosted.main()
                     else:
@@ -295,3 +297,112 @@ class OrchestrationAndCleanup(unittest.TestCase):
                 expected_process = None if failure == 'import' else process
                 self.assertEqual(stop.call_count, 2 if failure else 1)
                 stop.assert_called_with(expected_process)
+
+
+class OwnedResourceCleanup(unittest.TestCase):
+    owner = '0123456789abcdef'
+
+    def test_delete_acceptance_is_not_absence(self):
+        api = MagicMock()
+        api.identity.return_value = ('abc-def', self.owner)
+        with self.assertRaises(TimeoutError):
+            cleanup.remove_owned(api, self.owner, time.monotonic()-1)
+        self.assertEqual(api.delete.call_count, 2)
+
+    def test_unowned_helper_is_never_deleted(self):
+        api = MagicMock()
+        api.identity.side_effect = [None, ('abc-def', 'another-owner')]
+        with self.assertRaises(ValueError):
+            cleanup.remove_owned(api, self.owner, time.monotonic()+1)
+        api.delete.assert_not_called()
+        self.assertTrue(all(call.args[2] != 'atak-demo-adb' for call in api.identity.call_args_list))
+
+    def test_replacement_is_not_deleted_and_original_delete_has_uid_precondition(self):
+        api = MagicMock()
+        api.identity.side_effect = [('abc-def', self.owner), None, ('aaa-ccc', 'another-owner')]
+        with self.assertRaises(ValueError):
+            cleanup.remove_owned(api, self.owner, time.monotonic()+1)
+        api.delete.assert_called_once()
+        real_api = cleanup.Kubernetes()
+        with patch.object(real_api, 'call') as call:
+            real_api.delete('/owned/resource', 'abc-def')
+        args, payload = call.call_args.args
+        self.assertEqual(args, ['delete', '--raw', '/owned/resource', '-f', '-'])
+        self.assertEqual(json.loads(payload)['preconditions'], {'uid':'abc-def'})
+        self.assertEqual(json.loads(payload)['gracePeriodSeconds'], 0)
+
+    def test_both_absent_resources_are_verified_without_deletion(self):
+        api = MagicMock()
+        api.identity.return_value = None
+        cleanup.remove_owned(api, self.owner, time.monotonic()+1)
+        api.delete.assert_not_called()
+        self.assertEqual(api.identity.call_count, 2)
+
+    def test_unique_helper_refuses_existing_name_and_defaults_keep_connected_pod(self):
+        for owned in (True, False):
+            with self.subTest(owned=owned), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                uds = root/'uds'
+                uds.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\ncase "$*" in *" get pod "*) echo pod/existing;; *get-state*) echo device;; esac\n')
+                uds.chmod(0o755)
+                env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], CALL_LOG=str(root/'calls'))
+                if owned:
+                    env.update(ATAK_ADB_OWNER=self.owner, ATAK_ADB_POD='atak-scenario-'+self.owner)
+                result = subprocess.run(['bash', 'demo/atak-adb.sh', 'start'], cwd=ROOT, env=env, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 2 if owned else 0)
+                calls = (root/'calls').read_text()
+                self.assertNotIn(' delete ', calls)
+                self.assertNotIn(' apply ', calls)
+                self.assertNotIn(' create ', calls)
+                if owned: self.assertNotIn('atak-demo-adb', calls)
+                else: self.assertIn('atak-demo-adb', calls)
+
+    def test_environment_and_owned_identity_are_explicit_through_nested_driver(self):
+        source = (ROOT/'atak/ci/interoperability.sh').read_text()
+        self.assertIn('export DOMAIN="${domain}" DEVICE_GROUP="${DEVICE_GROUP:-Operators}"', source)
+        self.assertIn('export DRIVER_IMAGE="${DRIVER_IMAGE:?', source)
+        self.assertIn('export ATAK_ADB_OWNER="${owner}" ATAK_ADB_POD="atak-scenario-${owner}"', source)
+        self.assertIn('export work name domain owner', source)
+        controller = (ROOT/'atak/ci/interoperability.py').read_text()
+        self.assertIn("AndroidUI(args.output / 'ui', pod=pod)", controller)
+        hook = (ROOT/'atak/ci/e2e.sh').read_text()
+        self.assertIn('DOMAIN="${DOMAIN}" DEVICE_GROUP="${DEVICE_GROUP}" DRIVER_IMAGE="${DRIVER_IMAGE}"', hook)
+
+    def test_unique_helper_creation_carries_owned_label_and_explicit_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            uds = root/'uds'
+            uds.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\ncase "$*" in *" create -f -"*) cat > "$MANIFEST";; *get-state*) echo device;; esac\n')
+            uds.chmod(0o755)
+            env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], CALL_LOG=str(root/'calls'), MANIFEST=str(root/'pod'), ATAK_ADB_OWNER=self.owner, ATAK_ADB_POD='atak-scenario-'+self.owner, DRIVER_IMAGE='test-driver:chosen')
+            result = subprocess.run(['bash', 'demo/atak-adb.sh', 'start'], cwd=ROOT, env=env, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            manifest = (root/'pod').read_text()
+            self.assertIn('name: atak-scenario-'+self.owner, manifest)
+            self.assertIn('scenario-owner: "'+self.owner+'"', manifest)
+            self.assertIn('image: test-driver:chosen', manifest)
+            self.assertNotIn(' delete ', (root/'calls').read_text())
+            self.assertNotIn(' apply ', (root/'calls').read_text())
+
+    def test_owned_stop_or_default_name_collision_cannot_delete_recording_pod(self):
+        for pod in ('atak-demo-adb', 'atak-scenario-'+self.owner, '../unrelated'):
+            with self.subTest(pod=pod), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                uds = root/'uds'
+                uds.write_text('#!/bin/sh\necho called >> "$CALL_LOG"\n')
+                uds.chmod(0o755)
+                env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'], CALL_LOG=str(root/'calls'), ATAK_ADB_OWNER=self.owner, ATAK_ADB_POD=pod)
+                result = subprocess.run(['bash', 'demo/atak-adb.sh', 'stop'], cwd=ROOT, env=env, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 2)
+                self.assertFalse((root/'calls').exists())
+
+    def test_cleanup_receipt_requires_observed_absence_after_both_deletions(self):
+        api = MagicMock()
+        api.identity.side_effect = [('abc-def', self.owner), ('aaa-bbb', self.owner), None, None]
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', ['cleanup', '--owner', self.owner, '--output', directory]), patch.object(cleanup, 'Kubernetes', return_value=api):
+            cleanup.main()
+            receipt = json.loads((Path(directory)/'cleanup.json').read_text())
+        self.assertTrue(receipt['cleanup_verified'])
+        self.assertTrue(receipt['owned_resources_absent'])
+        self.assertEqual(api.delete.call_count, 2)
+        self.assertEqual(api.identity.call_count, 4)

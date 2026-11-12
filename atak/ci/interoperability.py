@@ -7,6 +7,7 @@ import contextlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import signal
@@ -72,7 +73,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     control = args.output / 'control'
     control.mkdir()
-    ui = ui_module.AndroidUI(args.output / 'ui')
+    pod = os.environ.get('ATAK_ADB_POD', '')
+    owner = os.environ.get('ATAK_ADB_OWNER', '')
+    if not re.fullmatch('[0-9a-f]{16}', owner) or pod != 'atak-scenario-' + owner:
+        parser.error('hosted scenario requires a uniquely owned helper identity')
+    ui = ui_module.AndroidUI(args.output / 'ui', pod=pod)
     receipt = {'status': 'failed', 'package_sha256': inputs['package_sha256'], 'passed_phases': []}
     challenge = secrets.token_hex(4)
     marker = inputs['markers'][0]

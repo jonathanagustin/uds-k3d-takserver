@@ -79,6 +79,9 @@ jobs:
       - name: TakClient revocation endpoint contract
         run: python3 -B -m unittest tests.test_takclient_revocation -v
 
+      - name: Android scenario offline guards
+        run: python3 -B -m unittest tests.test_android_scenario -v
+
       - name: ATAK viewer uptime probe
         env:
           PYYAML_VERSION: 6.0.3

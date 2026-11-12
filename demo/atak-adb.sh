@@ -9,6 +9,8 @@
 #   demo/atak-adb.sh start       create the pod and connect adb (keeps a
 #                                pod that is already connected)
 #   demo/atak-adb.sh prep        shorter Android animations, ATAK in front
+#   demo/atak-adb.sh scenario PACKAGE FRESH_OUTPUT [CONTENT_URI]
+#                                stage package; optionally dispatch official import activity
 #   demo/atak-adb.sh zoom N      tap ATAK's + zoom button N times
 #   demo/atak-adb.sh shot NAME   save the device screen to demo/out/atak/NAME.png
 #   demo/atak-adb.sh record-start NAME
@@ -79,6 +81,35 @@ YAML
     done
     echo "adb could not connect to ${device}" >&2
     exit 1
+    ;;
+  scenario)
+    # Explicit opt-in only: use the existing real device and driver pod.
+    package="${2:?mission package path}"
+    output="${3:?fresh evidence directory}"
+    [[ -f "${package}" && ! -e "${output}" ]] || exit 2
+    remote="$(k exec -n atak "${pod}" -- mktemp -d /tmp/android-scenario.XXXXXX)"
+    [[ "${remote}" =~ ^/tmp/android-scenario\.[a-zA-Z0-9]{6}$ ]] || {
+      echo "unexpected remote temporary path" >&2
+      exit 2
+    }
+    # shellcheck disable=SC2329 # Invoked by the EXIT trap.
+    cleanup_scenario() {
+      k exec -n atak "${pod}" -- rm -rf -- "${remote}" || true
+    }
+    trap cleanup_scenario EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    k cp atak/scenarios/android-interoperability.py "atak/${pod}:${remote}/scenario.py"
+    k cp "${package}" "atak/${pod}:${remote}/scenario.dpk"
+    scenario_args=()
+    if [[ -n "${4:-}" ]]; then scenario_args+=(--import-content-uri "$4"); fi
+    status=0
+    k exec -n atak "${pod}" -- python3 "${remote}/scenario.py" \
+      --mission-package "${remote}/scenario.dpk" --device "${device}" \
+      --output "${remote}/evidence" "${scenario_args[@]}" || status=$?
+    mkdir -p "${output}"
+    k cp "atak/${pod}:${remote}/evidence/." "${output}/" || status=1
+    exit "${status}"
     ;;
   zoom)
     a shell uiautomator dump /sdcard/demo-ui.xml >/dev/null 2>&1

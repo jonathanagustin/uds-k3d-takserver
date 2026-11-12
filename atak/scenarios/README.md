@@ -279,3 +279,11 @@ nothing; stale release tags require the normal main test/publisher path. The
 tiny seven-day proof contains source/tree/key identifiers and fixed scenario
 status, with no captures, credentials or personal data. This is GitHub API-bound
 workflow evidence, not a standalone signed provenance claim.
+
+The whole workflow blob is compared conservatively. The initial rollout and any
+workflow edit therefore still run the full post-merge qualification; this gate
+saves later duplicate runs for harness updates with an unchanged workflow and
+producer/publisher semantics. Skipping requires admission success as well as a
+true reuse output. Setup failures or the shared 150-second helper deadline fall
+back to full qualification; commands share that budget and own killable process
+groups. UDS setup has its own one-minute bound.

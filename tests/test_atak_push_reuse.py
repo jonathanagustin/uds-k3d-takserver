@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
+import sys
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -123,7 +125,36 @@ class ArtifactAndWorkflow(unittest.TestCase):
         self.assertTrue(all(v=='read' for v in jobs['admission']['permissions'].values()))
         self.assertNotIn('packages: write',str(jobs['admission']))
         for name in ['images','e2e']:
-            self.assertEqual(jobs[name]['needs'],'admission');self.assertIn('!cancelled()',jobs[name]['if']);self.assertIn("outputs.reuse != 'true'",jobs[name]['if'])
+            self.assertEqual(jobs[name]['needs'],'admission');self.assertIn('!cancelled()',jobs[name]['if']);self.assertIn("outputs.reuse != 'true'",jobs[name]['if']);self.assertIn("needs.admission.result != 'success'",jobs[name]['if'])
+            for result,reuse,full in [('success','true',False),('failure','true',True),('cancelled','true',True),('success','false',True),('failure','false',True)]:
+                expression=jobs[name]['if'].removeprefix('${{').removesuffix('}}').strip()
+                for token,value in [('!cancelled()',True),('needs.admission.result',result),('needs.admission.outputs.reuse',reuse),('github.event.pull_request.head.repo.full_name',m.REPO),('github.event_name','push'),('github.repository',m.REPO)]:
+                    expression=expression.replace(token,repr(value))
+                self.assertEqual(eval(expression.replace('&&',' and ').replace('||',' or '),{'__builtins__':{}}),full)
         self.assertEqual(jobs['e2e']['permissions']['packages'],'write')
+        setup=next(s for s in jobs['admission']['steps'] if s['name']=='Install UDS CLI')
+        self.assertEqual(setup['timeout-minutes'],1);self.assertTrue(setup['continue-on-error'])
+
+class Deadline(unittest.TestCase):
+    def test_remaining_budget_clamps_command_and_kills_owned_descendant(self):
+        with tempfile.TemporaryDirectory() as d:
+            marker=str(Path(d)/'escaped')
+            child="import time,pathlib;time.sleep(.5);pathlib.Path("+repr(marker)+").write_text('escaped')"
+            parent="import subprocess,sys,time;subprocess.Popen([sys.executable,'-c',"+repr(child)+"]);time.sleep(5)"
+            started=time.monotonic()
+            with patch.object(m,'DEADLINE',started+.15),self.assertRaises(ValueError):m.command([sys.executable,'-c',parent])
+            self.assertLess(time.monotonic()-started,1.5)
+            time.sleep(.55);self.assertFalse(Path(marker).exists())
+    def test_multiple_successful_commands_exhaust_shared_budget_and_output_full(self):
+        def slow_decide(event):
+            for _ in range(8):m.command([sys.executable,'-c','import time;time.sleep(.06)'])
+            return True
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d);(p/'event').write_text('{}')
+            with patch.dict(os.environ,{'GITHUB_EVENT_PATH':str(p/'event'),'GITHUB_OUTPUT':str(p/'output')}),patch('sys.argv',['reuse','admit']),patch.object(m,'HELPER_SECONDS',.16),patch.object(m,'DEADLINE',None),patch.object(m,'decide',side_effect=slow_decide),patch('sys.stdout',new_callable=io.StringIO):
+                m.main();self.assertEqual((p/'output').read_text(),'reuse=false\n')
+    def test_exhausted_budget_does_not_launch_another_command(self):
+        with patch.object(m,'DEADLINE',time.monotonic()-1),patch.object(m.subprocess,'Popen') as popen,self.assertRaises(ValueError):m.command(['never-launch'])
+        popen.assert_not_called()
 
 if __name__=='__main__':unittest.main()

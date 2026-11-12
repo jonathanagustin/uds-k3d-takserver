@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import tempfile
 import time
@@ -18,6 +19,8 @@ REPO = 'jonathanagustin/uds-takserver'
 WORKFLOW = '.github/workflows/atak-e2e.yaml'
 ARTIFACT = 'atak-tested-checkout-v1'
 SCHEMA = 'atak-tested-checkout-v1'
+HELPER_SECONDS = 150
+DEADLINE = None
 PHASES = ['stage-and-ui-import', 'android-broadcast-and-fresh-peer-observation', 'explicit-peer-return-and-android-ui-verification']
 STATUS = 'ui-import-broadcast-action-fresh-challenge-and-return-verified'
 # These contain producer/publisher code and tool/environment choices. Runtime
@@ -25,24 +28,39 @@ STATUS = 'ui-import-broadcast-action-fresh-challenge-and-return-verified'
 SEMANTICS = ['.github/workflows/atak-e2e.yaml', '.gitmodules', 'atak/apk', 'atak/driver', 'atak/vm', 'atak/viewer', 'atak/deploy', 'atak/zarf.yaml', 'atak/ci/device-images.sh', 'atak/ci/build-apk.sh', 'atak/ci/fetch-source.sh', 'upstream/atak-civ']
 
 
+def stop_group(process):
+    # Each command owns a new session; terminate descendants as well as leader.
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        if sig == signal.SIGTERM:
+            time.sleep(0.1)
+    process.wait(timeout=2)
+
+
 def command(args, limit=1024*1024, env=None):
-    # File-backed bounded output; never print commands, responses or exceptions.
+    # File-backed polling limits; fast writes may briefly overshoot the bound.
+    # Never print commands, responses or exceptions. All commands share one
+    # aggregate deadline, including successful earlier API/registry calls.
+    now = time.monotonic()
+    deadline = min(now+25, DEADLINE if DEADLINE is not None else now+25)
+    if deadline <= now:
+        raise ValueError('aggregate deadline')
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-        with subprocess.Popen(args, stdout=out, stderr=err, env=env) as p:
+        with subprocess.Popen(args, stdout=out, stderr=err, env=env, start_new_session=True) as p:
             try:
-                deadline = time.monotonic()+25
                 while p.poll() is None:
-                    if time.monotonic() > deadline or out.tell() > limit or err.tell() > 65536:
-                        p.kill(); p.wait()
+                    if time.monotonic() >= deadline or out.tell() > limit or err.tell() > 65536:
                         raise ValueError('command bound')
-                    time.sleep(0.05)
-            except subprocess.TimeoutExpired:
-                p.kill(); p.wait()
-                raise ValueError('command deadline') from None
-            if p.returncode or out.tell() > limit or err.tell() > 65536:
-                raise ValueError('command rejected')
-            out.seek(0)
-            return out.read(limit+1)
+                    time.sleep(min(0.05, max(0, deadline-time.monotonic())))
+                if time.monotonic() >= deadline or p.returncode or out.tell() > limit or err.tell() > 65536:
+                    raise ValueError('command rejected')
+                out.seek(0)
+                return out.read(limit+1)
+            finally:
+                stop_group(p)
 
 
 def git(*args):
@@ -182,6 +200,8 @@ def decide(event):
 
 
 def main():
+    global DEADLINE
+    DEADLINE = time.monotonic()+HELPER_SECONDS
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=['record', 'admit'])
     parser.add_argument('--output')
@@ -192,6 +212,8 @@ def main():
     reuse = False
     try:
         reuse = decide(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()))
+        if time.monotonic() >= DEADLINE:
+            reuse = False
     except (KeyError, ValueError, TypeError, AttributeError, OSError, subprocess.SubprocessError, zipfile.BadZipFile):
         pass  # Unknown/ambiguous/error means full test, never a skipped gate.
     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:

@@ -16,6 +16,7 @@ import zipfile
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 import resource_inputs
+import source_families
 NATIVE=HERE.parent/'kernel-native'
 sys.path.insert(0,str(NATIVE))
 spec=importlib.util.spec_from_file_location('sdk_package_native',NATIVE/'build.py')
@@ -38,7 +39,7 @@ def jar_write(path,entries):
             if jar.read(name)!=data:raise ValueError('archive member bytes differ')
 
 def recipe():
-    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java']
+    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch']
     return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe()}
 
 def verify_native(root,providers):
@@ -115,14 +116,20 @@ def main():
     if p.digest(provider_source)!=readonly['before'] or p.digest(HERE/'patches/default-io-readonly.patch')!=readonly['patch_sha256']:raise ValueError('DefaultIOProvider patch preimage differs')
     run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/default-io-readonly.patch'],'patch-default-io-readonly',30)
     if p.digest(provider_source)!=readonly['after']:raise ValueError('DefaultIOProvider patch postimage differs')
+    shader=lock['gles_null_shader_lengths'];shader_source=stage/'GLES20.java'
+    shutil.copyfile(p.regular(roots['kernel_java']/'stage'/shader['source_file']),shader_source)
+    if p.digest(shader_source)!=shader['before'] or p.digest(HERE/'patches/gles-null-shader-lengths.patch')!=shader['patch_sha256']:raise ValueError('GLES20 shader-source patch preimage differs')
+    run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/gles-null-shader-lengths.patch'],'patch-gles-null-shader-lengths',30)
+    if p.digest(shader_source)!=shader['after']:raise ValueError('GLES20 shader-source patch postimage differs')
     java_input=p.load(roots['kernel_java']/'inputs.json');cp=[roots['kernel_java']/'classes']+[Path(x['path']) for x in java_input['classpath']]
     replacement=out/'replacement-classes';replacement.mkdir()
     resources_source=HERE.parent/'compat/src/main/java/android/content/res/Resources.java'
-    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source,provider_source],'compile-real-stock-loader')
+    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source,provider_source,shader_source],'compile-real-stock-loader')
     classes={name:(roots['kernel_java']/'classes'/name).read_bytes() for name in p.inventory(roots['kernel_java']/'classes')}
     replaced=p.inventory(replacement)
-    if set(replaced)!={n for n in classes if re.fullmatch(r'(?:com/atakmap/map/EngineLibrary|android/content/res/Resources|com/atakmap/coremap/io/DefaultIOProvider)(?:\$[^/]+)?\.class',n)}:raise ValueError('only existing reviewed loader/resource class families may change')
-    classes.update({name:(replacement/name).read_bytes() for name in replaced})
+    classes=source_families.merge(classes,{name:(replacement/name).read_bytes() for name in replaced})
+    record['replaced_class_families']={name:replaced[name] for name in replaced}
+    record['gles_null_shader_lengths']={'source_before':shader['before'],'source_after':shader['after'],'scope':shader['scope'],'headed_runtime_qualified':False}
     libraries=native_files(args.native_proof,roots)
     if list(libraries)!=lock['native_order']:raise ValueError('reviewed resource load order differs')
     resource_lock=p.load(HERE/'runtime-resources.lock.json')

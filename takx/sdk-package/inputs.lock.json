@@ -25,5 +25,13 @@
     "before": "c2d2943fa95f61c062b1e240cb9dd5985728f65c38db183222e81ccc01ef0607",
     "after": "8dcefd5d360c69fc7122d257f2152fae6d74e3666d37c99315973f57086c1d42",
     "patch_sha256": "0e2690a9b32a6dcc43cc5c8f40e7f430e3a9157bb5530612795a11844fdc3633"
+  },
+  "gles_null_shader_lengths": {
+    "source_file": "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java",
+    "before": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5",
+    "after": "310aac9829e9baada3b713b7c72ba12e1d6f9d11d21d3552260339fb7b9846ab",
+    "patch_sha256": "4076aef29cbda5010d26da665972147ccc3f80133453fdd55213a9b6e66b57e6",
+    "family": "gov/tak/platform/commons/opengl/GLES20",
+    "scope": "supported JOGL null IntBuffer shader-source lengths; no native or version change"
   }
 }

@@ -1,6 +1,6 @@
 # Public-source Kernel component package
 
-The local qualification passed four fresh JVM runs, including package relocation, with zero JNI warnings and all nine native providers loaded from stock extraction. It also passed the missing-resource negative control. The two earlier failed attempts remain preserved separately.
+The prior recipe's local qualification passed four fresh JVM runs, including package relocation, with zero JNI warnings and all nine native providers loaded from stock extraction. It also passed the missing-resource negative control. The two earlier failed attempts remain preserved separately.
 
 This opt-in Linux amd64 profile assembles the genuine Kernel **8.30.5** Java/JNI component and qualifies its real `EngineLibrary` resource loader. It uses the fresh native component producer, exact Java class inventory and verified dependency producers from `kernel-native`. It builds no native library and substitutes no TAKX release version.
 
@@ -109,3 +109,22 @@ JNI, database, and logger checks. This was qualification-only reuse after a test
 oracle correction, with fresh runtime data and native extraction; it did not
 rebuild the artifact or native libraries. The earlier resource-complete SDK
 artifact and failed-oracle evidence remain unchanged.
+
+### Shader-source lengths (source change pending qualification)
+
+The assembler now stages the pinned official GLES20.java and rebuilds its real
+class family with the supported JOGL null IntBuffer shader-source length overload.
+The original class family is replaced inside the single Kernel JAR; no duplicate
+FQCN prefix or replacement GL API is supplied. OpenGL uses NUL-terminated source
+strings, with no Java UTF-16 count passed as a native byte count. Source hashes and
+the exact one-call patch are locked; all upstream notices and Kernel identity stay
+intact. The existing loader, resource and read-only provider family replacements
+remain in place. GLES20Constants is a separate family and is not replaced.
+
+An isolated real JOGL comparison with the unchanged provider demonstrated six
+critical-scope warnings using heap lengths and zero with direct or null lengths,
+with real shader compile/link and pixel readback. Its heap baseline failed strict
+qualification. That evidence identifies the repair target; this new SDK recipe and
+its production GLES20 family have not yet been compiled or qualified. Existing
+package qualification above refers to the prior recipe, not this source revision.
+Full headed TAK renderer and SDK/client acceptance remain pending.

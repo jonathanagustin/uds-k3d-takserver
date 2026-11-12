@@ -28,19 +28,35 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 image="${DRIVER_IMAGE:-ghcr.io/jonathanagustin/uds-takserver/atak-driver:dev}"
 device="${ATAK_ADB:-atak-device-adb.atak.svc.cluster.local:5555}"
-pod=atak-demo-adb
+# Optional scenario identity does not alter default recording callers. With an
+# owner token, start refuses an existing name and stop requires verified cleanup.
+pod="${ATAK_ADB_POD:-atak-demo-adb}"
+owner="${ATAK_ADB_OWNER:-}"
+[[ "${pod}" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ && "${#pod}" -le 63 ]] || exit 2
+if [[ -n "${owner}" ]]; then
+  [[ "${owner}" =~ ^[0-9a-f]{16}$ && "${pod}" == "atak-scenario-${owner}" ]] || exit 2
+fi
 k() { uds zarf tools kubectl "$@"; }
 a() { k exec -n atak "${pod}" -- adb -s "${device}" "$@"; }
 
 case "${1:?usage: demo/atak-adb.sh start|zoom N|shot NAME|stop}" in
   start)
-    # A recording may be running through this pod: keep it when connected.
-    if a get-state 2>/dev/null | grep -q device; then
-      echo "adb already connected to ${device}"
-      exit 0
+    if [[ -n "${owner}" ]]; then
+      # Scenario helpers never reuse/delete a pod. create also closes the
+      # get/create race: an existing name makes admission fail, not overwrite.
+      existing="$(k get pod "${pod}" -n atak --ignore-not-found -o name)"
+      [[ -z "${existing}" ]] || { echo "owned helper name already exists" >&2; exit 2; }
+      verb=create
+    else
+      # Preserve default recording callers and their connected pod.
+      if a get-state 2>/dev/null | grep -q device; then
+        echo "adb already connected to ${device}"
+        exit 0
+      fi
+      k delete pod -n atak "${pod}" --ignore-not-found --wait >/dev/null
+      verb=apply
     fi
-    k delete pod -n atak "${pod}" --ignore-not-found --wait >/dev/null
-    k apply -f - >/dev/null <<YAML
+    k "${verb}" -f - >/dev/null <<YAML
 apiVersion: v1
 kind: Pod
 metadata:
@@ -49,6 +65,7 @@ metadata:
   labels:
     app.kubernetes.io/name: atak-driver
     zarf.dev/agent: ignore
+    tak.jonathanagustin.github.io/scenario-owner: "${owner:-none}"
 spec:
   restartPolicy: Never
   securityContext:
@@ -168,6 +185,7 @@ sys.exit("no tak_nav_zoom on screen")')"
     fi
     ;;
   stop)
+    [[ -z "${owner}" ]] || { echo "owned scenario helpers require verified cleanup" >&2; exit 2; }
     k delete pod -n atak "${pod}" --ignore-not-found --wait=false >/dev/null
     ;;
   *)

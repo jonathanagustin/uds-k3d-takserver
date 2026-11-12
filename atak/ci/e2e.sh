@@ -238,5 +238,6 @@ if [[ "${ATAK_INTEROP_SCENARIO:-false}" == "true" ]]; then
   echo "== synthetic Android import, Broadcast and reverse update"
   # Reuse this already-qualified device/cluster. No new APK, image, recording or
   # parallel job. Includes setup and cleanup; TERM+5s grace is at most 8 minutes.
-  timeout --signal=TERM --kill-after=5s 475s ./atak/ci/interoperability.sh "${OUT}/scenario"
+  DOMAIN="${DOMAIN}" DEVICE_GROUP="${DEVICE_GROUP}" DRIVER_IMAGE="${DRIVER_IMAGE}" \
+    timeout --signal=TERM --kill-after=5s 475s ./atak/ci/interoperability.sh "${OUT}/scenario"
 fi

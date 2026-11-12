@@ -35,7 +35,7 @@ class ProducerQueues(unittest.TestCase):
                         answer = not pattern.startswith('!')
                 return answer
             self.assertFalse(included('atak/scenarios/README.md'))
-            for path in [*runtime, 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
+            for path in [*runtime, 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/cleanup-scenario.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
                 with self.subTest(event=event, path=path): self.assertTrue(included(path))
         self.assertIn('workflow_dispatch', events)
         step = next(step for step in workflow['jobs']['e2e']['steps'] if step.get('name') == 'ATAK device end to end')

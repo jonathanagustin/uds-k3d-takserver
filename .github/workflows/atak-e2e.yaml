@@ -26,6 +26,7 @@ on:
       - "takx/mission-package/fixtures/manifest.xml"
       - "takx/mission-package/fixtures/point.cot"
       - "takx/mission-package/fixtures/README.txt"
+      - "demo/atak-adb.sh"
       - ".github/workflows/atak-e2e.yaml"
   # Publishes the device images under the ATAK release tag after a merge.
   push:
@@ -42,6 +43,7 @@ on:
       - "takx/mission-package/fixtures/manifest.xml"
       - "takx/mission-package/fixtures/point.cot"
       - "takx/mission-package/fixtures/README.txt"
+      - "demo/atak-adb.sh"
       - ".github/workflows/atak-e2e.yaml"
 
 permissions:

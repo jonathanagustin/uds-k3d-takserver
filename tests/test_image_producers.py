@@ -24,7 +24,7 @@ class ProducerQueues(unittest.TestCase):
         workflow = yaml.safe_load((ROOT / '.github/workflows/atak-e2e.yaml').read_text())
         events = workflow.get('on', workflow.get(True))
         runtime = ['atak/scenarios/android-interoperability.py', 'atak/scenarios/observe-peer.py', 'atak/scenarios/android-ui.py', 'takx/mission-package/build_fixture.py', 'takx/mission-package/fixtures.lock.json', 'takx/mission-package/fixtures/manifest.xml', 'takx/mission-package/fixtures/point.cot', 'takx/mission-package/fixtures/README.txt']
-        expected = ['atak/**', '!atak/scenarios/**', *runtime, '.github/workflows/atak-e2e.yaml']
+        expected = ['atak/**', '!atak/scenarios/**', *runtime, 'demo/atak-adb.sh', '.github/workflows/atak-e2e.yaml']
         for event in ('pull_request', 'push'):
             patterns = events[event]['paths']
             self.assertEqual(patterns, expected)
@@ -35,7 +35,7 @@ class ProducerQueues(unittest.TestCase):
                         answer = not pattern.startswith('!')
                 return answer
             self.assertFalse(included('atak/scenarios/README.md'))
-            for path in [*runtime, 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/cleanup-scenario.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
+            for path in [*runtime, 'demo/atak-adb.sh', 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/cleanup-scenario.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
                 with self.subTest(event=event, path=path): self.assertTrue(included(path))
         self.assertIn('workflow_dispatch', events)
         step = next(step for step in workflow['jobs']['e2e']['steps'] if step.get('name') == 'ATAK device end to end')

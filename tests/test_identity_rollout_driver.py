@@ -60,6 +60,29 @@ def policy_fixture():
     return package, policies, net, [driver.sha(net[0]['spec'])]
 
 
+def pepr_fixture(phase='strict'):
+    deployments, replicasets, pods = {}, [], []
+    for name in driver.PEPR:
+        template = {'metadata': {'labels': {'app': name}},
+                    'spec': {'serviceAccountName': name, 'containers': [
+                        {'name': 'server', 'image': 'example/pepr@sha256:' + '1' * 64,
+                         'env': [{'name': 'TAK_WORKLOAD_IDENTITY_PHASE', 'value': phase}]}]}}
+        deployments[name] = {'metadata': {'name': name, 'uid': name + '-deployment', 'generation': 2,
+            'annotations': {'meta.helm.sh/release-name': 'takserver-oidc', 'meta.helm.sh/release-namespace': 'pepr-system'},
+            'labels': {'app.kubernetes.io/managed-by': 'Helm'}},
+            'spec': {'replicas': 1, 'selector': {'matchLabels': {'app': name}}, 'template': template},
+            'status': {'observedGeneration': 2, 'replicas': 1, 'updatedReplicas': 1,
+                       'readyReplicas': 1, 'availableReplicas': 1}}
+        replicasets.append({'metadata': {'name': name + '-rs', 'uid': name + '-rs',
+            'ownerReferences': [{'controller': True, 'uid': name + '-deployment'}]},
+            'spec': {'replicas': 1, 'template': copy.deepcopy(template)}})
+        pods.append({'metadata': {'name': name + '-pod', 'uid': name + '-pod', 'labels': {'app': name},
+            'ownerReferences': [{'controller': True, 'uid': name + '-rs'}]},
+            'spec': copy.deepcopy(template['spec']),
+            'status': {'phase': 'Running', 'conditions': [{'type': 'Ready', 'status': 'True'}]}})
+    return deployments, replicasets, pods
+
+
 class IdentityFixtures(unittest.TestCase):
     @unittest.skipUnless(shutil.which('helm'), 'Helm required for actual source RBAC render')
     def test_actual_chart_rbac_contract_rejects_permission_expansion(self):
@@ -162,6 +185,52 @@ class IdentityFixtures(unittest.TestCase):
                                   'selector': {'matchLabels': {'app': 'unrelated', 'extra-label': 'anything'}},
                                   'rules': [{}]}})
         self.assertEqual(driver.validate_policies(package, policies, network, baseline), expected)
+
+    def test_readonly_pepr_observer_checks_original_uid_template_and_phase(self):
+        cases = ('valid', 'replacement', 'foreign-owner', 'template-drift', 'deployment-phase',
+                 'replicaset-phase', 'inactive-replicaset-pod', 'pod-phase')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                instance = driver.Driver(Path(directory) / 'journal.json')
+                deployments, replicasets, pods = pepr_fixture()
+                instance.state.update(peprUIDs={name: d['metadata']['uid'] for name, d in deployments.items()},
+                    peprTemplateFingerprints={name: driver.template_fingerprint(d, True) for name, d in deployments.items()})
+                first = driver.PEPR[0]
+                if case == 'replacement':
+                    deployments[first]['metadata']['uid'] = 'replacement-deployment'
+                    replicasets[0]['metadata']['ownerReferences'][0]['uid'] = 'replacement-deployment'
+                elif case == 'foreign-owner':
+                    deployments[first]['metadata']['annotations']['meta.helm.sh/release-name'] = 'foreign'
+                elif case == 'template-drift':
+                    deployments[first]['spec']['template']['spec']['containers'][0]['image'] = 'foreign/image'
+                    replicasets[0]['spec']['template'] = copy.deepcopy(deployments[first]['spec']['template'])
+                    pods[0]['spec'] = copy.deepcopy(deployments[first]['spec']['template']['spec'])
+                elif case == 'deployment-phase':
+                    deployments[first]['spec']['template']['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                elif case == 'replicaset-phase':
+                    replicasets[0]['spec']['template']['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                elif case == 'inactive-replicaset-pod':
+                    inactive = copy.deepcopy(replicasets[0])
+                    inactive['metadata']['uid'] = 'inactive-pepr-rs'
+                    inactive['spec']['replicas'] = 0
+                    replicasets.append(inactive)
+                    pods[0]['metadata']['ownerReferences'][0]['uid'] = 'inactive-pepr-rs'
+                elif case == 'pod-phase':
+                    pods[0]['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                def get(kind, name=None, namespace=None):
+                    self.assertEqual(namespace, 'pepr-system')
+                    return deployments[name] if kind == 'deployment' else {
+                        'items': replicasets if kind == 'replicasets' else pods}
+                instance.get = get
+                instance.patch = MagicMock(side_effect=AssertionError('observer must not mutate'))
+                if case == 'valid':
+                    result = instance.observe_pepr('strict')
+                    self.assertEqual({row[0] for row in result}, set(driver.PEPR))
+                    self.assertEqual(instance._last_pepr_observation['pods'], pods)
+                else:
+                    with self.assertRaises(ValueError):
+                        instance.observe_pepr('strict')
+                instance.patch.assert_not_called()
 
     def test_requested_policy_observation_refuses_concurrent_uid_or_rule_drift(self):
         with tempfile.TemporaryDirectory() as directory:

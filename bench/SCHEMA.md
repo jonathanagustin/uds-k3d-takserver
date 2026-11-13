@@ -230,6 +230,25 @@ incarnations, clock/overhead checks and repeated measurements remain empirical
 gates for issue #48. Missing metadata never changes application readiness or
 authorizes reuse. No startup pilot or tuning is dispatched by this option.
 
+## Separate startup-only records
+
+`bench.startup_trials` writes version-1 `startup-begin` and `startup-finish`
+records separately from load-study records. A finish embeds its hash-bound begin,
+typed cluster/node identities, kubelet image-inventory hashes, configuration
+hashes, application image/container identities, exact phase evidence and numeric
+JVM observations. `pod_creation_to_ready_span_s` is the span between the earliest
+new application Pod creation and latest Ready transition. `warm_s` equals that
+span only for an accepted warm finish; it is null for cold finishes.
+
+The pair validator rechecks source/collector bindings, sample clocks/counters,
+new incarnations, stable configuration/platform/images, and the complete
+cold-finish to warm-begin handoff. Its result contains the two record hashes
+and the scope of one independent application pair, with no load, class-loading
+duration, class data sharing, or probe-tuning claim. Caller `source` and other
+input hashes are supplied bindings, not independent run or checkout attestations.
+Kubelet image inventories may be truncated and do not establish page-cache state.
+See the [startup-only procedure](../docs/benchmarks.md#collect-one-startup-pair-without-load).
+
 ## Opt-in sustained synthetic baseline
 
 The manual Benchmark input `study=synthetic-baseline` selects baseline only,

@@ -61,6 +61,49 @@ test('each channel publishes its own content, search filter, source links, and n
 });
 
 
+test('published root and main landing prose explains abbreviations at first use', () => {
+  const definitions = [
+    ['TAK', 'Team Awareness Kit (TAK)'],
+    ['UDS', 'Unified Defense Stack (UDS)'],
+    ['ATAK-CIV', 'Android Tactical Assault Kit for Civilian Use (ATAK-CIV)'],
+    ['API', 'application programming interface (API)'],
+    ['UI', 'user interface (UI)'],
+  ];
+  for (const prefix of ['', 'main']) {
+    // Inspect production HTML, not only the authored source or a replacement helper.
+    // Brand/navigation/hero labels intentionally retain their approved short names.
+    const html = readFileSync(path.join(site, 'dist', prefix, 'index.html'), 'utf8');
+    const start = html.indexOf('Team Awareness Kit (TAK) Server on the Unified Defense Stack (UDS) brings');
+    assert.ok(start >= 0, `${prefix || 'root'} must publish the revised project introduction`);
+    const prose = html.slice(start).replace(/<[^>]*>/g, ' ');
+    for (const [abbreviation, definition] of definitions) {
+      const defined = prose.indexOf(definition);
+      assert.ok(defined >= 0, `${prefix || 'root'} is missing ${definition}`);
+      const first = new RegExp(`\\b${abbreviation}\\b`).exec(prose);
+      assert.equal(first?.index, defined + definition.lastIndexOf(abbreviation),
+        `${prefix || 'root'} uses ${abbreviation} before its explanation`);
+    }
+  }
+});
+
+test('root and main present the recorded preview as an accessible inline player', () => {
+  for (const prefix of ['', 'main']) {
+    const html = readFileSync(path.join(site, 'dist', prefix, 'index.html'), 'utf8');
+    const player = /<video\b[^>]*>[\s\S]*?<\/video>/.exec(html)?.[0];
+    assert.ok(player, `${prefix || 'root'} has no inline preview player`);
+    assert.match(player, /\bcontrols(?:[ =/>])/);
+    assert.match(player, /\bplaysinline(?:[ =/>])/);
+    assert.match(player, /preload="none"/);
+    assert.match(player, /poster="https:\/\/github\.com\/jonathanagustin\/uds-takserver\/releases\/download\/v0\.12\.0\/poster\.jpg"/);
+    assert.match(player, /aria-label="Recorded CloudTAK and TAK Server preview"/);
+    assert.match(player, /aria-describedby="ui-preview-caption"/);
+    assert.match(player, /uds-takserver-ui-preview\.mp4" type="video\/mp4"/);
+    assert.doesNotMatch(player, /\bautoplay(?:[ =/>])/);
+    assert.match(html, /id="ui-preview-caption"/);
+    assert.doesNotMatch(html, /href="[^"]*edit-manifest\.json"/);
+  }
+});
+
 test('the current root landing does not replace released guides or archived homes', () => {
   const temporary = mkdtempSync(path.join(tmpdir(), 'tak-landing-source-'));
   try {

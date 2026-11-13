@@ -446,6 +446,65 @@ FAILURE_PATTERNS = {
 }
 
 
+IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', 'strict', 'rollback', 'shared', 'fresh-strict'))
+IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
+    'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
+    'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
+    'retained-object-conditionally-removed')) | frozenset(prefix + alias for prefix in
+    ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
+     'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
+
+
+def identity_progress(directory):
+    """Selected methods' failed or partial progress, never raw journal fields."""
+    result = {}
+    for method in identity_methods():
+        path = directory / ('identity' if method == 'manual' else 'package-identity') / 'journal.json'
+        item = {'status': 'unavailable', 'stages': []}
+        try:
+            journal = bounded_json(path)
+            guard = journal.get('guard') or {}
+            require(all(guard.get(field) == os.environ.get(env) for field, env in
+                    [('sourceSHA', 'GITHUB_SHA'), ('runID', 'GITHUB_RUN_ID'), ('runAttempt', 'GITHUB_RUN_ATTEMPT')]),
+                    'progress journal is not source/run bound')
+            stages = journal.get('stages', [])
+            require(isinstance(stages, list) and len(stages) <= 4096, 'progress stage bound')
+            for entry in stages:
+                if entry.get('stage') in IDENTITY_PROGRESS_STAGES:
+                    stage = {'stage': entry['stage']}
+                    if entry.get('phase') in IDENTITY_ALIASES:
+                        stage['phase'] = entry['phase']
+                    require(len(item['stages']) < 200, 'public progress stage bound')
+                    item['stages'].append(stage)
+            item.update(status='observed', journalSHA256=sha(path))
+        except (ValueError, OSError, KeyError, TypeError, AttributeError):
+            item = {'status': 'unavailable', 'stages': []}
+        result[method] = item
+    return result
+
+
+def identity_failure_callsites(directory):
+    """Only reviewed path/line/source hashes; never exception text or values."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('identity_failure_evidence', ROOT / 'tests/workload-identities/failure_evidence.py')
+    capture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(capture)
+    result = []
+    for method in identity_methods():
+        try:
+            value = capture.public(directory / ('identity' if method == 'manual' else 'package-identity'))
+            kind = value['exceptionType']
+            category = ('guard-rejection' if kind in ('ValueError', 'EvidenceError') else
+                        'schema' if kind in ('KeyError', 'TypeError', 'AttributeError', 'JSONDecodeError') else
+                        'deadline' if kind in ('TimeoutError', 'TimeoutExpired') else
+                        'command-failed' if kind == 'CalledProcessError' else
+                        'filesystem' if kind in ('OSError', 'FileNotFoundError', 'PermissionError') else 'unclassified-exception')
+            result.append({'method': method, 'category': category, 'callsite': value})
+        except (ValueError, OSError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
+            pass
+    return result
+
+
 def failure_categories(directory, progress):
     """Read one bounded regular private file; publish only fixed IDs/counts."""
     source, run, attempt = (os.environ.get(key, '') for key in
@@ -457,6 +516,13 @@ def failure_categories(directory, progress):
     result = {'schema': 1, 'sourceSHA': source, 'runID': run, 'runAttempt': attempt,
               'failedStep': failed[-1] if failed else 'unavailable',
               'scope': 'retained-tail-signatures-only', 'status': 'unavailable', 'categories': []}
+    if 'identities' in SCENARIOS.get(os.environ.get('SCENARIO'), []):
+        calls = identity_failure_callsites(directory)
+        result['identityFailures'] = calls
+        if calls:
+            result['scope'] = 'reviewed-callsite-only'
+            result['status'] = 'captured'
+            result['categories'] = [{'patternID': 'identity-' + item['category'], 'count': 1} for item in calls]
     path = directory / 'owner/PRIVATE-command-failure.txt'
     try:
         regular_file(path)
@@ -503,15 +569,10 @@ def publish(directory, output, arch):
                 progress['ownerSteps'].append({'name': entry['name'], 'status': entry['status']})
     except (ValueError, OSError, KeyError, TypeError, AttributeError):
         pass
-    try:
-        journal = bounded_json(directory / 'identity/journal.json')
-        allowed = {'preflight', 'probe-compiled', 'traffic-baseline', 'traffic-dual-before-rollout',
-                   'traffic-transition', 'traffic-strict', 'traffic-rollback', 'traffic-shared',
-                   'reversed-and-verified', 'stopped'}
-        progress['identityStages'] = [entry['stage'] for entry in journal.get('stages', [])[:200]
-                                      if entry.get('stage') in allowed]
-    except (ValueError, OSError, KeyError, TypeError, AttributeError):
-        pass
+    if 'identities' in scenarios:
+        progress['identityMethods'] = identity_progress(directory)
+        progress['identityStages'] = [entry['stage'] for method in progress['identityMethods'].values()
+                                      for entry in method['stages']]
     if value.get('accepted') and 'identitySummary' in value:
         summary = value.pop('identitySummary')
         (public / 'identity-phases.json').write_text(json.dumps(summary, indent=2) + '\n')

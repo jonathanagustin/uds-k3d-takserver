@@ -413,6 +413,8 @@ class Driver:
         with os.fdopen(descriptor, 'wb') as stream:
             stream.write(data)
         self.state['preflightDiagnostic'] = {'file': path.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
+        print(json.dumps({'stage': 'preflight-package-mismatch', **{key: diagnostic[key] for key in
+            ('expectedSHA256', 'actualSHA256', 'differingPaths', 'pathsTruncated')}}, sort_keys=True))
 
     def policies(self):
         package = self.get('package', NS)

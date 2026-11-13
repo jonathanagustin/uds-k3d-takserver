@@ -21,7 +21,7 @@ FORCE_FILES = {WORKFLOW, CLASSIFIER, 'tests/test_runtime_paths.sh',
     'tests/test_workload_identities.py', 'tests/test_filesystem_backup_owner.py', 'tests/test_velero_handoff.py',
     'tests/test_ephemeral_cluster.py', 'tests/test_velero_transfer.py', 'tests/test_velero_trial.py',
     'tests/test_staged_migrations.py', 'tests/test_upgrade_agent_watch.py', 'tests/test_identity_rollout_driver.py',
-    'tests/test_package_identity_driver.py', 'tests/test_identity_phase_evidence.py', 'tests/test_identity_public_evidence.py', 'tests/test_identity_retained_state.py', 'tests/test_identity_render_inputs.py'}
+    'tests/test_package_identity_driver.py', 'tests/test_identity_phase_evidence.py', 'tests/test_identity_public_evidence.py', 'tests/test_identity_retained_state.py', 'tests/test_identity_render_inputs.py', 'tests/test_identity_failure_evidence.py'}
 MAX_BYTES = 2 * 1024 * 1024
 
 

@@ -235,3 +235,22 @@ The existing `test:cloudtak` task runs at baseline, strict and fresh strict, inc
 its actual basemap positive/negative checks. Component identities are checked on
 both sides and explicit passed stages are required by the publisher. Other phases
 retain TLS/API/flow checks without repeatedly invoking mutation-heavy `test:all`.
+
+### Failed package trial diagnostics
+
+The package wrapper retains the first failure even when initialization stops
+before a trial ID or normal journal exists. Its private
+`PRIVATE-failure-callsite.json` contains only the source/run identity, a fixed
+exception type, and reviewed relative source filenames, line numbers and source
+hashes. It records no exception message, local variables, command arguments,
+command output or Kubernetes objects. Capture and publication both check the
+allowlisted files against the exact reviewed checkout; missing, changed or
+oversized evidence stays unavailable.
+
+Failure publication reads the selected manual and package journal paths
+independently. It publishes allowlisted stage names and phase aliases, plus
+validated callsites and fixed failure categories when available. These are
+partial progress diagnostics, never an acceptance result. A genuine Package
+preflight mismatch also prints only its existing safe field paths and whole-spec
+hashes after its exclusive private write succeeds; unknown map keys remain
+opaque hashes and no spec values or rendering inputs are printed.

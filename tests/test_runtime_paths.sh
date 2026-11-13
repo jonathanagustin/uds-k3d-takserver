@@ -209,13 +209,17 @@ import sys
 import tempfile
 
 source = Path(sys.argv[1])
+tracked = subprocess.check_output(['git', '-C', str(source), 'ls-files', '-z', '--', 'tests/']).decode().split('\0')
 for helper, suite in [('drive.py', 'test_identity_rollout_driver'),
                       ('retained_state.py', 'test_identity_retained_state'),
                       ('render_inputs.py', 'test_identity_render_inputs')]:
     for operation in ('delete', 'rename'):
         with tempfile.TemporaryDirectory(prefix='identity-import-') as directory:
             root = Path(directory)
-            shutil.copytree(source / 'tests', root / 'tests', ignore=shutil.ignore_patterns('__pycache__'))
+            for relative in filter(None, tracked):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / relative, target)
             path = root / 'tests/workload-identities' / helper
             if operation == 'delete':
                 path.unlink()

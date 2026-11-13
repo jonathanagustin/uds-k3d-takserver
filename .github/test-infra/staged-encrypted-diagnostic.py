@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Opt-in age encryption of one private staged failure; never print its bytes."""
 import hashlib
+import fcntl
 import io
 import json
 import os
@@ -32,6 +33,8 @@ RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 INPUT_LIMIT = 65536
 CIPHER_LIMIT = 73728
 OUTPUT_NAME = 'staged-encrypted-diagnostic'
+PACKAGE_NAME = 'PRIVATE-package-command-failure.json'
+PACKAGE_JOURNAL_LIMIT = 16 * 1024 * 1024  # Diagnostic authentication only, never acceptance.
 
 
 def require(value):
@@ -187,6 +190,134 @@ def owner_identity(path):
             and cluster['runAttempt'] == os.environ['GITHUB_RUN_ATTEMPT'])
 
 
+def package_descriptor(path, limit):
+    """Walk private parents by descriptor; no intermediate symlink race."""
+    require(path.is_absolute() and '..' not in path.parts)
+    directory = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        require(stat.S_IMODE(os.fstat(directory).st_mode) == 0o700)
+        descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        try:
+            info = os.fstat(descriptor)
+            require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= limit)
+        except Exception:
+            os.close(descriptor)
+            raise
+        return descriptor
+    finally:
+        os.close(directory)
+
+
+def private_json(path, limit):
+    descriptor = package_descriptor(path, limit)
+    try:
+        before = os.fstat(descriptor)
+        chunks, size, hasher = [], 0, hashlib.sha256()
+        while chunk := os.read(descriptor, min(65536, limit + 1 - size)):
+            chunks.append(chunk)
+            hasher.update(chunk)
+            size += len(chunk)
+            require(size <= limit)
+        raw = b''.join(chunks)
+        after = os.fstat(descriptor)
+        require(before.st_size == after.st_size == len(raw) and before.st_mtime_ns == after.st_mtime_ns
+                and before.st_ctime_ns == after.st_ctime_ns)
+    finally:
+        os.close(descriptor)
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result)
+            result[key] = value
+        return result
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=lambda _value: require(False)), raw, hasher.hexdigest()
+
+
+def reviewed_source_hash(relative):
+    path = ROOT / relative
+    descriptor = regular_descriptor(path, 256 * 1024)
+    try:
+        raw = os.read(descriptor, 256 * 1024 + 1)
+        require(len(raw) <= 256 * 1024)
+    finally:
+        os.close(descriptor)
+    reviewed = bounded_process(['env', 'GIT_NO_LAZY_FETCH=1', 'GIT_TERMINAL_PROMPT=0',
+                               'git', '-C', str(ROOT), 'show', 'HEAD:' + relative], limit=256 * 1024, seconds=5)
+    require(reviewed == raw)
+    return digest(raw)
+
+
+def package_input(temporary):
+    folder = temporary / 'staged-migrations/package-identity'
+    journal, _journal_raw, journal_hash = private_json(folder / 'journal.json', PACKAGE_JOURNAL_LIMIT)
+    progress, _progress_raw, _progress_hash = private_json(folder / 'journal-progress.json', 256 * 1024)
+    expected = {'sourceSHA': os.environ['GITHUB_SHA'], 'runID': os.environ['GITHUB_RUN_ID'],
+                'runAttempt': os.environ['GITHUB_RUN_ATTEMPT']}
+    require(type(journal.get('schema')) is int and journal['schema'] == 1 and journal.get('accepted') is False
+            and journal.get('method') == 'package')
+    require(type(progress.get('schema')) is int and progress['schema'] == 1
+            and progress.get('guard') == expected and progress.get('journalSHA256') == journal_hash)
+    require(all(journal.get('guard', {}).get(key) == value for key, value in expected.items()))
+    reference = journal.get('packageCommandFailure', {})
+    require(set(reference) == {'file', 'sha256', 'bytes'} and reference['file'] == PACKAGE_NAME
+            and type(reference['bytes']) is int and 0 < reference['bytes'] <= INPUT_LIMIT
+            and isinstance(reference['sha256'], str) and re.fullmatch('[a-f0-9]{64}', reference['sha256']))
+    payload, raw, private_hash = private_json(folder / PACKAGE_NAME, INPUT_LIMIT)
+    require(len(raw) == reference['bytes'] and private_hash == reference['sha256'])
+    require(set(payload) == {'schema', 'binding', 'role', 'phase', 'exitStatus', 'timedOut', 'stdout', 'stderr',
+            'stdoutTruncated', 'stderrTruncated', 'packageDriverSHA256', 'driverSHA256'})
+    require(type(payload['schema']) is int and payload['schema'] == 1 and payload['binding'] == expected
+            and payload['role'] in ('deploy', 'remove') and payload['phase'] in ('shared', 'transition', 'strict', 'rollback')
+            and (payload['role'] != 'remove' or payload['phase'] == 'shared')
+            and type(payload['exitStatus']) is int and -255 <= payload['exitStatus'] <= 255
+            and type(payload['timedOut']) is bool and (payload['exitStatus'] != 0 or payload['timedOut']))
+    for stream in ('stdout', 'stderr'):
+        require(isinstance(payload[stream], str) and len(payload[stream].encode('utf-8')) <= 24 * 1024
+                and type(payload[stream + 'Truncated']) is bool)
+    failed = next((entry for entry in journal.get('stages', []) if entry.get('stage') == 'package-command-failed'), None)
+    require(failed is not None and all(type(failed.get(key)) is type(payload[key]) and failed[key] == payload[key]
+                                     for key in ('role', 'phase', 'exitStatus', 'timedOut')))
+    for key, relative in [('packageDriverSHA256', 'tests/workload-identities/package_roundtrip.py'),
+                          ('driverSHA256', 'tests/workload-identities/drive.py')]:
+        require(payload[key] == journal.get(key) == reviewed_source_hash(relative))
+    # Encrypt the validated snapshot, not a pathname that can change after checks.
+    descriptor = os.memfd_create('staged-package-failure', os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+    try:
+        require(os.write(descriptor, raw) == len(raw))
+        # Linux UAPI values also support Python builds that omit their names.
+        fcntl.fcntl(descriptor, getattr(fcntl, 'F_ADD_SEALS', 1033), 0x000F)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def select_private(temporary):
+    scenario = os.environ.get('SCENARIO', '')
+    candidates = []
+    try:
+        if scenario in ('', 'velero', 'all'):
+            owner_identity(temporary / 'staged-migrations/owner/journal.json')
+            candidates.append(regular_descriptor(temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT))
+    except Exception:
+        pass  # An ineligible channel never authorizes its private bytes.
+    try:
+        if scenario in ('identities', 'all') and os.environ.get('IDENTITY_METHOD') in ('package', 'combined'):
+            candidates.append(package_input(temporary))
+    except Exception:
+        pass
+    if len(candidates) != 1:
+        for descriptor in candidates:
+            os.close(descriptor)
+        require(False)
+    return candidates[0]
+
+
 def main():
     recipient = os.environ.get('STAGED_AGE_RECIPIENT', '')
     if not recipient or os.environ.get('STAGED_TRIAL_OUTCOME') != 'failure':
@@ -207,8 +338,7 @@ def main():
         destination = temporary / OUTPUT_NAME
         require(not destination.exists() and not destination.is_symlink())
         stage = 'private-input'
-        owner_identity(temporary / 'staged-migrations/owner/journal.json')
-        descriptor = regular_descriptor(temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT)
+        descriptor = select_private(temporary)
         stage = 'verified-tool'
         with tempfile.TemporaryDirectory(prefix='staged-age-tool-', dir=temporary) as tools:
             binary, pin = acquire_age(Path(tools))

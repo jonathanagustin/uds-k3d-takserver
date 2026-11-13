@@ -297,7 +297,7 @@ def validate_phase(snapshot, guards, expected_binding=None):
             [_restore_workload(r) for r in snapshot['replicasets']], snapshot['pods'], snapshot['account'], snapshot['baselineUIDs'])
         pepr_result = _validate_pepr(snapshot, guards)
         verdict.update(accepted=True, reason='passed', binding=bind, inputSHA256=digest(snapshot), guardSHA256=guard_hash,
-                       policyFingerprint=fingerprint, workloadCount=len(identities), peprWorkloadCount=len(pepr_result), inventoryCounts=snapshot['counts'])
+                       captureSHA256=snapshot['captureSHA256'], policyFingerprint=fingerprint, workloadCount=len(identities), peprWorkloadCount=len(pepr_result), inventoryCounts=snapshot['counts'])
     except (EvidenceError, KeyError, TypeError, AttributeError, ValueError, StopIteration, OverflowError):
         pass
     return verdict

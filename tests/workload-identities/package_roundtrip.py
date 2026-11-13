@@ -79,22 +79,37 @@ def bounded_package_run(argv,timeout):
     child=subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
     streams={child.stdout:bytearray(),child.stderr:bytearray()};truncated={key:False for key in streams}
     deadline=time.monotonic()+timeout;timed_out=False
-    with selectors.DefaultSelector() as selector:
-        for stream in streams:selector.register(stream,selectors.EVENT_READ)
-        while selector.get_map():
-            if not timed_out and time.monotonic()>=deadline:
+    selector=selectors.DefaultSelector()
+    try:
+        for stream in streams:
+            os.set_blocking(stream.fileno(),False);selector.register(stream,selectors.EVENT_READ)
+        while selector.get_map() or child.poll() is None:
+            now=time.monotonic()
+            if not timed_out and now>=deadline:
                 timed_out=True
                 try:os.killpg(child.pid,signal.SIGKILL)
                 except ProcessLookupError:pass
-            for key,_ in selector.select(0.1):
-                chunk=os.read(key.fileobj.fileno(),65536)
+            # Escaped descendants can retain pipe descriptors after the owned
+            # process group dies. Never wait indefinitely for their EOF.
+            if timed_out and now>=deadline+0.25:break
+            for key,_ in selector.select(0.01):
+                try:chunk=os.read(key.fileobj.fileno(),65536)
+                except BlockingIOError:continue
                 if not chunk:selector.unregister(key.fileobj);continue
                 buffer=streams[key.fileobj];buffer.extend(chunk)
                 if len(buffer)>16384:del buffer[:-16384];truncated[key.fileobj]=True
-    code=child.wait(timeout=5)
+        code=child.wait(timeout=1)
+    finally:
+        try:os.killpg(child.pid,signal.SIGKILL)
+        except ProcessLookupError:pass
+        # The direct child belongs to this process group and cannot escape a
+        # pre-exec session leader's group. Reap it even after a read failure.
+        child.wait(timeout=1)
+        selector.close()
+        for stream in streams:stream.close()
     result={'exitStatus':code,'timedOut':timed_out}
     for name,stream in [('stdout',child.stdout),('stderr',child.stderr)]:
-        result[name]=streams[stream].decode('utf-8','replace');result[name+'Truncated']=truncated[stream];stream.close()
+        result[name]=streams[stream].decode('utf-8','replace');result[name+'Truncated']=truncated[stream]
     return result
 
 def command_failure_category(result):

@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 import stat
+import time
+import signal
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -40,6 +42,27 @@ class PackageGuards(unittest.TestCase):
         self.assertEqual(result['exitStatus'],7);self.assertTrue(result['stdoutTruncated']);self.assertLessEqual(len(result['stdout']),16384)
         timeout=P.bounded_package_run([sys.executable,'-c','import time;time.sleep(5)'],0.01)
         self.assertTrue(timeout['timedOut']);self.assertNotEqual(timeout['exitStatus'],0)
+
+    def test_package_timeout_bounds_escaped_pipe_holder_and_closed_pipe_child(self):
+        # Own the detached process explicitly: production can bound its reads,
+        # but must not kill unrelated process groups to obtain pipe EOF.
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile=Path(directory)/'pid'
+            script="import os,time; os.setsid(); open("+repr(str(pidfile))+",'w').write(str(os.getpid())); time.sleep(10)"
+            launcher="import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',"+repr(script)+"]); time.sleep(10)"
+            started=time.monotonic()
+            try:
+                result=P.bounded_package_run([sys.executable,'-c',launcher],0.5)
+                self.assertTrue(result['timedOut']);self.assertLess(time.monotonic()-started,2)
+                self.assertTrue(pidfile.exists(),'detached pipe holder did not start')
+            finally:
+                if pidfile.exists():
+                    try:os.kill(int(pidfile.read_text()),signal.SIGKILL)
+                    except ProcessLookupError:pass
+        started=time.monotonic()
+        result=P.bounded_package_run([sys.executable,'-c','import os,time;os.close(1);os.close(2);time.sleep(10)'],0.05)
+        self.assertTrue(result['timedOut']);self.assertNotEqual(result['exitStatus'],0)
+        self.assertLess(time.monotonic()-started,2)
 
     def test_package_command_failure_private_first_only_and_fixed_public_facts(self):
         with tempfile.TemporaryDirectory() as directory:

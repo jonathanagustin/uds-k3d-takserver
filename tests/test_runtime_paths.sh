@@ -60,6 +60,19 @@ check_decide() {
 
 # Docs, metadata, device, benchmark, demo, and unit tests do not deploy TAK.
 check_match "docs/ci.md" ignore
+# Exact failure-only probes skip clusters; adjacent and enforcement paths do not.
+check_match ".github/scripts/runner-wedge-probe.sh" ignore
+check_match ".github/scripts/runner-wedge-kernel.py" ignore
+check_match ".github/scripts/runner-wedge-probe-extra.sh" relevant
+check_match ".github/scripts/runner-wedge-kernel-extra.py" relevant
+check_match ".github/scripts/deploy-slim-core.sh" relevant
+check_match ".github/scripts/node-agent-ready.sh" relevant
+check_match ".github/scripts/node-airgap.sh" relevant
+check_decide false $'.github/scripts/runner-wedge-probe.sh\n.github/scripts/runner-wedge-kernel.py'
+check_decide true $'.github/scripts/runner-wedge-probe.sh\ncharts/takserver/values.yaml'
+check_decide true $'.github/scripts/runner-wedge-kernel.py\n.github/scripts/deploy-slim-core.sh'
+check_decide true $'.github/scripts/runner-wedge-kernel.py\n.github/scripts/node-agent-ready.sh'
+check_decide true $'.github/scripts/runner-wedge-probe.sh\n.github/scripts/node-airgap.sh'
 check_match "docs/how-to/upgrade-from-0-6.md" ignore
 check_match "adr/0015-full-core-is-a-scheduled-gate.md" ignore
 check_match "docs-site/package.json" ignore

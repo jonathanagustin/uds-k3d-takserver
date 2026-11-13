@@ -170,6 +170,7 @@ else
 safe get pods -n zarf -l "${selector}" -o wide
 pods="$(k get pods -n zarf -l "${selector}" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
 count=0
+probe_pods=()
 while IFS= read -r pod; do
   [[ -n "${pod}" ]] || continue
   count=$((count + 1))
@@ -177,6 +178,8 @@ while IFS= read -r pod; do
   echo "Agent container metadata: ${pod}/server"
   if k get pod -n zarf "${pod}" -o json >"${scratch}/pod" 2>/dev/null; then
     python3 "${here}/upgrade-agent-metadata.py" pod <"${scratch}/pod" | redact 12 || true
+    cp "${scratch}/pod" "${scratch}/probe-pod-${count}.json"
+    probe_pods+=("${scratch}/probe-pod-${count}.json")
     if (( physical_needed )); then
       physical_logs "${scratch}/pod"
     fi
@@ -188,4 +191,10 @@ while IFS= read -r pod; do
   echo "Previous agent log: ${pod}/server"
   safe logs -n zarf "${pod}" -c server --previous --tail=80
 done <<<"${pods}"
+# Preserve all primary CRI/physical/API logs before spending any probe budget.
+# These are postfailure observations, not measurements of the failed request.
+if (( ${#probe_pods[@]} )); then
+  echo 'Agent API lookup snapshots: postfailure only; no historical cause inferred'
+  python3 "${here}/agent-api-snapshot.py" "${probe_pods[@]}" | redact all || true
+fi
 fi

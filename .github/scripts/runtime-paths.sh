@@ -10,6 +10,7 @@
 # charts, Pepr, network policies, values, bundles, tasks, image builds,
 # dependency pins, and the scripts the cluster jobs run are not listed here.
 # Docs, device, optional TAKX, benchmark, demo, unit tests, and metadata are.
+# The two exact failure-only runner probes have bounded subprocess Unit tests.
 # mise.toml is not on this list: it pins Node, k3d, Helm, the UDS CLI, and
 # pnpm in the same file as the linters, so a pin-only change still starts
 # Test and Package.
@@ -66,6 +67,8 @@ upstream/takx
 .github/workflows/scan.yaml
 .github/scripts/full-core-paths.sh
 .github/scripts/runtime-paths.sh
+.github/scripts/runner-wedge-probe.sh
+.github/scripts/runner-wedge-kernel.py
 .github/scripts/install-reuse-shadow.py
 .github/scripts/ci-apt.py
 .github/scripts/check-docs-browser.py

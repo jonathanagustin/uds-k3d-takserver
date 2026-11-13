@@ -143,8 +143,8 @@ After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and n
 After a failed install, upgrade, or Full Core deploy,
 `.github/scripts/runner-wedge-probe.sh` checks `ip -4 route` before Docker,
 Kubernetes, and Falco diagnostics. Routing has a five-second budget and a
-one-second kill grace; the kernel-log probe has a ten-second budget and the
-same grace. If routing times out, those network diagnostics are skipped.
+one-second kill grace. Kernel evidence commands have separate two- or
+three-second budgets and an eight-MiB complete-stream cap. If routing times out, those network diagnostics are skipped.
 Local log sanitizing and printing still run. A missing command or permission
 is reported as inconclusive and does not suppress diagnostics.
 If the probe does not return within 20 seconds, the step still exits 0 and
@@ -155,7 +155,18 @@ The wrapper signals the probe process group without waiting for stuck tasks.
 That timeout is not the install or upgrade
 failure; the failed deploy step above it is.
 
-This identifies the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-takserver/issues/300).
+On a routing timeout, the probe claims a job-private marker before requesting
+SysRq `w` once. This dumps blocked tasks; it does not reboot or repair the runner.
+The probe records full `dmesg -T` streams before and after the request and `lsmod`.
+It redacts each complete stream before printing it, preserving call traces rather
+than only matching header lines. Timed-out, oversized or unsanitizable streams
+are omitted with an explicit status. Repeated probes do not repeat SysRq.
+A missing permission or collection failure is inconclusive. These two failure-only
+probe scripts are tested in Unit without starting cluster matrices. Changes to
+deployment, readiness or enforcement helpers still run the cluster gates. Failed-run artifact
+uploads remain disabled because they can hang; evidence is printed in the job log.
+
+This collects evidence for the runner failure investigated in [issue #300](https://github.com/jonathanagustin/uds-takserver/issues/300).
 It does not repair the kernel, interrupt a process stuck in uninterruptible
 kernel sleep, or guarantee that the runner can finish reporting to GitHub.
 The deploy keeps its original failure result. Rerun the failed job once on a

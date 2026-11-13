@@ -58,7 +58,7 @@ fi
 pattern='^('
 pattern+='bundle/'
 pattern+='|\.github/workflows/full-core\.yaml'
-pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|runner-wedge-probe|redact-logs|redact-then-filter|checked-pipe|node-agent-ready|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
+pattern+='|\.github/scripts/(full-core-paths|check-full-core|full-core-top|check-monitoring|check-filesystem-backup|check-exemptions|deploy-slim-core|fit-runner|trim-runner|add-runner-swap|dump-memory|runner-wedge-probe|runner-wedge-kernel|redact-logs|redact-then-filter|checked-pipe|node-agent-ready|summarize-coreconfig|stage-sanitized-logs|dev-package|wait-for-tak-images)\.(sh|py)'
 pattern+='|tasks\.yaml'
 pattern+='|tasks/test\.yaml'
 pattern+='|tests/(backup-restore|db-dump-secret|local-path-local|grafana-alerts|falco-events|portal|uptime-probes|loki-client|exemptions)[^/]*'
@@ -72,8 +72,9 @@ pattern+=')'
 # Files under those paths that Full Core does not read. bundle/uds-config.yaml
 # configures the slim test bundle (Test's install and upgrade jobs); Full Core
 # deploys bundle/full with bundle/full/uds-config.yaml. The workload unit tests
-# run in the Unit tests workflow (unit-tests.yaml), not in a cluster.
-skip='^(bundle/uds-config\.yaml|pepr/capabilities/[^/]*\.test\.ts)$'
+# run in the Unit tests workflow (unit-tests.yaml), not in a cluster. The two
+# exact runner-wedge probes run only after failure and have subprocess Unit tests.
+skip='^(bundle/uds-config\.yaml|pepr/capabilities/[^/]*\.test\.ts|\.github/scripts/runner-wedge-(probe\.sh|kernel\.py))$'
 
 hits="$(grep -E "${pattern}" <<< "${changed}" | grep -Ev "${skip}" || true)"
 if [[ -n "${hits}" ]]; then

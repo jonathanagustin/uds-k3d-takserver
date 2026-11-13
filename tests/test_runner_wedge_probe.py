@@ -21,7 +21,7 @@ class RunnerWedgeProbeTests(unittest.TestCase):
             directory = Path(temporary)
             scripts = {
                 "ip": route,
-                "sudo": 'test "$1" = -n || exit 2\nshift\nexec "$@"',
+                "sudo": 'test "$1" = -n || exit 2\nshift\nif [[ "$1" == sh ]]; then exit 0; fi\nexec "$@"',
                 "dmesg": 'printf "%s\\n" "$TEST_KERNEL_LINES"',
                 # Exercise real TERM/KILL behavior quickly while recording the
                 # production budgets supplied by the caller.
@@ -39,12 +39,11 @@ class RunnerWedgeProbeTests(unittest.TestCase):
                 ["bash", str(ROOT / ".github/scripts/runner-wedge-probe.sh")],
                 capture_output=True, text=True, timeout=4,
                 env={**os.environ, "PATH": f"{directory}:{os.environ['PATH']}",
-                     "GITHUB_OUTPUT": str(output), "TEST_TIMEOUT_LOG": str(log),
+                     "GITHUB_OUTPUT": str(output), "RUNNER_TEMP": str(directory), "TEST_TIMEOUT_LOG": str(log),
                      "TEST_KERNEL_LINES": kernel},
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("--kill-after=1s 5s ip -4 route", log.read_text())
-            self.assertIn("--kill-after=1s 10s dmesg -T", log.read_text())
             return result.stdout, output.read_text()
 
     def test_healthy_route_does_not_suppress_diagnostics(self):
@@ -65,7 +64,7 @@ class RunnerWedgeProbeTests(unittest.TestCase):
     def test_hung_task_warning_alone_does_not_suppress_network_diagnostics(self):
         text, output = self.probe("exit 0", "INFO: task kworker blocked for more than 120 seconds")
         self.assertIn("network-stalled=false", output)
-        self.assertIn("Kernel hung-task lines", text)
+        self.assertIn("Kernel hung-task evidence", text)
 
     def test_deadline_exits_zero_when_the_probe_does_not_return(self):
         with tempfile.TemporaryDirectory() as temporary:

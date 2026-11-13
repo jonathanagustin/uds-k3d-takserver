@@ -289,6 +289,8 @@ class StartupWorkflow(unittest.TestCase):
         positions = [joined.index(needle) for needle in needles]
         self.assertEqual(positions, sorted(positions))
         self.assertEqual(joined.count('rollout restart'), 1)
+        self.assertIn("'--for=delete', *names, '--timeout=60s'", joined)
+        self.assertIn("value['snapshot']['identities'][app]['pod_name']", joined)
         self.assertIn('sha = os.environ[\'GITHUB_SHA\']', joined)
         self.assertIn("'source': hashlib.sha256(sha.encode()).hexdigest()", joined)
 

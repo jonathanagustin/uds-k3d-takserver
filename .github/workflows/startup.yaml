@@ -121,13 +121,27 @@ jobs:
           python3 -m bench.startup_trials begin --context k3d-uds --cohort "$COHORT" \
             --bindings "$EVIDENCE/bindings.json" --output "$EVIDENCE/warm-begin.json"
       - name: Restart only the two measured application Deployments
-        timeout-minutes: 9
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           python3 tests/ephemeral-cluster.py verify --context k3d-uds
           kubectl --context k3d-uds -n takserver rollout restart deployment/takserver-api deployment/takserver-messaging
           kubectl --context k3d-uds -n takserver rollout status deployment/takserver-api --timeout=420s
           kubectl --context k3d-uds -n takserver rollout status deployment/takserver-messaging --timeout=60s
+          # A rollout may be Ready while an old Pod is still terminating. The
+          # observer requires unique Pods; wait only for the two bound old names.
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess
+          from bench.startup_trials import APPS, validate_begin
+          value = validate_begin(json.loads((pathlib.Path(os.environ['EVIDENCE'])/'warm-begin.json').read_text()))
+          names = []
+          for app in APPS:
+              name = value['snapshot']['identities'][app]['pod_name']
+              assert re.fullmatch(re.escape(app)+r'-[a-z0-9-]{1,100}', name)
+              names.append('pod/'+name)
+          subprocess.run(['kubectl', '--context', 'k3d-uds', '-n', 'takserver', 'wait',
+                          '--for=delete', *names, '--timeout=60s'], check=True, timeout=65)
+          PY
       - name: Finish and validate the warm pair
         timeout-minutes: 2
         run: |

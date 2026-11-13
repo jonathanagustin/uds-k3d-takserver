@@ -145,7 +145,7 @@ jobs:
       - name: UI reel publisher contracts
         env:
           PYYAML_VERSION: 6.0.3
-        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s demo/ui-reel -p 'test_publish.py' -v
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest discover -s demo/ui-reel -p 'test_publish*.py' -v
 
       - name: Optional native source and cache guards
         env:

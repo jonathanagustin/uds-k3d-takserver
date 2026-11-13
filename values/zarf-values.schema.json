@@ -2,12 +2,18 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "tak", "dns"],
+  "required": [
+    "global",
+    "tak",
+    "dns"
+  ],
   "properties": {
     "global": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["domain"],
+      "required": [
+        "domain"
+      ],
       "properties": {
         "domain": {
           "type": "string",
@@ -18,11 +24,19 @@
     "tak": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["imageTag", "plugins"],
+      "required": [
+        "imageTag",
+        "plugins"
+      ],
       "properties": {
         "workloadIdentityPhase": {
           "type": "string",
-          "enum": ["shared", "transition", "strict", "rollback"]
+          "enum": [
+            "shared",
+            "transition",
+            "strict",
+            "rollback"
+          ]
         },
         "imageTag": {
           "type": "string",
@@ -31,7 +45,10 @@
         "plugins": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["memoryRequest", "memoryLimit"],
+          "required": [
+            "memoryRequest",
+            "memoryLimit"
+          ],
           "properties": {
             "memoryRequest": {
               "type": "string",
@@ -48,7 +65,10 @@
     "dns": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["inCluster", "passthroughHosts"],
+      "required": [
+        "inCluster",
+        "passthroughHosts"
+      ],
       "properties": {
         "inCluster": {
           "type": "string",
@@ -65,9 +85,47 @@
       "properties": {
         "enabled": {
           "oneOf": [
-            { "type": "boolean" },
-            { "type": "string", "enum": ["true", "false"] }
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           ]
+        }
+      }
+    },
+    "chartOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "takserver": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uds-takserver-config": {
+              "type": "object"
+            },
+            "takserver-oidc": {
+              "type": "object"
+            },
+            "takserver": {
+              "type": "object"
+            }
+          }
+        },
+        "cloudtak": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uds-cloudtak": {
+              "type": "object"
+            }
+          }
         }
       }
     }

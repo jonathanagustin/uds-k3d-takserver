@@ -19,7 +19,20 @@ spec=importlib.util.spec_from_file_location('package_trial',ROOT/'tests/workload
 P=importlib.util.module_from_spec(spec);spec.loader.exec_module(P)
 
 class PackageGuards(unittest.TestCase):
-    def bound(self):return {'archive':'/owned/zarf-package-takserver-amd64-dev-upstream.tar.zst','archiveSHA256':'a'*64,'planSHA256':'b'*64,'configSHA256':'c'*64,'variables':{'DOMAIN':'uds.dev','TAK_IMAGE_TAG':'reviewed','FILESYSTEM_BACKUP':'true','POSTGRES_STORAGE_CLASS':'local-path-local','CLOUDTAK_STORAGE_CLASS':'local-path-local'}}
+    def setUp(self):
+        directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
+        self.phase_directory=Path(directory.name)
+        self.charts=P.D.render_inputs.baseline_chart_values({},lambda path:{})
+        self.charts['takserver']['takserver']={'postgresql':{'primary':{'persistence':{'size':'1Gi'},'resources':{'limits':{'memory':'512Mi'}}}}}
+        self.phase_values={}
+        for phase in P.D.PHASES:
+            path=self.phase_directory/(phase+'.yaml')
+            path.write_text(yaml.safe_dump({'chartOverrides':self.charts,'tak':{'workloadIdentityPhase':phase}}));path.chmod(0o600)
+            self.phase_values[phase]={'path':str(path),'sha256':P.digest(path)}
+
+    def bound(self):return {'archive':'/owned/zarf-package-takserver-amd64-dev-upstream.tar.zst','archiveSHA256':'a'*64,'planSHA256':'b'*64,'configSHA256':'c'*64,
+                           'chartBinding':{'chartOverrides':self.charts,'chartOverridesSHA256':P.D.render_inputs.digest(self.charts)},'phaseValues':self.phase_values,
+                           'variables':{'DOMAIN':'uds.dev','TAK_IMAGE_TAG':'reviewed','FILESYSTEM_BACKUP':'true','POSTGRES_STORAGE_CLASS':'local-path-local','CLOUDTAK_STORAGE_CLASS':'local-path-local'}}
     def test_exec_dispatches_bound_application_namespace_and_container(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None
@@ -50,20 +63,41 @@ class PackageGuards(unittest.TestCase):
         self.assertTrue(result['stdout']);self.assertEqual(set(result['stdout']),{'\ufffd'})
 
     def test_package_timeout_bounds_escaped_pipe_holder_and_closed_pipe_child(self):
-        # Own the detached process explicitly: production can bound its reads,
-        # but must not kill unrelated process groups to obtain pipe EOF.
+        # Start the production timeout only once the owned escaped pipe holder
+        # exists. Interpreter startup time is not the behavior under test.
         with tempfile.TemporaryDirectory() as directory:
             pidfile=Path(directory)/'pid'
-            script="import os,time; os.setsid(); open("+repr(str(pidfile))+",'w').write(str(os.getpid())); time.sleep(10)"
-            launcher="import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',"+repr(script)+"]); time.sleep(10)"
-            started=time.monotonic()
+            script="import time; time.sleep(10)"
+            launcher=("import subprocess,sys,time,pathlib; child=subprocess.Popen([sys.executable,'-c',"+
+                      repr(script)+"],start_new_session=True); pathlib.Path("+repr(str(pidfile))+
+                      ").write_text(str(child.pid)); time.sleep(10)")
+            original=P.subprocess.Popen;ready=[];owned=[]
+            def start_ready(*args,**kwargs):
+                child=original(*args,**kwargs)
+                try:
+                    deadline=time.monotonic()+5
+                    while time.monotonic()<deadline:
+                        value=pidfile.read_text().strip() if pidfile.exists() else ''
+                        if value.isdigit():
+                            owned.append(int(value));ready.append(time.monotonic());return child
+                        time.sleep(0.01)
+                    self.fail('owned detached pipe holder did not become ready')
+                except BaseException:
+                    try:os.killpg(child.pid,signal.SIGKILL)
+                    except ProcessLookupError:pass
+                    child.wait(timeout=5)
+                    for stream in (child.stdout,child.stderr):stream.close()
+                    raise
             try:
-                result=P.bounded_package_run([sys.executable,'-c',launcher],0.5)
-                self.assertTrue(result['timedOut']);self.assertLess(time.monotonic()-started,2)
-                self.assertTrue(pidfile.exists(),'detached pipe holder did not start')
+                with patch.object(P.subprocess,'Popen',side_effect=start_ready):
+                    result=P.bounded_package_run([sys.executable,'-c',launcher],0.5)
+                self.assertTrue(result['timedOut']);self.assertLess(time.monotonic()-ready[0],2)
+                self.assertEqual(os.getpgid(owned[0]),owned[0])
+                os.kill(owned[0],0)
+                self.assertNotEqual(Path('/proc/'+str(owned[0])+'/stat').read_text().split(') ',1)[1].split()[0],'Z')
             finally:
-                if pidfile.exists():
-                    try:os.kill(int(pidfile.read_text()),signal.SIGKILL)
+                if owned:
+                    try:os.kill(owned[0],signal.SIGKILL)
                     except ProcessLookupError:pass
         started=time.monotonic()
         result=P.bounded_package_run([sys.executable,'-c','import os,time;os.close(1);os.close(2);time.sleep(10)'],0.05)
@@ -95,12 +129,29 @@ class PackageGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
             self.assertEqual(foreign.read_text(),'untouched')
 
+    def test_only_legacy_upstream_chart_uses_client_side_apply_compatibility(self):
+        package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
+        charts=[chart for component in package['components'] for chart in component.get('charts',[])]
+        legacy=[chart for chart in charts if chart.get('serverSideApply')=='false']
+        self.assertEqual(len(legacy),1)
+        chart=legacy[0]
+        self.assertEqual((chart['name'],chart['namespace'],chart['releaseName']),('takserver','takserver','takserver'))
+        self.assertEqual(chart['url'],'https://github.com/TAK-Product-Center/Server.git')
+        self.assertEqual(chart['version'],'5.7-RELEASE-14')
+        self.assertTrue(all('serverSideApply' not in item for item in charts if item is not chart))
+        self.assertIs(type(chart['serverSideApply']),str)
+        for phase in P.PHASES:self.assertNotIn('--force-conflicts',P.deploy_command(self.bound(),phase))
+
     def test_same_archive_and_values_only_phase_changes(self):
         commands=[P.deploy_command(self.bound(),phase) for phase in P.PHASES]
-        stripped=[c[:-1] for c in commands]
+        stripped=[]
+        for command in commands:
+            command=command.copy();command[command.index('--values')+1]='bound-phase-file';stripped.append(command)
         self.assertTrue(all(c==stripped[0] for c in stripped));self.assertTrue(all(c[4]==self.bound()['archive'] for c in commands))
-        self.assertEqual([c[-1] for c in commands],['tak.workloadIdentityPhase='+x for x in P.PHASES])
-        self.assertEqual(commands[0].count('--set-values'),1)
+        for command,phase in zip(commands,P.PHASES):
+            value=yaml.safe_load(Path(command[command.index('--values')+1]).read_text())
+            self.assertEqual(value,{'chartOverrides':self.charts,'tak':{'workloadIdentityPhase':phase}})
+        self.assertNotIn('--set-values',commands[0])
         self.assertNotIn('--force-conflicts',commands[0])
         with self.assertRaises(ValueError):P.deploy_command(self.bound(),'unknown')
     def test_cli_capabilities_fail_before_any_deployment(self):
@@ -110,7 +161,56 @@ class PackageGuards(unittest.TestCase):
             return (ROOT/'tests/workload-identities/fixtures'/('uds-0.41.0-'+argv[3]+'-flags.txt')).read_text()
         P.cli_preflight(help);self.assertEqual([x[3] for x in calls],['deploy','remove'])
         self.assertTrue(all(x[-1]=='--help' for x in calls))
-        with self.assertRaisesRegex(ValueError,'--features, --set-values'):P.cli_preflight(lambda argv:'  -c, --confirm  Confirms\n      --set-variables stringToString Variables\n')
+        with self.assertRaisesRegex(ValueError,'--features, --values'):P.cli_preflight(lambda argv:'  -c, --confirm  Confirms\n      --set-variables stringToString Variables\n')
+        with self.assertRaisesRegex(ValueError,'--values'):
+            P.cli_preflight(lambda argv:'\n'.join(line for line in help(argv).splitlines() if ', --values ' not in line))
+
+    def test_phase_file_hash_and_private_modes_are_checked_without_rewriting(self):
+        bound=self.bound();path=Path(bound['phaseValues']['strict']['path']);raw=path.read_bytes()
+        path.chmod(0o644)
+        with self.assertRaises(ValueError):P.deploy_command(bound,'strict')
+        path.chmod(0o600);path.parent.chmod(0o755)
+        with self.assertRaises(ValueError):P.deploy_command(bound,'strict')
+        path.parent.chmod(0o700);path.unlink();foreign=path.parent/'foreign';foreign.write_bytes(raw);path.symlink_to(foreign)
+        with self.assertRaises(ValueError):P.deploy_command(bound,'strict')
+        self.assertTrue(path.is_symlink());self.assertEqual(foreign.read_bytes(),raw)
+
+    def test_real_package_capture_preserves_config_binding_through_public_replay(self):
+        from tests.test_identity_phase_evidence import fixture,evidence
+        from tests.test_identity_public_evidence import IdentityPublicationTests
+        from tests.test_staged_migrations import S
+        bind,data=fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);capture_dir=root/'captured';capture_dir.mkdir(mode=0o700)
+            bound=self.bound();bound.update(archiveSHA256='d'*64,planSHA256='e'*64,configSHA256='f'*64)
+            instance=P.PackageTrial(capture_dir/'journal.json',bound)
+            instance.state.update(guard={k:bind[k] for k in ('sourceSHA','runID','runAttempt','clusterUID')},
+                meshConfigUID=bind['meshConfigUID'],meshConfigHash=bind['meshConfigHash'],baselineNetwork=data['baseline_network'],
+                deploymentUIDs=data['baseline_uids'],templateFingerprints=data['template_fingerprints'],
+                peprUIDs=data['pepr_uids'],peprTemplateFingerprints=data['pepr_template_fingerprints'],
+                packagePhases=['shared','transition'],zarfDomainBinding={'configSHA256':bound['configSHA256']})
+            instance._last_policy_observation={key:data[key] for key in ('package','policies','network_policies','policy_lists')}
+            instance._last_identity_observation={key:data[key] for key in ('deployments','replicasets','pods')}
+            instance._last_pepr_observation=data['pepr']
+            instance.wait=lambda callback:callback();instance.policies=lambda:None;instance.identities=lambda account:None;instance.observe_pepr=lambda phase:None
+            instance.observe_render_inputs=lambda:data['render_inputs']
+            verdict=instance.capture_phase('strict','dedicated')
+            self.assertTrue(verdict['accepted']);self.assertEqual(verdict['binding']['baselineValuesSHA256'],bound['configSHA256'])
+            self.assertNotEqual(verdict['binding']['baselineValuesSHA256'],bound['chartBinding']['chartOverridesSHA256'])
+            self.assertEqual(instance.state['baselineChartValuesSHA256'],bound['chartBinding']['chartOverridesSHA256'])
+            reference=instance.state['phaseEvidence'][0]['reference'];snapshot=evidence.read_phase(capture_dir/'phases',reference)
+            self.assertTrue(evidence.validate_phase(snapshot,P.D.guard_api())['accepted'])
+            fixture_case=IdentityPublicationTests()
+            with fixture_case.env(),patch.dict(os.environ,{'IDENTITY_METHOD':'package'}),patch.object(S.platform,'machine',return_value='x86_64'):
+                journal=fixture_case.package_journal(root)
+                journal['packageDriverSHA256']=S.sha(ROOT/'tests/workload-identities/package_roundtrip.py')
+                entry=next(entry for entry in journal['phaseEvidence'] if entry['phase']=='strict')
+                folder=root/'package-identity';(folder/'phases'/entry['reference']['file']).unlink()
+                entry['reference']=evidence.write_phase(folder/'phases',snapshot)
+                (folder/'journal.json').write_text(json.dumps(journal))
+                receipt=S.publish(root,root/'public','amd64')
+                self.assertTrue(receipt['accepted']);S.verify(root/'public/receipts')
+
     def test_actual_deploy_path_dispatches_supported_command_then_observes(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.bound['archiveSHA256']='a'*64
@@ -136,7 +236,13 @@ class PackageGuards(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'GITHUB_SHA':'a'*40}):
             root=Path(directory);archive=root/'zarf-package-takserver-amd64-dev-upstream.tar.zst';archive.write_bytes(b'owned archive identity fixture, not package')
             config=root/'config.yaml';config.write_text(yaml.safe_dump({'variables':{'takserver':self.bound()['variables']}}));plan=root/'plan.json';plan.write_text(json.dumps({'schema':1,'sourceSHA':'a'*40,'files':{'config':{'path':config.name,'sha256':P.digest(config)}}}))
-            expected=P.digest(archive);P.bind_inputs(archive,expected,plan)
+            expected=P.digest(archive)
+            with patch.object(P.D.render_inputs,'bind_chart_overrides',return_value=self.bound()['chartBinding']):
+                bound=P.bind_inputs(archive,expected,plan)
+            path=Path(bound['phaseValues']['strict']['path']);original=path.read_bytes();path.write_text('tampered')
+            with self.assertRaises(ValueError):P.deploy_command(bound,'strict')
+            self.assertEqual(path.read_text(),'tampered','command must not regenerate tampered values')
+            path.write_bytes(original)
             config.write_text('changed')
             with self.assertRaises(ValueError):P.bind_inputs(archive,expected,plan)
             archive.write_bytes(b'changed')
@@ -239,7 +345,7 @@ class PackageGuards(unittest.TestCase):
         self.assertEqual(proof['version'],'0.41.0');self.assertEqual(proof['embeddedZarfVersion'],'0.89.0')
         for op,item in proof['commands'].items():self.assertEqual(P.digest(root/item['fixture']),item['fixtureSHA256'])
         actual=P.declared_flags((root/'uds-0.41.0-deploy-flags.txt').read_text())
-        self.assertEqual(actual,{'--confirm','--features','--set-values','--set-variables'})
+        self.assertEqual(actual,{'--confirm','--features','--values','--set-values','--set-variables'})
         self.assertNotIn('--set',actual)
         command=P.deploy_command(self.bound(),'strict')
         self.assertNotIn('--set',command);self.assertEqual(command.count('--set-variables'),len(self.bound()['variables'])+1)

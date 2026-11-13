@@ -27,6 +27,8 @@ components:
             targetPath: .workloadIdentityPhase
           - sourcePath: .health.enabled
             targetPath: .health.enabled
+          - sourcePath: .chartOverrides.takserver.uds-takserver-config
+            targetPath: .
       # Admission module. Installed before the upstream chart so that every
       # TAK pod is created with the init container that renders the OIDC client
       # secret into CoreConfig.xml. The chart is built by pepr/build.sh when the
@@ -37,12 +39,19 @@ components:
         localPath: ../pepr/dist/c72fcf944a4f43bbb386d22371aa640f-chart
         templatedValuesFiles:
           - ../values/pepr-values.yaml
+        values:
+          - sourcePath: .chartOverrides.takserver.takserver-oidc
+            targetPath: .
       # Upstream chart. Not vendored. `version` is the git tag Zarf clones.
       # releaseName stays takserver so the Bitnami Postgres Service is
       # takserver-postgresql, which is the host the chart's own example uses.
       - name: takserver
         namespace: takserver
         releaseName: takserver
+        # Upstream hardcodes the shared ServiceAccount. Pepr admission/watchers
+        # own phase identities; use Helm's client-side patch compatibility for
+        # this chart so SSA cannot reject the admission-enforced identity first.
+        serverSideApply: "false"
         url: https://github.com/TAK-Product-Center/Server.git
         gitPath: src/takserver-cluster/deployments/helm
         version: 5.7-RELEASE-14
@@ -66,3 +75,6 @@ components:
             targetPath: .takserver.takserverDatabaseSetup.image.tag
           - sourcePath: .tak.imageTag
             targetPath: .ignite.image.tag
+          # Optional whole-chart overlay, matching UDS bundle override semantics.
+          - sourcePath: .chartOverrides.takserver.takserver
+            targetPath: .

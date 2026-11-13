@@ -2,3 +2,4 @@
       --set-values stringToString       Set package values (key.path=value). Booleans and integers are type-inferred; everything else is a string (default [])
       --set-variables stringToString    Specify deployment variables to set on the command line (KEY=value) (default [])
       --features stringToString    Provide a comma-separated list of feature names to bools to enable or disable. Ex. --features "foo=true,bar=false,baz=true" (default [])
+  -v, --values strings                  [beta] Values files to use for templating and Helm overrides. Multiple files can be passed in as a comma separated list, and the flag can be provided multiple times.

@@ -148,6 +148,8 @@ components:
         values:
           - sourcePath: .global.domain
             targetPath: .domain
+          - sourcePath: .chartOverrides.cloudtak.uds-cloudtak
+            targetPath: .
     healthChecks:
       - apiVersion: uds.dev/v1alpha1
         kind: Package

@@ -59,6 +59,20 @@ check_decide() {
 }
 
 # Docs, metadata, device, benchmark, demo, and unit tests do not deploy TAK.
+# Audited comment-only Lula paths do not run in deployment jobs. Unknown adjacent files still do.
+check_match ".github/workflows/lula.yaml" ignore
+check_match ".github/workflows/lula-crawl.yaml" ignore
+check_match ".github/scripts/lula-crawl-preflight.py" ignore
+check_match ".github/lula/README.md" ignore
+check_match ".github/lula/official/LICENSE" ignore
+check_match ".github/lula/official/crawl-0.9.5.js" ignore
+check_match ".github/lula/patch_crawl.py" ignore
+check_match ".github/lula/source.lock.json" ignore
+check_match "compliance/README.md" ignore
+check_match ".github/lula/unknown-runtime.py" relevant
+check_match ".github/scripts/lula-crawl-preflight-extra.py" relevant
+check_decide false $'.github/workflows/lula.yaml\n.github/workflows/lula-crawl.yaml\n.github/scripts/lula-crawl-preflight.py\n.github/lula/README.md\n.github/lula/official/LICENSE\n.github/lula/official/crawl-0.9.5.js\n.github/lula/patch_crawl.py\n.github/lula/source.lock.json\ncompliance/README.md'
+check_decide true $'.github/workflows/lula-crawl.yaml\ncharts/takserver/values.yaml'
 check_match "docs/ci.md" ignore
 # Exact failure-only probes skip clusters; adjacent and enforcement paths do not.
 check_match ".github/scripts/runner-wedge-probe.sh" ignore

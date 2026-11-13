@@ -189,6 +189,119 @@ def bind_domain_plan(plan_path, source_sha):
     return {'plan':str(plan_path),'planSHA256':hashlib.sha256(raw_plan).hexdigest(),'config':str(config_path),'configSHA256':hashlib.sha256(raw_config).hexdigest(),'DOMAIN':domain}
 
 
+APPLICATION_CHARTS = {'takserver': ('uds-takserver-config', 'takserver-oidc', 'takserver'),
+                      'cloudtak': ('uds-cloudtak',)}
+
+
+def baseline_chart_values(overrides, read_values):
+    """Replay only four application charts, using UDS file-then-value order."""
+    require(isinstance(overrides, dict) and set(overrides) <= set(APPLICATION_CHARTS), 'unsupported baseline component')
+    _shape(overrides)
+    require(len(encoded(overrides)) <= MAX_BYTES, 'baseline overrides exceed bound')
+    result = {component: {chart: {} for chart in charts} for component, charts in APPLICATION_CHARTS.items()}
+    def merge(left, right):
+        require(isinstance(right, dict), 'baseline chart values must be objects')
+        for key, value in right.items():
+            if isinstance(value, dict) and isinstance(left.get(key), dict):
+                merge(left[key], value)
+            else:
+                left[key] = copy.deepcopy(value)
+    for component, charts in overrides.items():
+        require(isinstance(charts, dict) and set(charts) <= set(APPLICATION_CHARTS[component]), 'unsupported baseline chart')
+        for chart, override in charts.items():
+            require(isinstance(override, dict) and set(override) <= {'valuesFiles', 'values', 'variables'}, 'unsupported baseline chart override')
+            require(all(isinstance(override.get(key, []), list) and len(override.get(key, [])) <= 64
+                        for key in ('valuesFiles', 'values', 'variables')), 'baseline override inventory exceeds bound')
+            # Variable declarations do not supply Helm values; retain their exact
+            # reviewed identity in the source binding, never invent their values.
+            for declaration in override.get('variables', []):
+                require(isinstance(declaration, dict) and set(declaration) == {'name', 'description', 'path'}
+                        and component == 'cloudtak' and chart == 'uds-cloudtak'
+                        and declaration['name'] == 'CLOUDTAK_SSO_GROUPS' and declaration['path'] == 'sso.groups',
+                        'unsupported baseline chart variable')
+            for path in override.get('valuesFiles', []):
+                require(isinstance(path, str), 'invalid baseline values reference')
+                value = read_values(path)
+                _shape(value)
+                require(len(encoded(value)) <= MAX_BYTES, 'baseline chart file exceeds bound')
+                merge(result[component][chart], value)
+            for entry in override.get('values', []):
+                require(isinstance(entry, dict) and set(entry) == {'path', 'value'}, 'unsupported baseline value')
+                require(isinstance(entry['path'], str), 'unsupported baseline value path')
+                require(not isinstance(entry['value'], dict), 'object-valued baseline entries require an explicit merge contract')
+                parts = entry['path'].split('.')
+                require(parts and all(re.fullmatch(r'[A-Za-z0-9_-]+', part) for part in parts), 'unsupported baseline value path')
+                current = result[component][chart]
+                for part in parts[:-1]:
+                    require(part not in current or isinstance(current[part], dict), 'baseline value path conflict')
+                    current = current.setdefault(part, {})
+                current[parts[-1]] = copy.deepcopy(entry['value'])
+    for chart in result['takserver'].values():
+        require('workloadIdentityPhase' not in chart and 'TAK_WORKLOAD_IDENTITY_PHASE' not in encoded(chart).decode(),
+                'baseline cannot override identity phase')
+    _shape(result)
+    require(len(encoded(result)) <= MAX_BYTES, 'baseline chart values exceed bound')
+    return result
+
+
+def bind_chart_overrides(plan_path, source_sha, repository_root):
+    """Bind reviewed source closure to the same prepared baseline candidate."""
+    import os
+    from pathlib import Path
+    import subprocess
+    import yaml
+    domain = bind_domain_plan(plan_path, source_sha)
+    root = Path(repository_root).resolve()
+    sources = {}
+    def read(path):
+        path = Path(path)
+        require(not any(p.is_symlink() for p in (path, *path.parents)), 'baseline source has a symbolic link')
+        path = path.resolve()
+        require(path.is_file() and path.stat().st_size <= MAX_BYTES, 'baseline source is not bounded')
+        raw = path.read_bytes()
+        require(len(raw) <= MAX_BYTES, 'baseline source exceeds bound')
+        return path, raw
+    def reviewed(path, parse=True):
+        path, raw = read(path)
+        require(root in path.parents, 'baseline source escapes repository')
+        relative = path.relative_to(root).as_posix()
+        result = subprocess.run(['git', 'show', source_sha + ':' + relative], cwd=root, capture_output=True, timeout=5,
+            env={**os.environ, 'GIT_NO_LAZY_FETCH': '1', 'GIT_TERMINAL_PROMPT': '0'})
+        require(result.returncode == 0 and result.stdout == raw, 'baseline source differs from reviewed commit')
+        sources[relative] = hashlib.sha256(raw).hexdigest()
+        return yaml.safe_load(raw) if parse else None
+    for relative in ('tests/velero-ownership/candidate.py', 'tests/velero-ownership/prepare.py'):
+        reviewed(root / relative, parse=False)
+    bundle_path = root / 'bundle/full/uds-bundle.yaml'
+    bundle = reviewed(bundle_path)
+    packages = [package for package in bundle['packages'] if package['name'] == 'takserver']
+    require(len(packages) == 1, 'baseline application package differs')
+    package = packages[0]
+    plan_directory = Path(domain['plan']).parent
+    _receipt_path, raw_receipt = read(plan_directory / 'candidate.json')
+    receipt = json.loads(raw_receipt)
+    _candidate_path, candidate_raw = read(plan_directory / 'core/uds-bundle.yaml')
+    require(type(receipt.get('schema')) is int and receipt['schema'] == 1 and receipt['sourceSHA'] == source_sha
+            and receipt['files']['core/uds-bundle.yaml'] == hashlib.sha256(candidate_raw).hexdigest(),
+            'prepared baseline candidate hash differs')
+    candidate = yaml.safe_load(candidate_raw)
+    prepared = [item for item in candidate['packages'] if item['name'] == 'takserver']
+    require(len(prepared) == 1, 'prepared baseline application differs')
+    expected = copy.deepcopy(package)
+    if 'path' in expected:
+        expected['path'] = os.path.relpath((bundle_path.parent / expected['path']).resolve(), plan_directory / 'core')
+    for charts in expected.get('overrides', {}).values():
+        for chart in charts.values():
+            if 'valuesFiles' in chart:
+                chart['valuesFiles'] = [os.path.relpath((bundle_path.parent / path).resolve(), plan_directory / 'core')
+                                       for path in chart['valuesFiles']]
+    require(prepared[0] == expected, 'prepared baseline application overrides differ')
+    values = baseline_chart_values(package['overrides'], lambda path: reviewed(bundle_path.parent / path))
+    return {'chartOverrides': values, 'chartOverridesSHA256': digest(values), 'chartOverrideSources': sources,
+            'candidateSHA256': hashlib.sha256(raw_receipt).hexdigest(),
+            'candidateManifestSHA256': hashlib.sha256(candidate_raw).hexdigest()}
+
+
 def postrender_domain(value, domain=None):
     """Emulate only Zarf's known DOMAIN token, leaving other Helm data intact."""
     _shape(value)

@@ -81,6 +81,34 @@ class PackageGuards(unittest.TestCase):
             self.assertEqual(public['status'],'unavailable')
             self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
 
+    def test_optional_retained_capture_and_fallback_journal_cannot_replace_first_cause(self):
+        for capture_error in (OSError('capture I/O'),RuntimeError('capture failure')):
+            for journal_error in (OSError('journal I/O'),RuntimeError('journal failure')):
+                with self.subTest(capture=type(capture_error).__name__,journal=type(journal_error).__name__):
+                    trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+                    original=ValueError('original retained source invariant')
+                    def verify(driver,proof):
+                        driver._retained_source_failure={'fixture':'private snapshot'}
+                        raise original
+                    trial.capture_retained_validation=lambda *args: (_ for _ in ()).throw(capture_error)
+                    trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(journal_error)
+                    with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(ValueError) as failure:
+                        trial.retained_verify({},'transition')
+                    self.assertIs(failure.exception,original)
+                    self.assertIs(trial.state['accepted'],False)
+                    self.assertIsNone(trial._retained_source_failure)
+        for interrupted in ('capture','journal'):
+            trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+            def verify(driver,proof):
+                driver._retained_source_failure={'fixture':'private snapshot'}
+                raise ValueError('known invariant')
+            def capture(*args):raise KeyboardInterrupt() if interrupted=='capture' else OSError('capture I/O')
+            trial.capture_retained_validation=capture
+            trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(KeyboardInterrupt())
+            with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(KeyboardInterrupt):
+                trial.retained_verify({},'transition')
+            self.assertIs(trial.state['accepted'],False)
+
     def test_retained_validation_capture_is_typed_first_and_preserves_original_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory);folder.chmod(0o700)

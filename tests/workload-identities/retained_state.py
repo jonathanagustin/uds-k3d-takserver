@@ -149,20 +149,25 @@ def verify_hooks(driver,baseline):
     if validation_failed and hook_diagnostic(baseline,observed) is None:observed=None
     diagnostic=hook_diagnostic(baseline,observed)
     if diagnostic is not None:
-        # Closed diagnostic plus actual objects, held only in memory for encryption.
-        baseline=baseline if valid_origin(baseline) else None
-        observed=observed if valid_origin(observed) else None
-        held=getattr(driver,'_retained_hook_baseline',None) or {}
-        baseline_objects=(held.get('objects') if baseline and held.get('inventorySHA256')==sha(baseline['hookInventory']) else None)
-        driver._retained_source_failure={'schema':1,'baseline':baseline,'observed':observed,'diagnostic':diagnostic,
-                                        'baselineObjects':copy.deepcopy(baseline_objects) if baseline else None,
-                                        'observedObjects':copy.deepcopy(getattr(driver,'_retained_hook_objects',None)) if observed else None}
-        try:validate_source_failure(driver._retained_source_failure)
-        except ValueError:
-            # Optional private capture must neither truncate nor mask the drift.
+        failure=ValueError('stored source generator/hook changed across phase-only deployment')
+        if isinstance(getattr(driver,'state',None),dict):driver.state['accepted']=False
+        try:
+            # Closed diagnostic plus actual objects, held only in memory for encryption.
+            baseline=baseline if valid_origin(baseline) else None
+            observed=observed if valid_origin(observed) else None
+            held=getattr(driver,'_retained_hook_baseline',None) or {}
+            baseline_objects=(held.get('objects') if baseline and held.get('inventorySHA256')==sha(baseline['hookInventory']) else None)
+            driver._retained_source_failure={'schema':1,'baseline':baseline,'observed':observed,'diagnostic':diagnostic,
+                                            'baselineObjects':copy.deepcopy(baseline_objects) if baseline else None,
+                                            'observedObjects':copy.deepcopy(getattr(driver,'_retained_hook_objects',None)) if observed else None}
+            validate_source_failure(driver._retained_source_failure)
+        except Exception:
+            # Optional capture must neither truncate nor mask the known drift.
+            # BaseException interrupts deliberately remain uncaught.
             driver._retained_source_failure=None
-        driver.journal('retained-hook-drift',**diagnostic)
-        raise ValueError('stored source generator/hook changed across phase-only deployment')
+        try:driver.journal('retained-hook-drift',**diagnostic)
+        except Exception:pass
+        raise failure
     return observed
 
 def resource_record(obj):

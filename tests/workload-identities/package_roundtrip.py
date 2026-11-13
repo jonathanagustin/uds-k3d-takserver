@@ -243,11 +243,15 @@ class PackageTrial(D.Driver):
         try:
             return R.verify(self,proof)
         except ValueError:
-            snapshot=self._retained_source_failure
-            if snapshot is not None:
-                try:self.capture_retained_validation(snapshot,phase)
-                except (ValueError,OSError):
-                    self.journal('retained-source-diagnostic-unavailable',phase=phase)
+            self.state['accepted']=False
+            try:
+                snapshot=self._retained_source_failure
+                if snapshot is not None:self.capture_retained_validation(snapshot,phase)
+            except Exception:
+                # Optional evidence must never replace the original invariant.
+                # Interrupts inherit BaseException and deliberately propagate.
+                try:self.journal('retained-source-diagnostic-unavailable',phase=phase)
+                except Exception:pass
             raise
         finally:
             self._retained_source_failure=None

@@ -202,6 +202,25 @@ class StoredHookSourceGuards(unittest.TestCase):
         baseline=self.origin(self.rendered['shared',0])
         for objects in self.rendered.values():
             self.assertIsNone(R.hook_diagnostic(baseline,self.origin(objects)))
+    def test_optional_hook_capture_and_journal_failures_preserve_known_invariant(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        changed=copy.deepcopy(objects)
+        next(obj for obj in changed if obj['kind']=='Job')['spec']['template']['spec']['containers'][0]['image']='changed-fixture-image'
+        for capture_error in (None,OSError('capture I/O'),RuntimeError('capture failure')):
+            for journal_error in (OSError('journal I/O'),RuntimeError('journal failure')):
+                with self.subTest(capture=type(capture_error).__name__,journal=type(journal_error).__name__):
+                    driver=self.driver(changed);driver.state={'accepted':True};driver.journal.side_effect=journal_error
+                    original=R.validate_source_failure
+                    with patch.object(R,'validate_source_failure',side_effect=capture_error or original):
+                        with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):
+                            R.verify_hooks(driver,baseline)
+                    self.assertIs(driver.state['accepted'],False)
+                    if capture_error:self.assertIsNone(driver._retained_source_failure)
+                    else:self.assertIsNotNone(driver._retained_source_failure)
+        driver=self.driver(changed);driver.state={'accepted':True};driver.journal.side_effect=KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):R.verify_hooks(driver,baseline)
+        self.assertIs(driver.state['accepted'],False)
+
     def test_same_phase_generated_random_credentials_still_reject(self):
         baseline=self.origin(self.original[0]);driver=self.driver(self.original[1])
         with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):R.verify_hooks(driver,baseline)

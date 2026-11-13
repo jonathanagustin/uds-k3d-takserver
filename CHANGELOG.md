@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.15.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.3...v0.15.0) (2026-11-13)
+
+
+### Features
+
+* publish reviewed UI scenes as immutable prereleases ([f3c09ad](https://github.com/jonathanagustin/uds-takserver/commit/f3c09ad192da7ffb62951ccbb98c24cbee6b20f2))
+
+
+### Bug Fixes
+
+* **bench:** retain bound JVM metrics when timing joins fail ([c47a1af](https://github.com/jonathanagustin/uds-takserver/commit/c47a1af5132ac82126383906bc8f2ad1c46f4b49))
+* bind identity renders to the deployed Zarf domain ([#525](https://github.com/jonathanagustin/uds-takserver/issues/525)) ([267c875](https://github.com/jonathanagustin/uds-takserver/commit/267c875a90aca4fc026d18491acfb250263ab6e0))
+* capture encrypted package migration failure evidence ([791ebf0](https://github.com/jonathanagustin/uds-takserver/commit/791ebf0117e758448e64c71fdb695eae8cfcd3ee))
+* **docs:** update Astro for image endpoint security advisory ([#541](https://github.com/jonathanagustin/uds-takserver/issues/541)) ([a475725](https://github.com/jonathanagustin/uds-takserver/commit/a475725cadde54dcd5397a9aa943d2df43dbd5d9))
+* enable guarded Lula comment analysis ([f34f772](https://github.com/jonathanagustin/uds-takserver/commit/f34f77228dbe7d8d25be1a59af90b61927af4f30))
+* expose typed phase failures and limit staged-helper CI ([#529](https://github.com/jonathanagustin/uds-takserver/issues/529)) ([c67fc61](https://github.com/jonathanagustin/uds-takserver/commit/c67fc61200158a1c33a8b18dca0931da0d877525))
+* keep preview links on the docs home page ([#524](https://github.com/jonathanagustin/uds-takserver/issues/524)) ([7268d25](https://github.com/jonathanagustin/uds-takserver/commit/7268d2534288c968fcb59697419feb975e87dae2))
+* preserve identities and chart values during package upgrades ([a060478](https://github.com/jonathanagustin/uds-takserver/commit/a0604781dd408b50be6a8cdfcb1cf6bae0298982))
+* preserve protocol probe results across kubectl exec ([#528](https://github.com/jonathanagustin/uds-takserver/issues/528)) ([379bb8f](https://github.com/jonathanagustin/uds-takserver/commit/379bb8f701902ab34a471c660d3a3f501ced59a6))
+* retain actionable identity trial failure evidence ([#523](https://github.com/jonathanagustin/uds-takserver/issues/523)) ([6d308ca](https://github.com/jonathanagustin/uds-takserver/commit/6d308cac71f6aa84ce1d974d240792be3b686e3a))
+* retain server revisions in identity policy evidence ([#531](https://github.com/jonathanagustin/uds-takserver/issues/531)) ([b00364b](https://github.com/jonathanagustin/uds-takserver/commit/b00364bb24e8b9a50a82005aab19d4d48f277590))
+* scope retained PVC checks to their application namespace ([#527](https://github.com/jonathanagustin/uds-takserver/issues/527)) ([f3f0169](https://github.com/jonathanagustin/uds-takserver/commit/f3f0169ef78cd67b3e4249097c6158610134159d))
+* use documented Zarf variables in staged identity trials ([#521](https://github.com/jonathanagustin/uds-takserver/issues/521)) ([2e4153d](https://github.com/jonathanagustin/uds-takserver/commit/2e4153d073f096db1ba3d132854e4c38062ae9e3))
+* validate identity policy ports before disjoint filtering ([#530](https://github.com/jonathanagustin/uds-takserver/issues/530)) ([d098922](https://github.com/jonathanagustin/uds-takserver/commit/d09892280316b1c90c6f045e439b17a13aed740d))
+* validate staged workload identity migrations through Zarf ([6e6871c](https://github.com/jonathanagustin/uds-takserver/commit/6e6871c6857c0c91553fc0136f9e6c6d2ba9b485))
+
 ## [0.14.3](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.2...v0.14.3) (2026-11-13)
 
 

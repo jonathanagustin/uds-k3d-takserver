@@ -1,6 +1,7 @@
 # TAKX 5.8 elevation-download compatibility source profile
 
-Local source candidate, not compiler/runtime acceptance. The new public Kernel
+Experimental compatibility profile; the offline behavior controls pass, while
+complete Platform and client acceptance remain open. The new public Kernel
 component leaves four real `ElevationDownloader` contract errors in the official
 TAKX 5.8.1 Platform. This profile changes genuine source; it supplies no empty
 API (application programming interface), fake terrain samples or version alias.
@@ -28,23 +29,41 @@ protected constructor still borrows its supplied watcher and neither starts nor
 disposes it. A stable listener reference is retained so dispose removes exactly
 the registered listener. The one-shot TAKX count consumer now disposes its task
 in a finally block, and calls the count API instead of touching private fields.
+Construction and fresh coverage queries scan directories synchronously; callers
+should run them away from the user interface thread.
 
 `ElevationDownloadControls.java` exercises the actual patched class: budget
 boundaries/overflow, ordinary/date-line/polar/invalid bounds, unique tile counts,
 existing/deleted cache filenames, coverage snapshot isolation, invalid limits and
 unavailable remote coverage. Its resource fixture is deliberately test-only;
 production still uses the real resource manager. It never calls the network
-scanner. These controls have NOT been compiled or executed. Both patches were
-applied to exact cached official sources with zero fuzz and verified postimages;
-that is source preparation only.
+scanner. Both patches apply to exact cached official sources with zero fuzz and
+verified postimages. The complete changed downloader family and controls compile
+against the accepted public component; 53 actual behavioral assertions pass.
+The controls include real date-line, full-world longitude endpoint and polar
+coverage, invalid unsorted/raw bounds, and borrowed watcher ownership. Raw invalid
+bounds use the protected constructor because the public constructor sorts its
+endpoints and can discard a NaN input.
 
-Next, after root review and an exclusive Java slot: compile the complete changed
-ElevationDownloader source family against the accepted component, compile/run
-these offline controls with bounded output and core dumps disabled, then rerun
-all 1,898 genuine 5.8 Platform sources using only the two reviewed postimages and
-complete changed family. Preserve all remaining contour/vehicle diagnostics;
-never accept partial Platform classes. No native rebuild is needed for this
-family. This does not qualify a client, renderer or network download workflow.
+The downloader's genuine error tracker initializes native configuration services.
+The passing attempt therefore uses all 36 qualified consumer classpath entries
+and freshly extracts the nine unchanged native providers. All 39 mapped executable and
+library files match the previously qualified component; 2,746 loaded class origins
+are checked. Strict Java Native Interface (JNI) warnings and uncaught callbacks
+are zero; three known Simple Logging Facade for Java (SLF4J) notices remain.
+Earlier attempts with an incomplete logging classpath and a nonnative extraction
+budget remain failed evidence, not acceptance. No shim or new native build was
+used to make the tests pass.
+
+Offline control receipt SHA-256:
+`0ba9ea26120fc45c9af69d04e5f65e23d38ced9380bfb066ae58d1bda99195a1`.
+Independent output, native provider and class-origin audit SHA-256:
+`20487fc4081431d0eef4646c077ba4975a9fda6a579026fc706cc5c76e7612e8`.
+
+Next, rerun all 1,898 genuine 5.8 Platform sources using only the two reviewed
+postimages and complete changed family. Preserve all remaining contour/vehicle
+diagnostics; never accept partial Platform classes. This does not qualify a
+client, renderer or network download workflow.
 
 Official local source inventory: the public Kernel revision has no
 `gov.tak.api.contour` or `gov.tak.api.vehicle` family. ATAK has 22 actual Android

@@ -15,6 +15,12 @@ import java.util.BitSet;
 /** Offline controls for the real patched downloader. No scanCurrentAreas/network call. */
 public final class ElevationDownloadControls {
     private static int assertions;
+    // The public constructor sorts endpoints and can discard NaN; preserve raw invalid input.
+    private static final class RawBounds extends GeoBounds {
+        RawBounds(double south, double west, double north, double east) {
+            super(south, west, north, east, true);
+        }
+    }
     private static void check(boolean value) {
         if (!value) throw new AssertionError("elevation contract assertion " + assertions);
         assertions++;
@@ -76,14 +82,33 @@ public final class ElevationDownloadControls {
         check(Arrays.equals(bounds(dateline), new int[]{179, -1, 181, 1}));
         check(Arrays.equals(bounds(new GeoBounds(89, 0, 90, 0)), new int[]{0, 89, 0, 89}));
         check(bounds(new GeoBounds(90, 0, 90, 0)) == null);
-        check(bounds(new GeoBounds(Double.NaN, 0, 1, 1)) == null);
+        check(bounds(new RawBounds(Double.NaN, 0, 1, 1)) == null);
         check(bounds(new GeoBounds(0, Double.POSITIVE_INFINITY, 1, 1)) == null);
         check(bounds(new GeoBounds(-91, 0, 1, 1)) == null);
         int zero = Dt2FileWatcher.getCoverageIndex(0, 0);
         BitSet remote = new BitSet(); remote.set(zero);
+        remote.set(Dt2FileWatcher.getCoverageIndex(-1, 179));
+        remote.set(Dt2FileWatcher.getCoverageIndex(-1, -180));
+        remote.set(Dt2FileWatcher.getCoverageIndex(-1, -179));
+        remote.set(Dt2FileWatcher.getCoverageIndex(89, 0));
+        remote.set(Dt2FileWatcher.getCoverageIndex(-90, 0));
         ElevationDownloader downloader = new ElevationDownloader(resource(remote), root.toFile());
         try {
             check(downloader.getMaxTileRequests() == 100);
+            // Inclusive east=180 wraps to -180 and must not count the same world cell twice.
+            check(downloader.getMissingTileCount(new GeoBounds[]{new GeoBounds(-90, -180, 90, 180)})
+                    == remote.cardinality());
+            check(downloader.getMissingTileCount(new GeoBounds[]{dateline, dateline}) == 3);
+            check(downloader.getMissingTileCount(new GeoBounds[]{new GeoBounds(89, 0, 90, 0)}) == 1);
+            check(downloader.getMissingTileCount(new GeoBounds[]{new GeoBounds(-90, 0, -90, 0)}) == 1);
+            for (GeoBounds invalid : new GeoBounds[]{
+                    new RawBounds(Double.NaN, 0, 1, 1), new RawBounds(0, Double.NaN, 1, 1),
+                    new RawBounds(0, 0, Double.NaN, 1), new RawBounds(0, 0, 1, Double.NaN),
+                    new RawBounds(0, -181, 1, 1), new RawBounds(0, 0, 1, 181),
+                    new RawBounds(1, 0, 0, 1), new RawBounds(0, 1, 1, 0)}) {
+                check(bounds(invalid) == null);
+                rejects(() -> downloader.getMissingTileCount(new GeoBounds[]{invalid}), IllegalArgumentException.class);
+            }
             downloader.setMaxTileRequests(Integer.MAX_VALUE);
             check(downloader.getMaxTileRequests() == Integer.MAX_VALUE);
             rejects(() -> downloader.setMaxTileRequests(0), IllegalArgumentException.class);
@@ -101,7 +126,7 @@ public final class ElevationDownloadControls {
             check(downloader.getMissingTileCount(new GeoBounds[]{tile}) == 1);
             rejects(() -> downloader.getMissingTileCount(null), IllegalArgumentException.class);
             rejects(() -> downloader.getMissingTileCount(new GeoBounds[]{null}), IllegalArgumentException.class);
-            rejects(() -> downloader.getMissingTileCount(new GeoBounds[]{new GeoBounds(Double.NaN, 0, 1, 1)}), IllegalArgumentException.class);
+            rejects(() -> downloader.getMissingTileCount(new GeoBounds[]{new RawBounds(Double.NaN, 0, 1, 1)}), IllegalArgumentException.class);
         } finally { downloader.dispose(); }
         ElevationDownloader unavailable = new ElevationDownloader(resource(null), root.toFile());
         try {

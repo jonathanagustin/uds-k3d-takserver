@@ -2,11 +2,16 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 """Fail closed before an explicitly authorized pinned Lula comment crawl."""
+import argparse
 import base64
 import json
 from pathlib import Path
 import re
 import sys
+
+
+class UnsupportedFileCount(ValueError):
+    pass
 
 
 def validate(pr, baseline, repository):
@@ -17,7 +22,7 @@ def validate(pr, baseline, repository):
     if pr.get("base", {}).get("ref") != "main":
         raise ValueError("crawl requires a main-target PR")
     count = pr.get("changed_files")
-    if type(count) is not int or not 0 <= count <= 30:
+    if type(count) is not int or count < 0:
         raise ValueError("Lula 0.9.5 cannot cover more than 30 changed files")
     if (baseline.get("type") != "file" or baseline.get("encoding") != "base64"
             or baseline.get("path") != "charts/takserver/files/config/CoreConfig.xml"):
@@ -36,6 +41,8 @@ def validate(pr, baseline, repository):
         pairs += kind == b"End"
     if opened or not pairs:
         raise ValueError("crawl requires the existing mapped baseline")
+    if count > 30:
+        raise UnsupportedFileCount("Lula 0.9.5 cannot cover more than 30 changed files")
 
 
 def snapshot(pr, repository):
@@ -47,16 +54,39 @@ def snapshot(pr, repository):
             "changedFiles": pr["changed_files"]}
 
 
-if __name__ == "__main__":
+def evaluate(pr, baseline, repository, automatic=False):
+    binding = snapshot(pr, repository)
     try:
-        with open(sys.argv[1]) as source:
+        validate(pr, baseline, repository)
+    except UnsupportedFileCount:
+        if automatic:
+            return None
+        raise
+    return binding
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("pr", type=Path)
+    parser.add_argument("baseline", type=Path)
+    parser.add_argument("repository")
+    parser.add_argument("binding", type=Path, nargs="?")
+    parser.add_argument("--automatic", action="store_true")
+    parser.add_argument("--github-output", type=Path)
+    args = parser.parse_args()
+    try:
+        with args.pr.open() as source:
             pr = json.load(source)
-        with open(sys.argv[2]) as source:
+        with args.baseline.open() as source:
             baseline = json.load(source)
-        validate(pr, baseline, sys.argv[3])
-        if len(sys.argv) == 5:
-            binding = snapshot(pr, sys.argv[3])
-            with Path(sys.argv[4]).open("x") as output:
+        binding = evaluate(pr, baseline, args.repository, args.automatic)
+        if binding is None:
+            print("Lula automatic crawl skipped: unsupported_changed_file_count")
+        elif args.binding:
+            with args.binding.open("x") as output:
                 json.dump(binding, output)
+        if args.github_output:
+            with args.github_output.open("a") as output:
+                output.write("ready=" + ("true" if binding is not None else "false") + "\n")
     except (ValueError, KeyError, IndexError) as error:
         sys.exit(str(error))

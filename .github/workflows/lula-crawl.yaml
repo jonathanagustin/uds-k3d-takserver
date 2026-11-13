@@ -46,19 +46,16 @@ jobs:
       - name: Checkout trusted main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/heads/main
+          ref: ${{ github.sha }}
           persist-credentials: false
-
-      - name: Install Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26.13.0
 
       # The same live API preflight serves both triggers. Metadata is environment
       # data, never shell source. Existing base markers cannot be added by this PR.
       - name: Require a supported PR and an existing mapped baseline
+        id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -67,9 +64,18 @@ jobs:
           base="$(jq -r .base.sha "${RUNNER_TEMP}/lula-pr.json")"
           [[ "${base}" =~ ^[0-9a-f]{40}$ ]]
           gh api "repos/${GITHUB_REPOSITORY}/contents/charts/takserver/files/config/CoreConfig.xml?ref=${base}" > "${RUNNER_TEMP}/lula-baseline.json"
-          python3 .github/scripts/lula-crawl-preflight.py "${RUNNER_TEMP}/lula-pr.json" "${RUNNER_TEMP}/lula-baseline.json" "${GITHUB_REPOSITORY}" "${RUNNER_TEMP}/lula-preflight.json"
+          mode=()
+          if [[ "${EVENT_NAME}" == "pull_request_target" ]]; then mode=(--automatic); fi
+          python3 .github/scripts/lula-crawl-preflight.py "${RUNNER_TEMP}/lula-pr.json" "${RUNNER_TEMP}/lula-baseline.json" "${GITHUB_REPOSITORY}" "${RUNNER_TEMP}/lula-preflight.json" "${mode[@]}" --github-output "${GITHUB_OUTPUT}"
+
+      - name: Install Node
+        if: steps.preflight.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
 
       - name: Prepare the verified official safety variant without credentials
+        if: steps.preflight.outputs.ready == 'true'
         env:
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           NPM_CONFIG_USERCONFIG: /dev/null
@@ -93,6 +99,7 @@ jobs:
             "${RUNNER_TEMP}/lula-tools/node_modules/lula2/dist/index.safe.mjs"
 
       - name: Comment with complete analysis and safe bot-owned replacement
+        if: steps.preflight.outputs.ready == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash

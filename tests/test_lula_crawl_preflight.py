@@ -3,7 +3,11 @@
 
 import base64
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 import yaml
@@ -38,7 +42,7 @@ class CrawlPreflight(unittest.TestCase):
                       "github.event.pull_request.head.repo.full_name == github.repository"]:
             self.assertIn(guard, job["if"])
         checkout = job["steps"][0]
-        self.assertEqual(checkout["with"]["ref"], "refs/heads/main")
+        self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
         self.assertFalse(checkout["with"]["persist-credentials"])
         command = job["steps"][-1]["run"]
         self.assertIn("index.safe.mjs\" crawl --post-mode=comment", command)
@@ -49,6 +53,7 @@ class CrawlPreflight(unittest.TestCase):
         self.assertFalse(manual["concurrency"]["cancel-in-progress"])
         for step in job["steps"]:
             self.assertNotIn("${{", step.get("run", ""))
+            self.assertNotIn("continue-on-error", step)
         prepare = next(s for s in job["steps"] if "without credentials" in s["name"])
         self.assertNotIn("GITHUB_TOKEN", prepare.get("env", {}))
         self.assertIn("--ignore-scripts", prepare["run"])
@@ -56,6 +61,9 @@ class CrawlPreflight(unittest.TestCase):
         self.assertLess(prepare["run"].index("module.verify_archive"), prepare["run"].index("npm install"))
         preflight = next(s for s in job["steps"] if "existing mapped baseline" in s["name"])
         self.assertIn(".github/scripts/lula-crawl-preflight.py", preflight["run"])
+        self.assertIn("--automatic", preflight["run"])
+        for step in job["steps"][job["steps"].index(preflight)+1:]:
+            self.assertEqual(step["if"], "steps.preflight.outputs.ready == 'true'")
 
     def test_supported_boundary_passes(self):
         PREFLIGHT.validate(self.pr, self.baseline, "owner/repo")
@@ -77,6 +85,52 @@ class CrawlPreflight(unittest.TestCase):
         for sha in [None, "main", "a" * 39, "$(command)"]:
             with self.subTest(sha=sha), self.assertRaises(ValueError):
                 PREFLIGHT.snapshot({**self.pr, "base": {"sha": sha}}, "owner/repo")
+
+    def test_only_known_automatic_oversize_is_a_skip(self):
+        oversized = {**self.pr, "changed_files": 31}
+        self.assertIsNone(PREFLIGHT.evaluate(oversized, self.baseline, "owner/repo", automatic=True))
+        with self.assertRaises(PREFLIGHT.UnsupportedFileCount):
+            PREFLIGHT.evaluate(oversized, self.baseline, "owner/repo")
+        for pr, baseline in [
+            ({**oversized, "changed_files": "31"}, self.baseline),
+            ({**oversized, "draft": True}, self.baseline),
+            ({**oversized, "head": {"sha": "not-a-commit"}}, self.baseline),
+            (oversized, {**self.baseline, "path": "wrong.xml"}),
+            (oversized, {**self.baseline, "content": "not-base64"}),
+        ]:
+            with self.subTest(pr=pr, baseline=baseline), self.assertRaises(ValueError):
+                PREFLIGHT.evaluate(pr, baseline, "owner/repo", automatic=True)
+
+    def test_actual_cli_skip_and_failures_write_no_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pr, baseline, binding, output = [root / name for name in ["pr.json", "baseline.json", "binding.json", "output"]]
+            baseline.write_text(json.dumps(self.baseline))
+            pr.write_text(json.dumps({**self.pr, "changed_files": 31}))
+            command = [sys.executable, str(ROOT / ".github/scripts/lula-crawl-preflight.py"),
+                       str(pr), str(baseline), "owner/repo", str(binding)]
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "Lula automatic crawl skipped: unsupported_changed_file_count")
+            self.assertEqual(output.read_text(), "ready=false\n")
+            self.assertFalse(binding.exists())
+            output.unlink()
+            result = subprocess.run(command + ["--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(binding.exists())
+            pr.write_text(json.dumps(self.pr))
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(output.read_text(), "ready=true\n")
+            self.assertEqual(json.loads(binding.read_text()), PREFLIGHT.snapshot(self.pr, "owner/repo"))
+            output.unlink()
+            binding.unlink()
+            pr.write_text("invalid JSON")
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(binding.exists())
 
     def test_new_marker_foundation_cannot_prove_a_live_crawl(self):
         for baseline in [{}, {**self.baseline, "content": base64.b64encode(b"<Configuration/>").decode()}]:

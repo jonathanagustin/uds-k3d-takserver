@@ -195,3 +195,22 @@ the independent audit SHA-256 is
 Those results validate that composition, not a fresh execution of this public
 recipe. Three API-only SLF4J framework lines remained visible. Full SDK, renderer
 and client acceptance remain separate.
+
+### Successful and historical composition inputs
+
+An explicit reduced composition may select a normal successful native GDAL/JNI
+producer. Its declaration has exactly `schema: 1`, the profile above,
+`producer_kind: "successful"`, `producer_receipt`, `producer_receipt_sha256`, and
+`producer_recipe_sha256` (SHA-256 of the receipt's `recipe` as sorted compact JSON).
+The existing strict public producer replay rechecks current source recipes,
+products, inputs, mapped providers and GNU inventory. Selection additionally
+requires actual checked-JNI/driver markers, the reduced SQLite-disabled object
+closure, registration-symbol absence and ELF dependency checks. A failed producer
+cannot use this successful variant.
+
+The existing finalization-plan/receipt declaration is a separate historical
+variant: its original execution remains failed, and it never manufactures an
+original success. Both variants hash the current transitive validator/producer
+source closure into the SDK recipe and keep runtime driver-absence acceptance
+pending until actual SDK qualification. These source APIs have offline guard
+coverage; neither constitutes a fresh public recipe runtime acceptance.

@@ -58,7 +58,7 @@ def runtime_control_sources(selected_composition):
 
 def recipe():
     files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch','composition.py','patches/obj-buffer-capacity.patch','patches/gdal-reduced-profile-skip.patch','GdalReducedProfileSmoke.java','patches/obj-two-fixture-regression.patch']
-    return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe(),'native_finalization_validation':p.digest(HERE.parent/'native-gdal-jni/finalization_validation.py')}
+    return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe(),'native_finalization_validation':composition.source_closure()}
 
 def verify_native(root,providers):
     raw=p.load(root/'complete.json');current=b.recipe()

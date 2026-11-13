@@ -498,15 +498,19 @@ def identity_progress(directory):
             journal = bounded_json(companion if (companion.exists() or companion.is_symlink()) else path)
             if (companion.exists() or companion.is_symlink()):
                 reason='journal-hash-or-file-mismatch'
-                require(journal.get('schema')==1 and journal.get('journalSHA256')==diagnostic_journal_hash(path),'companion-journal-mismatch')
+                journal_hash=diagnostic_journal_hash(path)
+                require(type(journal.get('schema')) is int and journal['schema']==1 and
+                        journal.get('journalSHA256')==journal_hash,'companion-journal-mismatch')
                 reason='invalid-companion'
                 retained,total,truncated=journal.get('retainedCount'),journal.get('totalCount'),journal.get('truncated')
-                require(type(retained) is int and type(total) is int and 0<=retained<=128 and retained==min(total,128) and
+                require(type(retained) is int and type(total) is int and 0<=total<=4096 and 0<=retained<=128 and retained==min(total,128) and
                         type(truncated) is bool and truncated==(total>128) and len(journal.get('stages',[]))==retained,'invalid-companion-counts')
                 item.update(retainedCount=retained,totalCount=total,truncated=truncated)
                 protocol=journal.get('lastProtocol')
                 require(isinstance(protocol,dict) and set(protocol)=={'protocol-start','protocol-result'},'invalid-protocol-diagnostic')
                 item['lastProtocol']={key:public_protocol(entry) if entry is not None else None for key,entry in protocol.items()}
+            else:
+                journal_hash=diagnostic_journal_hash(path)
             reason='source-run-binding-mismatch'
             guard = journal.get('guard') or {}
             require(all(guard.get(field) == os.environ.get(env) for field, env in
@@ -531,7 +535,7 @@ def identity_progress(directory):
                             stage.update(exitStatus=status,stderrPresent=entry['stderrPresent'])
                     require(len(item['stages']) < 200, 'public progress stage bound')
                     item['stages'].append(stage)
-            item.update(status='observed', journalSHA256=sha(path))
+            item.update(status='observed', journalSHA256=journal_hash)
         except (ValueError, OSError, KeyError, TypeError, AttributeError):
             item = {'status': 'unavailable', 'stages': [], 'reason':reason}
         result[method] = item

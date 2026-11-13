@@ -160,6 +160,14 @@ class FailureEvidenceTests(unittest.TestCase):
             for field in ('sourceSHA','runID'):
                 value=json.loads(saved);value['guard'][field]='tampered';companion.write_text(json.dumps(value))
                 self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+            for key,replacement in [('schema',True),('totalCount',4097)]:
+                value=json.loads(saved);value[key]=replacement;companion.write_text(json.dumps(value))
+                self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+            companion.unlink();target=folder/'other.json';target.write_text(saved);companion.symlink_to(target)
+            self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+            companion.unlink();companion.write_text(saved)
+            with patch.object(S,'sha',side_effect=AssertionError('must reuse bounded streamed hash')):
+                self.assertEqual(S.identity_progress(root)['package']['status'],'observed')
             companion.write_text(saved);instance.evidence.write_text(instance.evidence.read_text()+' ')
             self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
             companion.unlink();self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')

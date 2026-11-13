@@ -206,7 +206,7 @@ class PackageKeyTests(unittest.TestCase):
                     path.write_text('original\n')
             self.assertEqual(key(), baseline)
 
-    def test_exact_lint_metadata_preserves_key_but_build_inputs_invalidate(self):
+    def test_exact_metadata_and_observers_preserve_key_but_build_inputs_invalidate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             def git(*args):
@@ -230,9 +230,12 @@ class PackageKeyTests(unittest.TestCase):
                 path.write_text('original\n')
             git('add', *runtime)
             baseline = key()
-            for name in ['.codespellrc', '.license_config.yaml', 'hk.pkl']:
+            for name in ['.codespellrc', '.license_config.yaml', 'hk.pkl',
+                         '.github/scripts/collect-install-receipt.py',
+                         '.github/scripts/install-reuse-shadow.py']:
                 with self.subTest(metadata=name):
                     path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text('original\n')
                     git('add', name)
                     self.assertEqual(key(), baseline, 'adding lint metadata')

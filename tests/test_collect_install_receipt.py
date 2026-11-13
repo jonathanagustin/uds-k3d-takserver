@@ -13,6 +13,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+
+import yaml
 from unittest.mock import patch
 
 from tests import test_install_artifact_inputs as artifact_fixtures
@@ -307,6 +309,35 @@ class CollectorTests(unittest.TestCase):
             collector.command(self.root, [sys.executable, '-c', 'import time; time.sleep(60)'],
                               dict(os.environ), seconds=0.1)
         self.assertLess(time.monotonic() - started, 5)
+
+    def test_observer_steps_are_nonfatal_and_their_unit_coverage_is_unconditional(self):
+        document = yaml.safe_load((ROOT / '.github/workflows/test.yaml').read_text())
+        steps = document['jobs']['validate-install']['steps']
+        names = {'Capture install receipt source', 'Capture pinned install inputs',
+                 'Collect optional install receipt'}
+        observed = {step['name'] for step in steps if step.get('name') in names}
+        self.assertEqual(observed, names)
+        for step in steps:
+            if step.get('name') in names:
+                self.assertTrue(step['continue-on-error'])
+                self.assertLessEqual(step['timeout-minutes'], 3)
+                self.assertIn('timeout --kill-after=2s', step['run'])
+        unit = yaml.safe_load((ROOT / '.github/workflows/unit-tests.yaml').read_text())
+        for trigger in unit.get('on', unit.get(True)).values():
+            if isinstance(trigger, dict):
+                self.assertNotIn('paths', trigger)
+                self.assertNotIn('paths-ignore', trigger)
+        producer = []
+        for job in unit['jobs'].values():
+            for step in job.get('steps', []):
+                if step.get('name') == 'Install execution receipt producers':
+                    self.assertNotIn('if', job)
+                    self.assertNotIn('if', step)
+                    producer.append(step)
+        self.assertEqual(len(producer), 1)
+        for module in ('test_install_receipt', 'test_checkpoint_identity', 'test_install_artifact_inputs',
+                       'test_collect_install_receipt', 'test_install_reuse_shadow'):
+            self.assertIn('tests.' + module, producer[0]['run'])
 
     def test_workflow_captures_before_pin_and_only_uploads_authenticated_success(self):
         source = (ROOT / '.github/workflows/test.yaml').read_text()

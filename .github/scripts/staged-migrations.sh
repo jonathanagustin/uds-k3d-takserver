@@ -88,7 +88,7 @@ fi
 if [[ "${SCENARIO}" != velero ]]; then
   if [[ "${identity_method}" == manual || "${identity_method}" == combined ]]; then
     mkdir -m 700 "${trial}/identity"
-    timeout --kill-after=10s 2700 python3 tests/workload-identities/drive.py round-trip --evidence "${trial}/identity/journal.json"
+    timeout --kill-after=10s 2700 python3 tests/workload-identities/drive.py round-trip --evidence "${trial}/identity/journal.json" --candidate-plan "${trial}/candidate/plan.json"
   fi
   if [[ "${identity_method}" == package || "${identity_method}" == combined ]]; then
     mkdir -m 700 "${trial}/package-identity"

@@ -123,6 +123,7 @@ published images; do not add image builds, a cold matrix or a larger runner.
    ```bash
    uv run --no-project --with pyyaml==6.0.3 python3 \
      tests/workload-identities/drive.py round-trip \
+     --candidate-plan "$RUNNER_TEMP/staged-migrations/candidate/plan.json" \
      --evidence "$RUNNER_TEMP/identity-trial/journal.json"
    ```
 
@@ -254,3 +255,10 @@ partial progress diagnostics, never an acceptance result. A genuine Package
 preflight mismatch also prints only its existing safe field paths and whole-spec
 hashes after its exclusive private write succeeds; unknown map keys remain
 opaque hashes and no spec values or rendering inputs are printed.
+
+Both manual and package trials bind the reviewed candidate plan and its config
+hash before rendering. Zarf replaces `###ZARF_VAR_DOMAIN###` after Helm rendering;
+the shared expected-render path now emulates only that known token using the
+bound config's DOMAIN. It does not infer a domain from a live URL or omit SSO
+fields. All other Helm data, discovery/schema checks and exact specification
+comparison remain unchanged. Plan/config drift or an unbound token fails closed.

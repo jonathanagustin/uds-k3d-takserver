@@ -386,6 +386,13 @@ class Driver:
         self._last_render_inputs = observed
         return observed
 
+    def bind_zarf_domain(self, candidate_plan):
+        self.guard()
+        binding=render_inputs.bind_domain_plan(candidate_plan,os.environ.get('GITHUB_SHA'))
+        require('zarfDomainBinding' not in self.state or self.state['zarfDomainBinding']==binding,'bound Zarf deployment inputs changed')
+        self.state['zarfDomainBinding']=binding
+        return binding
+
     def render(self, phase):
         observed = self.observe_render_inputs()
         values = copy.deepcopy(self.values)
@@ -397,6 +404,10 @@ class Driver:
         text = self.command(args, json.dumps(values))
         docs = [d for d in yaml.safe_load_all(text) if d]
         package = next(d for d in docs if d['kind'] == 'Package' and d['metadata']['name'] == NS)
+        binding=self.state.get('zarfDomainBinding')
+        if binding:
+            require(render_inputs.bind_domain_plan(binding['plan'],os.environ.get('GITHUB_SHA'))==binding,'bound Zarf deployment inputs changed')
+        package['spec']=render_inputs.postrender_domain(package['spec'],binding['DOMAIN'] if binding else None)
         package['spec'] = render_inputs.apply_defaults(package['spec'], self._package_schema)
         return package, [d for d in docs if (d['kind'], d['metadata']['name']) in RBAC]
 
@@ -460,6 +471,10 @@ class Driver:
         binding.update(meshConfigUID=self.state['meshConfigUID'], meshConfigHash=self.state['meshConfigHash'], phase=phase)
         if binding_extra:
             binding.update(binding_extra)
+        deployment=self.state.get('zarfDomainBinding')
+        if deployment:
+            require(binding.get('baselineValuesSHA256',deployment['configSHA256'])==deployment['configSHA256'],'phase/render deployment bindings differ')
+            binding['baselineValuesSHA256']=deployment['configSHA256']
         snapshot = phase_evidence.capture(binding, guards=guard_api(), **self._last_policy_observation,
             **self._last_identity_observation, baseline_network=self.state['baselineNetwork'], account=account,
             baseline_uids=self.state['deploymentUIDs'], template_fingerprints=self.state['templateFingerprints'],
@@ -925,10 +940,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('round-trip', 'reverse'))
     parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--candidate-plan',type=Path,help='Reviewed staged plan binding the deployed Zarf DOMAIN')
     args = parser.parse_args()
     driver = Driver(args.evidence.resolve())
     try:
         if args.operation == 'round-trip':
+            require(args.candidate_plan is not None,'hash-bound candidate plan required for Zarf DOMAIN')
+            driver.bind_zarf_domain(args.candidate_plan)
             resources = driver.prepare()
             driver.compile_probe()
             driver.create({'apiVersion': 'v1', 'kind': 'ServiceAccount',

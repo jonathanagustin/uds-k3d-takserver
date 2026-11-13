@@ -56,7 +56,8 @@ A local, not-yet-published workflow preparation adds a trusted-main
 `pull_request_target` comment path alongside the explicitly authorized manual
 path. Both use the same live preflight, target only open non-draft same-repository
 PRs into `main`, reject more than 30 changed files, and require the existing
-mapped CoreConfig base marker pair. They check out only `refs/heads/main`, never
+mapped CoreConfig base marker pair. They check out only immutable `github.sha`: the trusted base commit for
+`pull_request_target` and the guarded main run commit for manual dispatch, never
 PR code. The existing read-only PR mapping validation remains separate.
 
 The prepared paths share per-PR serialization and use an explicit project safety
@@ -122,3 +123,11 @@ path and complete, ordered XML-comment marker pairs. Marker substrings in a
 value, reversed pairs, and unfinished or nested blocks do not establish the
 existing baseline. These checks do not replace the outstanding live comment
 acceptance or activate automatic posting.
+
+In the local activation preparation, a valid automatic PR exceeding the pinned
+30-file limit skips with fixed reason `unsupported_changed_file_count`; no Node
+installation, crawler execution, binding file or comment mutation follows.
+Manual requests over that limit still fail. Malformed API/JSON responses,
+invalid source bindings and other guard errors remain failures; there is no
+blanket error suppression. Checkout uses the workflow run's immutable trusted
+commit rather than a mutable main ref.

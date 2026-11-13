@@ -45,7 +45,8 @@ does not install npm dependencies, fetch credentials, or invoke the generated
 CLI. Version pinning of the package does not freeze every transitive dependency.
 
 The local workflow preparation uses this variant for both manual and automatic
-`pull_request_target` entry points, with trusted main checkout only, same-repository
+`pull_request_target` entry points, with immutable trusted `github.sha` checkout only (base commit for PR-target,
+guarded main run commit for manual), same-repository
 open non-draft main-target PR guards, the 30-file bound, existing base SC-8 markers,
 and job-only PR write permission. It does not check out or execute PR code or
 interpolate PR metadata into shell code. Both entry points serialize the same PR.
@@ -63,3 +64,11 @@ still applies. Local mocked API tests establish these safety behaviors, not live
 comment acceptance. A later authorized small PR changing an existing mapped block
 must produce an actual comment with the expected UUID and preserved run/source
 and PR identities. No crawl, comment, or GitHub write was performed here.
+
+In the local activation preparation, a valid automatic PR exceeding the pinned
+30-file limit skips with fixed reason `unsupported_changed_file_count`; no Node
+installation, crawler execution, binding file or comment mutation follows.
+Manual requests over that limit still fail. Malformed API/JSON responses,
+invalid source bindings and other guard errors remain failures; there is no
+blanket error suppression. Checkout uses the workflow run's immutable trusted
+commit rather than a mutable main ref.

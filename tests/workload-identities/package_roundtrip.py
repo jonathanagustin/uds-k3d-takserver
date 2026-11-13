@@ -23,7 +23,10 @@ failure_spec=importlib.util.spec_from_file_location('identity_failure_evidence',
 F=importlib.util.module_from_spec(failure_spec);failure_spec.loader.exec_module(F)
 PHASES=('shared','transition','strict','rollback','shared')
 VARIABLES={'DOMAIN','TAK_IMAGE_TAG','FILESYSTEM_BACKUP','POSTGRES_STORAGE_CLASS','CLOUDTAK_STORAGE_CLASS'}
-CORE_NAMESPACES=('kube-system','istio-system','uds-system','velero')
+# Pinned k3d-slim-dev Core 1.16.0: core-base (Pepr/Istio) and
+# core-identity-authorization (Keycloak); Velero is not a SLIM component.
+# https://github.com/defenseunicorns/uds-core/blob/v1.16.0/bundles/k3d-slim-dev/uds-bundle.yaml
+CORE_NAMESPACES=('kube-system','istio-system','pepr-system','keycloak')
 
 def digest(path):
     h=hashlib.sha256()

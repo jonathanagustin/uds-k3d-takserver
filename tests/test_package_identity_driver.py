@@ -60,6 +60,38 @@ class PackageGuards(unittest.TestCase):
             archive.write_bytes(b'changed')
             with self.assertRaises(ValueError):P.bind_inputs(archive,expected,plan)
 
+    def test_pinned_slim_core_snapshot_preserves_every_observed_identity(self):
+        namespaces=['default','kube-system','istio-system','pepr-system','keycloak','velero','takserver','cloudtak']
+        app_agent={'metadata':{'name':'node-agent','uid':'app-agent','annotations':{
+            'meta.helm.sh/release-name':'uds-takserver-config','meta.helm.sh/release-namespace':'takserver'}}}
+        def get(kind,name=None,namespace=None):
+            if kind=='namespaces':return {'items':[{'metadata':{'name':ns}} for ns in namespaces]}
+            if kind=='namespace':return {'metadata':{'uid':'ns-'+name}}
+            if kind=='configmap':return {'data':{'mesh':'bound mesh'}}
+            objects=[]
+            if kind=='deployments':objects=[{'metadata':{'name':'controller','uid':namespace+'-controller'}}]
+            if kind=='daemonsets' and namespace=='velero':objects=[app_agent,{'metadata':{'name':'core-agent','uid':'core-agent'}}]
+            return {'items':objects}
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.get=get
+            snapshot=instance.core_snapshot()
+            self.assertNotIn('namespace/uds-system',snapshot)
+            for ns in ('default','kube-system','istio-system','pepr-system','keycloak','velero'):
+                self.assertEqual(snapshot['namespace/'+ns],'ns-'+ns)
+                self.assertEqual(snapshot[ns+'/deployments/controller'],ns+'-controller')
+            self.assertNotIn('velero/daemonsets/node-agent',snapshot)
+            self.assertEqual(snapshot['velero/daemonsets/core-agent'],'core-agent')
+            self.assertEqual(snapshot['mesh'],P.D.sha({'mesh':'bound mesh'}))
+            namespaces.remove('velero')
+            self.assertNotIn('namespace/velero',instance.core_snapshot())
+            for required in ('kube-system','istio-system','pepr-system','keycloak'):
+                namespaces.remove(required)
+                with self.subTest(missing=required),self.assertRaisesRegex(ValueError,'required Core namespaces missing'):
+                    instance.core_snapshot()
+                namespaces.append(required)
+            namespaces.append('velero');app_agent['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+            self.assertEqual(instance.core_snapshot()['velero/daemonsets/node-agent'],'app-agent')
+
     def test_core_identity_change_refuses_before_any_package_dispatch(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None;instance.inputs_unchanged=lambda:None

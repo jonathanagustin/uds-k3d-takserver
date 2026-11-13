@@ -114,6 +114,77 @@ done
 check_match ".github/workflows/staged-migrations.yaml.bak" relevant
 check_match ".github/scripts/staged-migrations-extra.py" relevant
 check_match ".github/scripts/staged-migrations.sh.bak" relevant
+# These exact files have only manual staged-migration and unconditional Unit
+# callers. Their shared identity/render/data/flow dependencies stay sensitive.
+optional_identity_paths=(
+  tests/workload-identities/package_roundtrip.py
+  tests/workload-identities/phase_evidence.py
+  tests/workload-identities/failure_evidence.py
+  tests/workload-identities/README.md
+  tests/test_package_identity_driver.py
+  tests/test_identity_phase_evidence.py
+  tests/test_identity_failure_evidence.py
+)
+for optional_identity in "${optional_identity_paths[@]}"; do
+  check_match "${optional_identity}" ignore
+  check_decide false "${optional_identity}"
+  check_decide true "${optional_identity}"$'\ntests/flows.py'
+  check_match "${optional_identity}/nested-helper.py" relevant
+done
+check_decide false "$(printf '%s\n' "${optional_identity_paths[@]}")"
+for sensitive_identity in tests/workload-identities/drive.py tests/workload-identities/render_inputs.py tests/workload-identities/retained_state.py tests/flows.py; do
+  check_match "${sensitive_identity}" relevant
+  check_decide true $'tests/workload-identities/package_roundtrip.py\n'"${sensitive_identity}"
+done
+check_match "tests/workload-identities/new-helper.py" relevant
+check_match "tests/workload-identities/package_roundtrip_extra.py" relevant
+check_match "tests/workload-identities/README-extra.md" relevant
+check_match "tests/workload-identities/phase_evidence.py.bak" relevant
+# Editing this policy also edits Test/Package, so it qualifies the runtime
+# baseline once; subsequent optional-only source changes do not repeat it.
+check_decide true $'.github/scripts/runtime-paths.sh\n.github/workflows/test.yaml\n.github/workflows/package.yaml\ntests/test_runtime_paths.sh'
+
+# Paths are classified even when absent from the worktree. Exercise real Git
+# additions/deletions for renames rather than relying on file existence.
+python3 - "${script}" <<'PY'
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+classifier = sys.argv[1]
+with tempfile.TemporaryDirectory(prefix='identity-paths-') as directory:
+    root = Path(directory)
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.DEVNULL).decode()
+    git('init', '-q')
+    folder = root / 'tests/workload-identities'
+    folder.mkdir(parents=True)
+    (folder / 'package_roundtrip.py').write_text('optional fixture\n')
+    (folder / 'drive.py').write_text('shared runtime fixture\n')
+    git('add', '.')
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base')
+    def check(want):
+        git('add', '-A')
+        paths = git('diff', '--cached', '--name-only', '--no-renames').splitlines()
+        env = {k: v for k, v in os.environ.items() if k != 'GITHUB_OUTPUT'}
+        env['CHANGED'] = '\n'.join(paths)
+        actual = subprocess.check_output([classifier, 'decide'], env=env).decode().strip()
+        assert actual == 'runtime=' + want, (paths, actual, want)
+        print('ok: Git changed paths', paths, '->', actual)
+    (folder / 'package_roundtrip.py').rename(folder / 'unreviewed-probe.py')
+    check('true')
+    git('reset', '--hard', '-q', 'HEAD')
+    (folder / 'drive.py').rename(folder / 'phase_evidence.py')
+    check('true')
+    git('reset', '--hard', '-q', 'HEAD')
+    (folder / 'drive.py').unlink()
+    check('true')
+    git('reset', '--hard', '-q', 'HEAD')
+    (folder / 'package_roundtrip.py').unlink()
+    check('false')  # optional deletion still runs the unconditional safety tests
+PY
 for shared_path in tests/backup-restore.sh tests/backup-names.sh tests/ephemeral-cluster.py tests/upgrade-agent-watch.py .github/scripts/node-agent-ready.sh tasks/test.yaml bundle/full/uds-bundle.yaml; do
   check_match "${shared_path}" relevant
   check_decide true $'.github/scripts/staged-migrations.sh\n'"${shared_path}"
@@ -256,6 +327,7 @@ must_relevant() {
       ;;
     tests/*)
       case "${path}" in
+        tests/workload-identities/package_roundtrip.py | tests/workload-identities/phase_evidence.py | tests/workload-identities/failure_evidence.py | tests/workload-identities/README.md) return 1 ;;
         tests/demo/* | tests/test_* | tests/playwright.demo.config.ts) return 1 ;;
         *) return 0 ;;
       esac

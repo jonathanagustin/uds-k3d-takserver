@@ -11,15 +11,16 @@ FAMILIES = (
 )
 
 
-def members(names):
-    return {name for name in names if any(re.fullmatch(re.escape(family) + r'(?:\$[^/]+)?\.class', name) for family in FAMILIES)}
+def members(names, families=FAMILIES):
+    return {name for name in names if any(re.fullmatch(re.escape(family) + r'(?:\$[^/]+)?\.class', name) for family in families)}
 
 
-def merge(original, replacement):
-    expected = members(original)
+def merge(original, replacement, extra_families=()):
+    families = FAMILIES + tuple(extra_families)
+    expected = members(original, families)
     if not expected or set(replacement) != expected:
         raise ValueError('only complete existing reviewed loader/resource/provider/GLES20 families may change')
-    if not all(any(name == family + '.class' for name in expected) for family in FAMILIES):
+    if not all(any(name == family + '.class' for name in expected) for family in families):
         raise ValueError('original required class family missing')
     result = dict(original)
     result.update(replacement)

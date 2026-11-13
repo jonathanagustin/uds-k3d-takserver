@@ -134,3 +134,64 @@ origins and the loaded native providers matched their pinned inputs.
 These component checks cover shader upload through the real wrapper. A newly
 assembled SDK bundle, full TAK renderer and complete client still need qualification.
 The package qualification above refers to the prior recipe.
+
+## Explicit reduced GDAL composition and OBJ capacity repair
+
+The package recipe repairs the genuine `ObjModelSpi` two-class family. Small valid
+OBJ files can estimate index-buffer growth below the eight bytes required for a
+vertex/UV index pair. The patch reserves a complete tuple, grows geometrically
+and checks integer overflow before allocation. It preserves all other class names.
+
+The optional `--composition declaration.json --composition-sha256 SHA256` selects
+`public-cpu-gdal244-kml-v1`. Keep `--providers` pointing at the **original native
+producer's providers**. Their strict verifier and equality comparison are unchanged.
+The separate composition declaration has exactly these keys:
+
+```json
+{
+  "schema": 1,
+  "profile": "public-cpu-gdal244-kml-v1",
+  "finalization_plan": "/data/evidence/finalization-plan.json",
+  "finalization_plan_sha256": "<reviewed SHA-256>",
+  "finalization_receipt": "/data/evidence/finalization/complete.json",
+  "finalization_receipt_sha256": "<reviewed SHA-256>"
+}
+```
+
+These are caller-declared evidence locations, not prescribed host paths. The
+read-only `native-gdal-jni/finalization_validation.py` API independently validates
+the specifically supported stopped GNU-inventory execution and its existing
+successful finalization. It checks the original source checkpoint, failed receipt,
+complete retained evidence, actual ELF products and consumed providers. It writes
+nothing and runs no compiler or native/JVM probe. It does not create producer
+success. Other failure kinds require their own reviewed validation workflow.
+
+Selection requires the actual reduced closure: `HAVE_SQLITE=no`, 1,073 objects,
+absent SQLite-driver registration symbols and both verified GDAL products. Only
+this explicit selection removes the automatic `GDAL_SKIP=MBTiles,GPKG` assignment
+from the genuine three-class `GdalLibrary` family. Unselected/full-profile source
+retains the exact upstream assignment. Caller configuration is preserved by the
+reduced variant. No warning filter, error handler or driver deregistration is added.
+
+Qualification runs actual driver-registry absence, real initializer and remaining
+MEM/GTiff checks with stock loading and provider-map validation, including relocation.
+The package sidecar describes assembly provenance; runtime qualification is recorded
+separately in the completion receipt. Neither grants renderer or client acceptance.
+
+The complete six-format regression suite belongs to the separately reviewed
+`takx/kernel-regressions` change (draft #506); this change does not substitute an
+unreviewed copy of that directory. Apply `patches/obj-two-fixture-regression.patch`
+to that reviewed source before its full qualification: it preserves the original
+171-byte tetrahedron and repeats the identical analytic geometry assertions on a
+compact valid fixture. Retain DTED, MBTiles, GeoPackage, KML, elevation and OBJ,
+relocation and both resource omissions as required acceptance controls.
+
+The separate actual candidate04 composition completed all eleven phases, six
+formats (including both OBJ fixtures), relocation and both omissions with zero
+native/JNI warnings. Its completion receipt SHA-256 is
+`f8436e590294cf38683dded113fb250d5301a4146bbae10a278ee361de512a1d`;
+the independent audit SHA-256 is
+`dc5dddb9e9c15c74e2dcbffde263edb79a6669fd7cb7bba8c94a73c802ff766e`.
+Those results validate that composition, not a fresh execution of this public
+recipe. Three API-only SLF4J framework lines remained visible. Full SDK, renderer
+and client acceptance remain separate.

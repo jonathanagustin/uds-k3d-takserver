@@ -1,0 +1,49 @@
+--- a/ObjModelSpi.java
++++ b/ObjModelSpi.java
+@@ -41,9 +41,16 @@
+         return buf;
+     }
+ 
+-    private static ByteBuffer reallocate(ByteBuffer src, int length)
+-    {
+-        ByteBuffer dst = Unsafe.allocateDirect(length);
++    private static ByteBuffer reallocate(ByteBuffer src, int required, int growth)
++    {
++        // Small valid OBJ files can have an estimated growth smaller than one
++        // complete vertex/index tuple. Reserve the entire pending tuple.
++        long minimum = (long) src.position() + required;
++        long geometric = (long) src.capacity() + Math.max(growth, src.capacity() / 2);
++        long capacity = Math.max(minimum, geometric);
++        if (required < 0 || capacity > Integer.MAX_VALUE)
++            throw new IllegalArgumentException("OBJ buffer capacity exceeds supported range");
++        ByteBuffer dst = Unsafe.allocateDirect((int) capacity);
+         dst.order(ByteOrder.nativeOrder());
+         src.flip();
+         // XXX - is it quicker to do a memcpy?
+@@ -139,7 +146,7 @@
+                                 if (parts.length == 3 || parts.length == 4 || parts.length == 6 || parts.length == 7 || parts.length == 8)
+                                 {
+                                     if (vertices.remaining() < 12)
+-                                        vertices = reallocate(vertices, vertices.capacity() + ((int) fileLength / 8));
++                                        vertices = reallocate(vertices, 12, (int) fileLength / 8);
+ 
+                                     vertices.putFloat(Float.parseFloat(parts[0]));
+                                     vertices.putFloat(Float.parseFloat(parts[1]));
+@@ -154,7 +161,7 @@
+                                 if (parts.length == 2 || parts.length == 3)
+                                 {
+                                     if (texCoords.remaining() < 8)
+-                                        texCoords = reallocate(texCoords, texCoords.capacity() + ((int) fileLength / 12));
++                                        texCoords = reallocate(texCoords, 8, (int) fileLength / 12);
+                                     texCoords.putFloat(Float.parseFloat(parts[0]));
+                                     texCoords.putFloat(Float.parseFloat(parts[1]));
+                                 } else
+@@ -181,7 +188,7 @@
+                             if (faceIndices.size() == 2 || faceIndices.size() == 3)
+                             {
+                                 if (vertTexCoordIndices.remaining() < 8)
+-                                    vertTexCoordIndices = reallocate(vertTexCoordIndices, vertTexCoordIndices.capacity() + ((int) fileLength / 24));
++                                    vertTexCoordIndices = reallocate(vertTexCoordIndices, 8, (int) fileLength / 24);
+                                 vertTexCoordIndices.putInt(Integer.parseInt(faceIndices.get(0)));
+                                 vertTexCoordIndices.putInt(Integer.parseInt(faceIndices.get(1)));
+                             } else

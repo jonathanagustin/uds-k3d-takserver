@@ -1,17 +1,17 @@
 # Disposable workload-identity acceptance driver
 
 `drive.py` implements a guarded shared → transition → strict → rollback → shared
-trial for issue #32. It has **not run against a cluster**. Fixtures and protocol
-peers validate failure handling, not real policy continuity or either architecture.
+trial for issue #32. Live acceptance is still required on both architectures. Fixtures and protocol
+peers validate failure handling, not real policy continuity.
 Defaults remain shared. This is not a production Helm migration command.
 
 ## Fixed scope and prerequisites
 
 Run only from a reviewed checkout inside this repository's explicitly selected
-GitHub Actions job, after the ordinary Full Core install and its initial checks.
+GitHub Actions job, after its Unified Defense Stack (UDS) Core install and shared-baseline checks.
 The shared [ephemeral guard](../ephemeral-cluster.py) binds `k3d-uds` to this job,
 source commit, local Unix-socket Docker daemon, actual running k3d node container,
-published API port, kube-system UID and matching create-once marker. The shared pre-bootstrap operation refuses an existing/stopped cluster
+published application programming interface (API) port, the kube-system unique identifier (UID) and matching create-once marker. The shared pre-bootstrap operation refuses an existing/stopped cluster
 or matching context before creating a trial. There is no
 local/production bypass or arbitrary context/command hook. The driver also
 refuses changed consumed source files.
@@ -20,22 +20,22 @@ The trial expects:
 
 - A current shared-identity install of the same config chart and values, with
   exact Helm owners `uds-takserver-config/takserver`, `takserver/takserver` and
-  `takserver-oidc/pepr-system`. The four fixed TAK Deployments and the two fixed
-  module Deployment UIDs are retained. Dedicated migration RBAC must be absent
+  `takserver-oidc/pepr-system`. The four fixed Team Awareness Kit (TAK) Deployments and the two fixed
+  module Deployment UIDs are retained. Dedicated migration role-based access control (RBAC) must be absent
   initially; unexpected existing objects are not adopted.
-- UDS Core1.16's `uds/package` and `uds/generation` policy labels, current Package
+- UDS Core 1.16's `uds/package` and `uds/generation` policy labels, current Package
   `Ready`/`observedGeneration`, and the ambient Pod redirection annotation.
   Istio's `istio` ConfigMap in `istio-system` must use the supported root namespace
   and cluster.local trust domain. Applicable root-namespace ALLOW policies are
   examined too; unknown/broad policies stop the trial instead of being ignored.
-- One Ready Ignite, PostgreSQL primary and NATS backend. Their Pod UIDs, IPs and
+- One Ready Ignite, PostgreSQL primary and NATS backend. Their Pod UIDs, Internet Protocol (IP) addresses and
   ServiceAccounts must remain unchanged during the experiment. Ignite must mount
-  the inspected `takserver-ignite-configmap`, have no SSL/indirect-import listener
+  the inspected `takserver-ignite-configmap`, have no Secure Sockets Layer (SSL) or indirect-import listener
   configuration, and contain `/opt/ignite/libs/ignite-core-2.17.0.jar`.
-  A TLS or otherwise different listener needs a separate source-backed probe.
+  A Transport Layer Security (TLS) or otherwise different listener needs a separate source-backed probe.
 - Host `helm`, `uds`, `kubectl`, Docker, Python3.10+ with PyYAML6.0.3, and a Java
   compiler supporting `--release17`. The local k3d kubeconfig must carry inline
-  client certificate/key and CA data for conditional deletion; token/exec/cloud
+  client certificate/key and certificate authority (CA) data for conditional deletion; token/exec/cloud
   authentication is refused. No client private key enters evidence or Pod probes.
 - The actual application images must contain Bash, env, base64, sha256sum and a
   Java17+ runtime, with writable `/tmp`. Control Pods reuse their immutable image
@@ -69,8 +69,8 @@ Pod can be omitted to make rollout pass.
 Fresh **application-data reachability** checks cover every live migrated Pod:
 
 - All four workloads read Ignite2.17's18-byte NodeId greeting: little-endian
-  message type -1 plus a nonzero UUID. They do not join the cluster or touch cache
-  data. This is protocol reachability, not a successful Ignite application RPC.
+  message type -1 plus a nonzero universally unique identifier (UUID). They do not join the cluster or touch cache
+  data. This is protocol reachability, not a successful Ignite application remote procedure call (RPC).
 - API, messaging and plugins also receive a PostgreSQL SSLRequest response and
   NATS INFO greeting. No database authentication/write or NATS publication occurs.
 - For each source, paired unready, Job-controlled probe Pods use the same actual image and
@@ -78,7 +78,7 @@ Fresh **application-data reachability** checks cover every live migrated Pod:
   unrelated account. They are created with a neutral label, then relabeled using
   guarded Pod metadata updates: the existing CREATE-only app injector would
   otherwise start the real application initialization, which is not this probe.
-  No webhook or policy is disabled. Both control network/DNS paths are checked.
+  No webhook or policy is disabled. Both control network paths and Domain Name System (DNS) resolution are checked.
   A real controlling Job prevents adoption by a Deployment ReplicaSet; its
   selector labels and controller UID are preserved and checked after relabeling.
   The permitted control and real application must receive data before and after
@@ -86,9 +86,9 @@ Fresh **application-data reachability** checks cover every live migrated Pod:
   additionally denied on PostgreSQL. Ignite legitimately retains its legacy
   identity, so the driver does not pretend every legacy flow can be denied.
 
-The helper strips Java option environment variables only for its own tiny JVM,
+The helper strips Java option environment variables only for its own small Java virtual machine (JVM),
 with bounded heap/metaspace; it does not change the application's environment.
-TCP connect alone, kubectl errors, malformed/partial protocol frames and an
+Transmission Control Protocol (TCP) connect alone, kubectl errors, malformed/partial protocol frames and an
 unready positive backend cannot pass. Protocol source references are in
 [protocol-contract.json](protocol-contract.json). These are representative live
 paths for each changed identity, not a claim to exercise every allowed port or
@@ -154,3 +154,84 @@ Offline tests:
 uv run --no-project --with pyyaml==6.0.3 python3 -B -m unittest \
   tests.test_identity_rollout_driver tests.test_ephemeral_cluster -v
 ```
+
+## Supported package phase acceptance (explicit opt-in)
+
+The manual workflow additionally offers `identity_method=package` or `combined`
+with `scenario=identities`. The default remains the existing manual trial;
+ordinary workflows never activate this experiment. `combined` runs the existing
+manual round trip first, then the package path on its restored shared baseline.
+
+The package path reuses one downloaded application archive, verified by its
+recorded hash, and the bound staged configuration. It deploys actual Zarf package values through
+`shared -> transition -> strict -> rollback -> shared`. `rollback` is the reverse
+transition: both principal sets remain allowed while admission restores legacy
+accounts. Selecting `transition` again would continue forcing dedicated accounts.
+No phase is implemented by patching the Package, Deployments or Pepr environment.
+Only the existing UID-bound disposable probe Job/Pod controls are created/labeled.
+
+Pinned command-line interface (CLI) capability checks run before cluster creation. Each deployment rechecks
+archive/config hashes, the job-local cluster guard and default context. Read-only
+policy, workload and Pepr validators require convergence; the same protocol
+positive/negative controls run with unchanged credentials and protocol paths.
+Each phase also runs existing web TLS, Marti API and flow checks. Complete bounded
+phase snapshots are projected into private immutable files and replayed by the
+same pure validators before fixed public verdicts are emitted. A boolean alone
+cannot establish acceptance; unsupported/missing observations fail closed.
+
+`fresh_strict=true` additionally authorizes removal of only the bound `takserver`
+application package after a successful reversal. Core namespace/controller/Package
+UIDs must remain unchanged. The source-owned local backup node-agent is part of
+this application package; it is distinguished from the retained Core Velero server.
+Before removal, cleanup binds exact application persistent volume claim (PVC) UIDs and persistent volume (PV) claim references and
+StatefulSet/chart ownership, stored Helm hooks, and the known certificate generator.
+After all consumers are gone, only these exact retained objects may be deleted,
+using API UID/resourceVersion preconditions. Unknown or foreign leftovers refuse
+fresh acceptance; no namespace deletion or broad PVC/Secret cleanup is used.
+The same archive then installs strict with new application UID baselines and the
+original Core guard. This is separate from migration/rollback acceptance.
+
+Across the five phase deployments, private credential-data hashes must remain
+unchanged. The known `before-hook-creation` keystore Secret may legitimately get a
+new UID while retaining identical data and hook ownership. PVC/PV identities remain
+stable, and an exact generated test-only file on each application data volume must
+retain its hash. Only that owned file is removed; no database file is overwritten.
+Hashes and retained-object metadata stay private and are not public artifact fields.
+
+The package trial has its own 120-minute wall budget and 125-minute outer timeout;
+individual deployments are capped at25minutes and explicit package removal at15.
+No live execution or architecture acceptance is implied by these source fixtures.
+Both native architectures still require actual supported-package and clean strict
+results before the issue's remaining acceptance can be claimed.
+
+Typed phase evidence is bounded to256KiB per phase and16 private0600 files in a
+0700 directory. It records complete root/local policy list resource versions and
+counts, safe workload identities and hashes of complete original templates/specs.
+Pod environment, commands and full annotations are excluded. Each snapshot is
+replayed through the same policy, workload and Pepr guards; missing old facts or
+unsupported credential-capable conditions produce insufficient evidence rather
+than being silently dropped. Bound API versions and Package custom resource definition (CRD) schema identity
+also accompany rendering, so API capability/default changes cannot be waived.
+Public output contains fixed verdicts and reviewed input/guard/capture hashes,
+not private manifests. Existing f3c09ad1 runs do not establish this new schema's
+acceptance merely because their booleans or phase names look similar.
+
+Known API-generated retained state is source-bound rather than broadly ignored:
+`takserver-startup` must have the literal completed startup annotation and ready
+value. The CloudTAK admin copy must have its source label and exactly match the
+current certificate/keystore parents. The optional watcher enrollment cache is
+recognized only by its source label; active TakClient resources prevent retirement.
+UID/resourceVersion checks still apply to every exact deletion.
+
+Known infrastructure trust maps are never deleted by this cleanup. Before removal,
+their exact UID, public certificate data and source metadata are bound to the
+retained Kubernetes/Istio/Core authority map UID/data. The UDS bundle additionally
+requires the exact Package owner reference and controller labels from Core1.16.
+Only these bound observations may remain during clean-state checks; a reserved
+name alone, an extra payload, or changed UID/data/source still refuses acceptance.
+
+CloudTAK is required, not an optional skip, for this issue's package acceptance.
+The existing `test:cloudtak` task runs at baseline, strict and fresh strict, including
+its actual basemap positive/negative checks. Component identities are checked on
+both sides and explicit passed stages are required by the publisher. Other phases
+retain TLS/API/flow checks without repeatedly invoking mutation-heavy `test:all`.

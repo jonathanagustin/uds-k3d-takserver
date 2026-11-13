@@ -40,7 +40,8 @@ class WorkflowWiringTests(unittest.TestCase):
             'tests.test_expose_annotations', 'tests.test_workload_identities', 'tests.test_filesystem_backup_owner',
             'tests.test_velero_handoff', 'tests.test_ephemeral_cluster', 'tests.test_velero_transfer',
             'tests.test_velero_trial', 'tests.test_staged_migrations', 'tests.test_upgrade_agent_watch',
-            'tests.test_identity_rollout_driver'}
+            'tests.test_identity_rollout_driver',
+            'tests.test_package_identity_driver', 'tests.test_identity_phase_evidence', 'tests.test_identity_public_evidence', 'tests.test_identity_retained_state', 'tests.test_identity_render_inputs'}
         modules = set(re.findall(r'tests\.test_[A-Za-z_]+(?:\.[A-Za-z]+)?', safety['run']))
         self.assertEqual(modules, expected_modules)
         for module in modules:

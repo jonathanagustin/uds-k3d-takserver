@@ -16,6 +16,7 @@ import time
 import ssl
 import shutil
 import tempfile
+from types import SimpleNamespace
 import urllib.request
 import urllib.parse
 import yaml
@@ -32,6 +33,18 @@ PHASES = ('shared', 'transition', 'strict', 'rollback')
 ROLE_NAMES = {'takserver-workload-discovery', 'takserver-config-ignite-log'}
 RBAC = {('ServiceAccount', app) for app in APPS} | {('Role', name) for name in ROLE_NAMES} | {
     ('RoleBinding', app + '-discovery') for app in APPS} | {('RoleBinding', 'takserver-config-ignite-log')}
+_render_spec = importlib.util.spec_from_file_location('identity_render_inputs', HERE / 'render_inputs.py')
+render_inputs = importlib.util.module_from_spec(_render_spec)
+_render_spec.loader.exec_module(render_inputs)
+_phase_spec = importlib.util.spec_from_file_location('identity_phase_evidence', HERE / 'phase_evidence.py')
+phase_evidence = importlib.util.module_from_spec(_phase_spec)
+_phase_spec.loader.exec_module(phase_evidence)
+
+
+def guard_api():
+    return SimpleNamespace(__file__=__file__, APPS=APPS, PEPR=PEPR, sha=sha,
+                           template_fingerprint=template_fingerprint, validate_policies=validate_policies,
+                           validate_workloads=validate_workloads, validate_pepr=validate_pepr)
 
 
 def require(value, message):
@@ -77,8 +90,11 @@ def validate_policies(package, policies, network_policies, baseline_network):
         if spec.get('action', 'ALLOW') != 'ALLOW':
             continue
         selector = spec.get('selector', {}).get('matchLabels', {})
+        # Package selectors do not enumerate every label on destination Pods.
+        # An additional policy label is unknown, so it cannot rule out overlap.
+        # Only a conflicting value for a known label excludes overlap.
         relevant = [(key, labels) for key, labels in targets.items()
-                    if all(labels.get(k) == v for k, v in selector.items())]
+                    if all(k not in labels or labels[k] == v for k, v in selector.items())]
         if not relevant:
             continue
         for rule in spec.get('rules', []):
@@ -148,6 +164,8 @@ def validate_workloads(deployments, replicasets, pods, account, baseline_uids):
             require(not meta.get('deletionTimestamp') and meta.get('labels', {}).get('app') == app, 'terminating or mislabeled Pod')
             controllers = [o for o in meta.get('ownerReferences', []) if o.get('controller') is True]
             require(len(controllers) == 1 and controllers[0].get('uid') in owners, 'foreign or standalone workload Pod')
+            require(controllers[0]['uid'] == active[0]['metadata']['uid'],
+                    'workload Pod is owned by an inactive ReplicaSet')
             rs = by_uid[controllers[0]['uid']]
             require(not rs['metadata'].get('deletionTimestamp') and
                     rs['spec']['template']['spec'].get('serviceAccountName') == expected, 'stale ReplicaSet identity')
@@ -157,6 +175,53 @@ def validate_workloads(deployments, replicasets, pods, account, baseline_uids):
             identities.append({'app': app, 'name': meta['name'], 'uid': meta['uid'], 'account': expected,
                                'resourceVersion': meta['resourceVersion'], 'controllerReplicaSetUID': controllers[0]['uid']})
     return identities
+
+
+def validate_pepr(deployments, replicasets, observed_pods, phase, baseline_uids, template_fingerprints):
+    """Validate a complete read-only Pepr observation without a cluster client."""
+    require(phase in PHASES, 'unknown Pepr observation phase')
+    require(len(deployments) == len(PEPR) and {d['metadata']['name'] for d in deployments} == set(PEPR),
+            'two exact Pepr Deployments required')
+    deployments = {d['metadata']['name']: d for d in deployments}
+    result = []
+    for name in PEPR:
+        deployment = deployments[name]
+        require(deployment['metadata']['uid'] == baseline_uids[name], 'Pepr Deployment replaced')
+        helm_owner(deployment, 'takserver-oidc', 'pepr-system')
+        require(template_fingerprint(deployment, True) == template_fingerprints[name], 'Pepr template drift')
+        deployed_phases = [e.get('value') for c in deployment['spec']['template']['spec']['containers']
+                           for e in c.get('env', []) if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
+        require(deployed_phases == [phase], 'Pepr Deployment phase has not converged')
+        ready(deployment)
+        count = deployment['spec'].get('replicas', 1)
+        require(count > 0 and deployment['status'].get('replicas') == count and
+                deployment['status'].get('updatedReplicas') == count and
+                deployment['status'].get('readyReplicas') == count and deployment['status'].get('availableReplicas') == count and
+                deployment['status'].get('unavailableReplicas', 0) == 0, 'Pepr rollout incomplete')
+        rsuids = {r['metadata']['uid'] for r in replicasets if any(o.get('controller') is True and
+                  o.get('uid') == deployment['metadata']['uid'] for o in r['metadata'].get('ownerReferences', []))}
+        selector = deployment['spec'].get('selector', {}).get('matchLabels', {})
+        require(selector, 'Pepr selector is empty')
+        pods = [p for p in observed_pods if any(
+            o.get('uid') in rsuids for o in p['metadata'].get('ownerReferences', [])) or
+            all(p['metadata'].get('labels', {}).get(k) == v for k, v in selector.items())]
+        require(len(pods) == count, 'stale or mixed Pepr Pods')
+        active = [r for r in replicasets if r['metadata']['uid'] in rsuids and r['spec'].get('replicas', 1) > 0]
+        require(len(active) == 1 and active[0]['spec'].get('replicas', 1) == count and
+                not active[0]['metadata'].get('deletionTimestamp') and
+                template_fingerprint(active[0], exact=True) == template_fingerprint(deployment, exact=True), 'mixed active Pepr ReplicaSets')
+        for pod in pods:
+            owners = [o for o in pod['metadata'].get('ownerReferences', []) if o.get('controller') is True]
+            require(len(owners) == 1 and owners[0].get('uid') in rsuids, 'foreign Pepr Pod matches the selector')
+            require(owners[0]['uid'] == active[0]['metadata']['uid'], 'Pepr Pod is owned by an inactive ReplicaSet')
+            require(not pod['metadata'].get('deletionTimestamp') and pod['spec'].get('serviceAccountName') == name and
+                    pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True'
+                    for c in pod['status'].get('conditions', [])), 'Pepr Pod identity/readiness mismatch')
+            phases = [e.get('value') for c in pod['spec']['containers'] for e in c.get('env', [])
+                      if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
+            require(phases == [phase], 'old Pepr phase Pod remains')
+        result.append((name, deployment['metadata']['generation'], sorted(p['metadata']['uid'] for p in pods)))
+    return result
 
 
 def validate_rbac(resources):
@@ -187,9 +252,11 @@ def package_invariant(package):
     return sha(spec)
 
 
-def template_fingerprint(deployment, pepr=False):
+def template_fingerprint(deployment, pepr=False, exact=False):
     template = copy.deepcopy(deployment['spec']['template'])
     template.get('metadata', {}).get('labels', {}).pop('pod-template-hash', None)
+    if exact:
+        return sha(template)
     if pepr:
         for container in template['spec']['containers']:
             for env in container.get('env', []):
@@ -211,7 +278,9 @@ class Driver:
     def guard(self):
         require(time.monotonic() < self.deadline, '40-minute trial wall budget exhausted')
         if self.guard_module is None:
-            for relative in ('tests/workload-identities/drive.py', 'tests/workload-identities/ProtocolProbe.java', 'tests/ephemeral-cluster.py'):
+            for relative in ('tests/workload-identities/drive.py', 'tests/workload-identities/ProtocolProbe.java',
+                             'tests/workload-identities/render_inputs.py', 'tests/workload-identities/phase_evidence.py',
+                             'tests/ephemeral-cluster.py'):
                 reviewed = self.command(['git', 'show', 'HEAD:' + relative])
                 require(reviewed.encode() == (ROOT / relative).read_bytes(), 'consumed trial code differs from reviewed HEAD')
             path = ROOT / 'tests/ephemeral-cluster.py'
@@ -288,14 +357,62 @@ class Driver:
             time.sleep(3)
         raise ValueError('convergence timeout: ' + last)
 
+    def _read_render_inputs(self):
+        versions = render_inputs.api_versions(self.kube('api-versions'))
+        crd = json.loads(self.kube('get', 'customresourcedefinition', 'packages.uds.dev', '-o', 'json'))
+        record, schema = render_inputs.package_schema(crd)
+        return {'apiVersions': versions, 'apiVersionsSHA256': sha(versions), 'packageCRD': record}, schema
+
+    def bind_render_inputs(self):
+        """Bind discovery/schema only after the disposable-cluster guard passes."""
+        self.guard()
+        if 'renderInputs' in self.state:
+            return self.observe_render_inputs()
+        observed, schema = self._read_render_inputs()
+        self.state['renderInputs'] = copy.deepcopy(observed)
+        self._package_schema = schema
+        self._last_render_inputs = observed
+        return observed
+
+    def observe_render_inputs(self):
+        require('renderInputs' in self.state, 'render inputs must be bound before rendering')
+        observed, schema = self._read_render_inputs()
+        original = copy.deepcopy(self.state['renderInputs'])
+        comparable = copy.deepcopy(observed)
+        for value in (original, comparable):
+            value['packageCRD'].pop('resourceVersion', None)
+        require(comparable == original, 'Helm API capabilities or Package CRD identity/schema changed')
+        self._package_schema = schema
+        self._last_render_inputs = observed
+        return observed
+
     def render(self, phase):
+        observed = self.observe_render_inputs()
         values = copy.deepcopy(self.values)
         values['workloadIdentityPhase'] = phase
-        text = self.command(['helm', 'template', 'uds-takserver-config', str(ROOT / 'charts/takserver'),
-                             '--namespace', NS, '--values', '-'], json.dumps(values))
+        args = ['helm', 'template', 'uds-takserver-config', str(ROOT / 'charts/takserver'),
+                '--namespace', NS, '--values', '-']
+        for version in observed['apiVersions']:
+            args += ['--api-versions', version]
+        text = self.command(args, json.dumps(values))
         docs = [d for d in yaml.safe_load_all(text) if d]
         package = next(d for d in docs if d['kind'] == 'Package' and d['metadata']['name'] == NS)
+        package['spec'] = render_inputs.apply_defaults(package['spec'], self._package_schema)
         return package, [d for d in docs if (d['kind'], d['metadata']['name']) in RBAC]
+
+    def preflight_mismatch(self, expected, actual, receipt):
+        """Retain actionable paths/hashes before the normal journal exists."""
+        diagnostic = {'schema': 1, 'stage': 'preflight-package-mismatch',
+                      'binding': {k: receipt[k] for k in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID')},
+                      'renderInputs': self._last_render_inputs,
+                      **render_inputs.safe_difference(expected, actual)}
+        data = json.dumps(diagnostic, sort_keys=True, separators=(',', ':')).encode()
+        require(len(data) <= 64 * 1024, 'preflight diagnostic exceeds bound')
+        path = self.evidence.with_suffix('.preflight.json')
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(data)
+        self.state['preflightDiagnostic'] = {'file': path.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
 
     def policies(self):
         package = self.get('package', NS)
@@ -305,10 +422,16 @@ class Driver:
         mesh = self.get('configmap', 'istio', 'istio-system')
         require(mesh['metadata']['uid'] == self.state['meshConfigUID'] and sha(mesh.get('data', {}).get('mesh')) == self.state['meshConfigHash'],
                 'Istio mesh/root-namespace configuration changed')
-        policies = self.get('authorizationpolicies.security.istio.io')['items']
-        policies += self.get('authorizationpolicies.security.istio.io', namespace='istio-system')['items']
+        local = self.get('authorizationpolicies.security.istio.io')
+        root = self.get('authorizationpolicies.security.istio.io', namespace='istio-system')
+        policies = local['items'] + root['items']
         network = self.get('networkpolicies', labels='uds/package=' + NS)['items']
-        return validate_policies(package, policies, network, self.state['baselineNetwork'])
+        fingerprint = validate_policies(package, policies, network, self.state['baselineNetwork'])
+        self._last_policy_observation = {'package': package, 'policies': policies, 'network_policies': network,
+            'policy_lists': {namespace: {'resourceVersion': value.get('metadata', {}).get('resourceVersion'),
+                                         'itemCount': len(value['items'])}
+                             for namespace, value in ((NS, local), ('istio-system', root))}}
+        return fingerprint
 
     def identities(self, account):
         deployments = self.get('deployments')['items']
@@ -316,8 +439,44 @@ class Driver:
             app = deployment['metadata']['name']
             if app in APPS:
                 require(template_fingerprint(deployment) == self.state['templateFingerprints'][app], 'workload template drift')
-        return validate_workloads(deployments, self.get('replicasets')['items'],
-                                  self.get('pods')['items'], account, self.state['deploymentUIDs'])
+        replicasets, pods = self.get('replicasets')['items'], self.get('pods')['items']
+        identities = validate_workloads(deployments, replicasets, pods, account, self.state['deploymentUIDs'])
+        self._last_identity_observation = {'deployments': deployments, 'replicasets': replicasets, 'pods': pods}
+        return identities
+
+    def capture_phase(self, phase, account, binding_extra=None):
+        """Persist typed inputs from the final stable observation, not later reads."""
+        require(binding_extra is None or (isinstance(binding_extra, dict) and set(binding_extra) <= {
+            'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256'}), 'unsupported extra phase binding')
+        pepr_phase = {'baseline': 'shared', 'dual-before-rollout': 'shared', 'fresh-strict': 'strict'}.get(phase, phase)
+        def observe():
+            return {'policies': self.policies(), 'workloads': self.identities(account),
+                    'pepr': self.observe_pepr(pepr_phase)}
+        self.wait(observe)
+        render_observation = self.observe_render_inputs()
+        binding = {key: self.state['guard'][key] for key in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID')}
+        binding.update(meshConfigUID=self.state['meshConfigUID'], meshConfigHash=self.state['meshConfigHash'], phase=phase)
+        if binding_extra:
+            binding.update(binding_extra)
+        snapshot = phase_evidence.capture(binding, guards=guard_api(), **self._last_policy_observation,
+            **self._last_identity_observation, baseline_network=self.state['baselineNetwork'], account=account,
+            baseline_uids=self.state['deploymentUIDs'], template_fingerprints=self.state['templateFingerprints'],
+            pepr=self._last_pepr_observation, pepr_uids=self.state['peprUIDs'],
+            pepr_template_fingerprints=self.state['peprTemplateFingerprints'], render_inputs=render_observation)
+        verdict = phase_evidence.validate_phase(snapshot, guard_api())
+        require(verdict['accepted'] is True, 'typed identity phase evidence is insufficient')
+        if self.state.get('recoveryOnly'):
+            # Recovery must still pass the guards, but must not overwrite an
+            # earlier phase or turn cleanup into fresh round-trip acceptance.
+            self.journal('recovery-phase-checked-' + phase, guardsPassed=True, recoveryOnly=True)
+            return verdict
+        directory = self.evidence.parent / 'phases'
+        if not directory.exists():
+            directory.mkdir(mode=0o700)
+        reference = phase_evidence.write_phase(directory, snapshot)
+        self.state.setdefault('phaseEvidence', []).append({'phase': phase, 'reference': reference})
+        self.journal('phase-evidence-' + phase, accepted=True, inputSHA256=verdict['inputSHA256'])
+        return verdict
 
     def stage_config(self, phase):
         if phase in ('strict', 'shared'):
@@ -334,6 +493,17 @@ class Driver:
         fingerprint = self.wait(self.policies)
         self.journal('policy-converged-' + phase, policyFingerprint=fingerprint)
 
+    def observe_pepr(self, phase):
+        """Observe exact original Pepr deployments and their converged phase; never mutate."""
+        require(phase in PHASES, 'unknown Pepr observation phase')
+        deployments = [self.get('deployment', name, 'pepr-system') for name in PEPR]
+        replicasets = self.get('replicasets', namespace='pepr-system')['items']
+        pods = self.get('pods', namespace='pepr-system')['items']
+        result = validate_pepr(deployments, replicasets, pods, phase,
+                               self.state['peprUIDs'], self.state['peprTemplateFingerprints'])
+        self._last_pepr_observation = {'deployments': deployments, 'replicasets': replicasets, 'pods': pods}
+        return result
+
     def stage_admission(self, phase):
         for name in PEPR:
             self.policies()
@@ -348,41 +518,7 @@ class Driver:
             env = deployment['spec']['template']['spec']['containers'][i]['env'][j]
             require(env.get('value') in PHASES and 'valueFrom' not in env, 'unknown Pepr phase')
             self.patch('deployment', deployment, f'/spec/template/spec/containers/{i}/env/{j}/value', phase, 'pepr-system')
-        def pepr_ready():
-            result = []
-            for name in PEPR:
-                deployment = self.get('deployment', name, 'pepr-system')
-                ready(deployment)
-                count = deployment['spec'].get('replicas', 1)
-                require(count > 0 and deployment['status'].get('replicas') == count and
-                        deployment['status'].get('updatedReplicas') == count and
-                        deployment['status'].get('readyReplicas') == count and deployment['status'].get('availableReplicas') == count and
-                        deployment['status'].get('unavailableReplicas', 0) == 0, 'Pepr rollout incomplete')
-                replicasets = self.get('replicasets', namespace='pepr-system')['items']
-                rsuids = {r['metadata']['uid'] for r in replicasets if any(o.get('controller') is True and
-                          o.get('uid') == deployment['metadata']['uid'] for o in r['metadata'].get('ownerReferences', []))}
-                selector = deployment['spec'].get('selector', {}).get('matchLabels', {})
-                require(selector, 'Pepr selector is empty')
-                pods = [p for p in self.get('pods', namespace='pepr-system')['items'] if any(
-                    o.get('uid') in rsuids for o in p['metadata'].get('ownerReferences', [])) or
-                    all(p['metadata'].get('labels', {}).get(k) == v for k, v in selector.items())]
-                require(len(pods) == count, 'stale or mixed Pepr Pods')
-                for pod in pods:
-                    owners = [o for o in pod['metadata'].get('ownerReferences', []) if o.get('controller') is True]
-                    require(len(owners) == 1 and owners[0].get('uid') in rsuids, 'foreign Pepr Pod matches the selector')
-                    require(not pod['metadata'].get('deletionTimestamp') and pod['spec'].get('serviceAccountName') == name and
-                            pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True'
-                            for c in pod['status'].get('conditions', [])), 'Pepr Pod identity/readiness mismatch')
-                    phases = [e.get('value') for c in pod['spec']['containers'] for e in c.get('env', [])
-                              if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
-                    require(phases == [phase], 'old Pepr phase Pod remains')
-                active = [r for r in replicasets if r['metadata']['uid'] in rsuids and r['spec'].get('replicas', 1) > 0]
-                require(len(active) == 1 and active[0]['spec'].get('replicas', 1) == count and
-                        not active[0]['metadata'].get('deletionTimestamp') and
-                        template_fingerprint(active[0], True) == template_fingerprint(deployment, True), 'mixed active Pepr ReplicaSets')
-                result.append((name, deployment['metadata']['generation'], sorted(p['metadata']['uid'] for p in pods)))
-            return result
-        self.wait(pepr_ready)
+        self.wait(lambda: self.observe_pepr(phase))
         # A real existing Deployment update exercises the installed mutating adapter.
         for app in APPS:
             self.policies()
@@ -541,7 +677,7 @@ class Driver:
                 'probe execution/protocol invalid (not a valid network denial)')
         return result.returncode
 
-    def traffic(self, identities, phase):
+    def traffic(self, identities, phase, evidence_phase=None):
         self.active_pods = {p['name']: {'uid': p['uid'], 'account': p['account'],
                                       'ownerUID': p['controllerReplicaSetUID']} for p in identities}
         pods = self.get('pods')['items']
@@ -658,7 +794,7 @@ class Driver:
                 self.delete_created('Pod', allowed_name)
             cleanup = self.exec(identity['name'], container, ['/bin/bash', '-ceu', 'rm -f ' + directory + '/ProtocolProbe.class; rmdir ' + directory])
             require(cleanup.returncode == 0, 'source probe cleanup failed')
-        self.journal('traffic-' + phase, checks=receipts)
+        self.journal('traffic-' + (evidence_phase or phase), checks=receipts)
         return receipts
 
     def prepare(self):
@@ -669,13 +805,16 @@ class Driver:
         require(self.evidence.parent.stat().st_mode & 0o077 == 0, 'evidence directory must be private (0700)')
         require(self.get('namespace', NS, NS)['metadata'].get('labels', {}).get('istio.io/dataplane-mode') == 'ambient',
                 'takserver namespace is not ambient')
+        self.bind_render_inputs()
         self.values = json.loads(self.command(['helm', '--kube-context', CONTEXT, 'get', 'values', 'uds-takserver-config',
                                               '-n', NS, '-o', 'json']) or '{}') or {}
         require(self.values.get('workloadIdentityPhase', 'shared') == 'shared', 'trial must start from shared Helm values')
         package = self.get('package', NS)
         helm_owner(package, 'uds-takserver-config', NS)
         initial, _ = self.render('shared')
-        require(package['spec'] == initial['spec'], 'deployed Package differs from exact config chart/values')
+        if package['spec'] != initial['spec']:
+            self.preflight_mismatch(initial['spec'], package['spec'], receipt)
+            raise ValueError('deployed Package differs from exact config chart/values; safe field-path diagnostic retained')
         deployments = {d['metadata']['name']: d for d in self.get('deployments')['items'] if d['metadata']['name'] in APPS}
         require(set(deployments) == set(APPS), 'four exact TAK Deployments required')
         pepr = {name: self.get('deployment', name, 'pepr-system') for name in PEPR}
@@ -747,9 +886,11 @@ class Driver:
         self.stage_config('rollback')
         identities = self.stage_admission('rollback')
         self.traffic(identities, 'rollback')
+        self.capture_phase('rollback', 'shared')
         self.stage_config('shared')
         identities = self.stage_admission('shared')
         self.traffic(identities, 'shared')
+        self.capture_phase('shared', 'shared')
         require(self.get('package', NS)['spec']['network']['allow'] == self.state['baselineAllow'], 'baseline rules not restored')
         for app in APPS:
             obj = self.get('deployment', app)
@@ -793,13 +934,16 @@ def main():
             for obj in resources:
                 driver.create(obj)
             driver.traffic(driver.identities('shared'), 'baseline')
+            driver.capture_phase('baseline', 'shared')
             driver.stage_config('transition')
             driver.traffic(driver.identities('shared'), 'dual-before-rollout')
             identities = driver.stage_admission('transition')
             driver.traffic(identities, 'transition')
+            driver.capture_phase('transition', 'dedicated')
             driver.stage_config('strict')
             identities = driver.stage_admission('strict')
             driver.traffic(identities, 'strict')
+            driver.capture_phase('strict', 'dedicated')
             driver.reverse()
         else:
             require(args.evidence.is_file(), 'existing trial evidence required')

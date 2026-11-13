@@ -36,6 +36,10 @@ def selection():
             and os.environ.get('GITHUB_REPOSITORY') == 'jonathanagustin/uds-takserver',
             'staged trials require manual dispatch from this repository main')
     scenario, architecture = os.environ.get('SCENARIO', ''), os.environ.get('ARCHITECTURE', '')
+    method=os.environ.get('IDENTITY_METHOD','manual');fresh=os.environ.get('FRESH_STRICT','false')
+    require(method in ('manual','package','combined') and fresh in ('true','false'),'invalid identity package selection')
+    require(method=='manual' or scenario=='identities','package acceptance requires identities-only scenario')
+    require(fresh=='false' or method in ('package','combined'),'fresh strict requires package method')
     require(scenario in SCENARIOS and architecture in ARCHES, 'invalid staged selection')
     return SCENARIOS[scenario], ARCHES[architecture]
 
@@ -140,6 +144,157 @@ def restore_task_default(directory):
     print('Reviewed task defaults restored; bound archives and pinned config unchanged')
 
 
+def identity_modules():
+    """Private phase replay uses reviewed local pure code, never cluster reads."""
+    import importlib.util
+    modules = []
+    for name, relative in [('identity_guards', 'tests/workload-identities/drive.py'),
+                           ('identity_phase_evidence', 'tests/workload-identities/phase_evidence.py')]:
+        spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        modules.append(module)
+    return modules
+
+
+def identity_methods():
+    method = os.environ.get('IDENTITY_METHOD', 'manual')
+    require(method in ('manual', 'package', 'combined'), 'invalid identity method')
+    return ['manual', 'package'] if method == 'combined' else [method]
+
+
+def identity_phase_proofs(directory, journal, fresh=False):
+    guards, capture = identity_modules()
+    expected = ['baseline', 'transition', 'strict', 'rollback', 'shared'] + (['fresh-strict'] if fresh else [])
+    entries = journal.get('phaseEvidence')
+    require(isinstance(entries, list) and [e.get('phase') for e in entries] == expected,
+            'identity phase snapshots absent or incomplete')
+    proofs = []
+    for entry in entries:
+        require(set(entry) == {'phase', 'reference'}, 'invalid phase reference schema')
+        snapshot = capture.read_phase(directory / 'phases', entry['reference'])
+        verdict = capture.validate_phase(snapshot, guards)
+        require(verdict['accepted'] is True and verdict['inputSHA256'] == entry['reference']['sha256'],
+                'identity phase evidence insufficient')
+        bind = verdict['binding']
+        guard = journal['guard']
+        require(all(bind[k] == guard[k] for k in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID'))
+                and bind['meshConfigUID'] == journal['meshConfigUID']
+                and bind['meshConfigHash'] == journal['meshConfigHash'] and bind['phase'] == entry['phase'],
+                'identity phase source/run/cluster/mesh differs')
+        proofs.append(verdict)
+    return proofs
+
+
+def identity_receipt(directory, arch):
+    methods = identity_methods()
+    fresh = os.environ.get('FRESH_STRICT', 'false') == 'true'
+    result = {'schema': 1, 'methods': methods, 'phaseProofs': {}, 'freshStrictAccepted': False, 'packageInputBindings': None}
+    hashes, common_guard, last_path = {}, None, None
+    for method in methods:
+        folder = directory / ('identity' if method == 'manual' else 'package-identity')
+        last_path = folder / 'journal.json'
+        journal = bounded_json(last_path)
+        require(journal.get('schema') == 1 and journal.get('completed') is True and journal.get('accepted') is True
+                and journal.get('recoveryOnly', False) is False and journal.get('scenario') == 'identities'
+                and journal.get('architecture') == arch
+                and journal.get('driverSHA256') == sha(ROOT / 'tests/workload-identities/drive.py')
+                and journal.get('probeSourceSHA256') == sha(ROOT / 'tests/workload-identities/ProtocolProbe.java'),
+                'identity method incomplete or source differs')
+        stages = {e['stage'] for e in journal['stages']}
+        if method == 'manual':
+            require({'traffic-baseline', 'traffic-dual-before-rollout', 'traffic-transition', 'traffic-strict',
+                     'traffic-rollback', 'traffic-shared', 'reversed-and-verified'} <= stages and 'stopped' not in stages,
+                    'manual identity phases incomplete')
+        else:
+            require(journal.get('method') == 'package'
+                    and journal.get('packageDriverSHA256') == sha(ROOT / 'tests/workload-identities/package_roundtrip.py')
+                    and journal.get('packagePhases') == ['shared', 'transition', 'strict', 'rollback', 'shared'] + (['strict'] if fresh else [])
+                    and journal.get('freshStrictRequested') is fresh
+                    and journal.get('freshStrictAccepted') is fresh
+                    and 'package-roundtrip-verified' in stages and 'stopped' not in stages,
+                    'package identity method incomplete')
+            aliases = ['baseline', 'transition', 'strict', 'rollback', 'shared'] + (['fresh-strict'] if fresh else [])
+            wanted = [entry for alias in aliases for entry in [
+                ('traffic-package-' + alias, None), ('package-application-checks', alias),
+                ('package-phase-evidence-' + alias, None), ('package-observed-' + alias, None)]]
+            ordered = []
+            for step in journal['stages']:
+                name = step['stage']
+                if name == 'package-application-checks':
+                    ordered.append((name, step.get('phase')))
+                if any(name.startswith(prefix) for prefix in ('traffic-package-', 'package-phase-evidence-', 'package-observed-')):
+                    if name.startswith('traffic-package-'):
+                        require(isinstance(step.get('checks'), list) and step['checks'], 'package traffic proof absent')
+                    if name.startswith('package-phase-evidence-'):
+                        require(step.get('accepted') is True, 'package phase evidence not accepted')
+                    ordered.append((name, None))
+            require(ordered == wanted, 'package phase traffic/application ordering incomplete')
+            require(not fresh or 'fresh-strict-verified' in stages, 'fresh strict verification absent')
+            cloudtak=[step.get('phase') for step in journal['stages'] if step['stage']=='cloudtak-basemap-application-checks' and step.get('passed') is True]
+            require(cloudtak==['baseline','strict']+(['fresh-strict'] if fresh else []),'actual CloudTAK baseline/strict checks absent')
+            bindings = journal.get('inputBindings') or {}
+            require(set(bindings) == {'archiveSHA256', 'planSHA256', 'configSHA256'}
+                    and all(re.fullmatch('[a-f0-9]{64}', h) for h in bindings.values()), 'package input bindings absent')
+            result['packageInputBindings'] = bindings
+        guard = journal['guard']
+        require(common_guard is None or common_guard == guard, 'identity methods differ in cluster/source/run')
+        common_guard = guard
+        result['phaseProofs'][method] = identity_phase_proofs(folder, journal, fresh and method == 'package')
+        if method == 'package':
+            require(all(p['binding'].get('packageArchiveSHA256') == bindings['archiveSHA256']
+                        and p['binding'].get('baselineValuesSHA256') == bindings['configSHA256']
+                        for p in result['phaseProofs'][method]), 'phase/package archive bindings differ')
+        hashes[method + '-identities-journal'] = sha(last_path)
+        if method == 'package' and fresh:
+            result['freshStrictAccepted'] = True
+    return result, hashes, common_guard, last_path
+
+
+def verify_identity_summary(summary, receipt):
+    require(set(summary) == {'schema', 'methods', 'phaseProofs', 'freshStrictAccepted', 'packageInputBindings'} and summary['schema'] == 1,
+            'invalid identity summary schema')
+    require(summary['methods'] == identity_methods() == list(summary['phaseProofs'])
+            and summary['freshStrictAccepted'] is (os.environ.get('FRESH_STRICT', 'false') == 'true'),
+            'identity method/fresh selection differs')
+    package_inputs = summary['packageInputBindings']
+    if 'package' in summary['methods']:
+        require(isinstance(package_inputs, dict) and set(package_inputs) == {'archiveSHA256', 'planSHA256', 'configSHA256'}
+                and all(re.fullmatch('[a-f0-9]{64}', h) for h in package_inputs.values()), 'public package bindings absent')
+    else:
+        require(package_inputs is None, 'unexpected package bindings')
+    mesh_bindings = set()
+    for method, proofs in summary['phaseProofs'].items():
+        phases = ['baseline', 'transition', 'strict', 'rollback', 'shared'] + (
+            ['fresh-strict'] if method == 'package' and summary['freshStrictAccepted'] else [])
+        require([p['binding']['phase'] for p in proofs] == phases, 'public phase sequence differs')
+        for proof in proofs:
+            require(set(proof) == {'schema', 'accepted', 'reason', 'binding', 'inputSHA256', 'guardSHA256',
+                                  'captureSHA256', 'policyFingerprint', 'workloadCount', 'peprWorkloadCount', 'inventoryCounts'}
+                    and proof['schema'] == 1 and proof['accepted'] is True and proof['reason'] == 'passed'
+                    and proof['guardSHA256'] == sha(ROOT / 'tests/workload-identities/drive.py')
+                    and proof['captureSHA256'] == sha(ROOT / 'tests/workload-identities/phase_evidence.py')
+                    and all(re.fullmatch('[a-f0-9]{64}', proof[k]) for k in ('inputSHA256', 'policyFingerprint'))
+                    and type(proof['workloadCount']) is int and 0 < proof['workloadCount'] <= 256
+                    and proof['peprWorkloadCount'] == 2, 'invalid public phase verdict')
+            bind = proof['binding']
+            required = {'sourceSHA', 'runID', 'runAttempt', 'clusterUID', 'meshConfigUID', 'meshConfigHash', 'phase'}
+            require(required <= set(bind) <= required | {'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256', 'renderInputsSHA256'}
+                    and all(bind[k] == receipt[k] for k in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID'))
+                    and re.fullmatch('[a-f0-9]{64}', bind['meshConfigHash'])
+                    and re.fullmatch('[a-f0-9]{64}', bind.get('renderInputsSHA256', ''))
+                    and re.fullmatch('[A-Za-z0-9_.:/@*+-]{1,253}', bind['meshConfigUID'])
+                    and all(re.fullmatch('[a-f0-9]{64}', bind[k]) for k in set(bind)-required), 'invalid public phase binding')
+            if method == 'package':
+                require(bind.get('packageArchiveSHA256') == package_inputs['archiveSHA256']
+                        and bind.get('baselineValuesSHA256') == package_inputs['configSHA256'], 'public phase/archive binding differs')
+            mesh_bindings.add((bind['meshConfigUID'], bind['meshConfigHash']))
+            require(set(proof['inventoryCounts']) == {'policies', 'network', 'deployments', 'replicasets', 'pods'}
+                    and all(type(n) is int and 0 <= n <= 256 for n in proof['inventoryCounts'].values()),
+                    'invalid public inventory count')
+    require(len(mesh_bindings) == 1, 'public mesh binding changed across phases')
+
+
 def receipt(directory, arch):
     scenarios, arches = selection()
     require(arch in arches and {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine()) == arch,
@@ -168,20 +323,11 @@ def receipt(directory, arch):
                         and (stage != 'local-after' or proof.get('retiredCoreConfigAbsent') is True), 'missing same-cluster owner acceptance')
                 result['proofHashes'][stage] = sha(path)
         else:
-            journal_path = directory / 'identity/journal.json'
-            journal = bounded_json(journal_path)
-            require(journal.get('schema') == 1 and journal.get('completed') is True
-                    and journal.get('accepted') is True and journal.get('recoveryOnly') is False
-                    and journal.get('scenario') == 'identities' and journal.get('architecture') == arch
-                    and journal.get('driverSHA256') == sha(ROOT / 'tests/workload-identities/drive.py')
-                    and journal.get('probeSourceSHA256') == sha(ROOT / 'tests/workload-identities/ProtocolProbe.java'),
-                    'identity trial or restored baseline is incomplete')
-            stages = {entry['stage'] for entry in journal['stages']}
-            require({'traffic-baseline', 'traffic-dual-before-rollout', 'traffic-transition', 'traffic-strict',
-                     'traffic-rollback', 'traffic-shared', 'reversed-and-verified'}.issubset(stages)
-                    and 'stopped' not in stages, 'identity acceptance is missing a required phase')
-            require(guard is None or guard == journal['guard'], 'scenario cluster/run receipts differ')
-            guard = journal['guard']
+            summary, hashes, identity_guard, journal_path = identity_receipt(directory, arch)
+            require(guard is None or guard == identity_guard, 'scenario cluster/run receipts differ')
+            guard = identity_guard
+            result['identitySummary'] = summary
+            result['proofHashes'].update(hashes)
         require(guard['sourceSHA'] == result['sourceSHA'] and guard['runID'] == result['runID']
                 and guard['runAttempt'] == result['runAttempt'], 'scenario source/run differs')
         result['proofHashes'][scenario + '-journal'] = sha(journal_path)
@@ -228,9 +374,9 @@ def verify_public_proofs(directory, value):
                     and proof['clusterUID'] == value['clusterUID'] and proof['daemonsetUID'] == value['daemonsetUID'],
                     'published observer acceptance does not match receipt')
     if 'identities' in value['scenarios']:
-        require({'traffic-baseline', 'traffic-dual-before-rollout', 'traffic-transition', 'traffic-strict',
-                 'traffic-rollback', 'traffic-shared', 'reversed-and-verified'}.issubset(progress['identityStages'])
-                and 'stopped' not in progress['identityStages'], 'public identity progress is incomplete')
+        path = directory / 'identity-phases.json'
+        require(sha(path) == hashes['identity-phases'], 'public identity phase proof differs or is absent')
+        verify_identity_summary(bounded_json(path), value)
 
 
 def bounded_json(path):
@@ -292,7 +438,7 @@ FAILURE_PATTERNS = {
     'signature-verification': r'failed to verify (?:certificate|signature)|signature verification failed|no matching signatures',
     'authentication': r'unauthorized|\bforbidden\b|authentication required|access denied|denied: requested access|status(?: code)?[ :]+40[13]|http/[0-9.]+\s+403',
     'helm-operation': r'helm upgrade failed|helm install failed|upgrade failed:|installation failed:|another operation .{0,80}in progress',
-    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional propert(?:y|ies)|values don.t meet the specifications',
+    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional (?:property|properties)|values don.t meet the specifications',
     'cluster-connectivity': r'kubernetes cluster unreachable|connection refused|unable to connect to the server|no route to host',
     'tls-certificate': r'x509:|certificate has expired|certificate signed by unknown authority|unknown ca|tls handshake timeout',
     'admission-webhook': r'failed calling webhook|admission webhook.{0,160}denied|no endpoints available for service',
@@ -366,6 +512,9 @@ def publish(directory, output, arch):
                                       if entry.get('stage') in allowed]
     except (ValueError, OSError, KeyError, TypeError, AttributeError):
         pass
+    if value.get('accepted') and 'identitySummary' in value:
+        summary = value.pop('identitySummary')
+        (public / 'identity-phases.json').write_text(json.dumps(summary, indent=2) + '\n')
     (public / 'progress.json').write_text(json.dumps(progress, indent=2) + '\n')
     for group, stage in [('fresh', 'fresh-ready'), ('fresh', 'fresh-core'), ('handoff', 'local-before'),
                          ('handoff', 'core-ready'), ('handoff', 'core-after'), ('handoff', 'local-ready'), ('handoff', 'local-after')]:

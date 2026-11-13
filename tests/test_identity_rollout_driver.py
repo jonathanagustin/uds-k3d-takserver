@@ -60,6 +60,29 @@ def policy_fixture():
     return package, policies, net, [driver.sha(net[0]['spec'])]
 
 
+def pepr_fixture(phase='strict'):
+    deployments, replicasets, pods = {}, [], []
+    for name in driver.PEPR:
+        template = {'metadata': {'labels': {'app': name}},
+                    'spec': {'serviceAccountName': name, 'containers': [
+                        {'name': 'server', 'image': 'example/pepr@sha256:' + '1' * 64,
+                         'env': [{'name': 'TAK_WORKLOAD_IDENTITY_PHASE', 'value': phase}]}]}}
+        deployments[name] = {'metadata': {'name': name, 'uid': name + '-deployment', 'generation': 2,
+            'annotations': {'meta.helm.sh/release-name': 'takserver-oidc', 'meta.helm.sh/release-namespace': 'pepr-system'},
+            'labels': {'app.kubernetes.io/managed-by': 'Helm'}},
+            'spec': {'replicas': 1, 'selector': {'matchLabels': {'app': name}}, 'template': template},
+            'status': {'observedGeneration': 2, 'replicas': 1, 'updatedReplicas': 1,
+                       'readyReplicas': 1, 'availableReplicas': 1}}
+        replicasets.append({'metadata': {'name': name + '-rs', 'uid': name + '-rs',
+            'ownerReferences': [{'controller': True, 'uid': name + '-deployment'}]},
+            'spec': {'replicas': 1, 'template': copy.deepcopy(template)}})
+        pods.append({'metadata': {'name': name + '-pod', 'uid': name + '-pod', 'labels': {'app': name},
+            'ownerReferences': [{'controller': True, 'uid': name + '-rs'}]},
+            'spec': copy.deepcopy(template['spec']),
+            'status': {'phase': 'Running', 'conditions': [{'type': 'Ready', 'status': 'True'}]}})
+    return deployments, replicasets, pods
+
+
 class IdentityFixtures(unittest.TestCase):
     @unittest.skipUnless(shutil.which('helm'), 'Helm required for actual source RBAC render')
     def test_actual_chart_rbac_contract_rejects_permission_expansion(self):
@@ -102,6 +125,19 @@ class IdentityFixtures(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     driver.validate_workloads(d,r,p,'dedicated',u)
 
+    def test_ready_pod_of_inactive_owned_replicaset_is_not_converged(self):
+        deployments, replicasets, pods, uids = workload_fixture()
+        inactive = copy.deepcopy(replicasets[0])
+        inactive['metadata']['uid'] = 'inactive-owned-replicaset'
+        inactive['metadata']['name'] += '-inactive'
+        inactive['spec']['replicas'] = 0
+        replicasets.append(inactive)
+        # Counters, readiness and account all match. Only controller ownership
+        # exposes this stale Pod; the active ReplicaSet remains present.
+        pods[0]['metadata']['ownerReferences'][0]['uid'] = inactive['metadata']['uid']
+        with self.assertRaisesRegex(ValueError, 'inactive ReplicaSet'):
+            driver.validate_workloads(deployments, replicasets, pods, 'dedicated', uids)
+
     def test_exact_current_policy_convergence_and_duplicate_network_rules(self):
         package, policies, net, baseline = policy_fixture()
         fingerprint = driver.validate_policies(package, policies, net, baseline)
@@ -128,6 +164,85 @@ class IdentityFixtures(unittest.TestCase):
             with self.subTest(mutate=mutate):
                 p,a,n,b = policy_fixture(); mutate(p,a,n)
                 with self.assertRaises(ValueError): driver.validate_policies(p,a,n,b)
+
+    def test_root_allow_with_unknown_extra_destination_label_can_overlap(self):
+        for selector in ({'app': 'takserver-ignite', 'extra-label': 'present-on-pod'}, {}, None):
+            with self.subTest(selector=selector):
+                package, policies, network, baseline = policy_fixture()
+                policy = {'metadata': {'name': 'root-allow', 'namespace': 'istio-system'},
+                          'spec': {'action': 'ALLOW', 'rules': [{}]}}
+                if selector is not None:
+                    policy['spec']['selector'] = {'matchLabels': selector}
+                policies.append(policy)
+                with self.assertRaisesRegex(ValueError, 'foreign overlapping policy'):
+                    driver.validate_policies(package, policies, network, baseline)
+
+    def test_root_allow_with_conflicting_known_destination_label_is_disjoint(self):
+        package, policies, network, baseline = policy_fixture()
+        expected = driver.validate_policies(package, policies, network, baseline)
+        policies.append({'metadata': {'name': 'other-app', 'namespace': 'istio-system'},
+                         'spec': {'action': 'ALLOW',
+                                  'selector': {'matchLabels': {'app': 'unrelated', 'extra-label': 'anything'}},
+                                  'rules': [{}]}})
+        self.assertEqual(driver.validate_policies(package, policies, network, baseline), expected)
+
+    def test_readonly_pepr_observer_checks_original_uid_template_and_phase(self):
+        cases = ('valid', 'replacement', 'foreign-owner', 'template-drift', 'deployment-phase',
+                 'replicaset-phase', 'inactive-replicaset-pod', 'pod-phase')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                instance = driver.Driver(Path(directory) / 'journal.json')
+                deployments, replicasets, pods = pepr_fixture()
+                instance.state.update(peprUIDs={name: d['metadata']['uid'] for name, d in deployments.items()},
+                    peprTemplateFingerprints={name: driver.template_fingerprint(d, True) for name, d in deployments.items()})
+                first = driver.PEPR[0]
+                if case == 'replacement':
+                    deployments[first]['metadata']['uid'] = 'replacement-deployment'
+                    replicasets[0]['metadata']['ownerReferences'][0]['uid'] = 'replacement-deployment'
+                elif case == 'foreign-owner':
+                    deployments[first]['metadata']['annotations']['meta.helm.sh/release-name'] = 'foreign'
+                elif case == 'template-drift':
+                    deployments[first]['spec']['template']['spec']['containers'][0]['image'] = 'foreign/image'
+                    replicasets[0]['spec']['template'] = copy.deepcopy(deployments[first]['spec']['template'])
+                    pods[0]['spec'] = copy.deepcopy(deployments[first]['spec']['template']['spec'])
+                elif case == 'deployment-phase':
+                    deployments[first]['spec']['template']['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                elif case == 'replicaset-phase':
+                    replicasets[0]['spec']['template']['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                elif case == 'inactive-replicaset-pod':
+                    inactive = copy.deepcopy(replicasets[0])
+                    inactive['metadata']['uid'] = 'inactive-pepr-rs'
+                    inactive['spec']['replicas'] = 0
+                    replicasets.append(inactive)
+                    pods[0]['metadata']['ownerReferences'][0]['uid'] = 'inactive-pepr-rs'
+                elif case == 'pod-phase':
+                    pods[0]['spec']['containers'][0]['env'][0]['value'] = 'shared'
+                def get(kind, name=None, namespace=None):
+                    self.assertEqual(namespace, 'pepr-system')
+                    return deployments[name] if kind == 'deployment' else {
+                        'items': replicasets if kind == 'replicasets' else pods}
+                instance.get = get
+                instance.patch = MagicMock(side_effect=AssertionError('observer must not mutate'))
+                if case == 'valid':
+                    result = instance.observe_pepr('strict')
+                    self.assertEqual({row[0] for row in result}, set(driver.PEPR))
+                    self.assertEqual(instance._last_pepr_observation['pods'], pods)
+                else:
+                    with self.assertRaises(ValueError):
+                        instance.observe_pepr('strict')
+                instance.patch.assert_not_called()
+
+    def test_pure_pepr_validator_needs_no_cluster_and_does_not_mutate_inputs(self):
+        deployments, replicasets, pods = pepr_fixture()
+        baseline_uids = {name: d['metadata']['uid'] for name, d in deployments.items()}
+        fingerprints = {name: driver.template_fingerprint(d, True) for name, d in deployments.items()}
+        inputs = (list(deployments.values()), replicasets, pods)
+        original = copy.deepcopy(inputs)
+        result = driver.validate_pepr(*inputs, 'strict', baseline_uids, fingerprints)
+        self.assertEqual(len(result), len(driver.PEPR))
+        self.assertEqual(inputs, original)
+        with self.assertRaisesRegex(ValueError, 'two exact Pepr Deployments'):
+            driver.validate_pepr(inputs[0] * 2, replicasets, pods, 'strict', baseline_uids, fingerprints)
 
     def test_requested_policy_observation_refuses_concurrent_uid_or_rule_drift(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -252,6 +367,7 @@ class IdentityFixtures(unittest.TestCase):
             instance.stage_config=lambda phase: events.append(('config',phase))
             instance.stage_admission=lambda phase: events.append(('admission',phase)) or []
             instance.traffic=lambda identities,phase: events.append(('traffic',phase))
+            instance.capture_phase=lambda phase,account: events.append(('evidence',phase,account))
             instance.patch=lambda *a,**k: None
             instance.wait=lambda callback: callback()
             instance.identities=lambda account: []
@@ -264,8 +380,8 @@ class IdentityFixtures(unittest.TestCase):
                 return value
             instance.get=get
             instance.reverse()
-            self.assertEqual(events,[('config','rollback'),('admission','rollback'),('traffic','rollback'),
-                                     ('config','shared'),('admission','shared'),('traffic','shared')])
+            self.assertEqual(events,[('config','rollback'),('admission','rollback'),('traffic','rollback'),('evidence','rollback','shared'),
+                                     ('config','shared'),('admission','shared'),('traffic','shared'),('evidence','shared','shared')])
             self.assertTrue(instance.state['completed'])
             self.assertFalse(instance.state['accepted'], 'completion alone cannot manufacture missing forward acceptance')
             events.clear();instance.state['completed']=False

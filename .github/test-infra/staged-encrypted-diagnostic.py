@@ -342,7 +342,7 @@ def validation_input(folder,journal,expected):
                          ('driverSHA256','tests/workload-identities/drive.py'),
                          ('retainedSourceSHA256','tests/workload-identities/retained_state.py')]:
         require(payload[key]==journal.get(key)==reviewed_source_hash(relative))
-    # The reviewed retained-source helper admits only the versioned hash inventory.
+    # The reviewed retained-source helper binds the full hook bodies to their hash inventory.
     path=ROOT/'tests/workload-identities/retained_state.py'
     descriptor=regular_descriptor(path,256*1024)
     try:source=os.read(descriptor,256*1024+1)

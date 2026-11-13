@@ -162,7 +162,7 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
     def test_validation_malformed_alias_oversize_binding_order_and_private_paths_rejected(self):
         cases=('missing-first','ambiguous-first','first-schema','reference-alias','earlier-command','schema','type','kind',
                'source','run','attempt','phase','stage','source-hash','snapshot-key','inventory-code','diagnostic','oversize',
-               'private-link','private-mode','duplicate-key')
+               'private-link','private-mode','duplicate-key','body-alias','body-field','body-duplicate')
         for case in cases:
             with self.subTest(case=case),tempfile.TemporaryDirectory() as temporary:
                 root=Path(temporary);folder,output,env,payload,journal,_owner=validation_fixture(root)
@@ -179,6 +179,9 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
                 elif case=='snapshot-key':payload['snapshot']['raw']='PRIVATE_SENTINEL'
                 elif case=='inventory-code':payload['snapshot']['baseline']['hookInventory']['objects']['unknown']=payload['snapshot']['baseline']['hookInventory']['objects'].pop('keystore')
                 elif case=='diagnostic':payload['snapshot']['diagnostic']['category']='PRIVATE_SENTINEL'
+                elif case=='body-alias':payload['snapshot']['baselineObjects']=payload['snapshot']['observedObjects']
+                elif case=='body-field':payload['snapshot']['observedObjects'][-1]['spec']['template']['spec']['containers'][0]['image']='PRIVATE_SENTINEL'
+                elif case=='body-duplicate':payload['snapshot']['observedObjects'].append(copy.deepcopy(payload['snapshot']['observedObjects'][0]))
                 elif case=='oversize':payload['snapshot']['raw']='PRIVATE_SENTINEL'*6000
                 save_validation(folder,payload,journal)
                 private=folder/AGE.VALIDATION_NAME
@@ -453,8 +456,18 @@ class GenuineAgeProof(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='validation-age-proof-') as temporary:
             root=Path(temporary);folder,output,env,payload,journal,_owner=validation_fixture(root)
             head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=AGE.ROOT).decode().strip()
-            payload['binding']['sourceSHA']=journal['guard']['sourceSHA']=head
-            save_validation(folder,payload,journal);plain=(folder/AGE.VALIDATION_NAME).read_bytes()
+            # Persist through the real producer, then authenticate/encrypt that file.
+            from tests.test_package_identity_driver import P
+            for child in folder.iterdir():child.unlink()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'method':'package','accepted':False,'stages':[],
+                         'guard':{'sourceSHA':head,'runID':'123','runAttempt':'1'}}
+            trial.capture_retained_validation(payload['snapshot'],'transition')
+            plain=(folder/AGE.VALIDATION_NAME).read_bytes()
+            journal_text=trial.evidence.read_text()
+            for value in ('PRIVATE_JOB_IMAGE','PRIVATE_JOB_COMMAND','PRIVATE_JOB_ENV','PRIVATE_KEYSTORE_SOURCE'):
+                self.assertNotIn(value,journal_text)
+                self.assertNotIn(value,(folder/'journal-progress.json').read_text())
             for name in ('correct','wrong'):
                 subprocess.run([str(keygen),'-o',str(root/(name+'.key'))],capture_output=True,timeout=10,check=True)
             recipient=subprocess.run([str(keygen),'-y',str(root/'correct.key')],capture_output=True,timeout=10,check=True).stdout.decode().strip()

@@ -94,6 +94,13 @@ renovate.json
 release-please-config.json
 commitlint.config.js
 hk.pkl
+tests/workload-identities/package_roundtrip.py
+tests/workload-identities/phase_evidence.py
+tests/workload-identities/failure_evidence.py
+tests/workload-identities/README.md
+tests/test_package_identity_driver.py
+tests/test_identity_phase_evidence.py
+tests/test_identity_failure_evidence.py
 tests/demo/**
 tests/test_*
 tests/playwright.demo.config.ts

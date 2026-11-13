@@ -60,7 +60,7 @@ def patch_source(source):
     });
     if (!comments.length) break;
     for (const c of comments) {
-      if (c.id !== posted.id && Number.isSafeInteger(c.id) && c.id > 0 &&
+      if (c.id < posted.id && Number.isSafeInteger(c.id) && c.id > 0 &&
           c.user?.id === bot.id && c.user?.login === bot.login && c.user?.type === bot.type &&
           typeof c.body === "string" &&
           c.body.startsWith(LULA_SIGNATURE + "\\n## Lula Compliance Overview\\n")) stale.push(c.id);

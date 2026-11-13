@@ -28,6 +28,24 @@ def replace(path,old,new,transforms):
     transforms.append({'path':str(path),'preimage':a.native.digest_bytes(before) if hasattr(a.native,'digest_bytes') else __import__('hashlib').sha256(before).hexdigest(),'postimage':a.native.digest(path)})
 
 
+def canonical_patch(raw):
+    """Preserve port-patch content while making uniform CRLF transport explicit."""
+    remainder=raw.replace(b'\r\n',b'')
+    if b'\r' in remainder or (b'\r\n' in raw and b'\n' in remainder):
+        raise ValueError('mixed or bare-CR port patch refused')
+    return raw.replace(b'\r\n',b'\n')
+
+
+def stage_patch(original,destination,transforms):
+    raw=original.read_bytes();normalized=canonical_patch(raw)
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    with destination.open('xb') as stream:stream.write(normalized)
+    transforms.append({'kind':'port-patch-line-endings','path':str(original),
+                       'preimage':__import__('hashlib').sha256(raw).hexdigest(),
+                       'postimage':a.native.digest(destination)})
+    return destination
+
+
 def verify_resume(previous,snapshot,tools,providers,acquisition_sha256,order):
     """Rehash the complete retained producer before adopting any installed file."""
     frozen=json.loads(snapshot.read_text())
@@ -119,7 +137,8 @@ def main():
             if entry['selected_action']!='acquire_source':continue
             source=out/'source'/name;shutil.copytree(src/'source'/name,source)
             for number,patch in enumerate(entry['patches']):
-                command([tools['patch']['path'],'--binary','--batch','--fuzz=0','-p1','-d',source,'-i',HERE/'ports'/name/patch],name+'-patch-'+str(number),30)
+                staged=stage_patch(HERE/'ports'/name/patch,out/'patches'/name/patch,transforms)
+                command([tools['patch']['path'],'--binary','--batch','--fuzz=0','-p1','-d',source,'-i',staged],name+'-patch-'+str(number),30)
             if name=='ktx':(source/'other_include/zstd_errors.h').unlink()
             if entry['kind']=='install-real-headers':
                 headers=([source/'picosha2.h'] if name=='picosha2' else list(source.glob('*.h')) if name=='stb' else [source/'include/mapbox/earcut.hpp'])

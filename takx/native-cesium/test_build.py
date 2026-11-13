@@ -5,12 +5,32 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
 
 SPEC=importlib.util.spec_from_file_location('cesium_builder',Path(__file__).with_name('build.py'))
 B=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(B)
 
 
 class ResumeGuards(unittest.TestCase):
+    def test_crlf_patch_applies_to_lf_source_without_changing_vendor_patch(self):
+        patch=b'--- a/input.txt\r\n+++ b/input.txt\r\n@@ -1 +1 @@\r\n-before\r\n+after\r\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);original=root/'vendor.patch';original.write_bytes(patch)
+            source=root/'input.txt';source.write_bytes(b'before\n')
+            records=[];staged=B.stage_patch(original,root/'staged/port.patch',records)
+            result=subprocess.run(['patch','--binary','--batch','--fuzz=0','-p1','-d',str(root),'-i',str(staged)],capture_output=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(source.read_bytes(),b'after\n')
+            self.assertEqual(original.read_bytes(),patch)
+            self.assertEqual(staged.read_bytes(),patch.replace(b'\r\n',b'\n'))
+            self.assertEqual(records[0]['preimage'],B.a.native.digest(original))
+            self.assertEqual(records[0]['postimage'],B.a.native.digest(staged))
+
+    def test_lf_patch_is_unchanged_and_mixed_or_bare_cr_is_refused(self):
+        self.assertEqual(B.canonical_patch(b'patch\ncontent\n'),b'patch\ncontent\n')
+        for raw in (b'patch\rcontent\n',b'patch\r\ncontent\n'):
+            with self.assertRaisesRegex(ValueError,'port patch refused'):B.canonical_patch(raw)
+
     def fixture(self,root,completed=None):
         old=root/'old';old.mkdir();(old/'install').mkdir()
         (old/'install/libreal.a').write_bytes(b'genuine product fixture')

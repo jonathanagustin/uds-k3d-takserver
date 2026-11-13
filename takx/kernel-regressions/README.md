@@ -1,6 +1,6 @@
 # Public Kernel format regressions
 
-This harness adapts real upstream test slices and a bounded authored 3D fixture to the public-source desktop
+This harness adapts real upstream test slices and bounded authored 3D fixtures to the public-source desktop
 SDK. It calls the production Kernel classes, native SQLite/GeoPackage code and
 DTED source factory. It contains no replacement SDK classes or test codec.
 
@@ -30,12 +30,10 @@ read-only enforcement. The first runtime failure exposing the unsupported extra
 assertion is preserved separately.
 
 The KML slice verifies the upstream default point SYMBOL style through the real
-OGR reader and in-memory GDAL filesystem. It remains unexecuted until the
-resource-complete SDK qualification is reviewed. A fifth slice adapts actual GDAL
+OGR reader and in-memory GDAL filesystem. A fifth slice adapts actual GDAL
 GeoTIFF creation and ElevationChunk sampling
 with a 32 × 32 constant geographic HAE raster and an independent analytic height
 oracle. It does not reproduce the original large fractal UTM regression.
-Both new slices are source only, awaiting compile and runtime qualification.
 The CPU 3D import slice writes an authored unit tetrahedron OBJ and calls the
 real production ObjModelSpi/Model/Mesh. It checks four faces, twelve expanded
 vertices, all XYZ coordinates, unit bounds and absence of invented materials.
@@ -81,9 +79,9 @@ JDK/host ELF identities may accompany them. Original native build paths and
 shared SQLite/crypto backends are rejected. A failed command retains logs and a
 failure receipt; all recorded outputs become read-only.
 
-No native test has been run merely by adding this harness. Actual execution needs
-the newly qualified SDK and enough reserved disk space; its receipt records the
-tested slices and preserves the unqualified runtime/elevation/3D boundaries.
+Actual execution needs a reviewed resource-complete SDK and enough reserved disk
+space. Its receipt records each tested slice; broader elevation, scene, renderer
+and full-client acceptance remain separate.
 
 ## Independent category processes
 
@@ -100,8 +98,7 @@ No category outcome is claimed until this revised runner is actually executed.
 
 ## Observed qualification results
 
-The source compiles against the genuine resource-complete SDK. Actual native
-runs have **not qualified the complete suite**:
+Earlier genuine native attempts did not qualify the complete suite:
 
 - Runtime 01 passed startup and basic native controls, then rejected an extra
   MBTiles SPI read-only assertion. The actual default IO provider ignores that
@@ -114,13 +111,41 @@ runs have **not qualified the complete suite**:
   reader. Elevation and OBJ were not reached. Receipt SHA256:
   `533ef2d28f507413e12a4c1ead02e12a6fb41bf34cbab35e8f68b9a808d4c914`.
 
-The GDAL options-vector typemap calls Java enumeration methods without checking
-pending exceptions. The reduced native build explicitly configures both
-`--with-expat=no` and `--with-libkml=no`. These require real source/producer fixes
-and new qualified artifacts; this suite does not replace providers, edit completed
-SDKs or relax checked-JNI rules. The independent-process runner was prepared
-after those failures and remains unexecuted. Compilation and offline provenance
-checks are useful evidence, but do not substitute for passing native regressions.
+Those earlier artifacts had an unchecked GDAL options-vector typemap and no KML
+reader. A later independently reviewed composed SDK includes genuine GDAL/JNI
+source fixes, KML support, a reduced-driver initialization profile and the OBJ
+small-buffer fix. This harness does not replace providers, edit completed SDKs
+or relax checked-JNI rules.
+
+On 2026-11-13, the revised independent-process runner at `d440be0` qualified all
+six categories against that retained SDK. SDK receipt SHA256:
+`f8436e590294cf38683dded113fb250d5301a4146bbae10a278ee361de512a1d`.
+Fresh regression receipt SHA256:
+`abf15e67cd827ebf76edb0923a2c8c9b36b1479dfdda945d9987485deaf8b253`.
+
+| Category | Assertions | Checked-JNI process |
+| --- | ---: | --- |
+| DTED discovery | 13 | PASS |
+| MBTiles | 29 | PASS |
+| GeoPackage gridded coverage | 65545 | PASS |
+| KML point style | 5 | PASS |
+| Analytic GDAL elevation | 13 | PASS |
+| Two authored CPU OBJ imports | 39 | PASS |
+
+Every category exited zero, passed the unchanged strict native/JNI diagnostic
+gates and mapped all nine exact packaged native providers. The API-only SLF4J
+framework notices remain visible; this is not a claim of globally silent startup.
+The fresh attempt used an executable tmpfs output and retained the workspace's
+2 GiB free floor; aggregate compile/failed-attempt/current outputs used
+216412160 allocated bytes, below the 256 MiB cap. Its first attempt passed DTED
+assertions but rejected the exact qualified `bin/java` executable because the
+harness allowed JDK libraries only. That failed receipt and cache-restoration
+provenance remain preserved; the fix admits only the independently hashed Java
+tool, not arbitrary JDK binaries.
+
+This qualifies these adapted CPU format slices against the named component. It
+does not qualify a new SDK packaging recipe, renderer, original upstream teapot
+assets, or full client.
 
 The OBJ category keeps the original authored tetrahedron and also imports a compact
 version without its comment. Both use the same independent mesh/coordinate oracle;

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.3](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.2...v0.14.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **takx:** avoid heap pins when uploading shader sources ([130f2ca](https://github.com/jonathanagustin/uds-takserver/commit/130f2ca60dd0febb86c4769441020223a85671ab))
+* **takx:** preserve GDAL JNI exceptions and support KML ([3a36d6e](https://github.com/jonathanagustin/uds-takserver/commit/3a36d6e45bacba76673dd7d1e787eb05cd638648))
+
 ## [0.14.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.1...v0.14.2) (2026-11-12)
 
 

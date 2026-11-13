@@ -124,7 +124,7 @@ class PolicyTests(unittest.TestCase):
                     '--pr', '5', '--target', self.target, '--policy-ref', self.policy,
                     '--prospective', str(root / 'prospective.json')]
             with mock.patch.object(sys, 'argv', argv), mock.patch.object(SHADOW, 'GitHub', return_value=self.api), \
-                    mock.patch.object(SHADOW, 'command', return_value=json.dumps(self.verification(raw))), \
+                    mock.patch.object(SHADOW, 'command', return_value=self.verification(raw)), \
                     mock.patch.object(sys, 'stdout', new=io.StringIO()) as output:
                 SHADOW.main()
             result = json.loads(output.getvalue())

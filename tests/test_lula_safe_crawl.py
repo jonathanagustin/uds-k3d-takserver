@@ -32,7 +32,7 @@ const comments = [
   {id:6,user:{...bot,id:9},body:prefix},
   {id:7,user:{...bot,login:'other[bot]'},body:prefix},
   {id:8,user:{...bot,type:'User'},body:prefix},
-  own(99)
+  own(99), own(100)
 ];
 const block = '<!-- @lulaStart aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -->\nVALUE\n<!-- @lulaEnd aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -->';
 const api = {
@@ -82,6 +82,16 @@ vm.runInNewContext(executable+'\ncrawlCommand();',context);
 
 
 class SafeCrawl(unittest.TestCase):
+    def test_fixtures_are_unconditionally_wired_into_read_only_validation(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT / ".github/workflows/lula.yaml").read_text())
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        job = workflow["jobs"]["mappings"]
+        self.assertNotIn("if", job)
+        steps = [step for step in job["steps"] if "tests.test_lula_safe_crawl" in step.get("run", "")]
+        self.assertEqual(len(steps), 1)
+        self.assertNotIn("if", steps[0])
+
     def run_case(self, mode):
         result = subprocess.run(["node", "-e", HARNESS], input=json.dumps({
             "mode": mode, "source": PATCH.patch_source(OFFICIAL.read_text())}),

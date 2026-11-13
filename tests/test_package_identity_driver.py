@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -33,6 +35,37 @@ class PackageGuards(unittest.TestCase):
                     with self.assertRaises(ValueError):instance.exec('db-0',container,['true'],namespace=namespace)
                 self.assertEqual(run.call_count,before)
 
+    def test_bounded_package_subprocess_limits_output_and_marks_timeout(self):
+        result=P.bounded_package_run([sys.executable,'-c',"import sys;sys.stdout.write('SECRET'*20000);sys.stderr.write('private failure');sys.exit(7)"],5)
+        self.assertEqual(result['exitStatus'],7);self.assertTrue(result['stdoutTruncated']);self.assertLessEqual(len(result['stdout']),16384)
+        timeout=P.bounded_package_run([sys.executable,'-c','import time;time.sleep(5)'],0.01)
+        self.assertTrue(timeout['timedOut']);self.assertNotEqual(timeout['exitStatus'],0)
+
+    def test_package_command_failure_private_first_only_and_fixed_public_facts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);root.chmod(0o700)
+            instance=P.PackageTrial(root/'journal.json',self.bound())
+            instance.state['guard']={'sourceSHA':'a'*40,'runID':'1','runAttempt':'1'}
+            instance.guard=lambda:None;instance.inputs_unchanged=lambda:None;instance.core_unchanged=lambda:None
+            instance.command=lambda *a,**kw:P.D.CONTEXT
+            result={'exitStatus':7,'timedOut':False,'stdout':'SECRET_OUT','stderr':'UPGRADE FAILED SECRET_ERROR',
+                    'stdoutTruncated':False,'stderrTruncated':False}
+            with patch.object(P,'bounded_package_run',return_value=result):
+                with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'transition'),5)
+            target=root/P.PACKAGE_FAILURE;first=target.read_bytes();payload=json.loads(first)
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600);self.assertEqual(payload['binding'],instance.state['guard'])
+            self.assertEqual(payload['stderr'],result['stderr']);self.assertLessEqual(len(first),65536)
+            stage=instance.state['stages'][-1];self.assertEqual(stage['category'],'helm-upgrade');self.assertNotIn('SECRET',json.dumps(stage))
+            self.assertNotIn('SECRET',(root/'journal-progress.json').read_text())
+            result['stderr']='DIFFERENT'
+            with patch.object(P,'bounded_package_run',return_value=result):
+                with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
+            self.assertEqual(target.read_bytes(),first)
+            target.unlink();foreign=root/'foreign';foreign.write_text('untouched');target.symlink_to(foreign)
+            with patch.object(P,'bounded_package_run',return_value=result):
+                with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
+            self.assertEqual(foreign.read_text(),'untouched')
+
     def test_same_archive_and_values_only_phase_changes(self):
         commands=[P.deploy_command(self.bound(),phase) for phase in P.PHASES]
         stripped=[c[:-1] for c in commands]
@@ -54,8 +87,11 @@ class PackageGuards(unittest.TestCase):
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.bound['archiveSHA256']='a'*64
             calls=[];seen=[];instance.guard=lambda:None;instance.inputs_unchanged=lambda:None;instance.core_unchanged=lambda:None;instance.journal=lambda *a,**k:None
             instance.command=lambda argv,**kw:(calls.append(argv) or (P.D.CONTEXT if argv[0]=='kubectl' else ''))
-            instance.observe=seen.append;instance.deploy('rollback')
-            self.assertEqual(calls[-1],P.deploy_command(instance.bound,'rollback'));self.assertEqual(seen,['rollback'])
+            instance.observe=seen.append
+            with patch.object(P,'bounded_package_run',return_value={'exitStatus':0,'timedOut':False,'stdout':'','stderr':'','stdoutTruncated':False,'stderrTruncated':False}) as execute:
+                instance.deploy('rollback')
+            self.assertEqual(execute.call_args.args[0],P.deploy_command(instance.bound,'rollback'))
+            self.assertEqual(seen,['rollback'])
     def test_direct_phase_mutations_cannot_run_in_package_path(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound())

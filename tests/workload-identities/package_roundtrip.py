@@ -10,6 +10,9 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
+import signal
+import stat
 import subprocess
 import time
 import yaml
@@ -68,6 +71,41 @@ def require_clean_objects(namespace,kind,objects):
         objects=[x for x in objects if x['metadata']['name'] in D.PEPR or x['metadata'].get('labels',{}).get('name')=='takserver-oidc']
     if kind=='serviceaccounts':objects=[x for x in objects if x['metadata']['name']!='default']
     D.require(not objects,'retained application state prevents clean strict install: '+kind)
+
+PACKAGE_FAILURE='PRIVATE-package-command-failure.json'
+PACKAGE_CATEGORIES=('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown')
+
+def bounded_package_run(argv,timeout):
+    child=subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+    streams={child.stdout:bytearray(),child.stderr:bytearray()};truncated={key:False for key in streams}
+    deadline=time.monotonic()+timeout;timed_out=False
+    with selectors.DefaultSelector() as selector:
+        for stream in streams:selector.register(stream,selectors.EVENT_READ)
+        while selector.get_map():
+            if not timed_out and time.monotonic()>=deadline:
+                timed_out=True
+                try:os.killpg(child.pid,signal.SIGKILL)
+                except ProcessLookupError:pass
+            for key,_ in selector.select(0.1):
+                chunk=os.read(key.fileobj.fileno(),65536)
+                if not chunk:selector.unregister(key.fileobj);continue
+                buffer=streams[key.fileobj];buffer.extend(chunk)
+                if len(buffer)>16384:del buffer[:-16384];truncated[key.fileobj]=True
+    code=child.wait(timeout=5)
+    result={'exitStatus':code,'timedOut':timed_out}
+    for name,stream in [('stdout',child.stdout),('stderr',child.stderr)]:
+        result[name]=streams[stream].decode('utf-8','replace');result[name+'Truncated']=truncated[stream];stream.close()
+    return result
+
+def command_failure_category(result):
+    if result['timedOut']:return 'timeout'
+    text=(result['stdout']+'\n'+result['stderr']).lower()
+    for category,pattern in [('helm-hook',r'failed (pre|post)-(install|upgrade)|hook.*failed'),
+                             ('helm-upgrade',r'upgrade failed|cannot patch|helm.*error'),
+                             ('resource-conflict',r'already exists|conflict with|ownership metadata'),
+                             ('package-validation',r'package.*checksum|invalid package|package validation')]:
+        if re.search(pattern,text):return category
+    return 'unknown'
 
 class PackageTrial(D.Driver):
     def __init__(self,evidence,bound):
@@ -141,7 +179,40 @@ class PackageTrial(D.Driver):
     def run_package(self,argv,timeout):
         self.guard();self.inputs_unchanged();self.core_unchanged()
         D.require(self.command(['kubectl','config','current-context']).strip()==D.CONTEXT,'Zarf default context is not the guarded cluster')
-        return self.command(argv,timeout=min(timeout,max(1,int(self.deadline-time.monotonic()))))
+        role='remove' if argv==['uds','zarf','package','remove','takserver','--confirm'] else 'deploy'
+        phase=next((phase for phase in D.PHASES if argv==deploy_command(self.bound,phase)),None) if role=='deploy' else 'shared'
+        D.require(phase is not None,'unsupported package command')
+        result=bounded_package_run(argv,min(timeout,max(1,int(self.deadline-time.monotonic()))))
+        if result['exitStatus']!=0 or result['timedOut']:
+            binding={key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')}
+            payload={'schema':1,'binding':binding,'role':role,'phase':phase,**result,
+                     'packageDriverSHA256':digest(Path(__file__)),'driverSHA256':digest(HERE/'drive.py')}
+            folder=self.evidence.parent
+            D.require(stat.S_IMODE(folder.stat().st_mode)==0o700 and not any(path.is_symlink() for path in (folder,*folder.parents)),
+                      'package failure directory is not private')
+            destination=folder/PACKAGE_FAILURE
+            data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            while len(data)>64*1024:
+                for stream in ('stdout','stderr'):
+                    payload[stream]=payload[stream][len(payload[stream])//2:];payload[stream+'Truncated']=True
+                data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            try:
+                fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            except FileExistsError:
+                # Never follow a pre-existing link or adopt another trial's file.
+                previous=self.state.get('packageCommandFailure',{})
+                D.require(previous.get('file')==PACKAGE_FAILURE and not destination.is_symlink() and
+                          stat.S_ISREG(destination.stat().st_mode) and stat.S_IMODE(destination.stat().st_mode)==0o600 and
+                          destination.stat().st_size<=64*1024 and digest(destination)==previous.get('sha256'),
+                          'existing package failure is not the owned first failure')
+            else:
+                with os.fdopen(fd,'wb') as output:output.write(data)
+                self.state['packageCommandFailure']={'file':PACKAGE_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            self.journal('package-command-failed',role=role,phase=phase,exitStatus=result['exitStatus'],timedOut=result['timedOut'],
+                         category=command_failure_category(result),stdoutPresent=bool(result['stdout']),stderrPresent=bool(result['stderr']))
+            raise ValueError('supported package command failed; inspect bounded private evidence')
+        return result['stdout']
+
 
     def deploy(self,phase):
         self.guard();self.inputs_unchanged();self.core_unchanged()

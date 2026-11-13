@@ -355,7 +355,7 @@ class Driver:
         temporary.write_text(json.dumps(self.state, indent=2, sort_keys=True) + '\n')
         temporary.chmod(0o600)
         temporary.replace(self.evidence)
-        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory','diagnostic')
+        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory','diagnostic','role','timedOut','category','stdoutPresent')
         stages=[{key:entry[key] for key in fields if key in entry} for entry in self.state['stages']
                 if entry['stage'] not in ('protocol-start','protocol-result')]
         protocol={stage:next(({key:entry[key] for key in fields if key in entry}

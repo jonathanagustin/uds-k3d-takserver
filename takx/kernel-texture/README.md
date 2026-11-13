@@ -55,9 +55,14 @@ The pixel control uses an owned asymmetric texture fixture. It does not yet
 exercise URI decoding, asynchronous atlas loading, the complete batch builder /
 renderer object lifecycle or a TAKX drawable. The separate composed Native03 +
 CPU04 qualification now passes the five Texture CPU JNI methods and native clone
-ownership/getter checks under `-Xcheck:jni`; see [qualification evidence and
-limits](QUALIFICATION.md). It does not establish the composite/parser serialization
-round-trip, complete native texture feature or live client acceptance.
+ownership/getter checks under `-Xcheck:jni`. A later full-style CPU control passed
+50 repetitions of composite child order/value, parser serialization and owned
+clone disposal with zero Java Native Interface (JNI) warnings. The first failed
+control remains preserved: upstream whole-composite equality compares child
+pointers, so independent parsed children require individual value checks. See
+[qualification evidence and limits](QUALIFICATION.md). These CPU checks do not
+establish image decoding, asynchronous atlas loading, the complete native
+texture feature or live client acceptance.
 Perspective/horizon behavior, surface render-to-texture pixel density, global
 wrap/pole behavior, atlas eviction/context recovery and performance remain
 acceptance gates. A vertex behind the camera or a degenerate texture frame is an

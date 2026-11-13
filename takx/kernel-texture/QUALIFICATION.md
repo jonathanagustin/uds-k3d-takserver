@@ -11,7 +11,7 @@ unchanged by this documentation update:
 
 The following are existing local evidence receipts, identified by digest. They
 are not distributed binaries or a portable end-to-end SDK build attestation.
-No new build or runtime control was executed for this documentation update.
+The full style CPU control below was executed separately; graphics acceptance remains open.
 
 | Evidence receipt | SHA-256 |
 | --- | --- |
@@ -42,9 +42,31 @@ store/query/visibility checks. They are separate component evidence, not three
 additional Texture methods. No context GPU native method was exercised. A URI
 getter returning the supplied string does not prove image decoding or loading.
 
-The executed Texture candidate was narrower than the checked-in
-`TextureStyleControl.java`: it did not establish composite equality, OGR parser
-or serialization round-trips. `builder-control.cpp` still has syntax-only
+The later full-style CPU control reused the exact Native03 providers and accepted
+class origins. Its first attempt failed at the independent composite comparison;
+the failed receipt is preserved as
+`pr498-full-style-preparation-01/execution/complete.json`, Secure Hash Algorithm
+256-bit (SHA-256) digest
+`bee0c23d27846ffd64955aa9f08e617e3ed77a56d595f637054c8256a7ef2bc3`.
+Upstream composite equality compares child pointer identity. Native composite
+clones share children, while parsing creates new children; comparing those
+independent composite objects with whole-object equality is invalid.
+
+The corrected control passed compilation and actual execution with receipt
+`pr498-full-style-preparation-02/execution/complete.json`, SHA-256 digest
+`0c0e27d505e60da684db7292dcf580ed037aae6cbea716eac58ca1ec274478ef`.
+It completed 50 repetitions checking native clone equality, composite class
+and child order/count, each parsed child's native value equality, exact texture
+fields and serialization round-trips. The parser cache owns its returned style;
+the control disposes its own clone. The native composite child getter returns
+owned clones, which the control explicitly disposes. Invalid constructors still
+refuse their inputs. All 2,880 reused input pins stayed unchanged and execution
+emitted zero Java Native Interface (JNI) warnings under `-Xcheck:jni`.
+The runtime stream digest is
+`50dd600718b76d35c7ffde1e65ac37e09adf07fbe29f5f8eaa17192c92763a8f`.
+This CPU proof does not exercise graphics or decode a texture image.
+
+`builder-control.cpp` still has syntax-only
 qualification. URI decoding, asynchronous loader/atlas completion and failure,
 refresh scheduling, nested styles/siblings/edit overlays, the complete batch
 builder/renderer lifecycle, atlas eviction/context recovery and a TAKX drawable

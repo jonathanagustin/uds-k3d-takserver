@@ -73,6 +73,7 @@ def claim_parent(driver,pvc):
             'volumeName':volume['metadata']['name'],'volumeUID':volume['metadata']['uid']}
 
 def mount(driver,pvc):
+    require(pvc['metadata']['namespace'] in APP_RELEASES,'PVC mount outside application')
     matches=[];parent=claim_parent(driver,pvc)
     for pod in driver.get('pods',namespace=pvc['metadata']['namespace'])['items']:
         volumes={v['name'] for v in pod['spec'].get('volumes',[]) if v.get('persistentVolumeClaim',{}).get('claimName')==pvc['metadata']['name']}
@@ -83,9 +84,32 @@ def mount(driver,pvc):
             for item in container.get('volumeMounts',[]):
                 if item['name'] in volumes and not item.get('readOnly'):
                     path=item['mountPath'];require(re.fullmatch(r'/[A-Za-z0-9_./-]+',path) and '..' not in PurePosixPath(path).parts,'unsupported PVC mount path')
+                    require(isinstance(container.get('name'),str) and re.fullmatch(r'[a-z0-9][a-z0-9-]*',container['name']),'unsupported PVC container')
                     matches.append((pod['metadata']['name'],container['name'],path))
     require(len(matches)==1,'PVC has no unique writable application mount')
     return matches[0]
+
+def sentinel_exec(driver,operation,namespace,pod,container,args,payload=None):
+    require(operation in ('create','read','remove') and namespace in APP_RELEASES,'unsupported sentinel operation/scope')
+    driver.journal('retained-sentinel-start',operation=operation,namespace=namespace)
+    result=driver.exec(pod,container,args,payload,namespace=namespace)
+    # Fixed bounded facts only: never publish remote stderr, paths or Pod names.
+    status=result.returncode
+    driver.journal('retained-sentinel-exec',operation=operation,namespace=namespace,
+                   exitStatus=status if isinstance(status,int) and -255<=status<=255 else None,
+                   stderrPresent=bool(result.stderr.strip()))
+    return result
+
+def sentinel_create_script(path,sentinel):
+    # Fixed predicate statuses: 61 missing directory, 62 symlink, 63 unwritable,
+    # 64 existing sentinel, 65 write failure. No remote text is evidence.
+    directory=shlex.quote(path);target=shlex.quote(sentinel)
+    return ('umask 077; set -o noclobber; '
+            'if test -L '+directory+'; then exit 62; fi; '
+            'if ! test -d '+directory+'; then exit 61; fi; '
+            'if ! test -w '+directory+'; then exit 63; fi; '
+            'if test -e '+target+' || test -L '+target+'; then exit 64; fi; '
+            'if ! cat > '+target+'; then exit 65; fi')
 
 def capture(driver):
     origin=hooks(driver);records=[]
@@ -94,8 +118,8 @@ def capture(driver):
         for pvc in driver.get('persistentvolumeclaims',namespace=namespace)['items']:
             rec=resource_record(pvc);rec['parent']=claim_parent(driver,pvc);pod,container,path=mount(driver,pvc)
             sentinel=path.rstrip('/')+'/.uds-'+driver.state['trialID'];token=sha({'uid':rec['uid'],'trial':driver.state['trialID']})+'\n'
-            script='umask 077; set -o noclobber; test -d '+shlex.quote(path)+'; test ! -L '+shlex.quote(path)+'; cat > '+shlex.quote(sentinel)
-            result=driver.exec(pod,container,['/bin/bash','-ceu',script],token)
+            script=sentinel_create_script(path,sentinel)
+            result=sentinel_exec(driver,'create',namespace,pod,container,['/bin/bash','-ceu',script],token)
             require(result.returncode==0 and not result.stderr.strip(),'could not create exact owned PVC data sentinel')
             rec.update(sentinel=sentinel,sentinelSHA256=hashlib.sha256(token.encode()).hexdigest());records.append(rec)
     require(records,'application data claims missing')
@@ -135,11 +159,11 @@ def verify(driver,proof,remove_sentinels=False):
         else:require(meta.get('annotations',{}).get('helm.sh/hook-delete-policy')=='before-hook-creation','keystore no longer source-owned hook')
         if rec['kind']=='PersistentVolumeClaim':
             require(claim_parent(driver,current)==rec['parent'],'data PVC/PV parent changed');pod,container,_=mount(driver,current)
-            result=driver.exec(pod,container,['/bin/bash','-ceu','test ! -L '+shlex.quote(rec['sentinel'])+'; sha256sum -- '+shlex.quote(rec['sentinel'])])
+            result=sentinel_exec(driver,'read',rec['namespace'],pod,container,['/bin/bash','-ceu','test ! -L '+shlex.quote(rec['sentinel'])+'; sha256sum -- '+shlex.quote(rec['sentinel'])])
             observed=result.stdout.split()
             require(result.returncode==0 and not result.stderr.strip() and len(observed)==2 and observed[0]==rec['sentinelSHA256'] and observed[1]==rec['sentinel'],'application PVC data sentinel changed')
             if remove_sentinels:
-                result=driver.exec(pod,container,['/bin/bash','-ceu','rm -- '+shlex.quote(rec['sentinel'])]);require(result.returncode==0,'exact owned sentinel cleanup failed')
+                result=sentinel_exec(driver,'remove',rec['namespace'],pod,container,['/bin/bash','-ceu','rm -- '+shlex.quote(rec['sentinel'])]);require(result.returncode==0,'exact owned sentinel cleanup failed')
             observations.append({'kind':rec['kind'],'name':rec['name'],'namespace':rec['namespace'],'uid':meta['uid'],'volumeUID':rec['parent']['volumeUID'],'sentinelSHA256':observed[0]})
         else:
             value=current.get('data',{}) if rec['kind']=='Secret' else {'data':current.get('data',{}),'binaryData':current.get('binaryData',{})}

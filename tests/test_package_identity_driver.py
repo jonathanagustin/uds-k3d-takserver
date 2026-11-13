@@ -16,6 +16,23 @@ P=importlib.util.module_from_spec(spec);spec.loader.exec_module(P)
 
 class PackageGuards(unittest.TestCase):
     def bound(self):return {'archive':'/owned/zarf-package-takserver-amd64-dev-upstream.tar.zst','archiveSHA256':'a'*64,'planSHA256':'b'*64,'configSHA256':'c'*64,'variables':{'DOMAIN':'uds.dev','TAK_IMAGE_TAG':'reviewed','FILESYSTEM_BACKUP':'true','POSTGRES_STORAGE_CLASS':'local-path-local','CLOUDTAK_STORAGE_CLASS':'local-path-local'}}
+    def test_exec_dispatches_bound_application_namespace_and_container(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None
+            instance.get=lambda *a,**kw:{'metadata':{},'spec':{'containers':[{'name':'postgres'}]}}
+            with patch.object(P.D.subprocess,'run') as run:
+                for namespace in ('takserver','cloudtak'):
+                    instance.exec('db-0','postgres',['true'],namespace=namespace)
+                    argv=run.call_args.args[0]
+                    self.assertEqual(argv[argv.index('-n')+1],namespace)
+                    self.assertEqual(argv[argv.index('-c')+1],'postgres')
+                instance.exec('db-0','postgres',['true'])
+                self.assertEqual(run.call_args.args[0][9],'takserver')
+                before=run.call_count
+                for namespace,container in [('kube-system','postgres'),('cloudtak','unknown')]:
+                    with self.assertRaises(ValueError):instance.exec('db-0',container,['true'],namespace=namespace)
+                self.assertEqual(run.call_count,before)
+
     def test_same_archive_and_values_only_phase_changes(self):
         commands=[P.deploy_command(self.bound(),phase) for phase in P.PHASES]
         stripped=[c[:-1] for c in commands]

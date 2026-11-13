@@ -658,16 +658,23 @@ class Driver:
         require(selector and all(labels.get(k) == v for k, v in selector.items()), 'Job selector protection lost')
         return pod, job
 
-    def exec(self, pod, container, args, payload=None):
+    def exec(self, pod, container, args, payload=None, *, namespace=None):
         self.guard()
-        expected = getattr(self, 'active_pods', {}).get(pod)
+        target_namespace = NS if namespace is None else namespace
+        require(target_namespace in (NS, 'cloudtak'), 'exec namespace outside application')
+        if namespace is not None:
+            current = self.get('pod', pod, namespace=target_namespace)
+            require(not current['metadata'].get('deletionTimestamp') and
+                    sum(c.get('name') == container for c in current['spec']['containers']) == 1,
+                    'exec container is not a unique live application container')
+        expected = getattr(self, 'active_pods', {}).get(pod) if target_namespace == NS else None
         if expected:
             current = self.get('pod', pod)
             require(current['metadata']['uid'] == expected['uid'] and not current['metadata'].get('deletionTimestamp') and
                     current['spec'].get('serviceAccountName') == expected['account'], 'probe Pod identity changed')
             owners = [o for o in current['metadata'].get('ownerReferences', []) if o.get('controller') is True]
             require(len(owners) == 1 and owners[0].get('uid') == expected['ownerUID'], 'probe Pod controller changed')
-        return subprocess.run(['uds', 'zarf', 'tools', 'kubectl', '--context', CONTEXT, 'exec', '-i', '-n', NS,
+        return subprocess.run(['uds', 'zarf', 'tools', 'kubectl', '--context', CONTEXT, 'exec', '-i', '-n', target_namespace,
                                pod, '-c', container, '--', *args], input=payload, text=True,
                               capture_output=True, timeout=20)
 

@@ -143,6 +143,22 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
             self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
 
+    def test_sentinel_progress_exports_only_reviewed_typed_facts(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            guard={field:ENV[env] for field,env in [('sourceSHA','GITHUB_SHA'),('runID','GITHUB_RUN_ID'),('runAttempt','GITHUB_RUN_ATTEMPT')]}
+            stage={'stage':'retained-sentinel-exec','operation':'create','namespace':'cloudtak','exitStatus':63,'stderrPresent':True}
+            def progress(entries):
+                (folder/'journal.json').write_text(json.dumps({'guard':guard,'stages':entries}))
+                return S.identity_progress(root)['package']
+            start={'stage':'retained-sentinel-start','operation':'create','namespace':'cloudtak'}
+            leaked={**stage,**{key:'PRIVATE_SENTINEL' for key in ('pod','path','stdout','stderr','argv')}}
+            self.assertEqual(progress([start,leaked])['stages'],[start,stage])
+            for key,value in [('operation','foreign'),('namespace','kube-system'),('exitStatus',True),('exitStatus',256),('exitStatus','63'),('stderrPresent',1)]:
+                with self.subTest(key=key,value=value):
+                    self.assertEqual(progress([{**stage,key:value}]),{'status':'unavailable','stages':[]})
+            self.assertEqual(progress([{**stage,'exitStatus':None}])['stages'][0]['exitStatus'],None)
+
     def test_package_failure_progress_and_callsites_publish_before_acceptance(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {**ENV, 'SCENARIO': 'identities', 'IDENTITY_METHOD': 'package'}, clear=True), patch.object(S.platform, 'machine', return_value='x86_64'), patch.object(F, 'reviewed', side_effect=source_bytes):
             root = Path(directory); folder = root/'package-identity'; folder.mkdir(mode=0o700)

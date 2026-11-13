@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "profileId": "gdal244-java-pending-exceptions-v2",
+  "patchFile": "gdal-java-pending-exceptions-v2.patch",
+  "sourceRevision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "patchSha256": "9a8fd85a2174a49d0ffbeb75c6120540ccec58b14a2eedfacf0732758ede30e5",
+  "sources": {
+    "swig/include/java/typemaps_java.i": {
+      "preSha256": "c65c74a47c0c4dbab3dac693a565b99f9e825187a82583dd07f681253926f64b",
+      "postSha256": "0551da6551f6d7c6bc8e358dac1721c559cd183fd6ba4da667511383232e95f5"
+    },
+    "swig/include/java/callback.i": {
+      "preSha256": "309f971cfcf37ca5b0b0964f5431eda07195e202e481fbc1784dac9c9b83d52c",
+      "postSha256": "6962a37c369433a6b4cb3de76876451d77baa070006d2d55abcf23dce38d59c7"
+    }
+  },
+  "runtimeAcceptance": false
+}

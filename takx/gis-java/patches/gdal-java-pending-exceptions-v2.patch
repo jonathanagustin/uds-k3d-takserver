@@ -1,0 +1,120 @@
+--- a/swig/include/java/typemaps_java.i
++++ b/swig/include/java/typemaps_java.i
+@@ -12,0 +13,46 @@
++
++/* Scoped input ownership for C++ JNI wrappers, including early typemap returns. */
++%{
++#include "cpl_string.h"
++#ifdef __cplusplus
++namespace {
++class GdalJavaScopedUtfChars {
++    JNIEnv *env_;
++    jstring string_;
++    const char *chars_;
++public:
++    GdalJavaScopedUtfChars(JNIEnv *env, jstring string)
++        : env_(env), string_(string), chars_(string ? env->GetStringUTFChars(string, 0) : NULL) {}
++    ~GdalJavaScopedUtfChars() { if (chars_) env_->ReleaseStringUTFChars(string_, chars_); }
++    const char *get() const { return chars_; }
++    GdalJavaScopedUtfChars(const GdalJavaScopedUtfChars &) = delete;
++    GdalJavaScopedUtfChars &operator=(const GdalJavaScopedUtfChars &) = delete;
++};
++class GdalJavaScopedOptions {
++    char ***slot_;
++public:
++    explicit GdalJavaScopedOptions(char ***slot) : slot_(slot) {}
++    ~GdalJavaScopedOptions() { CSLDestroy(*slot_); }
++    GdalJavaScopedOptions(const GdalJavaScopedOptions &) = delete;
++    GdalJavaScopedOptions &operator=(const GdalJavaScopedOptions &) = delete;
++};
++}
++#define GDAL_JAVA_CSL_TAIL_CLEANUP(list) ((void)0)
++#else
++#define GDAL_JAVA_CSL_TAIL_CLEANUP(list) CSLDestroy(list)
++#endif
++%}
++#ifdef __cplusplus
++%typemap(in, noblock=1) char * {
++  GdalJavaScopedUtfChars $1_utf_guard(jenv, $input);
++  $1 = ($1_ltype)$1_utf_guard.get();
++  if ($input && !$1) return $null;
++}
++%typemap(in, noblock=1) const char * {
++  GdalJavaScopedUtfChars $1_utf_guard(jenv, $input);
++  $1 = ($1_ltype)$1_utf_guard.get();
++  if ($input && !$1) return $null;
++}
++%typemap(freearg, noblock=1) char * "";
++%typemap(freearg, noblock=1) const char * "";
++#endif
+@@ -499,0 +546,2 @@
++  /* Preserve an original callback Throwable before native-error translation. */
++  if (jenv->ExceptionCheck()) return $null;
+@@ -1026,3 +1074,3 @@
+-%typemap(in) char **options
+-{
+-  /* %typemap(in) char **options */
++%typemap(in, noblock=1) char **options
++{
++  /* %typemap(in, noblock=1) char **options */
+@@ -1029,0 +1078,3 @@
++#ifdef __cplusplus
++  GdalJavaScopedOptions $1_options_guard(&$1);
++#endif
+@@ -1031,0 +1083 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1032,0 +1085 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1033,0 +1087 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1035,0 +1090 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1037,0 +1093 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1039,0 +1096 @@
++    if (jenv->ExceptionCheck()) return $null;
+@@ -1045,2 +1102,10 @@
+-    for (jobject keys = jenv->CallObjectMethod($input, elements);
+-          jenv->CallBooleanMethod(keys, hasMoreElements) == JNI_TRUE;) {
++    jobject keys = jenv->CallObjectMethod($input, elements);
++    if (jenv->ExceptionCheck()) return $null;
++    if (keys == NULL) {
++      SWIG_JavaThrowException(jenv, SWIG_JavaNullPointerException, "Vector.elements() returned null");
++      return $null;
++    }
++    while (true) {
++      const jboolean more = jenv->CallBooleanMethod(keys, hasMoreElements);
++      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
++      if (more != JNI_TRUE) break;
+@@ -1047,0 +1113 @@
++      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
+@@ -1050 +1116 @@
+-          CSLDestroy($1);
++          GDAL_JAVA_CSL_TAIL_CLEANUP($1);
+@@ -1055 +1121,2 @@
+-      $1 = CSLAddString($1,  valptr);
++      if (valptr == NULL) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
++      $1 = CSLAddString($1, valptr);
+@@ -1056,0 +1124 @@
++      jenv->DeleteLocalRef(value);
+@@ -1063 +1131 @@
+-  CSLDestroy( $1 );
++  GDAL_JAVA_CSL_TAIL_CLEANUP($1);
+--- a/swig/include/java/callback.i
++++ b/swig/include/java/callback.i
+@@ -47,0 +48,2 @@
++    // GDAL can call repeatedly after cancellation; preserve the original Throwable.
++    if (jenv->ExceptionCheck()) return 0;
+@@ -49,0 +52 @@
++    if (jenv->ExceptionCheck()) return 0;
+@@ -51 +54,3 @@
+-    jstring temp_string = jenv->NewStringUTF(pszMessage);
++    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
++    jstring temp_string = jenv->NewStringUTF(pszMessage ? pszMessage : "");
++    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
+@@ -52,0 +58 @@
++    const bool failed = jenv->ExceptionCheck();
+@@ -54 +60,2 @@
+-    return ret;
++    jenv->DeleteLocalRef(progressCallbackClass);
++    return failed ? 0 : ret;

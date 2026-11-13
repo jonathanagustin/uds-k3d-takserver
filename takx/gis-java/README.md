@@ -100,3 +100,29 @@ python3 -B -m unittest discover -s takx/gis-java -p test_build.py -v
 The separate [data-only recipe](data/README.md) builds a project resource JAR
 from the same locked GDAL source archive. It uses no SDK inputs and does not
 build or run GDAL/native libraries.
+
+## Pending-exception source profile
+
+The prepared GIS Java recipe applies the exact official-source patch described
+by `jni-exceptions-profile-v2.json` before SWIG generation. It checks both source
+preimages/postimages and binds the patch tool, profile and patch to the new cache
+key. Completed old caches cannot become patched caches by changing a label.
+
+The patch checks Java Enumeration calls in the GDAL options-vector typemap and
+stops repeated progress callbacks while an original Throwable is pending. It
+never clears or replaces that Throwable. A subclass returning a null Enumeration
+is rejected with a genuine Java NullPointerException before any call through
+that reference; a separate real negative control checks its exact message. `GdalExceptionControls.java` provides
+real Vector/Enumeration and ProgressCallback throwing controls for a later
+checked-JNI execution; compilation alone does not establish their behavior.
+The helper is compiled with the existing API probe, but never invoked by this
+Java-only recipe. A genuine JNI rebuild and new SDK proof are required.
+
+The v2 profile adds scoped owners for ordinary C++ UTF string inputs and CSL
+options, plus a pending-Throwable guard before OGRErr translation. Fresh SWIG/Java
+generation and actual JNI controls passed for this source profile. The native
+producer's final inventory step failed on libtool's internal metadata symlink; a
+separate artifact audit verified the preserved native products and runtime logs
+without relabeling that failed attempt. See [qualification](../native-gdal-jni/KML_PROFILE.md)
+and [ownership scope](../native-gdal-jni/JNI_OWNERSHIP.md). A newly composed SDK
+and full client runtime remain separate gates.

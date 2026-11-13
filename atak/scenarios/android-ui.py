@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Bounded UI actions for the pinned official ATAK file browser and marker panes."""
 import importlib.util
+import hashlib
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -11,6 +12,12 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('scenario', Path(__file__).with_name('android-interoperability.py'))
 scenario = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scenario)
+radial_spec = importlib.util.spec_from_file_location('radial_details', Path(__file__).with_name('radial-details.py'))
+radial = importlib.util.module_from_spec(radial_spec)
+radial_spec.loader.exec_module(radial)
+
+FIXED_UI_TEXT = {'Tools', 'All tools & plugins', 'Import', 'Overlays', 'Select Import Type',
+                 'Suggested Import Strategy', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'DD', 'Broadcast'}
 
 
 def select(tree, *, rid=None, text=None):
@@ -88,6 +95,12 @@ class AndroidUI:
     def __init__(self, output, device='atak-device-adb.atak.svc.cluster.local:5555', pod='atak-demo-adb'):
         self.output = Path(output)
         self.prefix = ['uds', 'zarf', 'tools', 'kubectl', 'exec', '-n', 'atak', pod, '--', 'adb', '-s', device]
+        self.action = 'not-started'
+        self.last_selector = {}
+
+    def diagnostic(self):
+        # Never include arbitrary UI text, actual field contents, or credentials.
+        return {'action': self.action, 'selector': dict(self.last_selector)}
 
     def adb(self, *command):
         return scenario.run_bounded(self.prefix + list(command), timeout=12)
@@ -111,6 +124,13 @@ class AndroidUI:
         return ET.fromstring(payload)
 
     def find(self, seconds=10, **selector):
+        self.last_selector = {}
+        if selector.get('rid'):
+            if not re.fullmatch('[A-Za-z0-9_]+', selector['rid']):
+                raise ValueError('unsupported diagnostic selector')
+            self.last_selector['rid'] = selector['rid']
+        if selector.get('text'):
+            self.last_selector['text'] = selector['text'] if selector['text'] in FIXED_UI_TEXT else '<synthetic-text>'
         deadline = time.monotonic() + seconds
         while True:
             try:
@@ -173,9 +193,12 @@ class AndroidUI:
         raise ValueError('package selection checkbox absent')
 
     def import_package(self):
+        self.action = 'import-open-tool'
         self.tool('Import')
+        self.action = 'import-select-local-storage'
         self.find(rid='alertTitle', text='Select Import Type')
         self.tap_node(local_import_button(self.tree()))
+        self.action = 'import-find-shared-storage'
         self.tap(rid='phone')
         for _ in range(5):
             current = self.find(rid='importBrowserCurrentDirectory').get('text', '').rstrip('/')
@@ -184,10 +207,12 @@ class AndroidUI:
             self.tap(rid='importManagerFileBrowserUpButton')
         else:
             raise ValueError('file browser did not reach shared storage')
+        self.action = 'import-select-package'
         self.tap(rid='importManagerBrowserFileName', text='Download')
         self.tap(rid='importManagerBrowserFileName', text='atak-synthetic-scenario.dpk')
         self.confirm_file_selected('atak-synthetic-scenario.dpk')
         self.tap(text='OK')
+        self.action = 'import-select-copy'
         self.find(rid='alertTitle', text='Suggested Import Strategy')
         self.tap_node(first_import_tile(self.tree(), 'Suggested Import Strategy', 3))
 
@@ -197,7 +222,9 @@ class AndroidUI:
             self.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
 
     def details(self, callsign):
+        self.action = 'details-open-overlays'
         self.tool('Overlays')
+        self.action = 'details-search-marker'
         try:
             select(self.tree(), rid='hierarchy_search')
         except LookupError:
@@ -211,26 +238,61 @@ class AndroidUI:
             self.adb('shell', 'input', 'keyevent', *(['KEYCODE_DEL'] * len(existing)))
         self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
         self.hide_keyboard()
+        self.action = 'details-select-marker'
         self.tap(rid='hierarchy_manager_list_item_title', text=callsign)
+        self.open_radial_details(callsign)
+        self.action = 'details-read-editor'
         actual = self.find(rid='cotInfoNameEdit').get('text')
         if actual != callsign:
             raise ValueError('wrong marker detail pane')
 
+    def open_radial_details(self, callsign):
+        # Hierarchy row selection focuses the marker and opens its GL radial;
+        # it does not open the CoT editor. Select the actual visible icon.
+        self.action = 'details-select-radial-editor'
+        self.last_selector = {'visual': 'official-details-icon', 'viewport_rid': 'map_view'}
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                tree = self.tree()
+                self.last_selector = {'rid': 'hierarchy_manager_list_item_title', 'text': '<synthetic-text>'}
+                select(tree, rid='hierarchy_manager_list_item_title', text=callsign)
+                self.last_selector = {'rid': 'hierarchy_search', 'text': '<synthetic-text>'}
+                select(tree, rid='hierarchy_search', text=callsign)
+                self.last_selector = {'rid': 'map_view'}
+                viewport = tuple(map(int, re.findall(r'\d+', select(tree, rid='map_view').get('bounds'))))
+                density = self.adb('shell', 'wm', 'density')
+                frame = self.adb('exec-out', 'screencap')
+                self.last_selector = {'visual': 'official-details-icon', 'viewport_rid': 'map_view'}
+                match = radial.locate_details(frame, viewport, density)
+                self.last_selector.update(density_dpi=match['density_dpi'],
+                                          frame_sha256=hashlib.sha256(frame).hexdigest())
+                self.adb('shell', 'input', 'tap', str(match['x']), str(match['y']))
+                return
+            except LookupError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.25)
+
     def verify_point(self, callsign, lat, lon, evidence):
+        self.action = 'coordinates-open-dialog'
         if self.find(rid='cotInfoNameEdit').get('text') != callsign:
             raise ValueError('wrong callsign in marker pane')
         self.tap(rid='cotInfoCoordButton')
+        self.action = 'coordinates-read-decimal-degrees'
         self.tap(text='DD')
         actual_lat = float(self.find(rid='coordDialogDDLatText').get('text'))
         actual_lon = float(self.find(rid='coordDialogDDLonText').get('text'))
         if abs(actual_lat-lat) > .0000005 or abs(actual_lon-lon) > .0000005:
             raise ValueError('Android coordinates differ from expected point')
         self.capture(evidence + '-coordinates')
+        self.action = 'coordinates-close-and-pan'
         self.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
         self.tap(rid='cotInfoPanButton')
         self.capture(evidence + '-map')
 
     def rename(self, callsign):
+        self.action = 'rename-marker'
         current = self.find(rid='cotInfoNameEdit').get('text', '')
         if not 1 <= len(current) <= 80 or not re.fullmatch(r'[A-Za-z0-9 -]{1,80}', callsign):
             raise ValueError('unsupported synthetic callsign')
@@ -246,10 +308,13 @@ class AndroidUI:
         return int(self.adb('shell', 'date', '+%s').strip())
 
     def share_dialog(self):
+        self.action = 'share-open-contacts'
         self.tap(rid='cotInfoSendButton')
+        self.action = 'share-find-broadcast'
         self.find(rid='contact_list_button_send_to_all', text='Broadcast')
 
     def broadcast(self):
+        self.action = 'share-send-broadcast'
         # Deliberately choose the real all/server Broadcast target, never the
         # silent observer (which has not advertised itself as a contact).
         self.tap(rid='contact_list_button_send_to_all', text='Broadcast')

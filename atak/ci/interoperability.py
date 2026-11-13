@@ -146,6 +146,7 @@ def main():
         receipt['status'] = 'ui-import-broadcast-action-fresh-challenge-and-return-verified'
     except Exception as error:
         receipt['error_type'] = type(error).__name__
+        receipt['ui'] = ui.diagnostic()
         stop_observer(process)
         if not interrupted_run:
             try:

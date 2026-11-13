@@ -23,7 +23,7 @@ class ProducerQueues(unittest.TestCase):
     def test_atak_filters_include_every_hosted_scenario_runtime_input(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/atak-e2e.yaml').read_text())
         events = workflow.get('on', workflow.get(True))
-        runtime = ['atak/scenarios/android-interoperability.py', 'atak/scenarios/observe-peer.py', 'atak/scenarios/android-ui.py', 'takx/mission-package/build_fixture.py', 'takx/mission-package/fixtures.lock.json', 'takx/mission-package/fixtures/manifest.xml', 'takx/mission-package/fixtures/point.cot', 'takx/mission-package/fixtures/README.txt']
+        runtime = ['atak/scenarios/android-interoperability.py', 'atak/scenarios/observe-peer.py', 'atak/scenarios/android-ui.py', 'atak/scenarios/radial-details.py', 'atak/scenarios/details-icon.json', 'takx/mission-package/build_fixture.py', 'takx/mission-package/fixtures.lock.json', 'takx/mission-package/fixtures/manifest.xml', 'takx/mission-package/fixtures/point.cot', 'takx/mission-package/fixtures/README.txt']
         expected = ['atak/**', '!atak/scenarios/**', *runtime, 'demo/atak-adb.sh', '.github/workflows/atak-e2e.yaml']
         for event in ('pull_request', 'push'):
             patterns = events[event]['paths']
@@ -35,6 +35,7 @@ class ProducerQueues(unittest.TestCase):
                         answer = not pattern.startswith('!')
                 return answer
             self.assertFalse(included('atak/scenarios/README.md'))
+            self.assertFalse(included('atak/scenarios/fixtures/atak-marker-radial.json'))
             for path in [*runtime, 'demo/atak-adb.sh', 'atak/ci/e2e.sh', 'atak/ci/interoperability.py', 'atak/ci/reverse-marker.py', 'atak/ci/cleanup-scenario.py', 'atak/ci/interoperability.sh', 'atak/driver/drive.sh', 'atak/vm/Dockerfile', 'atak/apk/Dockerfile', 'atak/deploy/device.yaml', '.github/workflows/atak-e2e.yaml']:
                 with self.subTest(event=event, path=path): self.assertTrue(included(path))
         self.assertIn('workflow_dispatch', events)

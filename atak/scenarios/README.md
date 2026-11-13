@@ -266,12 +266,22 @@ claimed. The minimal actual UI fixture and exact official source references are
 in `atak/scenarios/fixtures/atak-tools-grid.README.md`.
 
 The workflow excludes inactive scenario documentation but explicitly reincludes
-all three runtime scenario scripts. Changes to the consumed mission builder,
+the runtime scenario helpers and official Details icon template. Changes to the consumed mission builder,
 fixture lock and three exact fixture files also trigger the existing e2e run.
 Runtime/VM/APK/driver/deployment/workflow changes still trigger it; source-only
 documentation changes do not. Offline Unit tests cover UI state failures,
 retained-event freshness, TLS identity rejection before application reads,
 partial controller failures, owned-process cleanup and these path filters.
+
+The native marker row opens a radial menu before its editor. Its OpenGL Details
+icon has no accessible node. The helper validates the live map viewport and
+display density, then requires a unique match for the pinned official icon in
+its source-defined wedge. It never substitutes a private broadcast or fixed
+screen coordinates. The editor callsign and coordinates must still match for
+both the imported marker and the returned marker. Failed receipts include a
+fixed UI action and sanitized selector, without copying arbitrary field text.
+The captured regression and its limits are described in
+[`fixtures/atak-marker-radial.README.md`](fixtures/atak-marker-radial.README.md).
 
 ## Avoiding duplicate post-merge runs
 

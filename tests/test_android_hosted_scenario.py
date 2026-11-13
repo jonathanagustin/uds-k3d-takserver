@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Explicit offline protocol/state fixtures; no device, server or TLS network use."""
 import contextlib
+import base64
 import copy
 import hashlib
 import importlib.util
@@ -11,12 +12,14 @@ from pathlib import Path
 import socket
 import ssl
 import subprocess
+import struct
 import tempfile
 import time
 import types
 import unittest
 from unittest.mock import MagicMock, patch
 import xml.etree.ElementTree as ET
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,6 +36,115 @@ ui = load('ui', 'atak/scenarios/android-ui.py')
 hosted = load('hosted', 'atak/ci/interoperability.py')
 reverse = load('reverse', 'atak/ci/reverse-marker.py')
 cleanup = load('cleanup', 'atak/ci/cleanup-scenario.py')
+radial = load('radial', 'atak/scenarios/radial-details.py')
+
+
+class CapturedRadialDetails(unittest.TestCase):
+    """Replay captured pixels; altered images below are adversarial offline data."""
+    @classmethod
+    def setUpClass(cls):
+        fixture = json.loads((ROOT/'atak/scenarios/fixtures/atak-marker-radial.json').read_text())
+        cls.frame = zlib.decompress(base64.b64decode(fixture['raw_zlib_base64']))
+        assert hashlib.sha256(cls.frame).hexdigest() == fixture['raw_sha256']
+        cls.tree = ET.parse(ROOT/'atak/scenarios/fixtures/atak-marker-radial.xml').getroot()
+        cls.viewport = tuple(map(int, ui.re.findall(r'\d+', ui.select(cls.tree, rid='map_view').get('bounds'))))
+        cls.density = f"Physical density: {fixture['observed_density_dpi']}\n".encode()
+        cls.callsign = 'SYNTHETIC-MISSION TEST'
+
+    def blank_map(self):
+        frame = bytearray(self.frame)
+        width, _, _ = radial.raw_frame(frame)
+        left, top, right, bottom = self.viewport
+        for y in range(top, bottom):
+            start = 16 + (y*width+left)*4
+            frame[start:start+(right-left)*4] = bytes((0, 4, 8, 255))*(right-left)
+        return frame
+
+    def ambiguous_map(self):
+        frame = self.blank_map()
+        width, _, _ = radial.raw_frame(frame)
+        # Two distinct copies of the observed icon, both inside the source wedge.
+        # These edits are not device evidence and must never qualify a live run.
+        for center_x, center_y in [(440, 386), (391, 421)]:
+            for row in range(31):
+                source = 16 + ((392+row)*width+404)*4
+                target = 16 + ((center_y-15+row)*width+center_x-15)*4
+                frame[target:target+31*4] = self.frame[source:source+31*4]
+        return frame
+
+    def test_actual_captured_radial_has_no_accessible_details_but_matches_official_icon(self):
+        with self.assertRaises(LookupError): ui.select(self.tree, text='Details')
+        with self.assertRaises(LookupError): ui.select(self.tree, rid='cotInfoNameEdit')
+        match = radial.locate_details(self.frame, self.viewport, self.density)
+        self.assertEqual((match['x'], match['y']), (419, 407))
+        self.assertGreaterEqual(match['score'], .95)
+        self.assertEqual(match['density_dpi'], 160)
+
+    def test_missing_or_ambiguous_official_icon_fails_closed(self):
+        with self.assertRaises(LookupError):
+            radial.locate_details(self.blank_map(), self.viewport, self.density)
+        with self.assertRaisesRegex(ValueError, 'ambiguous Details controls'):
+            radial.locate_details(self.ambiguous_map(), self.viewport, self.density)
+
+    def test_raw_frames_reject_truncation_wrong_format_and_bad_viewports(self):
+        old_header = self.frame[:12]+self.frame[16:]
+        self.assertEqual(radial.raw_frame(old_header)[:2], (720, 1280))
+        for broken in [self.frame[:-1], self.frame+b'x', b'',
+                       struct.pack('<IIII', 720, 1280, 3, 0)+self.frame[16:]]:
+            with self.subTest(length=len(broken)), self.assertRaises(ValueError):
+                radial.raw_frame(broken)
+        for bounds in [(0, 24, 721, 628), (720, 24, 0, 628), (0, -1, 720, 628)]:
+            with self.subTest(bounds=bounds), self.assertRaises(ValueError):
+                radial.locate_details(self.frame, bounds, self.density)
+        with self.assertRaises(LookupError):
+            radial.locate_details(self.frame, (0, 24, 720, 1208), self.density)
+
+    def test_density_is_live_validated_and_not_guessed(self):
+        self.assertEqual(radial.live_density(b'Physical density: 160\nOverride density: 240\n'), 240)
+        for density in [b'', b'Physical density: 0', b'Physical density: 999',
+                        b'Override density: 160', b'Physical density: 160\nPhysical density: 160',
+                        b'Physical density: 160\nunknown']:
+            with self.subTest(density=density), self.assertRaises(ValueError):
+                radial.live_density(density)
+        with self.assertRaises(ValueError):
+            radial.locate_details(self.frame, self.viewport, b'Physical density: 640')
+
+    def test_changed_official_template_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'icon.json'
+            path.write_bytes((ROOT/'atak/scenarios/details-icon.json').read_bytes()+b' ')
+            with self.assertRaises(ValueError): radial.template_alpha(path)
+
+    def test_ui_uses_live_matched_control_and_never_injects_a_broadcast(self):
+        device = ui.AndroidUI('/unused')
+        with patch.object(device, 'tree', return_value=self.tree), \
+                patch.object(device, 'adb', side_effect=[self.density, self.frame, b'']) as adb:
+            device.open_radial_details(self.callsign)
+        self.assertEqual(adb.call_args_list, [
+            unittest.mock.call('shell', 'wm', 'density'),
+            unittest.mock.call('exec-out', 'screencap'),
+            unittest.mock.call('shell', 'input', 'tap', '419', '407')])
+        self.assertEqual(device.diagnostic()['action'], 'details-select-radial-editor')
+
+    def test_missing_or_ambiguous_pixels_never_tap(self):
+        for frame in [self.blank_map(), self.ambiguous_map()]:
+            device = ui.AndroidUI('/unused')
+            with patch.object(device, 'tree', return_value=self.tree), \
+                    patch.object(device, 'adb', side_effect=[self.density, frame]) as adb, \
+                    patch.object(ui.time, 'monotonic', side_effect=[0, 11]):
+                with self.assertRaises((LookupError, ValueError)):
+                    device.open_radial_details(self.callsign)
+            self.assertFalse(any('tap' in call.args for call in adb.call_args_list))
+
+    def test_failed_selector_diagnostics_exclude_arbitrary_ui_text(self):
+        device = ui.AndroidUI('/unused')
+        device.action = 'details-read-editor'
+        with patch.object(device, 'tree', return_value=ET.Element('hierarchy')):
+            with self.assertRaises(LookupError):
+                device.find(seconds=0, rid='cotInfoNameEdit', text='PRIVATE arbitrary field contents')
+        self.assertEqual(device.diagnostic(), {'action': 'details-read-editor',
+                                              'selector': {'rid': 'cotInfoNameEdit', 'text': '<synthetic-text>'}})
+        self.assertNotIn('PRIVATE', json.dumps(device.diagnostic()))
 
 
 class TLSIdentity(unittest.TestCase):
@@ -234,8 +346,9 @@ class ActualUIStates(unittest.TestCase):
         device = ui.AndroidUI('/unused')
         search = ET.Element('node', text='OLD')
         actual = ET.Element('node', text='TEST RETURN')
-        with patch.object(device, 'tool'), patch.object(device, 'tree', return_value=self.node(rid='hierarchy_search')), patch.object(device, 'find', side_effect=[search, actual]), patch.object(device, 'tap') as tap, patch.object(device, 'adb', return_value=b'mInputShown=true') as adb:
+        with patch.object(device, 'tool'), patch.object(device, 'tree', return_value=self.node(rid='hierarchy_search')), patch.object(device, 'find', side_effect=[search, actual]), patch.object(device, 'tap') as tap, patch.object(device, 'open_radial_details') as details, patch.object(device, 'adb', return_value=b'mInputShown=true') as adb:
             device.details('TEST RETURN')
+        details.assert_called_once_with('TEST RETURN')
         self.assertIn(unittest.mock.call('shell', 'input', 'keyevent', 'KEYCODE_DEL', 'KEYCODE_DEL', 'KEYCODE_DEL'), adb.call_args_list)
         self.assertIn(unittest.mock.call('shell', 'input', 'keyevent', 'KEYCODE_BACK'), adb.call_args_list)
         self.assertNotIn(unittest.mock.call(rid='hierarchy_search_btn'), tap.call_args_list)
@@ -339,6 +452,7 @@ class OrchestrationAndCleanup(unittest.TestCase):
                         actions.append('rename')
                         return 100
                     def capture(self, name): pass
+                    def diagnostic(self): return {'action': 'offline-controller-fixture', 'selector': {}}
                     def share_dialog(self): actions.append('share-dialog')
                     def adb(self, *command): return b'102'
                     def broadcast(self):
@@ -361,6 +475,7 @@ class OrchestrationAndCleanup(unittest.TestCase):
                 self.assertNotIn('PRIVATE', json.dumps(receipt))
                 if failure:
                     self.assertEqual(receipt['status'], 'failed')
+                    self.assertEqual(receipt['ui']['action'], 'offline-controller-fixture')
                     self.assertLess(len(receipt['passed_phases']), 3)
                 else:
                     self.assertEqual(len(receipt['passed_phases']), 3)

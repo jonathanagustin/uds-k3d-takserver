@@ -20,7 +20,8 @@ rule. Connections to the Kubernetes API, DNS, and the mesh are ignored.
 --check also exits 1 when an Ingress rule from other pods (a remoteSelector
 with no remoteGenerated) has no remoteServiceAccount, or when a generated
 AuthorizationPolicy in the namespace admits this namespace or a peer
-namespace by namespace alone, with no principal.
+namespace without a principal, including an unrestricted source. IP-only
+sources for external traffic are not workload-identity rules.
 """
 
 import ipaddress
@@ -195,14 +196,26 @@ def unscoped_rules(rules):
         f"Package rule {rule.get('description', rule)}"
         for rule in rules
         if rule.get("direction") == "Ingress"
-        and rule.get("remoteSelector")
+        and "remoteSelector" in rule
         and not rule.get("remoteGenerated")
+        and not (rule.get("remoteHost") or rule.get("remoteCidr"))
         and not rule.get("remoteServiceAccount")
     ]
 
 
+def namespace_matches(pattern, namespace):
+    """Istio namespace matches support exact, prefix, suffix and presence."""
+    if pattern == "*":
+        return True
+    if pattern.endswith("*"):
+        return namespace.startswith(pattern[:-1])
+    if pattern.startswith("*"):
+        return namespace.endswith(pattern[1:])
+    return pattern == namespace
+
+
 def unscoped_policies(rules):
-    """Generated AuthorizationPolicy sources that admit a pod namespace without a principal."""
+    """Generated ALLOW sources that admit a peer pod without a principal."""
     peers = {NS} | {r["remoteNamespace"] for r in rules if r.get("remoteNamespace")}
     out = kubectl("get", "authorizationpolicies.security.istio.io", "-n", NS, "-l", f"uds/package={PACKAGE}", "-o", "json")
     found = []
@@ -210,11 +223,22 @@ def unscoped_policies(rules):
         if policy["spec"].get("action", "ALLOW") != "ALLOW":
             continue
         for rule in policy["spec"].get("rules") or []:
-            for src in rule.get("from") or []:
+            # An ALLOW policy with no rules admits nothing. A rule with no
+            # sources (including an empty list) instead matches every source.
+            for src in rule.get("from") or [{}]:
                 source = src.get("source") or {}
                 if source.get("principals"):
                     continue
-                if set(source.get("namespaces") or []) & peers:
+                namespaces = source.get("namespaces") or []
+                # Explicit IP-only rules are used for external clients. If a
+                # namespace is also specified, its peer workloads still need
+                # a principal even when their addresses are constrained.
+                if not namespaces and (source.get("ipBlocks") or source.get("remoteIpBlocks")):
+                    continue
+                excluded = source.get("notNamespaces") or []
+                if any((not namespaces or any(namespace_matches(n, peer) for n in namespaces))
+                       and not any(namespace_matches(n, peer) for n in excluded)
+                       for peer in peers):
                     found.append(f"AuthorizationPolicy {policy['metadata']['name']} {source}")
     return found
 

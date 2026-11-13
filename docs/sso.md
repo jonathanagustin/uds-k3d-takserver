@@ -136,7 +136,7 @@ API and messaging pods may connect to the tenant gateway:
 - Pod labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway` (Istio gateway chart 1.31, release name `tenant-ingressgateway`)
 - Port 443
 
-That is the path for the discovery document, the token endpoint, and the signing keys in JavaScript Object Notation (JSON), using the JSON Web Key Set (JWKS) format. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP.
+That is the path for the discovery document, the token endpoint, and the JSON Web Key Set (JWKS) signing keys. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP.
 
 Messaging needs the same path. With `x509tokenAuth`, a certificate enrolled on 8446 with a bearer token is stored with that token, and on 8089 TAK authenticates the stream by validating the token against the issuer's keys. Without the rule and the trust store, TAK logs `Remote host terminated the handshake` for the discovery document and closes the stream right after TLS. The messaging pod gets the same trust-store init container as the API pod.
 

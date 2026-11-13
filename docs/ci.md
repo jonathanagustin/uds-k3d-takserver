@@ -54,7 +54,7 @@ The image workflows also attest the images they push. See [Verify a release](../
 
 ## ATAK test device
 
-The device runs Android in a virtual machine (VM) managed by KubeVirt.
+The device runs Android Tactical Assault Kit for Civilian Use (ATAK-CIV) in an Android virtual machine (VM) managed by KubeVirt.
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |

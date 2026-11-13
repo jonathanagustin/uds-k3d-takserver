@@ -64,7 +64,7 @@ Local install and upgrade tests run on k3d. Azure Kubernetes Service (AKS), Amaz
 - **Certificates made at deploy time.** A pre-install Job runs TAK's `generateClusterCerts.sh`. No keys or keystores are in git or in any image. See [architecture decision record (ADR) 2](adr/0002-generate-certificates-at-deploy-time.md).
 - **UDS networking.** The browser user interface (UI) goes through the tenant gateway. Traffic for the application programming interface (API), enrollment, and streaming goes through the passthrough gateway, including the standard TAK ports 8446 and 8089. NetworkPolicies are default-deny, with explicit per-workload rules. See [docs/networking.md](docs/networking.md).
 - **CloudTAK in the browser.** The optional `cloudtak` component (on by default) runs CloudTAK v13.112.3 at `map.<domain>` with its own PostGIS database. Each Keycloak user gets their own TAK certificate. See [docs/cloudtak.md](docs/cloudtak.md).
-- **A real ATAK test device.** `atak/` runs ATAK-CIV 5.5.1.10, built from public source, in an Android virtual machine (VM) under KubeVirt. It connects to TAK over mutual Transport Layer Security (TLS) on 8089 like a field device. It is a separate package for amd64 nodes with Kernel-based Virtual Machine (KVM). See [docs/atak-device.md](docs/atak-device.md).
+- **A real ATAK test device.** `atak/` runs Android Tactical Assault Kit for Civilian Use (ATAK-CIV) 5.5.1.10, built from public source, in an Android virtual machine (VM) under KubeVirt. It connects to TAK over mutual Transport Layer Security (TLS) on 8089 like a field device. It is a separate package for amd64 nodes with Kernel-based Virtual Machine (KVM). See [docs/atak-device.md](docs/atak-device.md).
 - **Images built from source.** The six TAK images, CloudTAK, and PostGIS are built here for amd64 and arm64 and published to GHCR. Continuous integration (CI) tags each build by a hash of its inputs, so a pull request always tests its own images. See [docs/building.md](docs/building.md).
 - **Signed releases.** Each release package is signed keylessly with Sigstore. Its build provenance (SLSA v1, the Supply-chain Levels for Software Artifacts format) is attested in GHCR and attached to the GitHub release. See [Verify a release](#verify-a-release).
 - **Supply-chain checks.** CI runs Grype scans, software bills of materials (SBOMs), CodeQL, dependency review, and OpenSSF Scorecard. Renovate keeps dependencies current. See [CI workflows](docs/ci.md).
@@ -218,7 +218,7 @@ After deployment, use the [Access](#access) table to choose a browser or certifi
 
 ### Deploy
 
-Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK (Android Team Awareness Kit) device. 4 min.
+Build the Zarf package, bundle it with UDS Core, deploy it, sign in through Keycloak, and connect a real ATAK device. 4 min.
 
 https://github.com/user-attachments/assets/7d727d39-b4f1-4251-b440-57c7799c51d1
 

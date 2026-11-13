@@ -203,7 +203,7 @@ The package allows only the flows below. Every allow rule has its own descriptio
 | Egress and Ingress | Ignite to Ignite, ports 47100 and 47500 | `Egress <port> from takserver-ignite to ignite-peers`, and the Ingress rule |
 | Egress and Ingress | every pair of API, messaging, config, and plugins, port 47100 | `Egress 47100 from <a> to <b>`, `Ingress 47100 to <b> from <a>` |
 | Egress | `remoteGenerated: KubeAPI`, one rule per pod label in `kubeApi.selectors` | Ignite Kubernetes discovery for that label |
-| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and signing keys in JavaScript Object Notation (JSON), using the JSON Web Key Set (JWKS) format |
+| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JSON Web Key Set (JWKS) signing keys |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, messaging selector, only when `sso.enabled` | Keycloak discovery and JWKS for 8089 clients |
 | Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled`. The UDS operator writes it from the UDP expose entry | QUIC from the Envoy default gateway |
 

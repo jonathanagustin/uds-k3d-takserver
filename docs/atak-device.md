@@ -1,6 +1,6 @@
 # ATAK test device
 
-`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 virtual machine (VM) managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams Cursor on Target (CoT) events on 8089 over mutual Transport Layer Security (TLS), and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
+`atak/` runs the real Android Tactical Assault Kit for Civilian Use (ATAK-CIV) app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 virtual machine (VM) managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams Cursor on Target (CoT) events on 8089 over mutual Transport Layer Security (TLS), and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
 
 The device runs a Team Awareness Kit (TAK) client. It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [architecture decision record (ADR) 14](../adr/0014-atak-test-device-in-kubevirt.md).
 

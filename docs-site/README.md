@@ -2,6 +2,12 @@
 
 This directory publishes the guides that already live in the repository. It does not keep a second copy of them.
 
+Treat each page as a standalone guide. At the first substantive prose use, write
+the full term followed by its abbreviation in parentheses; use the abbreviation
+after that. Prefer plain words when an abbreviation is unnecessary. Preserve
+exact commands, configuration identifiers, API types, URLs and product names.
+
+
 Navigation follows the UDS documentation's learning, concepts, how-to and
 reference model, adapted to this single package. Core's broad Operations &
 Maintenance area becomes Project for package development, security reporting and

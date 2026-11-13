@@ -5,7 +5,7 @@ TAK Server for Team Awareness Kit (TAK) clients with the driver. Check its conne
 
 ## What you'll accomplish
 
-Run ATAK-CIV in the KubeVirt Android virtual machine (VM), provision its client certificate through
+Run Android Tactical Assault Kit for Civilian Use (ATAK-CIV) in the KubeVirt Android virtual machine (VM), provision its client certificate through
 a `TakClient`, and see its callsign in TAK and CloudTAK.
 
 ## Prerequisites
@@ -93,7 +93,7 @@ for container runtimes without Container Runtime Interface (CRI) image-volume su
 
 **Solution:** Inspect the `TakClient` Ready condition and watcher logs. Its
 certificate must be provisioned by the operator and its TAK file user must
-belong to `Operators`; copying a CA-signed certificate alone does not establish
+belong to `Operators`; copying a certificate signed by a certificate authority (CA) alone does not establish
 that group membership.
 
 ## Related documentation

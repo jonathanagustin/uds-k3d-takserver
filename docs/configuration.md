@@ -49,7 +49,7 @@ global:
 | `tak.plugins.memoryLimit` | `PLUGINS_MEMORY_LIMIT` | the plugins memory limit |
 | `health.enabled` | `true` (no variable) | the `tak-health` client-port checks. See [Client-port health](networking.md#client-port-health) |
 
-`FILESYSTEM_BACKUP`, `POSTGRES_STORAGE_CLASS`, and `CLOUDTAK_STORAGE_CLASS` have no package value. Set them as variables. A package value cannot work for them. The charts decide while Helm renders whether to add the node-agent, the volume annotations, and `storageClassName`. A package value defaults to the variable's placeholder, and Zarf replaces that placeholder only after Helm renders. So with no package value set, Helm would see the placeholder text, not `true` or a class name. The variables reach the charts through values files that Zarf fills in before Helm runs.
+`FILESYSTEM_BACKUP`, `POSTGRES_STORAGE_CLASS`, and `CLOUDTAK_STORAGE_CLASS` are deployment variables. They reach the charts through values files that Zarf fills in before Helm renders the node agent, volume annotations, and storage class. Use these variables for the standard deployment settings.
 
 `chartOverrides` accepts optional objects merged at the root of four application
 charts: `takserver.uds-takserver-config`, `takserver.takserver-oidc`,

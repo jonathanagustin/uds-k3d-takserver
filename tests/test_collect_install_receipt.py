@@ -102,6 +102,19 @@ class CollectorTests(unittest.TestCase):
         self.assertIn('INSTALL_RECEIPT_METADATA=true', Path(self.env['GITHUB_ENV']).read_text())
         self.assertIn('ready=true', Path(self.env['GITHUB_OUTPUT']).read_text())
 
+    def test_changed_source_fails_before_execution_and_expensive_resolution(self):
+        collector.capture(self.root, self.env, self.directory)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Fixture', '-c',
+                        'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'changed'],
+                       check=True, capture_output=True, timeout=5)
+        with patch.object(collector, 'execution') as execution, \
+                patch.object(collector, 'pinned_inputs') as inputs, \
+                self.assertRaisesRegex(ValueError, 'checkout or run identity changed'):
+            collector.collect(self.root, self.env, self.directory)
+        execution.assert_not_called()
+        inputs.assert_not_called()
+        self.assertFalse(list(self.directory.glob('install-receipt-*.json')))
+
     def test_actual_acquisition_snapshot_precedes_execution_and_never_is_receipt(self):
         fixture = self.inputs()
         collector.capture(self.root, self.env, self.directory)

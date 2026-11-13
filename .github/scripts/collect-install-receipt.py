@@ -166,11 +166,17 @@ def pinned(root, env, directory):
     return value
 
 
-def resolved_inputs(root, env, directory):
-    """Resolve actual acquired bytes; does not assert application execution."""
+def captured_source(root, env, directory):
+    """Check the original source/run binding before execution or archive reads."""
     stage('source-snapshot')
     saved = read_json(directory / 'install-source.json', 4096)
     require(saved == snapshot(root, env), 'checkout or run identity changed')
+    return saved
+
+
+def resolved_inputs(root, env, directory):
+    """Resolve actual acquired bytes; does not assert application execution."""
+    saved = captured_source(root, env, directory)
     ctx = saved['context']
     arch = ctx['arch']
     stage('pinned-snapshot')
@@ -230,7 +236,8 @@ def prospective(root, env, directory):
 
 
 def collect(root, env, directory):
-    ctx = context(env)
+    saved = captured_source(root, env, directory)
+    ctx = saved['context']
     stage('execution')
     execution(env, ctx['scenario'])
     saved, inputs = resolved_inputs(root, env, directory)

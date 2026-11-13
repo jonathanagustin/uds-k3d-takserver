@@ -69,6 +69,23 @@ def recipe():
     files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch','composition.py','native_source_snapshot.py','patches/obj-buffer-capacity.patch','patches/gdal-reduced-profile-skip.patch','GdalReducedProfileSmoke.java','patches/obj-two-fixture-regression.patch']
     return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe(),'native_finalization_validation':composition.source_closure()}
 
+def provider_failure_categories(expected, results, errors):
+    known=set(p.FAMILIES);allowed=known|{'cross_provider_chain'};failed=set()
+    if not all(isinstance(value,dict) for value in (expected,results,errors)):return ['inventory']
+    if set(expected)!=known or not set(results)<=known or not set(errors)<=allowed:failed.add('inventory')
+    failed.update(name for name in known if name in errors)
+    if 'cross_provider_chain' in errors:failed.add('cross_provider_chain')
+    for name in known:
+        if name in expected and name in results:
+            if not isinstance(expected[name],dict) or not isinstance(results[name],dict):failed.add('inventory')
+            if expected[name]!=results[name]:failed.add(name)
+        elif name not in errors:failed.add('inventory')
+    return sorted(failed or {'inventory'})
+
+def require_provider_results(expected, results, errors):
+    if errors or expected!=results:
+        raise ValueError('actual native providers differ: '+','.join(provider_failure_categories(expected,results,errors)))
+
 def verify_native(root,providers,source_snapshot=None,expected_receipt_sha256=None):
     binding=None
     if source_snapshot is not None:
@@ -84,7 +101,7 @@ def verify_native(root,providers,source_snapshot=None,expected_receipt_sha256=No
                 prefix=prefixes.get(name,'').encode()
                 if not prefix or not data.startswith(prefix) or hashlib.sha256(data[len(prefix):]).hexdigest()!=digest:raise ValueError('native producer differs beyond exact reviewed license comments')
     results,errors=p.verify_all(providers)
-    if errors or raw['providers']!=results:raise ValueError('actual native providers differ')
+    require_provider_results(raw['providers'],results,errors)
     p.check_files(root/'layout',raw['staged_sources']);p.check_files(root/'gltf-headers',raw['gltf_headers']);p.check_files(root/'gles1-declarations',raw['gles1_declarations'])
     p.check_files(root/'cesium-source',p.inventory(p.root_of(providers,'cesium')/'source/cesium'))
     b.toolchain.verify(raw['actual_toolchain'])

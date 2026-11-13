@@ -39,11 +39,11 @@ test('home page links the four tasks and the theme toggle changes the document',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('the preview anchor stays on home and reaches its inline player', async ({ page }) => {
+test('the preview anchor stays on home and reaches its inline player', async ({ page, baseURL }) => {
   for (const hash of ['#ui-preview', '#ui%2Dpreview']) {
     await page.goto('about:blank');
     await page.goto(hash, { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`/uds-takserver/${hash}$`));
+    await expect(page).toHaveURL(new URL(hash, baseURL).href);
     const preview = page.locator('#ui-preview');
     await expect(preview).toBeVisible();
     await expect(preview.locator('video')).toHaveAttribute('controls', '');

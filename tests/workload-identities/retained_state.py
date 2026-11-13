@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Private invariants and exact retained-application cleanup, never Core cleanup."""
 import base64
+import copy
 import hashlib
 import json
 from pathlib import PurePosixPath
@@ -31,10 +32,143 @@ SOURCE_FILES=('pepr/capabilities/workload.ts','pepr/capabilities/cloudtak-admin.
 def source_files():
     return {name:hashlib.sha256((Path(__file__).resolve().parents[2]/name).read_bytes()).hexdigest() for name in SOURCE_FILES}
 
+# This is the complete config-chart hook inventory, not an allowlist of fields
+# to ignore. Every object field contributes to its canonical SHA-256.
+HOOKS={
+    ('v1','Secret','takserver-keystore'):'keystore',
+    ('networking.k8s.io/v1','NetworkPolicy','takserver-cert-init-kube-api'):'cert-network',
+    ('v1','ServiceAccount','takserver-cert-init'):'cert-account',
+    ('rbac.authorization.k8s.io/v1','Role','takserver-cert-init'):'cert-role',
+    ('rbac.authorization.k8s.io/v1','RoleBinding','takserver-cert-init'):'cert-binding',
+    ('batch/v1','Job','takserver-cert-init'):'cert-job',
+}
+FIELD_KEYS={
+    'metadata':{'metadata'}, 'credential-data':{'data','stringData','type','immutable'},
+    'job-spec':{'spec'}, 'rbac':{'rules','roleRef','subjects'},
+    'network-policy':{'spec'},
+    'identity-spec':{'automountServiceAccountToken','secrets','imagePullSecrets'},
+}
+HOOK_CLASSES={'keystore':('metadata','credential-data','object-fields'),
+              'cert-network':('metadata','network-policy','object-fields'),
+              'cert-account':('metadata','identity-spec','object-fields'),
+              'cert-role':('metadata','rbac','object-fields'),
+              'cert-binding':('metadata','rbac','object-fields'),
+              'cert-job':('metadata','job-spec','object-fields')}
+ORIGIN_HASHES=('storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256')
+
+def hook_inventory(objects):
+    require(isinstance(objects,list) and len(objects)==len(HOOKS),'stored hook inventory differs')
+    result={}
+    for obj in objects:
+        require(isinstance(obj,dict) and isinstance(obj.get('metadata'),dict),'stored hook inventory differs')
+        key=(obj.get('apiVersion'),obj.get('kind'),obj['metadata'].get('name'))
+        require(key in HOOKS and HOOKS[key] not in result,'stored hook inventory differs')
+        code=HOOKS[key];classes=HOOK_CLASSES[code];used=set();fields={}
+        for category in classes[:-1]:
+            names=FIELD_KEYS[category];used|=names
+            fields[category]=sha({name:obj[name] for name in names if name in obj})
+        fields['object-fields']=sha({name:value for name,value in obj.items() if name not in used})
+        result[code]={'sha256':sha(obj),'fieldSHA256':fields}
+    require(set(result)==set(HOOK_CLASSES),'stored hook inventory differs')
+    return {'schema':1,'objects':result}
+
+def valid_inventory(value):
+    if not isinstance(value,dict) or set(value)!={'schema','objects'} or type(value['schema']) is not int or value['schema']!=1:return False
+    objects=value['objects']
+    if not isinstance(objects,dict) or set(objects)!=set(HOOK_CLASSES):return False
+    for code,entry in objects.items():
+        if not isinstance(entry,dict) or set(entry)!={'sha256','fieldSHA256'}:return False
+        fields=entry['fieldSHA256']
+        if not isinstance(fields,dict) or set(fields)!=set(HOOK_CLASSES[code]):return False
+        if not all(isinstance(v,str) and re.fullmatch(r'[a-f0-9]{64}',v) for v in [entry['sha256'],*fields.values()]):return False
+    return True
+
+def valid_origin(origin):
+    return (isinstance(origin,dict) and set(origin)=={'sourceFilesSHA256',*ORIGIN_HASHES,'hookInventory'}
+            and isinstance(origin['sourceFilesSHA256'],dict) and set(origin['sourceFilesSHA256'])==set(SOURCE_FILES)
+            and all(isinstance(v,str) and re.fullmatch(r'[a-f0-9]{64}',v) for v in [*origin['sourceFilesSHA256'].values(),*[origin[k] for k in ORIGIN_HASHES]])
+            and valid_inventory(origin['hookInventory'])
+            and origin['keystoreHookSHA256']==origin['hookInventory']['objects']['keystore']['sha256']
+            and origin['sourceGeneratorJobSHA256']==origin['hookInventory']['objects']['cert-job']['sha256'])
+
 def require_origin(rec):
     origin=rec.get('origin',{})
-    require(set(origin)=={'sourceFilesSHA256','storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256'} and origin['sourceFilesSHA256']==source_files(),'retained cleanup has no unchanged bound source origin')
-    require(all(re.fullmatch(r'[a-f0-9]{64}',origin[key]) for key in ('storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256')),'retained source origin hashes invalid')
+    require(valid_origin(origin) and origin['sourceFilesSHA256']==source_files(),'retained cleanup has no unchanged bound source origin')
+
+def hook_diagnostic(baseline,observed):
+    if not valid_origin(baseline) or not valid_origin(observed):return {'hook':'inventory','category':'inventory','fieldClass':'inventory'}
+    if baseline['sourceFilesSHA256']!=observed['sourceFilesSHA256']:return {'hook':'source-code','category':'source-code','fieldClass':'source-code'}
+    for code,classes in HOOK_CLASSES.items():
+        old=baseline['hookInventory']['objects'][code];new=observed['hookInventory']['objects'][code]
+        if old['sha256']==new['sha256']:continue
+        for category in classes:
+            if old['fieldSHA256'][category]!=new['fieldSHA256'][category]:
+                group=('metadata' if category=='metadata' else 'credential' if category=='credential-data' else
+                       'generator' if category=='job-spec' else 'authorization' if category in ('rbac','network-policy','identity-spec') else 'inventory')
+                return {'hook':code,'category':group,'fieldClass':category}
+        return {'hook':code,'category':'inventory','fieldClass':'object-fields'}
+    # Existing exact Job/Secret hashes also remain independently mandatory.
+    if baseline['keystoreHookSHA256']!=observed['keystoreHookSHA256']:return {'hook':'keystore','category':'credential','fieldClass':'object-fields'}
+    if baseline['sourceGeneratorJobSHA256']!=observed['sourceGeneratorJobSHA256']:return {'hook':'cert-job','category':'generator','fieldClass':'object-fields'}
+    return None
+
+SOURCE_FAILURE_LIMIT=127*1024
+
+def validate_source_failure(snapshot):
+    require(isinstance(snapshot,dict) and set(snapshot)=={'schema','baseline','observed','diagnostic','baselineObjects','observedObjects'} and
+            type(snapshot['schema']) is int and snapshot['schema']==1,'retained hook failure schema differs')
+    require(all(value is None or valid_origin(value) for value in (snapshot['baseline'],snapshot['observed'])),
+            'retained hook failure origin differs')
+    diagnostic=snapshot['diagnostic']
+    require(isinstance(diagnostic,dict) and set(diagnostic)=={'hook','category','fieldClass'} and
+            diagnostic==hook_diagnostic(snapshot['baseline'],snapshot['observed']),
+            'retained hook failure diagnostic differs')
+    # These actual objects exist only in the optional encrypted private file,
+    # never the proof/origin persisted in the ordinary journal.
+    for name in ('baseline','observed'):
+        objects=snapshot[name+'Objects'];origin=snapshot[name]
+        require(objects is None if origin is None else isinstance(objects,list),
+                'retained hook failure objects missing')
+        if origin is not None:
+            try:inventory=hook_inventory(objects)
+            except (ValueError,TypeError,KeyError,AttributeError,RecursionError):
+                raise ValueError('retained hook failure object inventory differs') from None
+            require(inventory==origin['hookInventory'],'retained hook failure object hashes differ')
+    try:size=len(json.dumps(snapshot,sort_keys=True,separators=(',',':'),allow_nan=False).encode())
+    except (TypeError,ValueError,RecursionError):raise ValueError('retained hook failure object encoding differs') from None
+    require(size<=SOURCE_FAILURE_LIMIT,'retained hook failure bound')
+    return snapshot
+
+def verify_hooks(driver,baseline):
+    driver._retained_source_failure=None
+    validation_failed=False
+    try:observed=hooks(driver)
+    except (ValueError,KeyError,TypeError,AttributeError,StopIteration):
+        observed=getattr(driver,'_retained_hook_observation',None)
+        validation_failed=True
+    if validation_failed and hook_diagnostic(baseline,observed) is None:observed=None
+    diagnostic=hook_diagnostic(baseline,observed)
+    if diagnostic is not None:
+        failure=ValueError('stored source generator/hook changed across phase-only deployment')
+        if isinstance(getattr(driver,'state',None),dict):driver.state['accepted']=False
+        try:
+            # Closed diagnostic plus actual objects, held only in memory for encryption.
+            baseline=baseline if valid_origin(baseline) else None
+            observed=observed if valid_origin(observed) else None
+            held=getattr(driver,'_retained_hook_baseline',None) or {}
+            baseline_objects=(held.get('objects') if baseline and held.get('inventorySHA256')==sha(baseline['hookInventory']) else None)
+            driver._retained_source_failure={'schema':1,'baseline':baseline,'observed':observed,'diagnostic':diagnostic,
+                                            'baselineObjects':copy.deepcopy(baseline_objects) if baseline else None,
+                                            'observedObjects':copy.deepcopy(getattr(driver,'_retained_hook_objects',None)) if observed else None}
+            validate_source_failure(driver._retained_source_failure)
+        except Exception:
+            # Optional capture must neither truncate nor mask the known drift.
+            # BaseException interrupts deliberately remain uncaught.
+            driver._retained_source_failure=None
+        try:driver.journal('retained-hook-drift',**diagnostic)
+        except Exception:pass
+        raise failure
+    return observed
 
 def resource_record(obj):
     meta=obj['metadata']
@@ -43,9 +177,25 @@ def resource_record(obj):
             'metadataSHA256':sha({k:meta.get(k) for k in ('name','namespace','uid','labels','annotations','ownerReferences')})}
 
 def hooks(driver):
+    driver._retained_hook_observation=None
+    driver._retained_hook_objects=None
     text=driver.command(['helm','--kube-context','k3d-uds','get','hooks','uds-takserver-config','-n','takserver'])
-    objects=[obj for obj in yaml.safe_load_all(text) if isinstance(obj,dict)]
+    require(len(text.encode())<=256*1024,'stored hook input bound')
+    try:
+        objects=[obj for obj in yaml.safe_load_all(text) if obj is not None]
+        inventory=hook_inventory(objects)
+        driver._retained_hook_objects=copy.deepcopy(objects)
+    except (yaml.YAMLError,TypeError,KeyError,AttributeError,RecursionError):
+        raise ValueError('stored hook inventory differs') from None
     secret=next(obj for obj in objects if obj.get('kind')=='Secret' and obj['metadata']['name']=='takserver-keystore')
+    job=next(obj for obj in objects if obj.get('kind')=='Job' and obj['metadata']['name']=='takserver-cert-init')
+    origin={'sourceFilesSHA256':source_files(),'storedHooksSHA256':hashlib.sha256(text.encode()).hexdigest(),
+            'sourceGeneratorJobSHA256':sha(job),'keystoreHookSHA256':sha(secret),'hookInventory':inventory}
+    driver._retained_hook_observation=origin
+    for obj in objects:
+        require(obj['metadata'].get('namespace') in (None,'takserver') and
+                isinstance(obj['metadata'].get('annotations'),dict) and
+                obj['metadata']['annotations'].get('helm.sh/hook')=='pre-install,pre-upgrade','stored hook ownership differs')
     annotations=secret['metadata'].get('annotations',{})
     require(annotations.get('helm.sh/hook')=='pre-install,pre-upgrade' and annotations.get('helm.sh/hook-delete-policy')=='before-hook-creation','stored keystore hook ownership differs')
     role=next(obj for obj in objects if obj.get('kind')=='Role' and obj['metadata']['name']=='takserver-cert-init')
@@ -53,8 +203,7 @@ def hooks(driver):
     require(GENERATED_SECRETS|{'takserver-keystore'}<=named,'stored source-generator RBAC differs')
     job=next(obj for obj in objects if obj.get('kind')=='Job' and obj['metadata']['name']=='takserver-cert-init')
     require(job['spec']['template']['spec']['serviceAccountName']=='takserver-cert-init','stored source generator identity differs')
-    sources=source_files()
-    return {'sourceFilesSHA256':sources,'storedHooksSHA256':hashlib.sha256(text.encode()).hexdigest(),'sourceGeneratorJobSHA256':sha(job),'keystoreHookSHA256':sha(secret)}
+    return origin
 
 def claim_parent(driver,pvc):
     name=pvc['metadata']['name'];namespace=pvc['metadata']['namespace'];matches=[]
@@ -112,7 +261,10 @@ def sentinel_create_script(path,sentinel):
             'if ! cat > '+target+'; then exit 65; fi')
 
 def capture(driver):
+    driver._retained_hook_baseline=None
     origin=hooks(driver);records=[]
+    driver._retained_hook_baseline={'inventorySHA256':sha(origin['hookInventory']),
+                                    'objects':copy.deepcopy(driver._retained_hook_objects)}
     for namespace in APP_RELEASES:
         if not driver.kube('get','namespace',namespace,'--ignore-not-found','-o','json').strip():continue
         for pvc in driver.get('persistentvolumeclaims',namespace=namespace)['items']:
@@ -151,7 +303,7 @@ def capture(driver):
     return {'source':origin,'records':records}
 
 def verify(driver,proof,remove_sentinels=False):
-    require(hooks(driver)==proof['source'],'stored source generator/hook changed across phase-only deployment')
+    verify_hooks(driver,proof['source'])
     observations=[]
     for rec in proof['records']:
         current=driver.get(rec['kind'],rec['name'],namespace=rec['namespace']);meta=current['metadata']

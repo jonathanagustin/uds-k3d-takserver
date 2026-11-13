@@ -81,6 +81,111 @@ class PackageGuards(unittest.TestCase):
             self.assertEqual(public['status'],'unavailable')
             self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
 
+    def test_optional_retained_capture_and_fallback_journal_cannot_replace_first_cause(self):
+        for capture_error in (OSError('capture I/O'),RuntimeError('capture failure')):
+            for journal_error in (OSError('journal I/O'),RuntimeError('journal failure')):
+                with self.subTest(capture=type(capture_error).__name__,journal=type(journal_error).__name__):
+                    trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+                    original=ValueError('original retained source invariant')
+                    def verify(driver,proof):
+                        driver._retained_source_failure={'fixture':'private snapshot'}
+                        raise original
+                    trial.capture_retained_validation=lambda *args: (_ for _ in ()).throw(capture_error)
+                    trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(journal_error)
+                    with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(ValueError) as failure:
+                        trial.retained_verify({},'transition')
+                    self.assertIs(failure.exception,original)
+                    self.assertIs(trial.state['accepted'],False)
+                    self.assertIsNone(trial._retained_source_failure)
+        for interrupted in ('capture','journal'):
+            trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+            def verify(driver,proof):
+                driver._retained_source_failure={'fixture':'private snapshot'}
+                raise ValueError('known invariant')
+            def capture(*args):raise KeyboardInterrupt() if interrupted=='capture' else OSError('capture I/O')
+            trial.capture_retained_validation=capture
+            trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(KeyboardInterrupt())
+            with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(KeyboardInterrupt):
+                trial.retained_verify({},'transition')
+            self.assertIs(trial.state['accepted'],False)
+
+    def test_retained_validation_capture_is_typed_first_and_preserves_original_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);folder.chmod(0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'accepted':False,'method':'package','stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            snapshot={'schema':1,'baseline':None,'observed':None,'baselineObjects':None,'observedObjects':None,
+                      'diagnostic':{'hook':'inventory','category':'inventory','fieldClass':'inventory'}}
+            original=ValueError('original retained validation failed')
+            def verify(driver,proof):
+                driver._retained_source_failure=snapshot
+                raise original
+            with patch.object(P.R,'verify',side_effect=verify):
+                with self.assertRaises(ValueError) as failure:trial.retained_verify({},'transition')
+            self.assertIs(failure.exception,original)
+            private=folder/P.VALIDATION_FAILURE;plain=private.read_bytes();payload=json.loads(plain)
+            self.assertEqual(payload['type'],'retained-source-validation')
+            self.assertEqual(payload['kind'],'stored-hooks-drift');self.assertEqual(payload['snapshot'],snapshot)
+            self.assertNotIn('stdout',payload);self.assertNotIn('exitStatus',payload)
+            self.assertEqual(private.stat().st_mode&0o777,0o600)
+            self.assertEqual(trial.state['firstPrivateFailure']['kind'],'retained-source-validation')
+            trial.capture_retained_validation(snapshot,'rollback')
+            self.assertTrue(private.read_bytes()==plain)
+            self.assertIsNone(trial._retained_source_failure)
+        with tempfile.TemporaryDirectory() as directory:
+            trial=object.__new__(P.PackageTrial);trial.evidence=Path(directory)/'journal.json'
+            trial.state={'packageCommandFailure':{'file':P.PACKAGE_FAILURE}}
+            trial.capture_retained_validation(snapshot,'transition')
+            self.assertFalse((Path(directory)/P.VALIDATION_FAILURE).exists())
+
+    @unittest.skipUnless(__import__('shutil').which('helm'),'existing Helm required for real hook source render')
+    def test_real_retained_verify_journal_companion_public_projection_never_exports_hook_bodies(self):
+        import copy
+        spec=importlib.util.spec_from_file_location('retained_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        raw=subprocess.check_output(['helm','template','uds-takserver-config',str(ROOT/'charts/takserver'),
+                                     '--namespace','takserver'],timeout=20)
+        objects=[obj for obj in yaml.safe_load_all(raw) if isinstance(obj,dict) and
+                 obj.get('metadata',{}).get('annotations',{}).get('helm.sh/hook')]
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'IDENTITY_METHOD':'package',
+                'GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'method':'package','accepted':False,'stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(objects)
+            baseline=P.R.hooks(trial)
+            # Seed only the ephemeral body cache populated by capture(); no cluster/PVC work.
+            trial._retained_hook_baseline={'inventorySHA256':P.R.sha(baseline['hookInventory']),
+                                          'objects':copy.deepcopy(objects)}
+            changed=copy.deepcopy(objects)
+            job=next(obj for obj in changed if obj['kind']=='Job')
+            job['spec']['template']['spec']['containers'][0]['image']='PRIVATE_HOOK_IMAGE_SENTINEL'
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(changed)
+            with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):
+                trial.retained_verify({'source':baseline,'records':[]},'transition')
+            private=(folder/P.VALIDATION_FAILURE).read_text()
+            self.assertIn('PRIVATE_HOOK_IMAGE_SENTINEL',private)
+            result=publisher.identity_progress(root)['package']
+            self.assertEqual(result['status'],'observed')
+            self.assertEqual(result['stages'],[{'stage':'retained-hook-drift','hook':'cert-job',
+                                               'category':'generator','fieldClass':'job-spec'}])
+            for value in (trial.evidence.read_text(),(folder/'journal-progress.json').read_text(),json.dumps(result)):
+                self.assertNotIn('PRIVATE_HOOK_IMAGE_SENTINEL',value)
+                self.assertNotIn('baselineObjects',value);self.assertNotIn('observedObjects',value)
+            for field in ('hook','category','fieldClass'):
+                trial.state['stages']=[]
+                diagnostic={'hook':'cert-job','category':'generator','fieldClass':'job-spec'}
+                diagnostic[field]='PRIVATE_PROJECTION_SENTINEL'
+                trial.journal('retained-hook-drift',**diagnostic)
+                rejected=publisher.identity_progress(root)['package']
+                self.assertEqual(rejected['status'],'unavailable')
+                self.assertNotIn('PRIVATE_PROJECTION_SENTINEL',json.dumps(rejected))
+            trial.state['stages']=[]
+            trial.journal('retained-hook-drift',hook='cert-job',category='credential',fieldClass='job-spec')
+            self.assertEqual(publisher.identity_progress(root)['package']['status'],'unavailable')
+
     def setUp(self):
         directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
         self.phase_directory=Path(directory.name)

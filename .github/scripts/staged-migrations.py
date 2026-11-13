@@ -450,9 +450,22 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'package-identity-timeout', 'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
+    'retained-hook-drift', 'package-identity-timeout', 'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
+
+
+
+# Only the finite diagnostics emitted by the reviewed retained-source guard.
+RETAINED_HOOK_FIELDS={
+    'keystore':{'metadata':{'metadata'},'credential-data':{'credential'},'object-fields':{'inventory','credential'}},
+    'cert-network':{'metadata':{'metadata'},'network-policy':{'authorization'},'object-fields':{'inventory'}},
+    'cert-account':{'metadata':{'metadata'},'identity-spec':{'authorization'},'object-fields':{'inventory'}},
+    'cert-role':{'metadata':{'metadata'},'rbac':{'authorization'},'object-fields':{'inventory'}},
+    'cert-binding':{'metadata':{'metadata'},'rbac':{'authorization'},'object-fields':{'inventory'}},
+    'cert-job':{'metadata':{'metadata'},'job-spec':{'generator'},'object-fields':{'inventory','generator'}},
+    'inventory':{'inventory':{'inventory'}},'source-code':{'source-code':{'source-code'}},
+}
 
 
 def diagnostic_journal_hash(path):
@@ -524,6 +537,13 @@ def identity_progress(directory):
                     stage = {'stage': entry['stage']}
                     if entry.get('phase') in IDENTITY_ALIASES:
                         stage['phase'] = entry['phase']
+                    if entry['stage']=='retained-hook-drift':
+                        require(set(entry)=={'stage','hook','category','fieldClass'} and
+                                isinstance(entry.get('hook'),str) and isinstance(entry.get('fieldClass'),str) and
+                                isinstance(entry.get('category'),str) and
+                                entry['category'] in RETAINED_HOOK_FIELDS.get(entry['hook'],{}).get(entry['fieldClass'],set()),
+                                'invalid retained hook diagnostic')
+                        stage.update({key:entry[key] for key in ('hook','category','fieldClass')})
                     if entry['stage']=='package-identity-timeout':
                         require(entry.get('phase') in ('shared','transition','strict','rollback') and
                                 entry.get('diagnostic') in ('no-observation','unstable-observation','workload-template-drift',

@@ -23,7 +23,7 @@ on:
         options: [manual, package, combined]
         default: manual
       fresh_strict:
-        description: After package reversal remove only TAK and test clean strict install (retained state refuses)
+        description: After package rollback remove only the application and validate a clean strict install
         type: boolean
         default: false
       passive_watch:

@@ -8,7 +8,7 @@ Defaults remain shared. This is not a production Helm migration command.
 ## Fixed scope and prerequisites
 
 Run only from a reviewed checkout inside this repository's explicitly selected
-GitHub Actions job, after the ordinary Full Core install and its initial checks.
+GitHub Actions job, after its Unified Defense Stack (UDS) Core install and shared-baseline checks.
 The shared [ephemeral guard](../ephemeral-cluster.py) binds `k3d-uds` to this job,
 source commit, local Unix-socket Docker daemon, actual running k3d node container,
 published application programming interface (API) port, the kube-system unique identifier (UID) and matching create-once marker. The shared pre-bootstrap operation refuses an existing/stopped cluster
@@ -23,7 +23,7 @@ The trial expects:
   `takserver-oidc/pepr-system`. The four fixed Team Awareness Kit (TAK) Deployments and the two fixed
   module Deployment UIDs are retained. Dedicated migration role-based access control (RBAC) must be absent
   initially; unexpected existing objects are not adopted.
-- Unified Defense Stack (UDS) Core 1.16's `uds/package` and `uds/generation` policy labels, current Package
+- UDS Core 1.16's `uds/package` and `uds/generation` policy labels, current Package
   `Ready`/`observedGeneration`, and the ambient Pod redirection annotation.
   Istio's `istio` ConfigMap in `istio-system` must use the supported root namespace
   and cluster.local trust domain. Applicable root-namespace ALLOW policies are

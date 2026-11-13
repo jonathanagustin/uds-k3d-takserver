@@ -1,0 +1,3 @@
+  -c, --confirm                     Confirms the removal action
+      --set-values stringToString   Set package values (key.path=value). Booleans and integers are type-inferred; everything else is a string (default [])
+      --features stringToString    Provide a comma-separated list of feature names to bools to enable or disable. Ex. --features "foo=true,bar=false,baz=true" (default [])

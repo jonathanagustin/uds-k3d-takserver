@@ -42,15 +42,21 @@ def bind_inputs(archive,archive_sha,plan_path):
 def deploy_command(bound,phase):
     D.require(phase in D.PHASES,'unsupported package phase')
     argv=['uds','zarf','package','deploy',bound['archive'],'--confirm','--features','values=true']
-    for key,value in sorted(bound['variables'].items()):argv+=['--set',key+'='+str(value)]
+    for key,value in sorted(bound['variables'].items()):argv+=['--set-variables',key+'='+str(value)]
     # The staged baseline explicitly selects the local backup owner.
-    argv+=['--set','FILESYSTEM_BACKUP_OWNER=local','--set-values','tak.workloadIdentityPhase='+phase]
+    argv+=['--set-variables','FILESYSTEM_BACKUP_OWNER=local','--set-values','tak.workloadIdentityPhase='+phase]
     return argv
 
+def declared_flags(help_text):
+    # Parse Cobra flag declarations, including their optional short alias.
+    # Prose/examples and longer similarly named flags do not establish support.
+    return set(re.findall(r'^\s*(?:-[A-Za-z0-9],\s+)?(--[a-z][a-z0-9-]*)(?=\s|=|$)',help_text,re.MULTILINE))
+
 def cli_preflight(command):
-    for operation,flags in [('deploy',('--confirm','--features','--set-values','--set')),('remove',('--confirm',))]:
-        help_text=command(['uds','zarf','package',operation,'--help'])
-        D.require(all(re.search(r'(?<![\w-])'+re.escape(flag)+r'(?![\w-])',help_text) for flag in flags),'pinned Zarf '+operation+' CLI lacks required flags')
+    for operation,flags in [('deploy',('--confirm','--features','--set-values','--set-variables')),('remove',('--confirm',))]:
+        available=declared_flags(command(['uds','zarf','package',operation,'--help']))
+        missing=[flag for flag in flags if flag not in available]
+        D.require(not missing,'pinned Zarf '+operation+' CLI lacks required flags: '+', '.join(missing))
 
 def require_clean_objects(namespace,kind,objects):
     if namespace=='pepr-system':

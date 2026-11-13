@@ -1,0 +1,4 @@
+  -c, --confirm                         Confirms package deployment without prompting. ONLY use with packages you trust. Skips prompts to review SBOM, configure variables, select optional components and review potential breaking changes.
+      --set-values stringToString       Set package values (key.path=value). Booleans and integers are type-inferred; everything else is a string (default [])
+      --set-variables stringToString    Specify deployment variables to set on the command line (KEY=value) (default [])
+      --features stringToString    Provide a comma-separated list of feature names to bools to enable or disable. Ex. --features "foo=true,bar=false,baz=true" (default [])

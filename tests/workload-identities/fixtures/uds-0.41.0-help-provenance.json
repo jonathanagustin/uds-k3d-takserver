@@ -1,0 +1,37 @@
+{
+  "tool": "uds",
+  "version": "0.41.0",
+  "embeddedZarfVersion": "0.89.0",
+  "binaryURL": "https://github.com/defenseunicorns/uds-cli/releases/download/v0.41.0/uds-cli_v0.41.0_Linux_amd64",
+  "binarySHA256": "31cd710a3f1154f81767a5268f2c887d9e33fe10b81e45ee4183c810dd5ad308",
+  "binaryBytes": 203632800,
+  "scope": "Unmodified flag-declaration lines extracted from actual official binary help; no cluster or deployment executed",
+  "commands": {
+    "deploy": {
+      "argv": [
+        "uds",
+        "zarf",
+        "package",
+        "deploy",
+        "--help"
+      ],
+      "exit": 0,
+      "fullStdoutSHA256": "b6acd607f0cc18a1738676a57ad71bb3047f5beebde7d84b19b5183549b4a105",
+      "fixture": "uds-0.41.0-deploy-flags.txt",
+      "fixtureSHA256": "b6398922daa1014fdd7bbf7bdfb91d7ed51b0fa11cb52c600428047602625901"
+    },
+    "remove": {
+      "argv": [
+        "uds",
+        "zarf",
+        "package",
+        "remove",
+        "--help"
+      ],
+      "exit": 0,
+      "fullStdoutSHA256": "a02f705b6b966e113b70c32cf3e893558b05d550c4557037785bb944e2086ddf",
+      "fixture": "uds-0.41.0-remove-flags.txt",
+      "fixtureSHA256": "45e239de97d2412f297ede65192e313eea51a0c6b13ce0d16642ea8a2ea233f1"
+    }
+  }
+}

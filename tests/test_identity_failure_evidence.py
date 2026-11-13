@@ -1,0 +1,175 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+"""Offline failure observability; no cluster, commands, messages or manifests captured."""
+import copy
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from tests.test_package_identity_driver import P, ROOT
+from tests.test_staged_migrations import S, ENV
+
+F = P.F
+
+
+def source_bytes(relative, *_args):
+    if relative not in F.FILES:
+        raise ValueError('unreviewed source')
+    return (ROOT/relative).read_bytes()
+
+
+def mocked_git(argv, **_kwargs):
+    if argv[-2:] == ['rev-parse', 'HEAD']:
+        return subprocess.CompletedProcess(argv, 0, (ENV['GITHUB_SHA']+'\n').encode(), b'')
+    if argv[-1].startswith('HEAD:'):
+        return subprocess.CompletedProcess(argv, 0, source_bytes(argv[-1][5:]), b'')
+    raise AssertionError('unexpected subprocess')
+
+
+class FailureEvidenceTests(unittest.TestCase):
+    def error(self):
+        try:
+            P.D.require(False, 'SECRET_SENTINEL https://private/?sig=SECRET_SENTINEL')
+        except ValueError as error:
+            return error
+
+    def test_capture_contains_only_reviewed_lines_hashes_and_fixed_type(self):
+        with patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes):
+            value = F.capture(self.error())
+            self.assertEqual(value['status'], 'captured')
+            self.assertEqual(value['exceptionType'], 'ValueError')
+            self.assertTrue(value['frames'])
+            self.assertNotIn('SECRET_SENTINEL', json.dumps(value))
+            for frame in value['frames']:
+                self.assertEqual(set(frame), {'file', 'line', 'sourceSHA256'})
+                self.assertIn(frame['file'], F.FILES)
+                self.assertEqual(frame['sourceSHA256'], hashlib.sha256(source_bytes(frame['file'])).hexdigest())
+
+    def test_exception_str_is_never_called_and_unknown_type_is_fixed(self):
+        class PrivateError(Exception):
+            def __str__(self): raise AssertionError('exception string must not be evaluated')
+        with patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes):
+            value = F.capture(PrivateError('SECRET_SENTINEL'))
+            self.assertEqual(value['exceptionType'], 'Other')
+            self.assertEqual(value['status'], 'unavailable')
+            self.assertEqual(value['frames'], [])
+
+    def test_first_private_capture_is_not_overwritten_and_tampering_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes):
+            root = Path(directory); root.chmod(0o700)
+            F.write(root, self.error()); path = root/F.NAME; original = path.read_bytes()
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            F.write(root, KeyError('other secret')); self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(F.public(root)['status'], 'captured')
+            for defect in ('payload', 'line', 'hash', 'source', 'run', 'oversized', 'boolean-schema'):
+                value = json.loads(original)
+                if defect == 'boolean-schema': value['schema'] = True
+                if defect == 'payload': value['secret'] = 'SECRET_SENTINEL'
+                if defect == 'line': value['frames'][0]['line'] = 2**60
+                if defect == 'hash': value['frames'][0]['sourceSHA256'] = '0'*64
+                if defect == 'source': value['frames'][0]['file'] = '/private/SECRET_SENTINEL'
+                if defect == 'run': value['runID'] = '999'
+                path.write_text(' '*(F.LIMIT+1) if defect == 'oversized' else json.dumps(value))
+                with self.assertRaises((ValueError, OSError)): F.public(root)
+            path.write_bytes(original)
+            path.unlink(); path.symlink_to('/dev/null')
+            with self.assertRaises(ValueError): F.public(root)
+
+    def test_reviewed_source_must_match_actual_HEAD_and_checkout(self):
+        with patch.dict(os.environ, ENV, clear=True), patch.object(F.subprocess, 'run', side_effect=mocked_git):
+            self.assertEqual(F.reviewed('tests/workload-identities/drive.py'), source_bytes('tests/workload-identities/drive.py'))
+            with patch.object(F.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'other-source', b'')):
+                with self.assertRaises(ValueError): F.reviewed('tests/workload-identities/drive.py')
+        with patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=ValueError('SECRET_SENTINEL')):
+            value = F.capture(self.error())
+            self.assertEqual(value['status'], 'unavailable')
+            self.assertNotIn('SECRET_SENTINEL', json.dumps(value))
+
+    def test_wrapper_captures_preflight_before_trial_id_without_printing_cause(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes), patch.object(P, 'cli_preflight', side_effect=ValueError('SECRET_SENTINEL')):
+            path = Path(directory)/'journal.json'
+            with patch('sys.argv', ['package_roundtrip.py', 'round-trip', '--evidence', str(path)]), self.assertRaises(SystemExit) as caught:
+                P.main()
+            self.assertNotIn('SECRET_SENTINEL', str(caught.exception))
+            self.assertFalse(path.exists())
+            self.assertEqual(F.public(path.parent)['status'], 'captured')
+
+    def test_wrapper_does_not_resolve_symlink_parent_before_failure_guard(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes), patch.object(P, 'cli_preflight', side_effect=ValueError('SECRET_SENTINEL')):
+            root = Path(directory)
+            outside = root/'outside'; outside.mkdir(mode=0o700)
+            link = root/'linked'; link.symlink_to(outside, target_is_directory=True)
+            with patch('sys.argv', ['package_roundtrip.py', 'round-trip', '--evidence', str(link/'journal.json')]), self.assertRaises(SystemExit):
+                P.main()
+            self.assertFalse((outside/F.NAME).exists())
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_actual_shell_cheap_preflight_captures_before_any_cluster_action(self):
+        # Real shell + Python wrapper + HEAD verification; only uds --help is a
+        # fake capability peer. No chart, package, Kubernetes or cluster runs.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); binary = root/'bin'; binary.mkdir()
+            calls = root/'uds-calls'
+            uds = binary/'uds'
+            uds.write_text('#!/usr/bin/env bash\nset -euo pipefail\nprintf "%s\\n" "$*" >> "${FAKE_UDS_CALLS}"\n'
+                           '[[ "$*" == "zarf package deploy --help" ]] || exit 88\n'
+                           'printf "  --confirm Confirms\\n  PRIVATE_HELP_SENTINEL\\n"\n')
+            uds.chmod(0o700)
+            head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+            env = {**os.environ, **ENV, 'GITHUB_SHA': head, 'SCENARIO': 'identities',
+                   'IDENTITY_METHOD': 'package', 'RUNNER_TEMP': str(root/'runner'),
+                   'PATH': str(binary)+os.pathsep+os.environ['PATH'], 'FAKE_UDS_CALLS': str(calls)}
+            child = subprocess.run(['bash', str(ROOT/'.github/scripts/staged-migrations.sh')],
+                                   cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(child.returncode, 0)
+            self.assertEqual(calls.read_text().splitlines(), ['zarf package deploy --help'])
+            folder = root/'runner/staged-migrations/package-identity'
+            self.assertFalse((folder/'journal.json').exists())
+            self.assertTrue((folder/F.NAME).is_file())
+            self.assertNotIn('PRIVATE_HELP_SENTINEL', child.stdout+child.stderr+(folder/F.NAME).read_text())
+            with patch.dict(os.environ, env, clear=True):
+                proof = F.public(folder)
+                self.assertEqual(proof['status'], 'captured')
+                self.assertTrue(any(frame['file'].endswith('package_roundtrip.py') for frame in proof['frames']))
+                value = S.publish(folder.parent, root/'public', 'amd64')
+            self.assertFalse(value['accepted'])
+            diagnostic = json.loads((root/'public/proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
+            self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
+
+    def test_package_failure_progress_and_callsites_publish_before_acceptance(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {**ENV, 'SCENARIO': 'identities', 'IDENTITY_METHOD': 'package'}, clear=True), patch.object(S.platform, 'machine', return_value='x86_64'), patch.object(F, 'reviewed', side_effect=source_bytes):
+            root = Path(directory); folder = root/'package-identity'; folder.mkdir(mode=0o700)
+            journal = {'guard': {field: ENV[env] for field, env in [('sourceSHA', 'GITHUB_SHA'), ('runID', 'GITHUB_RUN_ID'), ('runAttempt', 'GITHUB_RUN_ATTEMPT')]},
+                       'accepted': False, 'stages': [{'stage': 'created', 'private': 'SECRET_SENTINEL'} for _ in range(220)] + [{'stage': 'preflight'},
+                         {'stage': 'package-deploy-start', 'phase': 'transition', 'secret': 'SECRET_SENTINEL'},
+                         {'stage': 'stopped', 'message': 'SECRET_SENTINEL'}, {'stage': 'SECRET_SENTINEL'}]}
+            (folder/'journal.json').write_text(json.dumps(journal)); F.write(folder, self.error())
+            with patch.object(subprocess, 'run', side_effect=mocked_git):
+                value = S.publish(root, root/'public', 'amd64')
+            self.assertFalse(value['accepted'])
+            progress = json.loads((root/'public/proofs/amd64/progress.json').read_text())
+            self.assertEqual(progress['identityStages'], ['preflight', 'package-deploy-start', 'stopped'])
+            self.assertEqual(progress['identityMethods']['package']['stages'][1], {'stage': 'package-deploy-start', 'phase': 'transition'})
+            diagnostic = json.loads((root/'public/proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual(diagnostic['identityFailures'][0]['category'], 'guard-rejection')
+            self.assertEqual(diagnostic['identityFailures'][0]['callsite']['frames'], F.capture(self.error())['frames'])
+            self.assertFalse((root/'public/proofs/amd64/identity-phases.json').exists())
+            self.assertNotIn('SECRET_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
+
+    def test_before_journal_failure_and_selected_method_progress_remain_distinct(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {**ENV, 'SCENARIO': 'identities', 'IDENTITY_METHOD': 'combined'}, clear=True), patch.object(S.platform, 'machine', return_value='x86_64'), patch.object(F, 'reviewed', side_effect=source_bytes):
+            root = Path(directory); folder = root/'package-identity'; folder.mkdir(mode=0o700); F.write(folder, self.error())
+            with patch.object(subprocess, 'run', side_effect=mocked_git): value = S.publish(root, root/'public', 'amd64')
+            progress = json.loads((root/'public/proofs/amd64/progress.json').read_text())
+            self.assertEqual(set(progress['identityMethods']), {'manual', 'package'})
+            self.assertTrue(all(m['status'] == 'unavailable' for m in progress['identityMethods'].values()))
+            diagnostic = json.loads((root/'public/proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual([item['method'] for item in diagnostic['identityFailures']], ['package'])
+            self.assertFalse(value['accepted'])

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Offline render/discovery/defaulting checks; none grant live acceptance."""
 import copy
+import contextlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -177,7 +179,16 @@ class RenderInputTests(unittest.TestCase):
             expected = {'sso': [{'enabled': False, 'attributes': {}}]}
             actual = {'sso': [{'enabled': True, 'attributes': {'PRIVATE_KEY_CANARY': 'SECRET_VALUE_CANARY'}}]}
             receipt = {'sourceSHA': 'a' * 40, 'runID': '1', 'runAttempt': '1', 'clusterUID': 'cluster'}
-            instance.preflight_mismatch(expected, actual, receipt)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                instance.preflight_mismatch(expected, actual, receipt)
+            breadcrumb = json.loads(stdout.getvalue())
+            self.assertEqual(set(breadcrumb), {'stage', 'expectedSHA256', 'actualSHA256', 'differingPaths', 'pathsTruncated'})
+            self.assertEqual(breadcrumb['stage'], 'preflight-package-mismatch')
+            self.assertIn('/spec/sso/0/enabled', breadcrumb['differingPaths'])
+            self.assertNotIn('PRIVATE_KEY_CANARY', stdout.getvalue())
+            self.assertNotIn('SECRET_VALUE_CANARY', stdout.getvalue())
+            self.assertNotIn('renderInputs', stdout.getvalue())
             path = Path(directory) / 'journal.preflight.json'
             data = path.read_bytes()
             self.assertNotIn(b'PRIVATE_KEY_CANARY', data)

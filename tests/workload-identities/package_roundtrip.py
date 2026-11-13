@@ -19,6 +19,8 @@ spec=importlib.util.spec_from_file_location('identity_observer',HERE/'drive.py')
 D=importlib.util.module_from_spec(spec);spec.loader.exec_module(D)
 retained_spec=importlib.util.spec_from_file_location('owned_application_retention',HERE/'retained_state.py')
 R=importlib.util.module_from_spec(retained_spec);retained_spec.loader.exec_module(R)
+failure_spec=importlib.util.spec_from_file_location('identity_failure_evidence',HERE/'failure_evidence.py')
+F=importlib.util.module_from_spec(failure_spec);failure_spec.loader.exec_module(F)
 PHASES=('shared','transition','strict','rollback','shared')
 VARIABLES={'DOMAIN','TAK_IMAGE_TAG','FILESYSTEM_BACKUP','POSTGRES_STORAGE_CLASS','CLOUDTAK_STORAGE_CLASS'}
 CORE_NAMESPACES=('kube-system','istio-system','uds-system','velero')
@@ -74,7 +76,7 @@ class PackageTrial(D.Driver):
         D.require(time.monotonic()<self.deadline,'120-minute package trial wall budget exhausted')
         receipt=super().guard()
         if not self.state.get('packageDriverSHA256'):
-            for filename in ('package_roundtrip.py','phase_evidence.py','retained_state.py'):
+            for filename in ('package_roundtrip.py','phase_evidence.py','retained_state.py','failure_evidence.py'):
                 reviewed=self.command(['git','show','HEAD:tests/workload-identities/'+filename])
                 D.require(reviewed.encode()==(HERE/filename).read_bytes(),'package trial source differs from reviewed HEAD')
             self.state['packageDriverSHA256']=digest(Path(__file__))
@@ -240,19 +242,26 @@ class PackageTrial(D.Driver):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('operation',choices=('preflight','round-trip'));p.add_argument('--archive',type=Path);p.add_argument('--archive-sha256');p.add_argument('--candidate-plan',type=Path);p.add_argument('--evidence',type=Path);p.add_argument('--fresh-strict',action='store_true');a=p.parse_args()
-    command=lambda argv:subprocess.run(argv,text=True,capture_output=True,check=True,timeout=30).stdout
-    cli_preflight(command)
-    if a.operation=='preflight':return
-    D.require(all((a.archive,a.archive_sha256,a.candidate_plan,a.evidence)),'bound inputs and evidence required')
-    b=bind_inputs(a.archive.resolve(),a.archive_sha256,a.candidate_plan.resolve());driver=PackageTrial(a.evidence.resolve(),b)
-    driver.state['freshStrictRequested']=a.fresh_strict
+    driver=None
     try:
+        command=lambda argv:subprocess.run(argv,text=True,capture_output=True,check=True,timeout=30).stdout
+        cli_preflight(command)
+        if a.operation=='preflight':return
+        D.require(all((a.archive,a.archive_sha256,a.candidate_plan,a.evidence)),'bound inputs and evidence required')
+        b=bind_inputs(a.archive.resolve(),a.archive_sha256,a.candidate_plan.resolve());driver=PackageTrial(a.evidence.resolve(),b)
+        driver.state['freshStrictRequested']=a.fresh_strict
         driver.initialize()
         for phase in PHASES[1:]:driver.deploy(phase)
         if a.fresh_strict:driver.fresh_strict()
         driver.finish()
-    except (ValueError,KeyError,OSError,subprocess.SubprocessError) as error:
-        if driver.state.get('trialID'):driver.journal('stopped',failure=type(error).__name__)
-        raise SystemExit('package identity trial stopped; inspect private journal; no automatic rollback') from error
+    except Exception as error:
+        # Capture before journaling: initialize/preflight may fail before trialID.
+        # No message, command, stderr or local value is persisted or printed.
+        if a.evidence:
+            try:F.write(a.evidence.absolute().parent,error)
+            except (ValueError,OSError,subprocess.SubprocessError):pass
+        if driver is not None and driver.state.get('trialID'):
+            driver.journal('stopped',failure=type(error).__name__ if type(error).__name__ in F.TYPES else 'Other')
+        raise SystemExit('package identity trial stopped; inspect private callsite evidence; no automatic rollback') from None
 
 if __name__=='__main__':main()

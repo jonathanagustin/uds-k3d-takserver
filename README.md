@@ -150,7 +150,7 @@ uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:$
 
 Pass `--architecture amd64` or `--architecture arm64` when the cluster differs from the machine you deploy from. See [ADR 10](adr/0010-amd64-and-arm64.md).
 
-[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-airgap.mp4)
+[![Demo clip: the package is one file, TAK images come from the in-cluster Zarf registry, and the SBOMs are inside the package](docs-site/public/demo/demo-clip-airgap.jpg)](#operate-and-trust)
 
 ![TAK pods with image references rewritten to the in-cluster Zarf registry](docs-site/public/demo/screens/zarf-registry-images.webp)
 
@@ -169,7 +169,7 @@ Then open `https://takserver.uds.dev/` for TAK Server and `https://map.uds.dev/`
 
 Package creation pulls the published images from GHCR and Docker Hub. You do not need to build them first. `build.sh` also checks out the TAK source submodule if you cloned without it.
 
-[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-deploy.mp4)
+[![Demo clip: build the Zarf package, bundle it with UDS Core, and deploy it on a new k3d cluster](docs-site/public/demo/demo-clip-deploy.jpg)](#deploy)
 
 ### Upgrade from 0.6
 
@@ -214,7 +214,7 @@ After deployment, use the [Access](#access) table to choose a browser or certifi
 
 ## Demo
 
-[Watch the 26-second UI preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4): CloudTAK mapping, marker creation, sharing and TAK Server status, edited from recorded demos. The [source manifest](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/edit-manifest.json) lists the clips and checksums.
+[Watch the 26-second UI preview](https://jonathanagustin.github.io/uds-takserver/#ui-preview): CloudTAK mapping, marker creation, sharing and TAK Server status, edited from recorded demos.
 
 ### Deploy
 
@@ -236,8 +236,6 @@ https://github.com/user-attachments/assets/7d727d39-b4f1-4251-b440-57c7799c51d1
 
 </details>
 
-[Download `demo-deploy.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-deploy.mp4)
-
 ### Operate and Trust
 
 Air-gapped install, policy at work, CloudTAK and ATAK in sync, security defaults, upgrades, and self-healing. 5 min.
@@ -256,8 +254,6 @@ https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 - 4:42 What This Does Not Prove
 
 </details>
-
-[Download `demo-operate-and-trust.mp4`](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-operate-and-trust.mp4)
 
 ## Verify a release
 

@@ -15,6 +15,14 @@ spec=importlib.util.spec_from_file_location('sdk_public_recipe',Path(__file__).w
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 
 class CompositionGuards(unittest.TestCase):
+    def test_actual_java_commands_contain_fatal_logs_in_owned_output(self):
+        java=Path('/qualified-jdk');out=Path('/owned-output')
+        argv=b.contained_java_argv([java/'bin/java','-Xcheck:jni','Main'],java,out)
+        self.assertEqual(argv,[str(java/'bin/java'),'-XX:ErrorFile=/owned-output/hs_err_java_pid%p.log','-Xcheck:jni','Main'])
+        compiler=b.contained_java_argv([java/'bin/javac','Source.java'],java,out)
+        self.assertEqual(compiler[1:3],['-J-Xmx256m','-J-XX:ErrorFile=/owned-output/hs_err_javac_pid%p.log'])
+        self.assertEqual(b.contained_java_argv(['/metadata/tool','arg'],java,out),['/metadata/tool','arg'])
+
     def test_actual_patch_executor_has_one_patch_and_no_recipe_inputs(self):
         run=Mock();patch=b.HERE/'patches/gles-null-shader-lengths.patch'
         b.apply_source_patch(run,Path('/owned-stage'),patch,'patch-gles')

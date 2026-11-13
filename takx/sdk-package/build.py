@@ -39,6 +39,14 @@ def jar_write(path,entries):
         for name,data in entries.items():
             if jar.read(name)!=data:raise ValueError('archive member bytes differ')
 
+def contained_java_argv(argv, java, out):
+    argv=list(map(str,argv))
+    if Path(argv[0]).resolve()==(java/'bin/java').resolve():
+        argv[1:1]=['-XX:ErrorFile='+str(out/'hs_err_java_pid%p.log')]
+    elif Path(argv[0]).resolve()==(java/'bin/javac').resolve():
+        argv[1:1]=['-J-Xmx256m','-J-XX:ErrorFile='+str(out/'hs_err_javac_pid%p.log')]
+    return argv
+
 def apply_source_patch(run, stage, patch, label):
     patch=Path(patch)
     if patch.suffix!='.patch' or not patch.is_file():raise ValueError('one regular source patch required')
@@ -115,7 +123,7 @@ def main():
     def run(argv,name,timeout=120):
         remaining=lock['total_seconds']-(time.monotonic()-started)
         if remaining<=0:raise ValueError('package total command deadline exhausted')
-        argv=list(map(str,argv));argv[0]=str(tools.get(argv[0],argv[0]));commands.append({'name':name,'argv':argv,'timeout':min(timeout,remaining)});(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
+        argv=contained_java_argv(argv,java,out);argv[0]=str(tools.get(argv[0],argv[0]));commands.append({'name':name,'argv':argv,'timeout':min(timeout,remaining)});(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
         return runner.execute(argv,out,name,timeout=min(timeout,remaining),env=env,capture=True,disk_limit=lock['output_limit_bytes'])
     elf=audit.elf_audit(args.native_proof,roots,run)
     if elf!=raw['elf_audit']:raise ValueError('actual native ABI/privacy audit differs')

@@ -267,19 +267,10 @@ Deployments their corresponding `takserver-*` ServiceAccounts. Ignite keeps its
 upstream account, and the database setup Job remains unchanged. Standalone pods
 keep their chosen account even if they copy a TAK app label.
 
-The package deployment path stages configuration before admission. The pinned
-Zarf 0.89.0 deploys the `uds-takserver-config`, Pepr admission, and upstream
-application charts in that order. After each chart, it waits for the rendered
-resources using its custom-resource health checker, not just Helm's built-in
-workload checks. For an existing Package, that checker rejects a stale
-`status.observedGeneration` and requires its `Ready` condition. Core 1.16.0 writes
-the current generation and `Ready=True` after policy reconciliation completes.
-See the [Zarf chart gate](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/internal/packager/helm/chart.go#L179-L202),
-[generation check](https://github.com/zarf-dev/zarf/blob/v0.89.0/vendor/sigs.k8s.io/cli-utils/pkg/kstatus/status/generic.go#L73-L100),
-and [Core completion status](https://github.com/defenseunicorns/uds-core/blob/v1.16.0/src/pepr/operator/reconcilers/package-reconciler.ts#L159-L174).
-This supplies the config-first gate within package deployment; a separate manual
-Helm configuration stage is not part of this path. A stored Package alone is
-still insufficient evidence of convergence.
+The package deploys the configuration chart first and waits for the Package to
+be Ready for its current generation before updating admission. No separate manual
+Helm stage is needed; see [ADR 0007](../adr/0007-per-workload-network-rules.md#dedicated-tak-identities-opt-in-migration)
+for the pinned implementation and readiness checks.
 
 For an existing installation, keep the same package archive and deployed values
 through these stages:

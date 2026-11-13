@@ -455,18 +455,64 @@ IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
 
 
+def diagnostic_journal_hash(path):
+    # Diagnostic only: this never admits an oversized journal as acceptance proof.
+    before=path.lstat()
+    require(path.is_file() and not path.is_symlink() and before.st_size<=16*1024*1024,'diagnostic-journal-unavailable')
+    digest=hashlib.sha256()
+    with path.open('rb') as stream:
+        opened=os.fstat(stream.fileno())
+        require((opened.st_dev,opened.st_ino)==(before.st_dev,before.st_ino),'diagnostic-journal-changed')
+        count=0
+        while chunk:=stream.read(65536):
+            count+=len(chunk);require(count<=16*1024*1024,'diagnostic-journal-unavailable');digest.update(chunk)
+    after=path.lstat()
+    require((before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns)==
+            (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns) and count==before.st_size,'diagnostic-journal-changed')
+    return digest.hexdigest()
+
+
+def public_protocol(entry):
+    require(isinstance(entry,dict) and entry.get('stage') in ('protocol-start','protocol-result') and
+            entry.get('protocol') in ('dns','ignite','postgres','nats') and
+            entry.get('controlRole') in ('unspecified','workload','allowed-control','wrong-identity'),'invalid-protocol-diagnostic')
+    value={key:entry[key] for key in ('stage','protocol','controlRole')}
+    if entry['stage']=='protocol-result':
+        status=entry.get('outerExit')
+        require((status is None or type(status) is int and -255<=status<=255) and type(entry.get('stderrPresent')) is bool and
+                entry.get('stdoutCategory') in ('application-response','transport-rejected','other'),'invalid-protocol-diagnostic')
+        value.update(outerExit=status,stderrPresent=entry['stderrPresent'],stdoutCategory=entry['stdoutCategory'])
+    return value
+
+
 def identity_progress(directory):
     """Selected methods' failed or partial progress, never raw journal fields."""
     result = {}
     for method in identity_methods():
         path = directory / ('identity' if method == 'manual' else 'package-identity') / 'journal.json'
         item = {'status': 'unavailable', 'stages': []}
+        reason='missing-or-invalid-journal'
         try:
-            journal = bounded_json(path)
+            companion=path.with_name('journal-progress.json')
+            reason='invalid-companion' if (companion.exists() or companion.is_symlink()) else 'missing-or-invalid-journal'
+            journal = bounded_json(companion if (companion.exists() or companion.is_symlink()) else path)
+            if (companion.exists() or companion.is_symlink()):
+                reason='journal-hash-or-file-mismatch'
+                require(journal.get('schema')==1 and journal.get('journalSHA256')==diagnostic_journal_hash(path),'companion-journal-mismatch')
+                reason='invalid-companion'
+                retained,total,truncated=journal.get('retainedCount'),journal.get('totalCount'),journal.get('truncated')
+                require(type(retained) is int and type(total) is int and 0<=retained<=128 and retained==min(total,128) and
+                        type(truncated) is bool and truncated==(total>128) and len(journal.get('stages',[]))==retained,'invalid-companion-counts')
+                item.update(retainedCount=retained,totalCount=total,truncated=truncated)
+                protocol=journal.get('lastProtocol')
+                require(isinstance(protocol,dict) and set(protocol)=={'protocol-start','protocol-result'},'invalid-protocol-diagnostic')
+                item['lastProtocol']={key:public_protocol(entry) if entry is not None else None for key,entry in protocol.items()}
+            reason='source-run-binding-mismatch'
             guard = journal.get('guard') or {}
             require(all(guard.get(field) == os.environ.get(env) for field, env in
                     [('sourceSHA', 'GITHUB_SHA'), ('runID', 'GITHUB_RUN_ID'), ('runAttempt', 'GITHUB_RUN_ATTEMPT')]),
                     'progress journal is not source/run bound')
+            reason='invalid-stage-diagnostic'
             stages = journal.get('stages', [])
             require(isinstance(stages, list) and len(stages) <= 4096, 'progress stage bound')
             for entry in stages:
@@ -487,7 +533,7 @@ def identity_progress(directory):
                     item['stages'].append(stage)
             item.update(status='observed', journalSHA256=sha(path))
         except (ValueError, OSError, KeyError, TypeError, AttributeError):
-            item = {'status': 'unavailable', 'stages': []}
+            item = {'status': 'unavailable', 'stages': [], 'reason':reason}
         result[method] = item
     return result
 

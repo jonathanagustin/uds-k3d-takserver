@@ -143,6 +143,27 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
             self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
 
+    def test_compact_progress_binds_large_private_journal_without_acceptance(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            instance=P.D.Driver(folder/'journal.json')
+            instance.state['guard']={field:ENV[env] for field,env in [('sourceSHA','GITHUB_SHA'),('runID','GITHUB_RUN_ID'),('runAttempt','GITHUB_RUN_ATTEMPT')]}
+            instance.state['private']='PRIVATE_SECRET'*30000
+            for _ in range(130):instance.journal('preflight',private='SECRET')
+            instance.journal('protocol-result',protocol='postgres',controlRole='wrong-identity',outerExit=0,stdoutCategory='transport-rejected',stderrPresent=False,stderr='SECRET')
+            companion=folder/'journal-progress.json';saved=companion.read_text()
+            self.assertGreater(instance.evidence.stat().st_size,256*1024);self.assertLess(companion.stat().st_size,256*1024)
+            self.assertNotIn('SECRET',saved)
+            value=S.identity_progress(root)['package']
+            self.assertEqual(value['status'],'observed');self.assertTrue(value['truncated']);self.assertEqual(value['retainedCount'],128)
+            self.assertEqual(value['lastProtocol']['protocol-result']['stdoutCategory'],'transport-rejected')
+            for field in ('sourceSHA','runID'):
+                value=json.loads(saved);value['guard'][field]='tampered';companion.write_text(json.dumps(value))
+                self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+            companion.write_text(saved);instance.evidence.write_text(instance.evidence.read_text()+' ')
+            self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+            companion.unlink();self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+
     def test_sentinel_progress_exports_only_reviewed_typed_facts(self):
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
             root=Path(directory);folder=root/'package-identity';folder.mkdir()
@@ -156,7 +177,7 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(progress([start,leaked])['stages'],[start,stage])
             for key,value in [('operation','foreign'),('namespace','kube-system'),('exitStatus',True),('exitStatus',256),('exitStatus','63'),('stderrPresent',1)]:
                 with self.subTest(key=key,value=value):
-                    self.assertEqual(progress([{**stage,key:value}]),{'status':'unavailable','stages':[]})
+                    self.assertEqual(progress([{**stage,key:value}]),{'status':'unavailable','stages':[],'reason':'invalid-stage-diagnostic'})
             self.assertEqual(progress([{**stage,'exitStatus':None}])['stages'][0]['exitStatus'],None)
 
     def test_package_failure_progress_and_callsites_publish_before_acceptance(self):

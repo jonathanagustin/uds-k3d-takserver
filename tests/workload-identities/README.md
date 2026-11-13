@@ -262,3 +262,27 @@ the shared expected-render path now emulates only that known token using the
 bound config's DOMAIN. It does not infer a domain from a live URL or omit SSO
 fields. All other Helm data, discovery/schema checks and exact specification
 comparison remain unchanged. Plan/config drift or an unbound token fails closed.
+
+The Pepr chart finalizer (`pepr/scripts/finalize-chart.mjs`) includes the
+`takclients` Namespace in the application's `takserver-oidc` release, installed
+in `pepr-system` by `common/zarf.yaml`. Its namespace identity is therefore bound
+separately from Core only when the baseline has that exact Helm owner and managed
+label. The binding freezes the original UID (unique identifier); ownership changes,
+replacement during the round trip, and unexpected disappearance still fail.
+Only successful application removal permits absence. A new namespace binding is
+allowed only after the supported fresh installation and exact owner checks.
+Pre-existing foreign namespaces stay in the Core inventory. Every observed
+Deployment, StatefulSet, DaemonSet and Package in `takclients` remains guarded, so
+namespace ownership never permits unrelated workloads to disappear.
+
+Core UID or mesh-hash drift also emits a fixed public category and change type.
+The optional encrypted diagnostic retains the first bounded before/after UID and
+hash maps, with the same source/run/attempt binding as retained-hook diagnostics.
+It contains no Kubernetes resource bodies or mesh configuration values. Invalid
+maps, private-file changes, unsupported kinds or diagnostic I/O errors cannot
+turn the original Core guard failure into acceptance. Source fixtures establish
+this classification defect; they do not prove the exact changed inventory key in
+run43499139100, which did not retain that snapshot. A new live pilot is required.
+The typed maps cover completed inventory comparisons. A missing required Core
+namespace or a changed bound application owner fails before a complete snapshot
+exists; those failures retain the reviewed callsite rather than partial maps.

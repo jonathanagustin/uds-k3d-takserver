@@ -450,7 +450,7 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'retained-hook-drift', 'package-identity-timeout', 'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
+    'retained-hook-drift', 'retained-core-drift', 'package-identity-timeout', 'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
 
@@ -544,6 +544,12 @@ def identity_progress(directory):
                                 entry['category'] in RETAINED_HOOK_FIELDS.get(entry['hook'],{}).get(entry['fieldClass'],set()),
                                 'invalid retained hook diagnostic')
                         stage.update({key:entry[key] for key in ('hook','category','fieldClass')})
+                    if entry['stage']=='retained-core-drift':
+                        require(set(entry)=={'stage','category','change'} and
+                                entry.get('category') in ('namespace','workload','mesh','mixed') and
+                                entry.get('change') in ('added','removed','changed','mixed'),
+                                'invalid Core drift diagnostic')
+                        stage.update({key:entry[key] for key in ('category','change')})
                     if entry['stage']=='package-identity-timeout':
                         require(entry.get('phase') in ('shared','transition','strict','rollback') and
                                 entry.get('diagnostic') in ('no-observation','unstable-observation','workload-template-drift',

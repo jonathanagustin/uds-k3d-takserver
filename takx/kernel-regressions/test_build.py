@@ -6,12 +6,29 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('kernel_regressions_under_test', Path(__file__).with_name('build.py'))
 b = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(b)
 
 class Guards(unittest.TestCase):
+    def test_separate_output_reservation_preserves_workspace_floor(self):
+        parent=Path('/owned-output')
+        for separate,workspace_free,output_free,passes in [
+            (True,b.FLOOR+b.RECEIPT,b.CAP,True),
+            (True,b.FLOOR-1,b.CAP,False),(True,b.FLOOR+b.RECEIPT,b.CAP-1,False),
+            (False,b.FLOOR+b.CAP,b.FLOOR+b.CAP,True),
+            (False,b.FLOOR+b.RECEIPT,b.FLOOR+b.RECEIPT,False)]:
+            with self.subTest(separate=separate,workspace_free=workspace_free,output_free=output_free):
+                def stat(path):return SimpleNamespace(st_dev=2 if path==parent and separate else 1)
+                def usage(path):return SimpleNamespace(free=workspace_free if str(path)=='/workspace' else output_free)
+                with patch.object(Path,'stat',stat),patch.object(b.shutil,'disk_usage',usage):
+                    if passes:b.reserve_output(parent,b.CAP)
+                    else:
+                        with self.assertRaises(ValueError):b.reserve_output(parent,b.CAP)
+
     def test_sdk_inventory_escape_is_rejected(self):
         for name in ['../secret', '/absolute', 'a/../../escape', 'a\\b', 'a//b', None]:
             with self.assertRaises(ValueError):

@@ -69,8 +69,8 @@ python -B takx/kernel-regressions/build.py \
 
 Add `--phase compile --output /fresh/disjoint/output` for a Java-only compile
 (2 MiB reservation). Add `--phase qualify` for a new headless, checked-JNI JVM
-(256 MiB reservation, including the real native resource loader's extraction).
-Both require a fresh output directory and retain the 2 GiB physical free floor.
+(256 MiB reservation on the output filesystem, including the real native resource loader's extraction).
+Both require a fresh output directory and retain the 2 GiB physical free floor in `/workspace`. A separate executable output filesystem is reserved independently; it does not waive that workspace floor.
 There are no downloads, native rebuilds, automatic retries or hidden test skips.
 
 The native run uses genuine `EngineLibrary` initialization and the existing
@@ -121,3 +121,8 @@ and new qualified artifacts; this suite does not replace providers, edit complet
 SDKs or relax checked-JNI rules. The independent-process runner was prepared
 after those failures and remains unexecuted. Compilation and offline provenance
 checks are useful evidence, but do not substitute for passing native regressions.
+
+The OBJ category keeps the original authored tetrahedron and also imports a compact
+version without its comment. Both use the same independent mesh/coordinate oracle;
+the smaller valid input exercises the production parser's small-buffer growth boundary.
+This remains authored CPU parser coverage, not the absent upstream teapot test.

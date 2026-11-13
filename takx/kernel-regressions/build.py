@@ -55,6 +55,13 @@ def allocated(root):
             total += info.st_blocks * 512
     return total
 
+def reserve_output(parent, cap):
+    # Reserve the actual output filesystem; a separate executable tmpfs must
+    # not consume or waive the retained workspace's physical free floor.
+    require(shutil.disk_usage('/workspace').free >= FLOOR + RECEIPT, 'physical free floor')
+    shared = parent.stat().st_dev == Path('/workspace').stat().st_dev
+    require(shutil.disk_usage(parent).free >= cap + (FLOOR if shared else 0), 'full phase reservation required')
+
 def inspect(proof, expected):
     require(re.fullmatch(r'[0-9a-f]{64}', expected) and sha(proof / 'complete.json') == expected,
             'reviewed SDK proof hash required')
@@ -128,7 +135,7 @@ def main():
     require(not out.exists() and not out.is_symlink() and not out.is_relative_to(proof) and
             not proof.is_relative_to(out) and not out.is_relative_to(HERE.parent), 'fresh disjoint output required')
     cap = CAP if args.phase == 'qualify' else 2 * 1024**2
-    require(shutil.disk_usage('/workspace').free >= FLOOR + cap, 'full phase reservation required')
+    reserve_output(out.parent, cap)
     controls = HERE.parent / 'kernel-native'
     sources = sorted((HERE / 'java').glob('*.java')) + [controls / name for name in (
         'KernelRuntimeSmoke.java', 'NativeDatabaseCandidate.java', 'KernelThrowingLoggerCandidate.java')]
@@ -143,7 +150,7 @@ def main():
     def gate():
         require(allocated(out) + RECEIPT <= cap, 'inclusive output/receipt cap')
         require(shutil.disk_usage('/workspace').free >= FLOOR + RECEIPT, 'physical free floor')
-    env = {key: value for key, value in os.environ.items() if not key.startswith(('LD_', 'JAVA_', 'JDK_', 'CCACHE_')) and key not in
+    env = {key: value for key, value in os.environ.items() if not key.startswith(('LD_', 'JAVA_', 'JDK_', 'CCACHE_', 'GDAL_', 'CPL_', 'PROJ_')) and key not in
            ('_JAVA_OPTIONS', 'CLASSPATH', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY')}
     env.update(TMPDIR=str(out / 'tmp'), LC_ALL='C.UTF-8')
     def run(argv, label, allow_tool_failure=False):
@@ -243,7 +250,9 @@ def main():
                   'inputs': inputs, 'changed_inputs': changed, 'mapped_elfs': maps,
                   'output_inventory': {str(path.relative_to(out)): sha(path) for path in out.rglob('*') if path.is_file()},
                   'category_outcomes': categories,
-                  'upstream_regression_scope': ['DTED filename discovery only', 'MBTiles default SPI byte roundtrips', 'GeoPackage float gridded coverage'],
+                  'upstream_regression_scope': ['DTED filename discovery only', 'MBTiles default SPI byte roundtrips', 'GeoPackage float gridded coverage',
+                      'KML point style parsing', 'GDAL analytic constant elevation sampling', 'two authored CPU OBJ tetrahedron imports'],
+                  'qualified_format_categories': [category for category, outcome in categories.items() if outcome['qualified']],
                   'KML_elevation_sampling_3D_renderer_or_full_client_qualified': False}
         data = (json.dumps(result, indent=2) + '\n').encode()
         require(len(data) + 16384 < RECEIPT, 'receipt reserve')

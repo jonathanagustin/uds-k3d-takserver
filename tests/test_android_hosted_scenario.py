@@ -128,13 +128,13 @@ class ActualUIStates(unittest.TestCase):
 
     def test_import_uses_actual_file_browser_and_broadcast_target(self):
         device = ui.AndroidUI('/unused')
-        with patch.object(device, 'tree', return_value=ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot()), patch.object(device, 'tap_node') as tile_tap, patch.object(device, 'confirm_file_selected') as selection, patch.object(device, 'tool') as tool, patch.object(device, 'tap') as tap, patch.object(device, 'find', return_value=ET.Element('node', text='/sdcard')):
+        with patch.object(device, 'tree', side_effect=[ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot(), self.import_strategy_tree()]), patch.object(device, 'tap_node') as tile_tap, patch.object(device, 'confirm_file_selected') as selection, patch.object(device, 'tool') as tool, patch.object(device, 'tap') as tap, patch.object(device, 'find', return_value=ET.Element('node', text='/sdcard')):
             device.import_package()
             device.share_dialog()
             device.broadcast()
         tool.assert_called_once_with('Import')
         selection.assert_called_once_with('atak-synthetic-scenario.dpk')
-        self.assertEqual(tile_tap.call_args[0][0].get('bounds'), '[109,593][209,673]')
+        self.assertEqual(tile_tap.call_args_list[0][0][0].get('bounds'), '[109,593][209,673]')
         self.assertIn(unittest.mock.call(rid='importManagerBrowserFileName', text='atak-synthetic-scenario.dpk'), tap.call_args_list)
         self.assertEqual(tap.call_args_list[-1], unittest.mock.call(rid='contact_list_button_send_to_all', text='Broadcast'))
         self.assertFalse(any('peer' in str(call) for call in tap.call_args_list))
@@ -179,6 +179,19 @@ class ActualUIStates(unittest.TestCase):
             unittest.mock.call('shell', 'input', 'tap', '666', '650'),
             unittest.mock.call('shell', 'input', 'tap', '50', '20'),
             unittest.mock.call('shell', 'input', 'tap', '50', '20')])
+
+    def import_strategy_tree(self):
+        # Synthetic source-contract state; not observed device acceptance.
+        tree = ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot()
+        ui.select(tree, rid='alertTitle').set('text', 'Suggested Import Strategy')
+        row = ui.select(tree, rid='container')[0]
+        for child in list(row)[3:]: row.remove(child)
+        return tree
+
+    def test_copy_strategy_uses_first_source_ordered_tile(self):
+        tree = self.import_strategy_tree()
+        self.assertEqual(ui.first_import_tile(tree, 'Suggested Import Strategy', 3).get('bounds'), '[109,593][209,673]')
+        with self.assertRaises(LookupError): ui.local_import_button(tree)
 
     def test_actual_import_tiles_select_local_sd_and_reject_invalid_layout(self):
         tree = ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot()

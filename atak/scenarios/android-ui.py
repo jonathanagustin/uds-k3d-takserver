@@ -56,11 +56,15 @@ def loadout_list_button(tree):
 
 
 def local_import_button(tree):
+    return first_import_tile(tree, 'Select Import Type', 5)
+
+
+def first_import_tile(tree, title, count):
     """Pinned ImportManagerView adds Local SD first; TileButtonDialog keeps order."""
-    select(tree, rid='alertTitle', text='Select Import Type')
+    select(tree, rid='alertTitle', text=title)
     container = select(tree, rid='container')
     rows = list(container)
-    if len(rows) != 1 or len(rows[0]) != 5:
+    if len(rows) != 1 or len(rows[0]) != count:
         raise LookupError('unexpected pinned import tile layout')
     buttons = list(rows[0])
     previous_right = None
@@ -184,7 +188,8 @@ class AndroidUI:
         self.tap(rid='importManagerBrowserFileName', text='atak-synthetic-scenario.dpk')
         self.confirm_file_selected('atak-synthetic-scenario.dpk')
         self.tap(text='OK')
-        self.tap(text='Copy')
+        self.find(rid='alertTitle', text='Suggested Import Strategy')
+        self.tap_node(first_import_tile(self.tree(), 'Suggested Import Strategy', 3))
 
     def hide_keyboard(self):
         state = self.adb('shell', 'dumpsys', 'input_method').decode(errors='replace')

@@ -43,6 +43,12 @@ class PackageGuards(unittest.TestCase):
         timeout=P.bounded_package_run([sys.executable,'-c','import time;time.sleep(5)'],0.01)
         self.assertTrue(timeout['timedOut']);self.assertNotEqual(timeout['exitStatus'],0)
 
+    def test_package_output_replacement_remains_bounded_after_utf8_encoding(self):
+        result=P.bounded_package_run([sys.executable,'-c',"import os;os.write(1,bytes([255])*16384)"],5)
+        self.assertEqual(result['exitStatus'],0);self.assertTrue(result['stdoutTruncated'])
+        self.assertLessEqual(len(result['stdout'].encode('utf-8')),16384)
+        self.assertTrue(result['stdout']);self.assertEqual(set(result['stdout']),{'\ufffd'})
+
     def test_package_timeout_bounds_escaped_pipe_holder_and_closed_pipe_child(self):
         # Own the detached process explicitly: production can bound its reads,
         # but must not kill unrelated process groups to obtain pipe EOF.

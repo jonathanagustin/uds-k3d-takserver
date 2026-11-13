@@ -109,7 +109,10 @@ def bounded_package_run(argv,timeout):
         for stream in streams:stream.close()
     result={'exitStatus':code,'timedOut':timed_out}
     for name,stream in [('stdout',child.stdout),('stderr',child.stderr)]:
-        result[name]=streams[stream].decode('utf-8','replace');result[name+'Truncated']=truncated[stream]
+        text=streams[stream].decode('utf-8','replace');encoded=text.encode('utf-8')
+        if len(encoded)>16384:
+            text=encoded[-16384:].decode('utf-8','ignore');truncated[stream]=True
+        result[name]=text;result[name+'Truncated']=truncated[stream]
     return result
 
 def command_failure_category(result):

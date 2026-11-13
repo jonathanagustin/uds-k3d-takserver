@@ -28,6 +28,10 @@ def fixture():
                      pepr={'deployments': list(pepr_deployments.values()), 'replicasets': pepr_replicasets, 'pods': pepr_pods},
                      pepr_uids={name: d['metadata']['uid'] for name, d in pepr_deployments.items()},
                      pepr_template_fingerprints={name: driver.template_fingerprint(d, True) for name, d in pepr_deployments.items()},
+                     render_inputs={'apiVersions': ['apps/v1', 'uds.dev/v1alpha1', 'v1'],
+                                    'apiVersionsSHA256': evidence.digest(['apps/v1', 'uds.dev/v1alpha1', 'v1']),
+                                    'packageCRD': {'name': 'packages.uds.dev', 'uid': 'crd-uid', 'generation': 1,
+                                                   'resourceVersion': '99', 'version': 'v1alpha1', 'schemaSHA256': 'c'*64}},
                      policy_lists={'takserver': {'resourceVersion': '100', 'itemCount': 4},
                                    'istio-system': {'resourceVersion': '101', 'itemCount': 0}})
 
@@ -126,6 +130,23 @@ class PhaseEvidenceTests(unittest.TestCase):
         bind, data = fixture()
         data['policies'] *= evidence.MAX_ITEMS
         self.assertFalse(evidence.capture(bind, **data)['complete'])
+
+    def test_render_capability_crd_schema_binding_is_required_and_tamper_evident(self):
+        value = self.snapshot()
+        original = value['binding']['renderInputsSHA256']
+        changed = copy.deepcopy(value)
+        changed['renderInputs']['packageCRD']['resourceVersion'] = '100'
+        self.assertEqual(evidence.validate_render_inputs(changed['renderInputs'])[1], original)
+        self.assertTrue(evidence.validate_phase(changed, driver)['accepted'])
+        for defect in ('missing', 'api', 'hash', 'schema', 'uid', 'generation'):
+            changed = copy.deepcopy(value)
+            if defect == 'missing': del changed['renderInputs']
+            if defect == 'api': changed['renderInputs']['apiVersions'].append('unsafe/v1')
+            if defect == 'hash': changed['renderInputs']['apiVersionsSHA256'] = '0'*64
+            if defect == 'schema': changed['renderInputs']['packageCRD']['schemaSHA256'] = '0'*64
+            if defect == 'uid': changed['renderInputs']['packageCRD']['uid'] = 'other-crd'
+            if defect == 'generation': changed['renderInputs']['packageCRD']['generation'] += 1
+            self.assertFalse(evidence.validate_phase(changed, driver)['accepted'], defect)
 
     def test_private_write_read_no_overwrite_symlink_hash_or_size_bypass(self):
         value = self.snapshot()

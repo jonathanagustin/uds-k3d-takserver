@@ -77,7 +77,7 @@ def owners(meta):
 
 def binding(value):
     required = {'sourceSHA', 'runID', 'runAttempt', 'clusterUID', 'meshConfigUID', 'meshConfigHash', 'phase'}
-    extras = {'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256'}
+    extras = {'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256', 'renderInputsSHA256'}
     require(isinstance(value, dict) and required <= set(value) <= required | extras)
     require(re.fullmatch(r'[a-f0-9]{40}', value['sourceSHA']))
     require(all(re.fullmatch(r'[1-9][0-9]{0,19}', value[k]) for k in ('runID', 'runAttempt')))
@@ -86,6 +86,22 @@ def binding(value):
     require(re.fullmatch(HEX, value['meshConfigHash']))
     require(all(re.fullmatch(HEX, value[k]) for k in extras if k in value))
     return dict(value)
+
+
+def validate_render_inputs(value):
+    require(isinstance(value, dict) and set(value) == {'apiVersions', 'apiVersionsSHA256', 'packageCRD'})
+    versions = [token(v) for v in items(value['apiVersions'])]
+    require(versions and versions == sorted(set(versions)) and digest(versions) == value['apiVersionsSHA256'])
+    crd = value['packageCRD']
+    require(isinstance(crd, dict) and set(crd) == {'name', 'uid', 'generation', 'resourceVersion', 'version', 'schemaSHA256'})
+    require(crd['name'] == 'packages.uds.dev')
+    for key in ('uid', 'resourceVersion', 'version'):
+        token(crd[key])
+    number(crd['generation']); require(re.fullmatch(HEX, crd['schemaSHA256']))
+    result = {'apiVersions': versions, 'apiVersionsSHA256': value['apiVersionsSHA256'], 'packageCRD': dict(crd)}
+    semantic = copy.deepcopy(result)
+    semantic['packageCRD'].pop('resourceVersion')
+    return result, digest(semantic)
 
 
 def policy(obj):
@@ -189,12 +205,16 @@ def workload(obj, kind, guards, pepr=False):
 
 def capture(bind, *, guards, package, policies, network_policies, baseline_network,
             deployments, replicasets, pods, account, baseline_uids, template_fingerprints, policy_lists,
-            pepr, pepr_uids, pepr_template_fingerprints):
+            pepr, pepr_uids, pepr_template_fingerprints, render_inputs):
     """Project SAME fetched observations. No getters, kubectl or later refetches."""
     result = {'schema': 1, 'binding': binding(bind), 'complete': True,
               'guardSHA256': hashlib.sha256(Path(guards.__file__).read_bytes()).hexdigest(),
               'captureSHA256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     try:
+        inputs, semantic_hash = validate_render_inputs(render_inputs)
+        require(result['binding'].get('renderInputsSHA256', semantic_hash) == semantic_hash)
+        result['binding']['renderInputsSHA256'] = semantic_hash
+        result['renderInputs'] = inputs
         require(account in ('shared', 'dedicated'))
         require(set(baseline_uids) == set(guards.APPS) == set(template_fingerprints))
         result.update(account=account, baselineUIDs={k: token(v) for k, v in baseline_uids.items()},
@@ -280,6 +300,8 @@ def validate_phase(snapshot, guards, expected_binding=None):
         require(len(encoded(snapshot)) <= MAX_BYTES)
         bind = binding(snapshot['binding'])
         require(expected_binding is None or bind == expected_binding)
+        _inputs, semantic_hash = validate_render_inputs(snapshot['renderInputs'])
+        require(bind.get('renderInputsSHA256') == semantic_hash)
         guard_hash = hashlib.sha256(Path(guards.__file__).read_bytes()).hexdigest()
         require(snapshot['guardSHA256'] == guard_hash)
         require(snapshot['captureSHA256'] == hashlib.sha256(Path(__file__).read_bytes()).hexdigest())

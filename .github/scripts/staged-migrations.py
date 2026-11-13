@@ -273,9 +273,10 @@ def verify_identity_summary(summary, receipt):
                     and proof['peprWorkloadCount'] == 2, 'invalid public phase verdict')
             bind = proof['binding']
             required = {'sourceSHA', 'runID', 'runAttempt', 'clusterUID', 'meshConfigUID', 'meshConfigHash', 'phase'}
-            require(required <= set(bind) <= required | {'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256'}
+            require(required <= set(bind) <= required | {'bundleArchiveSHA256', 'packageArchiveSHA256', 'baselineValuesSHA256', 'renderInputsSHA256'}
                     and all(bind[k] == receipt[k] for k in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID'))
                     and re.fullmatch('[a-f0-9]{64}', bind['meshConfigHash'])
+                    and re.fullmatch('[a-f0-9]{64}', bind.get('renderInputsSHA256', ''))
                     and re.fullmatch('[A-Za-z0-9_.:/@*+-]{1,253}', bind['meshConfigUID'])
                     and all(re.fullmatch('[a-f0-9]{64}', bind[k]) for k in set(bind)-required), 'invalid public phase binding')
             if method == 'package':

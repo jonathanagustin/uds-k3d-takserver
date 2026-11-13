@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.15.0...v0.16.0) (2026-11-13)
+
+
+### Features
+
+* **takx:** stage elevation download compatibility for 5.8 ([e69fc2c](https://github.com/jonathanagustin/uds-takserver/commit/e69fc2c8c3801104a9235459f1967fa23766d172))
+
 ## [0.15.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.3...v0.15.0) (2026-11-13)
 
 

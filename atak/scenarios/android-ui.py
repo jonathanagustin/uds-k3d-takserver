@@ -20,10 +20,14 @@ FIXED_UI_TEXT = {'Tools', 'All tools & plugins', 'Import', 'Overlays', 'Select I
                  'Suggested Import Strategy', 'Callsign', 'Done', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'Cancel', 'DD', 'Broadcast'}
 
 
-def select(tree, *, rid=None, text=None):
+def select(tree, *, rid=None, text=None, require_enabled=True):
+    if type(require_enabled) is not bool:
+        raise ValueError('enabled selector policy must be boolean')
     matches = []
     for node in tree.iter('node'):
-        if node.get('enabled') != 'true' or node.get('visible-to-user') == 'false':
+        if (node.get('enabled') not in ('true', 'false')
+                or (require_enabled and node.get('enabled') != 'true')
+                or node.get('visible-to-user') == 'false'):
             continue
         if rid and not node.get('resource-id', '').endswith(':id/' + rid):
             continue
@@ -33,7 +37,7 @@ def select(tree, *, rid=None, text=None):
         if bounds and int(bounds[3]) > int(bounds[1]) and int(bounds[4]) > int(bounds[2]):
             matches.append(node)
     if len(matches) != 1:
-        raise LookupError('expected one enabled UI node')
+        raise LookupError('expected one eligible visible UI node')
     return matches[0]
 
 
@@ -301,8 +305,10 @@ class AndroidUI:
         self.tap(rid='cotInfoCoordButton')
         self.action = 'coordinates-read-decimal-degrees'
         self.tap(text='DD')
-        actual_lat = float(self.find(rid='coordDialogDDLatText').get('text'))
-        actual_lon = float(self.find(rid='coordDialogDDLonText').get('text'))
+        # Returned peer markers expose disabled, read-only coordinate fields.
+        # Observation still requires a unique visible node; taps remain enabled-only.
+        actual_lat = float(self.find(rid='coordDialogDDLatText', require_enabled=False).get('text'))
+        actual_lon = float(self.find(rid='coordDialogDDLonText', require_enabled=False).get('text'))
         if abs(actual_lat-lat) > .0000005 or abs(actual_lon-lon) > .0000005:
             raise ValueError('Android coordinates differ from expected point')
         self.capture(evidence + '-coordinates')

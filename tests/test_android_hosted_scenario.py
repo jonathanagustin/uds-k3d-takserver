@@ -451,6 +451,36 @@ class ActualUIStates(unittest.TestCase):
             with self.assertRaises(ValueError): device.verify_point('TEST', 0., 0., 'imported')
         capture.assert_not_called()
 
+    def test_captured_return_coordinates_are_observable_but_not_interactive(self):
+        tree=ET.parse(ROOT/'atak/scenarios/fixtures/atak-return-coordinates.xml').getroot()
+        device=ui.AndroidUI('/unused')
+        for rid,value in [('coordDialogDDLatText','0.00100'),('coordDialogDDLonText','0.00200')]:
+            with self.assertRaises(LookupError):ui.select(tree,rid=rid)
+            node=ui.select(tree,rid=rid,require_enabled=False)
+            self.assertEqual(node.get('text'),value)
+            with patch.object(device,'adb') as adb:
+                with self.assertRaises(LookupError):device.tap_node(node)
+                adb.assert_not_called()
+        def find(**selector):
+            if selector.get('rid')=='cotInfoNameEdit':return ET.Element('node',text='RETURN')
+            return ui.select(tree,**selector)
+        with patch.object(device,'find',side_effect=find),patch.object(device,'tap') as tap,patch.object(device,'capture') as capture:
+            device.verify_point('RETURN',.001,.002,'return')
+        self.assertEqual(capture.call_args_list,[unittest.mock.call('return-coordinates'),unittest.mock.call('return-map')])
+        self.assertEqual(tap.call_args_list[-2:],[unittest.mock.call(rid='button2',text='Cancel'),unittest.mock.call(rid='cotInfoPanButton')])
+
+    def test_readonly_coordinate_observation_rejects_hidden_or_ambiguous_nodes(self):
+        original=ET.parse(ROOT/'atak/scenarios/fixtures/atak-return-coordinates.xml').getroot()
+        for fault in ('hidden','duplicate','empty-bounds','unknown-state'):
+            with self.subTest(fault=fault):
+                tree=copy.deepcopy(original);node=ui.select(tree,rid='coordDialogDDLatText',require_enabled=False)
+                if fault=='hidden':node.set('visible-to-user','false')
+                elif fault=='duplicate':tree.append(copy.deepcopy(node))
+                elif fault=='empty-bounds':node.set('bounds','[0,0][0,0]')
+                else:node.attrib.pop('enabled')
+                with self.assertRaises(LookupError):ui.select(tree,rid='coordDialogDDLatText',require_enabled=False)
+        with self.assertRaises(ValueError):ui.select(original,require_enabled='false')
+
 
 class OrchestrationAndCleanup(unittest.TestCase):
     def test_failed_setup_removes_private_work_and_test_identity(self):

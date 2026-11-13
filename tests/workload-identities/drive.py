@@ -349,7 +349,7 @@ class Driver:
         temporary.write_text(json.dumps(self.state, indent=2, sort_keys=True) + '\n')
         temporary.chmod(0o600)
         temporary.replace(self.evidence)
-        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory')
+        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory','diagnostic')
         stages=[{key:entry[key] for key in fields if key in entry} for entry in self.state['stages']
                 if entry['stage'] not in ('protocol-start','protocol-result')]
         protocol={stage:next(({key:entry[key] for key in fields if key in entry}
@@ -503,6 +503,9 @@ class Driver:
             pepr=self._last_pepr_observation, pepr_uids=self.state['peprUIDs'],
             pepr_template_fingerprints=self.state['peprTemplateFingerprints'], render_inputs=render_observation)
         verdict = phase_evidence.validate_phase(snapshot, guard_api())
+        if verdict['accepted'] is not True:
+            diagnostic=phase_evidence.public_diagnostic(verdict['diagnostic'])
+            self.journal('typed-phase-rejected',phase=phase,diagnostic=diagnostic)
         require(verdict['accepted'] is True, 'typed identity phase evidence is insufficient')
         if self.state.get('recoveryOnly'):
             # Recovery must still pass the guards, but must not overwrite an

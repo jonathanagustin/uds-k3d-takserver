@@ -450,7 +450,7 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
+    'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
 
@@ -524,6 +524,10 @@ def identity_progress(directory):
                     stage = {'stage': entry['stage']}
                     if entry.get('phase') in IDENTITY_ALIASES:
                         stage['phase'] = entry['phase']
+                    if entry['stage']=='typed-phase-rejected':
+                        require(entry.get('phase') in IDENTITY_ALIASES,'invalid typed phase alias')
+                        _guards,capture=identity_modules()
+                        stage['diagnostic']=capture.public_diagnostic(entry.get('diagnostic'))
                     if entry['stage'] in ('retained-sentinel-start', 'retained-sentinel-exec'):
                         require(entry.get('operation') in ('create','read','remove') and
                                 entry.get('namespace') in ('takserver','cloudtak'), 'invalid sentinel scope')

@@ -4,8 +4,8 @@
 # @lulaStart 16058a8d-cbfb-5553-b1aa-6b2ab45ebe17
 name: Cosign
 
-# Optional hardening. Keyless signing stays off unless someone starts this
-# workflow and sets sign to true. It is not part of release or pull requests.
+# Manually sign the published image tags listed below. Set sign=true to
+# record their keyless signatures in the registry.
 on:
   workflow_dispatch:
     inputs:
@@ -43,7 +43,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sign images
+      - name: Sign published image tags
         shell: bash
         run: |
           set -euo pipefail

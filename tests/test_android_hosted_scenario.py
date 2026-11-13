@@ -153,7 +153,7 @@ class ActualUIStates(unittest.TestCase):
         tree = ET.fromstring('<hierarchy><node><node text="atak-synthetic-scenario.dpk" resource-id="app:id/importManagerBrowserFileName" enabled="true" bounds="[0,0][100,100]"/><node resource-id="app:id/importManagerBrowserFileSelected" checked="false"/></node></hierarchy>')
         with patch.object(device, 'tree', return_value=tree):
             with self.assertRaises(ValueError): device.confirm_file_selected('atak-synthetic-scenario.dpk')
-        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        native = ET.parse(ROOT/'atak/scenarios/fixtures/atak-tools-grid.xml').getroot()
         with patch.object(device, 'tree', return_value=native), patch.object(device, 'tap'), patch.object(device, 'find', return_value=ET.Element('node', bounds='[0,0][100,100]')), patch.object(device, 'adb') as adb:
             with self.assertRaises(LookupError): device.tool('Import')
         self.assertEqual(adb.call_count, 7)  # Settings action, then six bounded scans.
@@ -163,7 +163,7 @@ class ActualUIStates(unittest.TestCase):
     def test_real_tools_grid_routes_via_loadout_list_before_named_tool(self):
         # First state is a minimal projection of the actual hosted failure.
         # Later states model the pinned source contract, not device acceptance.
-        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        native = ET.parse(ROOT/'atak/scenarios/fixtures/atak-tools-grid.xml').getroot()
         self.assertEqual(ui.loadout_list_button(native).get('bounds'), '[648,632][684,668]')
         with self.assertRaises(LookupError): ui.select(native, text='All tools & plugins')
         loadouts = ET.fromstring('<hierarchy><node resource-id="app:id/toolbar_title_item_text" text="All tools &amp; plugins" enabled="true" bounds="[0,0][100,40]"/></hierarchy>')
@@ -181,7 +181,7 @@ class ActualUIStates(unittest.TestCase):
             unittest.mock.call('shell', 'input', 'tap', '50', '20')])
 
     def test_unknown_disabled_or_ambiguous_tools_toolbar_fails_without_tap(self):
-        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        native = ET.parse(ROOT/'atak/scenarios/fixtures/atak-tools-grid.xml').getroot()
         for fault in ('disabled', 'close-order', 'duplicate-toolbar', 'unexpected-child'):
             tree = copy.deepcopy(native)
             toolbar = ui.select(tree, rid='nav_stack_toolbar_buttons')

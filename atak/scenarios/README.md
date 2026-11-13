@@ -263,7 +263,7 @@ retains zero passed scenario phases; owned cleanup verified actual absence.
 The Tools-grid selector correction and name-edit behavior have offline coverage
 and still require a new actual device run. No new interoperability success is
 claimed. The minimal actual UI fixture and exact official source references are
-in `tests/fixtures/atak-tools-grid.README.md`.
+in `atak/scenarios/fixtures/atak-tools-grid.README.md`.
 
 The workflow excludes inactive scenario documentation but explicitly reincludes
 all three runtime scenario scripts. Changes to the consumed mission builder,

@@ -1,8 +1,8 @@
 # UI reel preview
 
-Make a 26-second, silent 1080p reel from the project's existing public demo
+Make a 26-second, silent 1080p user interface (UI) reel from the project's existing public demo
 footage. It shows CloudTAK mapping, marker creation, feature sharing and the
-TAK Server status page. This is an edit of historical recordings, not a new
+TAK Server status page for Team Awareness Kit (TAK) services. This is an edit of historical recordings, not a new
 deployment recording or a TAKX demo.
 
 The [published v0.12.0 preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4)
@@ -24,8 +24,8 @@ previously downloaded inputs without network access:
 python3 demo/ui-reel/render.py --offline --output demo/out/ui-reel-review
 ```
 
-`inputs.lock.json` records the exact source asset IDs, release, URLs, original
-update times and SHA-256 digests. It also pins the official Inter 4.1 font
+`inputs.lock.json` records the exact source asset identifiers (IDs), release, links, original
+update times and 256-bit Secure Hash Algorithm (SHA-256) digests. It also pins the official Inter 4.1 font
 archive, whose SIL Open Font License is copied into the output. A changed
 download or cached input fails verification before FFmpeg starts; a moving
 `demo` release cannot silently replace the locked recordings. If those old
@@ -42,7 +42,7 @@ The manual **UI reel preview** workflow runs only on `main`, creates a GitHub
 provenance attestation for the video and manifest, and uploads a 14-day review
 artifact when both optional inputs are empty. It starts no cluster and builds
 no application images. After downloading and extracting its artifact, verify
-both subjects using a current GitHub CLI:
+both subjects using the current GitHub command-line interface (CLI):
 
 ```sh
 gh attestation verify uds-takserver-ui-preview.mp4 \
@@ -68,8 +68,8 @@ non-main dispatches fail. Publication reuses the original six artifact files;
 it does not rerender footage or create a release.
 
 The separate publisher has `contents: write` and `actions: read`. The renderer
-retains read access plus attestation/OIDC permissions. Publish jobs queue in a
-separate FIFO concurrency group and never cancel active uploads. The publisher
+retains read access plus attestation and OpenID Connect (OIDC) permissions.
+Publish jobs queue in a separate first-in, first-out (FIFO) concurrency group and never cancel active uploads. The publisher
 uses GitHub CLI 2.103.3, with its official Linux archive SHA-256 pinned in the
 workflow; a changed archive fails before execution.
 
@@ -77,7 +77,7 @@ Before any release write, `publish.py` checks all of the following:
 
 - The completed, successful source is a manual `ui-reel.yaml` run on `main` in
   this repository, with matching repository IDs, workflow ID and commit.
-- Its sole `ui-reel-preview` artifact is unexpired and matches the API archive
+- Its sole `ui-reel-preview` artifact is unexpired and matches the application programming interface (API) archive
   digest, size and source identity. The archive contains exactly the video,
   poster, review strip, edit manifest, Sigstore bundle and Inter license, with
   no extra paths or symlinks. Compressed and expanded sizes are bounded at
@@ -85,7 +85,7 @@ Before any release write, `publish.py` checks all of the following:
 - The manifest matches all four media/license output hashes and sizes. Real
   `gh attestation verify --bundle` verifies both video and manifest with the
   repository, exact workflow signer, signer/source commit, main ref and GitHub
-  OIDC issuer pinned. The verified SLSA statement must also match the repository
+  OIDC issuer pinned. The verified Supply-chain Levels for Software Artifacts (SLSA) statement must also match the repository
   and owner IDs, source workflow, event and exact source run **attempt**. Merely
   decoding the unsigned bundle payload is insufficient.
 - Existing assets with any of the six fixed names must have the same API
@@ -128,7 +128,7 @@ existing scenes meet the 5–10 second clip brief: `create-map-marker` (6 second
 already encoded scenes, including the visible recorded-footage caption. No
 footage is extended, looped or relabeled as a new capture.
 
-Each clip has a poster and individual JSON manifest binding the exact locked
+Each clip has a poster and individual JavaScript Object Notation (JSON) manifest binding the exact locked
 source asset and interval, font input, recipe/lock hashes, tool versions, clip
 and poster hashes/sizes and measured media properties. The font license is
 included. These records do not invent missing original capture-run or application
@@ -136,13 +136,13 @@ version metadata. Offline fixture tests prove wiring and hash contracts, not
 visual quality; inspect every real clip and poster before sharing.
 
 The manual workflow's `export_scenes` input defaults to false. When enabled it
-attests all three clip MP4s and individual manifests and retains the bundle in a
+attests all three MP4 video clips and individual manifests and retains the bundle in a
 separate `ui-scene-previews` review artifact. Verify each MP4 and JSON with the
 same repository/workflow signer flags shown above and that artifact's bundle;
 check each poster against its verified manifest. Local exports are unsigned.
 Scene export cannot be combined with release publication. The existing strict
-six-file reel publisher does not accept scene artifacts. Publishing clips,
-vertical reframing, new scenes and fresh deployment/interoperability evidence
+six-file reel publisher does not accept scene artifacts. Publishing reviewed clips uses the separate scene publisher described below.
+Vertical reframing, new scenes and fresh deployment/interoperability evidence
 remain separate work.
 
 Future renders use the canonical Field mark wordmark from
@@ -178,7 +178,7 @@ A review record has exactly these fields:
 | `frames` | `create-map-marker.mp4: 180`, `share-feature.mp4: 195`, `shared-marker.mp4: 180` |
 | `sha256` | Exact filename-to-SHA-256 mapping for all eleven original artifact files |
 
-The eleven files are three MP4 clips, their three JPG posters, their three JSON
+The eleven files are three MP4 clips, their three JPG image posters, their three JSON
 scene manifests, `Inter-LICENSE.txt` and `attestation.sigstore.json`. Six MP4/JSON
 subjects must pass cryptographic provenance verification; each signed JSON
 manifest binds its poster. The publisher also checks the source recipe and lock,

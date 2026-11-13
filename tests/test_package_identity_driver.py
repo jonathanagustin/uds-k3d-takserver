@@ -50,20 +50,41 @@ class PackageGuards(unittest.TestCase):
         self.assertTrue(result['stdout']);self.assertEqual(set(result['stdout']),{'\ufffd'})
 
     def test_package_timeout_bounds_escaped_pipe_holder_and_closed_pipe_child(self):
-        # Own the detached process explicitly: production can bound its reads,
-        # but must not kill unrelated process groups to obtain pipe EOF.
+        # Start the production timeout only once the owned escaped pipe holder
+        # exists. Interpreter startup time is not the behavior under test.
         with tempfile.TemporaryDirectory() as directory:
             pidfile=Path(directory)/'pid'
-            script="import os,time; os.setsid(); open("+repr(str(pidfile))+",'w').write(str(os.getpid())); time.sleep(10)"
-            launcher="import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',"+repr(script)+"]); time.sleep(10)"
-            started=time.monotonic()
+            script="import time; time.sleep(10)"
+            launcher=("import subprocess,sys,time,pathlib; child=subprocess.Popen([sys.executable,'-c',"+
+                      repr(script)+"],start_new_session=True); pathlib.Path("+repr(str(pidfile))+
+                      ").write_text(str(child.pid)); time.sleep(10)")
+            original=P.subprocess.Popen;ready=[];owned=[]
+            def start_ready(*args,**kwargs):
+                child=original(*args,**kwargs)
+                try:
+                    deadline=time.monotonic()+5
+                    while time.monotonic()<deadline:
+                        value=pidfile.read_text().strip() if pidfile.exists() else ''
+                        if value.isdigit():
+                            owned.append(int(value));ready.append(time.monotonic());return child
+                        time.sleep(0.01)
+                    self.fail('owned detached pipe holder did not become ready')
+                except BaseException:
+                    try:os.killpg(child.pid,signal.SIGKILL)
+                    except ProcessLookupError:pass
+                    child.wait(timeout=5)
+                    for stream in (child.stdout,child.stderr):stream.close()
+                    raise
             try:
-                result=P.bounded_package_run([sys.executable,'-c',launcher],0.5)
-                self.assertTrue(result['timedOut']);self.assertLess(time.monotonic()-started,2)
-                self.assertTrue(pidfile.exists(),'detached pipe holder did not start')
+                with patch.object(P.subprocess,'Popen',side_effect=start_ready):
+                    result=P.bounded_package_run([sys.executable,'-c',launcher],0.5)
+                self.assertTrue(result['timedOut']);self.assertLess(time.monotonic()-ready[0],2)
+                self.assertEqual(os.getpgid(owned[0]),owned[0])
+                os.kill(owned[0],0)
+                self.assertNotEqual(Path('/proc/'+str(owned[0])+'/stat').read_text().split(') ',1)[1].split()[0],'Z')
             finally:
-                if pidfile.exists():
-                    try:os.kill(int(pidfile.read_text()),signal.SIGKILL)
+                if owned:
+                    try:os.kill(owned[0],signal.SIGKILL)
                     except ProcessLookupError:pass
         started=time.monotonic()
         result=P.bounded_package_run([sys.executable,'-c','import os,time;os.close(1);os.close(2);time.sleep(10)'],0.05)

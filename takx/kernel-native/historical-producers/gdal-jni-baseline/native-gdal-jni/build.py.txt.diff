@@ -1,0 +1,231 @@
+--- historical/native-gdal-jni/build.py
++++ current/native-gdal-jni/build.py
+@@ -2,7 +2,7 @@
+ # Copyright 2026 uds-takserver authors
+ # SPDX-License-Identifier: GPL-3.0-only
+ """Link the verified reduced GDAL PIC closure once and its real GIS Java SWIG JNI."""
+-import argparse, importlib.util, json, os, shlex, shutil, time
++import argparse, importlib.util, json, os, re, shlex, shutil, sys, time
+ from pathlib import Path
+ HERE=Path(__file__).resolve().parent
+ 
+@@ -11,7 +11,11 @@
+ kernel=module('gdal_jni_kernel',HERE.parent/'kernel-scene/kernel.py')
+ java=module('gdal_jni_java',HERE.parent/'kernel-java/build.py')
+ b=kernel.build
+-RECIPE_PATHS=('native-gdal-jni/build.py','native-gdal-jni/GdalJniProbe.java',
++kml=module('gdal_kml_profile',HERE/'kml_profile.py')
++diagnostics=module('shared_jni_diagnostics',HERE.parent/'jni_diagnostics.py')
++RECIPE_PATHS=('jni_diagnostics.py','native-gdal-jni/build.py','native-gdal-jni/GdalJniProbe.java','native-gdal-jni/kml_profile.py',
++    'native-gdal-jni/GdalFormatProfileProbe.java','gis-java/GdalExceptionControls.java',
++    'gis-java/jni-exceptions-profile-v2.json','gis-java/patches/gdal-java-pending-exceptions-v2.patch',
+     'kernel-scene/kernel.py','kernel-scene/build.py','kernel-scene/producer.py',
+     'kernel-scene/normalize_la.py','kernel-scene/inputs.lock.json',
+     'native-deps/build.py','native-las/build.py','native-assimp/build.py','native-proj/build.py',
+@@ -46,12 +50,18 @@
+ def replay(proof):
+     data=json.loads((proof/'complete.json').read_text())
+     if data['recipe']!=recipe():raise ValueError('replay recipe differs')
++    return replay_artifacts(proof,data)
++
++def replay_artifacts(proof,data):
++    """Artifact integrity only; caller must independently admit the exact recipe."""
+     if file_hashes(proof/'lib')!=data['products']:raise ValueError('replay products differ')
+     if file_hashes(proof/'classes')!=data['probe_classes']:raise ValueError('replay probe classes differ')
+     unchanged(data['bound_files']);unchanged(data['mapped_providers'])
+     for n,sha in data['evidence'].items():
+         if b.native.digest(proof/n)!=sha:raise ValueError('replay evidence differs')
+     if data.get('native_kernel_or_client_acceptance') is not False:raise ValueError('invalid acceptance')
++    if data.get('kml_profile_enabled') and kml.owned_gnu_build_inventory(proof/'gdal-kml-build')!=data['kml_build']['buildInventory']:
++        raise ValueError('replay actual GDAL compiled tree differs')
+     return data
+ 
+ def consumed_headers(path, roots):
+@@ -68,13 +78,44 @@
+     if not result:raise ValueError('empty compiler dependency inventory')
+     return result
+ 
++def compiler_backends(compiler, run):
++    """Ask the selected GCC for its real helpers instead of assuming a host layout."""
++    result={}
++    for name in ('cc1','cc1plus','collect2'):
++        value=run([compiler,'-print-prog-name='+name],'compiler-backend-'+name,15,True).decode('utf-8').strip()
++        path=Path(value)
++        if not path.is_absolute() or not path.is_file():
++            raise ValueError('GCC must identify an existing absolute backend: '+name)
++        path=path.resolve()
++        result[str(path)]=b.native.digest(path)
++    return result
++
+ def main():
+     p=argparse.ArgumentParser(description=__doc__)
+     for name in ('output','dependency-root','dependency-proof','dependency-producer','gdal-archive','libkml-archive','proj-proof','assimp-proof','gis-build','java-home'):
+         p.add_argument('--'+name,type=Path,required=True)
++    p.add_argument('--kml-proof',type=Path)
++    p.add_argument('--kml-receipt-sha256')
++    p.add_argument('--kml-bindings',type=Path)
++    p.add_argument('--kml-bindings-sha256')
++    p.add_argument('--gis-receipt-sha256')
++    p.add_argument('--cmake',type=Path,help='CMake executable for the opt-in KML profile; defaults to PATH')
+     a=p.parse_args()
+-    for key,value in vars(a).items():setattr(a,key,value.absolute())
+-    inputs=[v for k,v in vars(a).items() if k!='output']+[HERE]
++    profile_args=(a.kml_proof,a.kml_receipt_sha256,a.kml_bindings,a.kml_bindings_sha256,a.gis_receipt_sha256)
++    enabled=any(profile_args)
++    if enabled and not all(profile_args):
++        raise ValueError('complete explicit KML profile arguments required')
++    if a.cmake and not enabled:
++        raise ValueError('--cmake requires the complete KML profile')
++    for key,value in vars(a).items():
++        if isinstance(value,Path):setattr(a,key,value.absolute())
++    inputs=[v for key,v in vars(a).items() if key!='output' and isinstance(v,Path)]+[HERE]
++    if enabled:
++        kml.checked(a.kml_proof/'complete.json',a.kml_receipt_sha256)
++        kml.checked(a.kml_bindings,a.kml_bindings_sha256)
++        kml.checked(a.gis_build/'build-state.json',a.gis_receipt_sha256)
++    if enabled and shutil.disk_usage(a.output.parent).free < kml.FREE_FLOOR+kml.OUTPUT_CAP:
++        raise ValueError('full768MiB KML profile reservation above2GiBfloor required')
+     out=b.validate_output(a.output,inputs);out.mkdir(mode=0o700)
+     initial=recipe()
+     (out/'recipe.json').write_text(json.dumps(initial,indent=2)+'\n')
+@@ -82,12 +123,24 @@
+     for k in list(env):
+         if k.startswith(('LD_','PROJ_','GDAL_','PKG_CONFIG','BASH_FUNC_')) or k in ('CPATH','LIBRARY_PATH','LD_LIBRARY_PATH','LD_PRELOAD','C_INCLUDE_PATH','CPLUS_INCLUDE_PATH','JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS','CLASSPATH'):
+             env.pop(k)
+-    deadline=time.monotonic()+600;commands=[]
++    if enabled:
++        for name in ('BASH_ENV','ENV','MAKEFLAGS','MFLAGS','GNUMAKEFLAGS','MAKEFILES','CONFIG_SITE','CONFIG_SHELL',
++                     'AR','AS','LD','NM','RANLIB','STRIP','PYTHONPATH','GCC_EXEC_PREFIX','COMPILER_PATH',
++                     'CPPFLAGS','LDFLAGS'):
++            env.pop(name,None)
++        (out/'tmp').mkdir();(out/'home').mkdir()
++        env.update(TMPDIR=str(out/'tmp'),CFLAGS='-O2 -fPIC',CXXFLAGS='-O2 -fPIC',CONFIG_SITE='/dev/null',
++                   CC='/usr/bin/gcc',CXX='/usr/bin/g++',AR='/usr/bin/ar',AS='/usr/bin/as',LD='/usr/bin/ld',
++                   NM='/usr/bin/nm',RANLIB='/usr/bin/ranlib',MAKEFLAGS='-j1',LC_ALL='C.UTF-8',
++                   KERNEL_SCENE_PYTHON=str(Path(sys.executable).resolve()),
++                   KERNEL_SCENE_NORMALIZER=str(HERE.parent/'kernel-scene/normalize_la.py'))
++    deadline=time.monotonic()+(3600 if enabled else 600);commands=[]
+     def run(command,name,timeout=60,capture=False):
+         left=deadline-time.monotonic()
+-        if left<=0:raise ValueError('ten minute deadline exhausted')
++        if left<=0:raise ValueError('GDAL producer total deadline exhausted')
+         commands.append({'name':name,'command':list(map(str,command))});(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
+-        result=b.native.run(list(map(str,command)),out,name,min(left,timeout),env,capture)
++        result=(kml.run_bounded(command,out,name,min(left,timeout),env,capture) if enabled
++                else b.native.run(list(map(str,command)),out,name,min(left,timeout),env,capture))
+         if sum(x.stat().st_size for x in out.rglob('*') if x.is_file())>1024**3:raise ValueError('one GiB output bound exceeded')
+         return result
+     try:
+@@ -103,8 +156,20 @@
+             tool=a.java_home/'bin'/name
+             if b.native.digest(tool)!=gis_inputs['tools'][name]['sha256']:raise ValueError('JDK differs from GIS Java toolchain')
+             tools[str(tool.resolve())]=b.native.digest(tool)
+-        for name in ('gcc','g++','ld','as','readelf','nm'):
++        selected_tools=('gcc','g++','ld','as','readelf','nm')
++        if enabled:selected_tools+=('ar','ranlib','make','patch','pkg-config','sh','sed','awk','grep','install')
++        for name in selected_tools:
+             tool=Path('/usr/bin')/name;tools[str(tool.resolve())]=b.native.digest(tool)
++        cmake=None
++        if enabled:
++            tools[str(Path(sys.executable).resolve())]=b.native.digest(Path(sys.executable).resolve())
++            tools.update(compiler_backends('/usr/bin/gcc',run))
++            selected=a.cmake or shutil.which('cmake')
++            if not selected:raise ValueError('CMake is required for the explicit KML profile')
++            cmake=Path(selected).resolve()
++            if not cmake.is_file():raise ValueError('regular CMake executable required')
++            tools[str(cmake.resolve())]=b.native.digest(cmake.resolve())
++            env['PKG_CONFIG']=str(Path('/usr/bin/pkg-config').resolve())
+         bound_files=dict(tools)
+         runtime_before=dict(tools)
+         for item in (a.java_home/'lib').rglob('*'):
+@@ -128,7 +193,33 @@
+         jar=a.gis_build/'gdal-2.4.4-mod-java.jar'
+         bound_files[str(jar)]=b.native.digest(jar)
+         gdal=a.dependency_root/'gdal-install';proj=a.proj_proof/'install/lib/libproj.a';zlib=a.assimp_proof/'zlib-install/lib/libz.a'
+-        run(['/usr/bin/g++','-shared','-Wl,--no-undefined','-Wl,-soname,libgdal.so','-o',lib/'libgdal.so','-Wl,--whole-archive',gdal/'lib/libgdal.a','-Wl,--no-whole-archive',proj,zlib,'-pthread','-lm','-lrt','-ldl'],'gdal-shared',180)
++        kml_configuration=None;kml_build=None;extra_link=[]
++        if enabled:
++            profile_recipe=module('gdal_exception_profile',HERE.parent/'gis-java/build.py')
++            expected_profile=profile_recipe.jni_profile()
++            if gis_inputs.get('gdal_java_exception_profile')!=expected_profile:
++                raise ValueError('fresh corrected GIS source profile required')
++            for name,identity in expected_profile['sources'].items():
++                item=a.gis_build/'source/gdal'/name
++                if b.native.digest(item)!=identity['postSha256']:raise ValueError('actual patched GIS source postimage differs')
++            if gis_inputs.get('gdal_java_exception_profile_sha256')!=b.native.digest(HERE.parent/'gis-java/jni-exceptions-profile-v2.json'):
++                raise ValueError('corrected GIS source profile identity differs')
++            bound_files[str(a.kml_bindings)]=b.native.digest(a.kml_bindings)
++            kml_configuration=kml.prepare(a.kml_proof,a.kml_receipt_sha256,json.loads(a.kml_bindings.read_text()),
++                                          out/'private-pkg-config',list(b.CONFIGURE))
++            bound_files.update(kml_configuration['boundInputs'])
++            for name in ('libkml.pc','configuration.json'):
++                item=out/'private-pkg-config'/name;bound_files[str(item)]=b.native.digest(item)
++            unchanged(bound_files)
++            gdal,kml_build=kml.rebuild(out/'source-reference/gdal/gdal',out,kml_configuration,
++                                       a.proj_proof/'install',a.assimp_proof/'zlib-install',cmake,env,run)
++            bound_files.update({str(gdal/name):sha for name,sha in kml_build['installed'].items()})
++            (out/'kml-build.json').write_text(json.dumps(kml_build,indent=2)+'\n')
++            extra_link=['-Wl,--exclude-libs,libexpat.a',*kml_configuration['linkArguments']]
++        run(['/usr/bin/g++','-shared','-Wl,--no-undefined','-Wl,-soname,libgdal.so','-o',lib/'libgdal.so','-Wl,--whole-archive',gdal/'lib/libgdal.a','-Wl,--no-whole-archive',proj,zlib,*extra_link,'-pthread','-lm','-lrt','-ldl'],'gdal-shared',180)
++        if enabled:
++            symbols=run(['/usr/bin/readelf','--dyn-syms','--wide',lib/'libgdal.so'],'private-expat-symbols',30,True)
++            if re.search(rb'\bXML_[A-Za-z0-9_]+',symbols):raise ValueError('private Expat escaped dynamic symbol table')
+         header_root=out/'source-reference/gdal/gdal'
+         header_dirs=[header_root/n for n in ('apps','gnm','gcore','alg','ogr','ogr/ogrsf_frmts','port')]
+         offered_headers={str(x.relative_to(header_root)):b.native.digest(x) for d in header_dirs for x in d.glob('*.h')}
+@@ -156,15 +247,24 @@
+         run(['/usr/bin/nm','-D','--defined-only',lib/'libgdalalljni.so'],'jni-defined-symbols')
+         if ' GDALVersionInfo' in (out/'jni-defined-symbols.log').read_text():raise ValueError('duplicate GDAL engine in JNI')
+         jar=a.gis_build/'gdal-2.4.4-mod-java.jar';classes=out/'classes';classes.mkdir()
+-        run([a.java_home/'bin/javac','--release','11','-cp',jar,'-d',classes,HERE/'GdalJniProbe.java'],'probe-compile')
++        probe_sources=[HERE/'GdalJniProbe.java']
++        if enabled:probe_sources += [HERE/'GdalFormatProfileProbe.java',HERE.parent/'gis-java/GdalExceptionControls.java']
++        run([a.java_home/'bin/javac',*(['-J-Xmx128m','-J-XX:ActiveProcessorCount=2','-J-Djava.io.tmpdir='+str(out/'tmp')] if enabled else []),'--release','11','-cp',jar,'-d',classes,*probe_sources],'probe-compile')
+         probe_classes=file_hashes(classes)
+         runtime_before.update({str((lib/n).resolve()):sha for n,sha in products.items()})
+         unchanged(runtime_before)
+         for n,sha in probe_classes.items():bound_files[str(classes/n)]=sha
+         unchanged(bound_files)
+         env['GDAL_DATA']=str(gdal/'share/gdal')
+-        run([a.java_home/'bin/java','-Xmx128m','-Djava.library.path='+str(lib),'-cp',str(classes)+':'+str(jar),'GdalJniProbe'],'probe',60)
+-        maps=(out/'probe.log').read_text(); providers={line[4:] for line in maps.splitlines() if line.startswith('ELF ')}
++        run([a.java_home/'bin/java',*(['-Xcheck:jni','-XX:ActiveProcessorCount=2','-Djava.awt.headless=true',
++             '-Djava.io.tmpdir='+str(out/'tmp'),'-Duser.home='+str(out/'home')] if enabled else []),'-Xmx128m','-Djava.library.path='+str(lib),'-cp',str(classes)+':'+str(jar),'GdalFormatProfileProbe' if enabled else 'GdalJniProbe'],'probe',60)
++        maps=(out/'probe.log').read_text()
++        if enabled:
++            failures=diagnostics.strict_jni_failures(maps)
++            if failures:raise ValueError('strict JNI diagnostic: '+failures[0])
++            if 'PASS_GDAL_KML_DRIVERS_COORDINATES_ORIGINAL_THROWABLES' not in maps:
++                raise ValueError('strict KML/JNI controls failed')
++        providers={line[4:] for line in maps.splitlines() if line.startswith('ELF ')}
+         expected={str((lib/n).resolve()) for n in ('libgdal.so','libgdalalljni.so')}
+         gdal_providers={n for n in providers if 'gdal' in Path(n).name}
+         if gdal_providers!=expected:raise ValueError('unexpected mapped GDAL provider')
+@@ -175,13 +275,23 @@
+         for path,sha in tools.items():
+             if b.native.digest(Path(path))!=sha:raise ValueError('tool changed')
+         unchanged(bound_files);unchanged(mapped)
++        if enabled and kml.owned_gnu_build_inventory(out/'gdal-kml-build')!=kml_build['buildInventory']:
++            raise ValueError('actual GDAL compiled tree changed')
+         if products!=file_hashes(lib) or probe_classes!=file_hashes(classes):raise ValueError('output changed')
+         if initial!=recipe():raise ValueError('recipe changed')
+         evidence={str(n.relative_to(out)):b.native.digest(n) for n in out.iterdir() if n.is_file()}
+-        result={'evidence':evidence,'recipe':initial,'bound_files':bound_files,'products':products,'probe_classes':probe_classes,'dynamic_needed':dynamic,'genuine_gdal_jni':True,'gdal_version':'2.4.4','gdal_archive_objects':len(json.loads((a.dependency_proof/'dependencies-built.json').read_text())['objects_after']),'consumed_header_receipt_sha256':b.native.digest(out/'consumed-header-hashes.json'),'tools':tools,'wrappers':{n:b.native.digest(frozen/n) for n in wrappers},'mapped_providers':mapped,'recipe_sha256':b.native.digest(HERE/'build.py'),'probe_sha256':b.native.digest(HERE/'GdalJniProbe.java'),'native_kernel_or_client_acceptance':False}
+-        (out/'complete.json').write_text(json.dumps(result,indent=2)+'\n')
+-    except Exception:
+-        (out/'failed.json').write_text(json.dumps({'last_command':commands[-1]['name'] if commands else None,'native_kernel_or_client_acceptance':False},indent=2)+'\n');raise
++        result={'evidence':evidence,'recipe':initial,'bound_files':bound_files,'products':products,'probe_classes':probe_classes,'dynamic_needed':dynamic,'genuine_gdal_jni':True,'gdal_version':'2.4.4','gdal_archive_objects':sum(kernel.archive_members(gdal/'lib/libgdal.a').values()),'kml_build':kml_build,'kml_profile_enabled':enabled,'strict_jni_diagnostics_free':enabled,'checked_jni_warning_count':0 if enabled else None,'consumed_header_receipt_sha256':b.native.digest(out/'consumed-header-hashes.json'),'tools':tools,'wrappers':{n:b.native.digest(frozen/n) for n in wrappers},'mapped_providers':mapped,'recipe_sha256':b.native.digest(HERE/'build.py'),'probe_sha256':b.native.digest(HERE/'GdalJniProbe.java'),'native_kernel_or_client_acceptance':False}
++        data=(json.dumps(result,indent=2)+'\n').encode()
++        if enabled:
++            if len(data)>kml.RECEIPT_RESERVE:raise ValueError('KML receipt reserve exceeded')
++            kml.gate(out,len(data))
++        (out/'complete.json').write_bytes(data)
++        if enabled:
++            for item in out.rglob('*'):
++                if item.is_file():item.chmod(0o444)
++    except Exception as error:
++        (out/'failed.json').write_text(json.dumps({'first_failure':repr(error),'kml_profile_enabled':enabled,
++            'last_command':commands[-1]['name'] if commands else None,'native_kernel_or_client_acceptance':False},indent=2)+'\n');raise
+ if __name__=='__main__':
+     import sys
+     if len(sys.argv)==3 and sys.argv[1]=='--replay':

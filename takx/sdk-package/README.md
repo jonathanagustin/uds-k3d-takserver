@@ -1,12 +1,12 @@
 # Public-source Kernel component package
 
-The prior recipe's local qualification passed four fresh JVM runs, including package relocation, with zero JNI warnings and all nine native providers loaded from stock extraction. It also passed the missing-resource negative control. The two earlier failed attempts remain preserved separately.
+The software development kit (SDK) component recipe passed actual assembly, four fresh Java virtual machine (JVM) runs, relocation and both resource-omission controls. All nine packaged native providers loaded with zero Java Native Interface (JNI) warnings. The separately merged format runner also passed all six CPU (central processing unit) format categories against this new package. Exact receipts and scope appear below; earlier failures remain preserved.
 
-This opt-in Linux amd64 profile assembles the genuine Kernel **8.30.5** Java/JNI component and qualifies its real `EngineLibrary` resource loader. It uses the fresh native component producer, exact Java class inventory and verified dependency producers from `kernel-native`. It builds no native library and substitutes no TAKX release version.
+This opt-in Linux amd64 profile assembles the genuine Kernel **8.30.5** Java/JNI component and qualifies its real `EngineLibrary` resource loader. It uses the verified retained native component producer, exact Java class inventory and verified dependency producers from `kernel-native`. It builds no native library and substitutes no TAKX release version.
 
-The package contains one Kernel class/resource JAR, separate third-party JARs, the original Kernel and generated JNI headers, exact source notices and a version/ABI manifest. The manifest lists every class, header, notice, native resource and dependency JAR. The bundle includes no proof logs, runtime databases or private keys. Headers are the selected Kernel/JNI headers; this qualification does not establish a complete third-party C++ development kit.
+The package contains one Kernel class/resource Java archive (JAR), separate third-party JARs, the original Kernel and generated JNI headers, exact source notices and a version/application binary interface (ABI) manifest. The manifest lists every class, header, notice, native resource and dependency JAR. The bundle includes no proof logs, runtime databases or private keys. Headers are the selected Kernel/JNI headers; this qualification does not establish a complete third-party C++ development kit.
 
-The owned patch changes the real Linux64 preload list to the nine available providers in dependency order: GLdispatch, GLESv2, LAS, LAS_C, GDAL, GDALallJNI, Assimp, Core and KernelJNI. It also reports a missing required Linux resource. No proprietary placeholder library is supplied. Crypto, SQLCipher, Cesium and the other static dependencies retain the qualified native producer's actual ownership and export policy.
+The owned patch changes the real Linux64 preload list to the nine available providers in dependency order: GLdispatch, GLESv2, LAS, LAS_C, the Geospatial Data Abstraction Library (GDAL), GDALallJNI, Assimp, Core and KernelJNI. It also reports a missing required Linux resource. No proprietary placeholder library is supplied. Crypto, SQLCipher, Cesium and the other static dependencies retain the qualified native producer's actual ownership and export policy.
 
 GDAL's genuine Java initializer calls `System.loadLibrary("gdalalljni")` even after EngineLibrary loads its resource. Start the JVM with `java.library.path` pointing to EngineLibrary's extraction directory. The manifest records its template: `${java.io.tmpdir}/takkernel/engine/<JAR MD5>/lib/linux64`. MD5 is the upstream cache-directory locator; SHA256 inventories establish input identity. Set `java.io.tmpdir` and this library path before starting the JVM. Changing the property after startup is insufficient. No native preload or replacement GDAL availability flag is used.
 
@@ -134,3 +134,155 @@ origins and the loaded native providers matched their pinned inputs.
 These component checks cover shader upload through the real wrapper. A newly
 assembled SDK bundle, full TAK renderer and complete client still need qualification.
 The package qualification above refers to the prior recipe.
+
+## Explicit reduced GDAL composition and OBJ capacity repair
+
+The package recipe repairs the genuine `ObjModelSpi` two-class family. Small valid
+OBJ files can estimate index-buffer growth below the eight bytes required for a
+vertex/texture-coordinate index pair. The patch reserves a complete tuple, grows geometrically
+and checks integer overflow before allocation. It preserves all other class names.
+
+The optional `--composition declaration.json --composition-sha256 SHA256` selects
+`public-cpu-gdal244-kml-v1`. Keep `--providers` pointing at the **original native
+producer's providers**. Their strict verifier and equality comparison are unchanged.
+The separate composition declaration has exactly these keys:
+
+```json
+{
+  "schema": 1,
+  "profile": "public-cpu-gdal244-kml-v1",
+  "finalization_plan": "/data/evidence/finalization-plan.json",
+  "finalization_plan_sha256": "<reviewed SHA-256>",
+  "finalization_receipt": "/data/evidence/finalization/complete.json",
+  "finalization_receipt_sha256": "<reviewed SHA-256>"
+}
+```
+
+These are caller-declared evidence locations, not prescribed host paths. The
+read-only `native-gdal-jni/finalization_validation.py` API independently validates
+the specifically supported stopped GNU-inventory execution and its existing
+successful finalization. It checks the original source checkpoint, failed receipt,
+complete retained evidence, actual Executable and Linkable Format (ELF) products and consumed providers. It writes
+nothing and runs no compiler or native/JVM probe. It does not create producer
+success. Other failure kinds require their own reviewed validation workflow.
+
+Selection requires the actual reduced closure: `HAVE_SQLITE=no`, 1,073 objects,
+absent SQLite-driver registration symbols and both verified GDAL products. Only
+this explicit selection removes the automatic `GDAL_SKIP=MBTiles,GPKG` assignment
+from the genuine three-class `GdalLibrary` family. Unselected/full-profile source
+retains the exact upstream assignment. Caller configuration is preserved by the
+reduced variant. No warning filter, error handler or driver deregistration is added.
+
+Qualification runs actual driver-registry absence, real initializer and remaining
+MEM/GTiff checks with stock loading and provider-map validation, including relocation.
+The package sidecar describes assembly provenance; runtime qualification is recorded
+separately in the completion receipt. Neither grants renderer or client acceptance.
+
+The complete six-format regression suite belongs to the separately reviewed
+`takx/kernel-regressions` change (#506); this change does not substitute an
+unreviewed copy of that directory. Its reviewed source already preserves the
+original tetrahedron and repeats the identical analytic geometry assertions on a
+compact valid fixture. The retained patch is source-history evidence, not an
+additional patch to apply to that updated suite. Retain Digital Terrain Elevation Data (DTED), MBTiles, GeoPackage, Keyhole Markup Language (KML), elevation and Wavefront OBJ,
+relocation and both resource omissions as required acceptance controls.
+
+The separate actual candidate04 composition completed all eleven phases, six
+formats (including both OBJ fixtures), relocation and both omissions with zero
+native/JNI warnings. Its completion receipt SHA-256 is
+`f8436e590294cf38683dded113fb250d5301a4146bbae10a278ee361de512a1d`;
+the independent audit SHA-256 is
+`dc5dddb9e9c15c74e2dcbffde263edb79a6669fd7cb7bba8c94a73c802ff766e`.
+Those results validate that composition, not a fresh execution of this public
+recipe. Three Simple Logging Facade for Java (SLF4J) framework notices remained visible. Full SDK, renderer
+and client acceptance remain separate.
+
+### Successful and historical composition inputs
+
+An explicit reduced composition may select a normal successful native GDAL/JNI
+producer. Its declaration has exactly `schema: 1`, the profile above,
+`producer_kind: "successful"`, `producer_receipt`, `producer_receipt_sha256`, and
+`producer_recipe_sha256` (SHA-256 of the receipt's `recipe` as sorted compact JSON).
+The existing strict public producer replay rechecks current source recipes,
+products, inputs, mapped providers and GNU inventory. Selection additionally
+requires actual checked-JNI/driver markers, the reduced SQLite-disabled object
+closure, registration-symbol absence and ELF dependency checks. A failed producer
+cannot use this successful variant.
+
+The existing finalization-plan/receipt declaration is a separate historical
+variant: its original execution remains failed, and it never manufactures an
+original success. Both variants hash the current transitive validator/producer
+source closure into the SDK recipe and keep runtime driver-absence acceptance
+pending until actual SDK qualification. These source application programming interfaces (APIs) have offline guard
+coverage. The historical variant was used in the actual public recipe qualification below; the successful-producer route has guard coverage but no new native build acceptance.
+
+### Explicit historical native-source binding
+
+A retained native producer can be bound through `--native-source-snapshot DIR`
+and `--native-proof-sha256 SHA` together. This does not import or execute code
+from the supplied directory. The current SDK consumer pins a known portable
+source-bundle manifest and its complete original recipe hash in `inputs.lock.json`;
+the invocation separately pins the exact native completion receipt. Unrecognized
+bundles, another recipe, missing/changed/extra files, symbolic links and writable
+source members or directories are rejected before producer replay.
+
+The reviewed `public-kernel-native-45-v1` bundle has 41 exact Git blobs from
+`3780209d7bed4407568cfac902977fecef58727a` and four explicit preimages obtained by
+removing only the already reviewed literal GPL notice prefix. Every resulting
+byte hash equals the original native recipe. The manifest records each origin;
+this is not claimed to be one unchanged historical Git checkout. The receipt and
+current source files remain untouched. There is no runtime comment normalization
+or general source-hash exception. Existing provider, staged-source, toolchain and
+native ELF checks remain mandatory, and the new SDK recipe independently hashes
+its current consumer/helper closure.
+
+
+The portable manifest is distributed as
+`native-source-snapshots/public-kernel-native-45-v1.json` (SHA-256
+`f8c05d74060ede8407f6cd9fbdf7c9dc0071c4cf232e9dd40409e054f80bb63b`).
+Construct its byte-identical evidence bundle offline from a repository that
+already contains the pinned Git objects:
+
+```sh
+python3 -B takx/sdk-package/materialize_native_source_bundle.py \
+  --repository /path/to/uds-takserver --output /fresh/source-bundle
+```
+
+The constructor disables Git lazy fetch/network protocols, checks each original
+Git blob and exact declared prefix/preimage, then writes all 45 source members,
+the frozen recipe JSON and canonical manifest read-only. It never checks out,
+imports or executes historical Python. The bundle may be transported through an
+offline archive/store if its exact member paths, bytes and read-only permissions
+are preserved; the consumer rechecks the known manifest and complete membership.
+A construction pass or source-verification pass does not build native products
+or grant SDK, renderer or client acceptance. The curated baseline provider-history
+binding separately validates its exact retained source recipe and products; it
+does not upgrade that producer to a newer feature profile.
+
+
+### Actual public recipe qualification
+
+Recipe `c78df16a29d0c9dab694d595e369bd49aa172aeee72da911ad7427abb5e39a84`
+passed assembly and runtime qualification. Its completion receipt SHA-256 is
+`cdac6ab0b23712692707a661a7ea96c35fb10071026921a33f2f9d9e580e4981`;
+the output audit SHA-256 is
+`96d22eef24087ccdeff2d3cebf20116d921135cd3248b507d10ef31c42324651`.
+The package has 2,697 classes, 119 runtime resources and nine native providers.
+Basic initialization, encrypted database controls, throwing logger, actual reduced
+GDAL driver absence, copied-prefix relocation and both native/shader omissions
+passed. Each successful runtime mapped the same nine packaged providers and had
+zero JNI warnings; three SLF4J framework notices remained visible.
+
+The merged `kernel-regressions` runner then passed six independent JVM categories:
+DTED (13 assertions), MBTiles (29), GeoPackage (65,545), KML (5), elevation (13)
+and OBJ (39, including both fixtures). Its completion receipt SHA-256 is
+`586c79e90c51ce83eaa675852a7fa45fccd1f4f854342c84f6e64441c4c6e4d9`;
+the output audit SHA-256 is
+`73d823ba306d0003c0799d43a0dd65d8f69cd331716e965482e8e35df1870c0e`.
+Each category validated all nine providers with zero JNI warnings. No accepted
+artifact or earlier proof was overwritten.
+
+These runs assembled the current public Java component from retained, validated
+native products. The historical GDAL producer still records failure; its separate
+finalization is validated explicitly. No fresh native build was performed. This
+acceptance covers CPU component behavior on the tested host, not KML elevation
+sampling, a renderer, cross-host portability or a full client.

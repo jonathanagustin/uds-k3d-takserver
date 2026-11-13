@@ -17,6 +17,8 @@ HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 import resource_inputs
 import source_families
+import composition
+import native_source_snapshot
 NATIVE=HERE.parent/'kernel-native'
 sys.path.insert(0,str(NATIVE))
 spec=importlib.util.spec_from_file_location('sdk_package_native',NATIVE/'build.py')
@@ -38,22 +40,68 @@ def jar_write(path,entries):
         for name,data in entries.items():
             if jar.read(name)!=data:raise ValueError('archive member bytes differ')
 
-def recipe():
-    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch']
-    return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe()}
+def contained_java_argv(argv, java, out):
+    argv=list(map(str,argv))
+    if Path(argv[0]).resolve()==(java/'bin/java').resolve():
+        argv[1:1]=['-XX:ErrorFile='+str(out/'hs_err_java_pid%p.log')]
+    elif Path(argv[0]).resolve()==(java/'bin/javac').resolve():
+        argv[1:1]=['-J-Xmx256m','-J-XX:ErrorFile='+str(out/'hs_err_javac_pid%p.log')]
+    return argv
 
-def verify_native(root,providers):
+def apply_source_patch(run, stage, patch, label):
+    patch=Path(patch)
+    if patch.suffix!='.patch' or not patch.is_file():raise ValueError('one regular source patch required')
+    return run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',patch],label,30)
+
+def compile_java(run, java, classpath, destination, sources, label):
+    sources=list(sources)
+    if not sources or any(not isinstance(path,Path) or path.suffix!='.java' or not path.is_file() for path in sources):
+        raise ValueError('only regular Java source inputs allowed')
+    return run([java/'bin/javac','--release','17','-proc:none','-implicit:none','-sourcepath','','-cp',
+                os.pathsep.join(map(str,classpath)),'-d',destination,*sources],label)
+
+def runtime_control_sources(selected_composition):
+    return [NATIVE/n for n in ('KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java')]+[
+        HERE/n for n in ('StockLoaderSmoke.java','RuntimeResourcesSmoke.java','DefaultIoReadonlySmoke.java')]+(
+        [HERE/'GdalReducedProfileSmoke.java'] if selected_composition else [])
+
+def recipe():
+    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch','composition.py','native_source_snapshot.py','patches/obj-buffer-capacity.patch','patches/gdal-reduced-profile-skip.patch','GdalReducedProfileSmoke.java','patches/obj-two-fixture-regression.patch']
+    return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe(),'native_finalization_validation':composition.source_closure()}
+
+def provider_failure_categories(expected, results, errors):
+    known=set(p.FAMILIES);allowed=known|{'cross_provider_chain'};failed=set()
+    if not all(isinstance(value,dict) for value in (expected,results,errors)):return ['inventory']
+    if set(expected)!=known or not set(results)<=known or not set(errors)<=allowed:failed.add('inventory')
+    failed.update(name for name in known if name in errors)
+    if 'cross_provider_chain' in errors:failed.add('cross_provider_chain')
+    for name in known:
+        if name in expected and name in results:
+            if not isinstance(expected[name],dict) or not isinstance(results[name],dict):failed.add('inventory')
+            if expected[name]!=results[name]:failed.add(name)
+        elif name not in errors:failed.add('inventory')
+    return sorted(failed or {'inventory'})
+
+def require_provider_results(expected, results, errors):
+    if errors or expected!=results:
+        raise ValueError('actual native providers differ: '+','.join(provider_failure_categories(expected,results,errors)))
+
+def verify_native(root,providers,source_snapshot=None,expected_receipt_sha256=None):
+    binding=None
+    if source_snapshot is not None:
+        binding=native_source_snapshot.verify(source_snapshot,root/'complete.json',expected_receipt_sha256,p.load(HERE/'inputs.lock.json')['native_source_snapshots'])
     raw=p.load(root/'complete.json');current=b.recipe()
     if raw.get('native_translation_units')!={'core':483,'jni':159,'cesium':173} or not raw.get('fresh_native_build') or not raw.get('specified_runtime_controls_passed'):raise ValueError('actual fresh native component producer required')
-    prefixes={'CMakeLists.txt':'# Copyright 2026 uds-takserver authors\n# SPDX-License-Identifier: GPL-3.0-only\n',**{n:'// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n' for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']}}
-    if current.keys()!=raw['recipe'].keys():raise ValueError('native consumed recipe shape differs')
-    for name,digest in raw['recipe'].items():
-        data=(NATIVE/name).read_bytes()
-        if p.digest(NATIVE/name)!=digest:
-            prefix=prefixes.get(name,'').encode()
-            if not prefix or not data.startswith(prefix) or hashlib.sha256(data[len(prefix):]).hexdigest()!=digest:raise ValueError('native producer differs beyond exact reviewed license comments')
+    if binding is None:
+        prefixes={'CMakeLists.txt':'# Copyright 2026 uds-takserver authors\n# SPDX-License-Identifier: GPL-3.0-only\n',**{n:'// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n' for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']}}
+        if current.keys()!=raw['recipe'].keys():raise ValueError('native consumed recipe shape differs')
+        for name,digest in raw['recipe'].items():
+            data=(NATIVE/name).read_bytes()
+            if p.digest(NATIVE/name)!=digest:
+                prefix=prefixes.get(name,'').encode()
+                if not prefix or not data.startswith(prefix) or hashlib.sha256(data[len(prefix):]).hexdigest()!=digest:raise ValueError('native producer differs beyond exact reviewed license comments')
     results,errors=p.verify_all(providers)
-    if errors or raw['providers']!=results:raise ValueError('actual native providers differ')
+    require_provider_results(raw['providers'],results,errors)
     p.check_files(root/'layout',raw['staged_sources']);p.check_files(root/'gltf-headers',raw['gltf_headers']);p.check_files(root/'gles1-declarations',raw['gles1_declarations'])
     p.check_files(root/'cesium-source',p.inventory(p.root_of(providers,'cesium')/'source/cesium'))
     b.toolchain.verify(raw['actual_toolchain'])
@@ -74,13 +122,23 @@ def mapped_provider(name,sha,packaged,allowed,original_project):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for n in ['native-proof','providers','source','output']:parser.add_argument('--'+n,type=Path,required=True)
+    parser.add_argument('--native-source-snapshot',type=Path,help='Explicit consumer-reviewed nonexecuted native recipe source bundle')
+    parser.add_argument('--native-proof-sha256',help='Mandatory exact receipt hash with --native-source-snapshot')
+    parser.add_argument('--composition',type=Path,help='Explicit reduced GDAL composition declaration; baseline providers remain unchanged')
+    parser.add_argument('--composition-sha256')
     parser.add_argument('--java-home',type=Path,required=True)
     parser.add_argument('--resource-payloads',type=Path,help='Declared offline store: one regular file named by each reviewed LFS SHA-256')
     parser.add_argument('--phase',choices=['verify','package','qualify'],default='verify')
     for n,default in [('git','git'),('patch','patch'),('nm','nm'),('readelf','readelf')]:parser.add_argument('--'+n,default=default)
     args=parser.parse_args();lock=p.load(HERE/'inputs.lock.json');providers=p.load(args.providers);roots={k:p.root_of(providers,k) for k in providers}
+    if bool(args.native_source_snapshot)!=bool(args.native_proof_sha256):raise ValueError('source bundle and expected native receipt SHA required together')
+    native_source_binding=native_source_snapshot.verify(args.native_source_snapshot,args.native_proof/'complete.json',args.native_proof_sha256,lock['native_source_snapshots']) if args.native_source_snapshot else None
+    if bool(args.composition)!=bool(args.composition_sha256):raise ValueError('composition path and SHA required together')
+    selected_composition=composition.inspect(args.composition,args.composition_sha256) if args.composition else None
     inputs=[HERE.parent.parent,args.native_proof,args.source,args.providers,args.java_home,*p.declared_paths(providers),*([args.resource_payloads] if args.resource_payloads else [])]
-    out=b.disjoint(args.output,inputs);before=recipe();raw,verified=verify_native(args.native_proof,providers)
+    if selected_composition:inputs.extend(selected_composition[3])
+    if args.native_source_snapshot:inputs.append(args.native_source_snapshot)
+    out=b.disjoint(args.output,inputs);before=recipe();raw,verified=verify_native(args.native_proof,providers,args.native_source_snapshot,args.native_proof_sha256)
     java=args.java_home.resolve()
     for name in ['java','javac']:
         if p.digest(p.regular(java/'bin'/name))!=raw['tools'][name]['sha256']:raise ValueError('same actual qualified JDK required')
@@ -88,14 +146,17 @@ def main():
     for name,path in tools.items():
         if p.digest(p.regular(path))!=raw['utility_tools'][name]['sha256']:raise ValueError('same actual qualified metadata tools required')
     env=b.environment(java,raw['tools']['cc']['path'],raw['tools']['cxx']['path'],out)
+    if selected_composition:env={k:v for k,v in env.items() if not k.startswith(('GDAL_','CPL_','PROJ_','LD_','JAVA_','JDK_','_JAVA')) or k=='JAVA_HOME'}
     def run(argv,name,timeout=120):
         remaining=lock['total_seconds']-(time.monotonic()-started)
         if remaining<=0:raise ValueError('package total command deadline exhausted')
-        argv=list(map(str,argv));argv[0]=str(tools.get(argv[0],argv[0]));commands.append({'name':name,'argv':argv,'timeout':min(timeout,remaining)});(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
+        argv=contained_java_argv(argv,java,out);argv[0]=str(tools.get(argv[0],argv[0]));commands.append({'name':name,'argv':argv,'timeout':min(timeout,remaining)});(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
         return runner.execute(argv,out,name,timeout=min(timeout,remaining),env=env,capture=True,disk_limit=lock['output_limit_bytes'])
     elf=audit.elf_audit(args.native_proof,roots,run)
     if elf!=raw['elf_audit']:raise ValueError('actual native ABI/privacy audit differs')
     record={'recipe':before,'interpreter':{'path':str(Path(sys.executable).resolve()),'sha256':p.digest(Path(sys.executable).resolve()),'version':sys.version},'tools':{name:{'path':str(path),'sha256':p.digest(path)} for name,path in tools.items()},'jdk_tools':{name:raw['tools'][name] for name in ['java','javac']},'actual_toolchain':raw['actual_toolchain'],'original_native_producer':{'sha256':p.digest(args.native_proof/'complete.json'),'recipe':raw['recipe']},'fresh_native_build':False,'component_runtime_acceptance':False,'sdk_acceptance':False,'renderer_acceptance':False,'client_acceptance':False,'phase':args.phase}
+    if selected_composition:record['native_composition']=selected_composition[1]
+    if native_source_binding:record['original_native_source_binding']=native_source_binding
     if args.phase=='verify':(out/'verified.json').write_text(json.dumps(record,indent=2)+'\n');return
     package=out/'package';package.mkdir();licenses=package/'notices';licenses.mkdir();notice_lock=p.load(HERE/'notices.lock.json')
     notice_roots={**roots,'cesium_ancestor':Path(providers['cesium']['dependency_root']),'gdal_dependency':Path(providers['gdal_jni']['dependency_root'])}
@@ -109,28 +170,44 @@ def main():
         (licenses/('Kernel-'+item['path'])).write_bytes(data)
     source=roots['kernel_java']/'stage'/lock['source_file'];stage=out/'patched-source';stage.mkdir();shutil.copyfile(p.regular(source),stage/'EngineLibrary.java')
     if p.digest(stage/'EngineLibrary.java')!=lock['engine_before'] or p.digest(HERE/'patches/engine-library-public-linux.patch')!=lock['patch_sha256']:raise ValueError('EngineLibrary patch preimage differs')
-    run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/engine-library-public-linux.patch'],'patch-stock-loader',30)
+    apply_source_patch(run,stage,HERE/'patches/engine-library-public-linux.patch','patch-stock-loader')
     if p.digest(stage/'EngineLibrary.java')!=lock['engine_after']:raise ValueError('EngineLibrary patch postimage differs')
     readonly=lock['default_io_readonly'];provider_source=stage/'DefaultIOProvider.java'
     shutil.copyfile(p.regular(roots['kernel_java']/'stage'/readonly['source_file']),provider_source)
     if p.digest(provider_source)!=readonly['before'] or p.digest(HERE/'patches/default-io-readonly.patch')!=readonly['patch_sha256']:raise ValueError('DefaultIOProvider patch preimage differs')
-    run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/default-io-readonly.patch'],'patch-default-io-readonly',30)
+    apply_source_patch(run,stage,HERE/'patches/default-io-readonly.patch','patch-default-io-readonly')
     if p.digest(provider_source)!=readonly['after']:raise ValueError('DefaultIOProvider patch postimage differs')
     shader=lock['gles_null_shader_lengths'];shader_source=stage/'GLES20.java'
     shutil.copyfile(p.regular(roots['kernel_java']/'stage'/shader['source_file']),shader_source)
     if p.digest(shader_source)!=shader['before'] or p.digest(HERE/'patches/gles-null-shader-lengths.patch')!=shader['patch_sha256']:raise ValueError('GLES20 shader-source patch preimage differs')
-    run(['patch','--batch','--fuzz=0','--no-backup-if-mismatch','-p1','-d',stage,'-i',HERE/'patches/gles-null-shader-lengths.patch'],'patch-gles-null-shader-lengths',30)
+    apply_source_patch(run,stage,HERE/'patches/gles-null-shader-lengths.patch','patch-gles-null-shader-lengths')
     if p.digest(shader_source)!=shader['after']:raise ValueError('GLES20 shader-source patch postimage differs')
+    extra_sources=[];extra_families=['com/atakmap/map/layer/model/obj/ObjModelSpi']
+    def patch_family(item,filename,patchname):
+        target=stage/filename;shutil.copyfile(p.regular(roots['kernel_java']/'stage'/item['source_file']),target)
+        if p.digest(target)!=item['before'] or p.digest(HERE/'patches'/patchname)!=item['patch_sha256']:raise ValueError('profile source/patch preimage differs')
+        apply_source_patch(run,stage,HERE/'patches'/patchname,'patch-'+filename)
+        if p.digest(target)!=item['after']:raise ValueError('profile source postimage differs')
+        extra_sources.append(target)
+    patch_family(lock['obj_buffer_capacity'],'ObjModelSpi.java','obj-buffer-capacity.patch')
+    if selected_composition:
+        profile=lock['reduced_gdal'];patch_family({'source_file':profile['source_file'],'before':profile['source_before_sha256'],'after':profile['source_after_sha256'],'patch_sha256':profile['patch_sha256']},'GdalLibrary.java','gdal-reduced-profile-skip.patch')
+        extra_families.append('com/atakmap/map/gdal/GdalLibrary')
     java_input=p.load(roots['kernel_java']/'inputs.json');cp=[roots['kernel_java']/'classes']+[Path(x['path']) for x in java_input['classpath']]
     replacement=out/'replacement-classes';replacement.mkdir()
     resources_source=HERE.parent/'compat/src/main/java/android/content/res/Resources.java'
-    run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,cp)),'-d',replacement,stage/'EngineLibrary.java',resources_source,provider_source,shader_source],'compile-real-stock-loader')
+    compile_java(run,java,cp,replacement,[stage/'EngineLibrary.java',resources_source,provider_source,shader_source,*extra_sources],'compile-real-stock-loader')
     classes={name:(roots['kernel_java']/'classes'/name).read_bytes() for name in p.inventory(roots['kernel_java']/'classes')}
     replaced=p.inventory(replacement)
-    classes=source_families.merge(classes,{name:(replacement/name).read_bytes() for name in replaced})
+    family_preimages=dict(lock['obj_buffer_capacity']['class_preimages'])
+    if selected_composition:family_preimages.update(lock['reduced_gdal']['class_preimages'])
+    if any(name not in classes or hashlib.sha256(classes[name]).hexdigest()!=sha for name,sha in family_preimages.items()):raise ValueError('profile original class preimage differs')
+    classes=source_families.merge(classes,{name:(replacement/name).read_bytes() for name in replaced},extra_families)
     record['replaced_class_families']={name:replaced[name] for name in replaced}
     record['gles_null_shader_lengths']={'source_before':shader['before'],'source_after':shader['after'],'scope':shader['scope'],'headed_runtime_qualified':False}
     libraries=native_files(args.native_proof,roots)
+    if selected_composition:
+        libraries.update({'gdal':selected_composition[0]['libgdal.so'],'gdalalljni':selected_composition[0]['libgdalalljni.so']})
     if list(libraries)!=lock['native_order']:raise ValueError('reviewed resource load order differs')
     resource_lock=p.load(HERE/'runtime-resources.lock.json')
     if resource_lock['official_revision']!=lock['official_revision']:raise ValueError('resource revision differs')
@@ -176,6 +253,10 @@ def main():
     for name in p.inventory(roots['kernel_java']/'jni-headers'):
         dest=headers/'jni'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(roots['kernel_java']/'jni-headers'/name,dest)
     manifest={'version':lock['version'],'official_revision':lock['official_revision'],'abi':lock['abi'],'runtime_resources':{'namespace':resource_lock['namespace'],'source_inventory':resource_lock['files'],'entries':{name:hashlib.sha256(data).hexdigest() for name,data in resources.items()},'unindexed_values_xml':True,'android_values_semantics':False},'default_io_readonly_patch':readonly,'resource_adapter_source_sha256':p.digest(resources_source),'class_count':len(classes),'class_inventory':{name:hashlib.sha256(data).hexdigest() for name,data in classes.items()},'patched_class_family':replaced,'native_resource_order':lock['native_order'],'native_resources':native_manifest,'dependencies':jar_records,'headers':p.inventory(headers),'notices':p.inventory(licenses),'excluded_features':['proprietary codecs','renderer qualification','client qualification','CommonCommo','stock unmodified Linux preload list','cross-host ABI portability'],'native_elf_audit':elf,'original_native_producer_sha256':record['original_native_producer']['sha256'],'stock_loader_java_library_path':'${java.io.tmpdir}/takkernel/engine/'+hashlib.md5(artifact.read_bytes()).hexdigest()+'/lib/linux64','source_patch':{'before':lock['engine_before'],'after':lock['engine_after'],'patch_sha256':lock['patch_sha256']}}
+    manifest['obj_buffer_capacity_patch']=lock['obj_buffer_capacity']
+    if selected_composition:
+        manifest['native_composition']=selected_composition[1]
+        manifest['reduced_gdal_source_patch']=lock['reduced_gdal']
     (package/'version-abi-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     record.update(package_inventory=p.inventory(package),manifest=manifest)
     bundle=out/('kernel-'+lock['version']+'-linux-amd64-public-cpu.zip')
@@ -184,8 +265,8 @@ def main():
     if runner.disk_bytes(out)>lock['output_limit_bytes']:raise ValueError('package output bound exceeded')
     if args.phase=='qualify':
         runtime_classes=out/'runtime-classes';runtime_classes.mkdir();class_path=[artifact,*[package/v['path'] for v in jar_records]]
-        controls=[NATIVE/n for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']]+[HERE/'StockLoaderSmoke.java',HERE/'RuntimeResourcesSmoke.java',HERE/'DefaultIoReadonlySmoke.java']
-        run([java/'bin/javac','--release','17','-proc:none','-cp',os.pathsep.join(map(str,class_path)),'-d',runtime_classes,*controls],'compile-stock-loader-controls')
+        controls=runtime_control_sources(selected_composition)
+        compile_java(run,java,class_path,runtime_classes,controls,'compile-stock-loader-controls')
         # Only exact validated JDK/host inputs may accompany the nine packaged providers.
         # Do not permit any original installed provider merely because its proof is valid.
         allowed=dict(raw['actual_toolchain']['jdk_runtime']['bound_files'])
@@ -195,6 +276,9 @@ def main():
                 path=Path(name).resolve()
                 if any(path.is_relative_to(root) for root in roots.values()):continue
                 audit.add_elf(allowed,path,item)
+        if selected_composition:
+            for name,sha in selected_composition[2].items():
+                if name not in map(str,selected_composition[0].values()):allowed[name]=sha
         original_project={str(x.resolve()) for x in libraries.values()}
         allowed={name:sha for name,sha in allowed.items() if name not in original_project}
         p.bound_files(allowed)
@@ -209,8 +293,9 @@ def main():
             mode='database' if phase=='relocated' else phase
             stock_tmp=out/('stock-tmp-relocated' if phase=='relocated' else 'stock-tmp-package');stock_tmp.mkdir(exist_ok=True)
             library_path=stock_tmp/'takkernel/engine'/hashlib.md5(selected_jar.read_bytes()).hexdigest()/'lib/linux64'
-            text=run([java/'bin/java','-Djava.library.path='+str(library_path),'-Xcheck:jni','-Xmx256m','-XX:ActiveProcessorCount=2','-Djava.awt.headless=true','-Duser.home='+str(app/'home'),'-Djava.io.tmpdir='+str(stock_tmp),'-DTAK_APP_DATA_PATH='+str(app/'data'),'-cp',os.pathsep.join(map(str,[runtime_classes,*selected_class_path])),'StockLoaderSmoke',selected_jar,mode,out/'native-resources.sha256',expected_resources],'stock-'+phase).decode()
+            text=run([java/'bin/java','-Djava.library.path='+str(library_path),'-Xcheck:jni','-Xmx256m','-XX:ActiveProcessorCount=2','-Djava.awt.headless=true','-Duser.home='+str(app/'home'),'-Djava.io.tmpdir='+str(stock_tmp),'-DTAK_APP_DATA_PATH='+str(app/'data'),'-cp',os.pathsep.join(map(str,[runtime_classes,*selected_class_path])),('GdalReducedProfileSmoke' if selected_composition else 'StockLoaderSmoke'),selected_jar,mode,out/'native-resources.sha256',expected_resources],'stock-'+phase).decode()
             required=['PASS_GENUINE_118_RESOURCES_91_ASSETS_25_CATALOG_15_STOCK_GLSL','PASS_STOCK_ENGINE_RESOURCE_LOADER_SCOPED_COMPONENT','PASS_ENGINE_INITIALIZER_AND_NATIVE_CONFIG_GDAL','PASS_KERNEL_JNI_MATRIX_POINT_WKB_NATIVE_PROJECTION']
+            if selected_composition:required+=['PASS_REAL_REDUCED_PROFILE_GDAL_SKIP_INIT_REGISTRY_NO_SUPPRESSION']
             if mode=='database':required+=['PASS_REAL_DEFAULT_IO_READONLY_WRITE_REJECTION_NO_CREATE_MBTILES','PASS_PREPARED_NATIVE_DATABASE2_ENCRYPTED_OPEN_REOPEN_WRONG_KEY_CONTROL','PASS_REAL_GDAL_MEM_EXACT_WRITE_READ']
             if phase=='logger':required+=['PASS_REAL_THROWING_LOGGER_BASELINE_REJECTION_MATCH_AND_CORRECT_KEY_RECOVERY']
             if any(n not in text for n in required) or audit.strict_jni_diagnostics(text) or any(n in text for n in ['EngineLibrary: Failed to load','UnsatisfiedLinkError','NoClassDefFoundError']):raise ValueError('real strict stock loader control failed: '+phase)
@@ -242,7 +327,11 @@ def main():
         app=out/'negative';app.mkdir();(app/'home').mkdir();(app/'data').mkdir()
         text=run([java/'bin/java','-Xcheck:jni','-Xmx256m','-Djava.awt.headless=true','-Djava.io.tmpdir='+str(app),'-Duser.home='+str(app/'home'),'-DTAK_APP_DATA_PATH='+str(app/'data'),'-cp',os.pathsep.join(map(str,[runtime_classes,negative,*class_path[1:]])),'StockLoaderSmoke',negative,'missing',out/'native-resources.sha256'],'stock-missing-resource').decode()
         if 'PASS_REAL_STOCK_LOADER_MISSING_REQUIRED_RESOURCE' not in text:raise ValueError('real missing resource control failed')
+        if selected_composition:
+            record['composition_driver_absence_runtime_qualified']=True
         record.update(component_runtime_acceptance=True,stock_resource_loader_controls_passed=True,runtime=phases,missing_resource_negative_control=True,missing_shader_catalog_negative_control=True,runtime_resource_consumers_passed=True,negative_resource_fixture={'path':str(omitted.relative_to(out)),'native_payloads':False,'sdk_artifact':False,'omitted_genuine_shader':shader},owned_runtime_classes=p.inventory(runtime_classes))
+    if selected_composition and composition.inspect(args.composition,args.composition_sha256)[1]['products']!=selected_composition[1]['products']:raise ValueError('composition products changed')
+    if native_source_binding and native_source_snapshot.verify(args.native_source_snapshot,args.native_proof/'complete.json',args.native_proof_sha256,lock['native_source_snapshots'])!=native_source_binding:raise ValueError('historical source binding changed')
     again,errors=p.verify_all(providers)
     if errors or again!=verified:raise ValueError('provider inputs changed')
     b.toolchain.verify(raw['actual_toolchain'])

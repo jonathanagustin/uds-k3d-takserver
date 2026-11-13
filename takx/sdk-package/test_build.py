@@ -5,10 +5,25 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import copy
 import zipfile
 spec=importlib.util.spec_from_file_location('sdk_package_under_test',Path(__file__).with_name('build.py'))
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 class Guards(unittest.TestCase):
+    def test_provider_failure_names_are_fixed_and_private_messages_never_leak(self):
+        expected={name:{'receipt':'bound'} for name in b.p.FAMILIES};actual=copy.deepcopy(expected)
+        del actual['gdal_jni'];actual['gles']={'receipt':'different'}
+        errors={'gdal_jni':'PRIVATE_EXCEPTION_SENTINEL /private/path','proj':'PRIVATE_TOKEN_SENTINEL',
+                'cross_provider_chain':'PRIVATE_CHAIN_SENTINEL'}
+        with self.assertRaises(ValueError) as raised:b.require_provider_results(expected,actual,errors)
+        self.assertEqual(str(raised.exception),'actual native providers differ: cross_provider_chain,gdal_jni,gles,proj')
+        self.assertNotIn('PRIVATE',str(raised.exception));self.assertNotIn('/private',str(raised.exception))
+        with self.assertRaisesRegex(ValueError,'inventory') as unknown:
+            b.require_provider_results(expected,actual,{'PRIVATE_UNKNOWN_FAMILY':'PRIVATE_EXCEPTION'})
+        self.assertNotIn('PRIVATE',str(unknown.exception))
+        self.assertEqual(b.provider_failure_categories([],actual,errors),['inventory'])
+        self.assertIsNone(b.require_provider_results(expected,copy.deepcopy(expected),{}))
+
     def test_archive_paths_reject_traversal_and_absolute_names(self):
         for name in ['../secret','/secret','libs/../../secret','libs\\secret']:
             with self.assertRaises(ValueError):b.safe(name)

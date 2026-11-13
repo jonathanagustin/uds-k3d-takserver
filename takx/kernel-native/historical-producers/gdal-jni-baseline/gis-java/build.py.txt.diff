@@ -1,0 +1,67 @@
+--- historical/gis-java/build.py
++++ current/gis-java/build.py
+@@ -124,13 +124,13 @@
+ 
+ def toolchain(lock):
+     tools = {}
+-    for name in ('java', 'javac', 'jar', 'swig'):
++    for name in ('java', 'javac', 'jar', 'swig', 'patch'):
+         chosen = os.environ.get('GIS_JAVA_SWIG') if name == 'swig' else None
+         found = shutil.which(chosen or name)
+         if not found:
+             raise ValueError(f"required trusted tool missing: {name}")
+         path = Path(found).resolve()
+-        flag = '-version' if name != 'jar' else '--version'
++        flag = '--version' if name in ('jar', 'patch') else '-version'
+         output = subprocess.check_output([str(path), flag], stderr=subprocess.STDOUT, text=True).strip()
+         tools[name] = {'path': str(path), 'sha256': digest(path), 'version': output}
+     if not re.search(r'\bjavac 17\.', tools['javac']['version']) or not re.search(r'version "17\.', tools['java']['version']):
+@@ -148,9 +148,22 @@
+     return tools
+ 
+ 
++def jni_profile():
++    profile = json.loads((HERE / 'jni-exceptions-profile-v2.json').read_text())
++    patch = HERE / 'patches/gdal-java-pending-exceptions-v2.patch'
++    if (profile.get('schema') != 1 or profile.get('profileId') != 'gdal244-java-pending-exceptions-v2'
++            or set(profile.get('sources', {})) != {'swig/include/java/typemaps_java.i', 'swig/include/java/callback.i'}
++            or digest(patch) != profile.get('patchSha256')):
++        raise ValueError('unsupported or changed GDAL Java exception profile')
++    return profile
++
++
+ def fingerprint(lock, tools):
+     body = {'lock': lock, 'tools': tools, 'recipe_sha256': digest(HERE / 'build.py'),
+-            'probe_sha256': digest(HERE / 'CompileApiProbe.java')}
++            'probe_sha256': digest(HERE / 'CompileApiProbe.java'),
++            'exception_controls_sha256': digest(HERE / 'GdalExceptionControls.java'),
++            'gdal_java_exception_profile': jni_profile(),
++            'gdal_java_exception_profile_sha256': digest(HERE / 'jni-exceptions-profile-v2.json')}
+     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest(), body
+ 
+ 
+@@ -179,7 +192,7 @@
+ def probe(build, tools, destination):
+     run([tools['javac']['path'], '-J-Xmx256m', '-J-XX:ActiveProcessorCount=2', '--release', '11', '-encoding', 'UTF-8', '-proc:none',
+          '-cp', os.pathsep.join(str(build / name) for name in ('gdal-2.4.4-mod-java.jar', 'assimp-4.0.1-mod-jassimp-java.jar')),
+-         '-d', destination, HERE / 'CompileApiProbe.java'])
++         '-d', destination, HERE / 'CompileApiProbe.java', HERE / 'GdalExceptionControls.java'])
+ 
+ 
+ def build_java(build, cache, lock, tools, offline):
+@@ -189,6 +202,15 @@
+     generated = build / 'generated'
+     generated.mkdir()
+     gdal = source / 'gdal'
++    profile = jni_profile()
++    for name, identity in profile['sources'].items():
++        if digest(gdal / name) != identity['preSha256']:
++            raise ValueError('GDAL Java exception patch preimage differs: ' + name)
++    run([tools['patch']['path'], '--batch', '--fuzz=0', '-p1', '-d', gdal,
++         '-i', HERE / 'patches/gdal-java-pending-exceptions-v2.patch'], build / 'jni-exception-patch.log')
++    for name, identity in profile['sources'].items():
++        if digest(gdal / name) != identity['postSha256']:
++            raise ValueError('GDAL Java exception patch postimage differs: ' + name)
+     env = {**os.environ, 'SWIG_LIB': tools['swig_library']['path']}
+     commands = []
+     for module in ('gdal', 'gdalconst', 'ogr', 'osr', 'gnm'):

@@ -49,16 +49,19 @@ def bound_files(values,root=None):
 def recipe_check(family,record,history_key=None):
     producer=module(family)
     current=producer.recipe() if hasattr(producer,'recipe') else producer.a.inventory(producer.HERE) if family=='cesium' else {n:digest(producer.HERE/n) for n in ('build.py','inputs.lock.json','DracoSourceProbe.cpp')}
-    if record['recipe']!=current:
+    historical = record['recipe']!=current
+    if historical:
         allowed=load(HERE/'producer-history.lock.json').get(history_key or family)
         if not allowed or record['recipe']!=allowed['recipe']:raise ValueError('unreviewed consumed producer source variant: '+family)
         for name,value in record['recipe'].items():
             expected=value['sha256'] if isinstance(value,dict) else value
-            candidate=HERE/allowed['variants'][name]['snapshot'] if name in allowed['variants'] else producer.HERE/name
+            recipe_root=TAKX if family=='gdal_jni' else producer.HERE
+            candidate=HERE/allowed['variants'][name]['snapshot'] if name in allowed['variants'] else recipe_root/name
             if not candidate.resolve().is_relative_to(TAKX.resolve()) or digest(regular(candidate))!=expected:raise ValueError('historical consumed source body differs')
     for name,tool in record.get('tools',{}).items():
         path,expected=(tool['path'],tool['sha256']) if isinstance(tool,dict) else (name,tool)
         if digest(regular(path))!=expected:raise ValueError('producer tool changed')
+    return historical
 def verify_java(root):
     mod=module('kernel_java');record=load(root/'inputs.json');result=load(root/'result.json')
     if record['recipe_sha256']!=digest(mod.HERE/'build.py') or record['lock_sha256']!=digest(mod.HERE/'inputs.lock.json'):raise ValueError('Java normative recipe differs')
@@ -76,7 +79,7 @@ def verify(family,root):
     if root.is_symlink() or not root.is_dir():raise ValueError('regular producer root required')
     root=root.resolve()
     if family=='kernel_java':return verify_java(root)
-    record=load(root/'complete.json');before=digest(root/'complete.json');recipe_check(family,record);producer=module(family)
+    record=load(root/'complete.json');before=digest(root/'complete.json');historical=recipe_check(family,record);producer=module(family)
     if family in ('sqlcipher','geos','proj','assimp'):
         # Existing normative contract also checks sources, installed files, tools,
         # positive outputs and runtime for these source-built component families.
@@ -101,7 +104,12 @@ def verify(family,root):
         bound_files(record['outputs'],root);producer.las.verify_runtime(record['runtime_closure'])
     elif family=='gdal_jni':
         # This pure verifier preserves its frozen stopped-producer ancestry.
-        producer.replay(root)
+        if historical:
+            if any(record.get(key) not in (None,False) for key in ('kml_profile_enabled','strict_jni_diagnostics_free')) or record.get('kml_build') is not None:
+                raise ValueError('historical GDAL baseline cannot claim strict JNI or KML acceptance')
+            producer.replay_artifacts(root,record)
+        else:
+            producer.replay(root)
     elif family=='gles':
         if not record.get('genuine_surfaceless_es3_clear_readback'):raise ValueError('real GLES controls absent')
         check_files(root/'source',record['source_inventory']);check_files(root/'install',record['installed']);bound_files(record['headers'],root/'include');bound_files(record['host_inputs']);bound_files(record['runtime_providers'])

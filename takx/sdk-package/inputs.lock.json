@@ -33,5 +33,42 @@
     "patch_sha256": "cb47b4bc88a82ae85fa5cc7772e18834d8c81b34e5929d7fb57e6cb71ec59013",
     "family": "gov/tak/platform/commons/opengl/GLES20",
     "scope": "supported JOGL null IntBuffer shader-source lengths; no native or version change"
+  },
+  "obj_buffer_capacity": {
+    "source_file": "takkernel/engine/src/main/java/com/atakmap/map/layer/model/obj/ObjModelSpi.java",
+    "before": "5b8e3e1fd1cf06e9e3f06fd7d29884236c0d00977ad6c41626bc956732a5cb82",
+    "after": "af8f8e7bfba1e9696aa1485b42e338bf9aba6807b13936226a776721f5133ec7",
+    "patch_sha256": "5b080bdacc7d2230ecbcf8c5b79db127bfa9df50859204809ac70f9696c19bb7",
+    "class_preimages": {
+      "com/atakmap/map/layer/model/obj/ObjModelSpi$CallbackReader.class": "273e7c99ce7830fca11a28f8a1e0b2bb0105afcd82148ad99c27a0fd20218ba4",
+      "com/atakmap/map/layer/model/obj/ObjModelSpi.class": "a9e7980e71df1bdafc745c5e05714834be77eab9eed10c606487cfae45a1218a"
+    }
+  },
+  "reduced_gdal": {
+    "profile": "public-cpu-gdal244-kml-v1",
+    "source_file": "takkernel/engine/src/main/java/com/atakmap/map/gdal/GdalLibrary.java",
+    "source_before_sha256": "0ebec74d66a4eabfa8a11fd40beffbc068b24843a6fe8a8a2fba221f58fe176e",
+    "source_after_sha256": "261cbdf94f804e2ce60934e27402d5bfb50c49f275900b97eabb2afd46bbb011",
+    "patch_sha256": "582be6328a228270e820b7c3835b584f58105e3301ef549d2948f9ade71aa09e",
+    "class_preimages": {
+      "com/atakmap/map/gdal/GdalLibrary.class": "dfc45fd07273f230d6ca042a1ee37501fb17da8a2e69de1ac59716197883d8a6",
+      "com/atakmap/map/gdal/GdalLibrary$DatabaseInfo.class": "d7814c2b2128de41bef5865f6b7ec0f84737b600da6296ff913fcdcc08cb8303",
+      "com/atakmap/map/gdal/GdalLibrary$PriorityDrivers.class": "4c11a61fd6641a9a14084b44bb709e0a2024d0400f4da72d1faa429feb55aae6"
+    }
+  },
+  "obj_format_regression": {
+    "source_file": "takx/kernel-regressions/java/KernelFormatRegressions.java",
+    "before": "d0dfb0801d448b6e015513ba7e669d28de49001e85e03da618670d26d60409f8",
+    "after": "d2f350520559f7b53f14cbe621a6474b25b4630b574ae6656edca90911360a7c",
+    "patch_sha256": "e0aa5188a33b5268eaf92a104ea181bdc9799e787d64c4149d115ccf124bd6b3",
+    "dependency": "separately reviewed kernel-regressions source (draft #506)"
+  },
+  "native_source_snapshots": {
+    "f8c05d74060ede8407f6cd9fbdf7c9dc0071c4cf232e9dd40409e054f80bb63b": {
+      "profile": "public-kernel-native-45-v1",
+      "source_count": 45,
+      "git_source_commit": "3780209d7bed4407568cfac902977fecef58727a",
+      "native_recipe_sha256": "2af1857972d05cb7edfd949b42c37dc835b431c7ea475c1560081df4c679f01f"
+    }
   }
 }

@@ -27,9 +27,24 @@ public final class TextureStyleControl {
       try{
         fields(texture);check(clone instanceof TextureFillStyle&&clone.equals(texture),"real clone/class/equality");fields((TextureFillStyle)clone);
         check(compositeClone instanceof CompositeStyle&&composite.equals(compositeClone),"composite native clone/equality");
-        Style child=((CompositeStyle)compositeClone).getStyle(1);check(child instanceof TextureFillStyle,"native composite class dispatch");fields((TextureFillStyle)child);
-        String packed=FeatureStyleParser.pack(composite);check(packed.contains("uds-tak-texture-v1:"),"explicit project serialization");Style restored=FeatureStyleParser.parse2(packed);
-        try{check(restored instanceof CompositeStyle&&restored.equals(composite),"native parser roundtrip");fields((TextureFillStyle)((CompositeStyle)restored).getStyle(1));}finally{if(restored!=null)restored.dispose();}
+        Style child=((CompositeStyle)compositeClone).getStyle(1);
+        try{check(child instanceof TextureFillStyle,"native composite class dispatch");fields((TextureFillStyle)child);}finally{child.dispose();}
+        String packed=FeatureStyleParser.pack(composite);check(packed.contains("uds-tak-texture-v1:"),"explicit project serialization");
+        // parse2 retains and returns the same cached style. Dispose our clone,
+        // never the cache-owned object requested again by the next iteration.
+        Style cached=FeatureStyleParser.parse2(packed);check(cached!=null,"native parser result");
+        Style restored=cached.clone();
+        try{
+          check(restored instanceof CompositeStyle,"native parser composite class");
+          CompositeStyle parsed=(CompositeStyle)restored;
+          check(parsed.getNumStyles()==2,"native parser child count");
+          // JNI getStyle returns an owned native clone; dispose each wrapper.
+          Style parsedBase=parsed.getStyle(0),parsedTexture=parsed.getStyle(1);
+          try{check(parsedBase instanceof BasicFillStyle&&parsedBase.equals(base),"native parser first child/value");
+          check(parsedTexture instanceof TextureFillStyle&&parsedTexture.equals(texture),"native parser second child/value");
+          fields((TextureFillStyle)parsedTexture);
+          }finally{parsedTexture.dispose();parsedBase.dispose();}
+        }finally{if(restored!=null)restored.dispose();}
       }finally{clone.dispose();compositeClone.dispose();composite.dispose();base.dispose();texture.dispose();}
     }
     for(int mode=0;mode<5;mode++){

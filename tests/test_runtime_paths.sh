@@ -103,6 +103,9 @@ check_match ".github/workflows/dependency-review.yaml" ignore
 check_match ".github/workflows/unit-tests.yaml" ignore
 check_match ".github/workflows/scorecard-analysis.yaml" ignore
 check_match ".github/workflows/benchmark.yaml" ignore
+check_match ".github/workflows/startup.yaml" ignore
+check_decide false ".github/workflows/startup.yaml"
+check_match ".github/workflows/startup-extra.yaml" relevant
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
 check_match ".github/workflows/mutation.yaml" ignore

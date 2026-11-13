@@ -9,6 +9,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import yaml
 from bench import startup_trials as trial, jvm_metrics as jvm
 from tests.test_jvm_metrics import pod, fake_commands, metrics
 
@@ -249,3 +250,55 @@ class StartupTrials(unittest.TestCase):
             with patch('sys.argv', ['startup', 'begin', '--context', 'owned', '--cohort', 'c', '--bindings', str(f), '--output', str(root/'output')]), patch.object(trial, 'begin', side_effect=RuntimeError('PRIVATE_RAW_EXCEPTION')), contextlib.redirect_stdout(out):
                 self.assertEqual(trial.main(), 1)
             self.assertNotIn('PRIVATE_RAW_EXCEPTION', out.getvalue())
+
+
+class StartupWorkflow(unittest.TestCase):
+    def setUp(self):
+        self.document = yaml.safe_load((Path(__file__).resolve().parents[1]/'.github/workflows/startup.yaml').read_text())
+        self.job = self.document['jobs']['startup']
+        self.steps = self.job['steps']
+
+    def test_only_manual_main_and_one_bounded_read_only_runner_can_run(self):
+        self.assertEqual(set(self.document.get('on', self.document.get(True))), {'workflow_dispatch'})
+        self.assertEqual(len(self.document['jobs']), 1)
+        self.assertEqual(self.job['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
+        self.assertNotIn('strategy', self.job)
+        self.assertLessEqual(self.job['timeout-minutes'], 60)
+        self.assertFalse(self.document['concurrency']['cancel-in-progress'])
+        self.assertTrue(all(level == 'read' for level in self.document['permissions'].values()))
+        self.assertNotIn('permissions', self.job)
+        self.assertFalse(any(step.get('continue-on-error') for step in self.steps))
+
+    def test_fresh_cluster_and_published_input_guards_precede_deployment(self):
+        scripts = [step.get('run', '') for step in self.steps]
+        index = lambda needle: next(i for i, script in enumerate(scripts) if needle in script)
+        self.assertLess(index('ephemeral-cluster.py bootstrap'), index('trim-runner.sh'))
+        self.assertLess(index('dev-package.sh prebuilt'), index('uds run deploy-slim-core'))
+        self.assertLess(index('uds run deploy-slim-core'), index('startup_trials begin'))
+        self.assertLess(index('startup_trials begin'), index('uds run create-deploy-test-bundle'))
+        joined = '\n'.join(scripts)
+        for forbidden in ('bench/run.py', 'tak_tester', 'create-dev-package', 'test-install', 'JAVA_OPTIONS', 'probe-tuning', 'wait-for-tak-images.sh'):
+            self.assertNotIn(forbidden, joined)
+        self.assertIn('test "$(uname -m)" = x86_64', joined)
+        self.assertIn('test "$(./.github/scripts/dev-package.sh prebuilt)" = true', joined)
+
+    def test_warm_rollout_occurs_between_boundaries_and_pair_validation(self):
+        joined = '\n'.join(step.get('run', '') for step in self.steps)
+        needles = ['--mode cold', '--output "$EVIDENCE/warm-begin.json"', 'ephemeral-cluster.py verify',
+                   'rollout restart deployment/takserver-api deployment/takserver-messaging', '--mode warm', 'startup_trials pair']
+        positions = [joined.index(needle) for needle in needles]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(joined.count('rollout restart'), 1)
+        self.assertIn("'--for=delete', *names, '--timeout=60s'", joined)
+        self.assertIn("value['snapshot']['identities'][app]['pod_name']", joined)
+        self.assertIn('sha = os.environ[\'GITHUB_SHA\']', joined)
+        self.assertIn("'source': hashlib.sha256(sha.encode()).hexdigest()", joined)
+
+    def test_artifact_retains_only_typed_records_even_after_failure(self):
+        uploads = [step for step in self.steps if step.get('uses', '').startswith('actions/upload-artifact@')]
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(uploads[0]['if'], "always() && steps.checkout.outcome == 'success'")
+        paths = uploads[0]['with']['path'].splitlines()
+        self.assertEqual({Path(path).name for path in paths}, {'bindings.json', 'cold-begin.json', 'cold.json', 'warm-begin.json', 'warm.json', 'pair.json'})
+        self.assertTrue(all(path.startswith('${{ runner.temp }}/startup-pair/') and '*' not in path for path in paths))
+        self.assertLessEqual(uploads[0]['with']['retention-days'], 14)

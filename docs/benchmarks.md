@@ -70,6 +70,12 @@ A setting is copied into the package only after a report puts it on the front. T
 
 ## Collect one startup pair without load
 
+The manual-only [Startup pair workflow](../.github/workflows/startup.yaml) runs
+this procedure on one AMD64 runner from `main`, with a 60-minute job ceiling.
+It requires an already published package matching the keyed application inputs;
+it fails before cluster work when that package is missing. It has no schedule,
+pull-request trigger, load test, or automatic retry. An active run is preserved.
+
 `python3 -m bench.startup_trials` records one application install and one
 subsequent rollout on the same disposable cluster. It does not install,
 restart, remove, or tune anything. It adds no scheduled or pull-request run.

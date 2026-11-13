@@ -48,6 +48,7 @@ on:
       - ".github/workflows/cosign.yaml"
       - ".github/workflows/demo.yaml"
       - ".github/workflows/benchmark.yaml"
+      - ".github/workflows/startup.yaml"
       - ".github/workflows/full-core.yaml"
       - ".github/workflows/unit-tests.yaml"
       - ".github/workflows/mutation.yaml"

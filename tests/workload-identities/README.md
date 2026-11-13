@@ -154,3 +154,64 @@ Offline tests:
 uv run --no-project --with pyyaml==6.0.3 python3 -B -m unittest \
   tests.test_identity_rollout_driver tests.test_ephemeral_cluster -v
 ```
+
+## Supported package phase acceptance (explicit opt-in)
+
+The manual workflow additionally offers `identity_method=package` or `combined`
+with `scenario=identities`. The default remains the existing manual trial;
+ordinary workflows never activate this experiment. `combined` runs the existing
+manual round trip first, then the package path on its restored shared baseline.
+
+The package path reuses one SHA-bound, already downloaded application archive and
+the bound staged configuration. It deploys actual Zarf package values through
+`shared -> transition -> strict -> rollback -> shared`. `rollback` is the reverse
+transition: both principal sets remain allowed while admission restores legacy
+accounts. Selecting `transition` again would continue forcing dedicated accounts.
+No phase is implemented by patching the Package, Deployments or Pepr environment.
+Only the existing UID-bound disposable probe Job/Pod controls are created/labeled.
+
+Pinned CLI capability checks run before cluster creation. Each deployment rechecks
+archive/config hashes, the job-local cluster guard and default context. Read-only
+policy, workload and Pepr validators require convergence; the same protocol
+positive/negative controls run with unchanged credentials and protocol paths.
+Each phase also runs existing web TLS, Marti API and flow checks. Complete bounded
+phase snapshots are projected into private immutable files and replayed by the
+same pure validators before fixed public verdicts are emitted. A boolean alone
+cannot establish acceptance; unsupported/missing observations fail closed.
+
+`fresh_strict=true` additionally authorizes removal of only the bound `takserver`
+application package after a successful reversal. Core namespace/controller/Package
+UIDs must remain unchanged. The source-owned local backup node-agent is part of
+this application package; it is distinguished from the retained Core Velero server.
+Before removal, cleanup binds exact application PVC UIDs/PV claim references and
+StatefulSet/chart ownership, stored Helm hooks, and the known certificate generator.
+After all consumers are gone, only these exact retained objects may be deleted,
+using API UID/resourceVersion preconditions. Unknown or foreign leftovers refuse
+fresh acceptance; no namespace deletion or broad PVC/Secret cleanup is used.
+The same archive then installs strict with new application UID baselines and the
+original Core guard. This is separate from migration/rollback acceptance.
+
+Across the five phase deployments, private credential-data hashes must remain
+unchanged. The known `before-hook-creation` keystore Secret may legitimately get a
+new UID while retaining identical data and hook ownership. PVC/PV identities remain
+stable, and an exact generated test-only file on each application data volume must
+retain its hash. Only that owned file is removed; no database file is overwritten.
+Hashes and retained-object metadata stay private and are not public artifact fields.
+
+The package trial has its own 120-minute wall budget and 125-minute outer timeout;
+individual deployments are capped at25minutes and explicit package removal at15.
+No live execution or architecture acceptance is implied by these source fixtures.
+Both native architectures still require actual supported-package and clean strict
+results before the issue's remaining acceptance can be claimed.
+
+Typed phase evidence is bounded to256KiB per phase and16 private0600 files in a
+0700 directory. It records complete root/local policy list resource versions and
+counts, safe workload identities and hashes of complete original templates/specs.
+Pod environment, commands and full annotations are excluded. Each snapshot is
+replayed through the same policy, workload and Pepr guards; missing old facts or
+unsupported credential-capable conditions produce insufficient evidence rather
+than being silently dropped. Bound API versions and Package CRD schema identity
+also accompany rendering, so API capability/default changes cannot be waived.
+Public output contains fixed verdicts and reviewed input/guard/capture hashes,
+not private manifests. Existing f3c09ad1 runs do not establish this new schema's
+acceptance merely because their booleans or phase names look similar.

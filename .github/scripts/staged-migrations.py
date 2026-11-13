@@ -36,6 +36,10 @@ def selection():
             and os.environ.get('GITHUB_REPOSITORY') == 'jonathanagustin/uds-takserver',
             'staged trials require manual dispatch from this repository main')
     scenario, architecture = os.environ.get('SCENARIO', ''), os.environ.get('ARCHITECTURE', '')
+    method=os.environ.get('IDENTITY_METHOD','manual');fresh=os.environ.get('FRESH_STRICT','false')
+    require(method in ('manual','package','combined') and fresh in ('true','false'),'invalid identity package selection')
+    require(method=='manual' or scenario=='identities','package acceptance requires identities-only scenario')
+    require(fresh=='false' or method in ('package','combined'),'fresh strict requires package method')
     require(scenario in SCENARIOS and architecture in ARCHES, 'invalid staged selection')
     return SCENARIOS[scenario], ARCHES[architecture]
 

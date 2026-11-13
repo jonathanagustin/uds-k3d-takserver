@@ -17,6 +17,15 @@ on:
         type: choice
         options: [amd64, arm64, both]
         default: amd64
+      identity_method:
+        description: Identity acceptance method (package/combined require identities scenario)
+        type: choice
+        options: [manual, package, combined]
+        default: manual
+      fresh_strict:
+        description: After package reversal remove only TAK and test clean strict install (retained state refuses)
+        type: boolean
+        default: false
       passive_watch:
         description: Optional diagnostic-only agent watcher (does not prove health)
         type: boolean
@@ -38,6 +47,8 @@ jobs:
     env:
       SCENARIO: ${{ inputs.scenario }}
       ARCHITECTURE: ${{ inputs.architecture }}
+      IDENTITY_METHOD: ${{ inputs.identity_method }}
+      FRESH_STRICT: ${{ inputs.fresh_strict }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -66,6 +77,8 @@ jobs:
     env:
       SCENARIO: ${{ inputs.scenario }}
       ARCHITECTURE: ${{ inputs.architecture }}
+      IDENTITY_METHOD: ${{ inputs.identity_method }}
+      FRESH_STRICT: ${{ inputs.fresh_strict }}
       PASSIVE_WATCH: ${{ inputs.passive_watch }}
       FLAVOR: upstream
       DEV_PACKAGE_WAIT_SECONDS: "0"
@@ -121,7 +134,7 @@ jobs:
         env:
           TRIAL_ARCH: ${{ matrix.arch }}
         run: |
-          python3 .github/scripts/staged-migrations.py publish \
+          uv run --no-project --with pyyaml==6.0.3 python3 .github/scripts/staged-migrations.py publish \
             --directory "$RUNNER_TEMP/staged-migrations" \
             --output "out/staged-public-${TRIAL_ARCH}" --arch "$TRIAL_ARCH"
       - name: Upload exact-run sanitized acceptance evidence
@@ -172,6 +185,8 @@ jobs:
       TRIAL_RESULT: ${{ needs.trial.result }}
       SCENARIO: ${{ inputs.scenario }}
       ARCHITECTURE: ${{ inputs.architecture }}
+      IDENTITY_METHOD: ${{ inputs.identity_method }}
+      FRESH_STRICT: ${{ inputs.fresh_strict }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

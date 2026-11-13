@@ -9,6 +9,13 @@ case "${SCENARIO:?}" in
   velero | identities | all) ;;
   *) exit 1 ;;
 esac
+identity_method="${IDENTITY_METHOD:-manual}"
+case "${identity_method}" in manual | package | combined) ;; *) exit 1 ;; esac
+if [[ "${identity_method}" != manual ]]; then
+  [[ "${SCENARIO}" == identities ]]
+  # Help/flag capability check only: before any cluster or package deployment.
+  python3 tests/workload-identities/package_roundtrip.py preflight
+fi
 trial="${RUNNER_TEMP:?}/staged-migrations"
 [[ ! -e "${trial}" ]]
 mkdir -m 700 "${trial}"
@@ -78,6 +85,16 @@ else
   timeout --kill-after=10s 10800 python3 tests/velero-ownership/drive.py round-trip --plan "${trial}/candidate/plan.json" --evidence "${trial}/owner"
 fi
 if [[ "${SCENARIO}" != velero ]]; then
-  mkdir -m 700 "${trial}/identity"
-  timeout --kill-after=10s 2700 python3 tests/workload-identities/drive.py round-trip --evidence "${trial}/identity/journal.json"
+  if [[ "${identity_method}" == manual || "${identity_method}" == combined ]]; then
+    mkdir -m 700 "${trial}/identity"
+    timeout --kill-after=10s 2700 python3 tests/workload-identities/drive.py round-trip --evidence "${trial}/identity/journal.json"
+  fi
+  if [[ "${identity_method}" == package || "${identity_method}" == combined ]]; then
+    mkdir -m 700 "${trial}/package-identity"
+    fresh=()
+    if [[ "${FRESH_STRICT:-false}" == true ]]; then fresh+=(--fresh-strict); fi
+    timeout --kill-after=10s 7500 python3 tests/workload-identities/package_roundtrip.py round-trip \
+      --archive "${root}/${flavored}" --archive-sha256 "$(sha256sum "${flavored}" | cut -d ' ' -f 1)" \
+      --candidate-plan "${trial}/candidate/plan.json" --evidence "${trial}/package-identity/journal.json" "${fresh[@]}"
+  fi
 fi

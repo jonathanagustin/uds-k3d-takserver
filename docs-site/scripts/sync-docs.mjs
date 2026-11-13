@@ -15,6 +15,7 @@ import { download } from './download.mjs';
 import { howToSteps } from './how-to-ui.mjs';
 import { repositoryUrl as repoUrl, rewriteTestBadge, rewriteLegacyGithubLinks } from '../src/lib/repository-links.mjs';
 import { fromHtml } from 'hast-util-from-html';
+import { embedDemoVideos } from './demo-videos.mjs';
 
 const { values: args } = parseArgs({ options: {
   'repo-root': { type: 'string' },
@@ -269,39 +270,6 @@ async function fetchDemoVideos() {
   return new Set(names);
 }
 
-function embedDemoVideos(markdown, videos) {
-  // A README line that is only a user-attachments URL is GitHub's inline
-  // player. On the site it becomes a <video> for the next demo download link.
-  // A line that is only a poster linking to a demo release video (a chapter
-  // clip on a doc page, written as [![alt](poster)](video) so GitHub shows
-  // the poster) becomes a <video> with that poster.
-  const lines = markdown.split('\n');
-  return lines
-    .map((line, index) => {
-      const clip = line
-        .trim()
-        .match(/^\[!\[([^\]]*)\]\(([^)\s]+\.(?:jpg|png|webp))\)\]\(https:\/\/github\.com\/[^)\s]+\/releases\/download\/demo\/([\w.-]+\.mp4)\)$/);
-      if (clip) {
-        if (!videos.has(clip[3])) return line;
-        const label = clip[1].replace(/"/g, '&quot;');
-        return [
-          `<video controls preload="none" playsinline width="1280" height="720" poster="${clip[2]}" aria-label="${label}">`,
-          `  <source src="${assetBase}/demo/${clip[3]}" type="video/mp4" />`,
-          `</video>`,
-        ].join('\n');
-      }
-      if (!/^https:\/\/github\.com\/user-attachments\/assets\/\S+$/.test(line.trim())) return line;
-      const next = lines.slice(index + 1).join('\n').match(/releases\/download\/demo\/([\w.-]+\.mp4)/);
-      if (!next || !videos.has(next[1])) return line;
-      const base = next[1].replace(/\.mp4$/, '');
-      return [
-        `<video controls preload="none" playsinline width="1280" height="720" poster="${assetBase}/demo/${base}.jpg">`,
-        `  <source src="${assetBase}/demo/${next[1]}" type="video/mp4" />`,
-        `</video>`,
-      ].join('\n');
-    })
-    .join('\n');
-}
 
 function dropFirstHeading(markdown) {
   // Starlight prints the frontmatter title as the page heading, so the body's

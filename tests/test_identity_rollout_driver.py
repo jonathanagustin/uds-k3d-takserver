@@ -261,6 +261,37 @@ class IdentityFixtures(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'two exact Pepr Deployments'):
             driver.validate_pepr(inputs[0] * 2, replicasets, pods, 'strict', baseline_uids, fingerprints)
 
+    def test_raw_policy_lists_preserve_server_revision_and_reject_partial_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance=driver.Driver(Path(directory)/'journal.json')
+            policy={'apiVersion':'security.istio.io/v1','kind':'AuthorizationPolicy','metadata':{
+                'namespace':'takserver','name':'policy','uid':'policy-uid','resourceVersion':'123'},'spec':{}}
+            raw={'apiVersion':'security.istio.io/v1','kind':'AuthorizationPolicyList',
+                 'metadata':{'resourceVersion':'124'},'items':[policy]}
+            commands=[]
+            def load(value):
+                instance.kube=lambda *argv:(commands.append(argv) or json.dumps(value))
+                return instance.authorization_policy_list('takserver')
+            self.assertEqual(load(raw),raw)
+            self.assertEqual(commands[-1],('get','--raw','/apis/security.istio.io/v1/namespaces/takserver/authorizationpolicies'))
+            bad=[]
+            for meta in [{},{'resourceVersion':''},{'resourceVersion':'124','continue':'next'},
+                         {'resourceVersion':'124','remainingItemCount':1},{'resourceVersion':'124','remainingItemCount':True}]:
+                bad.append({**raw,'metadata':meta})
+            bad += [{**raw,'kind':'List','apiVersion':'v1','metadata':{'resourceVersion':''}},
+                    {**raw,'items':[policy,policy]},
+                    {**raw,'items':[policy,{**policy,'metadata':{**policy['metadata'],'name':'different'}}]},
+                    {**raw,'items':[policy,{**policy,'metadata':{**policy['metadata'],'uid':'different'}}]},
+                    {**raw,'items':'malformed'},
+                    {**raw,'items':[{**policy,'metadata':{**policy['metadata'],'namespace':'istio-system'}}]},
+                    {**raw,'items':[{**policy,'spec':None}]}]
+            for value in bad:
+                with self.subTest(value=value),self.assertRaises(ValueError):load(value)
+            instance.kube=lambda *argv:(commands.append(argv) or json.dumps({**raw,'items':[]}))
+            self.assertEqual(instance.authorization_policy_list('istio-system')['items'],[])
+            self.assertEqual(commands[-1],('get','--raw','/apis/security.istio.io/v1/namespaces/istio-system/authorizationpolicies'))
+            with self.assertRaises(ValueError):instance.authorization_policy_list('foreign')
+
     def test_requested_policy_observation_refuses_concurrent_uid_or_rule_drift(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=driver.Driver(Path(directory)/'journal.json')
@@ -275,6 +306,7 @@ class IdentityFixtures(unittest.TestCase):
                 if kind.startswith('authorization') and kwargs.get('namespace')=='istio-system':return {'items':[]}
                 return {'items':policies if kind.startswith('authorization') else network}
             instance.get=get
+            instance.authorization_policy_list=lambda namespace:{'metadata':{'resourceVersion':'100'},'items':policies if namespace=='takserver' else []}
             instance.policies()
             package['metadata']['uid']='replacement'
             with self.assertRaisesRegex(ValueError,'requested Package'):instance.policies()

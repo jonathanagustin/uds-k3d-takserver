@@ -102,6 +102,55 @@ class CollectorTests(unittest.TestCase):
         self.assertIn('INSTALL_RECEIPT_METADATA=true', Path(self.env['GITHUB_ENV']).read_text())
         self.assertIn('ready=true', Path(self.env['GITHUB_OUTPUT']).read_text())
 
+    def test_changed_source_fails_before_execution_and_expensive_resolution(self):
+        collector.capture(self.root, self.env, self.directory)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Fixture', '-c',
+                        'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'changed'],
+                       check=True, capture_output=True, timeout=5)
+        with patch.object(collector, 'execution') as execution, \
+                patch.object(collector, 'pinned_inputs') as inputs, \
+                self.assertRaisesRegex(ValueError, 'checkout or run identity changed'):
+            collector.collect(self.root, self.env, self.directory)
+        execution.assert_not_called()
+        inputs.assert_not_called()
+        self.assertFalse(list(self.directory.glob('install-receipt-*.json')))
+
+    def test_actual_acquisition_snapshot_precedes_execution_and_never_is_receipt(self):
+        fixture = self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        pending = {**self.env, 'INSTALL_OUTCOME': '', 'SANITIZE_OK': 'false'}
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16,
+                                                           'v0.41.0', fixture.expected_app]):
+            value = collector.prospective(self.root, pending, self.directory)
+        self.assertEqual(value['inputs']['image_digests'], fixture.expected_images)
+        self.assertEqual(value['inputs']['package_archive_sha256'], collector.checkpoint.sha(b'package bytes'))
+        self.assertEqual(value['checkout'], collector.snapshot(self.root, pending)['checkout'])
+        self.assertEqual(value, json.loads((self.directory / 'install-prospective.json').read_text()))
+        self.assertNotIn('execution', value)
+        self.assertNotIn('reuse_authorized', value)
+        self.assertFalse(list(self.directory.glob('install-receipt-*.json')))
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+        with self.assertRaises(ValueError):
+            collector.collect(self.root, pending, self.directory)
+
+    def test_prospective_requires_current_acquisition_not_stale_checkpoint_marker(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        for change in ('marker', 'package'):
+            with self.subTest(change=change):
+                env = dict(self.env)
+                if change == 'marker':
+                    env['INSTALL_RECEIPT_CHECKPOINT_VALIDATED'] = 'false'
+                else:
+                    (self.root / 'zarf-package-takserver-amd64-dev.tar.zst').write_bytes(b'changed')
+                with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']), self.assertRaises(ValueError):
+                    collector.prospective(self.root, env, self.directory)
+                self.assertFalse((self.directory / 'install-prospective.json').exists())
+
     def test_airgap_requires_correct_execution_and_restore_success(self):
         env = {**self.env, 'AIRGAP_TEST': 'true', 'INSTALL_OUTCOME': 'skipped',
                'AIRGAP_OUTCOME': 'success', 'AIRGAP_RESTORE_OUTCOME': 'success'}

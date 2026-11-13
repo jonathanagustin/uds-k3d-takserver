@@ -464,3 +464,39 @@ installation success.
 Docs and Demo setup helpers are excluded by exact path from install, upgrade, and
 package triggers. Unit tests still cover them, and their own workflows still run.
 Shared diagnostics, redaction, and node firewall scripts remain runtime inputs.
+
+## Install input comparison before application deployment
+
+Issue #419's read-only shadow checker can compare a successful historical
+receipt with the actual inputs acquired for a new push. It always requests
+fresh execution; no install or upgrade is skipped.
+
+The optional collector operation is:
+
+```sh
+python3 -B .github/scripts/collect-install-receipt.py prospective
+```
+
+Use the ordinary install job's existing source capture, pinned-input capture,
+and run-bound checkpoint selection. Run this operation after
+`create:test-bundle` and before `deploy:test-bundle`. It validates the actual
+package archives and generated bundle, using the same resolver as the final
+receipt collector. It writes `install-prospective.json` in `RUNNER_TEMP`, without
+asserting application success or emitting a reusable execution receipt.
+
+Pass that file as `--prospective` to `install-reuse-shadow.py`, alongside its
+existing receipt, attestation bundle, PR, target commit and reviewed policy ref.
+The checker first qualifies the authenticated historical receipt, then checks
+that the prospective snapshot names the current push's target checkout,
+workflow, scenario and architecture. It compares the package key/archive hash,
+checkpoint and Core digests, all eight image digests and actual UDS CLI version.
+A mismatch or unavailable input requires fresh execution. Matching inputs also
+require fresh execution: runner policy, complete producer dependency trust,
+prospective acquisition qualification and enforcement remain open gates.
+
+This is an explicit diagnostic operation, without automatic workflow wiring or
+historical-artifact selection. Current install tasks deploy slim Core before
+acquiring the application package and bundle. The available comparison point
+therefore precedes application deployment but follows cluster creation. Saving
+those cluster minutes needs a separately reviewed acquisition/deployment split;
+this comparison does not establish that optimization or change air-gap ordering.

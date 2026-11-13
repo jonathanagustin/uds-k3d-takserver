@@ -166,13 +166,18 @@ def pinned(root, env, directory):
     return value
 
 
-def collect(root, env, directory):
+def captured_source(root, env, directory):
+    """Check the original source/run binding before execution or archive reads."""
     stage('source-snapshot')
     saved = read_json(directory / 'install-source.json', 4096)
     require(saved == snapshot(root, env), 'checkout or run identity changed')
+    return saved
+
+
+def resolved_inputs(root, env, directory):
+    """Resolve actual acquired bytes; does not assert application execution."""
+    saved = captured_source(root, env, directory)
     ctx = saved['context']
-    stage('execution')
-    execution(env, ctx['scenario'])
     arch = ctx['arch']
     stage('pinned-snapshot')
     pinned = read_json(directory / 'install-pinned.json', 1024)
@@ -215,6 +220,29 @@ def collect(root, env, directory):
     inputs = {**pinned, 'package_archive_sha256': package_hash,
               'checkpoint_oci_digest': acquisition['index_digest'],
               **derived}
+    foundation.validate_inputs(inputs, arch)
+    require(saved == snapshot(root, env), 'source identity changed')
+    return saved, inputs
+
+
+def prospective(root, env, directory):
+    """Non-authorizing acquisition snapshot, consumed by the shadow comparator."""
+    saved, inputs = resolved_inputs(root, env, directory)
+    result = {**saved, 'inputs': inputs}
+    with (directory / 'install-prospective.json').open('x') as output:
+        json.dump(result, output, sort_keys=True)
+        output.write('\n')
+    return result
+
+
+def collect(root, env, directory):
+    saved = captured_source(root, env, directory)
+    ctx = saved['context']
+    stage('execution')
+    execution(env, ctx['scenario'])
+    saved, inputs = resolved_inputs(root, env, directory)
+    ctx = saved['context']
+    arch = ctx['arch']
     stage('receipt-write')
     result = foundation.receipt(root, REPOSITORY, ctx['event'], ctx['run_id'], ctx['attempt'],
                                 arch, ctx['scenario'], 'success', inputs)
@@ -232,12 +260,14 @@ def collect(root, env, directory):
 def main():
     stage('operation')
     try:
-        require(sys.argv[1:] in (['capture'], ['pinned'], ['collect']), 'invalid operation')
+        require(sys.argv[1:] in (['capture'], ['pinned'], ['prospective'], ['collect']), 'invalid operation')
         directory = Path(os.environ['RUNNER_TEMP'])
         if sys.argv[1] == 'capture':
             capture(ROOT, os.environ, directory)
         elif sys.argv[1] == 'pinned':
             pinned(ROOT, os.environ, directory)
+        elif sys.argv[1] == 'prospective':
+            prospective(ROOT, os.environ, directory)
         else:
             collect(ROOT, os.environ, directory)
         print('Optional install receipt evidence recorded')

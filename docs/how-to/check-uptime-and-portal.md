@@ -1,6 +1,6 @@
 # Check uptime probes and Portal tiles
 
-Inspect TAK and CloudTAK probes and Portal entries. Check browser availability
+Inspect Team Awareness Kit (TAK) and CloudTAK probes and Portal entries. Check browser availability
 separately from TAK client-port health.
 
 ## What you'll accomplish
@@ -10,10 +10,10 @@ as up, and Portal shows browser tiles to the intended users.
 
 ## Prerequisites
 
-- A full UDS Core deployment with monitoring and Portal. Slim core installs
-  neither the Probe API nor Portal.
+- A full Unified Defense Stack (UDS) Core deployment with monitoring and Portal. Slim core installs
+  neither the Probe application programming interface (API) nor Portal.
 - TAK and CloudTAK deployed with their default uptime checks enabled.
-- Access to Grafana Explore and Portal, and the UDS CLI with cluster read access.
+- Access to Grafana Explore and Portal, and the UDS command-line interface (CLI) with cluster read access.
 
 ## Before you begin
 
@@ -65,8 +65,8 @@ stream data; `tak-health` checks those ports separately.
 
 All enabled targets should have a current `probe_success` of `1`. Portal
 should show the tiles listed above for each user. Core alerts after a target
-has failed for five minutes. Its TLS expiry alerts concern the gateway
-certificates, not the deploy-time TAK CA or passthrough certificates.
+has failed for five minutes. Its Transport Layer Security (TLS) expiry alerts concern the gateway
+certificates, not the deploy-time TAK certificate authority (CA) or passthrough certificates.
 
 The full-core suite's `tests/uptime-probes.sh` verifies failure and recovery by
 temporarily scaling CloudTAK and TAK messaging to zero. That test interrupts
@@ -89,9 +89,9 @@ slim-core test that skips this check is not evidence that the probe works.
 
 **Problem:** A generated check cannot reach its application.
 
-**Symptom:** `probe_success` is `0`; HTTP status is `0` or `503`.
+**Symptom:** `probe_success` is `0`; Hypertext Transfer Protocol (HTTP) status is `0` or `503`.
 
-**Solution:** Status `0` means no HTTP response; check DNS, TLS, and routing.
+**Solution:** Status `0` means no HTTP response; check Domain Name System (DNS), TLS, and routing.
 For `503`, inspect the workload readiness. For `/stream`, read the
 `tak-health` log and check messaging; `/api` and `/enroll` depend on TAK API.
 For ATAK, inspect operator logs for the `uds-atak-viewer-probe` client.

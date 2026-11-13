@@ -1,6 +1,6 @@
 # Single sign-on
 
-TAK Server 5.7 has its own OpenID Connect (OIDC) authorization-code flow, so people sign in to the TAK web UI with their UDS Keycloak account. The Package registers one Keycloak client. An init container fills the client secret into `CoreConfig.xml` on every start. Authservice is not in front of TAK.
+TAK Server 5.7 handles single sign-on (SSO) for users of Team Awareness Kit (TAK) through its own OpenID Connect (OIDC) authorization-code flow, so people sign in to the TAK web user interface (UI) with their Unified Defense Stack (UDS) Keycloak account. The Package registers one Keycloak client. An init container fills the client secret into `CoreConfig.xml` on every start. Authservice is not in front of TAK.
 
 The Keycloak client:
 
@@ -22,7 +22,7 @@ The Keycloak client:
 
 The sign-in routes: `GET /login/auth` redirects the browser to Keycloak. `GET /login/redirect` exchanges the code. `GET /login/refresh` refreshes the token (`com.bbn.marti.oauth.OAuthApi`). `useTakServerLoginPage` is false, so a 401 on the browser connector is sent to `/login/auth`.
 
-The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates browser TLS and opens a new TLS connection to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
+The browser UI is `https://takserver.<domain>/` on the tenant gateway, which terminates browser Transport Layer Security (TLS) and opens a new TLS connection to port 8447. The redirect has no port because that host is published on 443. Certificate enrollment stays on 8446. Ports 8443 and 8089 still require a client certificate.
 
 [![Demo clip: sign in to the TAK web UI through UDS Keycloak](../docs-site/public/demo/demo-clip-sso.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-sso.mp4)
 
@@ -39,7 +39,7 @@ TAK listens on four TLS connectors. Only 8446 and 8447 take a browser sign-in:
 | 8447 | on | off | admin UI, WebTAK, and the non-admin UI |
 | 8089 | on | required | streaming, unchanged |
 
-Bearer tokens and the access-token cookie are accepted only when the local port is 8446 or 8447 (`AccessTokenResolver`). The stock API Service does not publish 8447. This chart adds Service `takserver-web` with port name `https` and `appProtocol: https`, and DestinationRule `takserver-web`, so the tenant gateway speaks TLS to the connector. See [Networking](networking.md#tenant-gateway-to-8447).
+Bearer tokens and the access-token cookie are accepted only when the local port is 8446 or 8447 (`AccessTokenResolver`). The stock application programming interface (API) Service does not publish 8447. This chart adds Service `takserver-web` with port name `https` and `appProtocol: https`, and DestinationRule `takserver-web`, so the tenant gateway speaks TLS to the connector. See [Networking](networking.md#tenant-gateway-to-8447).
 
 ## CoreConfig
 
@@ -74,7 +74,7 @@ That container runs `envsubst '${TAK_OIDC_CLIENT_SECRET}'` from Secret `takserve
 
 The secret template is only `TAK_OIDC_CLIENT_SECRET: clientField(secret)`. The secret is labeled `uds.dev/pod-reload: "true"` with selector `uds.dev/oidc-reload=takserver`, so a rotated secret restarts those pods and the init container reads it again.
 
-`trustAllCerts` is false. The API and messaging init containers copy the JVM trust store and import ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the CA bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. In that case the init container imports the certificate chain presented by the tenant gateway for the discovery host. Public DNS for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
+`trustAllCerts` is false. The API and messaging init containers copy the Java virtual machine (JVM) trust store and import ConfigMap `uds-trust-bundle` when that file has certificates. Slim core does not set the certificate authority (CA) bundle variables, and the operator deletes the ConfigMap when the bundle would be empty. In that case the init container imports the certificate chain presented by the tenant gateway for the discovery host. Public Domain Name System (DNS) for `sso.uds.dev` is `127.0.0.1`, which inside a pod is the pod itself. The package's in-cluster DNS rewrite answers `sso.<domain>` with the tenant gateway ClusterIP instead (see [Networking](networking.md#in-cluster-dns)).
 
 ## Render at admission
 
@@ -86,7 +86,7 @@ The image build applies `.github/container-and-chart/docker/cacheconfig-listener
 
 The `takserver-oidc` module is a Pepr mutating webhook. Its configuration is `pepr/`, and `pepr/build.sh` builds the chart when the package is created. It acts on pod creation for the four apps that read `CoreConfig.xml` (`takserver-config`, `takserver-messaging`, `takserver-api`, `takserver-plugins`) and adds the `render-oidc` init container, its volumes, the `/conf` mount, and the pod-reload label. Init containers cannot be added to a running pod, so a pod that has `render-oidc` has had it since its first start. The chart installs before the upstream chart, so the first pods are admitted through it.
 
-The webhook fails closed and is scoped to the `takserver` namespace. Within it, the webhook matches those four pods by app label, and it matches the TAK Deployments and Ignite objects by name. If the module is down, only those objects wait. Scoping it matters: a cluster-wide failing webhook blocks the Istio CNI pods the module needs after a node restart. `tests/oidc-render.sh` checks the webhook, that each pod completed `render-oidc`, and that each node's secret matches the cluster secret by length and hash.
+The webhook fails closed and is scoped to the `takserver` namespace. Within it, the webhook matches those four pods by app label, and it matches the TAK Deployments and Ignite objects by name. If the module is down, only those objects wait. Scoping it matters: a cluster-wide failing webhook blocks the Istio Container Network Interface (CNI) pods the module needs after a node restart. `tests/oidc-render.sh` checks the webhook, that each pod completed `render-oidc`, and that each node's secret matches the cluster secret by length and hash.
 
 ## Groups
 
@@ -108,7 +108,7 @@ Both clients set `client.session.idle.timeout` to `600` and `client.session.max.
 
 `/UDS Core/Admin` is the Keycloak login gate (`groups.anyOf`). UDS Core creates that group. `/TAK/Operators_READ` is not a login gate. TAK maps it to the `Operators` group. An operator creates that group once and puts users in it.
 
-This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the CI fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/ensure-map-user.py` creates `mapuser` in `/CloudTAK/Users` and `/TAK/Operators_READ`. The CloudTAK client lets it in, and the TAK client refuses it. `tests/sso-clients.py` reads the client attributes back from the admin API.
+This package does not add an OpenTofu component for one group the realm gate does not use. `tests/ensure-tak-group.py` is the continuous integration (CI) fixture that creates it for `doug`. It is not a Zarf deploy action. `tests/ensure-outsider.py` creates `outsider` with no groups, and the Playwright spec expects Keycloak to refuse both clients. `tests/ensure-map-user.py` creates `mapuser` in `/CloudTAK/Users` and `/TAK/Operators_READ`. The CloudTAK client lets it in, and the TAK client refuses it. `tests/sso-clients.py` reads the client attributes back from the admin API.
 
 ## What TAK does not check
 
@@ -116,7 +116,7 @@ TAK verifies the token's RS256 signature and nothing else about the token. Plan 
 
 - No issuer check. Discovery stores the signing key and clears `issuer`. Any token from the `uds` realm whose signature matches that key is accepted, including a token minted for a different client, as long as the group claims match.
 - No audience check.
-- No PKCE (Proof Key for Code Exchange). The client does not set `pkce.code.challenge.method`.
+- No Proof Key for Code Exchange (PKCE). The client does not set `pkce.code.challenge.method`.
 - Logout clears the access-token cookie and redirects inside TAK (`AuthCookieUtils.logout`). TAK still does not call the Keycloak end-session endpoint. The client registers `post.logout.redirect.uris` anyway, so a caller that does end the session can return to `/login/redirect`. CloudTAK's sign-in route does call end-session. See [CloudTAK](cloudtak.md).
 - One identity provider (IdP). A second `openIdDiscoveryConfiguration` is not a failover list. TAK picks one entry at random.
 - Port 8089 does not take a browser cookie. With `x509tokenAuth`, a certificate that was enrolled on 8446 with a bearer token is authenticated as that token's user.
@@ -136,7 +136,7 @@ API and messaging pods may connect to the tenant gateway:
 - Pod labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway` (Istio gateway chart 1.31, release name `tenant-ingressgateway`)
 - Port 443
 
-That is the path for the discovery document, the token endpoint, and the signing keys (JWKS, the JSON Web Key Set). The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP.
+That is the path for the discovery document, the token endpoint, and the JSON Web Key Set (JWKS) signing keys. The calls use `https://sso.<domain>/...`. The in-cluster DNS rewrite sends that name to the gateway ClusterIP.
 
 Messaging needs the same path. With `x509tokenAuth`, a certificate enrolled on 8446 with a bearer token is stored with that token, and on 8089 TAK authenticates the stream by validating the token against the issuer's keys. Without the rule and the trust store, TAK logs `Remote host terminated the handshake` for the discovery document and closes the stream right after TLS. The messaging pod gets the same trust-store init container as the API pod.
 

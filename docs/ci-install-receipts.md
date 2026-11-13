@@ -31,9 +31,9 @@ derives them from controlled install inputs; workflow inputs cannot supply them:
 | `package_key` | Architecture and the existing dev-package input key. |
 | `package_archive_sha256` | SHA-256 of the actual package archive deployed by the scenario. |
 | `checkpoint_oci_digest` | Verified immutable checkpoint source index; the acquisition sidecar also binds its architecture manifest. |
-| `core_oci_digest` | Immutable OCI identity of the Core package actually selected for this architecture. |
-| `image_digests` | Exactly the six TAK image names, `cloudtak` and `postgis`, each mapped to its packaged image-manifest SHA-256 digest. |
-| `uds_version` | The UDS CLI semantic version used by the scenario. |
+| `core_oci_digest` | Immutable Open Container Initiative (OCI) identity of the Core package actually selected for this architecture. |
+| `image_digests` | Exactly the six Team Awareness Kit (TAK) image names, `cloudtak` and `postgis`, each mapped to its packaged image-manifest SHA-256 digest. |
+| `uds_version` | The Unified Defense Stack (UDS) command-line interface (CLI) semantic version used by the scenario. |
 
 These eight image roles are a curated identity set, not the complete transitive
 dependency closure or proof of equivalent acceptance.
@@ -48,7 +48,7 @@ match the unflavored copy consumed by bundle creation.
 
 Collect that manifest after the job pins its images. `pin-image-tags.sh` edits
 the working tree, so the original checkout tree alone does not describe the
-pinned package. Conversely, the dev-package key excludes CI, tests and bundles;
+pinned package. Conversely, the dev-package key excludes continuous integration (CI), tests and bundles;
 it cannot establish equivalent acceptance by itself. No rendered values,
 private gateway fixtures, credentials, kubeconfig or environment dumps belong
 in the manifest. Unknown fields and freeform values are rejected without being
@@ -101,7 +101,7 @@ pinning, then rechecked at collection. The actual post-pinning package key and
 CLI version are captured immediately after pinning by bounded local commands
 and must still match after execution. Metadata parsing never extracts
 archive paths or emits configuration bodies; it retains at most 32 MiB of
-small JSON objects and the complete collector has a 150-second outer deadline.
+small JavaScript Object Notation (JSON) objects and the complete collector has a 150-second outer deadline.
 
 Collection, attestation and small artifact upload are optional and cannot fail
 application acceptance. Upload requires successful GitHub build-provenance
@@ -129,7 +129,7 @@ The collector additionally runs the pinned CLI's local-only
 `uds zarf package inspect digest <absolute-archive>` and requires its canonical
 OCI manifest digest to equal the generated bundle's selected `takserver`
 manifest. Matching flavored/plain archive hashes alone is insufficient. This
-SDK command validates the local package and uses a dedicated temporary
+software development kit (SDK) command validates the local package and uses a dedicated temporary
 directory which is removed after the bounded 45-second command. It does not
 resolve a registry tag or query the cluster. A second archive hash detects
 changes during collection. Local UDS 0.41 actions-only format proof confirmed
@@ -171,7 +171,7 @@ limitation remains an explicit permanent blocker. It does not trust an arbitrary
 PR's claim of approved code. The supplied receipt and Sigstore bundle are data files,
 never executable inputs. GitHub CLI must support `attestation verify` with exact
 certificate, issuer, source and signer restrictions; unsupported tools or denied
-API reads produce a fresh-execution decision. No installation or workflow dispatch
+application programming interface (API) reads produce a fresh-execution decision. No installation or workflow dispatch
 is performed. Authenticated read access to the repository's Actions metadata,
 artifacts and attestations is needed.
 

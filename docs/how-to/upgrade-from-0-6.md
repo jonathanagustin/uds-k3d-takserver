@@ -5,20 +5,20 @@ and client identities survive.
 
 ## What you'll accomplish
 
-Upgrade the package with UDS Core 1.16.0, migrate the existing PostgreSQL 15
-volumes to PostgreSQL 18, and keep the deploy-time CA and enrolled clients.
+Upgrade the package with Unified Defense Stack (UDS) Core 1.16.0, migrate the existing PostgreSQL 15
+volumes to PostgreSQL 18, and keep the deploy-time certificate authority (CA) and enrolled clients.
 
 ## Prerequisites
 
 - An existing 0.6 deployment and permission to upgrade its UDS bundle.
-- The UDS CLI and `kubectl`, with the intended cluster context selected.
+- The UDS command-line interface (CLI) and `kubectl`, with the intended cluster context selected.
 - A tested recovery plan for both database volumes and certificate Secrets.
 - A selected, signed 0.7 release, verified using [Verify a release](../../README.md#verify-a-release).
 
 ## Before you begin
 
-Record the deployed versions, database PVC names, CA fingerprint, and a known
-database record. Arrange downtime: database migration and TAK restarts interrupt
+Record the deployed versions, database persistent volume claim (PVC) names, CA fingerprint, and a known
+database record. Arrange downtime: database migration and Team Awareness Kit (TAK) server restarts interrupt
 clients. Snapshot both database volumes or export `pg_dumpall` from each
 PostgreSQL 15 pod and keep the dumps outside the cluster. Preserve the original
 certificate objects as described in [Backup](../data.md#backup).
@@ -101,7 +101,7 @@ PostgreSQL 15 image against data already written by PostgreSQL 18.
 **Symptom:** The module cannot use its expected controller image.
 
 **Solution:** Check Core was upgraded to 1.16.0 and that the bundle installs Core
-before TAK. Follow [CI workflows](../ci.md) for the automated upgrade checks;
+before TAK. Follow [continuous integration (CI) workflows](../ci.md) for the automated upgrade checks;
 the PostgreSQL 15 baseline job uses release 0.6.0 explicitly.
 
 ## Related documentation

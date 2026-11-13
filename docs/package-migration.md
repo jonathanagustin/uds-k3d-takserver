@@ -1,6 +1,6 @@
 # GHCR package migration
 
-Packages now publish under `ghcr.io/jonathanagustin/uds-takserver`.
+Packages now publish under `ghcr.io/jonathanagustin/uds-takserver` in GitHub Container Registry (GHCR).
 The repository rename did not move existing registry artifacts.
 
 The manual **Migrate legacy GHCR packages** workflow inventories both namespaces.

@@ -1,7 +1,7 @@
 # Review rules for main
 
 This runbook explains how the repository owner can update the review rules.
-The proposed settings have not been applied. The settings update returned HTTP
+The proposed settings have not been applied. The settings update returned Hypertext Transfer Protocol (HTTP)
 403 because the connection lacks permission to administer the repository.
 Ruleset `25580922` is unchanged. The solo-maintainer policy
 keeps merges possible with one collaborator. The independent-review policy
@@ -74,7 +74,7 @@ when a second human collaborator is available.
 The sections below describe that stricter, optional policy and the common
 backup and restore procedure.
 
-GitHub's rule reference: [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). The API is [REST API endpoints for rules](https://docs.github.com/en/rest/repos/rules) (`X-GitHub-Api-Version: 2026-03-10`). Reviews: [Approving a pull request with required reviews](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews).
+GitHub's rule reference: [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). The application programming interface (API) is [representational state transfer (REST) API endpoints for rules](https://docs.github.com/en/rest/repos/rules) (`X-GitHub-Api-Version: 2026-03-10`). Reviews: [Approving a pull request with required reviews](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews).
 
 ## What is on main today
 
@@ -124,7 +124,7 @@ Code owner review is optional. Use it only after `CODEOWNERS` names a second hum
 
 ## Save the ruleset before you change it
 
-Use `gh auth login` as the repository owner, or a token that can administer this repository. Do not commit the token or the backup file. GitHub hides `bypass_actors` from a token that cannot edit the ruleset. If the saved JSON has no `bypass_actors` key, stop.
+Use `gh auth login` as the repository owner, or a token that can administer this repository. Do not commit the token or the backup file. GitHub hides `bypass_actors` from a token that cannot edit the ruleset. If the saved JavaScript Object Notation (JSON) has no `bypass_actors` key, stop.
 
 ```bash
 gh api \
@@ -215,7 +215,7 @@ curl -fsSL -X PUT \
 
 If last-push approval is rejected, change only `"require_last_push_approval"` to `false` in that file and send the PUT once more.
 
-Then GET the ruleset again. You want `required_approving_review_count` `1`, `bypass_actors` `[]`, `strict_required_status_checks_policy` `true`, and the same four checks. `require_last_push_approval` is `true` only when the PUT that set it was accepted. In the site UI this is Settings, Rules, Rulesets, `main`: one required approval, dismiss stale approvals, require approval of the most recent reviewable push, code owner review off, the four status checks, require branches to be up to date, and an empty bypass list.
+Then GET the ruleset again. You want `required_approving_review_count` `1`, `bypass_actors` `[]`, `strict_required_status_checks_policy` `true`, and the same four checks. `require_last_push_approval` is `true` only when the PUT that set it was accepted. In the site user interface (UI) this is Settings, Rules, Rulesets, `main`: one required approval, dismiss stale approvals, require approval of the most recent reviewable push, code owner review off, the four status checks, require branches to be up to date, and an empty bypass list.
 
 ## Restore the backup
 

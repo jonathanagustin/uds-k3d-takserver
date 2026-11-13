@@ -7,18 +7,18 @@ records the setup to test; it does not claim a working installer or import flow.
 ## What you'll accomplish
 
 Provision a `TakClient`, prepare its client certificate and trust material, and
-check TAKX streaming, HTTPS services and group isolation against CloudTAK.
+check TAKX streaming, Hypertext Transfer Protocol Secure (HTTPS) services and group isolation against CloudTAK.
 Record the results in [the compatibility issue](https://github.com/jonathanagustin/uds-takserver/issues/374).
 
 ## Prerequisites
 
-- A working [TAK deployment](../../README.md#install), the UDS CLI, Python 3,
+- A working [Team Awareness Kit (TAK) deployment](../../README.md#install), the Unified Defense Stack (UDS) command-line interface (CLI), Python 3,
   and permission to create `TakClient` resources and read their device Secrets.
 - An approved TAKX installation on a test workstation. Record its version,
   source, operating system and plugins. This repository supplies no installer.
   The original upstream build requires TAK.gov Artifactory credentials; follow the
   [upstream instructions](https://github.com/TAK-Product-Center/TAKX#build-and-development-instructions).
-- Workstation DNS and routes to the passthrough gateway, and a CloudTAK test user
+- Workstation Domain Name System (DNS) and routes to the passthrough gateway, and a CloudTAK test user
   in `Operators`. Use synthetic markers and a separate unrelated group for tests.
 
 ## Current build status
@@ -26,10 +26,10 @@ Record the results in [the compatibility issue](https://github.com/jonathanagust
 Public-source work compiles Kernel Java foundations and a WorldWind project
 variant. Separate Linux amd64 component checks cover Draco, LAS, Assimp,
 historical PROJ, GEOS and SQLCipher with source-built Tcl/OpenSSL prerequisites.
-Target-image ABI and historical-version security acceptance remain open; these
+Target-image application binary interface (ABI) and historical-version security acceptance remain open; these
 checks do not supply a linked native Kernel, launchable TAKX desktop or Kasm session. See the [component and client checkpoint](../../takx/CLIENT-CHECKPOINT.md#native-component-checkpoints).
 
-Platform compiler probes still stop at missing native texture-rendering APIs;
+Platform compiler probes still stop at missing native texture-rendering application programming interfaces (APIs);
 5.8 also has contour and vehicle-model gaps. [Native rendering](https://github.com/jonathanagustin/uds-takserver/issues/424)
 and live client/server interoperability remain unverified. Use an approved,
 working installation for the connection checks below.
@@ -44,8 +44,8 @@ For the configuration below, replace `<domain>` with the deployment domain:
 
 | Purpose | External address | Required behavior |
 | --- | --- | --- |
-| Streaming | `takserver-stream.<domain>:8089` | End-to-end mutual TLS to TAK messaging |
-| HTTPS API, missions and files | `https://takserver-api.<domain>/` | Port 443 with TLS SNI, forwarded to TAK's client-certificate connector on 8443 |
+| Streaming | `takserver-stream.<domain>:8089` | End-to-end mutual Transport Layer Security (TLS) to TAK messaging |
+| HTTPS application programming interface (API), missions and files | `https://takserver-api.<domain>/` | Port 443 with TLS Server Name Indication (SNI), forwarded to TAK's client-certificate connector on 8443 |
 | Enrollment, if separately tested | `takserver.<domain>:8446` | A different connector; not needed for this pre-provisioned certificate flow |
 
 These names must resolve to the **passthrough** load balancer externally. On k3d,
@@ -116,10 +116,10 @@ against the server certificate, and keep certificate validation enabled.
 
 3. In your installed TAKX build, configure a certificate-based SSL connection to
    the streaming address. Use `client.p12` as the client credential and
-   `truststore.p12` as the CA store, with the exported package password. Keep
+   `truststore.p12` as the certificate authority (CA) store, with the exported package password. Keep
    server trust enabled, and require hostname validation as well. The original
    public CommonCommo 1.17.2 candidate lacks server hostname verification. The
-   [project transport profile](../../takx/TLS.md) now adds configured DNS/IP SAN
+   [project transport profile](../../takx/TLS.md) now adds configured DNS and Internet Protocol (IP) subject alternative name (SAN)
    validation and DNS SNI, with real loopback acceptance and a separately pinned
    curl shutdown fix. It rejects CN-only certificates. This does not establish
    that an installed TAKX build contains these patches or passes TAK Server

@@ -1,6 +1,6 @@
 # Building the images
 
-This page explains where the TAK Server image source comes from, how to run the build, and how CI tags and publishes the six TAK images for both architectures.
+TAK Server connects Team Awareness Kit (TAK) clients. This page explains where its image source comes from, how to run the build, and how continuous integration (CI) tags and publishes the six TAK images for both architectures.
 
 `uds run build-image` and `mise run build-image` both run [`.github/container-and-chart/docker/build.sh`](../.github/container-and-chart/docker/build.sh). GitHub Actions runs that same script from [`.github/workflows/container.yaml`](../.github/workflows/container.yaml), and only when files under `.github/container-and-chart/`, that workflow, or the `upstream/takserver` pin change.
 
@@ -18,7 +18,7 @@ git submodule update --init --depth 1 upstream/takserver
 
 The builder stage copies the files, removes the submodule's `.git` pointer file, and commits them again as one commit tagged with the release. TAK's `src/build.gradle` reads its version from `git describe` and the branch name, so the war still reports `5.7-RELEASE-14-HEAD`, the same as a detached clone of the tag. The stage fails unless the tree id of that commit equals the upstream commit's tree id, which proves the files are exactly the pinned commit. The Ignite image copies `ignite.sh` from the same context instead of downloading it.
 
-Renovate's `git-submodules` manager is on. `.gitmodules` sets `branch = 5.7-RELEASE-14`, so Renovate looks for newer `X.Y-RELEASE-N` tags and moves the pinned commit, the tag in `.gitmodules`, and the other `5.7-RELEASE-14` strings in one pull request. See [ADR 0008](../adr/0008-tak-source-as-a-submodule.md).
+Renovate's `git-submodules` manager is on. `.gitmodules` sets `branch = 5.7-RELEASE-14`, so Renovate looks for newer `X.Y-RELEASE-N` tags and moves the pinned commit, the tag in `.gitmodules`, and the other `5.7-RELEASE-14` strings in one pull request. See [architecture decision record (ADR) 0008](../adr/0008-tak-source-as-a-submodule.md).
 
 ## Running the build
 
@@ -32,7 +32,7 @@ PUSH_IMAGES=true ./.github/container-and-chart/docker/build.sh
 
 `CONTAINER_RUNTIME=podman` is a best-effort override. Podman is not what this repository tests. If `podman buildx` is missing, the script falls back to `podman build` for a single platform and stops if you asked for more than one.
 
-You do not need a JDK, Gradle, protoc, or Node on the host. The Dockerfile's builder stage is Temurin 17.0.20, pinned by the image digest. Gradle is the upstream wrapper, 8.10.2. protoc 3.25.8 and the UI's Node downloads come from Gradle. The Gradle cache is a BuildKit cache mount at `/gradle`, so a rebuild on the same builder does not download everything again. In GitHub Actions that cache is also stored with the Actions cache.
+You do not need a Java Development Kit (JDK), Gradle, protoc, or Node on the host. The Dockerfile's builder stage is Temurin 17.0.20, pinned by the image digest. Gradle is the upstream wrapper, 8.10.2. protoc 3.25.8 and the web user interface (UI) build's Node downloads come from Gradle. The Gradle cache is a BuildKit cache mount at `/gradle`, so a rebuild on the same builder does not download everything again. In GitHub Actions that cache is also stored with the Actions cache.
 
 The runtime stages use UBI9 OpenJDK 17, also pinned by the manifest-list digest, so the same pin covers amd64 and arm64. The Temurin builder digest is a manifest list with both as well. The pin is the `RUNTIME_IMAGE` argument in [`Dockerfile`](../.github/container-and-chart/docker/Dockerfile), which Renovate moves to each new tag.
 
@@ -55,7 +55,7 @@ Pull requests scan the loaded images with Grype and Trivy. A push of these files
 
 ## Docker Hub rate limits
 
-The Zarf package pulls two images from `docker.io`: NATS (`library/nats:2.15.1-alpine`) and the NATS config reloader (`natsio/nats-server-config-reloader:0.25.0`). Postgres is the PostGIS image built in this repository. Docker Hub limits anonymous pulls per IP address, so a shared runner or sandbox can fail package creation with `429 toomanyrequests`. Pull them through a mirror:
+The Zarf package pulls two images from `docker.io`: NATS (`library/nats:2.15.1-alpine`) and the NATS config reloader (`natsio/nats-server-config-reloader:0.25.0`). Postgres is the PostGIS image built in this repository. Docker Hub limits anonymous pulls per Internet Protocol (IP) address, so a shared runner or sandbox can fail package creation with `429 toomanyrequests`. Pull them through a mirror:
 
 ```bash
 uds run create-dev-package --set CREATE_OPTIONS="--registry-override docker.io=mirror.gcr.io"

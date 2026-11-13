@@ -1,6 +1,6 @@
 # Data
 
-Use this page to check database settings, choose a backup method, restore data, and find TAK logs.
+Use this page to check database settings, choose a backup method, restore data, and find logs for Team Awareness Kit (TAK) services.
 
 [![Demo clip: deploy the last signed release, upgrade it in place, and check that TAK's CA, keystore, a database row and its volume are unchanged](../docs-site/public/demo/demo-clip-upgrade.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-upgrade.mp4)
 
@@ -15,7 +15,7 @@ The upstream TAK chart installs Bitnami PostgreSQL in the `takserver` namespace.
 | Database | `cot` |
 | User | `postgres` |
 | Password | the upstream example value `postgres` |
-| JDBC | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
+| Java Database Connectivity (JDBC) | `jdbc:postgresql://takserver-postgresql:5432/cot` in `CoreConfig.xml` |
 | Image | `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6` (amd64 and arm64) |
 | Data directory | `/bitnami/postgresql/data` |
 
@@ -33,7 +33,7 @@ CloudTAK's database is the same image. Its data directory is `/var/lib/postgresq
 
 `18-3.6` is PostgreSQL 18 and PostGIS 3.6.4. Tag `15-3.4` stays in the registry. A deployment that has not moved keeps running that tag. A new install of `18-3.6` creates an empty cluster and loads PostGIS from the image's init script.
 
-When an existing volume contains a PostgreSQL 15 cluster, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The PersistentVolumeClaim (PVC) is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
+When an existing volume contains a PostgreSQL 15 cluster, the `18-3.6` entrypoint reads `PG_VERSION`, runs `pg_upgrade --link` with the PostgreSQL 15 binaries in the image, then `postgis_extensions_upgrade()` in every database that has PostGIS. The persistent volume claim (PVC), a Kubernetes `PersistentVolumeClaim`, is the same volume. TAK and CloudTAK each migrate when their own pod starts. The startup probe gives that first start ten minutes before Kubernetes restarts the pod.
 
 `pg_upgrade --link` shares the table files with the new cluster and the entrypoint deletes the old directory after the new server has started. You cannot use that directory to run PostgreSQL 15 afterwards.
 
@@ -57,9 +57,9 @@ The upgrade test deploys the last release and writes a row. Then it deploys this
 For a step-by-step recovery procedure, see
 [Back up and restore TAK Server](how-to/backup-and-restore.md).
 
-Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.16.0-upstream` is a required package there, not an optional component. See [ADR 0016](../adr/0016-logical-db-dump.md).
+Slim (`k3d-core-slim-dev`) does not install Velero. The full bundle does. `core-backup-restore` at `1.16.0-upstream` is a required package there, not an optional component. See [architecture decision record (ADR) 0016](../adr/0016-logical-db-dump.md).
 
-Velero's default schedule is `velero-udsbackup`, daily at 03:00 UTC, kept for 240h, `snapshotVolumes: false`. UDS Core 1.16.0 does not deploy a node-agent, and k3d local-path has no snapshot API, so the default backup is API objects only. The Postgres files on the volume are not in it.
+Velero's default schedule is `velero-udsbackup`, daily at 03:00 Coordinated Universal Time (UTC), kept for 240h, `snapshotVolumes: false`. Unified Defense Stack (UDS) Core 1.16.0 does not deploy a node-agent, and k3d local-path has no snapshot application programming interface (API), so the default backup is API objects only. The Postgres files on the volume are not in it.
 
 To cover the databases, the package stores a logical `pg_dump` in Secret `tak-db-dump` (database `cot`) and Secret `cloudtak-db-dump` (CloudTAK's PostGIS database). CronJobs `tak-db-dump` (02:15 UTC) and `cloudtak-db-dump` (02:20 UTC) refresh those Secrets. They render only when `backup.dump.enabled` is true, which the full bundle sets. A slim install does not create them.
 
@@ -86,7 +86,7 @@ What a namespace backup contains:
 | Object | In the backup |
 | --- | --- |
 | ConfigMap `cert-migration` | Yes. Certificates and truststores. Private keys and keystores are removed from it. |
-| Secret `takserver-certs` | Yes. Private keys and keystores the pods mount. A restored server presents the same CA. |
+| Secret `takserver-certs` | Yes. Private keys and keystores the pods mount. A restored server presents the same certificate authority (CA). |
 | Secrets `takserver-ca-key` and `takserver-keystore` | Yes. The CA key, and the keystore password. |
 | Secret `takclient-enrollment` | Yes, in `takserver`. Watcher-only file-user passwords for TakClient renewal and recovery; never distribute it with device material. |
 | Secret `cloudtak-tak-admin` and the Keycloak client Secrets | Yes. They are namespace objects. |

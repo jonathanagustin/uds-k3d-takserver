@@ -1,10 +1,10 @@
 # Values profiles
 
-This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds. Neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
+Use values overlays to tune resources for Team Awareness Kit (TAK) services. This page describes two named values overlays, `small` and `production`. Neither is the package default. The nightly benchmark measures both (see [Benchmarks](benchmarks.md)), but only at 10 clients for 60 seconds. Neither is a sizing result yet. Package bytes per component are unmeasured too. CloudTAK is already an optional component (`required: false` in `zarf.yaml`). Small does not drop another one.
 
-The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-takserver/actions/runs/40174810574). The source is the kubelet Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
+The footprint below is the steady working set from `tests/usage.sh` at the end of install on [run 40174810574](https://github.com/jonathanagustin/uds-takserver/actions/runs/40174810574). The source is the kubelet application programming interface (API), specifically its Summary API, the same one `bench/run.py` reads. The higher of amd64 and arm64:
 
-| Container | CPU | Working set |
+| Container | central processing unit (CPU) | Working set |
 | --- | --- | --- |
 | api | 66m | 911Mi |
 | messaging | 26m | 888Mi |
@@ -25,7 +25,7 @@ Heaps stay `-Xmx512m` on api, messaging, and config. A 1Gi messaging cgroup ran 
 
 ## Default
 
-`values/common-values.yaml` is baked into the package. `charts/cloudtak/values.yaml` is the CloudTAK chart default. CI deploys `bundle/test-values.yaml` on top of the package. Those paths stay the default so the Test workflow does not change with this document. Pick a profile by adding it to a bundle. Do not use a profile as the only values file. It does not carry image names or passwords.
+`values/common-values.yaml` is baked into the package. `charts/cloudtak/values.yaml` is the CloudTAK chart default. continuous integration (CI) deploys `bundle/test-values.yaml` on top of the package. Those paths stay the default so the Test workflow does not change with this document. Pick a profile by adding it to a bundle. Do not use a profile as the only values file. It does not carry image names or passwords.
 
 NATS requests and limits stay in `values/common-values.yaml` (10m and 32Mi, limit 250m and 128Mi; reloader 5m and 16Mi, limit 50m and 32Mi). The profiles do not override them.
 

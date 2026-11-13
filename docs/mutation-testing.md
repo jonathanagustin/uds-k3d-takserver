@@ -18,7 +18,7 @@ Stryker lives in a separate npm project so its dependencies stay out of the
 application lockfile and package build. Its command runner executes the selected
 `node --test` file for every mutation; it does not collect per-test coverage.
 
-The targets exclude upstream checkouts, SDK JARs, test helpers, and generated
+The targets exclude upstream checkouts, software development kit (SDK) Java archives (JARs), test helpers, and generated
 artifacts. Empty mutation scopes fail rather than report a successful dry run. Scores
 describe these targets, not the whole TAKX client or repository.
 
@@ -31,7 +31,7 @@ gh workflow run mutation.yaml --ref main -f suite=all
 ```
 
 Each job has two workers and a 15-minute limit. New runs on the same branch cancel
-older mutation runs. HTML and machine-readable reports are retained for 14 days,
+older mutation runs. Hypertext Markup Language (HTML) and machine-readable reports are retained for 14 days,
 including when a gate fails. There is no schedule or automatic full mutation run
 on each pull request. Ordinary unit tests still run normally.
 
@@ -59,8 +59,8 @@ npm run test:coverage
 npm --prefix mutation test
 ```
 
-Open `mutation/reports/mutation.html`; JSON is beside it. Tool versions and
-Java targets are pinned in the test projects. Use your normal Maven proxy and TLS
+Open `mutation/reports/mutation.html`; JavaScript Object Notation (JSON) is beside it. Tool versions and
+Java targets are pinned in the test projects. Use your normal Maven proxy and Transport Layer Security (TLS)
 settings when your environment requires them; workspace credentials and trust
 stores do not belong in the repository.
 

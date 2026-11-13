@@ -258,7 +258,7 @@ def main():
         # Capture before journaling: initialize/preflight may fail before trialID.
         # No message, command, stderr or local value is persisted or printed.
         if a.evidence:
-            try:F.write(a.evidence.resolve().parent,error)
+            try:F.write(a.evidence.absolute().parent,error)
             except (ValueError,OSError,subprocess.SubprocessError):pass
         if driver is not None and driver.state.get('trialID'):
             driver.journal('stopped',failure=type(error).__name__ if type(error).__name__ in F.TYPES else 'Other')

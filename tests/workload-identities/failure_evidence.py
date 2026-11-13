@@ -139,7 +139,7 @@ def public(directory):
         return result
     value = json.loads(raw, object_pairs_hook=unique)
     if (set(value) != {'schema', 'sourceSHA', 'runID', 'runAttempt', 'status', 'exceptionType', 'frames'}
-            or value['schema'] != 1 or any(value[key] != item for key, item in identity().items())
+            or type(value['schema']) is not int or value['schema'] != 1 or any(value[key] != item for key, item in identity().items())
             or value['status'] != 'captured' or value['exceptionType'] not in TYPES | {'Other'}
             or not isinstance(value['frames'], list) or not 1 <= len(value['frames']) <= MAX_FRAMES):
         raise ValueError('invalid failure capture schema')

@@ -67,8 +67,9 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             F.write(root, KeyError('other secret')); self.assertEqual(path.read_bytes(), original)
             self.assertEqual(F.public(root)['status'], 'captured')
-            for defect in ('payload', 'line', 'hash', 'source', 'run', 'oversized'):
+            for defect in ('payload', 'line', 'hash', 'source', 'run', 'oversized', 'boolean-schema'):
                 value = json.loads(original)
+                if defect == 'boolean-schema': value['schema'] = True
                 if defect == 'payload': value['secret'] = 'SECRET_SENTINEL'
                 if defect == 'line': value['frames'][0]['line'] = 2**60
                 if defect == 'hash': value['frames'][0]['sourceSHA256'] = '0'*64
@@ -98,6 +99,16 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertNotIn('SECRET_SENTINEL', str(caught.exception))
             self.assertFalse(path.exists())
             self.assertEqual(F.public(path.parent)['status'], 'captured')
+
+    def test_wrapper_does_not_resolve_symlink_parent_before_failure_guard(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, ENV, clear=True), patch.object(F, 'reviewed', side_effect=source_bytes), patch.object(P, 'cli_preflight', side_effect=ValueError('SECRET_SENTINEL')):
+            root = Path(directory)
+            outside = root/'outside'; outside.mkdir(mode=0o700)
+            link = root/'linked'; link.symlink_to(outside, target_is_directory=True)
+            with patch('sys.argv', ['package_roundtrip.py', 'round-trip', '--evidence', str(link/'journal.json')]), self.assertRaises(SystemExit):
+                P.main()
+            self.assertFalse((outside/F.NAME).exists())
+            self.assertEqual(list(outside.iterdir()), [])
 
     def test_package_failure_progress_and_callsites_publish_before_acceptance(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {**ENV, 'SCENARIO': 'identities', 'IDENTITY_METHOD': 'package'}, clear=True), patch.object(S.platform, 'machine', return_value='x86_64'), patch.object(F, 'reviewed', side_effect=source_bytes):

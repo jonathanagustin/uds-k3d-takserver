@@ -159,7 +159,7 @@ class PublishTests(unittest.TestCase):
         self.assertNotIn("concurrency", workflow)
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         inputs = workflow[True]["workflow_dispatch"]["inputs"]
-        self.assertEqual(set(inputs), {"release_tag", "source_run_id", "export_scenes"})
+        self.assertEqual(set(inputs), {"release_tag", "source_run_id", "export_scenes", "scene_source_run_id", "scene_source_attempt"})
         self.assertTrue(all(i["default"] == "" and i["type"] == "string" for key, i in inputs.items() if key != "export_scenes"))
         self.assertEqual(inputs["export_scenes"]["type"], "boolean")
         self.assertIs(inputs["export_scenes"]["default"], False)
@@ -198,7 +198,7 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(normal["with"]["path"], "demo/out/ui-reel/")
         self.assertEqual(len(p.FILES), 6)
         mode = workflow["jobs"]["mode"]["steps"][-1]["run"]
-        guard = mode.split("python3 demo/ui-reel/publish.py --mode-only")[0]
+        guard = mode.split('if [[ -n "${SCENE_SOURCE_RUN_ID}"')[0]
         for tag, run, enabled, expected in [("", "", "true", 0), (TAG, RUN_ID, "false", 0),
                                              (TAG, "", "true", 1), ("", RUN_ID, "true", 1),
                                              (TAG, RUN_ID, "true", 1)]:

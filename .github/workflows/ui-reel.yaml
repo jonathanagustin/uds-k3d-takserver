@@ -19,6 +19,15 @@ on:
         type: string
         default: ""
 
+      scene_source_run_id:
+        description: "Publish reviewed historical scene artifact from this main run (no rendering)"
+        type: string
+        default: ""
+      scene_source_attempt:
+        description: "Exact scene producing attempt; requires committed full-frame privacy review"
+        type: string
+        default: ""
+
 permissions:
   contents: read
 
@@ -39,12 +48,18 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           EXPORT_SCENES: ${{ inputs.export_scenes }}
+          SCENE_SOURCE_RUN_ID: ${{ inputs.scene_source_run_id }}
+          SCENE_SOURCE_ATTEMPT: ${{ inputs.scene_source_attempt }}
         run: |
           if [[ "${EXPORT_SCENES}" == true && ( -n "${RELEASE_TAG}" || -n "${SOURCE_RUN_ID}" ) ]]; then
             echo "Scene exports are review-only and cannot be combined with publication"
             exit 1
           fi
-          python3 demo/ui-reel/publish.py --mode-only
+          if [[ -n "${SCENE_SOURCE_RUN_ID}" || -n "${SCENE_SOURCE_ATTEMPT}" ]]; then
+            python3 demo/ui-reel/publish_scenes.py --mode-only
+          else
+            python3 demo/ui-reel/publish.py --mode-only
+          fi
 
   render:
     needs: mode
@@ -155,3 +170,47 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: python3 demo/ui-reel/publish.py
+
+  publish-scenes:
+    needs: mode
+    if: github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'scenes'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    # Serialize all release edits, including retries; never cancel active uploads.
+    concurrency:
+      group: ui-scenes-publish
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the verified GitHub CLI version
+        env:
+          GH_VERSION: 2.103.3
+          GH_ARCHIVE_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location --max-time 120 \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}" -o "${archive}"
+          echo "${GH_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --status
+          tar -xzf "${archive}"
+          echo "${RUNNER_TEMP}/gh_${GH_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
+      - name: Ensure media inspection tools
+        run: |
+          if ! command -v ffprobe >/dev/null; then
+            sudo timeout 120 apt-get update -o Acquire::Retries=0 -o Acquire::http::Timeout=10
+            sudo timeout 120 apt-get install -y --no-install-recommends ffmpeg
+          fi
+      - name: Verify and publish the existing signed artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCENE_SOURCE_RUN_ID: ${{ inputs.scene_source_run_id }}
+          SCENE_SOURCE_ATTEMPT: ${{ inputs.scene_source_attempt }}
+        run: python3 demo/ui-reel/publish_scenes.py

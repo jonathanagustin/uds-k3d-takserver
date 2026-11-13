@@ -77,8 +77,11 @@ def validate_policies(package, policies, network_policies, baseline_network):
         if spec.get('action', 'ALLOW') != 'ALLOW':
             continue
         selector = spec.get('selector', {}).get('matchLabels', {})
+        # Package selectors do not enumerate every label on destination Pods.
+        # An additional policy label is therefore unknown, not a disjointness
+        # proof. Only a conflicting value for a known label excludes overlap.
         relevant = [(key, labels) for key, labels in targets.items()
-                    if all(labels.get(k) == v for k, v in selector.items())]
+                    if all(k not in labels or labels[k] == v for k, v in selector.items())]
         if not relevant:
             continue
         for rule in spec.get('rules', []):
@@ -148,6 +151,8 @@ def validate_workloads(deployments, replicasets, pods, account, baseline_uids):
             require(not meta.get('deletionTimestamp') and meta.get('labels', {}).get('app') == app, 'terminating or mislabeled Pod')
             controllers = [o for o in meta.get('ownerReferences', []) if o.get('controller') is True]
             require(len(controllers) == 1 and controllers[0].get('uid') in owners, 'foreign or standalone workload Pod')
+            require(controllers[0]['uid'] == active[0]['metadata']['uid'],
+                    'workload Pod is owned by an inactive ReplicaSet')
             rs = by_uid[controllers[0]['uid']]
             require(not rs['metadata'].get('deletionTimestamp') and
                     rs['spec']['template']['spec'].get('serviceAccountName') == expected, 'stale ReplicaSet identity')

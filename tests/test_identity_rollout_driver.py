@@ -102,6 +102,19 @@ class IdentityFixtures(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     driver.validate_workloads(d,r,p,'dedicated',u)
 
+    def test_ready_pod_of_inactive_owned_replicaset_is_not_converged(self):
+        deployments, replicasets, pods, uids = workload_fixture()
+        inactive = copy.deepcopy(replicasets[0])
+        inactive['metadata']['uid'] = 'inactive-owned-replicaset'
+        inactive['metadata']['name'] += '-inactive'
+        inactive['spec']['replicas'] = 0
+        replicasets.append(inactive)
+        # Counters, readiness and account all match. Only controller ownership
+        # exposes this stale Pod; the active ReplicaSet remains present.
+        pods[0]['metadata']['ownerReferences'][0]['uid'] = inactive['metadata']['uid']
+        with self.assertRaisesRegex(ValueError, 'inactive ReplicaSet'):
+            driver.validate_workloads(deployments, replicasets, pods, 'dedicated', uids)
+
     def test_exact_current_policy_convergence_and_duplicate_network_rules(self):
         package, policies, net, baseline = policy_fixture()
         fingerprint = driver.validate_policies(package, policies, net, baseline)
@@ -128,6 +141,27 @@ class IdentityFixtures(unittest.TestCase):
             with self.subTest(mutate=mutate):
                 p,a,n,b = policy_fixture(); mutate(p,a,n)
                 with self.assertRaises(ValueError): driver.validate_policies(p,a,n,b)
+
+    def test_root_allow_with_unknown_extra_destination_label_can_overlap(self):
+        for selector in ({'app': 'takserver-ignite', 'extra-label': 'present-on-pod'}, {}, None):
+            with self.subTest(selector=selector):
+                package, policies, network, baseline = policy_fixture()
+                policy = {'metadata': {'name': 'root-allow', 'namespace': 'istio-system'},
+                          'spec': {'action': 'ALLOW', 'rules': [{}]}}
+                if selector is not None:
+                    policy['spec']['selector'] = {'matchLabels': selector}
+                policies.append(policy)
+                with self.assertRaisesRegex(ValueError, 'foreign overlapping policy'):
+                    driver.validate_policies(package, policies, network, baseline)
+
+    def test_root_allow_with_conflicting_known_destination_label_is_disjoint(self):
+        package, policies, network, baseline = policy_fixture()
+        expected = driver.validate_policies(package, policies, network, baseline)
+        policies.append({'metadata': {'name': 'other-app', 'namespace': 'istio-system'},
+                         'spec': {'action': 'ALLOW',
+                                  'selector': {'matchLabels': {'app': 'unrelated', 'extra-label': 'anything'}},
+                                  'rules': [{}]}})
+        self.assertEqual(driver.validate_policies(package, policies, network, baseline), expected)
 
     def test_requested_policy_observation_refuses_concurrent_uid_or_rule_drift(self):
         with tempfile.TemporaryDirectory() as directory:

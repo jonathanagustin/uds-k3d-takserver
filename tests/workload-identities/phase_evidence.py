@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import re
 import stat
-from types import SimpleNamespace
 
 MAX_BYTES = 256 * 1024
 MAX_ITEMS = 256
@@ -265,19 +264,12 @@ def _validate_pepr(snapshot, guards):
                 else:
                     replicasets.append(value)
     require(set(deployments) == set(guards.PEPR))
-    def get(kind, name=None, namespace=None):
-        require(namespace == 'pepr-system')
-        if kind == 'deployment':
-            return copy.deepcopy(deployments[name])
-        require(kind in ('replicasets', 'pods'))
-        return {'items': copy.deepcopy(replicasets if kind == 'replicasets' else pods)}
-    local = SimpleNamespace(state={'peprUIDs': proof['baselineUIDs'], 'peprTemplateFingerprints': {
-        name: guards.template_fingerprint(value, True) for name, value in deployments.items()}}, get=get)
     phase = {'baseline': 'shared', 'dual-before-rollout': 'shared', 'fresh-strict': 'strict'}.get(
         snapshot['binding']['phase'], snapshot['binding']['phase'])
-    # The exact live observer executes against in-memory observations only.
-    # There is deliberately no Driver.get/kubectl fallback.
-    return guards.Driver.observe_pepr(local, phase)
+    # Exact pure live validator; no Driver/get/kubectl fallback exists here.
+    return guards.validate_pepr(list(deployments.values()), replicasets, pods, phase, proof['baselineUIDs'], {
+        name: guards.template_fingerprint(value, True) for name, value in deployments.items()})
+
 
 
 def validate_phase(snapshot, guards, expected_binding=None):

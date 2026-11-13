@@ -82,6 +82,22 @@ class PhaseEvidenceTests(unittest.TestCase):
         self.assertEqual(value['policies'][-1]['spec']['selector']['matchLabels']['unlisted-label'], 'possible')
         self.assertFalse(evidence.validate_phase(value, driver)['accepted'])
 
+    def test_pepr_old_phase_inactive_owner_and_missing_inventory_fail(self):
+        for defect in ('phase', 'owner', 'missing'):
+            bind, data = fixture()
+            if defect == 'phase':
+                data['pepr']['pods'][0]['spec']['containers'][0]['env'][0]['value'] = 'shared'
+            elif defect == 'owner':
+                old = copy.deepcopy(data['pepr']['replicasets'][0])
+                old['metadata']['uid'] = 'old-pepr-rs'
+                old['spec']['replicas'] = 0
+                data['pepr']['replicasets'].append(old)
+                data['pepr']['pods'][0]['metadata']['ownerReferences'][0]['uid'] = 'old-pepr-rs'
+            else:
+                data['pepr']['deployments'].pop()
+            value = evidence.capture(bind, **data)
+            self.assertFalse(evidence.validate_phase(value, driver)['accepted'], defect)
+
     def test_payload_and_full_annotations_never_enter_projection(self):
         bind, data = fixture()
         for obj in data['deployments'] + data['replicasets']:

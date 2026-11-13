@@ -111,6 +111,53 @@ class PackageGuards(unittest.TestCase):
             trial.capture_retained_validation(snapshot,'transition')
             self.assertFalse((Path(directory)/P.VALIDATION_FAILURE).exists())
 
+    @unittest.skipUnless(__import__('shutil').which('helm'),'existing Helm required for real hook source render')
+    def test_real_retained_verify_journal_companion_public_projection_never_exports_hook_bodies(self):
+        import copy
+        spec=importlib.util.spec_from_file_location('retained_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        raw=subprocess.check_output(['helm','template','uds-takserver-config',str(ROOT/'charts/takserver'),
+                                     '--namespace','takserver'],timeout=20)
+        objects=[obj for obj in yaml.safe_load_all(raw) if isinstance(obj,dict) and
+                 obj.get('metadata',{}).get('annotations',{}).get('helm.sh/hook')]
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'IDENTITY_METHOD':'package',
+                'GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'method':'package','accepted':False,'stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(objects)
+            baseline=P.R.hooks(trial)
+            # Seed only the ephemeral body cache populated by capture(); no cluster/PVC work.
+            trial._retained_hook_baseline={'inventorySHA256':P.R.sha(baseline['hookInventory']),
+                                          'objects':copy.deepcopy(objects)}
+            changed=copy.deepcopy(objects)
+            job=next(obj for obj in changed if obj['kind']=='Job')
+            job['spec']['template']['spec']['containers'][0]['image']='PRIVATE_HOOK_IMAGE_SENTINEL'
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(changed)
+            with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):
+                trial.retained_verify({'source':baseline,'records':[]},'transition')
+            private=(folder/P.VALIDATION_FAILURE).read_text()
+            self.assertIn('PRIVATE_HOOK_IMAGE_SENTINEL',private)
+            result=publisher.identity_progress(root)['package']
+            self.assertEqual(result['status'],'observed')
+            self.assertEqual(result['stages'],[{'stage':'retained-hook-drift','hook':'cert-job',
+                                               'category':'generator','fieldClass':'job-spec'}])
+            for value in (trial.evidence.read_text(),(folder/'journal-progress.json').read_text(),json.dumps(result)):
+                self.assertNotIn('PRIVATE_HOOK_IMAGE_SENTINEL',value)
+                self.assertNotIn('baselineObjects',value);self.assertNotIn('observedObjects',value)
+            for field in ('hook','category','fieldClass'):
+                trial.state['stages']=[]
+                diagnostic={'hook':'cert-job','category':'generator','fieldClass':'job-spec'}
+                diagnostic[field]='PRIVATE_PROJECTION_SENTINEL'
+                trial.journal('retained-hook-drift',**diagnostic)
+                rejected=publisher.identity_progress(root)['package']
+                self.assertEqual(rejected['status'],'unavailable')
+                self.assertNotIn('PRIVATE_PROJECTION_SENTINEL',json.dumps(rejected))
+            trial.state['stages']=[]
+            trial.journal('retained-hook-drift',hook='cert-job',category='credential',fieldClass='job-spec')
+            self.assertEqual(publisher.identity_progress(root)['package']['status'],'unavailable')
+
     def setUp(self):
         directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
         self.phase_directory=Path(directory.name)

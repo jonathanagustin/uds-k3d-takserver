@@ -20,7 +20,7 @@ class RetainedStateGuards(unittest.TestCase):
     def secret(self,name='takserver-keystore'):
         return {'kind':'Secret','metadata':{'name':name,'namespace':'takserver','uid':'original','resourceVersion':'7','annotations':{'helm.sh/hook-delete-policy':'before-hook-creation'}},'data':{'CAPASS':'Zml4dHVyZQ=='}}
     def record(self,obj):
-        rec=R.resource_record(obj);rec['origin']={'sourceFilesSHA256':R.source_files(),**{key:'a'*64 for key in ('storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256')}};return rec
+        rec=R.resource_record(obj);rec['origin']={'sourceFilesSHA256':R.source_files(),**{key:'a'*64 for key in ('storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256')},'hookInventory':{'schema':1,'objects':{code:{'sha256':'a'*64,'fieldSHA256':{field:'a'*64 for field in fields}} for code,fields in R.HOOK_CLASSES.items()}}};return rec
     def driver(self,obj):
         client={'clusters':[{'cluster':{'server':'https://127.0.0.1:6443','certificate-authority-data':'Zml4dHVyZQ=='}}],
                 'users':[{'user':{'client-certificate-data':'Zml4dHVyZQ==','client-key-data':'Zml4dHVyZQ=='}}]}
@@ -92,13 +92,13 @@ class RetainedStateGuards(unittest.TestCase):
         for name,recreated in [('takserver-keystore',True),('database',False)]:
             obj=self.secret(name);rec=R.resource_record(obj);rec.update(dataSHA256=R.sha(obj['data']),recreatedHook=recreated)
             obj['metadata']['uid']='new-hook';driver=SimpleNamespace(get=lambda *a,**k:obj)
-            with patch.object(R,'hooks',return_value={}):
+            with patch.object(R,'verify_hooks',return_value=None):
                 if recreated:R.verify(driver,{'source':{},'records':[rec]})
                 else:
                     with self.assertRaisesRegex(ValueError,'replaced'):R.verify(driver,{'source':{},'records':[rec]})
     def test_changed_hook_password_is_not_accepted_as_recreation(self):
         obj=self.secret();rec=R.resource_record(obj);rec.update(dataSHA256=R.sha(obj['data']),recreatedHook=True);obj['data']['CAPASS']='Y2hhbmdlZA=='
-        with patch.object(R,'hooks',return_value={}),self.assertRaisesRegex(ValueError,'credential/certificate'):
+        with patch.object(R,'verify_hooks',return_value=None),self.assertRaisesRegex(ValueError,'credential/certificate'):
             R.verify(SimpleNamespace(get=lambda *a,**k:obj),{'source':{},'records':[rec]})
 
     def test_startup_cleanup_requires_literal_source_checkpoint(self):
@@ -158,3 +158,149 @@ class RetainedStateGuards(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'bound source origin'):R.conditional_delete(driver,R.resource_record(obj))
         rec=self.record(obj);rec['origin']['sourceFilesSHA256']={}
         with self.assertRaisesRegex(ValueError,'bound source origin'):R.conditional_delete(driver,rec)
+
+class StoredHookSourceGuards(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        import yaml
+        cls.yaml=yaml
+        helm=shutil.which('helm')
+        if not helm:raise unittest.SkipTest('Helm required for actual config-chart hook fixtures')
+        cls.temp=tempfile.TemporaryDirectory();root=Path(cls.temp.name);chart=root/'chart'
+        shutil.copytree(ROOT/'charts/takserver',chart)
+        # Only lookup transport is replaced; all six actual templates remain.
+        (chart/'files/synthetic-keystore.json').write_text(json.dumps({'metadata':{'annotations':{'uds.dev/keystore-password':'generated'}},'data':{'CAPASS':base64.b64encode(os.urandom(24)).decode()}}))
+        (chart/'files/synthetic-cert-migration.json').write_text('{}')
+        path=chart/'templates/prereqs.yaml';source=path.read_text()
+        for original,replacement in [('lookup "v1" "Secret" .Release.Namespace "takserver-keystore"','(.Files.Get "files/synthetic-keystore.json" | fromJson)'),('lookup "v1" "ConfigMap" .Release.Namespace "cert-migration"','(.Files.Get "files/synthetic-cert-migration.json" | fromJson)')]:
+            if source.count(original)!=1:raise AssertionError('actual lookup source contract changed')
+            source=source.replace(original,replacement)
+        path.write_text(source);cls.rendered={}
+        for phase in ('shared','transition','strict','rollback'):
+            for repeat in range(2):
+                argv=[helm,'template','uds-takserver-config',str(chart),'--namespace','takserver','--set','workloadIdentityPhase='+phase]
+                if phase!='shared':argv.append('--is-upgrade')
+                raw=subprocess.check_output(argv,timeout=20)
+                cls.rendered[phase,repeat]=[obj for obj in yaml.safe_load_all(raw) if isinstance(obj,dict) and obj.get('metadata',{}).get('annotations',{}).get('helm.sh/hook')]
+        cls.original=[]
+        for _ in range(2):
+            raw=subprocess.check_output([helm,'template','uds-takserver-config',str(ROOT/'charts/takserver'),'--namespace','takserver'],timeout=20)
+            cls.original.append([obj for obj in yaml.safe_load_all(raw) if isinstance(obj,dict) and obj.get('metadata',{}).get('annotations',{}).get('helm.sh/hook')])
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls,'temp'):cls.temp.cleanup()
+    def driver(self,objects,text=None):
+        driver=SimpleNamespace(command=lambda *a,**k:text if text is not None else self.yaml.safe_dump_all(objects),journal=MagicMock())
+        if hasattr(self,'baseline_objects'):
+            driver._retained_hook_baseline={'inventorySHA256':R.sha(R.hook_inventory(self.baseline_objects)),
+                                            'objects':copy.deepcopy(self.baseline_objects)}
+        return driver
+    def origin(self,objects):
+        origin=R.hooks(self.driver(objects));self.baseline_objects=copy.deepcopy(objects);return origin
+    def test_real_stable_lookup_hook_inventory_equal_across_phases_and_rerenders(self):
+        baseline=self.origin(self.rendered['shared',0])
+        for objects in self.rendered.values():
+            self.assertIsNone(R.hook_diagnostic(baseline,self.origin(objects)))
+    def test_same_phase_generated_random_credentials_still_reject(self):
+        baseline=self.origin(self.original[0]);driver=self.driver(self.original[1])
+        with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):R.verify_hooks(driver,baseline)
+        self.assertEqual(driver._retained_source_failure['diagnostic'],{'hook':'keystore','category':'credential','fieldClass':'credential-data'})
+        self.assertIs(R.validate_source_failure(driver._retained_source_failure),driver._retained_source_failure)
+    def test_only_presentation_and_object_order_may_differ(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        text='# presentation only\n'+self.yaml.safe_dump_all(list(reversed(objects)),sort_keys=False)
+        driver=self.driver(objects,text);observed=R.verify_hooks(driver,baseline)
+        self.assertNotEqual(observed['storedHooksSHA256'],baseline['storedHooksSHA256'])
+        self.assertEqual(observed['hookInventory'],baseline['hookInventory'])
+        self.assertEqual(observed['keystoreHookSHA256'],baseline['keystoreHookSHA256'])
+        self.assertEqual(observed['sourceGeneratorJobSHA256'],baseline['sourceGeneratorJobSHA256'])
+        driver.journal.assert_not_called()
+    def test_every_actual_hook_leaf_and_unknown_field_is_guarded(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        def leaves(value,path=()):
+            if isinstance(value,dict):
+                for key,item in value.items():yield from leaves(item,path+(key,))
+            elif isinstance(value,list):
+                for index,item in enumerate(value):yield from leaves(item,path+(index,))
+            else:yield path
+        mutations=0
+        for index,obj in enumerate(objects):
+            for path in [*leaves(obj),('unexpected-field',)]:
+                changed=copy.deepcopy(objects);parent=changed[index]
+                for key in path[:-1]:parent=parent[key]
+                parent[path[-1]]='UNEXPECTED_PRIVATE_VALUE'
+                driver=self.driver(changed)
+                with self.subTest(hook=obj['kind'],field=path),self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+                diagnostic=driver.journal.call_args.kwargs
+                self.assertNotIn('UNEXPECTED_PRIVATE_VALUE',json.dumps(diagnostic))
+                self.assertEqual(set(diagnostic),{'hook','category','fieldClass'})
+                mutations+=1
+        self.assertGreater(mutations,100)
+    def test_extra_missing_duplicate_and_nonhook_objects_refused(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        for changed in (objects[:-1],objects+[copy.deepcopy(objects[0])],objects+[{'kind':'Unrecognized','metadata':{'name':'PRIVATE_NAME'}}],objects+[42]):
+            driver=self.driver(changed)
+            with self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+            self.assertEqual(driver._retained_source_failure['diagnostic'],{'hook':'inventory','category':'inventory','fieldClass':'inventory'})
+            self.assertNotIn('PRIVATE_NAME',json.dumps(driver._retained_source_failure))
+    def test_fixed_field_class_diagnostics_for_each_security_boundary(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        mutations=[('Secret','stringData','credential','credential-data'),
+                   ('Job','spec','generator','job-spec'),
+                   ('Role','rules','authorization','rbac'),
+                   ('RoleBinding','subjects','authorization','rbac'),
+                   ('NetworkPolicy','spec','authorization','network-policy'),
+                   ('ServiceAccount','metadata','metadata','metadata')]
+        for kind,field,category,field_class in mutations:
+            changed=copy.deepcopy(objects);obj=next(obj for obj in changed if obj['kind']==kind)
+            if field=='metadata':obj[field]['labels']={'test':'PRIVATE_VALUE'}
+            else:obj[field]='PRIVATE_VALUE'
+            driver=self.driver(changed)
+            with self.subTest(kind=kind),self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+            self.assertEqual(driver._retained_source_failure['diagnostic']['category'],category)
+            self.assertEqual(driver._retained_source_failure['diagnostic']['fieldClass'],field_class)
+        changed=copy.deepcopy(objects);changed[0]['metadata']['annotations']=None
+        driver=self.driver(changed)
+        with self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+        self.assertEqual(driver._retained_source_failure['diagnostic']['fieldClass'],'metadata')
+
+    def test_actual_private_bodies_are_hash_bound_and_never_journaled(self):
+        baseline=self.origin(self.original[0]);driver=self.driver(self.original[1])
+        with self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+        snapshot=driver._retained_source_failure
+        self.assertEqual(snapshot['baselineObjects'],self.original[0])
+        self.assertEqual(snapshot['observedObjects'],self.original[1])
+        for side in ('baseline','observed'):
+            changed=copy.deepcopy(snapshot)
+            secret=next(obj for obj in changed[side+'Objects'] if obj['kind']=='Secret')
+            secret['stringData']['CAPASS']='UNAUTHENTICATED_PRIVATE_VALUE'
+            with self.assertRaisesRegex(ValueError,'object hashes differ'):R.validate_source_failure(changed)
+            secret=next(obj for obj in snapshot[side+'Objects'] if obj['kind']=='Secret')
+            self.assertNotIn(secret['stringData']['CAPASS'],json.dumps(driver.journal.call_args.kwargs))
+        oversized=copy.deepcopy(snapshot)
+        for side in ('baseline','observed'):
+            job=next(obj for obj in oversized[side+'Objects'] if obj['kind']=='Job')
+            job['private-bound-test']='x'*R.SOURCE_FAILURE_LIMIT
+            origin=oversized[side];origin['hookInventory']=R.hook_inventory(oversized[side+'Objects'])
+            origin['sourceGeneratorJobSHA256']=R.sha(job)
+        with self.assertRaisesRegex(ValueError,'failure bound'):R.validate_source_failure(oversized)
+        self.assertLess(len(json.dumps(snapshot,sort_keys=True,separators=(',',':')).encode()),R.SOURCE_FAILURE_LIMIT)
+
+    def test_missing_private_baseline_never_masks_or_accepts_real_drift(self):
+        baseline=self.origin(self.original[0]);driver=self.driver(self.original[1])
+        driver._retained_hook_baseline={'inventorySHA256':'0'*64,'objects':self.original[0]}
+        with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):R.verify_hooks(driver,baseline)
+        self.assertIsNone(driver._retained_source_failure)
+        self.assertEqual(driver.journal.call_args.kwargs['fieldClass'],'credential-data')
+
+    def test_source_code_change_and_failure_snapshot_schema_are_guarded(self):
+        objects=self.rendered['shared',0];baseline=self.origin(objects)
+        with patch.object(R,'source_files',return_value={key:'f'*64 for key in R.SOURCE_FILES}):
+            driver=self.driver(objects)
+            with self.assertRaises(ValueError):R.verify_hooks(driver,baseline)
+        self.assertEqual(driver._retained_source_failure['diagnostic'],{'hook':'source-code','category':'source-code','fieldClass':'source-code'})
+        failure=copy.deepcopy(driver._retained_source_failure)
+        for mutate in [lambda v:v.update(extra='PRIVATE'),lambda v:v['diagnostic'].update(hook='PRIVATE'),lambda v:v['baseline']['hookInventory']['objects']['keystore'].update(sha256='PRIVATE')]:
+            value=copy.deepcopy(failure);mutate(value)
+            with self.assertRaises(ValueError):R.validate_source_failure(value)

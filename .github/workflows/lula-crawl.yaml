@@ -1,17 +1,20 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-name: Lula manual crawl
+name: Lula comment crawl
 
 on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
   workflow_dispatch:
     inputs:
       pull_number:
-        description: Open same-repository PR number with an existing mapped baseline
+        description: Open same-repository main-target PR with an existing mapped baseline
         required: true
         type: string
       post_comments:
-        description: Authorize Lula to replace its previous comments and post findings
+        description: Authorize safe bot-owned comment replacement and current findings
         required: true
         default: false
         type: boolean
@@ -19,18 +22,31 @@ on:
 permissions:
   contents: read
 
+# Both entry points serialize the same PR. Never cancel an active mutation.
+concurrency:
+  group: lula-crawl-${{ github.event.pull_request.number || inputs.pull_number }}
+  cancel-in-progress: false
+
 jobs:
   crawl:
-    if: github.ref == 'refs/heads/main' && inputs.post_comments
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.post_comments) ||
+      (github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == 'main' &&
+       github.event.pull_request.state == 'open' && !github.event.pull_request.draft &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
+    env:
+      PULL_NUMBER: ${{ github.event.pull_request.number || inputs.pull_number }}
     steps:
-      - name: Checkout trusted workflow source
+      # PR source, workflow, actions and dependencies are never checked out.
+      - name: Checkout trusted main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/heads/main
           persist-credentials: false
 
       - name: Install Node
@@ -38,27 +54,50 @@ jobs:
         with:
           node-version: 26.13.0
 
-      # The pinned crawler lists files without pagination. Keep this fail-closed
-      # guard until a separately tested implementation covers larger PRs.
+      # The same live API preflight serves both triggers. Metadata is environment
+      # data, never shell source. Existing base markers cannot be added by this PR.
       - name: Require a supported PR and an existing mapped baseline
         env:
           GH_TOKEN: ${{ github.token }}
-          PULL_NUMBER: ${{ inputs.pull_number }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "${PULL_NUMBER}" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_NUMBER}" > "${RUNNER_TEMP}/lula-pr.json"
           base="$(jq -r .base.sha "${RUNNER_TEMP}/lula-pr.json")"
+          [[ "${base}" =~ ^[0-9a-f]{40}$ ]]
           gh api "repos/${GITHUB_REPOSITORY}/contents/charts/takserver/files/config/CoreConfig.xml?ref=${base}" > "${RUNNER_TEMP}/lula-baseline.json"
-          python3 .github/scripts/lula-crawl-preflight.py "${RUNNER_TEMP}/lula-pr.json" "${RUNNER_TEMP}/lula-baseline.json" "${GITHUB_REPOSITORY}"
+          python3 .github/scripts/lula-crawl-preflight.py "${RUNNER_TEMP}/lula-pr.json" "${RUNNER_TEMP}/lula-baseline.json" "${GITHUB_REPOSITORY}" "${RUNNER_TEMP}/lula-preflight.json"
 
-      - name: Comment on changed mapped source blocks
+      - name: Prepare the verified official safety variant without credentials
+        env:
+          NPM_CONFIG_IGNORE_SCRIPTS: "true"
+          NPM_CONFIG_USERCONFIG: /dev/null
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/lula2-0.9.5.tgz"
+          curl --fail --silent --show-error --location --max-time 60 --max-filesize 4194304 \
+            https://registry.npmjs.org/lula2/-/lula2-0.9.5.tgz -o "${archive}"
+          python3 - "${archive}" <<'PY'
+          import importlib.util, pathlib, sys
+          spec = importlib.util.spec_from_file_location("patch", ".github/lula/patch_crawl.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          module.verify_archive(pathlib.Path(sys.argv[1]))
+          PY
+          npm install --ignore-scripts --no-bin-links --no-audit --no-fund \
+            --prefix "${RUNNER_TEMP}/lula-tools" "${archive}"
+          python3 .github/lula/patch_crawl.py --archive "${archive}" \
+            "${RUNNER_TEMP}/lula-tools/node_modules/lula2/dist/index.js" \
+            "${RUNNER_TEMP}/lula-tools/node_modules/lula2/dist/index.safe.mjs"
+
+      - name: Comment with complete analysis and safe bot-owned replacement
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          PULL_NUMBER: ${{ inputs.pull_number }}
         shell: bash
         run: |
           set -euo pipefail
           export OWNER="${GITHUB_REPOSITORY%%/*}" REPO="${GITHUB_REPOSITORY#*/}"
-          npx --yes lula2@0.9.5 crawl --post-mode=comment
+          export LULA_PREFLIGHT_JSON="$(cat "${RUNNER_TEMP}/lula-preflight.json")"
+          node "${RUNNER_TEMP}/lula-tools/node_modules/lula2/dist/index.safe.mjs" crawl --post-mode=comment

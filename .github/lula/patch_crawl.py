@@ -29,11 +29,25 @@ def patch_source(source):
         ('    await octokit.issues.createComment({', '    return (await octokit.issues.createComment({'),
         ('      body\n    });\n    return;', '      body\n    })).data;'),
         ('        console.error(`Error checking deleted file ${file.filename}: ${err}`);',
-         '        throw new Error("Incomplete Lula deleted-file analysis", { cause: err });'),
+         '        throw new Error("Incomplete Lula deleted-file analysis");'),
         ('      console.error(`Error processing ${file.filename}: ${err}`);',
-         '      throw new Error("Incomplete Lula modified-file analysis", { cause: err });'),
+         '      throw new Error("Incomplete Lula modified-file analysis");'),
         ('    const { owner, repo, pull_number } = getPRContext();',
          '    if (opts.postMode !== "comment") throw new Error("Safety variant supports comment mode only");\n    const { owner, repo, pull_number } = getPRContext();'),
+        ('    const prBranch = pr.data.head.ref;', '''    const expected = JSON.parse(process.env.LULA_PREFLIGHT_JSON);
+    const requireSnapshot = current => {
+      if (expected.repository !== owner + "/" + repo || current.state !== "open" || current.draft !== false ||
+          current.head?.repo?.full_name !== expected.repository || current.base?.ref !== "main" ||
+          current.head.sha !== expected.headSHA || current.base.sha !== expected.baseSHA ||
+          !Number.isInteger(current.changed_files) || current.changed_files < 0 || current.changed_files > 30 ||
+          current.changed_files !== expected.changedFiles) throw new Error("PR changed after trusted preflight");
+    };
+    requireSnapshot(pr.data);
+    const prBranch = pr.data.head.ref;'''),
+        ('    const context = {',
+         '    if (files.length !== expected.changedFiles) throw new Error("Incomplete Lula changed-file list");\n    const context = {'),
+        ('      const finalBody = analysisResult.commentBody + closingBody;',
+         '      requireSnapshot((await octokit.pulls.get({ owner, repo, pull_number })).data);\n      const finalBody = analysisResult.commentBody + closingBody;'),
         ('    await cleanupOldPosts(context, opts.postMode);\n', ''),
         ('      await postFinding({', '      const posted = await postFinding({'),
         ('        body: finalBody\n      });',

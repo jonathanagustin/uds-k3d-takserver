@@ -1,4 +1,4 @@
-# Lula 0.9.5 safety variant (not activated)
+# Lula 0.9.5 safety variant (local activation preparation)
 
 The official `lula2@0.9.5` command has only `review` and `comment` posting modes;
 neither is a render-only mode. In comment mode its cleanup selects comments by
@@ -44,12 +44,19 @@ drift and existing output, and performs no network requests or execution. It
 does not install npm dependencies, fetch credentials, or invoke the generated
 CLI. Version pinning of the package does not freeze every transitive dependency.
 
-No workflow uses this variant yet. The existing read-only mapping workflow and
-explicitly authorized manual workflow are unchanged. Before automatic activation,
-retain trusted default-branch workflow/code only, same-repository open non-draft
-PR guards, the 30-file bound, existing base SC-8 markers, and job-only PR write
-permission. Never check out or execute PR code or interpolate PR metadata into
-shell code. Serialize runs for one PR to avoid overlapping replacements.
+The local workflow preparation uses this variant for both manual and automatic
+`pull_request_target` entry points, with trusted main checkout only, same-repository
+open non-draft main-target PR guards, the 30-file bound, existing base SC-8 markers,
+and job-only PR write permission. It does not check out or execute PR code or
+interpolate PR metadata into shell code. Both entry points serialize the same PR.
+Archive integrity is verified before npm installation; install scripts are disabled,
+and the installation step receives no API credential. The crawler binds live
+base/head SHAs and file count to preflight, checks complete file-list length, and
+reads current PR state again immediately before posting. A changed/unsupported PR
+fails before mutation. A change after that final API read cannot be made atomic
+with GitHub comment creation; comments are observations, not an approval or merge
+check. This local branch has not been published or activated. The read-only
+mapping workflow remains separate and never posts.
 
 The existing deferral until a new Lula release or explicit compliance priority
 still applies. Local mocked API tests establish these safety behaviors, not live

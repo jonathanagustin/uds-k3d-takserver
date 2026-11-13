@@ -39,6 +39,18 @@ test('home page links the four tasks and the theme toggle changes the document',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
+test('the preview anchor stays on home and reaches its inline player', async ({ page }) => {
+  for (const hash of ['#ui-preview', '#ui%2Dpreview']) {
+    await page.goto('about:blank');
+    await page.goto(hash, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(new RegExp(`/uds-takserver/${hash}$`));
+    const preview = page.locator('#ui-preview');
+    await expect(preview).toBeVisible();
+    await expect(preview.locator('video')).toHaveAttribute('controls', '');
+    await expect(preview.locator('video')).toHaveAttribute('preload', 'none');
+  }
+});
+
 test('an old home-page anchor opens that section on Getting started', async ({ page }) => {
   // The README includes third-party badges; they do not gate local content.
   await page.goto('#quick-start', { waitUntil: 'domcontentloaded' });

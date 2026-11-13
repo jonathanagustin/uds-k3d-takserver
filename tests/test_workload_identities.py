@@ -4,6 +4,7 @@
 """Render actual staged identities, retaining shared defaults and scoped rules."""
 from pathlib import Path
 import contextlib
+import copy
 import importlib.util
 import io
 import json
@@ -107,6 +108,70 @@ class FlowIdentityChecks(unittest.TestCase):
         scoped = {'source': {'principals': ['cluster.local/ns/takserver/sa/takserver-api']}}
         self.assertEqual(self.findings({'rules': [{'from': [scoped]}]}), [])
         self.assertEqual(len(self.findings({'rules': [{'from': [scoped, {}]}]})), 1)
+
+    @staticmethod
+    def anywhere_fixture():
+        # UDS Core v1.16.0 authorizationPolicies.ts: Anywhere -> empty source,
+        # then buildAuthPolicy omits from but retains the selector and ports.
+        rule = {'direction': 'Ingress', 'remoteGenerated': 'Anywhere',
+                'selector': {'app': 'public-api'}, 'port': 8443, 'description': 'Public API'}
+        policy = {'metadata': {'name': f'protect-{flows.PACKAGE}-ingress-public-api',
+                              'namespace': flows.NS,
+                              'labels': {'uds/package': flows.PACKAGE, 'uds/generated': 'Anywhere',
+                                         'uds/for': 'network'}},
+                  'spec': {'action': 'ALLOW', 'selector': {'matchLabels': {'app': 'public-api'}},
+                           'rules': [{'to': [{'operation': {'ports': ['8443']}}]}]}}
+        return rule, policy
+
+    def test_exact_declared_anywhere_policy_preserves_public_ingress(self):
+        rule, policy = self.anywhere_fixture()
+        self.assertTrue(flows.declared_anywhere_policy(policy, [rule]))
+        self.assertEqual(self.check_status([rule], [policy]), 0)
+        # The identical all-source policy without its Package declaration fails.
+        self.assertEqual(self.check_status([], [policy]), 1)
+
+    def test_anywhere_label_does_not_waive_a_changed_or_widened_grant(self):
+        rule, original = self.anywhere_fixture()
+        mutations = [
+            lambda p: p['spec']['rules'][0]['to'][0]['operation']['ports'].append('47100'),
+            lambda p: p['spec']['rules'].append({}),
+            lambda p: p['spec']['selector']['matchLabels'].update(app='takserver-ignite'),
+            lambda p: p['metadata'].update(name='unrelated-policy'),
+            lambda p: p['metadata'].update(namespace='unrelated'),
+            lambda p: p['metadata']['labels'].pop('uds/generated'),
+            lambda p: p['metadata']['labels'].update({'uds/package': 'unrelated'}),
+            lambda p: p['metadata']['labels'].update({'uds/for': 'unrelated'}),
+        ]
+        for mutation in mutations:
+            policy = copy.deepcopy(original)
+            mutation(policy)
+            with self.subTest(policy=policy):
+                self.assertFalse(flows.declared_anywhere_policy(policy, [rule]))
+                self.assertEqual(self.check_status([rule], [policy]), 1)
+
+    def test_anywhere_policy_requires_the_matching_ingress_rule(self):
+        original, policy = self.anywhere_fixture()
+        for changes in [{'direction': 'Egress'}, {'remoteGenerated': 'IntraNamespace'},
+                        {'remoteServiceAccount': 'takserver-api'}, {'remoteCidr': '192.0.2.0/24'},
+                        {'remoteProtocol': 'UDP'}, {'selector': {'app': 'different'}}]:
+            with self.subTest(changes=changes):
+                rule = dict(original, **changes)
+                self.assertFalse(flows.declared_anywhere_policy(policy, [rule]))
+                self.assertEqual(self.check_status([rule], [policy]), 1)
+
+    def test_anywhere_fallback_name_and_multiport_translation(self):
+        _, policy = self.anywhere_fixture()
+        rule = {'direction': 'Ingress', 'remoteGenerated': 'Anywhere', 'ports': [8443, 8089]}
+        policy['metadata']['name'] = f'protect-{flows.PACKAGE}-ingress-all-pods-anywhere'
+        policy['spec'].pop('selector')
+        policy['spec']['rules'] = [{'to': [{'operation': {'ports': ['8443', '8089']}}]}]
+        self.assertEqual(self.check_status([rule], [policy]), 0)
+        # An explicit empty destination selector is not the same emitted spec.
+        rule['selector'] = {}
+        self.assertEqual(self.check_status([rule], [policy]), 1)
+        policy['metadata']['name'] = f'protect-{flows.PACKAGE}-ingress-anywhere'
+        policy['spec']['selector'] = {'matchLabels': {}}
+        self.assertEqual(self.check_status([rule], [policy]), 0)
 
 
 def render(phase):

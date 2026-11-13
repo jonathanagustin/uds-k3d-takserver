@@ -1,3 +1,5 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
 """Offline source-boundary guards; no compiler, network or native execution."""
 import hashlib
 import importlib.util

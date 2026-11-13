@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
 """Create a hash-bound feature source overlay; no build, download or source-tree mutation."""
 from __future__ import annotations
 import argparse

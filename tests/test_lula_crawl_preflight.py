@@ -3,7 +3,11 @@
 
 import base64
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 import yaml
@@ -17,7 +21,8 @@ SPEC.loader.exec_module(PREFLIGHT)
 class CrawlPreflight(unittest.TestCase):
     def setUp(self):
         self.pr = {"state": "open", "draft": False, "changed_files": 30,
-                   "head": {"repo": {"full_name": "owner/repo"}}}
+                   "base": {"ref": "main", "sha": "b" * 40},
+                   "head": {"sha": "a" * 40, "repo": {"full_name": "owner/repo"}}}
         self.baseline = {"type": "file", "encoding": "base64",
                          "path": "charts/takserver/files/config/CoreConfig.xml", "content": base64.b64encode(
             (ROOT / "charts/takserver/files/config/CoreConfig.xml").read_bytes()).decode()}
@@ -27,14 +32,38 @@ class CrawlPreflight(unittest.TestCase):
         manual = yaml.safe_load((ROOT / ".github/workflows/lula-crawl.yaml").read_text())
         self.assertEqual(set(auto["jobs"]), {"mappings"})
         trigger = manual.get("on", manual.get(True))
-        self.assertEqual(set(trigger), {"workflow_dispatch"})
+        self.assertEqual(set(trigger), {"workflow_dispatch", "pull_request_target"})
+        self.assertEqual(trigger["pull_request_target"]["branches"], ["main"])
         self.assertFalse(trigger["workflow_dispatch"]["inputs"]["post_comments"]["default"])
         job = manual["jobs"]["crawl"]
-        self.assertEqual(job["if"], "github.ref == 'refs/heads/main' && inputs.post_comments")
+        for guard in ["github.ref == 'refs/heads/main'", "inputs.post_comments",
+                      "github.event.pull_request.base.ref == 'main'",
+                      "github.event.pull_request.state == 'open'", "!github.event.pull_request.draft",
+                      "github.event.pull_request.head.repo.full_name == github.repository"]:
+            self.assertIn(guard, job["if"])
         checkout = job["steps"][0]
-        self.assertNotIn("ref", checkout["with"])
+        self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
+        self.assertFalse(checkout["with"]["persist-credentials"])
         command = job["steps"][-1]["run"]
-        self.assertIn("lula2@0.9.5 crawl --post-mode=comment", command)
+        self.assertIn("index.safe.mjs\" crawl --post-mode=comment", command)
+        self.assertNotIn("npx", command)
+        self.assertEqual(manual["permissions"], {"contents": "read"})
+        self.assertEqual(job["permissions"], {"contents": "read", "pull-requests": "write"})
+        self.assertIn("github.event.pull_request.number || inputs.pull_number", manual["concurrency"]["group"])
+        self.assertFalse(manual["concurrency"]["cancel-in-progress"])
+        for step in job["steps"]:
+            self.assertNotIn("${{", step.get("run", ""))
+            self.assertNotIn("continue-on-error", step)
+        prepare = next(s for s in job["steps"] if "without credentials" in s["name"])
+        self.assertNotIn("GITHUB_TOKEN", prepare.get("env", {}))
+        self.assertIn("--ignore-scripts", prepare["run"])
+        self.assertIn("module.verify_archive", prepare["run"])
+        self.assertLess(prepare["run"].index("module.verify_archive"), prepare["run"].index("npm install"))
+        preflight = next(s for s in job["steps"] if "existing mapped baseline" in s["name"])
+        self.assertIn(".github/scripts/lula-crawl-preflight.py", preflight["run"])
+        self.assertIn("--automatic", preflight["run"])
+        for step in job["steps"][job["steps"].index(preflight)+1:]:
+            self.assertEqual(step["if"], "steps.preflight.outputs.ready == 'true'")
 
     def test_supported_boundary_passes(self):
         PREFLIGHT.validate(self.pr, self.baseline, "owner/repo")
@@ -45,9 +74,66 @@ class CrawlPreflight(unittest.TestCase):
                 PREFLIGHT.validate({**self.pr, "changed_files": count}, self.baseline, "owner/repo")
 
     def test_fork_draft_and_closed_fail(self):
-        for change in [{"draft": True}, {"state": "closed"}, {"head": {"repo": {"full_name": "fork/repo"}}}]:
+        for change in [{"draft": True}, {"draft": None}, {"state": "closed"},
+                       {"base": {"ref": "other"}}, {"head": {"repo": {"full_name": "fork/repo"}}}]:
             with self.subTest(change=change), self.assertRaises(ValueError):
                 PREFLIGHT.validate({**self.pr, **change}, self.baseline, "owner/repo")
+
+    def test_snapshot_requires_exact_sources(self):
+        self.assertEqual(PREFLIGHT.snapshot(self.pr, "owner/repo"), {
+            "repository": "owner/repo", "baseSHA": "b" * 40, "headSHA": "a" * 40, "changedFiles": 30})
+        for sha in [None, "main", "a" * 39, "$(command)"]:
+            with self.subTest(sha=sha), self.assertRaises(ValueError):
+                PREFLIGHT.snapshot({**self.pr, "base": {"sha": sha}}, "owner/repo")
+
+    def test_only_known_automatic_oversize_is_a_skip(self):
+        oversized = {**self.pr, "changed_files": 31}
+        self.assertIsNone(PREFLIGHT.evaluate(oversized, self.baseline, "owner/repo", automatic=True))
+        with self.assertRaises(PREFLIGHT.UnsupportedFileCount):
+            PREFLIGHT.evaluate(oversized, self.baseline, "owner/repo")
+        for pr, baseline in [
+            ({**oversized, "changed_files": "31"}, self.baseline),
+            ({**oversized, "draft": True}, self.baseline),
+            ({**oversized, "head": {"sha": "not-a-commit"}}, self.baseline),
+            (oversized, {**self.baseline, "path": "wrong.xml"}),
+            (oversized, {**self.baseline, "content": "not-base64"}),
+        ]:
+            with self.subTest(pr=pr, baseline=baseline), self.assertRaises(ValueError):
+                PREFLIGHT.evaluate(pr, baseline, "owner/repo", automatic=True)
+
+    def test_actual_cli_skip_and_failures_write_no_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pr, baseline, binding, output = [root / name for name in ["pr.json", "baseline.json", "binding.json", "output"]]
+            baseline.write_text(json.dumps(self.baseline))
+            pr.write_text(json.dumps({**self.pr, "changed_files": 31}))
+            command = [sys.executable, str(ROOT / ".github/scripts/lula-crawl-preflight.py"),
+                       str(pr), str(baseline), "owner/repo", str(binding)]
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "Lula automatic crawl skipped: unsupported_changed_file_count")
+            self.assertEqual(output.read_text(), "ready=false\n")
+            self.assertFalse(binding.exists())
+            output.unlink()
+            result = subprocess.run(command + ["--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(binding.exists())
+            pr.write_text(json.dumps({**self.pr, "title": "DO_NOT_ECHO_TITLE", "body": "DO_NOT_ECHO_BODY"}))
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(output.read_text(), "ready=true\n")
+            self.assertEqual(json.loads(binding.read_text()), PREFLIGHT.snapshot(self.pr, "owner/repo"))
+            receipt = result.stdout.decode().removeprefix("Lula source binding: ")
+            self.assertEqual(json.loads(receipt), PREFLIGHT.snapshot(self.pr, "owner/repo"))
+            self.assertNotIn("DO_NOT_ECHO", receipt)
+            output.unlink()
+            binding.unlink()
+            pr.write_text("invalid JSON")
+            result = subprocess.run(command + ["--automatic", "--github-output", str(output)], capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(binding.exists())
 
     def test_new_marker_foundation_cannot_prove_a_live_crawl(self):
         for baseline in [{}, {**self.baseline, "content": base64.b64encode(b"<Configuration/>").decode()}]:

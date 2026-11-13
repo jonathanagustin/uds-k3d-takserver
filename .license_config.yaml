@@ -18,5 +18,7 @@ ignore:
   - "tests/fixtures/distributed-configuration-init.java"
   # Checksum-pinned official CoT/protobuf snapshots retain their original notices.
   - "takx/cot-conformance/official/**"
+  # Exact-hash published Lula fixture; upstream Apache license/notice are adjacent.
+  - ".github/lula/official/crawl-0.9.5.js"
   # Immutable synthetic XML fixture; attribution is in takx/mission-package/README.md.
   - "takx/mission-package/fixtures/manifest.xml"

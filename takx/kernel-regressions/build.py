@@ -215,6 +215,7 @@ def main():
             maps = {}
             for category in ('dted', 'mbtiles', 'geopackage', 'kml', 'elevation', 'obj'):
                 text = run([receipt['jdk_tools']['java']['path'], '-Xcheck:jni', '-Xmx256m', '-XX:ActiveProcessorCount=2',
+                            '-XX:ErrorFile=' + str(out / 'tmp/hs_err_pid%p.log'),
                             '-Djava.awt.headless=true', '-Djava.library.path=' + str(library_path),
                             '-Djava.io.tmpdir=' + str(out / 'tmp'), '-Duser.home=' + str(out / 'home'),
                             '-DTAK_APP_DATA_PATH=' + str(out / 'data'), '-cp', str(out / 'classes') + os.pathsep + cp,

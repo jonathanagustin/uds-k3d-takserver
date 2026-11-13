@@ -5,15 +5,15 @@ recovery environment, then load the dumps.
 
 ## What you'll accomplish
 
-Recover TAK and CloudTAK data and the existing TAK certificate authority (CA)
+Recover Team Awareness Kit (TAK) and CloudTAK data and the existing TAK certificate authority (CA)
 so enrolled clients can reconnect with their certificates.
 
 ## Prerequisites
 
-- A full UDS Core deployment with Velero, an available backup storage location,
+- A full Unified Defense Stack (UDS) Core deployment with Velero, an available backup storage location,
   and access to its backup bucket from the recovery environment. Slim core does
   not include Velero.
-- `kubectl`, the UDS CLI, and a Velero CLI compatible with the installed server.
+- `kubectl`, the UDS command-line interface (CLI), and a Velero CLI compatible with the installed server.
 - A checkout of this repository for `tests/db-dump-secret.sh`.
 - `backup.dump.enabled: true` on both application charts, as in
   [`bundle/full/uds-bundle.yaml`](../../bundle/full/uds-bundle.yaml).
@@ -131,7 +131,7 @@ UDS Core, Keycloak, or separately managed `TakClient` resources in `takclients`.
 
 Sign in to TAK and CloudTAK, read a record known to exist before the backup, and
 connect an already enrolled client. Confirm its CA still matches the restored
-server. A Completed API-object backup alone does not prove database recovery.
+server. A Completed application programming interface (API) object backup alone does not prove database recovery.
 
 On a disposable full-core test cluster, `tests/backup-restore.sh` verifies marker
 rows, namespace restoration, and an API call using a certificate saved before

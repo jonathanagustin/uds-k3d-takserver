@@ -1,18 +1,18 @@
 # Benchmarks
 
-The Benchmark workflow measures how much CPU and memory TAK Server uses under a client load, and how long it takes to become ready, for several resource configs. The nightly run on `main` has completed on both architectures since November 2, 2026, for example [run 41613491855](https://github.com/jonathanagustin/uds-takserver/actions/runs/41613491855). Those runs use 10 clients for 60 seconds, once per config. Treat the front as a first look, not a sizing decision. The results are in the run's `bench-front` artifact and its job summary. This page describes the harness.
+The Benchmark workflow measures how much processor time and memory TAK Server uses under a Team Awareness Kit (TAK) client load, and how long it takes to become ready, for several resource configs. The nightly run on `main` has completed on both architectures since November 2, 2026, for example [run 41613491855](https://github.com/jonathanagustin/uds-takserver/actions/runs/41613491855). Those runs use 10 clients for 60 seconds, once per config. Treat the front as a first look, not a sizing decision. The results are in the run's `bench-front` artifact and its job summary. This page describes the harness.
 
 ## When it runs
 
 The [retained ten-client snapshot](../bench/results/42361079121/README.md)
-contains matched baseline, Postgres buffers and Postgres WAL records from
+contains matched baseline, Postgres buffers and Postgres write-ahead log (WAL) records from
 November 7, 2026, on both architectures, with source hashes and a corrected
 report. It records why those observations do not justify a tuning change,
 architecture default, or a 200-client load.
 
 [`.github/workflows/benchmark.yaml`](../.github/workflows/benchmark.yaml) runs:
 
-- Mondays at 09:41 UTC
+- Mondays at 09:41 Coordinated Universal Time (UTC)
 - by hand (`workflow_dispatch`)
 - on a pull request labeled `benchmark`
 
@@ -43,26 +43,26 @@ Client certificates for the load are built at run time from `tests/extract-certs
 
 ## Configs
 
-Each file in [`bench/configs/`](../bench/configs/) changes memory settings, JVM flags, or Postgres settings on the running cluster. Before the next config, `bench/run.py` puts the previous config's changes back. Each lists client counts 10, 50, and 200 and a 60-second load.
+Each file in [`bench/configs/`](../bench/configs/) changes memory settings, Java virtual machine (JVM) flags, or Postgres settings on the running cluster. Before the next config, `bench/run.py` puts the previous config's changes back. Each lists client counts 10, 50, and 200 and a 60-second load.
 
 | Config | What it changes |
 | --- | --- |
 | `baseline` | Nothing. The test bundle's current requests, limits, and JVM flags. Its cold time-to-ready is the install itself, with no rollout restart |
-| `heap-768` | Sets `JDK_JAVA_OPTIONS` to `-Xms768m -Xmx768m` on the API, messaging, and config containers |
+| `heap-768` | Sets `JDK_JAVA_OPTIONS` to `-Xms768m -Xmx768m` on the application programming interface (API), messaging, and config containers |
 | `postgis-memory` | Raises the CloudTAK PostGIS memory request to 512Mi and limit to 1Gi |
 | `postgis-buffers` | TAK Postgres `shared_buffers` 128MB, `work_mem` 4MB, `effective_cache_size` 384MB, `max_wal_size` 256MB, `checkpoint_timeout` 5min, through `ALTER SYSTEM` and a restart |
 | `postgis-wal` | A smaller cache and fewer checkpoints than `postgis-buffers`: `shared_buffers` 64MB, `effective_cache_size` 256MB, `max_wal_size` 128MB, `checkpoint_timeout` 15min |
 | `small` | Memory requests and limits from the `small` [values profile](profiles.md) |
 | `production` | Memory requests and limits from the `production` [values profile](profiles.md) |
-| `gc-serial` | Serial garbage collector (GC) on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
+| `gc-serial` | Uses the serial collector for garbage collection (GC) on the API, messaging, and config containers. Skipped: the image already passes `UseG1GC`, and a second collector makes the JVM exit |
 
-The configs set memory, JVM flags, and Postgres settings only. CPU stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set. The harness resets those counters before each config. Earlier runs, such as run 41613491855, did not reset the checkpoint counters or the `cot` database counters. In those runs the values add up from one config to the next.
+The configs set memory, JVM flags, and Postgres settings only. Central processing unit (CPU) allocation stays at whatever the install set. Beside the load, each record holds the Postgres counters (`pg_stat_database`, `pg_stat_checkpointer`, `pg_stat_io`) and the `postgresql` container working set. The harness resets those counters before each config. Earlier runs, such as run 41613491855, did not reset the checkpoint counters or the `cot` database counters. In those runs the values add up from one config to the next.
 
 ## The record and the report
 
 [`bench/SCHEMA.md`](../bench/SCHEMA.md) defines every field in a record and how it is collected. A field that could not be measured is `null`, with the reason in `errors`. It is never stored as zero.
 
-The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against warm rollout duration. The initial cold install age is copied into every config as a shared reference, so it stays in the evidence table and never ranks swept configs. Cold and warm readiness measurements do not compete. Each view is split into cohorts with the same source revision, client count and load duration. Records missing one of those fields are isolated, so an unknown workload cannot dominate another record. A config is on the Pareto front for a view when no other config in the same cohort and on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each cohort's plot, but dominance is decided inside one architecture. See [ADR 19](../adr/0019-compare-arches-on-one-scale.md).
+The report compares configs on three views: footprint against throughput, footprint against mean latency, and footprint against warm rollout duration. The initial cold install age is copied into every config as a shared reference, so it stays in the evidence table and never ranks swept configs. Cold and warm readiness measurements do not compete. Each view is split into cohorts with the same source revision, client count and load duration. Records missing one of those fields are isolated, so an unknown workload cannot dominate another record. A config is on the Pareto front for a view when no other config in the same cohort and on the same architecture is at least as good on both axes and better on one. Dominated configs are drawn as open circles. Both architectures share one scale on each cohort's plot, but dominance is decided inside one architecture. See [architecture decision record (ADR) 19](../adr/0019-compare-arches-on-one-scale.md).
 
 The markdown report includes the observed CPU, working set, throughput, latency, startup phases, Postgres counters and record caveats. Missing timings stay "not measured"; negative or non-finite timings are shown as invalid and never treated as durations. The source records are unchanged. A startup-phase row describes the pod present when that config was collected. A Postgres-only rollout can reuse an earlier TAK pod, so repeated rows are not independent cold and warm TAK startup measurements.
 

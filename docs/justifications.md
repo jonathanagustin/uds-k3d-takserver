@@ -1,6 +1,6 @@
 # Policy exemptions and security posture
 
-UDS Core's policy engine validates and mutates every pod. A package has to keep its exemptions small and say why each one exists. This page lists every `Exemption` the package renders, and the one the optional ATAK test device adds, and the places where it deliberately differs from the default UDS posture.
+Unified Defense Stack (UDS) Core's policy engine validates and mutates every pod. A package has to keep its exemptions small and say why each one exists. This page lists every `Exemption` the package renders, and the one the optional ATAK test device adds, and the places where it deliberately differs from the default UDS posture.
 
 `.github/scripts/check-exemptions.sh` renders the chart, reads `atak/deploy/*.yaml`, and fails when an `Exemption` has no `## <name>` section on this page. hk runs it when the chart, `atak/deploy/`, this page or the script changes. Add the section in the same change that adds the exemption.
 
@@ -9,7 +9,7 @@ UDS Core's policy engine validates and mutates every pod. A package has to keep 
 - An `Exemption` that matches the `takserver` or `cloudtak` namespace is not the expected one, names other policies, or uses a bare wildcard.
 - A pod in those namespaces is annotated `exempted` without a matching expected exemption.
 
-It prints the exempted-resource list and the security context of each TAK pod.
+It prints the exempted-resource list and the security context of each Team Awareness Kit (TAK) server pod.
 
 [![Demo clip: what UDS admission changed on a TAK pod, and the one exemption the package needs](../docs-site/public/demo/demo-clip-policy.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-policy.mp4)
 
@@ -28,7 +28,7 @@ Each section below is named after the `Exemption` object it describes.
 
 ## velero-node-agent
 
-Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create it. See [ADR 0021](../adr/0021-velero-node-agent.md).
+Rendered only when `FILESYSTEM_BACKUP=true`. A default install does not create it. See [architecture decision record (ADR) 0021](../adr/0021-velero-node-agent.md).
 
 - **Policies:** `DisallowPrivileged`, `RequireNonRootUser`, `DropAllCapabilities`, `RestrictCapabilities`, `RestrictHostPathWrite`, `RestrictVolumeTypes`, `DisallowHostNamespaces`, `RestrictSELinuxType`
 - **Matcher:** `^node-agent-.*`, kind `pod`, namespace `velero`
@@ -55,7 +55,7 @@ Only the optional ATAK test device uses this. It is not part of the package: `at
 - **KubeVirt control plane** (`virt-(operator|api|controller|exportproxy)-*`, namespace `kubevirt`)
   - **Policies:** `RequireNonRootUser`, `DropAllCapabilities`, `RestrictVolumeTypes`
   - **Why:** These run as non-root, but the operator does not set every field the UDS defaults expect.
-- **ATAK test device VM launcher** (`virt-launcher-atak-device-*`, namespace `atak`)
+- **ATAK test device virtual machine (VM) launcher** (`virt-launcher-atak-device-*`, namespace `atak`)
   - **Policies:** `RestrictCapabilities`, `DropAllCapabilities`, `RestrictVolumeTypes`, `RestrictHostPathWrite`, `RestrictIstioTrafficOverrides`
   - **Why:** `virt-launcher` runs the device VM as UID 107 and adds `NET_BIND_SERVICE` for masquerade networking. KubeVirt always sets the `traffic.sidecar.istio.io/kubevirtInterfaces` annotation on launcher pods. It only matters to Istio sidecars and there is none here, so it changes nothing.
 - **Why it is safe:** Every matcher names the KubeVirt components or the one launcher name pattern, in the `kubevirt` and `atak` namespaces. Nothing in the `takserver` or `cloudtak` namespaces is exempted.
@@ -69,7 +69,7 @@ These are not exemptions. The policy engine mutates these settings or leaves the
 
 ### Non-root user and writable root filesystem
 
-The TAK images default to `USER 0`, and the upstream Deployments set no `securityContext`. UDS Core's policy engine fills it in when each pod is admitted. `test:exemptions` prints the result on every CI run. On amd64 and arm64 every TAK pod (api, config, messaging, plugins, ignite, nats, the database setup hook, postgresql) runs with:
+The TAK images default to `USER 0`, and the upstream Deployments set no `securityContext`. UDS Core's policy engine fills it in when each pod is admitted. `test:exemptions` prints the result on every continuous integration (CI) run. On amd64 and arm64 every TAK pod (api, config, messaging, plugins, ignite, nats, the database setup hook, postgresql) runs with:
 
 - pod: `runAsUser: 1000`, `runAsGroup: 1000`, `runAsNonRoot: true`. PostgreSQL also has `fsGroup: 1001`, and its container runs as `1001`.
 - each container: `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`.
@@ -78,7 +78,7 @@ TAK still starts because the image makes the directories it writes world-writabl
 
 ### Ambient mesh instead of sidecars
 
-Both Package CRs set `serviceMesh.mode: ambient`. Passthrough TLS on 8443, 8446, and 8089 has to reach TAK unchanged, and there is no waypoint and no Authservice in front of TAK. See [Networking](networking.md).
+Both Package CRs set `serviceMesh.mode: ambient`. Passthrough Transport Layer Security (TLS) on 8443, 8446, and 8089 has to reach TAK unchanged, and there is no waypoint and no Authservice in front of TAK. See [Networking](networking.md).
 
 ## UDS package requirements
 
@@ -87,20 +87,20 @@ The [UDS package requirements](https://docs.defenseunicorns.com/core/concepts/co
 ### Metrics monitor
 
 - **Requirement:** Implement a monitor for each application metrics endpoint, unless the application provides no metrics.
-- **Status:** Met for the TAK API, TAK messaging, and the `takserver-oidc` module when the monitoring API is installed. Slim omits the monitors. Postgres and NATS are not scraped. Their exporter images are not built here.
+- **Status:** Met for the TAK application programming interface (API), TAK messaging, and the `takserver-oidc` module when the monitoring API is installed. Slim omits the monitors. Postgres and NATS are not scraped. Their exporter images are not built here.
 - **Details:** [ADR 17](../adr/0017-prometheus-monitors.md) and [Configuration](configuration.md).
 - **What changes it:** Building multi-arch Postgres and NATS exporter images, and enabling them without an upstream chart change that this package does not carry.
 
 ### Commands in Zarf actions
 
 - **Requirement:** Zarf actions use only `coreutils` or `./zarf` self references.
-- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers at admission, writes the CoreDNS rewrite, and copies the gateway CA and the CloudTAK admin material. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
+- **Status:** Met. The `onDeploy` actions that ran `sed`, `python3`, and `patch-oidc-pods.py` are gone. The `takserver-oidc` Pepr module adds the init containers at admission, writes the CoreDNS rewrite, and copies the gateway certificate authority (CA) and the CloudTAK admin material. `onCreate.before` runs `pepr/build.sh` when the package is created, which is not a deploy action.
 - **What removes it:** Nothing further. The init containers and the CoreDNS rewrite live in the Pepr module. A scale-down remains only when Ignite was admitted without the tuned config.
 
 ### Zarf values
 
 - **Requirement:** Prefer Zarf Values over Zarf Variables where Zarf supports them. Values is beta, so variables stay for compatibility.
-- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. Each value defaults to its variable's placeholder, so `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` still decide the result unless a package value is set. A UDS CLI 0.40 bundle sets Zarf variables and has no package-values input, and the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md#package-values) has the table.
+- **Status:** Met, with the four variables kept on purpose. `values/zarf-values.yaml` and `values/zarf-values.schema.json` hold `global.domain`, `tak.imageTag`, `dns.inCluster`, and `dns.passthroughHosts`. Chart mappings and the templated Pepr values file read those. Each value defaults to its variable's placeholder, so `DOMAIN`, `TAK_IMAGE_TAG`, `IN_CLUSTER_DNS`, and `PASSTHROUGH_HOSTS` still decide the result unless a package value is set. A UDS command-line interface (CLI) 0.40 bundle sets Zarf variables and has no package-values input, and the `images:` list and `certs.image` cannot take a package value. [Configuration](configuration.md#package-values) has the table.
 - **What removes the variables:** A bundle CLI that can pass package values, and a cert image built from `tak.imageTag` instead of one substituted string.
 
 ### Package template
@@ -153,23 +153,23 @@ container carries k3d labels. Network namespaces have
 [separate firewall rules](https://man7.org/linux/man-pages/man7/network_namespaces.7.html).
 
 The allow list comes from the cluster's Docker networks, Kubernetes pod CIDRs,
-and existing Service addresses. It also covers the ambient mesh's synthetic DNS
+and existing Service addresses. It also covers the ambient mesh's synthetic Domain Name System (DNS)
 addresses and IPv6 link-local discovery. Other IPv4 and IPv6 destinations are
 rejected. Docker's embedded DNS forwarder is rejected separately so it cannot
 relay external queries through the runner. Kubernetes DNS and the tenant
 and passthrough gateways are checked by the existing `test:all` suite.
 
-A public-IP HTTP transport control must be reachable from every node before
+A public-IP Hypertext Transfer Protocol (HTTP) transport control must be reachable from every node before
 blocking, with no successful request or HTTP response after blocking. BusyBox
 wget uses `-Y off` to bypass proxies and `-S` to report response headers. Receipt
 of any HTTP status, including a redirect or error followed by a failed transfer,
 proves network reachability; it does not prove resource health. Failure with no
 HTTP response fails preflight instead of passing an endpoint outage as isolation.
-The IP literal prevents an initial DNS failure from masquerading as enforcement.
+The Internet Protocol (IP) literal prevents an initial DNS failure from masquerading as enforcement.
 This improves the control's transport semantics; it does not establish that TLS
 or a redirect caused the earlier CI preflight failure. The suite then installs and starts TAK and CloudTAK from
 the packaged images, creates the test identities, and runs `test:all`, including
-SSO, client certificates, CoT streaming, file transfer, and the CloudTAK map.
+single sign-on (SSO), client certificates, Cursor on Target (CoT) streaming, file transfer, and the CloudTAK map.
 `basemap.enabled=false` removes the external tile source. The browser test still
 checks sign-in and the TAK connection, and requires no packaged basemap or tile
 requests in this variant. The last step repeats the denied control and prints
@@ -240,7 +240,7 @@ including [the complete amd64 airgap job](https://github.com/jonathanagustin/uds
 on November 8, 2026. The job ran `uds run test-airgap` with the airgap bundle's
 external basemap disabled. Its log records:
 
-- At 05:39:12 UTC, the node's external IP control was reachable before
+- At 05:39:12 Coordinated Universal Time (UTC), the node's external IP control was reachable before
   isolation and denied after isolation.
 - Installation and `test:all` completed under the guard, including the SSO
   browser workflows and TAKClient tests. At 05:52:55 UTC, the live revocation

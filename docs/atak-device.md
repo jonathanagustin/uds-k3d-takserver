@@ -1,16 +1,16 @@
 # ATAK test device
 
-`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 VM managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams Cursor on Target (CoT) events on 8089 over mutual TLS, and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
+`atak/` runs the real ATAK-CIV Android app, built from the public source in the `upstream/atak-civ` submodule (tag 5.5.1.10), in an Android-x86 virtual machine (VM) managed by KubeVirt. It behaves like a field device: it imports a connection data package with its client certificate, streams Cursor on Target (CoT) events on 8089 over mutual Transport Layer Security (TLS), and shows up in `/Marti/api/clientEndPoints`. A phone view of its screen is served at `https://atak.<domain>/` behind Keycloak.
 
-It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [ADR 14](../adr/0014-atak-test-device-in-kubevirt.md).
+The device runs a Team Awareness Kit (TAK) client. It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the default tests deploys it. The dedicated workflow `.github/workflows/atak-e2e.yaml` builds and deploys it on the normal test cluster. See [architecture decision record (ADR) 14](../adr/0014-atak-test-device-in-kubevirt.md).
 
 [![Demo clip: ATAK-CIV in a KubeVirt VM connects to the same TAK Server with its client certificate](../docs-site/public/demo/demo-clip-atak-device.jpg)](https://github.com/jonathanagustin/uds-takserver/releases/download/demo/demo-clip-atak-device.mp4)
 
 ## Requirements
 
-- amd64 nodes with `/dev/kvm`. The VM image is Android-x86 and the APK is built for `x86_64` only. There is no arm64 build (see [Supported architectures](../README.md#supported-architectures)).
+- amd64 nodes with `/dev/kvm`. The VM image is Android-x86 and the Android application package (APK) is built for `x86_64` only. There is no arm64 build (see [Supported architectures](../README.md#supported-architectures)).
 - A 2Gi guest and 2 vCPU for the VM, plus KubeVirt. 2Gi is the configured guest in `atak/deploy/device.yaml`. It is the size this trial asks the scheduler for, together with KubeVirt's launcher overhead. A successful boot at 2Gi would not make it a measured minimum.
-- The standard TAK streaming port 8089 on the passthrough gateway (`standardPorts` in `charts/takserver/values.yaml`, [ADR 12](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)) and the in-cluster DNS rewrite, so the device can reach `takserver-stream.<domain>` the way a phone would.
+- The standard TAK streaming port 8089 on the passthrough gateway (`standardPorts` in `charts/takserver/values.yaml`, [ADR 12](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md)) and the in-cluster Domain Name System (DNS) rewrite, so the device can reach `takserver-stream.<domain>` the way a phone would.
 
 ## Images
 
@@ -22,7 +22,7 @@ It is optional and separate from the TAK package. Nothing in `zarf.yaml` or the 
 
 The APK build (`atak/apk/Dockerfile`, driven by `atak/ci/build-apk.sh`) compiles the takthirdparty natives, the Conan dependencies, and cesium-native from source. A cold build takes well over an hour on a GitHub runner; the layers are cached in `ghcr.io/jonathanagustin/uds-takserver/build-cache`. No key, certificate, or password is in any image. The APK is signed with the debug keystore that ships in the public atak-civ repository.
 
-CI tags each image with the ATAK version and a hash of its inputs, for example `atak-civ-vm:5.5.1.10-<hash>`. When that tag is in GitHub Container Registry (GHCR), CI pulls it. A pull request builds and pushes only the images whose inputs changed. Fork pull requests cannot push, so they build locally. After a passing e2e run on `main`, the plain `5.5.1.10` tags point at the tested images. `packages/atak-device:5.5.1.10` points at the tested Zarf package. See [Reused build outputs](ci.md#reused-build-outputs).
+Continuous integration (CI) tags each image with the ATAK version and a hash of its inputs, for example `atak-civ-vm:5.5.1.10-<hash>`. When that tag is in GitHub Container Registry (GHCR), CI pulls it. A pull request builds and pushes only the images whose inputs changed. Fork pull requests cannot push, so they build locally. After a passing e2e run on `main`, the plain `5.5.1.10` tags point at the tested images. `packages/atak-device:5.5.1.10` points at the tested Zarf package. See [Reused build outputs](ci.md#reused-build-outputs).
 
 ## Deploy
 
@@ -43,7 +43,7 @@ uds zarf package deploy oci://ghcr.io/jonathanagustin/uds-takserver/packages/ata
 
 The package (`atak/zarf.yaml`) has two components:
 
-- `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt CR in `atak/deploy/kubevirt-cr.yaml`, and the UDS policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in custom resource definition (CRD) schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every virtual machine instance (VMI) status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without CRI image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
+- `kubevirt`: KubeVirt v1.9.1 (operator manifest pinned by checksum), the KubeVirt custom resource (CR) in `atak/deploy/kubevirt-cr.yaml`, and the Unified Defense Stack (UDS) policy exemption it needs. Kubernetes 1.37, which CI runs (k3s v1.37.1), enforces numeric formats in custom resource definition (CRD) schemas. v1.6.x and v1.7.x declare the kernel and containerDisk checksums as int32, so a CRC32 above 2^31 makes every virtual machine instance (VMI) status update fail and the VMI stays `Scheduled` while the guest runs. Since v1.9.0 KubeVirt turns on every Beta feature gate by default, including `ImageVolume`. With it, the launcher pod gets the containerDisk, the kernel boot image and the `container-disk` binary as Kubernetes image volumes, and a container runtime without Container Runtime Interface (CRI) image volume support mounts them empty, so the pod fails with `/container-disk-binary/usr/bin/container-disk: no such file or directory` ([kubevirt#17460](https://github.com/kubevirt/kubevirt/issues/17460), [k3s#14323](https://github.com/k3s-io/k3s/issues/14323)). The CR disables `ImageVolume`, so KubeVirt copies the binary with an init container and virt-handler mounts the disk as in v1.8. It also disables `Template`, whose virt-template images are not in the package.
 - `atak-device`: the VM, Service `atak-device-adb`, the viewer Deployment, and the UDS Package `atak`. The Package's expose entry probes `https://atak.<domain>/phone.html`. That path is the viewer page. Authservice sits in front of it, and the operator's probe client is what the check uses.
 
 ## Check the viewer uptime probe
@@ -63,7 +63,7 @@ has zero replicas. Alertmanager and the node exporter are off, and
 `kubeStateMetrics.enabled` is false so kube-state-metrics is left out.
 Prometheus requests 256Mi. Those monitoring cuts apply only to this CI bundle.
 
-The device guest is 2Gi in the package and in `atak/ci/vm-smoke.sh`. CPU
+The device guest is 2Gi in the package and in `atak/ci/vm-smoke.sh`. Processor allocation
 stays at 2 cores, the `video=720x1280` framebuffer argument stays, and the
 manifest does not set a memory request below the guest or
 `overcommitGuestOverhead`. 2Gi is that configured guest. This page does not
@@ -71,7 +71,7 @@ treat it as a measured minimum, and it does not say the launcher will
 schedule until an opt-in run shows the pod placed, Android booted, and the
 authenticated probe fresh.
 
-After the device and viewer SSO checks pass, `atak/ci/uptime-probe.py` requires:
+After the device and viewer single sign-on (SSO) checks pass, `atak/ci/uptime-probe.py` requires:
 
 - Probe `atak/uds-atak-tenant-uptime` targets exactly
   `https://atak.<domain>/phone.html` using the operator-generated
@@ -104,8 +104,8 @@ The device authenticates with a client certificate, the way a provisioned field 
 
 At run time `atak/ci/e2e.sh` applies a `TakClient` ([ADR 22](../adr/0022-takclient-operator.md)) for callsign `atak-device` in group `Operators`, waits for it to be `Ready`, and copies `package.zip` from Secret `takclients/atak-device` into Secret `atak/atak-device-dpk`, which the driver pod mounts. The `takserver-oidc` watcher does the work:
 
-1. It creates a key and CSR with `CN=atak-device, O=TAK, OU=UDS` and asks TAK to sign it through Basic enrollment on 8446. TAK sets the lifetime globally (`TAKServerCAConfig`, 30 days by default). The watcher validates the returned key, CA signature, subject, client usage and validity before publishing it. See [ADR 24](../adr/0024-tak-signed-takclient-revocation.md).
-2. It registers `atak-device` as a TAK file user in `Operators` through TAK's admin API on 8443. TAK 5.7 maps a certificate to a user this way: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
+1. It creates a key and certificate signing request (CSR) with `CN=atak-device, O=TAK, OU=UDS` and asks TAK to sign it through Basic enrollment on 8446. TAK sets the lifetime globally (`TAKServerCAConfig`, 30 days by default). The watcher validates the returned key, certificate authority (CA) signature, subject, client usage and validity before publishing it. See [ADR 24](../adr/0024-tak-signed-takclient-revocation.md).
+2. It registers `atak-device` as a TAK file user in `Operators` through TAK's admin application programming interface (API) on 8443. TAK 5.7 maps a certificate to a user this way: `X509Authenticator` matches a client certificate against the file users by fingerprint or by the CN, and takes that user's groups. `Operators` is the group Keycloak users get, so the device and CloudTAK users see each other. A certificate with no file user still connects, but only in the anonymous group.
 3. It builds a standard ATAK connection data package: `MANIFEST/manifest.xml`, `certs/server.pref` with one stream `takserver-stream.<domain>:8089:ssl` and its `caLocation0`, `caPassword0`, `certificateLocation0`, and `clientPassword0` entries, the client `certs/atak-device.p12`, and the CA in `certs/truststore.p12`. Both PKCS#12 files use SHA-1 and 3DES, which Android 9 reads, and a generated password. The CA certificate in the truststore has a friendlyName (`tak-ca`). Without one, Android's PKCS12 keystore lists no entry and ATAK reports "Unable to validate Truststore".
 
 The driver installs the APK over adb, taps through the first-run prompts, pushes the package to `/sdcard/Download/atak-device.dpk`, and restarts ATAK. On start ATAK imports `Download/atak*.dpk` files (`PreferenceControl`), the normal import path for a provisioned device. The `.p12` files go to `atak/cert`, the `.pref` adds the stream with those certificates, and ATAK connects to 8089 over mutual TLS. The e2e job then looks for `atak-device` in `/Marti/api/subscriptions/all` and `/Marti/api/clientEndPoints`.
@@ -114,7 +114,7 @@ Inside the cluster `takserver.<domain>` resolves to the tenant gateway, so the d
 
 ### Test location
 
-The VM has no GPS, so the device reports a fixed test location instead.
+The VM has no Global Positioning System (GPS), so the device reports a fixed test location instead.
 
 Before ATAK's first start the driver stages a preferences file at `atak/config/prefs/defaults`. ATAK loads that file once at start-up and then deletes it (`PreferenceControl.ingestDefaults`). The file gives the device a fixed **test location** on the National Mall in Washington, DC (38.8895, -77.0353).
 
@@ -130,7 +130,7 @@ After the device connects, the driver locks the map on the self marker and zooms
 
 ### Why not password enrollment
 
-ATAK always enrolls on 8446 with HTTP Basic authentication (`CertificateEnrollmentClient` passes `passIsToken=false`). With `auth default="file"` TAK checks Basic credentials against its file authenticator and sends only bearer tokens to Keycloak, so a Keycloak password gets a 302 to the login page. Enrolling the device would need a TAK file user with a password. A certificate issued from the TAK CA needs no password user and matches how devices are provisioned in the field. The 8446 enrollment test in `tests/` still covers the enrollment endpoint.
+ATAK always enrolls on 8446 with Hypertext Transfer Protocol (HTTP) Basic authentication (`CertificateEnrollmentClient` passes `passIsToken=false`). With `auth default="file"` TAK checks Basic credentials against its file authenticator and sends only bearer tokens to Keycloak, so a Keycloak password gets a 302 to the login page. Enrolling the device would need a TAK file user with a password. A certificate issued from the TAK CA needs no password user and matches how devices are provisioned in the field. The 8446 enrollment test in `tests/` still covers the enrollment endpoint.
 
 ### Provisioning device certificates
 
@@ -156,7 +156,7 @@ On upgrade, existing locally signed certificates are reissued through TAK. The p
 
 ## Network rules
 
-The UDS Package `atak` sets ambient mesh for the viewer. The VM's launcher pod carries `istio.io/dataplane-mode: none` and stays out of the mesh. ztunnel hands inbound connections to the pod from inside its network namespace. That path bypasses KubeVirt's masquerade DNAT, so adb never reached the guest (`adb: device offline`). Its traffic is still limited by these NetworkPolicies, and TAK traffic is mutual TLS from the device to TAK. adb from the viewer and the driver to the device is plain TCP inside the cluster.
+The UDS Package `atak` sets ambient mesh for the viewer. The VM's launcher pod carries `istio.io/dataplane-mode: none` and stays out of the mesh. ztunnel hands inbound connections to the pod from inside its network namespace. That path bypasses KubeVirt's masquerade destination network address translation (DNAT), so adb never reached the guest (`adb: device offline`). Its traffic is still limited by these NetworkPolicies, and TAK traffic is mutual TLS from the device to TAK. adb from the viewer and the driver to the device is plain Transmission Control Protocol (TCP) inside the cluster.
 
 Rules:
 
@@ -182,5 +182,5 @@ The viewer's Keycloak client is `uds-atak-viewer` and is limited to the group `/
 ## Android-x86 notes
 
 - The initrd silences the kernel log unless `DEBUG` is set. `DEBUG=0` gives a verbose serial console without a debug shell.
-- Android-x86 renames `eth0` to `wifi_eth` and adds a virtual Wi-Fi `wlan0`. `VIRT_WIFI=0` keeps `eth0` for the Ethernet service, which takes the KubeVirt masquerade DHCP lease (cluster DNS included). The NIC model is `e1000`.
+- Android-x86 renames `eth0` to `wifi_eth` and adds a virtual Wi-Fi `wlan0`. `VIRT_WIFI=0` keeps `eth0` for the Ethernet service, which takes the KubeVirt masquerade Dynamic Host Configuration Protocol (DHCP) lease (cluster DNS included). The NIC model is `e1000`.
 - The ramdisk starts adbd on TCP 5555 and runs a boot report on the serial console (network, adb, display), keeps the screen on, and disables the crash-looping Android-x86 analytics app.

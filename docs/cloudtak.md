@@ -1,15 +1,15 @@
 # CloudTAK
 
-[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web UI, and connects it to the TAK Server in the `takserver` namespace. The component adds three Ingress rules to TAK Server's `Package` CR.
+[CloudTAK](https://github.com/dfpc-coe/CloudTAK) is a browser map client for TAK Server in the Team Awareness Kit (TAK) ecosystem. The optional `cloudtak` component runs it at `https://map.<domain>/`, next to the TAK web user interface (UI), and connects it to the TAK Server in the `takserver` namespace. The component adds three Ingress rules to TAK Server's `Package` custom resource (CR).
 
 ## What is deployed
 
 | Object | Namespace | Purpose |
 | --- | --- | --- |
-| Deployment `cloudtak` | `cloudtak` | CloudTAK's nginx and API process on port 5000, plus the `sso` and `bootstrap` containers |
-| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6` (amd64 and arm64, see [ADR 18](../adr/0018-upgrade-postgres-in-place.md)), 2Gi volume |
+| Deployment `cloudtak` | `cloudtak` | CloudTAK's nginx and application programming interface (API) process on port 5000, plus the `sso` and `bootstrap` containers |
+| StatefulSet `cloudtak-postgis` | `cloudtak` | CloudTAK's own PostGIS database, `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6` (amd64 and arm64, see [architecture decision record (ADR) 18](../adr/0018-upgrade-postgres-in-place.md)), 2Gi volume |
 | Secret `cloudtak` | `cloudtak` | Session signing secret, database password, and the password of the TAK account behind the admin connection. Generated on first install and kept on upgrade |
-| Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the UDS operator |
+| Secret `cloudtak-sso` | `cloudtak` | Keycloak client secret, key `OIDC_CLIENT_SECRET`. Written by the Unified Defense Stack (UDS) operator |
 | Secret `cloudtak-tak-admin` | `cloudtak` | `ca.pem`, `admin.pem`, `admin.key`, and `CAPASS`. The `takserver-oidc` watcher copies the certificates from ConfigMap `takserver/cert-migration`, the key from Secret `takserver-certs`, and `CAPASS` from Secret `takserver-keystore` |
 | Package `cloudtak` | `cloudtak` | Keycloak client `uds-cloudtak` (name `CloudTAK Login`), the `map` host on the tenant gateway, and the allow list |
 
@@ -33,7 +33,7 @@ The image is built from the `upstream/cloudtak` git submodule, pinned to tag `v1
 - The inputs are the submodule commit plus the git tree of this directory, recorded in the `dev.uds-takserver.inputs` label. `<key>` is the first 12 hex digits of their SHA-256 (`build.sh --tag` prints `v13.112.3-<key>`).
 - The Test workflow's `cloudtak-image` jobs run `ARCH=<arch> build.sh --if-changed` on a native runner for each architecture (`ubuntu-24.04` and `ubuntu-24.04-arm`). Each job pushes `v13.112.3-<key>-<arch>`, and only when no image with those inputs exists yet.
 - `cloudtak-index` then runs `build.sh --merge`. It writes `v13.112.3-<key>` as an index of the two tags with `docker buildx imagetools create`, and writes nothing unless both tags carry this commit's inputs.
-- Before CI creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.112.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`18-3.6-<key>`).
+- Before continuous integration (CI) creates a package, `.github/scripts/pin-image-tags.sh` points `zarf.yaml` and the chart values at `v13.112.3-<key>` in the job's checkout. A keyed tag only ever holds one set of inputs, so a pull request tests its own CloudTAK image even when another branch builds a different one at the same time. The PostGIS image works the same way (`18-3.6-<key>`).
 - `v13.112.3` and `v13.112.3-<arch>`, the tags in the committed files and in released packages, are written only from `main`. `build.sh --wait`, used by the Scan and Package workflows, waits for the keyed index.
 - `.github/workflows/cloudtak-image.yaml` does the same on `main`.
 
@@ -45,12 +45,12 @@ Renovate's `git-submodules` manager follows CloudTAK release tags. The tag strin
 
 People sign in to CloudTAK through UDS Core Keycloak, on the same UDS login page as the TAK web UI. CloudTAK's own password and passkey sign-in is off.
 
-1. `https://map.<domain>/` loads the CloudTAK app. With no session, the app routes to `/login`. nginx adds `/api/login/oidc/auto.js` to the app's HTML pages. With no stored ID token, that script sends `/login` on to `/api/login/oidc`. After a sign-in it sends `/login` to `/api/login/oidc/logout` with the ID token as `id_token_hint`.
-2. `/api/login/oidc` starts an authorization code flow with PKCE (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin` and `/CloudTAK/Users`. See [Who can sign in](#who-can-sign-in).
+1. `https://map.<domain>/` loads the CloudTAK app. With no session, the app routes to `/login`. nginx adds `/api/login/oidc/auto.js` to the app's Hypertext Markup Language (HTML) pages. With no stored ID token, that script sends `/login` on to `/api/login/oidc`. After a sign-in it sends `/login` to `/api/login/oidc/logout` with the ID token as `id_token_hint`.
+2. `/api/login/oidc` starts an authorization code flow with Proof Key for Code Exchange (PKCE) (S256) for Keycloak client `uds-cloudtak` in realm `uds`, and the browser lands on `https://sso.<domain>/realms/uds/protocol/openid-connect/auth`. The client allows members of `/UDS Core/Admin` and `/CloudTAK/Users`. See [Who can sign in](#who-can-sign-in).
 3. Keycloak returns to `https://map.<domain>/api/login/oidc/callback`. The `sso` container exchanges the code at Keycloak's token endpoint, in the cluster. `sso.<domain>` resolves to the tenant gateway through the in-cluster CoreDNS rewrite (see [Networking](networking.md)), and the Keycloak certificate is checked against the system trust store.
 4. It enrolls a TAK client certificate for the user on TAK's 8447. It sends the Keycloak access token as a bearer token, through the same TAK library call CloudTAK uses for password sign-in. TAK takes the username from `preferred_username` and the groups from `groups`, as it does for the TAK web UI (see [Single sign-on](sso.md)). The certificate is the Keycloak user's own TAK identity, with that user's TAK groups.
 5. It creates or updates the CloudTAK profile for that username with the certificate, and opens a CloudTAK login session with CloudTAK's own session code. Members of `sso.adminGroup` (default `/UDS Core/Admin`) become CloudTAK system administrators.
-6. The browser gets the session (login token, refresh token, session id) in the URL fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
+6. The browser gets the session (login token, refresh token, session id) in the uniform resource locator (URL) fragment of `/api/login/oidc/finish`, which is not sent to any server or written to a log. That page stores them where CloudTAK's own login page does and opens the map. The app restores the session, rotates the refresh token, and opens its own streaming connection to TAK's 8089 with the user's certificate.
 
 ![CloudTAK asks a new user for a callsign on first sign-in](../docs-site/public/demo/screens/cloudtak-callsign.webp)
 
@@ -109,7 +109,7 @@ CloudTAK cannot redirect to Keycloak on its own. The auto-redirect is the `auto.
 ### Trade-offs
 
 - Authservice is not used. Authservice in front of CloudTAK would authenticate the page but CloudTAK would never see the Keycloak user. People would still need a TAK account and a second sign-in, and TAK would see that account instead of the Keycloak user. With the code flow in the pod, the Keycloak user is the CloudTAK user and the TAK certificate subject.
-- The ID token is taken straight from Keycloak's token endpoint over a verified TLS connection, so `sso.mjs` checks its issuer, audience, nonce, and expiry rather than its signature (OpenID Connect Core 3.1.3.7). TAK checks the access token's signature against Keycloak's keys when it enrolls the certificate.
+- The ID token is taken straight from Keycloak's token endpoint over a verified Transport Layer Security (TLS) connection, so `sso.mjs` checks its issuer, audience, nonce, and expiry rather than its signature (OpenID Connect Core 3.1.3.7). TAK checks the access token's signature against Keycloak's keys when it enrolls the certificate.
 - CloudTAK's own logout clears the CloudTAK session and opens `/login`. `auto.js` sends that to `/api/login/oidc/logout` with the ID token from sign-in as `id_token_hint`. The client sets `logout.confirmation.enabled` to `false`. UDS Core otherwise leaves that on, and Keycloak 26 then shows "You are logged out" instead of following `post_logout_redirect_uri`. With it off, Keycloak ends the session and redirects back to the sign-in route, so the next visit stops on the Keycloak login page. Without the hint Keycloak stays on its confirmation page and does not continue.
 - Before that redirect, `auto.js` drops the CloudTAK login token, refresh token, and session id, so the next load cannot refresh the old session. A CloudTAK session that never opens `/login` still lasts until its refresh token expires. Password sign-in and passkey sign-in stay off.
 - A CloudTAK session lasts as long as CloudTAK's refresh token (`login::refresh::expiry`, 720 hours by default), not the Keycloak session. Removing a user from the sign-in groups in Keycloak blocks new sign-ins, not open CloudTAK sessions. Disable the profile in CloudTAK's admin page or revoke the certificate in TAK to cut one off.
@@ -132,8 +132,8 @@ The admin certificate is mounted only in the bootstrap container. The CloudTAK c
 
 ## Trust bundle
 
-CloudTAK's API and SSO containers use `NODE_EXTRA_CA_CERTS` with one PEM file
-containing the deploy-time TAK CA and UDS Core's `uds-trust-bundle`. This lets
+CloudTAK's API and single sign-on (SSO) containers use `NODE_EXTRA_CA_CERTS` with one PEM file
+containing the deploy-time TAK certificate authority (CA) and UDS Core's `uds-trust-bundle`. This lets
 Keycloak discovery and token exchange verify a private gateway CA supplied
 through Core's `CA_BUNDLE_CERTS`. Node's built-in public roots still apply.
 The init container assembles the file; the Node containers mount it read-only.
@@ -143,7 +143,7 @@ The operator labels the bundle ConfigMap for pod reload, restricted to
 `app=cloudtak` in the CloudTAK namespace. A bundle change restarts CloudTAK
 so Node reads the new file at startup. TAK's bundle uses the existing
 `uds.dev/oidc-reload=takserver` selector so its API and messaging init containers
-also rebuild their JVM trust stores when the bundle changes.
+also rebuild their Java virtual machine (JVM) trust stores when the bundle changes.
 
 ### Run the CA rotation acceptance test
 
@@ -209,7 +209,7 @@ trust file, that public roots alone do not accept it, and that an unrelated
 trial CA does not accept it. It also proves both TAK workloads and CloudTAK
 restart when that bundle changes. The rotation script leaves the gateway
 certificate unchanged; the opt-in workflow prepares its private certificate
-before the baseline deployment. The separate `test_trust_bundle.py` HTTPS test proves the merge
+before the baseline deployment. The separate `test_trust_bundle.py` Hypertext Transfer Protocol Secure (HTTPS) test proves the merge
 script with two local CAs.
 
 ## TAK connection
@@ -306,4 +306,4 @@ CloudTAK is licensed under AGPL-3.0. This repository does not include its source
 
 ## Resources
 
-CloudTAK requests 100m CPU and 256Mi memory, with a 500m and 768Mi limit. The `sso` container requests 50m and 128Mi, with a 500m and 512Mi limit. It loads CloudTAK's modules. On run 40174810574 the steady working set was 146Mi for CloudTAK and 67Mi for `sso`; an earlier note had `sso` near 270 MB, which is why the limit stays 512Mi. The bootstrap container requests 10m and 48Mi, with a 200m and 128Mi limit (steady 19Mi). PostGIS requests 50m and 128Mi, with a 500m and 512Mi limit (steady 96Mi). The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.
+CloudTAK requests 100m of central processing unit (CPU) capacity and 256Mi memory, with a 500m and 768Mi limit. The `sso` container requests 50m and 128Mi, with a 500m and 512Mi limit. It loads CloudTAK's modules. On run 40174810574 the steady working set was 146Mi for CloudTAK and 67Mi for `sso`; an earlier note had `sso` near 270 MB, which is why the limit stays 512Mi. The bootstrap container requests 10m and 48Mi, with a 200m and 128Mi limit (steady 19Mi). PostGIS requests 50m and 128Mi, with a 500m and 512Mi limit (steady 96Mi). The API's Node heap is capped at 640 MB with `NODE_OPTIONS`. Upstream asks for 6 GB.

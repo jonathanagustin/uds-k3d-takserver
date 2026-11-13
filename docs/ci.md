@@ -1,8 +1,8 @@
 # CI workflows
 
-Every check in this repository runs as a GitHub Actions workflow in [`.github/workflows/`](../.github/workflows/). This page lists each workflow, what starts it, and what it checks. Times are in UTC.
+Continuous integration (CI) checks for Team Awareness Kit (TAK) services run as GitHub Actions workflows in [`.github/workflows/`](../.github/workflows/). This page lists each workflow, what starts it, and what it checks. Times are in Coordinated Universal Time (UTC).
 
-Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the UDS CLI, and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds and deploys documentation independently of package releases. Ordinary `docs:` commits do not open a package release or appear in package release notes; `feat:`, `fix:` and the configured `chore:` entries still do. Full Core decides in its own `changes` job.
+Docs, device, benchmark, demo, unit-test-only, and repository metadata changes skip the install and upgrade matrices. Test and Package ignore the paths in [`.github/scripts/runtime-paths.sh`](../.github/scripts/runtime-paths.sh). A chart, Pepr module, network policy, value, bundle, task, image build, dependency pin, or script those jobs run still starts them. A chart SVG is one of those files. So is [`mise.toml`](../mise.toml): it pins Node, k3d, Helm, the Unified Defense Stack (UDS) command-line interface (CLI), and pnpm in the same file as the linters, and a change to any of those pins starts Test and Package. The Docs workflow builds and deploys documentation independently of package releases. Ordinary `docs:` commits do not open a package release or appear in package release notes; `feat:`, `fix:` and the configured `chore:` entries still do. Full Core decides in its own `changes` job.
 
 ## Pull request checks
 
@@ -29,7 +29,7 @@ bundle, blocks external egress inside the k3d nodes, then deploys the applicatio
 and runs the core tests. The runner keeps its network access. Cleanup attempts to restore
 the node firewall rules; check its result before reusing the test cluster. See [Airgap test boundaries](justifications.md).
 
-The HTTP control checks direct network reachability before and after blocking.
+The Hypertext Transfer Protocol (HTTP) control checks direct network reachability before and after blocking.
 A passing control does not establish that the application suite passed. Full
 airgap validation is still in progress; see [issue #256](https://github.com/jonathanagustin/uds-takserver/issues/256).
 
@@ -47,16 +47,18 @@ The upgrade test deploys only the `takserver` package on the upgrade step when t
 | --- | --- | --- | --- |
 | Container | `container.yaml` | changes to `.github/container-and-chart/`, the TAK submodule, or the workflow, and by hand | Builds the six TAK images on native amd64 and arm64 runners when their inputs changed, scans them, writes software bills of materials (SBOMs), and joins the two architectures into one index. See [Building the images](building.md) |
 | CloudTAK image | `cloudtak-image.yaml` | changes to the CloudTAK submodule or its build, and by hand | Builds the CloudTAK image per architecture and writes the multi-arch index. See [CloudTAK](cloudtak.md#image) |
-| PostGIS image | `postgis-image.yaml` | changes to the PostGIS build, and by hand | Builds the PostGIS image per architecture and writes the multi-arch index. See [ADR 13](../adr/0013-build-the-postgis-image-here.md) |
+| PostGIS image | `postgis-image.yaml` | changes to the PostGIS build, and by hand | Builds the PostGIS image per architecture and writes the multi-arch index. See [architecture decision record (ADR) 13](../adr/0013-build-the-postgis-image-here.md) |
 | Cosign | `cosign.yaml` | by hand only, with the `sign` input | Signs the published TAK images with keyless Cosign |
 
 The image workflows also attest the images they push. See [Verify a release](../README.md#verify-a-release).
 
 ## ATAK test device
 
+The device runs Android in a virtual machine (VM) managed by KubeVirt.
+
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| ATAK | `atak.yaml` | changes to the APK build or the `upstream/atak-civ` submodule, and by hand | Builds the ATAK-CIV APK and uploads it |
+| ATAK | `atak.yaml` | changes to the Android application package (APK) build or the `upstream/atak-civ` submodule, and by hand | Builds the ATAK-CIV APK and uploads it |
 | ATAK device VM | `atak-vm.yaml` | changes to `atak/vm/`, `atak/ci/`, or `atak/viewer/`, and by hand | Builds the containerDisk and the viewer, boots Android under KubeVirt on k3d, reaches it over adb, and opens the phone view in a browser |
 | ATAK e2e | `atak-e2e.yaml` | changes to `atak/`, pushes to `main` that change `atak/`, and by hand | Deploys UDS Core slim and TAK Server, then the device, and checks that it connects. The device images come from GitHub Container Registry (GHCR) when their inputs are unchanged. A push to `main` moves the `5.5.1.10` tags to the tested images. See [Reused build outputs](#reused-build-outputs) and [ATAK test device](atak-device.md) |
 | ATAK uptime native | `atak-uptime-native.yaml` | changes to the viewer freshness check or that workflow, and by hand | Runs the freshness check against Prometheus 3.16.0 on a standard runner. A fresh success passes. A success still inside the lookback, and a broken status, fail. It does not deploy the device |
@@ -64,9 +66,9 @@ The image workflows also attest the images they push. See [Verify a release](../
 Manual **ATAK e2e** runs accept an `uptime_probe` boolean. It adds only the Core
 monitoring layer, leaves Grafana at zero replicas, and checks the authenticated
 `/phone.html` target in Prometheus after the device test. The option is off by
-default while its extra memory and CPU footprint is measured beside the VM, so
+default while its extra memory and central processing unit (CPU) footprint is measured beside the VM, so
 a pull request run does not exercise it.
-`tests/test_atak_uptime.py` is a stand-in for the query API, not a Prometheus
+`tests/test_atak_uptime.py` is a stand-in for the query application programming interface (API), not a Prometheus
 server. It also renders kube-prometheus-stack 92.14.0, the chart in Core
 monitoring 1.16.0, and checks that `kubeStateMetrics.enabled: false` omits
 the kube-state-metrics Deployment while Prometheus remains. ATAK uptime native runs the same check against Prometheus and records
@@ -119,7 +121,7 @@ Full Core puts that group on `validate-full-core`, per architecture, and only wh
 
 ## Other clusters
 
-The EKS Test, RKE2 Test, and AKS Test workflows (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) run only by hand, and only when the `enabled` input is set. Each one sets up OpenTofu and validates its scaffold in [`.github/test-infra/`](../.github/test-infra/). Per their inputs, they create nothing and only initialize OpenTofu.
+The EKS Test and AKS Test workflows cover Amazon Elastic Kubernetes Service (EKS) and Azure Kubernetes Service (AKS). RKE2 Test covers RKE2, Rancher's Kubernetes distribution. The workflow files (`test-eks.yaml`, `test-rke2.yaml`, `test-aks.yaml`) run only by hand, and only when the `enabled` input is set. Each one sets up OpenTofu and validates its scaffold in [`.github/test-infra/`](../.github/test-infra/). Per their inputs, they create nothing and only initialize OpenTofu.
 
 ## Runner setup
 
@@ -130,7 +132,7 @@ The cluster jobs run on the standard 4 CPU GitHub runners, so a few scripts make
 - `.github/scripts/deploy-slim-core.sh` turns off k3s datastore compaction (`etcd-compaction-interval=0`) on CI clusters. A compaction that ran past its 5 second timeout made k3s exit mid-deploy about every other run. A local cluster keeps the default.
 - `uds run fit-runner` (`.github/scripts/fit-runner.sh`) scales down slim checkpoint pods the TAK tests do not need. That frees CPU for the `core-base` upgrade.
 
-After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and node allocatable. It also prints any out-of-memory (OOM) kills, k3d node restarts, `kubectl top`, and each container's last state. The step has a 5 minute timeout so a dead API server cannot hang the job.
+After a failed test, `.github/scripts/dump-memory.sh` prints runner memory and node allocatable. It also prints any kills caused by running out of memory (OOM), k3d node restarts, `kubectl top`, and each container's last state. The step has a 5 minute timeout so a dead API server cannot hang the job.
 
 ## Logs when an upload hangs
 
@@ -246,7 +248,7 @@ requiring a local archive. A missing tag invokes the publisher once with
 [UDS CLI 0.41.0 module](https://github.com/defenseunicorns/uds-cli/blob/v0.41.0/go.mod)
 embeds Zarf 0.89.0, whose
 [publish command](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/cmd/package.go)
-accepts that flag. Its [OCI retry implementation](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/pkg/zoci/retry.go)
+accepts that flag. Its [Open Container Initiative (OCI) retry implementation](https://github.com/zarf-dev/zarf/blob/v0.89.0/src/pkg/zoci/retry.go)
 uses three total attempts for the same publication, not three additional jobs.
 
 The local wrapper owns the publication process group, allows 20 minutes, then
@@ -271,7 +273,7 @@ Main, direct release events and reusable calls share one workflow publication
 group, so an older running build cannot deploy after a newer release build.
 Pull request previews retain their separate ref groups and cancellation policy.
 Docs errors surface in the Release Please workflow's `docs` job; they do not
-silently count as a successful dispatch. Only that job requests Pages and OIDC
+silently count as a successful dispatch. Only that job requests Pages and OpenID Connect (OIDC)
 permissions for documentation; it cannot publish packages or modify releases.
 
 ## Released upgrade bootstrap compatibility
@@ -295,7 +297,7 @@ The upgrade test also builds a local actions-only Zarf package as an admission
 readiness barrier. It runs after checkpoint restoration and again between the
 released Core and TAK packages in the same bundle deployment. Native Zarf waits
 require the agent Deployment to be Available, a ready Endpoint address referencing
-a Pod, and the HTTPS target port 8443. Their successive deadlines total at most
+a Pod, and the Hypertext Transfer Protocol Secure (HTTPS) target port 8443. Their successive deadlines total at most
 360 seconds; a failed wait stops deployment without restarting the agent or
 weakening its webhook. Failure diagnostics use bounded requests and redact the
 current and previous agent logs. This gate reports infrastructure readiness; it
@@ -339,13 +341,13 @@ nothing. A successful trial also performs no encryption. Only after the selected
 trial fails can the helper encrypt the fixed regular, non-symlink
 `staged-migrations/owner/PRIVATE-command-failure.txt`, bounded to 64 KiB. It cannot
 select another input file, take a private key or invoke an age plugin. The
-existing fixed JSON categories and all acceptance requirements remain unchanged.
+existing fixed JavaScript Object Notation (JSON) categories and all acceptance requirements remain unchanged.
 
 The helper requires this repository's manual main run and a matching checkout
 SHA and failed owner-journal source/run/attempt identity. It verifies the official
 age v1.3.2 release archive and extracted executable,
 and checks executable integrity before and after encryption. HTTPS acquisition
-preserves runner proxy/CA trust; the encryption child receives no inherited
+preserves runner proxy settings and certificate authority (CA) trust; the encryption child receives no inherited
 credentials or loader flags. Execution is bounded to 15 seconds, ciphertext to
 72 KiB and private stderr to 4 KiB. No captured stderr or exception text is
 printed. Only successful encryption and postchecks mark the separate ciphertext
@@ -430,7 +432,7 @@ replacements are atomic, with rollback if a later replacement fails.
 
 Both failed updates stop the job as an infrastructure acquisition failure; stale
 indexes do not count as success. Demo installs its package list once, with a
-120-second deadline. The helper retains signature and TLS checks. Its owned
+120-second deadline. The helper retains signature and Transport Layer Security (TLS) checks. Its owned
 `99zz-uds-ci-acquisition` configuration also gives Playwright's later APT calls
 zero acquisition retries, ten-second network timeouts and strict update errors;
 the Docs browser step has its own outer deadline. Complete package-manager logs

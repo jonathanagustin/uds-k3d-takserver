@@ -1,19 +1,19 @@
 # Helm charts in GHCR
 
 New packages use `ghcr.io/jonathanagustin/uds-takserver`. The separate
-[GHCR migration](package-migration.md) preserves historical artifacts and keeps
+[GitHub Container Registry (GHCR) migration](package-migration.md) preserves historical artifacts and keeps
 legacy URLs available for older releases.
 
-The charts publisher handles the two existing charts independently:
+The charts configure Team Awareness Kit (TAK) services on the Unified Defense Stack (UDS). The publisher handles the two existing charts independently:
 
-| Source | OCI chart name | Scope |
+| Source | Open Container Initiative (OCI) chart name | Scope |
 | --- | --- | --- |
 | `charts/takserver` | `ghcr.io/jonathanagustin/uds-takserver/charts/uds-takserver-config` | TAK's UDS configuration resources |
 | `charts/cloudtak` | `ghcr.io/jonathanagustin/uds-takserver/charts/uds-cloudtak` | CloudTAK resources used by the package |
 
 These are not an all-in-one TAK Helm installation. The application package
 orders the upstream TAK chart, UDS configuration, Pepr behavior and related
-components. UDS Core CRDs, certificates, values and package substitutions also
+components. UDS Core custom resource definitions (CRDs), certificates, values and package substitutions also
 matter. Use the signed Zarf package for that installation flow. Chart
 publication does not change local chart paths, Helm release names or templates.
 
@@ -58,7 +58,7 @@ The publisher implementation comes from the invoking workflow checkout; chart
 sources are archived separately from the validated tag. The old tag does not
 need to contain this new publisher script. Both packaged chart versions match
 the project release; each chart's original `appVersion` remains unchanged.
-Source/revision, tag URL and license annotations are added to the packages, not
+Source/revision, tag uniform resource locator (URL) and license annotations are added to the packages, not
 the source charts. Each archive also includes the actual root LICENSE from
 that same tag.
 
@@ -66,7 +66,7 @@ Packages have deterministic archive metadata based on the tag commit. An
 existing version is accepted only when its exact chart layer bytes and source
 annotations match. Both charts are checked before either is published, and
 publication is serialized per release tag. A conflicting version fails rather
-than replacing it. Registry authentication, TLS and transport failures are not
+than replacing it. Registry authentication, Transport Layer Security (TLS) and transport failures are not
 interpreted as missing versions.
 
 Each result is pulled by digest and compared with the local package, then
@@ -86,5 +86,5 @@ uv run --no-project --with pyyaml==6.0.3 python .github/scripts/publish-charts.p
 
 The script requires the pinned Helm and crane tools on `PATH`. Unit tests cover
 source/version validation, deterministic packaging, render preservation,
-collision handling and fail-closed registry errors. Loopback-only plain HTTP
+collision handling and fail-closed registry errors. Loopback-only plain Hypertext Transfer Protocol (HTTP)
 is available for an ephemeral local OCI registry; production always uses TLS.

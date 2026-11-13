@@ -1,21 +1,21 @@
 # Connect the ATAK test device
 
 Deploy the optional Android test device and provision it against the existing
-TAK Server with the driver. Check its connection and test location.
+TAK Server for Team Awareness Kit (TAK) clients with the driver. Check its connection and test location.
 
 ## What you'll accomplish
 
-Run ATAK-CIV in the KubeVirt Android VM, provision its client certificate through
+Run ATAK-CIV in the KubeVirt Android virtual machine (VM), provision its client certificate through
 a `TakClient`, and see its callsign in TAK and CloudTAK.
 
 ## Prerequisites
 
 - A working TAK deployment with the standard passthrough port 8089 and the
-  in-cluster DNS rewrite. See [Standard TAK ports](../networking.md#standard-tak-ports).
+  in-cluster Domain Name System (DNS) rewrite. See [Standard TAK ports](../networking.md#standard-tak-ports).
 - An amd64 node with `/dev/kvm`. The VM guest is 2Gi with 2 vCPU, plus
   capacity for KubeVirt's launcher overhead. 2Gi is the configured guest, not
-  a measured minimum. Android-x86 and this APK have no arm64 build.
-- The UDS CLI, Docker, k3d, and a checkout of this repository for the test driver.
+  a measured minimum. Android-x86 and this Android application package (APK) have no arm64 build.
+- The Unified Defense Stack (UDS) command-line interface (CLI), Docker, k3d, and a checkout of this repository for the test driver.
 - Published images matching the `ATAK_TAG` you select, including `atak-driver`
   for the automated provisioning path.
 
@@ -66,10 +66,10 @@ uds zarf tools kubectl get pods -n atak
 ```
 
 The `TakClient` must be Ready and the VM must run. The e2e script also checks
-TAK's `/Marti/api/clientEndPoints` and the device's latest CoT coordinates.
+TAK's `/Marti/api/clientEndPoints` and the device's latest Cursor on Target (CoT) coordinates.
 Expect callsign `ATAK-DEVICE (TEST LOCATION)` near 38.8895, -77.0353 unless you
 overrode the test settings. ATAK's red `NO GPS` label is expected: this is a
-mock self position, not a live GPS fix.
+mock self position, not a live Global Positioning System (GPS) fix.
 
 ## Troubleshooting
 
@@ -82,7 +82,7 @@ mock self position, not a live GPS fix.
 
 **Solution:** Confirm amd64 and `/dev/kvm`, then describe the VMI and launcher
 pod. Use the package's KubeVirt configuration, which disables `ImageVolume`
-for container runtimes without CRI image-volume support. See
+for container runtimes without Container Runtime Interface (CRI) image-volume support. See
 [Deploy](../atak-device.md#deploy) for the version-specific explanation.
 
 ### The device connects but sees no group traffic

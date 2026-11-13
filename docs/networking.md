@@ -1,12 +1,12 @@
 # Networking
 
-This page describes how traffic reaches TAK Server, which flows the package allows, how the mesh is set up, and how names resolve inside the cluster.
+This page describes how traffic from Team Awareness Kit (TAK) clients reaches TAK Server, which flows the package allows, how the mesh is set up, and how names resolve inside the cluster.
 
-The UDS operator turns the Package `network` block into NetworkPolicy and Istio resources. The rules are in `charts/takserver/templates/uds-package.yaml`. This package ships its own Istio objects only for the DestinationRule described in [Tenant gateway to 8447](#tenant-gateway-to-8447) and for the [standard TAK ports](#standard-tak-ports).
+The Unified Defense Stack (UDS) operator turns the Package `network` block into NetworkPolicy and Istio resources. The rules are in `charts/takserver/templates/uds-package.yaml`. This package ships its own Istio objects only for the DestinationRule described in [Tenant gateway to 8447](#tenant-gateway-to-8447) and for the [standard TAK ports](#standard-tak-ports).
 
 ## Exposure
 
-The upstream chart's nginx ingress stays off. The Package exposes the same three ports (8446, 8443, and 8089) on the passthrough gateway, and the browser UI on the tenant gateway. Passthrough forwards raw TLS. Istio does not terminate it.
+The upstream chart's nginx ingress stays off. The Package exposes the same three ports (8446, 8443, and 8089) on the passthrough gateway, and the browser user interface (UI) on the tenant gateway. Passthrough forwards raw Transport Layer Security (TLS). Istio does not terminate it.
 
 | Host | Gateway | Service | Port | Why this port |
 | --- | --- | --- | --- | --- |
@@ -17,7 +17,7 @@ The upstream chart's nginx ingress stays off. The Package exposes the same three
 
 Ports 8444, 9000, and 9001 stay on the Services and have no gateway host. TLS on 8089, 8443, 8444, 8446, 9000, and 9001 is not terminated by the tenant gateway.
 
-Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the API, and Ignite.
+Messaging also binds plaintext 8080, and the actuator is on that port. No Service in this package publishes 8080, and AuthorizationPolicy `takserver-deny-plaintext-8080` denies it to messaging, the application programming interface (API), and Ignite.
 
 API and messaging also listen on plaintext 9100 for Prometheus (the Java Management Extensions (JMX) exporter javaagent). That port is not published. The Package monitor is what lets Prometheus scrape it.
 
@@ -44,7 +44,7 @@ The package metadata that Portal and the package catalog read (title, tagline, c
 
 ### Uptime monitoring
 
-The package uses UDS Core [uptime monitoring](https://docs.defenseunicorns.com/core/how-to-guides/monitoring--observability/set-up-uptime-monitoring/). Each check is an `uptime.checks.paths` entry on an `expose` entry. The UDS operator turns it into a Prometheus Probe in the package's namespace, and Blackbox Exporter sends an HTTPS GET to `https://<host>.<domain><path>` at a regular interval. A check passes on a 2xx answer.
+The package uses UDS Core [uptime monitoring](https://docs.defenseunicorns.com/core/how-to-guides/monitoring--observability/set-up-uptime-monitoring/). Each check is an `uptime.checks.paths` entry on an `expose` entry. The UDS operator turns it into a Prometheus Probe in the package's namespace, and Blackbox Exporter sends a Hypertext Transfer Protocol Secure (HTTPS) GET to `https://<host>.<domain><path>` at a regular interval. A check passes on a 2xx answer.
 
 | Probe | Namespace | Target |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ The thresholds are UDS Core settings under `udsCoreDefaultAlerts` in the `uds-pr
 
 #### Client-port health
 
-UDS Core cannot probe TAK's client ports itself. Its probe only sends an HTTPS GET and must trust the server certificate. On the passthrough hosts TAK serves the package's own CA, not the gateway certificate. Ports 8443 and 8089 also require a client certificate, and 8089 is not HTTP. The UDS Core API has no field for a custom probe module, and the operator overwrites the Blackbox configuration Secret.
+UDS Core cannot probe TAK's client ports itself. Its probe only sends an HTTPS GET and must trust the server certificate. On the passthrough hosts TAK serves the package's own certificate authority (CA), not the gateway certificate. Ports 8443 and 8089 also require a client certificate, and 8089 is not Hypertext Transfer Protocol (HTTP). The UDS Core API has no field for a custom probe module, and the operator overwrites the Blackbox configuration Secret.
 
 The `tak-health` pod fills that gap. Every 30 seconds it connects to TAK the way a TAK client does, through the passthrough gateway:
 
@@ -103,7 +103,7 @@ The `tak-health` pod fills that gap. Every 30 seconds it connects to TAK the way
 | `/api` | 8443 (`takserver-api.<domain>` on 443) | the mutual TLS handshake succeeds and `GET /Marti/api/version` returns 200 |
 | `/enroll` | 8446 (`takserver-stream.<domain>`) | the TLS handshake succeeds and `GET /login` returns 200. No client certificate |
 
-Each path answers 200 when its last check passed and is at most 90 seconds old, about three check intervals. Otherwise it answers 503. So a stopped check loop also shows as down. The `tak-health` expose entry lists the three paths under `uptime.checks.paths` on the admin gateway. UDS Core probes them, and its alerts and **Probe Uptime** dashboard include them with no extra setup. The entry does not depend on `sso.enabled`, so TAK without SSO is checked too.
+Each path answers 200 when its last check passed and is at most 90 seconds old, about three check intervals. Otherwise it answers 503. So a stopped check loop also shows as down. The `tak-health` expose entry lists the three paths under `uptime.checks.paths` on the admin gateway. UDS Core probes them, and its alerts and **Probe Uptime** dashboard include them with no extra setup. The entry does not depend on `sso.enabled`, so TAK without single sign-on (SSO) is checked too.
 
 **Client certificate.** The cert-init Job issues the pod its own client certificate, `CN=tak-health`, signed by the deploy-time CA. It stores it in Secret `tak-health-client` as `ca.pem`, `client.pem`, and `client.key`. The certificate:
 
@@ -117,7 +117,7 @@ The pod mounts only that Secret, read-only, and runs as a non-root user with no 
 
 **What the certificate can and cannot do.** TAK accepts it on 8089 and 8443 because the deploy-time CA signed it. The `auth` block in `CoreConfig.xml` sets `x509groups="true"` and leaves `x509addAnonymous` at its default, `false`, so the certificate gets no groups. With no groups it receives no CoT from other clients, and data that TAK limits by group, such as missions and files, is not visible to it. It has no admin role, so admin pages and admin API calls are refused. It can still open a connection and call API endpoints that TAK does not limit by group, such as `/Marti/api/version`. This health certificate is signed locally and has no TAK enrollment-table row. To revoke it before expiry, update the CA-signed CRL and reload its TAK consumers, or rotate the deploy-time CA. TakClient certificates use the separate [certificate-table revocation path](../adr/0024-tak-signed-takclient-revocation.md).
 
-**With the TAK alerts.** These checks are in addition to the alerts in PrometheusRule `takserver` (see [Monitoring](configuration.md#monitoring)), not a replacement. Those alerts read the JMX exporter and kube-state-metrics: a Deployment scaled to 0, no available pods, a high JVM heap, or a restart loop. They do not show whether a client can connect. `tak-health` checks that. It does not see heap use or restarts.
+**With the TAK alerts.** These checks are in addition to the alerts in PrometheusRule `takserver` (see [Monitoring](configuration.md#monitoring)), not a replacement. Those alerts read the JMX exporter and kube-state-metrics: a Deployment scaled to 0, no available pods, a high Java virtual machine (JVM) heap, or a restart loop. They do not show whether a client can connect. `tak-health` checks that. It does not see heap use or restarts.
 
 **Turn it off.** Set the package value `health.enabled` to `false`:
 
@@ -148,19 +148,19 @@ Slim core installs neither the Probe API nor Portal. The full-core job checks bo
 
 A field client such as ATAK enrolls at `<host>:8446` and then streams to the same `<host>:8089`, with the port taken from its settings and the host shared. The 443 routes above give each port its own host, so a client cannot use them with one server entry.
 
-`charts/takserver/templates/standard-ports.yaml` adds an Istio Gateway on the passthrough gateway pods. The gateway has a TLS passthrough listener on 8446 and a TCP listener on 8089. A VirtualService sends 8446 to `takserver-api-service:8446`. That route matches on port and on SNI. The SNI hosts are `standardPorts.hosts`, which defaults to `takserver` and `takserver-stream`.
+`charts/takserver/templates/standard-ports.yaml` adds an Istio Gateway on the passthrough gateway pods. The gateway has a TLS passthrough listener on 8446 and a Transmission Control Protocol (TCP) listener on 8089. A VirtualService sends 8446 to `takserver-api-service:8446`. That route matches on port and on SNI. The SNI hosts are `standardPorts.hosts`, which defaults to `takserver` and `takserver-stream`.
 
 The same VirtualService sends 8089 to `takserver-messaging-service:8089` and matches on port alone. ATAK's streaming library does not send SNI, so an SNI match on 8089 would drop it. TLS still runs end to end on 8089 and TAK still requires the client certificate. The 443 routes stay as they are.
 
-See [ADR 0012](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md). The gateway Service publishes the two ports through the bundle override `istio-passthrough-gateway.gateway` `service.ports` in `bundle/uds-bundle.yaml`. The Istio gateway chart's NetworkPolicy opens every port in that list. Traffic to TAK uses the same Service ports as the Package expose entries, so the operator's ingress rules for 8446 and 8089 already cover it and no rule is added. Set `standardPorts.enabled: false` to drop the listeners. Without the Service ports they are inert.
+See [architecture decision record (ADR) 0012](../adr/0012-standard-tak-ports-on-the-passthrough-gateway.md). The gateway Service publishes the two ports through the bundle override `istio-passthrough-gateway.gateway` `service.ports` in `bundle/uds-bundle.yaml`. The Istio gateway chart's NetworkPolicy opens every port in that list. Traffic to TAK uses the same Service ports as the Package expose entries, so the operator's ingress rules for 8446 and 8089 already cover it and no rule is added. Set `standardPorts.enabled: false` to drop the listeners. Without the Service ports they are inert.
 
-Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In-cluster DNS](#in-cluster-dns)), so in-cluster clients use `takserver-stream.<domain>:8446` and `:8089`. Outside the cluster, point the TAK host at the passthrough gateway's load balancer. On k3d, host ports 8446 and 8089 are not mapped. Tests port-forward them.
+Inside the cluster, `takserver.<domain>` resolves to the tenant gateway (see [In-cluster Domain Name System (DNS)](#in-cluster-dns)), so in-cluster clients use `takserver-stream.<domain>:8446` and `:8089`. Outside the cluster, point the TAK host at the passthrough gateway's load balancer. On k3d, host ports 8446 and 8089 are not mapped. Tests port-forward them.
 
 `uds run test:gateway` writes `/tmp/tak-std-ports`. `tests/api-smoke.sh` enrolls a certificate on 8446, streams a CoT event on 8089 with it, and waits for the client in `/Marti/api/clientEndPoints` as seen by that user. That list only shows clients that share a group with the caller, and the admin certificate has none.
 
 ### QUIC
 
-QUIC is off by default: `quic.enabled` is `false`. With it off, the chart adds no QUIC input, no UDP Service, and no UDP expose entry.
+QUIC is off by default: `quic.enabled` is `false`. With it off, the chart adds no QUIC input, no User Datagram Protocol (UDP) Service, and no UDP expose entry.
 
 When `quic.enabled` is `true`, the chart does three things:
 
@@ -168,7 +168,7 @@ When `quic.enabled` is `true`, the chart does three things:
 - Service `takserver-messaging-quic` publishes UDP 8090 to the messaging pods.
 - The Package exposes that Service with `protocol: UDP` and no host.
 
-UDS Core sends that UDP traffic through Envoy Gateway, not Istio. The UDS operator writes the route and one NetworkPolicy. That policy lets only the Envoy default gateway proxy reach the messaging pods on UDP 8090. Istio AuthorizationPolicy and mesh mTLS do not cover this path.
+UDS Core sends that UDP traffic through Envoy Gateway, not Istio. The UDS operator writes the route and one NetworkPolicy. That policy lets only the Envoy default gateway proxy reach the messaging pods on UDP 8090. Istio AuthorizationPolicy and mesh mutual Transport Layer Security (mTLS) do not cover this path.
 
 TAK itself requires a client certificate. In TAK 5.7-RELEASE-14 the QUIC TLS context uses `ClientAuth.REQUIRE`, and the input's `auth` defaults to `x509`, the same as 8089. The anonymous UDP input on 8087 and the multicast inputs are not added.
 
@@ -183,7 +183,7 @@ The script exits early when the QUIC Service is missing, unless Envoy Gateway is
 
 ## Tenant gateway to 8447
 
-The Package CR `expose` entry cannot ask the gateway to use TLS toward the Service. The chart adds that part as plain Istio, outside the Package CR, when `api.web.backendTLS.enabled` is `true` (the default):
+The Package custom resource (CR) `expose` entry cannot ask the gateway to use TLS toward the Service. The chart adds that part as plain Istio, outside the Package CR, when `api.web.backendTLS.enabled` is `true` (the default):
 
 - The 8447 connector serves TLS from `certs/files/takserver-web.jks`. The cert Job issues it from the deploy-time CA, with the names `takserver-web`, `takserver-web.takserver`, `takserver-web.takserver.svc`, and `takserver-web.takserver.svc.cluster.local`.
 - Service `takserver-web` port is `https` with `appProtocol: https`.
@@ -203,7 +203,7 @@ The package allows only the flows below. Every allow rule has its own descriptio
 | Egress and Ingress | Ignite to Ignite, ports 47100 and 47500 | `Egress <port> from takserver-ignite to ignite-peers`, and the Ingress rule |
 | Egress and Ingress | every pair of API, messaging, config, and plugins, port 47100 | `Egress 47100 from <a> to <b>`, `Ingress 47100 to <b> from <a>` |
 | Egress | `remoteGenerated: KubeAPI`, one rule per pod label in `kubeApi.selectors` | Ignite Kubernetes discovery for that label |
-| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and JWKS (JSON Web Key Set) |
+| Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, API selector, only when `sso.enabled` | Keycloak discovery, token, and signing keys in JavaScript Object Notation (JSON), using the JSON Web Key Set (JWKS) format |
 | Egress | namespace `istio-tenant-gateway`, labels `app=tenant-ingressgateway` and `istio=tenant-ingressgateway`, port 443, messaging selector, only when `sso.enabled` | Keycloak discovery and JWKS for 8089 clients |
 | Ingress | namespace `envoy-default-gateway`, the Envoy proxy labels, UDP 8090, messaging selector, only when `quic.enabled`. The UDS operator writes it from the UDP expose entry | QUIC from the Envoy default gateway |
 

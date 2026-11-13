@@ -60,10 +60,19 @@ Offline control receipt SHA-256:
 Independent output, native provider and class-origin audit SHA-256:
 `20487fc4081431d0eef4646c077ba4975a9fda6a579026fc706cc5c76e7612e8`.
 
-Next, rerun all 1,898 genuine 5.8 Platform sources using only the two reviewed
-postimages and complete changed family. Preserve all remaining contour/vehicle
-diagnostics; never accept partial Platform classes. This does not qualify a
-client, renderer or network download workflow.
+The complete 1,898-source 5.8 Platform diagnostic has now run with the patched
+consumer and all four compiled downloader-family classes. All four elevation
+contract errors are gone. The 15 contour and 11 vehicle/Interop errors remain,
+with exactly the previous error headers and 50 compiler warnings. No class files
+were produced or accepted; the full Platform build still fails.
+
+Full Platform diagnostic receipt SHA-256:
+`2050186c524144d442760bf2559cb74e74196bd53284a5a19d686285ad183b49`.
+Independent diagnostic/source/classpath audit SHA-256:
+`ad6bef0aad542aa4dff17281163d20a6a052cc56410cf87b585a293c5fd750cb`.
+
+The remaining contour and vehicle contracts require real implementations. This
+profile does not qualify a client, renderer or network download workflow.
 
 Official local source inventory: the public Kernel revision has no
 `gov.tak.api.contour` or `gov.tak.api.vehicle` family. ATAK has 22 actual Android

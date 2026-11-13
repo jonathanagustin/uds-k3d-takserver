@@ -22,7 +22,7 @@ import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components
 
 <LegacyHomeHash />
 
-This package brings Team Awareness Kit (TAK) services to the Unified Defense Stack (UDS). Applications, identity, networking, security, and operations work together in one integrated environment. [TAK Server](https://github.com/TAK-Product-Center/Server) provides the services that connect TAK clients and exchange data. Deploying it on a shared platform also requires identity integration, client certificates, gateways, network rules, databases, and an upgrade process. Adding [CloudTAK](https://github.com/dfpc-coe/CloudTAK) introduces a browser application and its own database. Those pieces need to work together and stay aligned as the deployment changes.
+Team Awareness Kit (TAK) Server on the Unified Defense Stack (UDS) brings applications, identity, networking, security, and operations together in one integrated environment. [TAK Server](https://github.com/TAK-Product-Center/Server) provides the services that connect TAK clients and exchange data. Deploying it on a shared platform also requires identity integration, client certificates, gateways, network rules, databases, and an upgrade process. Adding [CloudTAK](https://github.com/dfpc-coe/CloudTAK) introduces a browser application and its own database. Those pieces need to work together and stay aligned as the deployment changes.
 
 This package connects TAK Server and CloudTAK to [UDS Core](https://docs.defenseunicorns.com/core/)'s Keycloak sign-in, gateways, and default-deny networking. It supplies deployment charts and configuration, uses TAK's certificate tooling at install time, and includes database backup and recovery workflows. Operators get a defined integration to deploy, test, and maintain alongside their other UDS applications.
 
@@ -34,7 +34,26 @@ Zarf packages the application charts, container images, and deployment configura
 - **Verify releases:** Package signatures and build provenance that you can check before deployment.
 - **Test and operate:** Local install and upgrade checks, plus guides for backup, recovery, and client provisioning.
 
-[Watch the 26-second user interface (UI) preview](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4) for CloudTAK mapping, marker creation, sharing and TAK Server status, edited from recorded demos. The [source manifest](https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/edit-manifest.json) lists the clips and checksums.
+<figure>
+  <video
+    controls
+    playsinline
+    preload="none"
+    width="1920"
+    height="1080"
+    style={{ width: '100%', height: 'auto' }}
+    poster="https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/poster.jpg"
+    aria-label="Recorded CloudTAK and TAK Server preview"
+    aria-describedby="ui-preview-caption"
+  >
+    <source src="https://github.com/jonathanagustin/uds-takserver/releases/download/v0.12.0/uds-takserver-ui-preview.mp4" type="video/mp4" />
+    This browser cannot play the video.
+  </video>
+  <figcaption id="ui-preview-caption">
+    A silent, 26-second user interface (UI) preview showing CloudTAK mapping, marker creation,
+    sharing and TAK Server status, edited from recorded demos.
+  </figcaption>
+</figure>
 
 ## Choose your starting point
 

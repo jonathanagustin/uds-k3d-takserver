@@ -17,6 +17,7 @@
     "No findings means no mutation",
     "Create replacement before cleanup",
     "Cleanup only older exact-signature comments matching authenticated create response and pinned GitHub Actions Bot identity",
-    "Finish comment enumeration before deletion"
+    "Finish comment enumeration before deletion",
+    "Bind trusted live preflight PR sources/state and file count; recheck before posting"
   ]
 }

@@ -52,14 +52,29 @@ forks. It does not crawl PRs or post comments. Automated live crawler activation
 remains deferred under issue #37; the foundational marker set can be reviewed
 separately from that activation decision.
 
-A separate **Lula manual crawl** workflow runs only from `main`, after a user
-supplies a PR number and explicitly enables `post_comments`. That input authorizes
-the pinned CLI to delete its previous signed comments and post current findings.
-The workflow checks out only trusted workflow source and never executes PR code.
-It rejects forks, drafts, closed PRs, more than 30 changed files, and a base commit
-without the existing mapped CoreConfig marker pair. Thus this foundational PR
-cannot serve as proof of a successful later crawl. A later small PR must modify
-an already mapped block and demonstrate the expected UUID in the comment.
+A local, not-yet-published workflow preparation adds a trusted-main
+`pull_request_target` comment path alongside the explicitly authorized manual
+path. Both use the same live preflight, target only open non-draft same-repository
+PRs into `main`, reject more than 30 changed files, and require the existing
+mapped CoreConfig base marker pair. They check out only `refs/heads/main`, never
+PR code. The existing read-only PR mapping validation remains separate.
+
+The prepared paths share per-PR serialization and use an explicit project safety
+variant of the pinned official crawler. It verifies the npm archive before
+installation, disables install scripts, verifies the exact original bundled
+source before patching, and grants the API token only to API preflight/posting
+steps. Source SHA/count bindings are rechecked before posting. The variant refuses
+partial file analysis, creates a replacement before cleanup, and removes only
+older exact-header comments by the authenticated GitHub Actions bot. With no
+findings it leaves prior comments unchanged; those may be stale historical
+findings. No workflow publication, crawl, or actual comment acceptance is claimed
+from this local preparation.
+
+A later small PR must modify an already mapped block and demonstrate the
+expected UUID in its actual comment, with the workflow source, run and PR source
+identities retained. This foundation's newly introduced markers cannot prove
+that acceptance. Publication/activation requires a separate maintainer review
+of the prior deferral; this local work does not silently lift it.
 
 Two verified limits in the pinned 0.9.5 CLI prevent claiming complete crawl
 acceptance today:
@@ -75,17 +90,12 @@ acceptance today:
   existing mapped block and verify the comment contains that UUID.
 
 These observations come from the published `lula2@0.9.5` bundle's
-`cli/commands/crawl.ts` code in `dist/index.js`. The tool is intentionally
-pinned; this draft does not patch or silently replace its crawler.
-
-Further source review found that unmodified 0.9.5 comment cleanup selects the
-signature substring without checking the author, including when no findings
-exist. Do not activate that command automatically. The explicitly declared,
-not-yet-activated [project safety variant](../.github/lula/README.md) retains
-official analysis while restricting cleanup to the authenticated GitHub Actions
-bot and refusing incomplete file analysis. Its mocked API tests are not live
-comment acceptance. The current manual workflow continues to use upstream bytes;
-its explicit authorization includes the documented cleanup limitation.
+`cli/commands/crawl.ts` code in `dist/index.js`. Further review found that
+unmodified cleanup selects the signature substring without an author check,
+even with no findings. The prepared workflows therefore explicitly use the
+[declared project safety variant](../.github/lula/README.md), retaining official
+analysis and accurate version/license provenance. Its mocked API tests are not
+live comment acceptance. Do not substitute unmodified upstream cleanup.
 
 ## Evidence boundaries
 

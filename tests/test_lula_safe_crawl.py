@@ -35,15 +35,30 @@ const comments = [
   own(99), own(100)
 ];
 const block = '<!-- @lulaStart aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -->\nVALUE\n<!-- @lulaEnd aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -->';
+const expected = {repository:'owner/repo',baseSHA:'b'.repeat(40),headSHA:'a'.repeat(40),changedFiles:1};
+let prReads = 0;
 const api = {
   pulls:{
-    get:async()=>({data:{head:{ref:'topic',sha:'head'},base:{sha:'base'}}}),
-    listFiles:async()=>({data:[{filename:'mapped.xml',status:input.mode==='deleted'?'removed':'modified'}]})
+    get:async()=>{
+      prReads++;
+      const data={state:'open',draft:false,changed_files:1,
+        head:{ref:'topic',sha:expected.headSHA,repo:{full_name:'owner/repo'}},
+        base:{ref:'main',sha:expected.baseSHA}};
+      if(input.mode==='race' && prReads>1) data.head.sha='c'.repeat(40);
+      if(input.mode==='fork') data.head.repo.full_name='fork/repo';
+      if(input.mode==='draft') data.draft=true;
+      if(input.mode==='closed') data.state='closed';
+      if(input.mode==='other-base') data.base.ref='other';
+      if(input.mode==='oversize') data.changed_files=31;
+      return {data};
+    },
+    listFiles:async()=>({data:input.mode==='incomplete'?[]:[{filename:'mapped.xml',status:input.mode==='deleted'?'removed':'modified'}]})
   },
   repos:{getContent:async({ref})=>{
-    events.push('read:'+ref);
-    if (input.mode==='partial' && ref==='head' || input.mode==='deleted') throw Error('API read failed');
-    return {data:block.replace('VALUE',ref==='head' && input.mode!=='none'?'NEW':'OLD')};
+    const side=ref===expected.headSHA?'head':'base';
+    events.push('read:'+side);
+    if (input.mode==='partial' && side==='head' || input.mode==='deleted') throw Error('API read failed');
+    return {data:block.replace('VALUE',side==='head' && input.mode!=='none'?'NEW':'OLD')};
   }},
   issues:{
     createComment:async()=>{
@@ -66,7 +81,7 @@ class Command {
 class Option {choices(){return this;}default(){return this;}}
 const context = {fs,createHash:crypto.createHash,Command,Option,
   Octokit:function(){return api;},
-  process:{env:{OWNER:'owner',REPO:'repo',PULL_NUMBER:'1'}},
+  process:{env:{OWNER:'owner',REPO:'repo',PULL_NUMBER:'1',LULA_PREFLIGHT_JSON:JSON.stringify(expected)}},
   console:{log(){},error(){}}
 };
 // Remove only static dependency imports/exports; all official analysis and the
@@ -127,6 +142,13 @@ class SafeCrawl(unittest.TestCase):
 
     def test_review_mode_rejected_before_any_api_read(self):
         self.assertEqual(self.run_case("review"), {"failed": True, "events": []})
+
+    def test_changed_or_unsupported_pr_never_mutates(self):
+        for mode in ["race", "fork", "draft", "closed", "other-base", "oversize", "incomplete"]:
+            with self.subTest(mode=mode):
+                result = self.run_case(mode)
+                self.assertTrue(result["failed"])
+                self.assertFalse(any(e.startswith(("create", "delete", "list")) for e in result["events"]))
 
     def test_exact_official_input_and_exclusive_output(self):
         self.assertIn(hashlib.sha256(OFFICIAL.read_bytes()).hexdigest(), PATCH.INPUTS)

@@ -152,7 +152,9 @@ def main():
             tool=a.java_home/'bin'/name
             if b.native.digest(tool)!=gis_inputs['tools'][name]['sha256']:raise ValueError('JDK differs from GIS Java toolchain')
             tools[str(tool.resolve())]=b.native.digest(tool)
-        for name in ('gcc','g++','ld','as','readelf','nm','ar','ranlib','make','patch','pkg-config','sh','sed','awk','grep','install'):
+        selected_tools=('gcc','g++','ld','as','readelf','nm')
+        if enabled:selected_tools+=('ar','ranlib','make','patch','pkg-config','sh','sed','awk','grep','install')
+        for name in selected_tools:
             tool=Path('/usr/bin')/name;tools[str(tool.resolve())]=b.native.digest(tool)
         cmake=None
         if enabled:

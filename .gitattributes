@@ -1,0 +1,4 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+# Preserve checksum-pinned unified-diff blank context lines, including final context.
+takx/gis-java/patches/gdal-java-pending-exceptions-v2.patch whitespace=-blank-at-eol,-blank-at-eof

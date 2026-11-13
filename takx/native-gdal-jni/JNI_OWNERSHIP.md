@@ -39,6 +39,10 @@ for owned UTF inputs and a C++ no-op for owned options, avoiding double release.
 C wrappers retain their existing CSL cleanup; the pinned gdalconst module has no
 options/UTF-input wrappers.
 
+The checksum-pinned patch retains unified-diff blank context lines, including
+its final context line. The exact patch path has Git whitespace attributes for
+those syntax bytes; other source whitespace checks remain enabled.
+
 Actual v2 generation produced 331 scoped UTF owners and 90 CSL owners. The
 108 custom raw UTF acquisition/release pairs remained unchanged. Genuine native
 compilation and Enumeration/progress/null controls passed with zero checked-JNI

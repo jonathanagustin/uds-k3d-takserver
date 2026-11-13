@@ -78,6 +78,15 @@ These observations come from the published `lula2@0.9.5` bundle's
 `cli/commands/crawl.ts` code in `dist/index.js`. The tool is intentionally
 pinned; this draft does not patch or silently replace its crawler.
 
+Further source review found that unmodified 0.9.5 comment cleanup selects the
+signature substring without checking the author, including when no findings
+exist. Do not activate that command automatically. The explicitly declared,
+not-yet-activated [project safety variant](../.github/lula/README.md) retains
+official analysis while restricting cleanup to the authenticated GitHub Actions
+bot and refusing incomplete file analysis. Its mocked API tests are not live
+comment acceptance. The current manual workflow continues to use upstream bytes;
+its explicit authorization includes the documented cleanup limitation.
+
 ## Evidence boundaries
 
 - The SSO mappings cover configured gates, not MFA or identity proofing.

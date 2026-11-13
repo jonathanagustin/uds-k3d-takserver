@@ -1,7 +1,8 @@
 # Render-context project variant qualification
 
 Status: experimental source profile. Native linking/static audits and five CPU
-JNI controls have passed locally. Headed/GPU lifecycle remains unqualified.
+Java Native Interface (JNI) controls have passed locally. Headed OpenGL lifecycle
+remains unqualified.
 The actual upstream identity remains Kernel 8.30.5 at official commit
 9f6893dd657feacc35ec5de03dad721c2e44170e.
 
@@ -42,6 +43,58 @@ all passed in actual fresh JVM processes with zero strict JNI warnings and norma
 exit. CPU Texture ownership does not establish textured rendering. No headed
 execution or context GPU native method ran. These local receipts are evidence
 identities, not inputs adopted by the portable source-preparation recipe.
+
+## Current source and incremental runtime evidence
+
+The current 57-path recipe incorporates seven later source updates: checked text
+callbacks and exception propagation, atlas binding restoration, and guards for
+optional terrain attributes optimized out of a shader. Cached official source,
+all five patch stages, and the seven actual build-source images were rechecked.
+The earlier native03 and CPU04 receipts describe their original composition;
+they do not by themselves qualify these later changes.
+
+The incremental native10 build compiled one terrain source file and linked new
+Core and JNI libraries over the preserved native09 atlas, native08 text callbacks
+and original context composition. Its receipt is
+`d3eba81bda9efb94076c7f2cf492576a3600efbed9fdf40db493fd535be9900c`;
+the separate static review is
+`56fcd2642b32cb4a45cb53da488aa0386fcf6a26429343b3be290bee227a8b94`.
+The review verified all 26 output files, 16,304 input pins, 119 generated headers,
+the actual 483 Core and 159 JNI link objects, retained exports, backend privacy
+and single SQLCipher ownership. These are local build identities, not a portable
+builder or a new complete software development kit (SDK).
+
+Fresh native10 CPU callback controls exited normally with zero strict JNI
+warnings; receipt
+`d89e5ec4ed5189a7cb37fbf1977cb6af46ebe02329295601938b18e1beca3585`.
+Font controls also exited normally, but retained 418 known Java Development Kit
+(JDK) font diagnostics and no project or unknown diagnostics; receipt
+`3ca80433f96f93a24c33d2b8b15651f7acbbb16412de109b49caefb26348635e`.
+That font result is a scoped result, not globally clean `-Xcheck:jni` execution.
+
+The first native10 headed attempt is preserved as failed:
+`604545af5ff79c90147b9a0a53a666f45dc4884fd68f669db7bc233ecd6d77d9`.
+Both initial views rendered without the prior terrain OpenGL error and produced
+matching cold/warm glyph pixels. The attempt then failed the moved-disposal-thread
+assertion; its complete logs also retain window-event lock timeouts. It did not
+complete the recreation, worker-retirement or terminal-collection checks below.
+The actual callback routing and capture overhead remain under investigation.
+No full lifecycle, global strictness or production rendering claim follows.
+
+## Additional compile-only evidence
+
+Fresh Context73 Client replay receipt SHA-256:
+`23bf081b46a210ceffede8dcc7032148e363352c072dafc139bba7e7e1b25cb6`.
+The actual 5.7 Client compiled 1,678 sources into 2,815 classes with zero errors
+using the final 73-class Context overlay. Existing Platform and prerequisites
+were reused; this was not a whole-project rebuild or runtime execution.
+
+Headed helper/probe compile receipt SHA-256:
+`adb324729ef2133e5e83b714f282dfd3a96583e94071de5e6f030b47d6413be1`.
+Three Java sources produced six classes; the native diagnostic helper has four
+JNI exports and links against the genuine variant Core. Neither the helper nor
+the libraries were loaded, and no graphical context or GPU control ran. The new
+test-only integration is a separate source checkpoint, not graphical acceptance.
 
 ## Required genuine headed checks
 

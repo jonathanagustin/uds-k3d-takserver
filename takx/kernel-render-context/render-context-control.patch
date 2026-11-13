@@ -258,34 +258,173 @@ index deb7aa6..7acf867 100644
  }
  
 diff --git a/takkernel/engine/src/main/cpp/renderer/GLText2.cpp b/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
-index bc43790..57fd72b 100644
 --- a/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
 +++ b/takkernel/engine/src/main/cpp/renderer/GLText2.cpp
-@@ -1,5 +1,6 @@
+@@ -1,6 +1,9 @@
  #include "renderer/GL.h"
  #include "renderer/GLText2.h"
 +#include "renderer/RenderContextLifecycle.h"
  #include <cfloat>
++#include <cmath>
++#include <new>
  #include <assert.h>
  #include <limits>
-@@ -196,11 +197,14 @@ GLText2 *TAK::Engine::Renderer::GLText2_intern(const TAK::Engine::Core::RenderCo
+ #include "core/AtakMapView.h"
+@@ -49,6 +52,30 @@
+ #endif
+ 
+ namespace {
++    // Capture only during native construction. Every later call delegates to
++    // the original mutable format; cache key and public format identity stay original.
++    class ConstructionTextFormat final : public TextFormat2 {
++    public:
++        ConstructionTextFormat(std::shared_ptr<TextFormat2> original, float height) NOTHROWS :
++            original_(std::move(original)), height_(height), constructing_(true) {}
++        ~ConstructionTextFormat() NOTHROWS override = default;
++        TextFormat2 &original() const NOTHROWS { return *original_; }
++        void finishConstruction() NOTHROWS { constructing_ = false; }
++        float getStringWidth(const char *s) NOTHROWS override { return original_->getStringWidth(s); }
++        float getCharPositionWidth(const char *s, int i) NOTHROWS override { return original_->getCharPositionWidth(s, i); }
++        float getCharWidth(unsigned int c) NOTHROWS override { return original_->getCharWidth(c); }
++        float getCharHeight() NOTHROWS override { return constructing_ ? height_ : original_->getCharHeight(); }
++        float getDescent() NOTHROWS override { return original_->getDescent(); }
++        float getStringHeight(const char *s) NOTHROWS override { return original_->getStringHeight(s); }
++        float getBaselineSpacing() NOTHROWS override { return original_->getBaselineSpacing(); }
++        int getFontSize() NOTHROWS override { return original_->getFontSize(); }
++        TAKErr loadGlyph(BitmapPtr &b, unsigned int c) NOTHROWS override { return original_->loadGlyph(b, c); }
++    private:
++        std::shared_ptr<TextFormat2> original_;
++        float height_;
++        bool constructing_;
++    };
++
+     Mutex cacheMutex(TEMT_Recursive);
+     Mutex textFormatCacheMutex(TEMT_Recursive);
+ 
+@@ -194,27 +221,38 @@
+ }
+ GLText2 *TAK::Engine::Renderer::GLText2_intern(const TAK::Engine::Core::RenderContext &ctx, std::shared_ptr<TextFormat2> textFormat) NOTHROWS
  {
++    if(!textFormat)
++        return nullptr;
      Lock lock(cacheMutex);
- 
+-
 -    std::unique_ptr<GLRenderBatch2>& SPRITE_BATCH = getSpriteBatch();
-+    // CPU interning may occur off the GL thread. Associate it with the explicit
-+    // owner rather than whichever context happens to be current on that thread.
-+    PerContextData& data = perContextDataCache.get(&ctx);
-+    std::unique_ptr<GLRenderBatch2>& SPRITE_BATCH = data.SPRITE_BATCH;
-     if (!SPRITE_BATCH.get())
-         SPRITE_BATCH.reset(new GLRenderBatch2(GLTEXT2_CHAR_BATCH_SIZE*4u));
- 
+-    if (!SPRITE_BATCH.get())
+-        SPRITE_BATCH.reset(new GLRenderBatch2(GLTEXT2_CHAR_BATCH_SIZE*4u));
+-
 -    GLTextCacheMap& glTextCache = getGLTextCache();
+-    do {
+-        auto entry = glTextCache.find(textFormat);
+-        if(entry == glTextCache.end())
+-            break;
++    PerContextData& data = perContextDataCache.get(&ctx);
 +    GLTextCacheMap& glTextCache = data.textCache;
-     do {
-         auto entry = glTextCache.find(textFormat);
-         if(entry == glTextCache.end())
-@@ -1228,3 +1232,20 @@ namespace
++    auto entry = glTextCache.find(textFormat);
++    if(entry != glTextCache.end())
+         return entry->second.get();
+-    } while(false);
+-
+-    GLText2 *customGLText = nullptr;
+-    std::unique_ptr<GLText2> retval(new GLText2(std::move(TextFormat2Ptr(textFormat.get(), Memory_leaker_const<TextFormat2>))));
+-    customGLText = retval.get();
++
++    // A managed callback reports failure as NaN while preserving its pending
++    // Throwable. Reject it before construction/publication; zero height is valid.
++    const float height = textFormat->getCharHeight();
++    if(!std::isfinite(height) || height < 0.f ||
++       static_cast<double>(height)*2.0 > static_cast<double>(std::numeric_limits<unsigned>::max()))
++        return nullptr;
++    TextFormat2Ptr captured(new(std::nothrow) ConstructionTextFormat(textFormat, height),
++                           Memory_deleter_const<TextFormat2, ConstructionTextFormat>);
++    if(!captured)
++        return nullptr;
++    ConstructionTextFormat *construction = static_cast<ConstructionTextFormat *>(captured.get());
++    std::unique_ptr<GLText2> retval(new(std::nothrow) GLText2(std::move(captured)));
++    if(!retval)
++        return nullptr;
++    construction->finishConstruction();
++    if(!data.SPRITE_BATCH) {
++        data.SPRITE_BATCH.reset(new(std::nothrow) GLRenderBatch2(GLTEXT2_CHAR_BATCH_SIZE*4u));
++        if(!data.SPRITE_BATCH)
++            return nullptr;
++    }
++    GLText2 *result = retval.get();
+     glTextCache[textFormat] = std::move(retval);
+-
+-    return customGLText;
+-
++    return result;
+ }
+ GLText2 *TAK::Engine::Renderer::GLText2_intern(const TextFormatParams &params) NOTHROWS
+ {
+@@ -235,15 +273,17 @@
+         if(!fmt)
+         {
+             TextFormat2Ptr fmt2ptr(nullptr, nullptr);
+-            if (TextFormat2_createTextFormat(fmt2ptr, params) == TE_Ok)
++            if (TextFormat2_createTextFormat(fmt2ptr, params) == TE_Ok && fmt2ptr)
+             {
+                 fmt = std::move(fmt2ptr);
+                 textFormatCache[params] = fmt;
+             }
+             if(!fmt) {
+-                TextFormat2_createDefaultSystemTextFormat(fmt2ptr, params.size);
+-                fmt = std::move(fmt2ptr);
+-                textFormatCache[params] = fmt;
++                fmt2ptr.reset();
++                if(TextFormat2_createDefaultSystemTextFormat(fmt2ptr, params.size) == TE_Ok && fmt2ptr) {
++                    fmt = std::move(fmt2ptr);
++                    textFormatCache[params] = fmt;
++                }
+             }
+         }
+     }
+@@ -637,7 +677,8 @@
+ 
+ TextFormat2 &GLText2::getTextFormat() const NOTHROWS
+ {
+-    return *textFormat;
++    ConstructionTextFormat *construction = dynamic_cast<ConstructionTextFormat *>(textFormat.get());
++    return construction ? construction->original() : *textFormat;
+ }
+ 
+ std::size_t GLText2::getLineCount(const char *text) NOTHROWS
+@@ -685,10 +726,13 @@
+     float cellWidth;
+ 
+     float cellHeight = textFormat->getCharHeight();// + (2*fontPadY);
++    if(!std::isfinite(cellHeight)) return TE_Err;
+ 
+     float charAdjX; // adjust start X
+     float charAdjY = (cellHeight / 2.0f) - fontPadY; // adjust start Y
+-    charAdjY -= textFormat->getDescent() - fontPadY;
++    const float descent = textFormat->getDescent();
++    if(!std::isfinite(descent)) return TE_Err;
++    charAdjY -= descent - fontPadY;
+ 
+     float letterX, letterY;
+     letterX = letterY = 0;
+@@ -725,7 +769,9 @@
+                 code = glyphAtlas.getTexId(&texId, key);
+                 TE_CHECKBREAK_CODE(code);
+ 
+-                commonCharWidth[ccidx] = (float)textFormat->getCharWidth(c);
++                const float width = textFormat->getCharWidth(c);
++                if(!std::isfinite(width)) return TE_Err;
++                commonCharWidth[ccidx] = width;
+                 commonCharTexId[ccidx] = texId;
+ 
+                 atakmap::math::Rectangle<float> uvBounds;
+@@ -761,6 +807,7 @@
+             TE_CHECKBREAK_CODE(code);
+ 
+             charWidth = textFormat->getCharWidth(c);
++            if(!std::isfinite(charWidth)) return TE_Err;
+             code = glyphAtlas.getTexId(&texId, key);
+             TE_CHECKBREAK_CODE(code);
+ 
+@@ -1228,3 +1275,20 @@
      }
  }
  
@@ -1091,7 +1230,6 @@ index 90988a9..f634cf2 100644
 +    return TE_Ok;
 +}
 diff --git a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
-index 1473f9c..ffc05a5 100644
 --- a/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
 +++ b/takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp
 @@ -1,4 +1,6 @@
@@ -1101,7 +1239,7 @@ index 1473f9c..ffc05a5 100644
  
  #include <algorithm>
  
-@@ -131,6 +133,8 @@ namespace
+@@ -131,6 +133,8 @@
      GLenum glType(const DataType tedt) NOTHROWS;
      void configureLightingUniforms(const TerrainTileRenderContext &ctx, const TerrainTileShader &shader) NOTHROWS;
  
@@ -1110,7 +1248,37 @@ index 1473f9c..ffc05a5 100644
      std::map<const RenderContext *, std::map<int64_t, TerrainTileShaders>> colorShaders;
      std::map<const RenderContext *, std::map<int, TerrainTileShaders>> depthShaders;
  }
-@@ -325,8 +329,7 @@ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShade
+@@ -262,10 +266,12 @@
+     }
+ 
+     glEnableVertexAttribArray(ctx.shader.base.aVertexCoords);
+-    glEnableVertexAttribArray(ctx.shader.base.aNormals);
++    if(ctx.shader.base.aNormals >= 0)
++        glEnableVertexAttribArray(ctx.shader.base.aNormals);
+     if(ctx.shader.aNoDataFlag != -1)
+         glEnableVertexAttribArray(ctx.shader.aNoDataFlag);
+-    glEnableVertexAttribArray(ctx.shader.aEcefVertCoords);
++    if(ctx.shader.aEcefVertCoords >= 0)
++        glEnableVertexAttribArray(ctx.shader.aEcefVertCoords);
+ 
+     return ctx;
+ }
+@@ -312,10 +318,12 @@
+ void TAK::Engine::Renderer::Elevation::GLTerrainTile_end(TerrainTileRenderContext &ctx) NOTHROWS
+ {
+     glDisableVertexAttribArray(ctx.shader.base.aVertexCoords);
+-    glDisableVertexAttribArray(ctx.shader.base.aNormals);
++    if(ctx.shader.base.aNormals >= 0)
++        glDisableVertexAttribArray(ctx.shader.base.aNormals);
+     if(ctx.shader.aNoDataFlag != -1)
+         glDisableVertexAttribArray(ctx.shader.aNoDataFlag);
+-    glDisableVertexAttribArray(ctx.shader.aEcefVertCoords);
++    if(ctx.shader.aEcefVertCoords >= 0)
++        glDisableVertexAttribArray(ctx.shader.aEcefVertCoords);
+     glUseProgram(0);
+ }
+ 
+@@ -325,8 +333,7 @@
  }
  TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShader(const TAK::Engine::Core::RenderContext &ctx, const int srid, const unsigned int options) NOTHROWS
  {
@@ -1120,7 +1288,7 @@ index 1473f9c..ffc05a5 100644
      const int64_t key = (((int64_t)srid)<<32LL)|((int64_t)options);
      auto entry = colorShaders[&ctx].find(key);
      if(entry != colorShaders[&ctx].end())
-@@ -373,8 +376,7 @@ TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getColorShade
+@@ -373,8 +380,7 @@
  }
  TerrainTileShaders TAK::Engine::Renderer::Elevation::GLTerrainTile_getDepthShader(const TAK::Engine::Core::RenderContext &ctx, const int srid) NOTHROWS
  {
@@ -1130,7 +1298,35 @@ index 1473f9c..ffc05a5 100644
      auto entry = depthShaders[&ctx].find(srid);
      if(entry != depthShaders[&ctx].end())
          return entry->second;
-@@ -754,3 +756,36 @@ namespace
+@@ -567,11 +573,13 @@
+ 
+         glBindBuffer(GL_ARRAY_BUFFER, vbo);
+         glVertexAttribPointer(shader.base.aVertexCoords, 3u, GL_FLOAT, false, static_cast<GLsizei>(layout.position.stride), (const void *)(base + layout.position.offset));
+-        const GLenum normalType = glType(layout.normal.type);
+-        if((layout.attributes&TEVA_Normal) && normalType)
+-            glVertexAttribPointer(shader.base.aNormals, 3u, normalType, !DataType_isFloating(layout.normal.type), static_cast<GLsizei>(layout.normal.stride), (const void *)(base + layout.normal.offset));
+-        else
+-            glVertexAttrib3f(shader.base.aNormals, 0.f, 0.f, 1.f);
++        if(shader.base.aNormals >= 0) {
++            const GLenum normalType = glType(layout.normal.type);
++            if((layout.attributes&TEVA_Normal) && normalType)
++                glVertexAttribPointer(shader.base.aNormals, 3u, normalType, !DataType_isFloating(layout.normal.type), static_cast<GLsizei>(layout.normal.stride), (const void *)(base + layout.normal.offset));
++            else
++                glVertexAttrib3f(shader.base.aNormals, 0.f, 0.f, 1.f);
++        }
+         if(shader.aNoDataFlag != -1)
+             glVertexAttrib1f(shader.aNoDataFlag, 1.f); // default the no data flag
+         if (tile.noDataAttr && (layout.attributes&tile.noDataAttr)) {
+@@ -582,7 +590,7 @@
+                     glVertexAttribPointer(shader.aNoDataFlag, 1u, noDataFlagType, !DataType_isFloating(noDataArr.type), static_cast<GLsizei>(noDataArr.stride), (const void*)(base + noDataArr.offset));
+             }
+         }
+-        if (tile.ecefAttr && (layout.attributes & tile.ecefAttr)) {
++        if (shader.aEcefVertCoords >= 0 && tile.ecefAttr && (layout.attributes & tile.ecefAttr)) {
+             VertexArray ecefAttr;
+             if (VertexDataLayout_getVertexArray(&ecefAttr, layout, tile.ecefAttr) == TE_Ok) {
+                 const GLenum ecefFlagType = glType(ecefAttr.type);
+@@ -754,3 +762,36 @@
          glUniform1f(shader.uMinAmbientLight, ctx.numLightSources ? 0.15f : 0.25f);
      }
  }
@@ -2696,7 +2892,6 @@ index 02e8269..66e530d 100644
      if(useShader) {
          glUseProgram(shader.pid);
 diff --git a/takkernel/engine/src/main/jni/jglmapview.cpp b/takkernel/engine/src/main/jni/jglmapview.cpp
-index a5f2671..13abef1 100644
 --- a/takkernel/engine/src/main/jni/jglmapview.cpp
 +++ b/takkernel/engine/src/main/jni/jglmapview.cpp
 @@ -1,3 +1,5 @@
@@ -2705,7 +2900,152 @@ index a5f2671..13abef1 100644
  #include "com_atakmap_map_opengl_GLMapView.h"
  
  #include <core/MapSceneModel2.h>
-@@ -1649,3 +1651,48 @@ namespace
+@@ -156,6 +158,7 @@
+ JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_render
+   (JNIEnv *env, jclass clazz, jlong ptr)
+ {
++    if(env->ExceptionCheck()) return;
+     GLGlobeBase *cview = JLONG_TO_INTPTR(GLGlobeBase, ptr);
+     if(!cview) {
+         ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg);
+@@ -166,6 +169,7 @@
+ JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_release
+   (JNIEnv *env, jclass clazz, jlong ptr)
+ {
++    if(env->ExceptionCheck()) return;
+     GLGlobeBase *cview = JLONG_TO_INTPTR(GLGlobeBase, ptr);
+     if(!cview) {
+         ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg);
+@@ -176,27 +180,33 @@
+ JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_setBaseMap
+   (JNIEnv *env, jclass clazz, jlong ptr, jobject mbasemap)
+ {
++    if(env->ExceptionCheck()) return;
+     GLGlobeBase *cview = JLONG_TO_INTPTR(GLGlobeBase, ptr);
+     if(!cview) {
+         ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg);
+         return;
+     }
+     GLMapRenderable2Ptr cbasemap(nullptr, nullptr);
+-    if(mbasemap)
+-        Renderer::Core::Interop_marshal(cbasemap, *env, mbasemap);
++    if(mbasemap) {
++        const TAKErr code = Renderer::Core::Interop_marshal(cbasemap, *env, mbasemap);
++        if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    }
+     cview->setBaseMap(std::move(cbasemap));
+ }
+ JNIEXPORT void JNICALL Java_com_atakmap_map_opengl_GLMapView_setStarsLayer
+         (JNIEnv *env, jclass clazz, jlong ptr, jobject mstarslayer)
+ {
++    if(env->ExceptionCheck()) return;
+     GLGlobeBase *cview = JLONG_TO_INTPTR(GLGlobeBase, ptr);
+     if(!cview) {
+         ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg);
+         return;
+     }
+     GLMapRenderable2Ptr cstarslayer(nullptr, nullptr);
+-    if(mstarslayer)
+-        Renderer::Core::Interop_marshal(cstarslayer, *env, mstarslayer);
++    if(mstarslayer) {
++        const TAKErr code = Renderer::Core::Interop_marshal(cstarslayer, *env, mstarslayer);
++        if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    }
+     cview->setStarsLayer(std::move(cstarslayer));
+ }
+ JNIEXPORT jlong JNICALL Java_com_atakmap_map_opengl_GLMapView_getLabelManager
+@@ -220,6 +230,9 @@
+ 
+     if(!checkInit(*env))
+         return;
++    if(env->ExceptionCheck())
++        return;
++    TAKErr code(TE_Ok);
+ 
+     Java::JNILocalRef mstate(*env, env->GetObjectField(mview, current ? GLMapView_class.currentPass : GLMapView_class.currentScene));
+     const GLGlobeBase::State *cstate = current ? cview->renderPass : &cview->renderPasses[0u];
+@@ -255,13 +268,21 @@
+     SET_STATE_FIELD(SetFloatField, focusx);
+     SET_STATE_FIELD(SetFloatField, focusy);
+     Java::JNILocalRef mupperLeft(*env, env->GetObjectField(mstate, GLMapView_class.State_class.upperLeft));
+-    Core::Interop_copy(mupperLeft, env, cstate->upperLeft);
++    code = Core::Interop_copy(mupperLeft, env, cstate->upperLeft);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code))
++        return;
+     Java::JNILocalRef mupperRight(*env, env->GetObjectField(mstate, GLMapView_class.State_class.upperRight));
+-    Core::Interop_copy(mupperRight, env, cstate->upperRight);
++    code = Core::Interop_copy(mupperRight, env, cstate->upperRight);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code))
++        return;
+     Java::JNILocalRef mlowerRight(*env, env->GetObjectField(mstate, GLMapView_class.State_class.lowerRight));
+-    Core::Interop_copy(mlowerRight, env, cstate->lowerRight);
++    code = Core::Interop_copy(mlowerRight, env, cstate->lowerRight);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code))
++        return;
+     Java::JNILocalRef mlowerLeft(*env, env->GetObjectField(mstate, GLMapView_class.State_class.lowerLeft));
+-    Core::Interop_copy(mlowerLeft, env, cstate->lowerLeft);
++    code = Core::Interop_copy(mlowerLeft, env, cstate->lowerLeft);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code))
++        return;
+     //env->SetBooleanField(mview, GLMapView_class.settled, (cview->settled ? JNI_TRUE : JNI_FALSE));
+     SET_STATE_FIELD(SetIntField, renderPump);
+     // XXX - no field in SDK
+@@ -270,7 +291,9 @@
+     SET_FIELD(SetLongField, animationDelta);
+     SET_FIELD(SetIntField, sceneModelVersion);
+     Java::JNILocalRef mscene(*env, env->GetObjectField(mstate, GLMapView_class.State_class.scene));
+-    Core::Interop_marshal(mscene.get(), *env, cstate->scene);
++    code = Core::Interop_marshal(mscene.get(), *env, cstate->scene);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code))
++        return;
+ 
+     // XXX - no field in SDK
+     //SET_FIELD(GLMapView_class, oscene, "Lcom/atakmap/map/MapSceneModel;");
+@@ -1535,8 +1558,12 @@
+         if(!impl)
+             return TE_Done;
+         LocalJNIEnv env;
++        if(env->ExceptionCheck())
++            return TE_Err;
+         // check if reference was cleared
+         Java::JNILocalRef limpl(*env, env->NewLocalRef(impl));
++        if(env->ExceptionCheck())
++            return TE_Err;
+         if(ATAKMapEngineJNI_equals(env, limpl, NULL)) {
+             env->DeleteWeakGlobalRef(impl);
+             impl = NULL;
+@@ -1544,6 +1571,8 @@
+         }
+         // dispatch camera changed
+         env->CallVoidMethod(limpl, GLMapView_class.dispatchCameraChanged);
++        if(env->ExceptionCheck())
++            return TE_Err;
+         return TE_Ok;
+     }
+     TAKErr CameraChangedForwarder::onCameraChangeRequested(const MapRenderer2 &renderer) NOTHROWS
+@@ -1551,8 +1580,12 @@
+         if(!impl)
+             return TE_Done;
+         LocalJNIEnv env;
++        if(env->ExceptionCheck())
++            return TE_Err;
+         // check if reference was cleared
+         Java::JNILocalRef limpl(*env, env->NewLocalRef(impl));
++        if(env->ExceptionCheck())
++            return TE_Err;
+         if(ATAKMapEngineJNI_equals(env, limpl, NULL)) {
+             env->DeleteWeakGlobalRef(impl);
+             impl = NULL;
+@@ -1560,6 +1593,8 @@
+         }
+         // dispatch camera changed
+         env->CallVoidMethod(limpl, GLMapView_class.dispatchCameraChangeRequested);
++        if(env->ExceptionCheck())
++            return TE_Err;
+         return TE_Ok;
+     }
+ 
+@@ -1649,3 +1684,48 @@
                      (camtgtz + (dirz*len*camLocAdj)) / view.displayModel->projectionZToNominalMeters);
      }
  }
@@ -2755,10 +3095,9 @@ index a5f2671..13abef1 100644
 +    ATAKMapEngineJNI_checkOrThrow(env, TAK::Engine::Renderer::RenderContext_markTerminal(*renderer));
 +}
 diff --git a/takkernel/engine/src/main/jni/jgltext.cpp b/takkernel/engine/src/main/jni/jgltext.cpp
-index 47a5484..c4756d7 100644
 --- a/takkernel/engine/src/main/jni/jgltext.cpp
 +++ b/takkernel/engine/src/main/jni/jgltext.cpp
-@@ -1,6 +1,7 @@
+@@ -1,11 +1,14 @@
  #include "com_atakmap_opengl_GLText.h"
  
  #include <renderer/GLText2.h>
@@ -2766,13 +3105,34 @@ index 47a5484..c4756d7 100644
  #include <util/Memory.h>
  
  #include "common.h"
-@@ -18,13 +19,20 @@ JNIEXPORT jlong JNICALL Java_com_atakmap_opengl_GLText_intern
+ #include "interop/JNIStringUTF.h"
+ #include "interop/renderer/ManagedTextFormat2.h"
++#include <cmath>
++#include <new>
+ 
+ using namespace TAK::Engine::Core;
+ using namespace TAK::Engine::Renderer;
+@@ -17,37 +20,71 @@
+ JNIEXPORT jlong JNICALL Java_com_atakmap_opengl_GLText_intern
    (JNIEnv *env, jclass clazz, jlong ctxPtr, jobject mtextFormat, jobject mglyphRenderer)
  {
++    if(env->ExceptionCheck()) return 0;
      const RenderContext *ctx = JLONG_TO_INTPTR(RenderContext, ctxPtr);
-+    if (!ctx) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return 0; }
-     TextFormat2Ptr cfmt(new ManagedTextFormat2(*env, mtextFormat, mglyphRenderer), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
-     return INTPTR_TO_JLONG(GLText2_intern(*ctx, std::move(cfmt)));
+-    TextFormat2Ptr cfmt(new ManagedTextFormat2(*env, mtextFormat, mglyphRenderer), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
+-    return INTPTR_TO_JLONG(GLText2_intern(*ctx, std::move(cfmt)));
++    if(!ctx || !mtextFormat) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return 0; }
++    TextFormat2Ptr format(new(std::nothrow) ManagedTextFormat2(*env, mtextFormat, mglyphRenderer), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
++    if(env->ExceptionCheck()) return 0;
++    if(!format) { ATAKMapEngineJNI_checkOrThrow(env, TE_OutOfMemory); return 0; }
++    try {
++        GLText2 *result = GLText2_intern(*ctx, std::move(format));
++        if(env->ExceptionCheck()) return 0;
++        if(!result) { ATAKMapEngineJNI_checkOrThrow(env, TE_Err); return 0; }
++        return INTPTR_TO_JLONG(result);
++    } catch(const std::bad_alloc &) {
++        if(!env->ExceptionCheck()) ATAKMapEngineJNI_checkOrThrow(env, TE_OutOfMemory);
++        return 0;
++    }
  }
  JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_invalidate
    (JNIEnv *env, jclass clazz, jlong ptr)
@@ -2788,7 +3148,50 @@ index 47a5484..c4756d7 100644
  }
  JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_batch__JJLjava_lang_String_2FFFFFFF
    (JNIEnv *env, jclass clazz, jlong gltextPtr, jlong glbatchPtr, jstring mtext, jfloat x, jfloat y, jfloat z, jfloat r, jfloat g, jfloat b, jfloat a)
-@@ -59,5 +67,11 @@ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_setTextFormatFactory
+ {
++    if(env->ExceptionCheck()) return;
+     GLText2 *gltext = JLONG_TO_INTPTR(GLText2, gltextPtr);
+     GLRenderBatch2 *batch = JLONG_TO_INTPTR(GLRenderBatch2, glbatchPtr);
++    if(!gltext || !batch || !mtext) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
+ 
+-    y += gltext->getTextFormat().getBaselineSpacing();
++    const float spacing = gltext->getTextFormat().getBaselineSpacing();
++    if(env->ExceptionCheck()) return;
++    if(!std::isfinite(spacing)) { ATAKMapEngineJNI_checkOrThrow(env, TE_Err); return; }
++    y += spacing;
+ 
+     JNIStringUTF text(*env, mtext);
+-    gltext->batch(*batch, text, x, y, z, r, g, b, a);
++    if(env->ExceptionCheck()) return;
++    const TAKErr code = gltext->batch(*batch, text, x, y, z, r, g, b, a);
++    if(env->ExceptionCheck()) return;
++    ATAKMapEngineJNI_checkOrThrow(env, code);
+ }
+ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_batch__JJLjava_lang_String_2FFFFFFFFF
+   (JNIEnv *env, jclass clazz, jlong gltextPtr, jlong glbatchPtr, jstring mtext, jfloat x, jfloat y, jfloat z, jfloat r, jfloat g, jfloat b, jfloat a, jfloat scissorX0, jfloat scissorX1)
+ {
++    if(env->ExceptionCheck()) return;
+     GLText2 *gltext = JLONG_TO_INTPTR(GLText2, gltextPtr);
+     GLRenderBatch2 *batch = JLONG_TO_INTPTR(GLRenderBatch2, glbatchPtr);
++    if(!gltext || !batch || !mtext) { ATAKMapEngineJNI_checkOrThrow(env, TE_InvalidArg); return; }
+ 
+     // XXX -
+-    y += gltext->getTextFormat().getBaselineSpacing();
++    const float spacing = gltext->getTextFormat().getBaselineSpacing();
++    if(env->ExceptionCheck()) return;
++    if(!std::isfinite(spacing)) { ATAKMapEngineJNI_checkOrThrow(env, TE_Err); return; }
++    y += spacing;
+ 
+     JNIStringUTF text(*env, mtext);
+-    gltext->batch(*batch, text, x, y, z, r, g, b, a, scissorX0, scissorX1);
++    if(env->ExceptionCheck()) return;
++    const TAKErr code = gltext->batch(*batch, text, x, y, z, r, g, b, a, scissorX0, scissorX1);
++    if(env->ExceptionCheck()) return;
++    ATAKMapEngineJNI_checkOrThrow(env, code);
+ }
+ 
+ JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_setTextFormatFactory
+@@ -59,5 +96,11 @@
  
  JNIEXPORT void JNICALL Java_com_atakmap_opengl_GLText_invalidateCache(JNIEnv *env, jclass clazz) {
  
@@ -2802,3 +3205,547 @@ index 47a5484..c4756d7 100644
 +    ATAKMapEngineJNI_checkOrThrow(env, GLText2_releaseContext(*current));
  }
 \ No newline at end of file
+diff --git a/takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp b/takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp
+--- a/takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp
++++ b/takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp
+@@ -366,6 +366,14 @@
+         if (!haveFree)
+             currentTexId = 0;
+     }
++
++    // Glyph uploads can occur while GLRenderBatch2 retains this unit's binding.
++    // Restore that binding on every exit, including subdivision failure.
++    struct TextureBindingGuard {
++        GLint binding;
++        TextureBindingGuard() NOTHROWS { glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding); }
++        ~TextureBindingGuard() NOTHROWS { glBindTexture(GL_TEXTURE_2D, binding); }
++    } textureBindingGuard;
+ 
+     if (currentTexId == 0) {
+         GLuint id{0};
+@@ -481,8 +489,6 @@
+ 
+     freeIndex++;
+ 
+-    glBindTexture(GL_TEXTURE_2D, 0);
+-
+     *value = retval;
+     return TE_Ok;
+ }
+diff --git a/takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp b/takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp
+--- a/takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp
++++ b/takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp
+@@ -1,6 +1,9 @@
+ #include "interop/renderer/ManagedTextFormat2.h"
+ 
+ #include <util/IO2.h>
++#include <cmath>
++#include <limits>
++#include <new>
+ 
+ #include "common.h"
+ #include "interop/JNIIntArray.h"
+@@ -60,146 +63,168 @@
+ }
+ 
+ ManagedTextFormat2::ManagedTextFormat2(JNIEnv &env_, jobject mtextformat_, jobject mglyphrenderer_) NOTHROWS :
+-    mimpl(env_.NewGlobalRef(mtextformat_)),
+-    mglyphRenderer(mglyphrenderer_ ? env_.NewGlobalRef(mglyphrenderer_) : env_.NewGlobalRef(mtextformat_))
+-{
++    mimpl(nullptr), mglyphRenderer(nullptr)
++{
++    if(env_.ExceptionCheck()) return;
+     static bool clinit = ManagedTextFormat2_init(env_);
++    if(env_.ExceptionCheck()) return;
++    if(!clinit) { ATAKMapEngineJNI_checkOrThrow(&env_, TE_IllegalState); return; }
++    if(!mtextformat_) { ATAKMapEngineJNI_checkOrThrow(&env_, TE_InvalidArg); return; }
++    mimpl = env_.NewGlobalRef(mtextformat_);
++    if(env_.ExceptionCheck()) return;
++    if(!mimpl) { ATAKMapEngineJNI_checkOrThrow(&env_, TE_OutOfMemory); return; }
++    mglyphRenderer = env_.NewGlobalRef(mglyphrenderer_ ? mglyphrenderer_ : mtextformat_);
++    if(!mglyphRenderer && !env_.ExceptionCheck()) ATAKMapEngineJNI_checkOrThrow(&env_, TE_OutOfMemory);
+ }
+ ManagedTextFormat2::~ManagedTextFormat2() NOTHROWS
+ {
+-    if(mimpl) {
+-        LocalJNIEnv env;
+-        env->DeleteGlobalRef(mimpl);
+-        mimpl = NULL;
++    LocalJNIEnv env;
++    if(mimpl) env->DeleteGlobalRef(mimpl);
++    if(mglyphRenderer) env->DeleteGlobalRef(mglyphRenderer);
++}
++namespace {
++    float failedMetric() NOTHROWS { return std::numeric_limits<float>::quiet_NaN(); }
++    // Cleanup is the only temporary exception-clear path. The first Java
++    // Throwable is restored by identity even if recycling also throws.
++    struct RecycleBitmap {
++        JNIEnv &env; jobject bitmap;
++        bool recycle() NOTHROWS {
++            if(!bitmap) return !env.ExceptionCheck();
++            jobject owned = bitmap; bitmap = nullptr;
++            jthrowable prior = env.ExceptionOccurred();
++            if(env.ExceptionCheck() && !prior) return false;
++            if(prior) env.ExceptionClear();
++            env.CallVoidMethod(owned, Bitmap_class.recycle);
++            const bool failed = env.ExceptionCheck();
++            if(prior) {
++                if(failed) env.ExceptionClear();
++                env.Throw(prior);
++                env.DeleteLocalRef(prior);
++                return false;
++            }
++            return !failed;
++        }
++        ~RecycleBitmap() NOTHROWS { recycle(); }
++    };
++}
++float ManagedTextFormat2::getStringWidth(const char *text) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    Java::JNILocalRef mtext(*env, env->NewStringUTF(text));
++    if(env->ExceptionCheck()) return failedMetric();
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.measureTextWidth, (jstring)mtext);
++    return env->ExceptionCheck() ? failedMetric() : (float)value;
++}
++float ManagedTextFormat2::getCharPositionWidth(const char *text, int position) NOTHROWS
++{
++    return getCharWidth(text[position]);
++}
++float ManagedTextFormat2::getCharWidth(const unsigned int chr) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    const jfloat value = env->CallFloatMethod(mimpl, MapTextFormat_class.getCharWidth, (jchar)chr);
++    return env->ExceptionCheck() ? failedMetric() : value;
++}
++float ManagedTextFormat2::getCharHeight() NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.getTallestGlyphHeight);
++    return env->ExceptionCheck() ? failedMetric() : (float)value;
++}
++float ManagedTextFormat2::getDescent() NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.getBaselineOffsetFromBottom);
++    return env->ExceptionCheck() ? failedMetric() : (float)value;
++}
++float ManagedTextFormat2::getStringHeight(const char *text) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    Java::JNILocalRef mtext(*env, env->NewStringUTF(text));
++    if(env->ExceptionCheck()) return failedMetric();
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.measureTextHeight, (jstring)mtext);
++    return env->ExceptionCheck() ? failedMetric() : (float)value;
++}
++float ManagedTextFormat2::getBaselineSpacing() NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return failedMetric();
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.getBaselineSpacing);
++    return env->ExceptionCheck() ? failedMetric() : (float)value;
++}
++int ManagedTextFormat2::getFontSize() NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return 0;
++    const jint value = env->CallIntMethod(mimpl, MapTextFormat_class.getFontSize);
++    return env->ExceptionCheck() ? 0 : value;
++}
++TAKErr ManagedTextFormat2::loadGlyph(BitmapPtr &value, const unsigned int c) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
++    const float width = env->CallFloatMethod(mglyphRenderer, MapTextFormat_class.getCharWidth, (jchar)c);
++    if(env->ExceptionCheck()) return TE_Err;
++    const int glyphHeight = env->CallIntMethod(mglyphRenderer, MapTextFormat_class.getTallestGlyphHeight);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!std::isfinite(width) || width < 0.f || static_cast<double>(width) > static_cast<double>(std::numeric_limits<int>::max()) || glyphHeight <= 0)
++        return TE_InvalidArg;
++    const int glyphWidth = std::max((int)width, 1);
++    if(glyphWidth > std::numeric_limits<jsize>::max()/glyphHeight) return TE_InvalidArg;
++    const jsize count = glyphWidth*glyphHeight;
++    Java::JNILocalRef mbitmap(*env, env->CallStaticObjectMethod(Bitmap_class.id, Bitmap_class.createBitmap, glyphWidth, glyphHeight, Bitmap_class.Config_enum.ARGB_8888));
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!mbitmap) return TE_Err;
++    RecycleBitmap recycle{*env, mbitmap.get()};
++    Java::JNILocalRef mcanvas(*env, env->NewObject(Canvas_class.id, Canvas_class.init, mbitmap.get()));
++    if(env->ExceptionCheck() || !mcanvas) return TE_Err;
++    char cc[5u];
++    if(c < 128u) { cc[0]=c; cc[1]='\0'; }
++    else if(c < 0x800) { cc[0]=0xC0|((c>>6)&0x1F); cc[1]=0x80|(c&0x3F); cc[2]='\0'; }
++    else if(c < 0x10000) { cc[0]=0xE0|((c>>12)&0x0F); cc[1]=0x80|((c>>6)&0x3F); cc[2]=0x80|(c&0x3F); cc[3]='\0'; }
++    else { cc[0]=0xF0|((c>>18)&0x07); cc[1]=0x80|((c>>12)&0x3F); cc[2]=0x80|((c>>6)&0x3F); cc[3]=0x80|(c&0x3F); cc[4]='\0'; }
++    Java::JNILocalRef mc(*env, env->NewStringUTF(cc));
++    if(env->ExceptionCheck()) return TE_Err;
++    env->CallVoidMethod(mglyphRenderer, MapTextFormat_class.renderGlyph, mcanvas.get(), (jstring)mc, 0, (jfloat)0, (jfloat)0);
++    if(env->ExceptionCheck()) return TE_Err;
++    Java::JNILocalRef margbref(*env, env->NewIntArray(count));
++    if(env->ExceptionCheck() || !margbref) return TE_Err;
++    env->CallVoidMethod(mbitmap, Bitmap_class.getPixels, margbref.get(), 0, glyphWidth, 0, 0, glyphWidth, glyphHeight);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!recycle.recycle()) return TE_Err;
++    BitmapPtr glyph(new(std::nothrow) Bitmap2(glyphWidth, glyphHeight,
++                    TE_PlatformEndian==TE_LittleEndian ? Bitmap2::BGRA32 : Bitmap2::ARGB32), Memory_deleter_const<Bitmap2>);
++    if(!glyph || !glyph->getData()) return TE_OutOfMemory;
++    bool copied = false;
++    {
++        JNIIntArray pixels(*env, (jintArray)margbref.get(), JNI_ABORT);
++        const uint8_t *data = pixels.get<const uint8_t>();
++        if(data) { memcpy(glyph->getData(), data, (std::size_t)count*sizeof(jint)); copied=true; }
++    } // release the array before any other JNI operation, even on error.
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!copied) return TE_OutOfMemory;
++    const bool same = ATAKMapEngineJNI_equals(env, mimpl, mglyphRenderer);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!same) {
++        const float width2 = env->CallFloatMethod(mimpl, MapTextFormat_class.getCharWidth, (jchar)c);
++        if(env->ExceptionCheck()) return TE_Err;
++        const int height2 = env->CallIntMethod(mimpl, MapTextFormat_class.getTallestGlyphHeight);
++        if(env->ExceptionCheck()) return TE_Err;
++        if(!std::isfinite(width2) || width2 < 0.f || static_cast<double>(width2) > static_cast<double>(std::numeric_limits<int>::max()) || height2<=0) return TE_InvalidArg;
++        const int widthInt = std::max((int)width2, 1);
++        if(widthInt > std::numeric_limits<jsize>::max()/height2) return TE_InvalidArg;
++        if(widthInt!=glyphWidth || height2!=glyphHeight) {
++            BitmapPtr resized(new(std::nothrow) Bitmap2(*glyph, (std::size_t)widthInt, (std::size_t)height2), Memory_deleter_const<Bitmap2>);
++            if(!resized || !resized->getData()) return TE_OutOfMemory;
++            glyph=std::move(resized);
++        }
+     }
+-    if(mglyphRenderer) {
+-        LocalJNIEnv env;
+-        env->DeleteGlobalRef(mglyphRenderer);
+-        mglyphRenderer = NULL;
+-    }
+-}
+-float ManagedTextFormat2::getStringWidth(const char *text) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    Java::JNILocalRef mtext(*env, env->NewStringUTF(text));
+-    return env->CallIntMethod(mimpl, MapTextFormat_class.measureTextWidth, (jstring)mtext);
+-}
+-float ManagedTextFormat2::getCharPositionWidth(const char *text, int position) NOTHROWS
+-{
+-    return getCharWidth(text[position]);
+-}
+-float ManagedTextFormat2::getCharWidth(const unsigned int chr) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallFloatMethod(mimpl, MapTextFormat_class.getCharWidth, (jchar)chr);
+-}
+-float ManagedTextFormat2::getCharHeight() NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return (float)env->CallIntMethod(mimpl, MapTextFormat_class.getTallestGlyphHeight);
+-}
+-float ManagedTextFormat2::getDescent() NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallIntMethod(mimpl, MapTextFormat_class.getBaselineOffsetFromBottom);
+-}
+-float ManagedTextFormat2::getStringHeight(const char *text) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    Java::JNILocalRef mtext(*env, env->NewStringUTF(text));
+-    return env->CallIntMethod(mimpl, MapTextFormat_class.measureTextHeight, (jstring)mtext);
+-}
+-float ManagedTextFormat2::getBaselineSpacing() NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallIntMethod(mimpl, MapTextFormat_class.getBaselineSpacing);
+-}
+-int ManagedTextFormat2::getFontSize() NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallIntMethod(mimpl, MapTextFormat_class.getFontSize);
+-}
+-TAKErr ManagedTextFormat2::loadGlyph(TAK::Engine::Renderer::BitmapPtr &value, const unsigned int c) NOTHROWS
+-{
+-    /*
+-            glyphBitmap = Bitmap.createBitmap(
+-                    (int) Math.max(Math.ceil(this.textFormat.getCharWidth(s.charAt(off))),1),
+-                    (int) Math.ceil(this.charMaxHeight), Bitmap.Config.ARGB_8888);
+-            canvas = new Canvas(glyphBitmap);
+-     */
+-    LocalJNIEnv env;
+-    // create managed Bitmap
+-    const int glyphWidth = std::max((int)env->CallFloatMethod(mglyphRenderer, MapTextFormat_class.getCharWidth, (jchar)c), 1);
+-    const int glyphHeight = env->CallIntMethod(mglyphRenderer, MapTextFormat_class.getTallestGlyphHeight);
+-    Java::JNILocalRef mbitmap(*env, env->CallStaticObjectMethod(Bitmap_class.id, Bitmap_class.createBitmap, glyphWidth, glyphHeight, Bitmap_class.Config_enum.ARGB_8888));
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-    // create canvas
+-    Java::JNILocalRef mcanvas(*env, env->NewObject(Canvas_class.id, Canvas_class.init, mbitmap.get()));
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-    // render the glyph
+-    char cc[5u];
+-    if(c < 128u) {
+-        // 7 bits, emit
+-        cc[0] = c;
+-        cc[1] = '\0';
+-    } else if(c < 0x800) {
+-        // 11 bits
+-        cc[0] = 0xC0 | ((c >> 6)&0x1F);
+-        cc[1] = 0x80 | (c&0x3F);
+-        cc[2] = '\0';
+-    } else if(c < 0x10000) {
+-        // 16 bits
+-        cc[0] = 0xE0 | ((c >> 12)&0x0F);
+-        cc[1] = 0x80 | ((c>>6)&0x3F);
+-        cc[2] = 0x80 | (c&0x3F);
+-        cc[3] = '\0';
+-    } else {
+-        // truncated to 21 bits
+-        cc[0] = 0xF0 | ((c >> 18)&0x07);
+-        cc[1] = 0x80 | ((c>>12)&0x3F);
+-        cc[2] = 0x80 | ((c>>6)&0x3F);
+-        cc[3] = 0x80 | (c&0x3F);
+-        cc[4] = '\0';
+-    }
+-    Java::JNILocalRef mc(*env, env->NewStringUTF(cc));
+-    env->CallVoidMethod(mglyphRenderer, MapTextFormat_class.renderGlyph, mcanvas.get(), (jstring)mc, 0, (jfloat)0, (jfloat)0);
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-    // obtain pixel data
+-    Java::JNILocalRef margbref(*env, env->NewIntArray(glyphWidth*glyphHeight));
+-    env->CallVoidMethod(mbitmap, Bitmap_class.getPixels, margbref.get(), 0, glyphWidth, 0, 0, glyphWidth, glyphHeight);
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-    env->CallVoidMethod(mbitmap, Bitmap_class.recycle);
+-    // create native bitmap
+-    if(TE_PlatformEndian == TE_LittleEndian)
+-        value = BitmapPtr(new(std::nothrow) Bitmap2(glyphWidth, glyphHeight, Bitmap2::BGRA32), Memory_deleter_const<Bitmap2>);
+-    else
+-        value = BitmapPtr(new(std::nothrow) Bitmap2(glyphWidth, glyphHeight, Bitmap2::ARGB32), Memory_deleter_const<Bitmap2>);
+-    if(!value)
+-        return TE_OutOfMemory;
+-
+-    JNIIntArray margb(*env, (jintArray)margbref.get(), JNI_ABORT);
+-    memcpy(value->getData(), margb.get<const uint8_t>(), (glyphWidth*glyphHeight)*sizeof(jint));
+-
+-    if(!ATAKMapEngineJNI_equals(env, mimpl, mglyphRenderer)) {
+-        // resize the bitmap
+-        const int charWidth = std::max((int)env->CallFloatMethod(mimpl, MapTextFormat_class.getCharWidth, (jchar)c), 1);
+-        const int charHeight = env->CallIntMethod(mimpl, MapTextFormat_class.getTallestGlyphHeight);
+-        if(charWidth != value->getWidth() || charHeight != value->getHeight())
+-            value = BitmapPtr(new(std::nothrow) Bitmap2(*value, (std::size_t)charWidth, (std::size_t)charHeight), Memory_deleter_const<Bitmap2>);
+-    }
+-
++    value=std::move(glyph);
+     return TE_Ok;
+ }
+ 
+@@ -213,33 +238,23 @@
+ ManagedTextFormatFactory::~ManagedTextFormatFactory() NOTHROWS
+ {}
+ 
+-TAK::Engine::Util::TAKErr ManagedTextFormatFactory::createTextFormat(TAK::Engine::Renderer::TextFormat2Ptr& value, const TAK::Engine::Renderer::TextFormatParams& params) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-
++TAK::Engine::Util::TAKErr ManagedTextFormatFactory::createTextFormat(TextFormat2Ptr& value, const TextFormatParams& params) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     static bool cinit = ManagedTextFormatFactory_init(*env);
+-    Java::JNILocalRef mtext(*env, env->NewStringUTF(params.fontName));
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-
+-    // call createTextFormat
+-    Java::JNILocalRef mtextformat(*env, nullptr);
+-    Java::JNILocalRef mfontName(*env, env->NewStringUTF(params.fontName));
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-    mtextformat = Java::JNILocalRef(*env, env->CallStaticObjectMethod(GLText_class.id, GLText_class.createTextFormat, mfontName.get(), params.bold,
+-                                                                      params.italic, (int)params.size, params.underline, params.strikethrough, params.outline));
+-
+-    if(env->ExceptionCheck()) {
+-        env->ExceptionClear();
+-        return TE_Err;
+-    }
+-
+-    value = TextFormat2Ptr(new ManagedTextFormat2(*env, mtextformat), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!cinit) return TE_IllegalState;
++    Java::JNILocalRef name(*env, params.fontName ? env->NewStringUTF(params.fontName) : nullptr);
++    if(env->ExceptionCheck()) return TE_Err;
++    Java::JNILocalRef format(*env, env->CallStaticObjectMethod(GLText_class.id, GLText_class.createTextFormat, name.get(), params.bold,
++                              params.italic, (int)params.size, params.underline, params.strikethrough, params.outline));
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!format) return TE_Err;
++    TextFormat2Ptr candidate(new(std::nothrow) ManagedTextFormat2(*env, format), Memory_deleter_const<TextFormat2, ManagedTextFormat2>);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!candidate) return TE_OutOfMemory;
++    value=std::move(candidate);
+     return TE_Ok;
+ }
+ 
+@@ -248,27 +263,43 @@
+     bool ManagedTextFormat2_init(JNIEnv &env) NOTHROWS
+     {
+         MapTextFormat_class.id = ATAKMapEngineJNI_findClass(&env, "com/atakmap/android/maps/MapTextFormat");
++        if(env.ExceptionCheck() || !MapTextFormat_class.id) return false;
+         MapTextFormat_class.measureTextWidth = env.GetMethodID(MapTextFormat_class.id, "measureTextWidth", "(Ljava/lang/String;)I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.measureTextWidth) return false;
+         MapTextFormat_class.measureTextHeight = env.GetMethodID(MapTextFormat_class.id, "measureTextHeight", "(Ljava/lang/String;)I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.measureTextHeight) return false;
+         MapTextFormat_class.getCharWidth = env.GetMethodID(MapTextFormat_class.id, "getCharWidth", "(I)F");
++        if(env.ExceptionCheck() || !MapTextFormat_class.getCharWidth) return false;
+         MapTextFormat_class.getFontSize = env.GetMethodID(MapTextFormat_class.id, "getFontSize", "()I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.getFontSize) return false;
+         MapTextFormat_class.getTallestGlyphHeight = env.GetMethodID(MapTextFormat_class.id, "getTallestGlyphHeight", "()I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.getTallestGlyphHeight) return false;
+         MapTextFormat_class.getBaselineSpacing = env.GetMethodID(MapTextFormat_class.id, "getBaselineSpacing", "()I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.getBaselineSpacing) return false;
+         MapTextFormat_class.renderGlyph = env.GetMethodID(MapTextFormat_class.id, "renderGlyph", "(Landroid/graphics/Canvas;Ljava/lang/String;IFF)V");
++        if(env.ExceptionCheck() || !MapTextFormat_class.renderGlyph) return false;
+         MapTextFormat_class.getBaselineOffsetFromBottom = env.GetMethodID(MapTextFormat_class.id, "getBaselineOffsetFromBottom", "()I");
++        if(env.ExceptionCheck() || !MapTextFormat_class.getBaselineOffsetFromBottom) return false;
+ 
+         Bitmap_class.id = ATAKMapEngineJNI_findClass(&env, "android/graphics/Bitmap");
++        if(env.ExceptionCheck() || !Bitmap_class.id) return false;
+         Bitmap_class.getPixels = env.GetMethodID(Bitmap_class.id, "getPixels", "([IIIIIII)V");
++        if(env.ExceptionCheck() || !Bitmap_class.getPixels) return false;
+         Bitmap_class.recycle = env.GetMethodID(Bitmap_class.id, "recycle", "()V");
++        if(env.ExceptionCheck() || !Bitmap_class.recycle) return false;
+         Bitmap_class.createBitmap = env.GetStaticMethodID(Bitmap_class.id, "createBitmap", "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
++        if(env.ExceptionCheck() || !Bitmap_class.createBitmap) return false;
+         {
+             Java::JNILocalRef e(env, nullptr);
+             if(Java::JNIEnum_value(e, env, "android/graphics/Bitmap$Config", "ARGB_8888") != TE_Ok)
+                 return false;
+             Bitmap_class.Config_enum.ARGB_8888 = env.NewWeakGlobalRef(e);
++        if(env.ExceptionCheck() || !Bitmap_class.Config_enum.ARGB_8888) return false;
+         }
+         Canvas_class.id = ATAKMapEngineJNI_findClass(&env, "android/graphics/Canvas");
++        if(env.ExceptionCheck() || !Canvas_class.id) return false;
+         Canvas_class.init = env.GetMethodID(Canvas_class.id, "<init>", "(Landroid/graphics/Bitmap;)V");
++        if(env.ExceptionCheck() || !Canvas_class.init) return false;
+ 
+ 
+         return true;
+@@ -277,9 +308,11 @@
+     bool ManagedTextFormatFactory_init(JNIEnv &env) NOTHROWS
+     {
+         GLText_class.id = ATAKMapEngineJNI_findClass(&env, "com/atakmap/opengl/GLText");
++        if(env.ExceptionCheck() || !GLText_class.id) return false;
+         GLText_class.createTextFormat = env.GetStaticMethodID(GLText_class.id,
+                 "createTextFormat",
+                 "(Ljava/lang/String;ZZIZZZ)Lcom/atakmap/android/maps/MapTextFormat;");
++        if(env.ExceptionCheck() || !GLText_class.createTextFormat) return false;
+         return true;
+     }
+ }
+diff --git a/takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp b/takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp
+--- a/takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp
++++ b/takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp
+@@ -10,6 +10,7 @@
+ using namespace TAKEngineJNI::Interop::Renderer::Core;
+ 
+ using namespace TAK::Engine::Core;
++using namespace TAK::Engine::Util;
+ using namespace TAK::Engine::Renderer::Core;
+ 
+ using namespace TAKEngineJNI::Interop::Core;
+@@ -38,10 +39,15 @@
+ }
+ 
+ ManagedGLMapRenderable2::ManagedGLMapRenderable2(JNIEnv &env_, jobject impl_, const bool requiresSync_) NOTHROWS :
+-    impl(env_.NewGlobalRef(impl_)),
++    impl(nullptr),
+     requiresSync(requiresSync_)
+ {
++    if(env_.ExceptionCheck()) return;
+     static bool clinit = ManagedGLRenderable2_class_init(env_);
++    if(env_.ExceptionCheck()) return;
++    if(!clinit) { ATAKMapEngineJNI_checkOrThrow(&env_, TE_IllegalState); return; }
++    impl = env_.NewGlobalRef(impl_);
++    if(!impl && !env_.ExceptionCheck()) ATAKMapEngineJNI_checkOrThrow(&env_, TE_OutOfMemory);
+ }
+ ManagedGLMapRenderable2::~ManagedGLMapRenderable2() NOTHROWS
+ {
+@@ -61,17 +67,21 @@
+     Interop_marshal(&mrenderPass, (GLMapView2::RenderPass)crenderPass);
+     // obtain managed view instance
+     JNILocalRef mview(*env, NULL);
+-    TAKEngineJNI::Interop::Renderer::Core::Interop_marshal(mview, *env, cview);
++    const TAKErr code = TAKEngineJNI::Interop::Renderer::Core::Interop_marshal(mview, *env, cview);
++    if(env->ExceptionCheck() || ATAKMapEngineJNI_checkOrThrow(env, code)) return;
++    if(!mview) { ATAKMapEngineJNI_checkOrThrow(env, TE_IllegalState); return; }
+     // if required, check state on managed and copy from native if dirty
+     if(requiresSync &&
+         (cview.drawVersion != env->GetIntField(mview, GLMapView_class.syncVersion) ||
+          crenderPass != env->GetIntField(mview, GLMapView_class.syncPass))) {
+ 
+         env->CallVoidMethod(mview, GLMapView_class.sync);
++        if(env->ExceptionCheck()) return;
+         env->SetIntField(mview, GLMapView_class.syncVersion, cview.drawVersion);
+         env->SetIntField(mview, GLMapView_class.syncPass, crenderPass);
+     }
+     env->CallVoidMethod(impl, GLMapRenderable2_class.draw, mview.get(), mrenderPass);
++    if(env->ExceptionCheck()) return;
+ }
+ void ManagedGLMapRenderable2::release() NOTHROWS
+ {
+@@ -79,6 +89,7 @@
+     if(env->ExceptionCheck())
+         return;
+     env->CallVoidMethod(impl, GLMapRenderable2_class.release);
++    if(env->ExceptionCheck()) return;
+ }
+ int ManagedGLMapRenderable2::getRenderPass() NOTHROWS
+ {
+@@ -86,7 +97,8 @@
+     if(env->ExceptionCheck())
+         return 0;
+     const jint mrenderPass = env->CallIntMethod(impl, GLMapRenderable2_class.getRenderPass);
+-    GLMapView2::RenderPass crenderPass;
++    if(env->ExceptionCheck()) return 0;
++    GLMapView2::RenderPass crenderPass = (GLMapView2::RenderPass)0;
+     Interop_marshal(&crenderPass, mrenderPass);
+     return crenderPass;
+ }
+@@ -100,17 +112,23 @@
+     bool ManagedGLRenderable2_class_init(JNIEnv &env) NOTHROWS
+     {
+ #define SET_METHOD_DEFINITION(c, m, sig) \
+-    c.m = env.GetMethodID(c.id, #m, sig)
++    c.m = env.GetMethodID(c.id, #m, sig); \
++    if(env.ExceptionCheck() || !c.m) return false
+ 
+         GLMapRenderable2_class.id = ATAKMapEngineJNI_findClass(&env, "com/atakmap/map/opengl/GLMapRenderable2");
++        if(env.ExceptionCheck() || !GLMapRenderable2_class.id) return false;
+         SET_METHOD_DEFINITION(GLMapRenderable2_class, draw, "(Lcom/atakmap/map/opengl/GLMapView;I)V");
+         SET_METHOD_DEFINITION(GLMapRenderable2_class, release, "()V");
+         SET_METHOD_DEFINITION(GLMapRenderable2_class, getRenderPass, "()I");
+ 
+         GLMapView_class.id = ATAKMapEngineJNI_findClass(&env, "com/atakmap/map/opengl/GLMapView");
++        if(env.ExceptionCheck() || !GLMapView_class.id) return false;
+         GLMapView_class.syncVersion = env.GetFieldID(GLMapView_class.id, "syncVersion", "I");
++        if(env.ExceptionCheck() || !GLMapView_class.syncVersion) return false;
+         GLMapView_class.syncPass = env.GetFieldID(GLMapView_class.id, "syncPass", "I");
++        if(env.ExceptionCheck() || !GLMapView_class.syncPass) return false;
+         GLMapView_class.sync = env.GetMethodID(GLMapView_class.id, "sync", "()V");
++        if(env.ExceptionCheck() || !GLMapView_class.sync) return false;
+ 
+         return true;
+     }

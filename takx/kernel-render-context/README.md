@@ -3,8 +3,8 @@
 This is a reviewable project source variant of official Kernel **8.30.5**, pinned
 to `9f6893dd657feacc35ec5de03dad721c2e44170e`. It implements the observed
 RenderContextControl lifecycle used by the pinned TAKX clients. It does not rename
-the Kernel, reproduce an unavailable private SDK, or qualify rendering/client use.
-GPU context destruction/recreation remains **unqualified**. Binding/font/shader CPU
+the Kernel, reproduce an unavailable private software development kit (SDK), or qualify rendering/client use.
+Graphics processing unit (GPU) context destruction/recreation remains **unqualified**. Binding/font/shader CPU
 identities are retained for process lifetime without a fixed bound across unlimited
 view/font creation; memory reclamation is not production-qualified.
 
@@ -14,7 +14,7 @@ reads exact blobs from an already cached official Git repository, creates a fres
 **sparse** source projection, and applies these locked stages in order:
 
 1. Official source preimages.
-2. The baseline atomic-counter and JNI exception-correctness patches.
+2. The baseline atomic-counter and Java Native Interface (JNI) exception-correctness patches.
 3. Frozen TextureFillStyle project patch, reviewed at `ec83eaa0eeed3b37caf57d3cfba0e9850685655b`.
 4. This Context patch. Its three batch renderer/shader files overlap Texture, so
    the lock records the actual combined images rather than substituting either
@@ -22,8 +22,9 @@ reads exact blobs from an already cached official Git repository, creates a fres
 5. Only the two selected client JNI sections (`interop/feature/Interop.cpp` and
    `jscenelayer.cpp`), not unrelated client Java policies.
 
-Every stage checks all 54 selected paths, including required absence of new files.
-`inputs.lock.json` binds original and intermediate/final SHA-256 images. Baseline
+Every stage checks all 57 selected paths, including required absence of new files.
+`inputs.lock.json` binds original and intermediate/final Secure Hash Algorithm
+(SHA-256) images. Baseline
 and Texture contracts must match the selected locks. The client profile's full
 patch must match its own lock, and its two consumed sections/images must exactly
 match this profile; unrelated client Java changes are not silently consumed.
@@ -39,12 +40,10 @@ python3 -B takx/kernel-render-context/prepare.py --phase prepare \
   --output /path/to/new-source-output
 ```
 
-There is no fetch, compiler, linker, JVM or native-load phase. Source commands have
+There is no fetch, compiler, linker, Java virtual machine (JVM) or native-load phase. Source commands have
 owned process groups, 20-second command/120-second aggregate deadlines, bounded
 streams, a 4 MiB output cap and a 2 GiB free-space floor. Failed output stays
-separate and never receives a success receipt. The private host-specific
-`dependency_prepass.py` used during qualification is deliberately untracked and
-is not imported or advertised as the public recipe.
+separate and never receives a success receipt.
 
 The output is not a complete native build tree or Java SDK. No native-builder
 feature flag is introduced by this profile. A future consolidated builder must
@@ -57,6 +56,13 @@ Production Java, JNI diagnostic probes and state-test doubles must remain separa
 No fake optional library/resource, source omission, version alias or duplicate GDAL
 provider is permitted by this source contract.
 
+The current source patch also includes the later checked text callbacks, atlas
+binding restoration and optional terrain-attribute guards. All seven updated
+source files reproduce byte-for-byte from cached official source and match the
+files consumed by the incremental native builds. Those builds preserve the
+original context/header composition; they do not replace the full rebuild rules
+above.
+
 Local qualification evidence now includes a genuine 108-object/two-library native
 variant with static export/NEEDED/TEXTREL/backend-privacy/SQLite-owner checks, plus
 five strict real CPU JNI controls. See [QUALIFICATION.md](QUALIFICATION.md) for the
@@ -66,7 +72,7 @@ The source ownership and pre-realization reasoning is in [DESIGN.md](DESIGN.md),
 [PRE_REALIZATION_AUDIT.md](PRE_REALIZATION_AUDIT.md), and
 [TERMINAL_OWNERSHIP_AUDIT.md](TERMINAL_OWNERSHIP_AUDIT.md).
 
-Default CI runs only these small offline guards; it does not build third-party
+Default continuous integration (CI) runs only these small offline guards; it does not build third-party
 sources, acquire dependencies, start Java or open a display:
 
 ```sh

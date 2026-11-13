@@ -19,7 +19,7 @@ class SourceGuards(unittest.TestCase):
         lock, data = p.load_contract()
         self.assertEqual(p.digest(data), lock['context_patch_sha256'])
         self.assertEqual(lock['stage_order'], ['official', 'baseline', 'texture', 'context', 'client_jni'])
-        self.assertEqual(len(lock['stages']['official']), 54)
+        self.assertEqual(len(lock['stages']['official']), 57)
         self.assertFalse(lock['native_builder_integration'])
         self.assertFalse(lock['gpu_qualified'])
 

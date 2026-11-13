@@ -1,7 +1,7 @@
 {
   "status": "source-work-in-progress-not-runtime-qualified",
   "upstream_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "patch_sha256": "d52f2683e1762776efae7cbeb1e820e27c54e9a6874f48d1ce348fe4d12d1eae",
+  "patch_sha256": "0ec289c590cda231327dfce0767a312db5063f7498caf081f7682a5400c4ca07",
   "files": [
     {
       "path": "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java",
@@ -26,7 +26,12 @@
     {
       "path": "takkernel/engine/src/main/cpp/renderer/GLText2.cpp",
       "preimage_sha256": "d01d01f71c76b3c199f83cb6b0f39a1fbe8e09e26f6d4684f6164828623b6e6f",
-      "postimage_sha256": "618f16023ae6ef6cc205e02e1806f8f77afc85ce535ee1dc28cf43b6f13e4f1f"
+      "postimage_sha256": "f657f15e50adbafdf1d7911d6721a836fc905cefb1e9c4e471dd53abd509dd35"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp",
+      "preimage_sha256": "5287cc8e2c848df28b55a31473dca4b12d38a4b4acdc49239d7290eccbf40de7",
+      "postimage_sha256": "ea8164c0fce797d701d5bbc9753ee8d26cd685055e9b50ac9ab866f0ed8ec603"
     },
     {
       "path": "takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp",
@@ -86,7 +91,7 @@
     {
       "path": "takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp",
       "preimage_sha256": "79a0edc2afdf8cacdb39f7e71f8a79eee4815d7ac2aa96f7c5323e1c2fa97657",
-      "postimage_sha256": "b18aa5f32bbdd77b0f46a18632b414d2cab4474cf61c3d702ff957e56585492c"
+      "postimage_sha256": "c4a3f9db8d348a6c9c405e6881adb277e1417ec1c0ed1568b5099c7b1eebe55d"
     },
     {
       "path": "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp",
@@ -184,14 +189,24 @@
       "postimage_sha256": "c70154c60dadfedfa20baf76aea71c1042e8cafbb521a03a81c024df971523f2"
     },
     {
+      "path": "takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp",
+      "preimage_sha256": "17da43229496520590cd981ec07c464789a9b2e4dfd5221a1bc2815bf6b04169",
+      "postimage_sha256": "9f691a922a92531975e9bd0755782d90dcd3c43c8ad00b51bb59f3e4611d41ea"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp",
+      "preimage_sha256": "31db74e690053053abec25f47563ec28cbb9256e2c9051ff6df552c222697daa",
+      "postimage_sha256": "4e7816552a3862dd581d25c04b3e8ae820cd65db5e869a28e16eabf8158b3284"
+    },
+    {
       "path": "takkernel/engine/src/main/jni/jglmapview.cpp",
       "preimage_sha256": "074fe83abc40862b5b3edbc94583799aa669a5b8439d0499d20cc3e2e295f4a0",
-      "postimage_sha256": "10e056673a9d5c74a69a1fa71354cef395533b9dee4ee5170f83f96f1426b159"
+      "postimage_sha256": "dddc8f73fe5c5c35d44304671cddf88d1da8043258f759ec8eebf68e39ab2a57"
     },
     {
       "path": "takkernel/engine/src/main/jni/jgltext.cpp",
       "preimage_sha256": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
-      "postimage_sha256": "a0d6eb6ee6180f26855bc40c3cc7a6a7a0adbca0e10959a657b281d929388c1e"
+      "postimage_sha256": "146cf8869eef0b98a8413af7ece855ad8d25cce9f7c0a6eccd60544f4556d36e"
     }
   ]
 }

@@ -116,7 +116,11 @@ public final class ContextRecreationProbe {
             // configuration precede first GL init/realization.
             actualContext=new JOGLRenderContext(canvas);
             globe=new Globe();
-            view=new GLMapView((gov.tak.api.engine.map.RenderContext)actualContext,
+            // Exercise the public com-interface overload selected by actual TAKX.
+            // This is the existing production forwarding adapter over the real
+            // JOGL context, never a synthetic/test/current/bootstrap context.
+            com.atakmap.map.RenderContext clientContext=new RenderContextBinding(actualContext);
+            view=new GLMapView(clientContext,
                     globe,0,0,canvas.getWidth(),canvas.getHeight());
             installBasemap();
             view.queueEvent(() -> preRealizationCallbacks++);
@@ -144,6 +148,7 @@ public final class ContextRecreationProbe {
         @Override public void init(GLAutoDrawable drawable) {
             try {
                 current(drawable);
+                HeadedAdmission.verifyMaps("owning-init",true);
                 System.out.println("GL_CONTEXT\t"+initCount+"\t"+drawable.getChosenGLCapabilities()+"\t"+
                         drawable.getGL().glGetString(GL.GL_VENDOR)+"\t"+drawable.getGL().glGetString(GL.GL_RENDERER)+"\t"+
                         drawable.getGL().glGetString(GL.GL_VERSION));
@@ -319,6 +324,8 @@ public final class ContextRecreationProbe {
     }
     public static void main(String[] args) throws Exception {
         check(args.length==4,"Expected reviewed provider manifest, test helper, feature class root, frozen base class root");
+        HeadedAdmission.checkOrigins();
+        HeadedAdmission.verifyMaps("before-provider-loads",false);
         Path featureClasses=Path.of(args[2]).toRealPath(), baseClasses=Path.of(args[3]).toRealPath();
         for(String name:new String[]{
                 "com.atakmap.map.layer.control.RenderContextControl","com.atakmap.map.opengl.RenderContextBinding",
@@ -362,6 +369,7 @@ public final class ContextRecreationProbe {
                 }
                 check(view.managedBasemapDraws>0,"Actual Kernel surface callback did not render within warmup bound");
             }
+            HeadedAdmission.verifyMaps("initial-real-views",true);
             java.util.Map<Path,String> firstMaps=mappedElfs("initial-real-views");
             rejected(views[0].view::start); // main thread has no current GL context
             // Global font invalidation is legal off the GL thread and must queue
@@ -414,6 +422,7 @@ public final class ContextRecreationProbe {
             }
             views[1].terminal=true; views[1].canvas.destroy(); healthy();
             for(int borrow=0;borrow<3;borrow++) terminalBorrowGc(borrow);
+            HeadedAdmission.verifyMaps("after-all-controls",true);
             java.util.Map<Path,String> finalMaps=mappedElfs("after-all-controls");
             for(java.util.Map.Entry<Path,String> entry:firstMaps.entrySet())
                 check(entry.getValue().equals(finalMaps.get(entry.getKey())),"Mapped provider disappeared or changed");

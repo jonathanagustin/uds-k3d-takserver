@@ -117,6 +117,44 @@ class MetricsTests(unittest.TestCase):
             phase['evidence']['startup_log_at'] = marker
             self.assertIsNone(jvm.join_phase(phase, jvm.observe(APP, 'k3d-uds', fake_commands()))['jvm_to_log_s'])
 
+    def test_rejected_marker_timing_retains_independent_bound_metrics(self):
+        observation = jvm.observe(APP, 'k3d-uds', fake_commands())
+        for marker in ('2024-01-01T00:00:06.059396Z',
+                       '2024-01-01T00:00:07Z'):
+            with self.subTest(marker=marker):
+                phase = phases.pod_phases(pod(), [], marker + ' Started TAK Server', container_name=APP)
+                jvm.join_phase(phase, observation)
+                self.assertIsNone(phase['jvm_to_log_s'])
+                self.assertIsNone(phase['evidence']['jvm_started_at'])
+                self.assertIsNone(phase['log_to_ready_s'])
+                self.assertEqual(phase['jvm_observation'], {'available': False, 'reason': 'marker_after_ready'})
+                retained = phase['jvm_metric_observation']
+                self.assertEqual(retained, observation)
+                self.assertEqual(retained['jvm_start_time_unix_ms'], START)
+                self.assertEqual(len(retained['samples']), 2)
+                self.assertIsNot(retained, observation)
+                self.assertIsNot(retained['identity'], observation['identity'])
+
+    def test_metrics_retention_requires_phase_identity_and_clears_stale_evidence(self):
+        observation = jvm.observe(APP, 'k3d-uds', fake_commands())
+        for key, value in [('pod_uid', 'different'), ('container_id', 'different'),
+                           ('restart_count', 1), ('container_started_at', '2024-01-01T00:00:01Z')]:
+            with self.subTest(key=key):
+                phase = phases.pod_phases(pod(), [], '2024-01-01T00:00:05Z Started TAK Server', container_name=APP)
+                jvm.join_phase(phase, observation)
+                self.assertIn('jvm_metric_observation', phase)
+                phase['evidence'][key] = value
+                jvm.join_phase(phase, observation)
+                self.assertNotIn('jvm_metric_observation', phase)
+                self.assertEqual(phase['jvm_observation']['reason'], 'phase_identity_mismatch')
+                self.assertIsNone(phase['jvm_to_log_s'])
+        phase = phases.pod_phases(pod(), [], '', container_name=APP)
+        jvm.join_phase(phase, observation)
+        self.assertEqual(phase['jvm_metric_observation'], observation)
+        self.assertIsNone(phase['jvm_to_log_s'])
+        jvm.join_phase(phase, {'available': False, 'reason': 'deadline'})
+        self.assertNotIn('jvm_metric_observation', phase)
+
     def test_numeric_start_format_is_not_a_false_incarnation_change(self):
         value = jvm.observe(APP, 'k3d-uds', fake_commands(bodies=[metrics(start='1704067201'), metrics(start='1.704067201E9')]))
         self.assertTrue(value['available'], value)

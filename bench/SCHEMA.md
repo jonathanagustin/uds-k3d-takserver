@@ -211,6 +211,15 @@ The same identity must match the phase's marker/init/Ready evidence before
 `jvm_started_at` and `jvm_to_log_s` are filled. Changed/ambiguous identities and
 negative/reordered timing leave them null. Historical records remain unchanged.
 
+The optional additive `jvm_metric_observation` field preserves a deep copy of
+that same bounded numeric observation only after exact phase incarnation and
+container-start binding succeeds. It survives a missing/reordered startup
+marker or rejected marker-to-Ready chronology; it does not make that timing
+valid. `jvm_observation` retains its existing accepted-join/fixed-failure contract,
+and rejected `jvm_started_at`/`jvm_to_log_s` remain null. A later unavailable or
+identity-mismatched observation clears retained metrics from the earlier attempt.
+No raw metrics exposition, labels, logs or command streams are retained.
+
 This is an existing-incarnation snapshot. JVM start is retrospective, but class
 counts are from the actual scrape times after startup, not from the earlier
 startup marker or Ready transition. No class evolution or loading-duration

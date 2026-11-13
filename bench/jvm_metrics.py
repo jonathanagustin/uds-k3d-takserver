@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Opt-in, numeric-only observations of existing application JVM telemetry."""
 import argparse
+import copy
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import json
@@ -254,6 +255,9 @@ def join_phase(phase, observation):
     phase['evidence'] = evidence
     evidence['jvm_started_at'] = None
     phase['jvm_to_log_s'] = None
+    # Independent metrics evidence is never an accepted timing join. Clear it
+    # on every attempt so stale successful observations cannot survive failures.
+    phase.pop('jvm_metric_observation', None)
     phase['jvm_observation'] = observation
     if not observation.get('available'):
         return phase
@@ -264,6 +268,9 @@ def join_phase(phase, observation):
         return phase
     try:
         require(epoch_ms(evidence.get('container_started_at')) == epoch_ms(current['container_started_at']), 'phase_identity_mismatch')
+        # Preserve only the observer's bounded numeric projection after exact
+        # phase incarnation binding, even if marker/Ready chronology rejects timing.
+        phase['jvm_metric_observation'] = copy.deepcopy(observation)
         marker_ms = epoch_ms(evidence.get('startup_log_at'))
         started = observation['jvm_start_time_unix_ms']
         require(started <= marker_ms, 'jvm_start_after_marker')

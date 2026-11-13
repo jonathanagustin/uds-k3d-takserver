@@ -80,6 +80,29 @@ def references(template):
     return found
 
 
+def container_images(pod):
+    """Resolve every measured Pod container image, including completed inits."""
+    inventory = []
+    for kind, declared_key, status_key, maximum in (
+            ('main', 'containers', 'containerStatuses', 32),
+            ('init', 'initContainers', 'initContainerStatuses', 16)):
+        declared = pod.get('spec', {}).get(declared_key, [])
+        statuses = pod.get('status', {}).get(status_key, [])
+        require(isinstance(declared, list) and isinstance(statuses, list) and len(declared) <= maximum, 'application_inventory')
+        names = [token(item['name'], r'[a-z0-9-]{1,63}') for item in declared]
+        require(len(names) == len(set(names)) == len(statuses) and
+                set(names) == {item['name'] for item in statuses}, 'application_inventory')
+        for item in declared:
+            status = next(value for value in statuses if value['name'] == item['name'])
+            reference = item['image']
+            require(isinstance(reference, str) and 0 < len(reference) <= 1024, 'application_inventory')
+            inventory.append({'kind': kind, 'name': item['name'], 'image_id': jvm.image_digest(status.get('imageID')),
+                              'image_reference_sha256': hashlib.sha256(status['imageID'].encode()).hexdigest(),
+                              'declared_image_sha256': hashlib.sha256(reference.encode()).hexdigest()})
+    require(any(item['kind'] == 'main' for item in inventory), 'application_inventory')
+    return sorted(inventory, key=lambda item: (item['kind'], item['name']))
+
+
 def snapshot(commands):
     """Return only typed identity/platform projections and opaque config hashes."""
     namespace = read_json(commands, ['get', 'namespace', 'kube-system', '-o', 'json'])
@@ -112,7 +135,7 @@ def snapshot(commands):
     deployments = read_json(commands, ['get', 'deployments', '-n', 'takserver', '-o', 'json'])['items']
     pods = read_json(commands, ['get', 'pods', '-n', 'takserver', '-l', 'app in (takserver-api,takserver-messaging)', '-o', 'json'])['items']
     require(isinstance(deployments, list) and isinstance(pods, list), 'application_inventory')
-    config, identities, source_pods = {}, {}, {}
+    config, identities, images, source_pods = {}, {}, {}, {}
     for app in APPS:
         ds = [d for d in deployments if d.get('metadata', {}).get('name') == app]
         ps = [p for p in pods if p.get('metadata', {}).get('labels', {}).get('app') == app]
@@ -138,9 +161,10 @@ def snapshot(commands):
             node = ps[0]['spec'].get('nodeName'); require(node in by_name, 'node_inventory')
             identity['node_uid'] = by_name[node]
             identities[app] = identity; source_pods[app] = ps[0]
+            images[app] = container_images(ps[0])
     return {'cluster_uid': cluster, 'platform': sorted(platform, key=lambda x: x['uid']),
             'reported_image_cache': sorted(cache, key=lambda x: x['node_uid']),
-            'config_sha256': config, 'identities': identities}, source_pods
+            'config_sha256': config, 'identities': identities, 'container_images': images}, source_pods
 
 
 def begin(context, cohort, bindings, commands=None, observer=None):
@@ -157,7 +181,7 @@ def begin(context, cohort, bindings, commands=None, observer=None):
                 all(observation['identity'].get(key) == value for key, value in identity.items() if key != 'node_uid'), 'phase_unavailable')
         starts[app] = observation['jvm_start_time_unix_ms']
     after, _ = snapshot(commands)
-    require(all(after[key] == observed[key] for key in ('cluster_uid', 'platform', 'config_sha256', 'identities')), 'phase_identity')
+    require(all(after[key] == observed[key] for key in ('cluster_uid', 'platform', 'config_sha256', 'identities', 'container_images')), 'phase_identity')
     return {'schema': 1, 'kind': 'startup-begin', 'context': context, 'cohort': cohort,
             'bindings': bindings, 'observed_started_at': started, 'observed_finished_at': stamp(),
             'snapshot': observed, 'jvm_starts': starts, 'jvm_observer_sha256': hashlib.sha256(Path(jvm.__file__).read_bytes()).hexdigest(), 'caller': jvm.caller_metadata(),
@@ -185,7 +209,7 @@ def finish(initial, mode, commands=None, observer=None):
         require(isinstance(events, list) and len(events) <= 1024, 'unsupported_schema')
         declared_inits = [token(item['name'], r'[a-z0-9-]{1,63}') for item in pod.get('spec', {}).get('initContainers', [])]
         require(len(declared_inits) == len(set(declared_inits)) <= 16, 'application_inventory')
-        paths = {'spec.containers{'+app+'}', *('spec.initContainers{'+name+'}' for name in declared_inits)}
+        paths = {'spec.'+('initContainers' if item['kind'] == 'init' else 'containers')+'{'+item['name']+'}' for item in before['container_images'][app]}
         for event in events:
             require(event.get('involvedObject', {}).get('uid') == identity['pod_uid'], 'phase_identity')
             if event.get('reason') in ('Pulling', 'Pulled'):
@@ -194,6 +218,7 @@ def finish(initial, mode, commands=None, observer=None):
         logs = commands.run(['logs', '-n', 'takserver', identity['pod_name'], '-c', app, '--timestamps'], LIMIT).decode()
         phase = phases.pod_phases(pod, events, logs, container_name=app)
         phase['declared_init_names'] = declared_inits
+        phase['image_pull_scope'] = 'sum of observed complete Pulling/Pulled pairs; missing events do not prove cache presence or zero pull time'
         observation = observer(app, initial['context'])
         jvm.join_phase(phase, observation)  # Preserve #533's independent-metrics semantics unchanged.
         require(phase['jvm_observation'].get('available') is True, 'phase_unavailable')
@@ -209,6 +234,7 @@ def finish(initial, mode, commands=None, observer=None):
     require(after['cluster_uid'] == before['cluster_uid'] and after['platform'] == before['platform'], 'platform_drift')
     require(after['config_sha256'] == before['config_sha256'], 'configuration_drift')
     require(after['identities'] == before['identities'], 'phase_identity')
+    require(after['container_images'] == before['container_images'], 'image_drift')
     for app in APPS:
         current_ready = phases.pod_phases(after_pods[app], [], '', container_name=app)['evidence']['ready_at']
         require(current_ready == result['phases'][app]['evidence']['ready_at'], 'phase_identity')
@@ -216,6 +242,7 @@ def finish(initial, mode, commands=None, observer=None):
     if mode == 'warm':
         require(set(initial['snapshot']['identities']) == set(APPS), 'warm_missing')
         require(before['config_sha256'] == initial['snapshot']['config_sha256'], 'configuration_drift')
+        require(before['container_images'] == initial['snapshot']['container_images'], 'image_drift')
         for app in APPS:
             for key, reason in [('image_id', 'image_drift'), ('image_reference_sha256', 'image_drift'), ('node_uid', 'node_drift')]:
                 require(before['identities'][app][key] == initial['snapshot']['identities'][app][key], reason)
@@ -244,6 +271,17 @@ def validate_snapshot(value):
         require(app in APPS and identity['node_uid'] in ids, 'node_inventory')
     require(set(value['config_sha256']) <= set(APPS) and
             all(jvm.matches(h, r'[a-f0-9]{64}') for h in value['config_sha256'].values()), 'configuration')
+    require(set(value['container_images']) == set(value['identities']), 'image_drift')
+    for app, images in value['container_images'].items():
+        require(isinstance(images, list) and 0 < len(images) <= 48, 'image_drift')
+        keys = {(item['kind'], item['name']) for item in images}
+        require(len(keys) == len(images) and ('main', app) in keys, 'image_drift')
+        for item in images:
+            require(item['kind'] in ('main', 'init'), 'image_drift'); token(item['name'], r'[a-z0-9-]{1,63}')
+            require(jvm.matches(item['image_id'], r'sha256:[a-f0-9]{64}') and
+                    all(jvm.matches(item[key], r'[a-f0-9]{64}') for key in ('image_reference_sha256', 'declared_image_sha256')), 'image_drift')
+        main = next(item for item in images if item['kind'] == 'main' and item['name'] == app)
+        require(all(main[key] == value['identities'][app][key] for key in ('image_id', 'image_reference_sha256')), 'image_drift')
     return value
 
 
@@ -278,6 +316,9 @@ def validate_finished(record):
     for app in APPS:
         phase, identity = record['phases'][app], current['identities'][app]
         evidence, observation = phase['evidence'], phase['jvm_observation']
+        for key in ('jvm_to_log_s', 'container_to_log_s', 'log_to_ready_s', 'image_pull_s'):
+            value = phase[key]
+            require(value is None or (type(value) in (int, float) and math.isfinite(value) and value >= 0), 'timestamp_join')
         require(observation.get('available') is True, 'phase_unavailable')
         require(observation.get('app') == app and observation.get('context') == initial['context'], 'phase_identity')
         require(all(evidence.get(key) == identity[key] and observation['identity'].get(key) == identity[key]
@@ -297,7 +338,8 @@ def validate_finished(record):
             start, end, mono_start, mono_end = brackets
             require(start <= end and mono_start <= mono_end and
                     abs((end-start)-(mono_end-mono_start)) <= .5 and
-                    facts['jvm_start_time_unix_ms'] <= jvm.epoch_ms(evidence['ready_at']) <= int(start*1000) <= int(end*1000) <= jvm.epoch_ms(record['observed_finished_at']), 'timestamp_join')
+                    facts['jvm_start_time_unix_ms'] <= jvm.epoch_ms(evidence['ready_at']) <= jvm.epoch_ms(record['observed_started_at']) <=
+                    int(start*1000) <= int(end*1000) <= jvm.epoch_ms(record['observed_finished_at']), 'timestamp_join')
         first, last = observation['samples']
         require(first['observed_end_unix'] <= last['observed_start_unix'] and
                 first['observed_end_monotonic'] <= last['observed_start_monotonic'] and
@@ -308,13 +350,29 @@ def validate_finished(record):
                 and joined['jvm_to_log_s'] == phase['jvm_to_log_s'], 'timestamp_join')
         expected = phases.elapsed(phases.parse_time(evidence['startup_log_at']), phases.parse_time(evidence['ready_at']))
         require(expected is not None and phase['log_to_ready_s'] == expected, 'timestamp_join')
+        container_elapsed = phases.elapsed(phases.parse_time(evidence['container_started_at']), phases.parse_time(evidence['startup_log_at']))
+        require(container_elapsed is not None and phase['container_to_log_s'] == container_elapsed, 'timestamp_join')
         require(set(phase['declared_init_names']) == {item['name'] for item in phase['inits']} and
                 len(phase['declared_init_names']) == len(phase['inits']) == len(evidence['init_intervals']), 'timestamp_join')
+        require(set(phase['declared_init_names']) == {item['name'] for item in current['container_images'][app] if item['kind'] == 'init'}, 'image_drift')
         for item, interval in zip(phase['inits'], evidence['init_intervals']):
             require(item['name'] == interval['name'] and item['seconds'] is not None and
+                    type(item['seconds']) in (int, float) and
                     item['seconds'] == phases.elapsed(phases.parse_time(interval['started_at']), phases.parse_time(interval['finished_at'])), 'timestamp_join')
             require(jvm.epoch_ms(record['pod_created_at'][app]) <= jvm.epoch_ms(interval['started_at']) <=
                     jvm.epoch_ms(interval['finished_at']) <= jvm.epoch_ms(evidence['container_started_at']), 'timestamp_join')
+        events = evidence['pull_events']
+        require(isinstance(events, list) and len(events) <= 1024, 'timestamp_join')
+        require(len({token(event['uid']) for event in events}) == len(events), 'timestamp_join')
+        known = current['container_images'][app]
+        paths = {'spec.'+('initContainers' if item['kind'] == 'init' else 'containers')+'{'+item['name']+'}' for item in known}
+        projected = []
+        for event in events:
+            require(event['reason'] in ('Pulling', 'Pulled') and event['container'] in paths, 'timestamp_join')
+            if event['at'] is not None:
+                require(jvm.epoch_ms(record['pod_created_at'][app]) <= jvm.epoch_ms(event['at']) <= jvm.epoch_ms(evidence['ready_at']), 'timestamp_join')
+            projected.append({'reason': event['reason'], 'eventTime': event['at'], 'involvedObject': {'fieldPath': event['container']}})
+        require(phase['image_pull_s'] == phases._pull_seconds(projected), 'timestamp_join')
         ready.append(jvm.epoch_ms(evidence['ready_at']))
         old = initial['snapshot']['identities'].get(app)
         require(old is None or old['pod_uid'] != identity['pod_uid'], 'incarnation_reused')
@@ -330,6 +388,7 @@ def validate_finished(record):
         require(type(record.get('warm_s')) in (int, float) and record['warm_s'] == span, 'warm_missing')
         require(set(initial['snapshot']['identities']) == set(APPS), 'warm_missing')
         require(current['config_sha256'] == initial['snapshot']['config_sha256'], 'configuration_drift')
+        require(current['container_images'] == initial['snapshot']['container_images'], 'image_drift')
         for app in APPS:
             for key, reason in [('image_id', 'image_drift'), ('image_reference_sha256', 'image_drift'), ('node_uid', 'node_drift')]:
                 require(current['identities'][app][key] == initial['snapshot']['identities'][app][key], reason)
@@ -342,7 +401,7 @@ def validate_pair(cold, warm):
     for key in ('context', 'cohort', 'bindings', 'collector_sha256'):
         require(cold['begin'][key] == warm['begin'][key], 'pair_binding')
     require(jvm.epoch_ms(cold['observed_finished_at']) <= jvm.epoch_ms(warm['begin']['observed_started_at']), 'pair_binding')
-    for key in ('cluster_uid', 'platform', 'config_sha256', 'identities'):
+    for key in ('cluster_uid', 'platform', 'config_sha256', 'identities', 'container_images'):
         require(cold['snapshot'][key] == warm['begin']['snapshot'][key], 'pair_binding')
     require(set(warm['begin']['jvm_starts']) == set(APPS), 'pair_binding')
     for app in APPS:

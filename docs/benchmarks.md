@@ -101,8 +101,8 @@ python3 -m bench.startup_trials pair --cold startup-evidence/cold.json \
 The cold boundary must contain neither application Pods nor Deployments.
 The warm boundary must match the accepted cold result. Both new application
 Pods and Java virtual machines (JVMs) must have new identities, with unchanged
-application images, deployment configuration, referenced configuration resources,
-and node platform. Startup log, numeric JVM-start, init, and Ready timestamps
+application, sidecar, and init-container image digests, deployment configuration,
+referenced configuration resources, and node platform. Startup log, numeric JVM-start, init, and Ready timestamps
 must join exactly; missing evidence rejects the pair. `warm_s` is the span from
 the earliest new application Pod creation to the latest application Ready
 transition, not the time taken by the rollout command.
@@ -110,8 +110,13 @@ transition, not the time taken by the rollout command.
 Records contain numeric telemetry, typed identities, timestamps, and hashes.
 Secret reads request only their unique identifiers and resource versions;
 configuration values and raw logs are not stored. Kubelet image inventory and
-pull-event projections describe observed image-cache evidence. They do not
-prove that filesystem or operating-system caches were cold. Class counts are
+pull-event projections describe observed image-cache evidence. Pull duration is
+the sum of observed complete event pairs; missing pairs stay unmeasured and do
+not prove zero pull time. Every reported phase duration is recomputed from its
+typed evidence. Numeric samples must fall inside the finish observation window,
+with ordered brackets and consistent wall-clock/monotonic elapsed times.
+The image observations do not prove that filesystem or operating-system caches
+were cold. Class counts are
 observed after startup, not class-loading durations. A valid pair alone does
 not justify class data sharing, probe tuning, or a performance improvement;
 repeated measurements and observer-overhead checks remain necessary.

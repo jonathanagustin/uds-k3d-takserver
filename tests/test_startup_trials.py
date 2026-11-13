@@ -62,14 +62,15 @@ def observation(app, context, warm=False):
         return jvm.observe(app, context, fake_commands(first=p, last=copy.deepcopy(p), bodies=[body, body]))
 
 
-def pair():
+def pair(commands=Commands):
     with patch.object(trial, 'stamp', return_value='2024-01-01T00:00:00Z'):
-        initial = trial.begin('owned', 'cohort-a', {'source': 'b'*64, 'config': 'a'*64}, Commands('empty'))
+        initial = trial.begin('owned', 'cohort-a', {'source': 'b'*64, 'config': 'a'*64}, commands('empty'))
+    with patch.object(trial, 'stamp', side_effect=['2024-01-01T00:00:06.500Z', '2024-01-01T00:00:10Z']):
+        cold = trial.finish(initial, 'cold', commands('cold'), observation)
     with patch.object(trial, 'stamp', return_value='2024-01-01T00:00:10Z'):
-        cold = trial.finish(initial, 'cold', Commands('cold'), observation)
-        warm_start = trial.begin('owned', 'cohort-a', {'source': 'b'*64, 'config': 'a'*64}, Commands('cold'), observation)
-    with patch.object(trial, 'stamp', return_value='2024-01-01T00:00:30Z'):
-        warm = trial.finish(warm_start, 'warm', Commands('warm'), lambda app, context: observation(app, context, True))
+        warm_start = trial.begin('owned', 'cohort-a', {'source': 'b'*64, 'config': 'a'*64}, commands('cold'), observation)
+    with patch.object(trial, 'stamp', side_effect=['2024-01-01T00:00:26.500Z', '2024-01-01T00:00:30Z']):
+        warm = trial.finish(warm_start, 'warm', commands('warm'), lambda app, context: observation(app, context, True))
     return cold, warm
 
 
@@ -152,6 +153,68 @@ class StartupTrials(unittest.TestCase):
             with patch('sys.argv', argv), contextlib.redirect_stdout(io.StringIO()): self.assertEqual(trial.main(), 1)
             self.assertEqual((root/'pair').read_bytes(), original)
 
+    def test_every_reported_phase_and_sample_is_bound_to_this_collection(self):
+        cold, warm = pair(); app = jvm.APPS[0]
+        for name in ('container-elapsed', 'pull-elapsed', 'missing-container-elapsed', 'stale-samples', 'bad-pull-path'):
+            with self.subTest(name=name):
+                c, w = copy.deepcopy(cold), copy.deepcopy(warm); phase = w['phases'][app]
+                if name == 'container-elapsed': phase['container_to_log_s'] = 999
+                elif name == 'pull-elapsed': phase['image_pull_s'] = 999
+                elif name == 'missing-container-elapsed': phase['container_to_log_s'] = None
+                elif name == 'stale-samples': w['observed_started_at'] = '2024-01-01T00:00:28Z'
+                else:
+                    phase['evidence']['pull_events'] = [{'uid': 'pull-a', 'reason': 'Pulled', 'container': 'spec.containers{unknown}', 'at': '2024-01-01T00:00:20Z'}]
+                with self.assertRaises(trial.Invalid): trial.validate_pair(c, w)
+
+    def test_init_sidecar_images_and_actual_projected_pull_pairs_are_bound(self):
+        class ExtraImages(Commands):
+            def run(self, args, limit):
+                raw = super().run(args, limit)
+                if args[:2] == ['get', 'deployments']:
+                    body = json.loads(raw)
+                    for item in body['items']:
+                        item['spec']['template']['spec']['containers'].append({'name': 'sidecar', 'image': 'example/sidecar:mutable'})
+                        item['spec']['template']['spec']['initContainers'] = [{'name': 'setup', 'image': 'example/setup:mutable'}]
+                    return json.dumps(body).encode()
+                if args[:2] == ['get', 'pods']:
+                    body = json.loads(raw)
+                    for item in body['items']:
+                        base = '20' if self.state == 'warm' else '00'
+                        item['spec']['containers'].append({'name': 'sidecar', 'image': 'example/sidecar:mutable'})
+                        item['spec']['initContainers'] = [{'name': 'setup', 'image': 'example/setup:mutable'}]
+                        item['status']['containerStatuses'].append({'name': 'sidecar', 'imageID': 'sha256:'+'c'*64,
+                            'state': {'running': {'startedAt': '2024-01-01T00:00:'+base+'.600Z'}}})
+                        item['status']['initContainerStatuses'] = [{'name': 'setup', 'imageID': 'sha256:'+'d'*64,
+                            'state': {'terminated': {'startedAt': '2024-01-01T00:00:'+base+'Z', 'finishedAt': '2024-01-01T00:00:'+base+'Z'}}}]
+                    return json.dumps(body).encode()
+                if args[:2] == ['get', 'events']:
+                    uid = args[-3].split('=', 1)[1]; base = '20' if self.state == 'warm' else '00'
+                    return json.dumps({'items': [{'metadata': {'uid': 'event-'+reason}, 'reason': reason,
+                        'involvedObject': {'uid': uid, 'fieldPath': 'spec.containers{sidecar}'},
+                        'eventTime': '2024-01-01T00:00:'+base+suffix+'Z'} for reason, suffix in [('Pulling', '.100'), ('Pulled', '.600')]]}).encode()
+                return raw
+        cold, warm = pair(ExtraImages); app = jvm.APPS[0]
+        self.assertTrue(trial.validate_pair(cold, warm)['accepted'])
+        self.assertEqual(warm['phases'][app]['image_pull_s'], .5)
+        for name in ('sidecar', 'setup'):
+            with self.subTest(name=name):
+                changed = copy.deepcopy(warm)
+                next(item for item in changed['snapshot']['container_images'][app] if item['name'] == name)['image_id'] = 'sha256:'+'e'*64
+                with self.assertRaises(trial.Invalid): trial.validate_pair(cold, changed)
+        for mutation in ('duration', 'duplicate', 'late', 'missing-uid'):
+            with self.subTest(mutation=mutation):
+                changed = copy.deepcopy(warm); phase = changed['phases'][app]
+                if mutation == 'duration': phase['image_pull_s'] = 999
+                elif mutation == 'duplicate': phase['evidence']['pull_events'].append(copy.deepcopy(phase['evidence']['pull_events'][0]))
+                elif mutation == 'late': phase['evidence']['pull_events'][1]['at'] = '2024-01-01T00:00:27Z'
+                else: phase['evidence']['pull_events'][0]['uid'] = None
+                with self.assertRaises(trial.Invalid): trial.validate_pair(cold, changed)
+        p = application(app)
+        p['spec']['containers'].append(copy.deepcopy(p['spec']['containers'][0]))
+        with self.assertRaises(trial.Invalid): trial.container_images(p)
+        p = application(app); p['status']['containerStatuses'].append({'name': 'unexpected', 'imageID': 'sha256:'+'e'*64})
+        with self.assertRaises(trial.Invalid): trial.container_images(p)
+
     def test_finish_rejects_ready_or_configuration_change_during_collection(self):
         class Drifting(Commands):
             def __init__(self, kind):
@@ -167,7 +230,7 @@ class StartupTrials(unittest.TestCase):
                 return value
         cold, warm = pair()
         for kind in ('ready', 'secret'):
-            with self.subTest(kind=kind), patch.object(trial, 'stamp', return_value='2024-01-01T00:00:30Z'):
+            with self.subTest(kind=kind), patch.object(trial, 'stamp', side_effect=['2024-01-01T00:00:26.500Z', '2024-01-01T00:00:30Z']):
                 with self.assertRaises(trial.Invalid): trial.finish(warm['begin'], 'warm', Drifting(kind), lambda app, context: observation(app, context, True))
 
     def test_schema_duplicates_symlinks_and_errors_do_not_export_private_values(self):

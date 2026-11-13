@@ -110,6 +110,39 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertFalse((outside/F.NAME).exists())
             self.assertEqual(list(outside.iterdir()), [])
 
+    def test_actual_shell_cheap_preflight_captures_before_any_cluster_action(self):
+        # Real shell + Python wrapper + HEAD verification; only uds --help is a
+        # fake capability peer. No chart, package, Kubernetes or cluster runs.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); binary = root/'bin'; binary.mkdir()
+            calls = root/'uds-calls'
+            uds = binary/'uds'
+            uds.write_text('#!/usr/bin/env bash\nset -euo pipefail\nprintf "%s\\n" "$*" >> "${FAKE_UDS_CALLS}"\n'
+                           '[[ "$*" == "zarf package deploy --help" ]] || exit 88\n'
+                           'printf "  --confirm Confirms\\n  PRIVATE_HELP_SENTINEL\\n"\n')
+            uds.chmod(0o700)
+            head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+            env = {**os.environ, **ENV, 'GITHUB_SHA': head, 'SCENARIO': 'identities',
+                   'IDENTITY_METHOD': 'package', 'RUNNER_TEMP': str(root/'runner'),
+                   'PATH': str(binary)+os.pathsep+os.environ['PATH'], 'FAKE_UDS_CALLS': str(calls)}
+            child = subprocess.run(['bash', str(ROOT/'.github/scripts/staged-migrations.sh')],
+                                   cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(child.returncode, 0)
+            self.assertEqual(calls.read_text().splitlines(), ['zarf package deploy --help'])
+            folder = root/'runner/staged-migrations/package-identity'
+            self.assertFalse((folder/'journal.json').exists())
+            self.assertTrue((folder/F.NAME).is_file())
+            self.assertNotIn('PRIVATE_HELP_SENTINEL', child.stdout+child.stderr+(folder/F.NAME).read_text())
+            with patch.dict(os.environ, env, clear=True):
+                proof = F.public(folder)
+                self.assertEqual(proof['status'], 'captured')
+                self.assertTrue(any(frame['file'].endswith('package_roundtrip.py') for frame in proof['frames']))
+                value = S.publish(folder.parent, root/'public', 'amd64')
+            self.assertFalse(value['accepted'])
+            diagnostic = json.loads((root/'public/proofs/amd64/failure-categories.json').read_text())
+            self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
+            self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
+
     def test_package_failure_progress_and_callsites_publish_before_acceptance(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {**ENV, 'SCENARIO': 'identities', 'IDENTITY_METHOD': 'package'}, clear=True), patch.object(S.platform, 'machine', return_value='x86_64'), patch.object(F, 'reviewed', side_effect=source_bytes):
             root = Path(directory); folder = root/'package-identity'; folder.mkdir(mode=0o700)

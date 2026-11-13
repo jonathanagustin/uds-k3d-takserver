@@ -14,7 +14,8 @@ case "${identity_method}" in manual | package | combined) ;; *) exit 1 ;; esac
 if [[ "${identity_method}" != manual ]]; then
   [[ "${SCENARIO}" == identities ]]
   # Help/flag capability check only: before any cluster or package deployment.
-  python3 tests/workload-identities/package_roundtrip.py preflight
+  python3 tests/workload-identities/package_roundtrip.py preflight \
+    --evidence "${RUNNER_TEMP:?}/staged-migrations/package-identity/journal.json"
 fi
 trial="${RUNNER_TEMP:?}/staged-migrations"
 [[ ! -e "${trial}" ]]

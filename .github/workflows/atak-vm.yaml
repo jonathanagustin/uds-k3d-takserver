@@ -8,8 +8,15 @@ on:
   pull_request:
     paths:
       - "atak/vm/**"
-      - "atak/ci/**"
       - "atak/viewer/**"
+      - "atak/deploy/**"
+      # Only these CI scripts are used by the VM/browser smoke test.
+      - "atak/ci/vm-smoke.sh"
+      - "atak/ci/viewer-smoke.sh"
+      - ".github/scripts/redact-then-filter.sh"
+      - ".github/scripts/redact-logs.py"
+      # The builds use the repository root as their Docker context.
+      - ".dockerignore"
       - ".github/workflows/atak-vm.yaml"
 
 permissions:

@@ -407,13 +407,28 @@ class IdentityFixtures(unittest.TestCase):
             output.symlink_to(target,target_is_directory=True)
             with self.assertRaises(ValueError):instance.install_probe('fixture','fixture')
 
+    def test_actual_shell_adapter_preserves_only_canonical_java_results(self):
+        script=driver.protocol_adapter('ignite')
+        for code,output,err,accepted in [(0,'APPLICATION_RESPONSE\n','',True),(10,'TRANSPORT_REJECTED\n','',True),
+            (20,'','PROBE_INVALID',False),(1,'APPLICATION_RESPONSE\n','',False),(10,'TRANSPORT_REJECTED\nextra','',False),
+            (10,'TRANSPORT_REJECTED\n\n','',False),(10,'TRANSPORT_REJECTED','',False),
+            (0,'UDS_PROTOCOL_V1:10:TRANSPORT_REJECTED\n','',False),(10,'TRANSPORT_REJECTED\n','warning',False)]:
+            with self.subTest(code=code,output=output,err=err),tempfile.TemporaryDirectory() as directory:
+                peer=Path(directory)/'peer'
+                peer.write_text('#!/usr/bin/env python3\nimport sys\nsys.stdout.write('+repr(output)+')\nsys.stderr.write('+repr(err)+')\nsys.exit('+str(code)+')\n');peer.chmod(0o700)
+                result=subprocess.run(['/bin/bash','-c',script,'adapter',str(peer)],text=True,capture_output=True)
+                instance=driver.Driver(Path(directory)/'journal');instance.exec=lambda *a,**kw:result
+                if accepted:self.assertEqual(instance.protocol('pod','app','/tmp/test','ignite'),code)
+                else:
+                    with self.assertRaises(ValueError):instance.protocol('pod','app','/tmp/test','ignite')
+
     def test_transport_command_errors_are_not_negative_traffic(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=driver.Driver(Path(directory)/'evidence')
             for code,out,err in [(1,'','kubectl failed'),(20,'','PROBE_INVALID'),(10,'',''),(0,'TRANSPORT_REJECTED','')]:
                 instance.exec=lambda *a,**k: subprocess.CompletedProcess([],code,out,err)
                 with self.assertRaises(ValueError): instance.protocol('pod','app','/tmp/test','ignite','10.0.0.1',47100)
-            instance.exec=lambda *a,**k: subprocess.CompletedProcess([],10,'TRANSPORT_REJECTED\n','')
+            instance.exec=lambda *a,**k: subprocess.CompletedProcess([],0,'UDS_PROTOCOL_V1:10:TRANSPORT_REJECTED\n','')
             self.assertEqual(instance.protocol('pod','app','/tmp/test','ignite','10.0.0.1',47100),10)
 
 

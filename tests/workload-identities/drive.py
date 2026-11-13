@@ -268,6 +268,17 @@ def template_fingerprint(deployment, pepr=False, exact=False):
     return sha(template)
 
 
+def protocol_adapter(mode):
+    require(mode in ('dns','ignite','postgres','nats'),'unsupported protocol')
+    token='DNS_RESPONSE' if mode=='dns' else 'APPLICATION_RESPONSE'
+    # Append status inside command substitution to preserve every stdout newline.
+    # Only canonical Java results become outer exit zero; kubectl errors remain errors.
+    return ('set +e; output=$("$@"; status=$?; printf "\\nUDS_EXIT_%s" "$status"); '
+            'case "$output" in '+"$'"+token+"\\n\\nUDS_EXIT_0') printf 'UDS_PROTOCOL_V1:0:"+token+"\\n' ;; "+
+            "$'TRANSPORT_REJECTED\\n\\nUDS_EXIT_10') printf 'UDS_PROTOCOL_V1:10:TRANSPORT_REJECTED\\n' ;; "+
+            '*) exit 71 ;; esac')
+
+
 class Driver:
     def __init__(self, evidence):
         self.evidence = evidence
@@ -338,6 +349,17 @@ class Driver:
         temporary.write_text(json.dumps(self.state, indent=2, sort_keys=True) + '\n')
         temporary.chmod(0o600)
         temporary.replace(self.evidence)
+        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory')
+        stages=[{key:entry[key] for key in fields if key in entry} for entry in self.state['stages']
+                if entry['stage'] not in ('protocol-start','protocol-result')]
+        protocol={stage:next(({key:entry[key] for key in fields if key in entry}
+                    for entry in reversed(self.state['stages']) if entry['stage']==stage),None)
+                  for stage in ('protocol-start','protocol-result')}
+        progress={'schema':1,'guard':{key:self.state.get('guard',{}).get(key) for key in ('sourceSHA','runID','runAttempt')},'journalSHA256':hashlib.sha256(self.evidence.read_bytes()).hexdigest(),
+                  'stages':stages[-128:],'retainedCount':min(len(stages),128),'totalCount':len(stages),'truncated':len(stages)>128,
+                  'lastProtocol':protocol}
+        companion=self.evidence.with_name('journal-progress.json');pending=companion.with_suffix('.tmp')
+        pending.write_text(json.dumps(progress,sort_keys=True)+'\n');pending.chmod(0o600);pending.replace(companion)
 
     def wait(self, callback, seconds=300):
         deadline = time.monotonic() + seconds
@@ -690,16 +712,24 @@ class Driver:
         require(result.returncode == 0, 'could not stage the fixed protocol probe in writable /tmp')
         return directory
 
-    def protocol(self, pod, container, directory, mode, ip=None, port=None):
+    def protocol(self, pod, container, directory, mode, ip=None, port=None, *, control_role="unspecified"):
         args = ['/usr/bin/env', '-u', 'JAVA_TOOL_OPTIONS', '-u', 'JDK_JAVA_OPTIONS', '-u', '_JAVA_OPTIONS',
                 'java', '-Xms8m', '-Xmx32m', '-XX:MaxMetaspaceSize=32m', '-cp', directory, 'ProtocolProbe', mode]
         if ip is not None:
             args += [ip, str(port)]
-        result = self.exec(pod, container, args)
-        expected = {0: 'DNS_RESPONSE' if mode == 'dns' else 'APPLICATION_RESPONSE', 10: 'TRANSPORT_REJECTED'}
-        require(result.returncode in expected and result.stdout.strip() == expected[result.returncode] and not result.stderr.strip(),
+        require(control_role in ('unspecified','workload','allowed-control','wrong-identity'),'unsupported protocol control role')
+        self.journal('protocol-start',protocol=mode,controlRole=control_role)
+        result = self.exec(pod, container, ['/bin/bash','-c',protocol_adapter(mode),'protocol-adapter',*args])
+        token='DNS_RESPONSE' if mode=='dns' else 'APPLICATION_RESPONSE'
+        expected = {'UDS_PROTOCOL_V1:0:'+token+'\n':0,'UDS_PROTOCOL_V1:10:TRANSPORT_REJECTED\n':10}
+        category=('application-response' if result.stdout=='UDS_PROTOCOL_V1:0:'+token+'\n' else
+                  'transport-rejected' if result.stdout=='UDS_PROTOCOL_V1:10:TRANSPORT_REJECTED\n' else 'other')
+        self.journal('protocol-result',protocol=mode,controlRole=control_role,
+                     outerExit=result.returncode if type(result.returncode) is int and -255<=result.returncode<=255 else None,
+                     stdoutCategory=category,stderrPresent=bool(result.stderr.strip()))
+        require(result.returncode==0 and result.stdout in expected and not result.stderr.strip(),
                 'probe execution/protocol invalid (not a valid network denial)')
-        return result.returncode
+        return expected[result.stdout]
 
     def traffic(self, identities, phase, evidence_phase=None):
         self.active_pods = {p['name']: {'uid': p['uid'], 'account': p['account'],
@@ -800,11 +830,11 @@ class Driver:
                 selected = [('postgres', 5432)] if control == 'legacy-postgres' else protocols
                 for protocol, port in selected:
                     target = targets[protocol]
-                    require(self.protocol(identity['name'], container, directory, protocol, target['ip'], port) == 0, 'positive protocol baseline failed')
-                    require(self.protocol(allowed_name, 'probe', allowdir, protocol, target['ip'], port) == 0, 'same-label permitted control failed')
-                    require(self.protocol(negative_name, 'probe', negdir, protocol, target['ip'], port) == 10, 'wrong identity received application data')
-                    require(self.protocol(allowed_name, 'probe', allowdir, protocol, target['ip'], port) == 0, 'same-label permitted recovery control failed')
-                    require(self.protocol(identity['name'], container, directory, protocol, target['ip'], port) == 0, 'positive recovery check failed')
+                    require(self.protocol(identity['name'], container, directory, protocol, target['ip'], port, control_role='workload') == 0, 'positive protocol baseline failed')
+                    require(self.protocol(allowed_name, 'probe', allowdir, protocol, target['ip'], port, control_role='allowed-control') == 0, 'same-label permitted control failed')
+                    require(self.protocol(negative_name, 'probe', negdir, protocol, target['ip'], port, control_role='wrong-identity') == 10, 'wrong identity received application data')
+                    require(self.protocol(allowed_name, 'probe', allowdir, protocol, target['ip'], port, control_role='allowed-control') == 0, 'same-label permitted recovery control failed')
+                    require(self.protocol(identity['name'], container, directory, protocol, target['ip'], port, control_role='workload') == 0, 'positive recovery check failed')
                     fresh = self.get('pod', target['name'])
                     require(fresh['metadata']['uid'] == target['uid'] and fresh['status'].get('podIP') == target['ip'] and
                             not fresh['metadata'].get('deletionTimestamp'), 'backend changed during control')

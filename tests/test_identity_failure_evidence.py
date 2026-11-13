@@ -143,6 +143,19 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
             self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
 
+    def test_package_command_progress_never_exports_private_streams(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            instance=P.D.Driver(folder/'journal.json')
+            instance.state['guard']={field:ENV[env] for field,env in [('sourceSHA','GITHUB_SHA'),('runID','GITHUB_RUN_ID'),('runAttempt','GITHUB_RUN_ATTEMPT')]}
+            fixed={'role':'deploy','phase':'transition','exitStatus':7,'timedOut':False,'category':'unknown','stdoutPresent':True,'stderrPresent':True}
+            instance.journal('package-command-failed',**fixed,stderr='SECRET',stdout='SECRET',argv='SECRET')
+            value=S.identity_progress(root)['package']
+            self.assertEqual(value['stages'],[{'stage':'package-command-failed',**fixed}]);self.assertNotIn('SECRET',json.dumps(value))
+            for field,replacement in [('exitStatus',True),('category','SECRET'),('role','foreign'),('timedOut',1)]:
+                instance.state['stages']=[];instance.journal('package-command-failed',**{**fixed,field:replacement})
+                self.assertEqual(S.identity_progress(root)['package']['status'],'unavailable')
+
     def test_driver_journals_rejected_verdict_before_failclosed_guard(self):
         from tests.test_identity_phase_evidence import fixture
         bind,data=fixture()

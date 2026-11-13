@@ -450,7 +450,7 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
+    'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
 
@@ -524,6 +524,13 @@ def identity_progress(directory):
                     stage = {'stage': entry['stage']}
                     if entry.get('phase') in IDENTITY_ALIASES:
                         stage['phase'] = entry['phase']
+                    if entry['stage']=='package-command-failed':
+                        require(entry.get('role') in ('deploy','remove') and entry.get('phase') in ('transition','strict','rollback','shared') and
+                                type(entry.get('exitStatus')) is int and -255<=entry['exitStatus']<=255 and
+                                all(type(entry.get(key)) is bool for key in ('timedOut','stdoutPresent','stderrPresent')) and
+                                entry.get('category') in ('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown'),
+                                'invalid package command diagnostic')
+                        stage.update({key:entry[key] for key in ('role','exitStatus','timedOut','category','stdoutPresent','stderrPresent')})
                     if entry['stage']=='typed-phase-rejected':
                         require(entry.get('phase') in IDENTITY_ALIASES,'invalid typed phase alias')
                         _guards,capture=identity_modules()

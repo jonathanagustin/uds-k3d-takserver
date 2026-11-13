@@ -214,6 +214,28 @@ class PackageTrial(D.Driver):
         self.journal('package-phase-evidence-'+alias,accepted=verdict['accepted'])
         return verdict
 
+    def wait_identities(self, expected, phase):
+        # Only fixed codes enter the journal; exception text can contain private data.
+        D.require(phase in D.PHASES, 'unknown identity observation phase')
+        reason = 'no-observation'
+        def observe_identity():
+            nonlocal reason
+            try:
+                result = self.identities(expected)
+                reason = 'unstable-observation'
+                return result
+            except ValueError as error:
+                reason = {'workload template drift': 'workload-template-drift',
+                          'inconsistent workload service account alias': 'inconsistent-service-account-alias'}.get(
+                              str(error), 'other-invariant')
+                raise
+        try:
+            return self.wait(observe_identity)
+        except ValueError as error:
+            if str(error).startswith('convergence timeout: '):
+                self.journal('package-identity-timeout', phase=phase, diagnostic=reason)
+            raise
+
     def observe(self,phase):
         desired,_=self.render(phase);current=self.get('package',D.NS)
         D.require(current['spec']==desired['spec'],'package deployment differs from exact phase render')
@@ -221,7 +243,7 @@ class PackageTrial(D.Driver):
         self.wait(self.policies)
         self.wait(lambda:self.observe_pepr(phase))
         expected='dedicated' if phase in ('transition','strict') else 'shared'
-        identities=self.wait(lambda:self.identities(expected));self.core_unchanged()
+        identities=self.wait_identities(expected,phase);self.core_unchanged()
         values=json.loads(self.command(['helm','--kube-context',D.CONTEXT,'get','values','uds-takserver-config','-n',D.NS,'-o','json']))
         D.require(values.get('workloadIdentityPhase','shared')==phase,'stored config Helm value differs')
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)

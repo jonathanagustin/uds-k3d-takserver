@@ -19,6 +19,61 @@ spec=importlib.util.spec_from_file_location('package_trial',ROOT/'tests/workload
 P=importlib.util.module_from_spec(spec);spec.loader.exec_module(P)
 
 class PackageGuards(unittest.TestCase):
+    def test_identity_wait_timeout_journals_only_fixed_reason_and_preserves_failure(self):
+        for raw, code in [('workload template drift', 'workload-template-drift'),
+                          ('inconsistent workload service account alias', 'inconsistent-service-account-alias'),
+                          ('private secret server-address value', 'other-invariant')]:
+            with self.subTest(code=code):
+                trial = object.__new__(P.PackageTrial)
+                entries = []
+                trial.journal = lambda stage, **fields: entries.append({'stage': stage, **fields})
+                def identities(expected):
+                    self.assertEqual(expected, 'dedicated')
+                    raise ValueError(raw)
+                trial.identities = identities
+                def wait(callback):
+                    try: callback()
+                    except ValueError: pass
+                    raise ValueError('convergence timeout: ' + raw)
+                trial.wait = wait
+                with self.assertRaisesRegex(ValueError, 'convergence timeout'):
+                    trial.wait_identities('dedicated', 'transition')
+                self.assertEqual(entries, [{'stage':'package-identity-timeout', 'phase':'transition', 'diagnostic':code}])
+                self.assertNotIn(raw, json.dumps(entries))
+        trial = object.__new__(P.PackageTrial)
+        trial.identities = lambda expected: ['unchanged-result']
+        trial.wait = lambda callback: callback()
+        trial.journal = lambda *args, **kwargs: self.fail('successful wait must not journal timeout')
+        self.assertEqual(trial.wait_identities('shared', 'rollback'), ['unchanged-result'])
+        trial.wait = lambda callback: (_ for _ in ()).throw(ValueError('guard budget exhausted'))
+        with self.assertRaisesRegex(ValueError, 'guard budget exhausted'):
+            trial.wait_identities('shared', 'rollback')
+
+    def test_identity_timeout_companion_projects_only_fixed_diagnostic(self):
+        spec=importlib.util.spec_from_file_location('timeout_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+                'IDENTITY_METHOD':'package', 'GITHUB_SHA':'a'*40, 'GITHUB_RUN_ID':'123', 'GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'stages':[], 'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            trial.identities=lambda expected: (_ for _ in ()).throw(ValueError('PRIVATE_UNKNOWN_SENTINEL'))
+            def wait(callback):
+                try: callback()
+                except ValueError: pass
+                raise ValueError('convergence timeout: PRIVATE_UNKNOWN_SENTINEL')
+            trial.wait=wait
+            with self.assertRaises(ValueError):trial.wait_identities('dedicated','transition')
+            public=publisher.identity_progress(root)['package']
+            self.assertEqual(public['status'],'observed')
+            self.assertEqual(public['stages'],[{'stage':'package-identity-timeout','phase':'transition','diagnostic':'other-invariant'}])
+            self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
+            # Even a source/run-bound companion must reject an arbitrary diagnostic.
+            trial.journal('package-identity-timeout',phase='transition',diagnostic='PRIVATE_UNKNOWN_SENTINEL')
+            public=publisher.identity_progress(root)['package']
+            self.assertEqual(public['status'],'unavailable')
+            self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
+
     def setUp(self):
         directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
         self.phase_directory=Path(directory.name)

@@ -24,3 +24,12 @@ dns:
   passthroughHosts: "###ZARF_VAR_PASSTHROUGH_HOSTS###"
 health:
   enabled: true
+# Optional chart-root overlays. Empty maps preserve ordinary package defaults.
+# The staged migration replays its reviewed baseline overlays through these.
+chartOverrides:
+  takserver:
+    uds-takserver-config: {}
+    takserver-oidc: {}
+    takserver: {}
+  cloudtak:
+    uds-cloudtak: {}

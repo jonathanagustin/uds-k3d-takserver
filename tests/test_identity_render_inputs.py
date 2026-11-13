@@ -21,6 +21,130 @@ SPEC.loader.exec_module(driver)
 inputs = driver.render_inputs
 
 
+class BaselineChartOverrideTests(unittest.TestCase):
+    def plan(self, directory):
+        import os
+        import yaml
+        root=Path(directory);core=root/'core';core.mkdir()
+        head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT).decode().strip()
+        config=root/'uds-config.yaml';config.write_text(yaml.safe_dump({'variables':{'takserver':{'DOMAIN':'uds.dev',
+            'TAK_IMAGE_TAG':'reviewed','FILESYSTEM_BACKUP':'true','POSTGRES_STORAGE_CLASS':'local-path-local',
+            'CLOUDTAK_STORAGE_CLASS':'local-path-local'}}}))
+        source=ROOT/'bundle/full/uds-bundle.yaml'
+        package=next(item for item in yaml.safe_load(source.read_text())['packages'] if item['name']=='takserver')
+        if 'path' in package:package['path']=os.path.relpath((source.parent/package['path']).resolve(),core)
+        for charts in package['overrides'].values():
+            for chart in charts.values():
+                if 'valuesFiles' in chart:
+                    chart['valuesFiles']=[os.path.relpath((source.parent/path).resolve(),core) for path in chart['valuesFiles']]
+        manifest=core/'uds-bundle.yaml';manifest.write_text(yaml.safe_dump({'packages':[package]}))
+        receipt=root/'candidate.json';receipt.write_text(json.dumps({'schema':1,'sourceSHA':head,
+            'files':{'core/uds-bundle.yaml':driver.hashlib.sha256(manifest.read_bytes()).hexdigest()}}))
+        plan=root/'plan.json';plan.write_text(json.dumps({'schema':1,'sourceSHA':head,'files':{
+            'config':{'path':config.name,'sha256':driver.hashlib.sha256(config.read_bytes()).hexdigest()}}}))
+        return plan,head,manifest,receipt
+
+    def test_entire_reviewed_baseline_maps_include_storage_resources_and_dump_flags(self):
+        import yaml
+        with tempfile.TemporaryDirectory() as directory:
+            plan,head,_manifest,_receipt=self.plan(directory)
+            result=inputs.bind_chart_overrides(plan,head,ROOT)
+            maps=result['chartOverrides']
+            self.assertEqual(maps['takserver']['takserver'],yaml.safe_load((ROOT/'bundle/test-values.yaml').read_text()))
+            self.assertEqual(maps['takserver']['takserver']['postgresql']['primary']['persistence']['size'],'1Gi')
+            self.assertIn('resources',maps['takserver']['takserver']['postgresql']['primary'])
+            self.assertEqual(maps['takserver']['uds-takserver-config']['backup']['dump']['enabled'],True)
+            self.assertEqual(maps['cloudtak']['uds-cloudtak']['backup']['dump']['enabled'],True)
+            self.assertEqual(maps['takserver']['takserver-oidc'],{})
+            self.assertEqual(result['chartOverridesSHA256'],inputs.digest(maps))
+            self.assertEqual(set(result['chartOverrideSources']),{'bundle/full/uds-bundle.yaml','bundle/test-values.yaml',
+                'tests/velero-ownership/candidate.py','tests/velero-ownership/prepare.py'})
+
+    def test_candidate_and_reviewed_source_changes_cannot_rebind_silently(self):
+        import yaml
+        for change in ('receipt','manifest-hash','manifest-values','source-file'):
+            with self.subTest(change=change),tempfile.TemporaryDirectory() as directory:
+                plan,head,manifest,receipt=self.plan(directory)
+                data=json.loads(receipt.read_text())
+                if change=='receipt':data['sourceSHA']='0'*40
+                if change=='manifest-hash':data['files']['core/uds-bundle.yaml']='0'*64
+                if change=='manifest-values':
+                    value=yaml.safe_load(manifest.read_text());value['packages'][0]['overrides']['takserver']['takserver']['valuesFiles']=[]
+                    manifest.write_text(yaml.safe_dump(value));data['files']['core/uds-bundle.yaml']=driver.hashlib.sha256(manifest.read_bytes()).hexdigest()
+                receipt.write_text(json.dumps(data))
+                if change=='source-file':
+                    original=Path.read_bytes
+                    def changed(path):
+                        raw=original(path)
+                        return raw+b'\n# changed baseline\n' if path==ROOT/'bundle/test-values.yaml' else raw
+                    with patch.object(Path,'read_bytes',changed),self.assertRaisesRegex(ValueError,'reviewed commit'):
+                        inputs.bind_chart_overrides(plan,head,ROOT)
+                else:
+                    with self.assertRaises(ValueError):inputs.bind_chart_overrides(plan,head,ROOT)
+
+    def test_bound_candidate_to_phase_command_retains_all_maps_and_rejects_tamper(self):
+        import yaml
+        from tests.test_package_identity_driver import P
+        with tempfile.TemporaryDirectory() as directory:
+            plan,head,_manifest,_receipt=self.plan(directory)
+            archive=Path(directory)/'zarf-package-takserver-amd64-dev-upstream.tar.zst'
+            archive.write_bytes(b'archive identity fixture, not a deployable package')
+            with patch.dict(driver.os.environ,{'GITHUB_SHA':head}):
+                bound=P.bind_inputs(archive,P.digest(archive),plan)
+                instance=P.PackageTrial(Path(directory)/'journal.json',bound)
+                instance.inputs_unchanged()
+                for phase in P.D.PHASES:
+                    command=P.deploy_command(bound,phase)
+                    path=Path(command[command.index('--values')+1])
+                    value=yaml.safe_load(path.read_text())
+                    self.assertEqual(value['chartOverrides'],bound['chartBinding']['chartOverrides'])
+                    self.assertEqual(value['tak']['workloadIdentityPhase'],phase)
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode),0o600)
+                    self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode),0o700)
+                selected=Path(bound['phaseValues']['transition']['path']);selected.write_text('changed')
+                with self.assertRaises(ValueError):P.deploy_command(bound,'transition')
+                with self.assertRaises(ValueError):instance.inputs_unchanged()
+                self.assertEqual(selected.read_text(),'changed')
+
+    def test_file_merge_order_keeps_nested_baseline_fields_and_rejects_phase_or_core_scope(self):
+        files={'first':{'postgresql':{'primary':{'persistence':{'size':'1Gi'},'resources':{'limits':{'memory':'512Mi'}}}}},
+               'second':{'postgresql':{'primary':{'resources':{'requests':{'memory':'128Mi'}}}}}}
+        override={'takserver':{'takserver':{'valuesFiles':['first','second'],
+                  'values':[{'path':'postgresql.primary.resources.limits.cpu','value':'500m'}]}}}
+        maps=inputs.baseline_chart_values(override,files.__getitem__)
+        self.assertEqual(maps['takserver']['takserver']['postgresql']['primary'],{
+            'persistence':{'size':'1Gi'},'resources':{'limits':{'memory':'512Mi','cpu':'500m'},'requests':{'memory':'128Mi'}}})
+        for bad in [{'core-base':{}},{'takserver':{'unknown':{}}},
+                    {'takserver':{'uds-takserver-config':{'values':[{'path':'workloadIdentityPhase','value':'shared'}]}}},
+                    {'takserver':{'takserver-oidc':{'values':[{'path':'env.TAK_WORKLOAD_IDENTITY_PHASE','value':'shared'}]}}}]:
+            with self.subTest(bad=bad),self.assertRaises(ValueError):inputs.baseline_chart_values(bad,files.__getitem__)
+
+    def test_pinned_zarf_root_merge_bridge_has_exact_four_empty_default_maps(self):
+        # Zarf0.89 value.Values.Set(".", map) recursively DeepMerges maps;
+        # an empty map has no entries to change. This checks the declared bridge,
+        # not a replacement CLI or a claim of live rendering acceptance.
+        import yaml
+        defaults=yaml.safe_load((ROOT/'values/zarf-values.yaml').read_text())['chartOverrides']
+        self.assertEqual(defaults,inputs.baseline_chart_values({},lambda path:{}))
+        schema=json.loads((ROOT/'values/zarf-values.schema.json').read_text())['properties']['chartOverrides']
+        self.assertFalse(schema['additionalProperties'])
+        self.assertEqual(set(schema['properties']),set(inputs.APPLICATION_CHARTS))
+        for component,charts in inputs.APPLICATION_CHARTS.items():
+            node=schema['properties'][component]
+            self.assertFalse(node['additionalProperties']);self.assertEqual(set(node['properties']),set(charts))
+            self.assertTrue(all(value['type']=='object' for value in node['properties'].values()))
+        package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
+        charts=[('takserver',chart) for component in package['components'] for chart in component.get('charts',[])]
+        cloud=yaml.safe_load((ROOT/'zarf.yaml').read_text())
+        charts += [('cloudtak',chart) for component in cloud['components'] if component['name']=='cloudtak' for chart in component.get('charts',[])]
+        bridges=[(component,chart['name'],mapping) for component,chart in charts for mapping in chart.get('values',[])
+                 if mapping['sourcePath'].startswith('.chartOverrides.')]
+        self.assertEqual(len(bridges),4)
+        for component,chart,mapping in bridges:
+            self.assertEqual(mapping,{'sourcePath':'.chartOverrides.'+component+'.'+chart,'targetPath':'.'})
+            self.assertEqual(defaults[component][chart],{})
+
+
 def crd_fixture():
     schema = {'type': 'object', 'properties': {'spec': {'type': 'object', 'properties': {
         'network': {'type': 'object', 'properties': {'serviceMesh': {'type': 'object', 'properties': {

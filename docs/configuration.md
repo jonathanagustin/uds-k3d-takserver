@@ -51,6 +51,29 @@ global:
 
 `FILESYSTEM_BACKUP`, `POSTGRES_STORAGE_CLASS`, and `CLOUDTAK_STORAGE_CLASS` have no package value. Set them as variables. A package value cannot work for them. The charts decide while Helm renders whether to add the node-agent, the volume annotations, and `storageClassName`. A package value defaults to the variable's placeholder, and Zarf replaces that placeholder only after Helm renders. So with no package value set, Helm would see the placeholder text, not `true` or a class name. The variables reach the charts through values files that Zarf fills in before Helm runs.
 
+`chartOverrides` accepts optional objects merged at the root of four application
+charts: `takserver.uds-takserver-config`, `takserver.takserver-oidc`,
+`takserver.takserver`, and `cloudtak.uds-cloudtak`. All four default to `{}`, so
+ordinary package defaults stay unchanged. Core charts are outside this interface.
+For example, a file passed with `--values` can retain an existing TAK chart
+resource setting:
+
+```yaml
+chartOverrides:
+  takserver:
+    takserver:
+      postgresql:
+        primary:
+          resources:
+            limits:
+              memory: 512Mi
+```
+
+Keep the same storage class and claim-template settings when upgrading an
+existing database. This interface does not resize or recreate storage. The
+staged identity migration carries forward its complete reviewed baseline chart
+overlays; it rejects overlays that override the identity phase.
+
 `tests/test_package_values.py` renders the package with `uds zarf dev inspect manifests` and checks that a `DOMAIN` change moves the cert-enrollment and stream gateway hosts, the CoreConfig OpenID Connect (OIDC) URLs, CloudTAK, and the watcher, and that a package value wins over the variable. It checks that the plugins memory reaches both the admission and watcher env. It also checks that both database volumes have no StorageClass by default and get the one their variable names, and that `health.enabled=false` removes the `tak-health` pod, expose entry, and certificate.
 
 Postgres is `ghcr.io/jonathanagustin/uds-takserver/postgis:18-3.6`, built in this repository from the official `postgres` image with PostGIS 3.6.4 for amd64 and arm64. The entrypoint upgrades a PostgreSQL 15 data directory. See [architecture decision record (ADR) 18](../adr/0018-upgrade-postgres-in-place.md).

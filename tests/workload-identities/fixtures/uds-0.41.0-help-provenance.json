@@ -18,7 +18,7 @@
       "exit": 0,
       "fullStdoutSHA256": "b6acd607f0cc18a1738676a57ad71bb3047f5beebde7d84b19b5183549b4a105",
       "fixture": "uds-0.41.0-deploy-flags.txt",
-      "fixtureSHA256": "b6398922daa1014fdd7bbf7bdfb91d7ed51b0fa11cb52c600428047602625901"
+      "fixtureSHA256": "31261fafd615d06ffdce232ae0d2eca32e647da59050aab10459b180a634a6b5"
     },
     "remove": {
       "argv": [

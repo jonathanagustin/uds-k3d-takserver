@@ -45,14 +45,51 @@ def bind_inputs(archive,archive_sha,plan_path):
     D.require(config.is_file() and not config.is_symlink() and digest(config)==item['sha256'],'bound config differs')
     value=yaml.safe_load(config.read_text());D.require(set(value)=={'variables'} and set(value['variables'])=={'takserver'},'unexpected package variables')
     variables=value['variables']['takserver'];D.require(set(variables)==VARIABLES and all(isinstance(x,(str,int,bool)) for x in variables.values()),'unsupported baseline variables')
-    return {'archive':str(archive),'archiveSHA256':archive_sha,'plan':str(plan_path),'planSHA256':digest(plan_path),'config':str(config),'configSHA256':item['sha256'],'variables':variables}
+    chart_binding=D.render_inputs.bind_chart_overrides(plan_path,os.environ['GITHUB_SHA'],D.ROOT)
+    directory=plan_path.parent/'package-phase-values'
+    D.require(not any(path.is_symlink() for path in (directory,*directory.parents)),'phase values path has a symbolic link')
+    directory.mkdir(mode=0o700,exist_ok=True)
+    D.require(stat.S_IMODE(directory.stat().st_mode)==0o700,'phase values directory is not private')
+    phase_values={}
+    for phase in D.PHASES:
+        raw=yaml.safe_dump({'chartOverrides':chart_binding['chartOverrides'],'tak':{'workloadIdentityPhase':phase}},sort_keys=True).encode()
+        D.require(len(raw)<=D.render_inputs.MAX_BYTES,'phase chart values exceed bound')
+        path=directory/(phase+'.yaml')
+        try:fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        except FileExistsError:
+            D.require(phase_value_bytes(path)==raw,'existing phase chart values differ')
+        else:
+            with os.fdopen(fd,'wb') as output:output.write(raw)
+        phase_values[phase]={'path':str(path),'sha256':hashlib.sha256(raw).hexdigest()}
+    return {'archive':str(archive),'archiveSHA256':archive_sha,'plan':str(plan_path),'planSHA256':digest(plan_path),'config':str(config),'configSHA256':item['sha256'],'variables':variables,
+            'chartBinding':chart_binding,'phaseValues':phase_values}
+
+
+def phase_value_bytes(path):
+    D.require(path.is_absolute() and not any(value.is_symlink() for value in (path,*path.parents))
+              and stat.S_IMODE(path.parent.stat().st_mode)==0o700,'phase chart values path differs')
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    with os.fdopen(fd,'rb') as stream:
+        info=os.fstat(stream.fileno())
+        D.require(stat.S_ISREG(info.st_mode) and info.st_size<=D.render_inputs.MAX_BYTES and stat.S_IMODE(info.st_mode)==0o600,
+                  'phase chart values are not a bounded private file')
+        raw=stream.read(D.render_inputs.MAX_BYTES+1)
+    D.require(len(raw)<=D.render_inputs.MAX_BYTES,'phase chart values exceed bound')
+    return raw
+
+
+def verify_phase_values(bound,phase):
+    entry=bound['phaseValues'][phase];path=Path(entry['path'])
+    D.require(hashlib.sha256(phase_value_bytes(path)).hexdigest()==entry['sha256'],'bound phase chart values changed')
+    return str(path)
+
 
 def deploy_command(bound,phase):
     D.require(phase in D.PHASES,'unsupported package phase')
-    argv=['uds','zarf','package','deploy',bound['archive'],'--confirm','--features','values=true']
+    argv=['uds','zarf','package','deploy',bound['archive'],'--confirm','--features','values=true','--values',verify_phase_values(bound,phase)]
     for key,value in sorted(bound['variables'].items()):argv+=['--set-variables',key+'='+str(value)]
     # The staged baseline explicitly selects the local backup owner.
-    argv+=['--set-variables','FILESYSTEM_BACKUP_OWNER=local','--set-values','tak.workloadIdentityPhase='+phase]
+    argv+=['--set-variables','FILESYSTEM_BACKUP_OWNER=local']
     return argv
 
 def declared_flags(help_text):
@@ -61,7 +98,7 @@ def declared_flags(help_text):
     return set(re.findall(r'^\s*(?:-[A-Za-z0-9],\s+)?(--[a-z][a-z0-9-]*)(?=\s|=|$)',help_text,re.MULTILINE))
 
 def cli_preflight(command):
-    for operation,flags in [('deploy',('--confirm','--features','--set-values','--set-variables')),('remove',('--confirm',))]:
+    for operation,flags in [('deploy',('--confirm','--features','--values','--set-variables')),('remove',('--confirm',))]:
         available=declared_flags(command(['uds','zarf','package',operation,'--help']))
         missing=[flag for flag in flags if flag not in available]
         D.require(not missing,'pinned Zarf '+operation+' CLI lacks required flags: '+', '.join(missing))
@@ -128,7 +165,9 @@ def command_failure_category(result):
 class PackageTrial(D.Driver):
     def __init__(self,evidence,bound):
         super().__init__(evidence);self.bound=bound;self.deadline=time.monotonic()+7200
-        self.state.update(method='package',inputBindings={key:bound[key] for key in ('archiveSHA256','planSHA256','configSHA256')},packagePhases=[],phaseEvidence=[],freshStrictAccepted=False)
+        self.state.update(method='package',inputBindings={key:bound[key] for key in ('archiveSHA256','planSHA256','configSHA256')},packagePhases=[],phaseEvidence=[],freshStrictAccepted=False,
+                          baselineChartValuesSHA256=bound['chartBinding']['chartOverridesSHA256'],
+                          phaseValuesSHA256={phase:entry['sha256'] for phase,entry in bound['phaseValues'].items()})
 
     def guard(self):
         # The base driver enforces reviewed probe/driver and ephemeral identity.
@@ -144,6 +183,9 @@ class PackageTrial(D.Driver):
     def inputs_unchanged(self):
         for path,key in [('archive','archiveSHA256'),('plan','planSHA256'),('config','configSHA256')]:
             D.require(digest(self.bound[path])==self.bound[key],'package input changed')
+        for phase in D.PHASES:verify_phase_values(self.bound,phase)
+        D.require(D.render_inputs.bind_chart_overrides(self.bound['plan'],os.environ['GITHUB_SHA'],D.ROOT)==self.bound['chartBinding'],
+                  'baseline chart source binding changed')
 
     def core_snapshot(self):
         result={}
@@ -168,7 +210,7 @@ class PackageTrial(D.Driver):
     def capture_phase(self,phase,account):
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
         verdict=super().capture_phase(alias,account,binding_extra={
-            'packageArchiveSHA256':self.bound['archiveSHA256'],'baselineValuesSHA256':self.bound['configSHA256']})
+            'packageArchiveSHA256':self.bound['archiveSHA256'],'baselineValuesSHA256':self.bound['chartBinding']['chartOverridesSHA256']})
         self.journal('package-phase-evidence-'+alias,accepted=verdict['accepted'])
         return verdict
 

@@ -21,6 +21,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const events = [];
+const contentRefs = [];
 const bot = {id:41898282, login:'github-actions[bot]', type:'Bot'};
 const prefix = '<!-- LULA_SIGNATURE:v1 -->\n## Lula Compliance Overview\n';
 const own = id => ({id,user:bot,body:prefix+'old'});
@@ -55,6 +56,8 @@ const api = {
     listFiles:async()=>({data:input.mode==='incomplete'?[]:[{filename:'mapped.xml',status:input.mode==='deleted'?'removed':'modified'}]})
   },
   repos:{getContent:async({ref})=>{
+    contentRefs.push(ref);
+    if (ref !== expected.baseSHA && ref !== expected.headSHA) throw Error('Non-SHA content reference');
     const side=ref===expected.headSHA?'head':'base';
     events.push('read:'+side);
     if (input.mode==='partial' && side==='head' || input.mode==='deleted') throw Error('API read failed');
@@ -91,7 +94,7 @@ vm.runInNewContext(executable+'\ncrawlCommand();',context);
 (async()=>{
   let failed=false;
   try {await action({postMode:input.mode==='review'?'review':'comment'});} catch {failed=true;}
-  process.stdout.write(JSON.stringify({failed,events}));
+  process.stdout.write(JSON.stringify({failed,events,contentRefs}));
 })();
 '''
 
@@ -116,6 +119,7 @@ class SafeCrawl(unittest.TestCase):
     def test_only_old_own_comments_deleted_after_successful_replacement(self):
         result = self.run_case("changed")
         self.assertFalse(result["failed"])
+        self.assertEqual(result["contentRefs"], ["b" * 40, "a" * 40])
         self.assertEqual([e for e in result["events"] if e.startswith("delete:")], ["delete:1", "delete:2"])
         self.assertLess(result["events"].index("create"), result["events"].index("delete:1"))
         self.assertLess(result["events"].index("list:2"), result["events"].index("delete:1"))
@@ -141,7 +145,7 @@ class SafeCrawl(unittest.TestCase):
                 self.assertFalse(any(e.startswith(("delete", "list")) for e in result["events"]))
 
     def test_review_mode_rejected_before_any_api_read(self):
-        self.assertEqual(self.run_case("review"), {"failed": True, "events": []})
+        self.assertEqual(self.run_case("review"), {"failed": True, "events": [], "contentRefs": []})
 
     def test_changed_or_unsupported_pr_never_mutates(self):
         for mode in ["race", "fork", "draft", "closed", "other-base", "oversize", "incomplete"]:

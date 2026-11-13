@@ -18,6 +18,7 @@ sys.path.insert(0,str(HERE))
 import resource_inputs
 import source_families
 import composition
+import native_source_snapshot
 NATIVE=HERE.parent/'kernel-native'
 sys.path.insert(0,str(NATIVE))
 spec=importlib.util.spec_from_file_location('sdk_package_native',NATIVE/'build.py')
@@ -65,19 +66,23 @@ def runtime_control_sources(selected_composition):
         [HERE/'GdalReducedProfileSmoke.java'] if selected_composition else [])
 
 def recipe():
-    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch','composition.py','patches/obj-buffer-capacity.patch','patches/gdal-reduced-profile-skip.patch','GdalReducedProfileSmoke.java','patches/obj-two-fixture-regression.patch']
+    files=['build.py','resource_inputs.py','runtime-resources.lock.json','StockLoaderSmoke.java','RuntimeResourcesSmoke.java','inputs.lock.json','notices.lock.json','patches/engine-library-public-linux.patch','patches/default-io-readonly.patch','DefaultIoReadonlySmoke.java','source_families.py','patches/gles-null-shader-lengths.patch','composition.py','native_source_snapshot.py','patches/obj-buffer-capacity.patch','patches/gdal-reduced-profile-skip.patch','GdalReducedProfileSmoke.java','patches/obj-two-fixture-regression.patch']
     return {'owned':{n:p.digest(HERE/n) for n in files},'resources_adapter':p.digest(HERE.parent/'compat/src/main/java/android/content/res/Resources.java'),'kernel_native':b.recipe(),'native_finalization_validation':composition.source_closure()}
 
-def verify_native(root,providers):
+def verify_native(root,providers,source_snapshot=None,expected_receipt_sha256=None):
+    binding=None
+    if source_snapshot is not None:
+        binding=native_source_snapshot.verify(source_snapshot,root/'complete.json',expected_receipt_sha256,p.load(HERE/'inputs.lock.json')['native_source_snapshots'])
     raw=p.load(root/'complete.json');current=b.recipe()
     if raw.get('native_translation_units')!={'core':483,'jni':159,'cesium':173} or not raw.get('fresh_native_build') or not raw.get('specified_runtime_controls_passed'):raise ValueError('actual fresh native component producer required')
-    prefixes={'CMakeLists.txt':'# Copyright 2026 uds-takserver authors\n# SPDX-License-Identifier: GPL-3.0-only\n',**{n:'// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n' for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']}}
-    if current.keys()!=raw['recipe'].keys():raise ValueError('native consumed recipe shape differs')
-    for name,digest in raw['recipe'].items():
-        data=(NATIVE/name).read_bytes()
-        if p.digest(NATIVE/name)!=digest:
-            prefix=prefixes.get(name,'').encode()
-            if not prefix or not data.startswith(prefix) or hashlib.sha256(data[len(prefix):]).hexdigest()!=digest:raise ValueError('native producer differs beyond exact reviewed license comments')
+    if binding is None:
+        prefixes={'CMakeLists.txt':'# Copyright 2026 uds-takserver authors\n# SPDX-License-Identifier: GPL-3.0-only\n',**{n:'// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n' for n in ['KernelRuntimeSmoke.java','NativeDatabaseCandidate.java','KernelThrowingLoggerCandidate.java']}}
+        if current.keys()!=raw['recipe'].keys():raise ValueError('native consumed recipe shape differs')
+        for name,digest in raw['recipe'].items():
+            data=(NATIVE/name).read_bytes()
+            if p.digest(NATIVE/name)!=digest:
+                prefix=prefixes.get(name,'').encode()
+                if not prefix or not data.startswith(prefix) or hashlib.sha256(data[len(prefix):]).hexdigest()!=digest:raise ValueError('native producer differs beyond exact reviewed license comments')
     results,errors=p.verify_all(providers)
     if errors or raw['providers']!=results:raise ValueError('actual native providers differ')
     p.check_files(root/'layout',raw['staged_sources']);p.check_files(root/'gltf-headers',raw['gltf_headers']);p.check_files(root/'gles1-declarations',raw['gles1_declarations'])
@@ -100,6 +105,8 @@ def mapped_provider(name,sha,packaged,allowed,original_project):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for n in ['native-proof','providers','source','output']:parser.add_argument('--'+n,type=Path,required=True)
+    parser.add_argument('--native-source-snapshot',type=Path,help='Explicit consumer-reviewed nonexecuted native recipe source bundle')
+    parser.add_argument('--native-proof-sha256',help='Mandatory exact receipt hash with --native-source-snapshot')
     parser.add_argument('--composition',type=Path,help='Explicit reduced GDAL composition declaration; baseline providers remain unchanged')
     parser.add_argument('--composition-sha256')
     parser.add_argument('--java-home',type=Path,required=True)
@@ -107,11 +114,14 @@ def main():
     parser.add_argument('--phase',choices=['verify','package','qualify'],default='verify')
     for n,default in [('git','git'),('patch','patch'),('nm','nm'),('readelf','readelf')]:parser.add_argument('--'+n,default=default)
     args=parser.parse_args();lock=p.load(HERE/'inputs.lock.json');providers=p.load(args.providers);roots={k:p.root_of(providers,k) for k in providers}
+    if bool(args.native_source_snapshot)!=bool(args.native_proof_sha256):raise ValueError('source bundle and expected native receipt SHA required together')
+    native_source_binding=native_source_snapshot.verify(args.native_source_snapshot,args.native_proof/'complete.json',args.native_proof_sha256,lock['native_source_snapshots']) if args.native_source_snapshot else None
     if bool(args.composition)!=bool(args.composition_sha256):raise ValueError('composition path and SHA required together')
     selected_composition=composition.inspect(args.composition,args.composition_sha256) if args.composition else None
     inputs=[HERE.parent.parent,args.native_proof,args.source,args.providers,args.java_home,*p.declared_paths(providers),*([args.resource_payloads] if args.resource_payloads else [])]
     if selected_composition:inputs.extend(selected_composition[3])
-    out=b.disjoint(args.output,inputs);before=recipe();raw,verified=verify_native(args.native_proof,providers)
+    if args.native_source_snapshot:inputs.append(args.native_source_snapshot)
+    out=b.disjoint(args.output,inputs);before=recipe();raw,verified=verify_native(args.native_proof,providers,args.native_source_snapshot,args.native_proof_sha256)
     java=args.java_home.resolve()
     for name in ['java','javac']:
         if p.digest(p.regular(java/'bin'/name))!=raw['tools'][name]['sha256']:raise ValueError('same actual qualified JDK required')
@@ -129,6 +139,7 @@ def main():
     if elf!=raw['elf_audit']:raise ValueError('actual native ABI/privacy audit differs')
     record={'recipe':before,'interpreter':{'path':str(Path(sys.executable).resolve()),'sha256':p.digest(Path(sys.executable).resolve()),'version':sys.version},'tools':{name:{'path':str(path),'sha256':p.digest(path)} for name,path in tools.items()},'jdk_tools':{name:raw['tools'][name] for name in ['java','javac']},'actual_toolchain':raw['actual_toolchain'],'original_native_producer':{'sha256':p.digest(args.native_proof/'complete.json'),'recipe':raw['recipe']},'fresh_native_build':False,'component_runtime_acceptance':False,'sdk_acceptance':False,'renderer_acceptance':False,'client_acceptance':False,'phase':args.phase}
     if selected_composition:record['native_composition']=selected_composition[1]
+    if native_source_binding:record['original_native_source_binding']=native_source_binding
     if args.phase=='verify':(out/'verified.json').write_text(json.dumps(record,indent=2)+'\n');return
     package=out/'package';package.mkdir();licenses=package/'notices';licenses.mkdir();notice_lock=p.load(HERE/'notices.lock.json')
     notice_roots={**roots,'cesium_ancestor':Path(providers['cesium']['dependency_root']),'gdal_dependency':Path(providers['gdal_jni']['dependency_root'])}
@@ -303,6 +314,7 @@ def main():
             record['composition_driver_absence_runtime_qualified']=True
         record.update(component_runtime_acceptance=True,stock_resource_loader_controls_passed=True,runtime=phases,missing_resource_negative_control=True,missing_shader_catalog_negative_control=True,runtime_resource_consumers_passed=True,negative_resource_fixture={'path':str(omitted.relative_to(out)),'native_payloads':False,'sdk_artifact':False,'omitted_genuine_shader':shader},owned_runtime_classes=p.inventory(runtime_classes))
     if selected_composition and composition.inspect(args.composition,args.composition_sha256)[1]['products']!=selected_composition[1]['products']:raise ValueError('composition products changed')
+    if native_source_binding and native_source_snapshot.verify(args.native_source_snapshot,args.native_proof/'complete.json',args.native_proof_sha256,lock['native_source_snapshots'])!=native_source_binding:raise ValueError('historical source binding changed')
     again,errors=p.verify_all(providers)
     if errors or again!=verified:raise ValueError('provider inputs changed')
     b.toolchain.verify(raw['actual_toolchain'])

@@ -62,5 +62,13 @@
     "after": "d2f350520559f7b53f14cbe621a6474b25b4630b574ae6656edca90911360a7c",
     "patch_sha256": "e0aa5188a33b5268eaf92a104ea181bdc9799e787d64c4149d115ccf124bd6b3",
     "dependency": "separately reviewed kernel-regressions source (draft #506)"
+  },
+  "native_source_snapshots": {
+    "f8c05d74060ede8407f6cd9fbdf7c9dc0071c4cf232e9dd40409e054f80bb63b": {
+      "profile": "public-kernel-native-45-v1",
+      "source_count": 45,
+      "git_source_commit": "3780209d7bed4407568cfac902977fecef58727a",
+      "native_recipe_sha256": "2af1857972d05cb7edfd949b42c37dc835b431c7ea475c1560081df4c679f01f"
+    }
   }
 }

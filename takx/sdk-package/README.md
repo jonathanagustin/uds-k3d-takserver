@@ -214,3 +214,23 @@ original success. Both variants hash the current transitive validator/producer
 source closure into the SDK recipe and keep runtime driver-absence acceptance
 pending until actual SDK qualification. These source APIs have offline guard
 coverage; neither constitutes a fresh public recipe runtime acceptance.
+
+### Explicit historical native-source binding
+
+A retained native producer can be bound through `--native-source-snapshot DIR`
+and `--native-proof-sha256 SHA` together. This does not import or execute code
+from the supplied directory. The current SDK consumer pins a known portable
+source-bundle manifest and its complete original recipe hash in `inputs.lock.json`;
+the invocation separately pins the exact native completion receipt. Unrecognized
+bundles, another recipe, missing/changed/extra files, symbolic links and writable
+source members or directories are rejected before producer replay.
+
+The reviewed `public-kernel-native-45-v1` bundle has 41 exact Git blobs from
+`3780209d7bed4407568cfac902977fecef58727a` and four explicit preimages obtained by
+removing only the already reviewed literal GPL notice prefix. Every resulting
+byte hash equals the original native recipe. The manifest records each origin;
+this is not claimed to be one unchanged historical Git checkout. The receipt and
+current source files remain untouched. There is no runtime comment normalization
+or general source-hash exception. Existing provider, staged-source, toolchain and
+native ELF checks remain mandatory, and the new SDK recipe independently hashes
+its current consumer/helper closure.

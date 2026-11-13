@@ -99,7 +99,13 @@ def validate_policies(package, policies, network_policies, baseline_network):
             continue
         for rule in spec.get('rules', []):
             operations = [t.get('operation', {}) for t in rule.get('to', [])]
-            ports = {int(p) for op in operations for p in op.get('ports', []) if str(p).isdigit()}
+            # Validate raw ports before excluding a disjoint rule. Filtering out
+            # wildcard/malformed values first can hide an applicable ALLOW.
+            require(all(isinstance(op, dict) and isinstance(op.get('ports'), list) and op['ports'] and
+                        all(type(port) is str and re.fullmatch(r'[1-9][0-9]*', port) and
+                            1 <= int(port) <= 65535 for port in op['ports']) for op in operations),
+                    'extra, wildcard or invalid operation port')
+            ports = {int(p) for op in operations for p in op['ports']}
             applicable = [key for key, _ in relevant if not operations or not ports or key[1] in ports]
             if not applicable:
                 continue

@@ -138,7 +138,28 @@ class SourceAndCacheGuards(unittest.TestCase):
         lock['revision'] = 'different source'
         self.assertNotEqual(first, build.fingerprint(lock, {'tool': 'one'})[0])
         with patch.object(build, 'digest', return_value='changed recipe or probe'):
-            self.assertNotEqual(first, build.fingerprint(lock, {'tool': 'one'})[0])
+            with self.assertRaisesRegex(ValueError, 'changed GDAL Java exception profile'):
+                build.fingerprint(lock, {'tool': 'one'})
+
+    def test_exception_profile_refuses_changed_patch_and_unknown_source_members(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'patches').mkdir()
+            name = 'patches/gdal-java-pending-exceptions-v2.patch'
+            (root / name).write_bytes((HERE / name).read_bytes())
+            profile = json.loads((HERE / 'jni-exceptions-profile-v2.json').read_text())
+            path = root / 'jni-exceptions-profile-v2.json'
+            path.write_text(json.dumps(profile))
+            with patch.object(build, 'HERE', root):
+                self.assertEqual(build.jni_profile(), profile)
+                (root / name).write_bytes(b'changed source patch')
+                with self.assertRaisesRegex(ValueError, 'changed GDAL Java exception profile'):
+                    build.jni_profile()
+                (root / name).write_bytes((HERE / name).read_bytes())
+                profile['sources']['unreviewed.i'] = profile['sources']['swig/include/java/callback.i']
+                path.write_text(json.dumps(profile))
+                with self.assertRaisesRegex(ValueError, 'changed GDAL Java exception profile'):
+                    build.jni_profile()
 
 
 if __name__ == '__main__':

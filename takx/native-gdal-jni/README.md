@@ -4,8 +4,10 @@ This opt-in harness consumes the completed local KernelScene GIS producer and
 GIS Java source-generation receipts. It verifies the original pinned sources,
 configuration, tools, installed products, all GDAL objects, and archive object
 closure with `kernel-scene/kernel.py`; it verifies the GIS Java recipe and every
-recorded output with `kernel-java/build.py`. It never rebuilds GDAL or changes
-its source algorithms, reduced driver profile, accepted receipts, or tools.
+recorded output with `kernel-java/build.py`. The default mode links the unchanged reduced GDAL archive. The explicit
+[KML profile](KML_PROFILE.md) compiles a fresh GDAL provider with genuine KML
+drivers and corrected GIS wrappers; it does not rebuild Kernel translation
+units or edit any completed SDK.
 
 Run `python3 takx/native-gdal-jni/build.py --help` for required explicit paths.
 The output must be new, external, and separate from all inputs. Commands run

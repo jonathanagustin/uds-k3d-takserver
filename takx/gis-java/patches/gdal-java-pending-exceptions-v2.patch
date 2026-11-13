@@ -1,0 +1,162 @@
+--- a/swig/include/java/typemaps_java.i
++++ b/swig/include/java/typemaps_java.i
+@@ -10,6 +10,52 @@
+ 
+ %include "arrays_java.i";
+ %include "typemaps.i"
++
++/* Scoped input ownership for C++ JNI wrappers, including early typemap returns. */
++%{
++#include "cpl_string.h"
++#ifdef __cplusplus
++namespace {
++class GdalJavaScopedUtfChars {
++    JNIEnv *env_;
++    jstring string_;
++    const char *chars_;
++public:
++    GdalJavaScopedUtfChars(JNIEnv *env, jstring string)
++        : env_(env), string_(string), chars_(string ? env->GetStringUTFChars(string, 0) : NULL) {}
++    ~GdalJavaScopedUtfChars() { if (chars_) env_->ReleaseStringUTFChars(string_, chars_); }
++    const char *get() const { return chars_; }
++    GdalJavaScopedUtfChars(const GdalJavaScopedUtfChars &) = delete;
++    GdalJavaScopedUtfChars &operator=(const GdalJavaScopedUtfChars &) = delete;
++};
++class GdalJavaScopedOptions {
++    char ***slot_;
++public:
++    explicit GdalJavaScopedOptions(char ***slot) : slot_(slot) {}
++    ~GdalJavaScopedOptions() { CSLDestroy(*slot_); }
++    GdalJavaScopedOptions(const GdalJavaScopedOptions &) = delete;
++    GdalJavaScopedOptions &operator=(const GdalJavaScopedOptions &) = delete;
++};
++}
++#define GDAL_JAVA_CSL_TAIL_CLEANUP(list) ((void)0)
++#else
++#define GDAL_JAVA_CSL_TAIL_CLEANUP(list) CSLDestroy(list)
++#endif
++%}
++#ifdef __cplusplus
++%typemap(in, noblock=1) char * {
++  GdalJavaScopedUtfChars $1_utf_guard(jenv, $input);
++  $1 = ($1_ltype)$1_utf_guard.get();
++  if ($input && !$1) return $null;
++}
++%typemap(in, noblock=1) const char * {
++  GdalJavaScopedUtfChars $1_utf_guard(jenv, $input);
++  $1 = ($1_ltype)$1_utf_guard.get();
++  if ($input && !$1) return $null;
++}
++%typemap(freearg, noblock=1) char * "";
++%typemap(freearg, noblock=1) const char * "";
++#endif
+ 
+ %apply (int) {VSI_RETVAL};
+ 
+@@ -497,6 +543,8 @@
+ 
+ %typemap(out,fragment="OGRErrMessages") OGRErr
+ {
++  /* Preserve an original callback Throwable before native-error translation. */
++  if (jenv->ExceptionCheck()) return $null;
+   /* %typemap(out) OGRErr */
+   if (result != 0 && bUseExceptions) {
+     SWIG_JavaThrowException(jenv, SWIG_JavaRuntimeException,
+@@ -1023,44 +1071,64 @@
+  * Typemaps maps char** arguments from a Vector
+  ***************************************************/
+ 
+-%typemap(in) char **options
+-{
+-  /* %typemap(in) char **options */
++%typemap(in, noblock=1) char **options
++{
++  /* %typemap(in, noblock=1) char **options */
+   $1 = NULL;
++#ifdef __cplusplus
++  GdalJavaScopedOptions $1_options_guard(&$1);
++#endif
+   if($input != 0) {
+     const jclass vector = jenv->FindClass("java/util/Vector");
++    if (jenv->ExceptionCheck()) return $null;
+     const jclass enumeration = jenv->FindClass("java/util/Enumeration");
++    if (jenv->ExceptionCheck()) return $null;
+     const jclass stringClass = jenv->FindClass("java/lang/String");
++    if (jenv->ExceptionCheck()) return $null;
+     const jmethodID elements = jenv->GetMethodID(vector, "elements",
+       "()Ljava/util/Enumeration;");
++    if (jenv->ExceptionCheck()) return $null;
+     const jmethodID hasMoreElements = jenv->GetMethodID(enumeration,
+       "hasMoreElements", "()Z");
++    if (jenv->ExceptionCheck()) return $null;
+     const jmethodID getNextElement = jenv->GetMethodID(enumeration,
+       "nextElement", "()Ljava/lang/Object;");
++    if (jenv->ExceptionCheck()) return $null;
+     if(vector == NULL || enumeration == NULL || elements == NULL ||
+         hasMoreElements == NULL || getNextElement == NULL) {
+           fprintf(stderr, "Could not load (options **) jni types.\n");
+           return $null;
+         }
+-    for (jobject keys = jenv->CallObjectMethod($input, elements);
+-          jenv->CallBooleanMethod(keys, hasMoreElements) == JNI_TRUE;) {
++    jobject keys = jenv->CallObjectMethod($input, elements);
++    if (jenv->ExceptionCheck()) return $null;
++    if (keys == NULL) {
++      SWIG_JavaThrowException(jenv, SWIG_JavaNullPointerException, "Vector.elements() returned null");
++      return $null;
++    }
++    while (true) {
++      const jboolean more = jenv->CallBooleanMethod(keys, hasMoreElements);
++      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
++      if (more != JNI_TRUE) break;
+       jstring value = (jstring)jenv->CallObjectMethod(keys, getNextElement);
++      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
+       if (value == NULL || !jenv->IsInstanceOf(value, stringClass))
+       {
+-          CSLDestroy($1);
++          GDAL_JAVA_CSL_TAIL_CLEANUP($1);
+           SWIG_JavaThrowException(jenv, SWIG_JavaIllegalArgumentException, "an element in the vector is not a string");
+           return $null;
+       }
+       const char *valptr = jenv->GetStringUTFChars(value, 0);
+-      $1 = CSLAddString($1,  valptr);
++      if (valptr == NULL) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
++      $1 = CSLAddString($1, valptr);
+       jenv->ReleaseStringUTFChars(value, valptr);
++      jenv->DeleteLocalRef(value);
+     }
+   }
+ }
+ %typemap(freearg) char **options
+ {
+   /* %typemap(freearg) char **options */
+-  CSLDestroy( $1 );
++  GDAL_JAVA_CSL_TAIL_CLEANUP($1);
+ }
+ %typemap(out) char **options
+ {
+--- a/swig/include/java/callback.i
++++ b/swig/include/java/callback.i
+@@ -45,13 +45,20 @@
+ {
+     JavaProgressData* psProgressInfo = (JavaProgressData*)pData;
+     JNIEnv *jenv = psProgressInfo->jenv;
++    // GDAL can call repeatedly after cancellation; preserve the original Throwable.
++    if (jenv->ExceptionCheck()) return 0;
+     int ret;
+     const jclass progressCallbackClass = jenv->FindClass("org/gdal/gdal/ProgressCallback");
++    if (jenv->ExceptionCheck()) return 0;
+     const jmethodID runMethod = jenv->GetMethodID(progressCallbackClass, "run", "(DLjava/lang/String;)I");
+-    jstring temp_string = jenv->NewStringUTF(pszMessage);
++    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
++    jstring temp_string = jenv->NewStringUTF(pszMessage ? pszMessage : "");
++    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
+     ret = jenv->CallIntMethod(psProgressInfo->pJavaCallback, runMethod, dfComplete, temp_string);
++    const bool failed = jenv->ExceptionCheck();
+     jenv->DeleteLocalRef(temp_string);
+-    return ret;
++    jenv->DeleteLocalRef(progressCallbackClass);
++    return failed ? 0 : ret;
+ }
+ %}
+ 

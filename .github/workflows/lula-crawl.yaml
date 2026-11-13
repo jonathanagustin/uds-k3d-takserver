@@ -106,5 +106,6 @@ jobs:
         run: |
           set -euo pipefail
           export OWNER="${GITHUB_REPOSITORY%%/*}" REPO="${GITHUB_REPOSITORY#*/}"
-          export LULA_PREFLIGHT_JSON="$(cat "${RUNNER_TEMP}/lula-preflight.json")"
+          LULA_PREFLIGHT_JSON="$(cat "${RUNNER_TEMP}/lula-preflight.json")"
+          export LULA_PREFLIGHT_JSON
           node "${RUNNER_TEMP}/lula-tools/node_modules/lula2/dist/index.safe.mjs" crawl --post-mode=comment

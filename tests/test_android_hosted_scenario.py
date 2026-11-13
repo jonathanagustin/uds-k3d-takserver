@@ -363,6 +363,50 @@ class ActualUIStates(unittest.TestCase):
                 with self.assertRaises(ValueError): device.capture('map')
             self.assertFalse((Path(directory)/'map.png').exists())
 
+    def test_verified_coordinate_dialog_uses_captured_cancel_button_before_pan(self):
+        tree=ET.parse(ROOT/'atak/scenarios/fixtures/atak-coordinate-dialog.xml').getroot()
+        device=ui.AndroidUI('/unused');closed=[]
+        values=[ET.Element('node',text='TEST'),ui.select(tree,rid='coordDialogDDLatText'),
+                ui.select(tree,rid='coordDialogDDLonText')]
+        def tap(**selector):
+            if selector.get('rid')=='button2':
+                self.assertEqual(selector,{'rid':'button2','text':'Cancel'})
+                ui.select(tree,**selector);closed.append(True)
+            elif selector.get('rid')=='cotInfoPanButton':self.assertEqual(closed,[True])
+        with patch.object(device,'find',side_effect=values),patch.object(device,'tap',side_effect=tap) as tapped, \
+                patch.object(device,'capture') as capture,patch.object(device,'adb',side_effect=AssertionError('BACK must not dismiss non-cancelable dialog')):
+            device.verify_point('TEST',0.,0.,'imported')
+        self.assertEqual(tapped.call_args_list[-2:],[unittest.mock.call(rid='button2',text='Cancel'),
+                                                   unittest.mock.call(rid='cotInfoPanButton')])
+        self.assertEqual(capture.call_args_list,[unittest.mock.call('imported-coordinates'),unittest.mock.call('imported-map')])
+
+    def test_ambiguous_coordinate_cancel_control_fails_before_pan(self):
+        tree=ET.parse(ROOT/'atak/scenarios/fixtures/atak-coordinate-dialog.xml').getroot()
+        cancel=ui.select(tree,rid='button2',text='Cancel');tree.append(copy.deepcopy(cancel))
+        device=ui.AndroidUI('/unused')
+        values=[ET.Element('node',text='TEST'),ui.select(tree,rid='coordDialogDDLatText'),
+                ui.select(tree,rid='coordDialogDDLonText')]
+        def tap(**selector):
+            if selector.get('rid')=='button2':ui.select(tree,**selector)
+            if selector.get('rid')=='cotInfoPanButton':self.fail('ambiguous modal must not pan')
+        with patch.object(device,'find',side_effect=values),patch.object(device,'tap',side_effect=tap),patch.object(device,'capture') as capture:
+            with self.assertRaises(LookupError):device.verify_point('TEST',0.,0.,'return')
+        self.assertEqual(capture.call_args_list,[unittest.mock.call('return-coordinates')])
+
+    def test_missing_coordinate_cancel_control_fails_before_pan(self):
+        tree=ET.parse(ROOT/'atak/scenarios/fixtures/atak-coordinate-dialog.xml').getroot()
+        for node in tree.iter('node'):
+            if node.get('resource-id')=='android:id/button2':node.set('enabled','false')
+        device=ui.AndroidUI('/unused')
+        values=[ET.Element('node',text='TEST'),ui.select(tree,rid='coordDialogDDLatText'),
+                ui.select(tree,rid='coordDialogDDLonText')]
+        def tap(**selector):
+            if selector.get('rid')=='button2':ui.select(tree,**selector)
+            if selector.get('rid')=='cotInfoPanButton':self.fail('must not pan before modal dismissal')
+        with patch.object(device,'find',side_effect=values),patch.object(device,'tap',side_effect=tap),patch.object(device,'capture') as capture:
+            with self.assertRaises(LookupError):device.verify_point('TEST',0.,0.,'return')
+        self.assertEqual(capture.call_args_list,[unittest.mock.call('return-coordinates')])
+
     def test_wrong_android_coordinates_fail_before_map_evidence(self):
         device = ui.AndroidUI('/unused')
         values = [ET.Element('node', text='TEST'), ET.Element('node', text='1'), ET.Element('node', text='0')]

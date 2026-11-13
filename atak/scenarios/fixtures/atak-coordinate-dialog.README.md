@@ -1,0 +1,5 @@
+# Coordinate dialog capture
+
+Captured from the failed hosted Android scenario in run `43470881345`, artifact `14062109945`, on source `7b602102`. The original XML SHA-256 is `bf19b1faeffc99aac6ef07eee8e309f7a9362d6e2ba37b03b2b332cd9f250793`; the checked-in copy adds this project's XML license comment and retains only hierarchy structure, resource IDs, classes, visible text/descriptions, enabled/visibility flags, and bounds. Other attributes are removed. The fields contain the synthetic test point at latitude and longitude zero.
+
+Official ATAK source `9f6893dd657feacc35ec5de03dad721c2e44170e`, `atak/ATAK/app/src/main/java/com/atakmap/android/gui/coordinateentry/CoordinateEntryCapability.java`, defines the negative Cancel button and calls `dialog.setCancelable(false)`. This captured hierarchy confirms its accessible `android:id/button2` control. Use it to cancel the coordinate editor after reading the point, then wait for the marker pane's pan control. This fixture records a failed run and does not grant live acceptance.

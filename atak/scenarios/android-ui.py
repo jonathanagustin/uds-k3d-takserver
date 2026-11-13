@@ -17,7 +17,7 @@ radial = importlib.util.module_from_spec(radial_spec)
 radial_spec.loader.exec_module(radial)
 
 FIXED_UI_TEXT = {'Tools', 'All tools & plugins', 'Import', 'Overlays', 'Select Import Type',
-                 'Suggested Import Strategy', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'DD', 'Broadcast'}
+                 'Suggested Import Strategy', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'Cancel', 'DD', 'Broadcast'}
 
 
 def select(tree, *, rid=None, text=None):
@@ -287,7 +287,9 @@ class AndroidUI:
             raise ValueError('Android coordinates differ from expected point')
         self.capture(evidence + '-coordinates')
         self.action = 'coordinates-close-and-pan'
-        self.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        # Official CoordinateEntryCapability sets this dialog non-cancelable;
+        # BACK cannot dismiss it. Cancel preserves the already-verified point.
+        self.tap(rid='button2', text='Cancel')
         self.tap(rid='cotInfoPanButton')
         self.capture(evidence + '-map')
 

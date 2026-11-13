@@ -91,7 +91,7 @@ export default defineConfig({
     starlight({
       title: 'TAK Server on UDS',
       description:
-        'TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.',
+        'All-in-one solution for packaging, deploying, and operating TAK Server',
       // Use the canonical wordmark in the header; use the matching theme-aware field mark favicon.
       logo: {
         light: '../assets/tak-on-uds-light.svg',

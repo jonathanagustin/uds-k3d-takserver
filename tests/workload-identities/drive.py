@@ -457,7 +457,7 @@ class Driver:
 
     def authorization_policy_list(self, namespace):
         require(namespace in (NS,'istio-system'),'unsupported policy inventory namespace')
-        # kubectl get's generic printer rebuilds a core/v1 List with empty
+        # The generic kubectl printer rebuilds a core/v1 List with empty
         # ListMeta (kubectl v0.37.1 pkg/cmd/get/get.go745-755). Raw preserves
         # the API server's actual List resourceVersion; never synthesize one.
         path='/apis/security.istio.io/v1/namespaces/'+namespace+'/authorizationpolicies'

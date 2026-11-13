@@ -370,7 +370,7 @@ async function writePage(page, byPath, videos, headings) {
   const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
   const local = titleLinkLabels(dropGithubOnly(dropFirstHeading(body)), page.src, headings);
   let content = rewriteLinks(local, page.src, byPath);
-  content = embedDemoVideos(content, videos);
+  content = embedDemoVideos(content, videos, assetBase);
   const steps = unreleased && page.src.startsWith('docs/how-to/') ? howToSteps(content) : null;
   const markdown = `${frontmatter(page, body)}${steps ?? content}`;
   const destination = path.join(outRoot, `${page.slug}.${steps ? 'mdx' : 'md'}`);

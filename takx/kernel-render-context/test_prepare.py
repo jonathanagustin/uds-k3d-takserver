@@ -15,6 +15,18 @@ SPEC.loader.exec_module(p)
 
 
 class SourceGuards(unittest.TestCase):
+    def test_cpu_control_extracts_one_unchanged_production_class_only(self):
+        spec = importlib.util.spec_from_file_location('worker_control', Path(__file__).with_name('worker_retirement_control.py'))
+        control = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(control)
+        start = '    class RetirableWorker final : public ControlWorker {'
+        end = '    struct ContextWorkers {'
+        body = start+'\npublic: int actual_value = 17;\n    };\n'
+        self.assertEqual(control.wrapper_source('prefix\n'+body+end+'suffix'), body)
+        for invalid in (body, end+body, body+body+end, body+end+end):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                control.wrapper_source(invalid)
+
     def test_owned_contract_and_exact_order(self):
         lock, data = p.load_contract()
         self.assertEqual(p.digest(data), lock['context_patch_sha256'])

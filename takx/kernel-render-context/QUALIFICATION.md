@@ -6,6 +6,35 @@ remains unqualified.
 The actual upstream identity remains Kernel 8.30.5 at official commit
 9f6893dd657feacc35ec5de03dad721c2e44170e.
 
+## Bounded worker retirement regression
+
+The pinned `ControlWorkerImpl::doAnyWork` returns `TE_TimedOut` after consuming
+its requested work budget, even when every executed Work completed successfully.
+The retirement wrapper already closes submissions and cancels remaining queued
+Work after that bounded drain. Propagating its budget status then incorrectly
+throws from JNI and prevents the remaining context cleanup. Normalize only that
+expected drain status alongside the existing Done/Interrupted cases; cancellation
+and interrupt errors continue to propagate.
+
+The CPU control compiled the exact extracted production wrapper with eleven
+complete official native units and their verified header closure, without
+function garbage collection or substitute native dependencies. Before the fix it
+exited 18 with `retirement=14 expected=0`, after confirming one completed Work,
+one cancelled Work, rejected foreign/stale submissions and preserved genuine
+delegate errors. The first failed executable and its output remain separate.
+The corrected control exits normally with `retirement=0 expected=0` and the same
+completion/cancellation/error controls. Its runnable entrypoint and exact-source
+checks are documented in README. The full 57-path source projection also passes.
+The final control receipt is
+`19d9e13d533654be7f9d3c074ab6476c895787e0fecae0f8a5493d14f83279ab`;
+it binds 29 official source/header files, the producer/contracts, compiler,
+27 actual commands and all compiled outputs.
+
+This is a CPU regression result only. It has not rerun the failed headed
+lifecycle, rebuilt Core/JNI, qualified the later unpublished Java callback
+candidate, or established renderer/context-recreation acceptance. The prior
+graphics failure and every headed gate below remain open.
+
 The patch targets TAKX's actual stop/release, current replacement context,
 setRenderContext, configure, start sequence. This is a project-defined lifecycle;
 it is not evidence that the unavailable newer private Kernel implementation was

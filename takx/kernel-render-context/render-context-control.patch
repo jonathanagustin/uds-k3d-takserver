@@ -509,7 +509,7 @@ index 41016bf..68d8ed2 100644
 +            // other threads were rejected by beginRetirement(). One Work can
 +            // exceed this soft budget; qualification also has a hard process cap.
 +            TAKErr result=old ? old->doAnyWork(100) : TE_Ok;
-+            if (result==TE_Done || result==TE_Interrupted) result=TE_Ok;
++            if (result==TE_Done || result==TE_Interrupted || result==TE_TimedOut) result=TE_Ok;
 +            std::vector<std::shared_ptr<Work>> pending;
 +            {
 +                std::lock_guard<std::mutex> lock(mutex);

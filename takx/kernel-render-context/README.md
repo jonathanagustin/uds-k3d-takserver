@@ -78,3 +78,20 @@ sources, acquire dependencies, start Java or open a display:
 ```sh
 python3 -B -m unittest discover -s takx/kernel-render-context -p test_prepare.py -v
 ```
+
+The separate opt-in CPU worker regression control requires cached official source
+and this profile's final prepared source projection:
+
+```sh
+python3 -B takx/kernel-render-context/worker_retirement_control.py \
+  --official-source /path/to/cached-official-git \
+  --prepared-source /path/to/new-source-output/source \
+  --output /path/to/new-worker-control --cxx /tools/g++
+```
+
+It extracts the production `RetirableWorker` class without edits and compiles it
+with all eleven complete official Work/thread/platform/logging/string units and
+their verified local header closure. It uses genuine Kernel Work and control
+queues; an explicit error delegate checks that real errors are still propagated.
+No engine library, JNI, renderer or OpenGL context is built or exercised. The
+control runs no source acquisition and cannot qualify the headed lifecycle.

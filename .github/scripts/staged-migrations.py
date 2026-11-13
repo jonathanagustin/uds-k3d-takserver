@@ -450,7 +450,7 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'retained-object-conditionally-removed')) | frozenset(prefix + alias for prefix in
+    'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
 
@@ -474,6 +474,15 @@ def identity_progress(directory):
                     stage = {'stage': entry['stage']}
                     if entry.get('phase') in IDENTITY_ALIASES:
                         stage['phase'] = entry['phase']
+                    if entry['stage'] in ('retained-sentinel-start', 'retained-sentinel-exec'):
+                        require(entry.get('operation') in ('create','read','remove') and
+                                entry.get('namespace') in ('takserver','cloudtak'), 'invalid sentinel scope')
+                        stage.update(operation=entry['operation'],namespace=entry['namespace'])
+                        if entry['stage']=='retained-sentinel-exec':
+                            status=entry.get('exitStatus')
+                            require((status is None or type(status) is int and -255<=status<=255) and
+                                    type(entry.get('stderrPresent')) is bool, 'invalid sentinel result')
+                            stage.update(exitStatus=status,stderrPresent=entry['stderrPresent'])
                     require(len(item['stages']) < 200, 'public progress stage bound')
                     item['stages'].append(stage)
             item.update(status='observed', journalSHA256=sha(path))

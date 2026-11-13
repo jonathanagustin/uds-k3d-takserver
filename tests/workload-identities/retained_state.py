@@ -91,6 +91,7 @@ def mount(driver,pvc):
 
 def sentinel_exec(driver,operation,namespace,pod,container,args,payload=None):
     require(operation in ('create','read','remove') and namespace in APP_RELEASES,'unsupported sentinel operation/scope')
+    driver.journal('retained-sentinel-start',operation=operation,namespace=namespace)
     result=driver.exec(pod,container,args,payload,namespace=namespace)
     # Fixed bounded facts only: never publish remote stderr, paths or Pod names.
     status=result.returncode
@@ -99,6 +100,17 @@ def sentinel_exec(driver,operation,namespace,pod,container,args,payload=None):
                    stderrPresent=bool(result.stderr.strip()))
     return result
 
+def sentinel_create_script(path,sentinel):
+    # Fixed predicate statuses: 61 missing directory, 62 symlink, 63 unwritable,
+    # 64 existing sentinel, 65 write failure. No remote text is evidence.
+    directory=shlex.quote(path);target=shlex.quote(sentinel)
+    return ('umask 077; set -o noclobber; '
+            'if test -L '+directory+'; then exit 62; fi; '
+            'if ! test -d '+directory+'; then exit 61; fi; '
+            'if ! test -w '+directory+'; then exit 63; fi; '
+            'if test -e '+target+' || test -L '+target+'; then exit 64; fi; '
+            'if ! cat > '+target+'; then exit 65; fi')
+
 def capture(driver):
     origin=hooks(driver);records=[]
     for namespace in APP_RELEASES:
@@ -106,7 +118,7 @@ def capture(driver):
         for pvc in driver.get('persistentvolumeclaims',namespace=namespace)['items']:
             rec=resource_record(pvc);rec['parent']=claim_parent(driver,pvc);pod,container,path=mount(driver,pvc)
             sentinel=path.rstrip('/')+'/.uds-'+driver.state['trialID'];token=sha({'uid':rec['uid'],'trial':driver.state['trialID']})+'\n'
-            script='umask 077; set -o noclobber; test -d '+shlex.quote(path)+'; test ! -L '+shlex.quote(path)+'; cat > '+shlex.quote(sentinel)
+            script=sentinel_create_script(path,sentinel)
             result=sentinel_exec(driver,'create',namespace,pod,container,['/bin/bash','-ceu',script],token)
             require(result.returncode==0 and not result.stderr.strip(),'could not create exact owned PVC data sentinel')
             rec.update(sentinel=sentinel,sentinelSHA256=hashlib.sha256(token.encode()).hexdigest());records.append(rec)

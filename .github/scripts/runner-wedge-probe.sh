@@ -47,7 +47,6 @@ if [[ "${WEDGE_PROBE_INNER:-}" != 1 ]]; then
   exit 0
 fi
 
-wedged=0
 network_stalled=false
 # A TERM-only timeout can itself wait forever for a blocked child. Escalate
 # to KILL after one second. This bounds the probe process; it cannot recover
@@ -59,7 +58,6 @@ case "${route_status}" in
   124|137)
     echo "ip -4 route did not answer within 5 seconds."
     network_stalled=true
-    wedged=1
     ;;
   *) echo "Routing probe was inconclusive (exit ${route_status})." ;;
 esac
@@ -67,18 +65,8 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   echo "network-stalled=${network_stalled}" >> "${GITHUB_OUTPUT}"
 fi
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hung="$(sudo -n timeout --kill-after=1s 10s dmesg -T 2>/dev/null |
-  "${here}/redact-then-filter.sh" \
-    --grep 'blocked for more than [0-9]+ seconds|hung_task|rtnl_lock' --tail 10 || true)"
-if [[ -n "${hung}" ]]; then
-  echo "Kernel hung-task lines:"
-  echo "${hung}"
-  wedged=1
-fi
-
-if [[ "${wedged}" -eq 1 ]]; then
-  echo "::warning::This runner matches the network wedge in issue #300 (kernel=$(uname -r) ImageVersion=${ImageVersion:-unknown}). The failure may be the runner, not the product. Rerun the failed job once and add this run to https://github.com/jonathanagustin/uds-takserver/issues/300."
-else
-  echo "No sign of the #300 runner wedge."
-fi
+# Kernel collection has its own finite command/output bounds. It captures full
+# traces, redacts complete streams, and claims SysRq-w once only when routing
+# actually timed out. The outer process-group deadline remains the final bound.
+python3 -B "${here}/runner-wedge-kernel.py" --network-stalled "${network_stalled}" || true
 exit 0

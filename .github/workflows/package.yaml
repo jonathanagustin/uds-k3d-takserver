@@ -56,6 +56,8 @@ on:
       - ".github/workflows/scan.yaml"
       - ".github/scripts/full-core-paths.sh"
       - ".github/scripts/runtime-paths.sh"
+      - ".github/scripts/runner-wedge-probe.sh"
+      - ".github/scripts/runner-wedge-kernel.py"
       - ".github/scripts/install-reuse-shadow.py"
       - ".github/scripts/ci-apt.py"
       - ".github/scripts/check-docs-browser.py"

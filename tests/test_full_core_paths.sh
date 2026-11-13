@@ -46,8 +46,16 @@ check true pull_request false "charts/takserver/dashboards/takserver.json"
 check true pull_request false "bundle/full/uds-config.yaml"
 check true pull_request false "bundle/uds-bundle.yaml"
 check true pull_request false ".github/workflows/full-core.yaml"
+check true pull_request false ".github/scripts/full-core-paths.sh"
 check true pull_request false ".github/scripts/summarize-coreconfig.py"
-check true pull_request false ".github/scripts/runner-wedge-probe.sh"
+check false pull_request false ".github/scripts/runner-wedge-probe.sh"
+check false pull_request false ".github/scripts/runner-wedge-kernel.py"
+check false push false $'.github/scripts/runner-wedge-probe.sh\n.github/scripts/runner-wedge-kernel.py'
+check true pull_request false $'.github/scripts/runner-wedge-kernel.py\n.github/scripts/deploy-slim-core.sh'
+check true pull_request false $'.github/scripts/runner-wedge-probe.sh\n.github/scripts/node-agent-ready.sh'
+check true pull_request false $'.github/scripts/runner-wedge-probe.sh\ncharts/takserver/templates/uds-package.yaml'
+check true schedule false ".github/scripts/runner-wedge-kernel.py"
+check true pull_request true ".github/scripts/runner-wedge-probe.sh"
 check true pull_request false ".github/scripts/redact-logs.py"
 check true pull_request false ".github/scripts/stage-sanitized-logs.sh"
 check true pull_request false ".github/scripts/redact-then-filter.sh"

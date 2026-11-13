@@ -56,6 +56,31 @@ still applies and can truncate later evidence. On the observed hosted node,
 `k3s crictl` returned `No help topic for 'crictl'`; this is not a claim that all
 K3s 1.37 distributions removed the wrapper.
 
+After all selected agents' primary logs, the helper may use any remaining
+30-second capture budget for at most two agent-to-API snapshots. A validated
+current `zarf/agent-hook-*` Pod identity selects its existing `server` container;
+`/zarf tools kubectl` reads only the `velero` Namespace UID using the container's
+normal in-cluster identity and network path. Both kubectl requests have a
+two-second request limit and the exec command has a three-second outer limit.
+The outer kubectl request includes exec establishment; elapsed time includes
+process startup and exec transport plus the inner lookup, not pure API GET
+latency.
+No token, kubeconfig, Secret, environment, or new diagnostic Pod is read or
+exported. The snapshot prints only the selected Pod namespace/name/UID/node/service
+account, elapsed milliseconds, exit status, outcome and a valid Namespace UID.
+Exec stderr and unsuccessful or malformed stdout are discarded wholesale.
+Unavailable execution, timeout and combined exec/lookup failure are distinct;
+a generic failure cannot establish whether exec or the nested API call failed.
+
+These are explicitly **postfailure snapshots**, not latency measurements or
+causal evidence for the earlier admission request. They cannot recover an
+AdmissionReview UID that official Zarf 0.88 never logged. Agent Pod metadata
+and the later exec are not atomic; a Pod replacement or expired exec route can
+make the snapshot unavailable. The unchanged global capture deadline may omit
+snapshots entirely; probes never precede or displace primary evidence. No
+admission bypass, retry, probe relaxation, audit configuration or global
+timeout change is introduced.
+
 Source contracts:
 
 - [Zarf v0.88.0 deployment](https://github.com/zarf-dev/zarf/blob/v0.88.0/packages/zarf-agent/chart/templates/deployment.yaml): `server` container and `agent-hook` pod label.
@@ -119,3 +144,5 @@ TLS and non-HTTP failures still stop deployment; credentials/query/fragment
 URLs are rejected without logging their values. No retry or TLS verification
 bypass is used. This removes the unrelated GitHub Zen dependency; the prior
 host TLS EOF cause remains unknown.
+
+Snapshot fixtures: `python3 -B -m unittest tests.test_upgrade_agent_api_snapshot`.

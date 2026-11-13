@@ -65,7 +65,7 @@ ones without this file receive a small navigation shell pointing to their own
 guides. The latest root uses the current project landing described above. README
 is published at Getting started. On an authored splash,
 a home URL hash such as `/#quick-start` opens that section on Getting started.
-The header uses the light and dark `assets/tak-on-uds-*.svg` wordmarks. The favicon uses the smaller `assets/tak-mark.svg` connected stack.
+The header uses the light and dark `assets/tak-on-uds-*.svg` wordmarks. The favicon uses the smaller `assets/tak-mark.svg` Field mark.
 `public/og.png` is the static social image.
 
 `starlight-llms-txt` writes `/llms.txt`, `/llms-full.txt`, and `/llms-small.txt` during the build.
@@ -119,9 +119,9 @@ inside the panel do not. Browser checks cover placement and short viewports.
 The landing page uses a native SVG wordmark with outlined lettering, so it does
 not depend on fonts or raster images. `assets/tak-on-uds-dark.svg` has light
 lettering for dark surfaces; `assets/tak-on-uds-light.svg` has dark lettering.
-The shared connected stack mark is `assets/tak-mark.svg`, also copied to the favicon
-and `assets/icon.svg`. Its navy ink switches to white for a dark system theme;
-the cyan inset is decorative and the outer silhouette stays legible at 16px.
+The shared Field mark mark is `assets/tak-mark.svg`, also copied to the favicon
+and `assets/icon.svg`. Its black ink switches to white for a dark system theme. The interlocking
+T/U silhouette uses one ink, with actual 16/24/32 px proofs in `assets/fieldmark/`.
 Explicit `tak-mark-light.svg`, `tak-mark-dark.svg` and `tak-mark-mono.svg` variants
 serve fixed surfaces and one-color uses. `zarf.yaml` embeds `assets/icon.svg` exactly;
 run `.github/scripts/check-icon.sh` after updating either file.

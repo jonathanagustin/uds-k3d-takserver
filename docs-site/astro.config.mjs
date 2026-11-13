@@ -92,7 +92,7 @@ export default defineConfig({
       title: 'TAK Server on UDS',
       description:
         'TAK Server packaged for UDS, with Keycloak sign-in, CloudTAK, and default-deny networking.',
-      // Use the canonical wordmark in the header; use the matching theme-aware connected stack favicon.
+      // Use the canonical wordmark in the header; use the matching theme-aware field mark favicon.
       logo: {
         light: '../assets/tak-on-uds-light.svg',
         dark: '../assets/tak-on-uds-dark.svg',

@@ -29,6 +29,19 @@ class Guards(unittest.TestCase):
                     else:
                         with self.assertRaises(ValueError):b.reserve_output(parent,b.CAP)
 
+    def test_only_the_exact_reviewed_java_executable_is_a_qualified_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);binary=root/'jdk/bin/java';binary.parent.mkdir(parents=True);binary.write_bytes(b'guard identity only; never launched')
+            other=binary.with_name('unreviewed');other.write_bytes(b'never launched')
+            receipt={'jdk_tools':{'java':{'path':str(binary),'sha256':b.sha(binary)}},
+                     'runtime':{'basic':{'mapped_elfs':{str(binary):b.sha(binary),str(other):b.sha(other)}}}}
+            hosts=b.qualified_hosts(receipt)
+            self.assertEqual(hosts,{str(binary.resolve()):b.sha(binary)})
+            with self.assertRaisesRegex(ValueError,'unapproved host'):
+                b.verify_maps('ELF '+b.sha(other)+' '+str(other),root/'packaged',{},hosts)
+            binary.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError,'qualified Java'):b.qualified_hosts(receipt)
+
     def test_sdk_inventory_escape_is_rejected(self):
         for name in ['../secret', '/absolute', 'a/../../escape', 'a\\b', 'a//b', None]:
             with self.assertRaises(ValueError):

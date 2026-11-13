@@ -62,6 +62,20 @@ def reserve_output(parent, cap):
     shared = parent.stat().st_dev == Path('/workspace').stat().st_dev
     require(shutil.disk_usage(parent).free >= cap + (FLOOR if shared else 0), 'full phase reservation required')
 
+def qualified_hosts(receipt):
+    java = receipt['jdk_tools']['java']
+    java_path = Path(java['path']).resolve()
+    require(sha(java_path) == java['sha256'], 'qualified Java executable differs')
+    # /proc/self/maps includes bin/java as well as JDK libraries. Admit this
+    # exact independently hashed tool, never arbitrary files beneath JDK/bin.
+    hosts = {str(java_path): java['sha256']}
+    for phase in receipt['runtime'].values():
+        for path, digest in phase['mapped_elfs'].items():
+            if path.startswith('/usr/lib/') or path.startswith(str(java_path.parent.parent / 'lib') + '/'):
+                require(path not in hosts or hosts[path] == digest, 'conflicting host identity')
+                hosts[path] = digest
+    return hosts
+
 def inspect(proof, expected):
     require(re.fullmatch(r'[0-9a-f]{64}', expected) and sha(proof / 'complete.json') == expected,
             'reviewed SDK proof hash required')
@@ -89,12 +103,7 @@ def inspect(proof, expected):
         dependencies.append(path)
     for entry in receipt['jdk_tools'].values():
         require(sha(entry['path']) == entry['sha256'], 'qualified JDK differs')
-    hosts = {}
-    for phase in receipt['runtime'].values():
-        for path, digest in phase['mapped_elfs'].items():
-            if path.startswith('/usr/lib/') or path.startswith(str(Path(receipt['jdk_tools']['java']['path']).parent.parent / 'lib') + '/'):
-                require(path not in hosts or hosts[path] == digest, 'conflicting host identity')
-                hosts[path] = digest
+    hosts = qualified_hosts(receipt)
     return receipt, artifact, dependencies, hosts
 
 def verify_maps(text, library_path, native, hosts):

@@ -17,7 +17,7 @@ radial = importlib.util.module_from_spec(radial_spec)
 radial_spec.loader.exec_module(radial)
 
 FIXED_UI_TEXT = {'Tools', 'All tools & plugins', 'Import', 'Overlays', 'Select Import Type',
-                 'Suggested Import Strategy', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'Cancel', 'DD', 'Broadcast'}
+                 'Suggested Import Strategy', 'Callsign', 'Done', 'Download', 'atak-synthetic-scenario.dpk', 'OK', 'Cancel', 'DD', 'Broadcast'}
 
 
 def select(tree, *, rid=None, text=None):
@@ -34,6 +34,26 @@ def select(tree, *, rid=None, text=None):
             matches.append(node)
     if len(matches) != 1:
         raise LookupError('expected one enabled UI node')
+    return matches[0]
+
+
+def callsign_input(tree, expected):
+    """The pinned GenericDetailsView prompt owns one unlabelled modal input."""
+    select(tree, rid='alertTitle', text='Callsign')
+    select(tree, rid='button1', text='Done')
+    select(tree, rid='button2', text='Cancel')
+    panel = select(tree, rid='custom')
+    matches = []
+    for node in panel.iter('node'):
+        if node.get('class') != 'android.widget.EditText':
+            continue
+        if node.get('enabled') != 'true' or node.get('visible-to-user') == 'false':
+            continue
+        select(node)
+        matches.append(node)
+    if (len(matches) != 1 or matches[0].get('resource-id', '')
+            or matches[0].get('text') != expected):
+        raise LookupError('unexpected pinned callsign dialog input')
     return matches[0]
 
 
@@ -299,12 +319,25 @@ class AndroidUI:
         if not 1 <= len(current) <= 80 or not re.fullmatch(r'[A-Za-z0-9 -]{1,80}', callsign):
             raise ValueError('unsupported synthetic callsign')
         self.tap(rid='cotInfoNameEdit')
+        self.action = 'rename-callsign-dialog'
+        self.last_selector = {'rid': 'custom', 'text': 'Callsign'}
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                editor = callsign_input(self.tree(), current)
+                break
+            except LookupError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.25)
+        self.tap_node(editor)
         self.adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
         self.adb('shell', 'input', 'keyevent', *(['KEYCODE_DEL'] * len(current)))
         self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
-        # CoTInfoView updates the marker from its text watcher. The name-title
-        # icon opens affiliation options, so it is not a focus/commit target.
-        self.hide_keyboard()
+        # GenericDetailsView copies the modal input back only on Done; then
+        # CoTInfoView's text watcher updates the marker. BACK only hides the IME.
+        self.tap(rid='button1', text='Done')
+        self.action = 'rename-verify-committed-callsign'
         if self.find(rid='cotInfoNameEdit').get('text') != callsign:
             raise ValueError('Android callsign edit not visible')
         return int(self.adb('shell', 'date', '+%s').strip())

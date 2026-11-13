@@ -26,7 +26,8 @@ plugins row opens a null-loadout Tools inventory containing Import and Overlays.
 No fixed coordinates or injected broadcasts are used by the scenario.
 
 The same source audit confirms the browser selection, search, coordinate and
-Broadcast resource IDs. `CoTInfoView` updates the name through its text watcher;
+Broadcast resource IDs. `GenericDetailsView` first commits its separate Callsign prompt with Done;
+`CoTInfoView` then updates the name through its text watcher;
 its name-title icon opens affiliation options and must not be used to commit
 an edit. Relevant official source file SHA-256 values:
 

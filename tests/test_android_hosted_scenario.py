@@ -334,13 +334,50 @@ class ActualUIStates(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(LookupError):
                 ui.loadout_list_button(tree)
 
-    def test_name_edit_never_opens_affiliation_dialog(self):
+    def callsign_tree(self):
+        return ET.parse(ROOT / 'atak/scenarios/fixtures/atak-callsign-dialog.xml').getroot()
+
+    def test_captured_callsign_prompt_requires_done_to_commit(self):
+        tree = self.callsign_tree()
+        old = 'SYNTHETIC-MISSION TEST 00000000'
+        editor = ui.callsign_input(tree, old)
+        self.assertEqual(editor.get('class'), 'android.widget.EditText')
+        self.assertEqual(editor.get('resource-id', ''), '')
+        # The original marker field is absent while its modal prompt is open.
+        with self.assertRaises(LookupError): ui.select(tree, rid='cotInfoNameEdit')
         device = ui.AndroidUI('/unused')
-        current, renamed = ET.Element('node', text='OLD'), ET.Element('node', text='TEST aabbccdd')
-        with patch.object(device, 'find', side_effect=[current, renamed]), patch.object(device, 'tap') as tap, patch.object(device, 'hide_keyboard') as hide, patch.object(device, 'adb', return_value=b'123'):
+        current, renamed = ET.Element('node', text=old), ET.Element('node', text='TEST aabbccdd')
+        taps, finds = [], []
+        def find_marker(**selector):
+            finds.append(selector)
+            if len(finds) == 1:
+                return current
+            self.assertIn({'rid': 'button1', 'text': 'Done'}, taps)
+            return renamed
+        with patch.object(device, 'find', side_effect=find_marker), patch.object(device, 'tree', return_value=tree), patch.object(device, 'tap', side_effect=lambda **selector: taps.append(selector)) as tap, patch.object(device, 'tap_node') as focus, patch.object(device, 'hide_keyboard') as hide, patch.object(device, 'adb', return_value=b'123') as adb:
             self.assertEqual(device.rename('TEST aabbccdd'), 123)
-        self.assertEqual(tap.call_args_list, [unittest.mock.call(rid='cotInfoNameEdit')])
-        hide.assert_called_once_with()
+        self.assertEqual(tap.call_args_list, [unittest.mock.call(rid='cotInfoNameEdit'), unittest.mock.call(rid='button1', text='Done')])
+        focus.assert_called_once_with(editor)
+        hide.assert_not_called()
+        self.assertIn(unittest.mock.call('shell', 'input', 'text', 'TEST%saabbccdd'), adb.call_args_list)
+        self.assertEqual(device.action, 'rename-verify-committed-callsign')
+
+    def test_callsign_prompt_refuses_wrong_ambiguous_and_hidden_controls(self):
+        old = 'SYNTHETIC-MISSION TEST 00000000'
+        for change in ['wrong-title', 'wrong-done', 'disabled-input', 'hidden-input', 'duplicate-input', 'unexpected-input-id', 'wrong-current-value', 'outside-input']:
+            with self.subTest(change=change):
+                tree = self.callsign_tree()
+                panel = ui.select(tree, rid='custom')
+                editor = ui.callsign_input(tree, old)
+                if change == 'wrong-title': ui.select(tree, rid='alertTitle').set('text', 'Other')
+                elif change == 'wrong-done': ui.select(tree, rid='button1').set('text', 'Cancel')
+                elif change == 'disabled-input': editor.set('enabled', 'false')
+                elif change == 'hidden-input': editor.set('visible-to-user', 'false')
+                elif change == 'duplicate-input': panel.append(copy.deepcopy(editor))
+                elif change == 'unexpected-input-id': editor.set('resource-id', 'com.atakmap.app.civ:id/other')
+                elif change == 'wrong-current-value': editor.set('text', 'OTHER SYNTHETIC')
+                elif change == 'outside-input': panel.remove(editor); tree.append(editor)
+                with self.assertRaises(LookupError): ui.callsign_input(tree, old)
 
     def test_return_search_replaces_retained_query_and_only_hides_active_ime(self):
         device = ui.AndroidUI('/unused')

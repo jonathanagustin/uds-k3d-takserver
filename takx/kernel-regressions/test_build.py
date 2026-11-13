@@ -1,0 +1,100 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+"""Offline admission guards only; no compiler, native library or JVM starts."""
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+SPEC = importlib.util.spec_from_file_location('kernel_regressions_under_test', Path(__file__).with_name('build.py'))
+b = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(b)
+
+class Guards(unittest.TestCase):
+    def test_separate_output_reservation_preserves_workspace_floor(self):
+        parent=Path('/owned-output')
+        for separate,workspace_free,output_free,passes in [
+            (True,b.FLOOR+b.RECEIPT,b.CAP,True),
+            (True,b.FLOOR-1,b.CAP,False),(True,b.FLOOR+b.RECEIPT,b.CAP-1,False),
+            (False,b.FLOOR+b.CAP,b.FLOOR+b.CAP,True),
+            (False,b.FLOOR+b.RECEIPT,b.FLOOR+b.RECEIPT,False)]:
+            with self.subTest(separate=separate,workspace_free=workspace_free,output_free=output_free):
+                def stat(path):return SimpleNamespace(st_dev=2 if path==parent and separate else 1)
+                def usage(path):return SimpleNamespace(free=workspace_free if str(path)=='/workspace' else output_free)
+                with patch.object(Path,'stat',stat),patch.object(b.shutil,'disk_usage',usage):
+                    if passes:b.reserve_output(parent,b.CAP)
+                    else:
+                        with self.assertRaises(ValueError):b.reserve_output(parent,b.CAP)
+
+    def test_only_the_exact_reviewed_java_executable_is_a_qualified_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);binary=root/'jdk/bin/java';binary.parent.mkdir(parents=True);binary.write_bytes(b'guard identity only; never launched')
+            other=binary.with_name('unreviewed');other.write_bytes(b'never launched')
+            receipt={'jdk_tools':{'java':{'path':str(binary),'sha256':b.sha(binary)}},
+                     'runtime':{'basic':{'mapped_elfs':{str(binary):b.sha(binary),str(other):b.sha(other)}}}}
+            hosts=b.qualified_hosts(receipt)
+            self.assertEqual(hosts,{str(binary.resolve()):b.sha(binary)})
+            with self.assertRaisesRegex(ValueError,'unapproved host'):
+                b.verify_maps('ELF '+b.sha(other)+' '+str(other),root/'packaged',{},hosts)
+            binary.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError,'qualified Java'):b.qualified_hosts(receipt)
+
+    def test_sdk_inventory_escape_is_rejected(self):
+        for name in ['../secret', '/absolute', 'a/../../escape', 'a\\b', 'a//b', None]:
+            with self.assertRaises(ValueError):
+                b.safe(name)
+
+    def test_reviewed_receipt_hash_is_mandatory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'complete.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'reviewed SDK proof hash'):
+                b.inspect(root, '0' * 64)
+
+    def test_native_smoke_without_resource_gate_cannot_be_relabelled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'complete.json').write_text(json.dumps({
+                'component_runtime_acceptance': True,
+                'stock_resource_loader_controls_passed': True,
+            }))
+            with self.assertRaisesRegex(ValueError, 'resource-complete'):
+                b.inspect(root, b.sha(root / 'complete.json'))
+
+    def test_missing_required_packaged_provider_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            host = root / 'libhost.so'
+            host.write_bytes(b'guard identity only; never loaded')
+            with self.assertRaisesRegex(ValueError, 'packaged provider absent'):
+                b.verify_maps('ELF ' + b.sha(host) + ' ' + str(host), root / 'packaged',
+                              {'libtakengine.so': '0' * 64}, {str(host): b.sha(host)})
+
+    def test_original_provider_cannot_replace_packaged_provider(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = root / 'libtakengine.so'
+            original.write_bytes(b'guard identity only; never loaded')
+            with self.assertRaisesRegex(ValueError, 'unapproved host or original provider'):
+                b.verify_maps('ELF ' + b.sha(original) + ' ' + str(original), root / 'packaged', {}, {})
+
+    def test_shared_backend_is_not_admitted_even_by_matching_hash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backend = root / 'libsqlite3.so.0'
+            backend.write_bytes(b'guard identity only; never loaded')
+            with self.assertRaisesRegex(ValueError, 'shared backend'):
+                b.verify_maps('ELF ' + b.sha(backend) + ' ' + str(backend), root / 'packaged', {}, {str(backend): b.sha(backend)})
+
+    def test_upstream_provenance_covers_the_three_real_slices(self):
+        lock = json.loads(Path(__file__).with_name('upstream.lock.json').read_text())
+        self.assertEqual(lock['revision'], b.REVISION)
+        self.assertEqual(len(lock['tests']), 6)
+        self.assertTrue(all(len(row['blob']) == 40 and len(row['sha256']) == 64 for row in lock['tests']))
+        self.assertIn('DTED height decoding', lock['adaptation']['not_covered'])
+
+if __name__ == '__main__':
+    unittest.main()

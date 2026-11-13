@@ -84,6 +84,35 @@ def pepr_fixture(phase='strict'):
 
 
 class IdentityFixtures(unittest.TestCase):
+    def test_identity_fingerprint_normalizes_only_consistent_service_account_alias(self):
+        baseline = {'spec': {'template': {'spec': {'containers': [{'name': 'app', 'image': 'same'}],
+            'serviceAccountName': driver.LEGACY, 'serviceAccount': driver.LEGACY}}}}
+        transition = copy.deepcopy(baseline)
+        transition['spec']['template']['spec'].update(serviceAccountName=driver.APPS[0], serviceAccount=driver.APPS[0])
+        self.assertEqual(driver.template_fingerprint(baseline), driver.template_fingerprint(transition))
+        self.assertEqual(baseline['spec']['template']['spec']['serviceAccount'], driver.LEGACY)
+        without_alias = copy.deepcopy(transition)
+        without_alias['spec']['template']['spec'].pop('serviceAccount')
+        self.assertEqual(driver.template_fingerprint(transition), driver.template_fingerprint(without_alias))
+        for mutation in ('contradictory', 'missing-canonical'):
+            invalid = copy.deepcopy(transition)
+            if mutation == 'contradictory':
+                invalid['spec']['template']['spec']['serviceAccount'] = driver.LEGACY
+            else:
+                invalid['spec']['template']['spec'].pop('serviceAccountName')
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, 'inconsistent workload service account alias'):
+                driver.template_fingerprint(invalid)
+        drift = copy.deepcopy(transition)
+        drift['spec']['template']['spec']['containers'][0]['image'] = 'changed'
+        self.assertNotEqual(driver.template_fingerprint(baseline), driver.template_fingerprint(drift))
+        for options in ({'exact': True}, {'pepr': True}):
+            self.assertNotEqual(driver.template_fingerprint(baseline, **options),
+                                driver.template_fingerprint(transition, **options))
+            alias_drift = copy.deepcopy(baseline)
+            alias_drift['spec']['template']['spec']['serviceAccount'] = 'different'
+            self.assertNotEqual(driver.template_fingerprint(baseline, **options),
+                                driver.template_fingerprint(alias_drift, **options))
+
     @unittest.skipUnless(shutil.which('helm'), 'Helm required for actual source RBAC render')
     def test_disjoint_port_filter_cannot_hide_invalid_or_wildcard_branches(self):
         package,policies,network,baseline=policy_fixture()

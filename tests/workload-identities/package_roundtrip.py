@@ -210,7 +210,7 @@ class PackageTrial(D.Driver):
     def capture_phase(self,phase,account):
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
         verdict=super().capture_phase(alias,account,binding_extra={
-            'packageArchiveSHA256':self.bound['archiveSHA256'],'baselineValuesSHA256':self.bound['chartBinding']['chartOverridesSHA256']})
+            'packageArchiveSHA256':self.bound['archiveSHA256'],'baselineValuesSHA256':self.bound['configSHA256']})
         self.journal('package-phase-evidence-'+alias,accepted=verdict['accepted'])
         return verdict
 

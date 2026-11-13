@@ -175,14 +175,42 @@ class PackageGuards(unittest.TestCase):
         with self.assertRaises(ValueError):P.deploy_command(bound,'strict')
         self.assertTrue(path.is_symlink());self.assertEqual(foreign.read_bytes(),raw)
 
-    def test_phase_evidence_binds_full_baseline_maps_not_only_variable_config(self):
+    def test_real_package_capture_preserves_config_binding_through_public_replay(self):
+        from tests.test_identity_phase_evidence import fixture,evidence
+        from tests.test_identity_public_evidence import IdentityPublicationTests
+        from tests.test_staged_migrations import S
+        bind,data=fixture()
         with tempfile.TemporaryDirectory() as directory:
-            instance=P.PackageTrial(Path(directory)/'journal',self.bound())
-            with patch.object(P.D.Driver,'capture_phase',return_value={'accepted':True}) as capture:
-                instance.capture_phase('shared','shared')
-            extra=capture.call_args.kwargs['binding_extra']
-            self.assertEqual(extra['baselineValuesSHA256'],P.D.render_inputs.digest(self.charts))
-            self.assertNotEqual(extra['baselineValuesSHA256'],self.bound()['configSHA256'])
+            root=Path(directory);capture_dir=root/'captured';capture_dir.mkdir(mode=0o700)
+            bound=self.bound();bound.update(archiveSHA256='d'*64,planSHA256='e'*64,configSHA256='f'*64)
+            instance=P.PackageTrial(capture_dir/'journal.json',bound)
+            instance.state.update(guard={k:bind[k] for k in ('sourceSHA','runID','runAttempt','clusterUID')},
+                meshConfigUID=bind['meshConfigUID'],meshConfigHash=bind['meshConfigHash'],baselineNetwork=data['baseline_network'],
+                deploymentUIDs=data['baseline_uids'],templateFingerprints=data['template_fingerprints'],
+                peprUIDs=data['pepr_uids'],peprTemplateFingerprints=data['pepr_template_fingerprints'],
+                packagePhases=['shared','transition'],zarfDomainBinding={'configSHA256':bound['configSHA256']})
+            instance._last_policy_observation={key:data[key] for key in ('package','policies','network_policies','policy_lists')}
+            instance._last_identity_observation={key:data[key] for key in ('deployments','replicasets','pods')}
+            instance._last_pepr_observation=data['pepr']
+            instance.wait=lambda callback:callback();instance.policies=lambda:None;instance.identities=lambda account:None;instance.observe_pepr=lambda phase:None
+            instance.observe_render_inputs=lambda:data['render_inputs']
+            verdict=instance.capture_phase('strict','dedicated')
+            self.assertTrue(verdict['accepted']);self.assertEqual(verdict['binding']['baselineValuesSHA256'],bound['configSHA256'])
+            self.assertNotEqual(verdict['binding']['baselineValuesSHA256'],bound['chartBinding']['chartOverridesSHA256'])
+            self.assertEqual(instance.state['baselineChartValuesSHA256'],bound['chartBinding']['chartOverridesSHA256'])
+            reference=instance.state['phaseEvidence'][0]['reference'];snapshot=evidence.read_phase(capture_dir/'phases',reference)
+            self.assertTrue(evidence.validate_phase(snapshot,P.D.guard_api())['accepted'])
+            fixture_case=IdentityPublicationTests()
+            with fixture_case.env(),patch.dict(os.environ,{'IDENTITY_METHOD':'package'}),patch.object(S.platform,'machine',return_value='x86_64'):
+                journal=fixture_case.package_journal(root)
+                journal['packageDriverSHA256']=S.sha(ROOT/'tests/workload-identities/package_roundtrip.py')
+                entry=next(entry for entry in journal['phaseEvidence'] if entry['phase']=='strict')
+                folder=root/'package-identity';(folder/'phases'/entry['reference']['file']).unlink()
+                entry['reference']=evidence.write_phase(folder/'phases',snapshot)
+                (folder/'journal.json').write_text(json.dumps(journal))
+                receipt=S.publish(root,root/'public','amd64')
+                self.assertTrue(receipt['accepted']);S.verify(root/'public/receipts')
+
     def test_actual_deploy_path_dispatches_supported_command_then_observes(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.bound['archiveSHA256']='a'*64

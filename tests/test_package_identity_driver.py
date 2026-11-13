@@ -95,6 +95,19 @@ class PackageGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
             self.assertEqual(foreign.read_text(),'untouched')
 
+    def test_only_legacy_upstream_chart_uses_client_side_apply_compatibility(self):
+        package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
+        charts=[chart for component in package['components'] for chart in component.get('charts',[])]
+        legacy=[chart for chart in charts if chart.get('serverSideApply')=='false']
+        self.assertEqual(len(legacy),1)
+        chart=legacy[0]
+        self.assertEqual((chart['name'],chart['namespace'],chart['releaseName']),('takserver','takserver','takserver'))
+        self.assertEqual(chart['url'],'https://github.com/TAK-Product-Center/Server.git')
+        self.assertEqual(chart['version'],'5.7-RELEASE-14')
+        self.assertTrue(all('serverSideApply' not in item for item in charts if item is not chart))
+        self.assertIs(type(chart['serverSideApply']),str)
+        for phase in P.PHASES:self.assertNotIn('--force-conflicts',P.deploy_command(self.bound(),phase))
+
     def test_same_archive_and_values_only_phase_changes(self):
         commands=[P.deploy_command(self.bound(),phase) for phase in P.PHASES]
         stripped=[c[:-1] for c in commands]

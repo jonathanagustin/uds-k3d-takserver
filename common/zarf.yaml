@@ -43,6 +43,10 @@ components:
       - name: takserver
         namespace: takserver
         releaseName: takserver
+        # Upstream hardcodes the shared ServiceAccount. Pepr admission/watchers
+        # own phase identities; use Helm's client-side patch compatibility for
+        # this chart so SSA cannot reject the admission-enforced identity first.
+        serverSideApply: "false"
         url: https://github.com/TAK-Product-Center/Server.git
         gitPath: src/takserver-cluster/deployments/helm
         version: 5.7-RELEASE-14

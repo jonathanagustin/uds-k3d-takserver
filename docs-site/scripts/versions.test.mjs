@@ -61,6 +61,31 @@ test('each channel publishes its own content, search filter, source links, and n
 });
 
 
+test('published root and main landing prose explains abbreviations at first use', () => {
+  const definitions = [
+    ['TAK', 'Team Awareness Kit (TAK)'],
+    ['UDS', 'Unified Defense Stack (UDS)'],
+    ['ATAK-CIV', 'Android Tactical Assault Kit for Civilian Use (ATAK-CIV)'],
+    ['API', 'application programming interface (API)'],
+    ['UI', 'user interface (UI)'],
+  ];
+  for (const prefix of ['', 'main']) {
+    // Inspect production HTML, not only the authored source or a replacement helper.
+    // Brand/navigation/hero labels intentionally retain their approved short names.
+    const html = readFileSync(path.join(site, 'dist', prefix, 'index.html'), 'utf8');
+    const start = html.indexOf('This package brings');
+    assert.ok(start >= 0, `${prefix || 'root'} must publish the revised project introduction`);
+    const prose = html.slice(start).replace(/<[^>]*>/g, ' ');
+    for (const [abbreviation, definition] of definitions) {
+      const defined = prose.indexOf(definition);
+      assert.ok(defined >= 0, `${prefix || 'root'} is missing ${definition}`);
+      const first = new RegExp(`\\b${abbreviation}\\b`).exec(prose);
+      assert.equal(first?.index, defined + definition.lastIndexOf(abbreviation),
+        `${prefix || 'root'} uses ${abbreviation} before its explanation`);
+    }
+  }
+});
+
 test('the current root landing does not replace released guides or archived homes', () => {
   const temporary = mkdtempSync(path.join(tmpdir(), 'tak-landing-source-'));
   try {

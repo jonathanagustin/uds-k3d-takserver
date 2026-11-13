@@ -3,7 +3,7 @@
   "profileId": "gdal244-java-pending-exceptions-v2",
   "patchFile": "gdal-java-pending-exceptions-v2.patch",
   "sourceRevision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "patchSha256": "5b2f452d7710d11323695687d5c0ac8566acabb2ad105c4da4aec954035266d7",
+  "patchSha256": "9a8fd85a2174a49d0ffbeb75c6120540ccec58b14a2eedfacf0732758ede30e5",
   "sources": {
     "swig/include/java/typemaps_java.i": {
       "preSha256": "c65c74a47c0c4dbab3dac693a565b99f9e825187a82583dd07f681253926f64b",

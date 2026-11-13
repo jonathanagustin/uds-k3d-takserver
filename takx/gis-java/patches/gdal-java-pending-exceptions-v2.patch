@@ -1,9 +1,6 @@
 --- a/swig/include/java/typemaps_java.i
 +++ b/swig/include/java/typemaps_java.i
-@@ -10,6 +10,52 @@
- 
- %include "arrays_java.i";
- %include "typemaps.i"
+@@ -12,0 +13,46 @@
 +
 +/* Scoped input ownership for C++ JNI wrappers, including early typemap returns. */
 +%{
@@ -50,53 +47,33 @@
 +%typemap(freearg, noblock=1) char * "";
 +%typemap(freearg, noblock=1) const char * "";
 +#endif
- 
- %apply (int) {VSI_RETVAL};
- 
-@@ -497,6 +543,8 @@
- 
- %typemap(out,fragment="OGRErrMessages") OGRErr
- {
+@@ -499,0 +546,2 @@
 +  /* Preserve an original callback Throwable before native-error translation. */
 +  if (jenv->ExceptionCheck()) return $null;
-   /* %typemap(out) OGRErr */
-   if (result != 0 && bUseExceptions) {
-     SWIG_JavaThrowException(jenv, SWIG_JavaRuntimeException,
-@@ -1023,44 +1071,64 @@
-  * Typemaps maps char** arguments from a Vector
-  ***************************************************/
- 
+@@ -1026,3 +1074,3 @@
 -%typemap(in) char **options
 -{
 -  /* %typemap(in) char **options */
 +%typemap(in, noblock=1) char **options
 +{
 +  /* %typemap(in, noblock=1) char **options */
-   $1 = NULL;
+@@ -1029,0 +1078,3 @@
 +#ifdef __cplusplus
 +  GdalJavaScopedOptions $1_options_guard(&$1);
 +#endif
-   if($input != 0) {
-     const jclass vector = jenv->FindClass("java/util/Vector");
+@@ -1031,0 +1083 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     const jclass enumeration = jenv->FindClass("java/util/Enumeration");
+@@ -1032,0 +1085 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     const jclass stringClass = jenv->FindClass("java/lang/String");
+@@ -1033,0 +1087 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     const jmethodID elements = jenv->GetMethodID(vector, "elements",
-       "()Ljava/util/Enumeration;");
+@@ -1035,0 +1090 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     const jmethodID hasMoreElements = jenv->GetMethodID(enumeration,
-       "hasMoreElements", "()Z");
+@@ -1037,0 +1093 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     const jmethodID getNextElement = jenv->GetMethodID(enumeration,
-       "nextElement", "()Ljava/lang/Object;");
+@@ -1039,0 +1096 @@
 +    if (jenv->ExceptionCheck()) return $null;
-     if(vector == NULL || enumeration == NULL || elements == NULL ||
-         hasMoreElements == NULL || getNextElement == NULL) {
-           fprintf(stderr, "Could not load (options **) jni types.\n");
-           return $null;
-         }
+@@ -1045,2 +1102,10 @@
 -    for (jobject keys = jenv->CallObjectMethod($input, elements);
 -          jenv->CallBooleanMethod(keys, hasMoreElements) == JNI_TRUE;) {
 +    jobject keys = jenv->CallObjectMethod($input, elements);
@@ -109,54 +86,35 @@
 +      const jboolean more = jenv->CallBooleanMethod(keys, hasMoreElements);
 +      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
 +      if (more != JNI_TRUE) break;
-       jstring value = (jstring)jenv->CallObjectMethod(keys, getNextElement);
+@@ -1047,0 +1113 @@
 +      if (jenv->ExceptionCheck()) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
-       if (value == NULL || !jenv->IsInstanceOf(value, stringClass))
-       {
+@@ -1050 +1116 @@
 -          CSLDestroy($1);
 +          GDAL_JAVA_CSL_TAIL_CLEANUP($1);
-           SWIG_JavaThrowException(jenv, SWIG_JavaIllegalArgumentException, "an element in the vector is not a string");
-           return $null;
-       }
-       const char *valptr = jenv->GetStringUTFChars(value, 0);
+@@ -1055 +1121,2 @@
 -      $1 = CSLAddString($1,  valptr);
 +      if (valptr == NULL) { GDAL_JAVA_CSL_TAIL_CLEANUP($1); return $null; }
 +      $1 = CSLAddString($1, valptr);
-       jenv->ReleaseStringUTFChars(value, valptr);
+@@ -1056,0 +1124 @@
 +      jenv->DeleteLocalRef(value);
-     }
-   }
- }
- %typemap(freearg) char **options
- {
-   /* %typemap(freearg) char **options */
+@@ -1063 +1131 @@
 -  CSLDestroy( $1 );
 +  GDAL_JAVA_CSL_TAIL_CLEANUP($1);
- }
- %typemap(out) char **options
- {
 --- a/swig/include/java/callback.i
 +++ b/swig/include/java/callback.i
-@@ -45,13 +45,20 @@
- {
-     JavaProgressData* psProgressInfo = (JavaProgressData*)pData;
-     JNIEnv *jenv = psProgressInfo->jenv;
+@@ -47,0 +48,2 @@
 +    // GDAL can call repeatedly after cancellation; preserve the original Throwable.
 +    if (jenv->ExceptionCheck()) return 0;
-     int ret;
-     const jclass progressCallbackClass = jenv->FindClass("org/gdal/gdal/ProgressCallback");
+@@ -49,0 +52 @@
 +    if (jenv->ExceptionCheck()) return 0;
-     const jmethodID runMethod = jenv->GetMethodID(progressCallbackClass, "run", "(DLjava/lang/String;)I");
+@@ -51 +54,3 @@
 -    jstring temp_string = jenv->NewStringUTF(pszMessage);
 +    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
 +    jstring temp_string = jenv->NewStringUTF(pszMessage ? pszMessage : "");
 +    if (jenv->ExceptionCheck()) { jenv->DeleteLocalRef(progressCallbackClass); return 0; }
-     ret = jenv->CallIntMethod(psProgressInfo->pJavaCallback, runMethod, dfComplete, temp_string);
+@@ -52,0 +58 @@
 +    const bool failed = jenv->ExceptionCheck();
-     jenv->DeleteLocalRef(temp_string);
+@@ -54 +60,2 @@
 -    return ret;
 +    jenv->DeleteLocalRef(progressCallbackClass);
 +    return failed ? 0 : ret;
- }
- %}
- 

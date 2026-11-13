@@ -2081,7 +2081,7 @@
   "revision": "9ccf6b8ed2ae452ef51e7b1739a7ffd4ef78a403",
   "schema": 1,
   "verifiers": {
-    "takx/gis-java/build.py": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
+    "takx/gis-java/build.py": "c086207b3343cda65de78daf178ffe94708bdaa41508b21d41407072d88783b1",
     "takx/kernel-java/build.py": "dba29276f5f3fd9bf396f31c2a58f1bb550834e6724191e653958e61d8fc6627"
   }
 }

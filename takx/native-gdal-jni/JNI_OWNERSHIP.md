@@ -39,9 +39,13 @@ for owned UTF inputs and a C++ no-op for owned options, avoiding double release.
 C wrappers retain their existing CSL cleanup; the pinned gdalconst module has no
 options/UTF-input wrappers.
 
-The checksum-pinned patch retains unified-diff blank context lines, including
-its final context line. The exact patch path has Git whitespace attributes for
-those syntax bytes; other source whitespace checks remain enabled.
+The public patch uses zero-context unified diffs with GNU patch `--fuzz=0`.
+Applying it to both exact official preimages reproduces the same pinned
+postimages as the originally qualified patch. The builder still requires both
+preimage and postimage hashes; fewer context anchors do not admit other source
+versions. The transport/profile fingerprint changes, while historical native
+receipts retain the original patch identity. This is source-equivalence
+validation, without a new wrapper or native build claim.
 
 Actual v2 generation produced 331 scoped UTF owners and 90 CSL owners. The
 108 custom raw UTF acquisition/release pairs remained unchanged. Genuine native

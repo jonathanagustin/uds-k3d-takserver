@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "package": "lula2",
+  "version": "0.9.5",
+  "source": "https://registry.npmjs.org/lula2/-/lula2-0.9.5.tgz",
+  "tarballIntegrity": "sha512-Q3XDxxu2SYD1fl+x1mP/q/kcyFKWiCagLr3nJJ9Wyw1OkQQqAn7OsPLFtR+FhwgHIDHnd6lntRbFqgmnqgTacg==",
+  "tarballSHA256": "0cf401c21f0a641a0760a5d23b406825c808903d7b690b0545ba0c25db06953c",
+  "license": "Apache-2.0",
+  "officialFiles": {
+    "dist/cli/commands/crawl.js": "bbc727ec333f3d61e9945407bdb62b3a0e3b48590766c5968adbc1dedf6d9612",
+    "dist/index.js": "6789580a1d7c5ab947733b658eec4f9d00e25b3ca410e7768e52682fd948a47f"
+  },
+  "variant": "Project safety variant; not an upstream Lula release",
+  "scope": [
+    "Comment mode only",
+    "Fail on modified/deleted file read error before mutation",
+    "No findings means no mutation",
+    "Create replacement before cleanup",
+    "Cleanup only older exact-signature comments matching authenticated create response and pinned GitHub Actions Bot identity",
+    "Finish comment enumeration before deletion"
+  ]
+}

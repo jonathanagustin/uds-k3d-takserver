@@ -204,7 +204,7 @@ def main():
         return content.decode('utf-8', errors='strict')
     try:
         cp = os.pathsep.join(map(str, [artifact, *dependencies]))
-        run([receipt['jdk_tools']['javac']['path'], '-J-Xmx256m', '--release', '17', '-proc:none', '-implicit:none',
+        run([receipt['jdk_tools']['javac']['path'], '-J-Xmx256m', '-J-XX:ErrorFile=' + str(out / 'tmp/hs_err_javac_pid%p.log'), '--release', '17', '-proc:none', '-implicit:none',
              '-sourcepath', '', '-cp', cp, '-d', out / 'classes', *sources], 'compile')
         for path in (out / 'classes').rglob('*.class'):
             require(re.fullmatch(r'(KernelFormatRegressions|KernelRegressionSmoke|KernelRuntimeSmoke|NativeDatabaseCandidate|KernelThrowingLoggerCandidate)(?:\$[A-Za-z0-9_]+)?\.class', path.relative_to(out / 'classes').as_posix()),

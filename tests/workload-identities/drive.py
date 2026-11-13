@@ -91,8 +91,8 @@ def validate_policies(package, policies, network_policies, baseline_network):
             continue
         selector = spec.get('selector', {}).get('matchLabels', {})
         # Package selectors do not enumerate every label on destination Pods.
-        # An additional policy label is therefore unknown, not a disjointness
-        # proof. Only a conflicting value for a known label excludes overlap.
+        # An additional policy label is unknown, so it cannot rule out overlap.
+        # Only a conflicting value for a known label excludes overlap.
         relevant = [(key, labels) for key, labels in targets.items()
                     if all(k not in labels or labels[k] == v for k, v in selector.items())]
         if not relevant:

@@ -438,7 +438,7 @@ FAILURE_PATTERNS = {
     'signature-verification': r'failed to verify (?:certificate|signature)|signature verification failed|no matching signatures',
     'authentication': r'unauthorized|\bforbidden\b|authentication required|access denied|denied: requested access|status(?: code)?[ :]+40[13]|http/[0-9.]+\s+403',
     'helm-operation': r'helm upgrade failed|helm install failed|upgrade failed:|installation failed:|another operation .{0,80}in progress',
-    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional propert(?:y|ies)|values don.t meet the specifications',
+    'schema-validation': r'validation (?:failed|error)|failed to validate|unknown field|additional (?:property|properties)|values don.t meet the specifications',
     'cluster-connectivity': r'kubernetes cluster unreachable|connection refused|unable to connect to the server|no route to host',
     'tls-certificate': r'x509:|certificate has expired|certificate signed by unknown authority|unknown ca|tls handshake timeout',
     'admission-webhook': r'failed calling webhook|admission webhook.{0,160}denied|no endpoints available for service',

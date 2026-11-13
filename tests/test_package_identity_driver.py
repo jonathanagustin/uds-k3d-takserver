@@ -68,6 +68,13 @@ class PackageGuards(unittest.TestCase):
             self.assertEqual(public['status'],'observed')
             self.assertEqual(public['stages'],[{'stage':'package-identity-timeout','phase':'transition','diagnostic':'other-invariant'}])
             self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
+            for phase in ('shared','transition','strict','rollback'):
+                trial.state['stages']=[]
+                with self.assertRaises(ValueError):trial.wait_identities('dedicated',phase)
+                projected=publisher.identity_progress(root)['package']
+                self.assertEqual(projected['status'],'observed')
+                self.assertEqual(projected['stages'][0]['phase'],phase)
+                self.assertEqual(projected['stages'][0]['diagnostic'],'other-invariant')
             # Even a source/run-bound companion must reject an arbitrary diagnostic.
             trial.journal('package-identity-timeout',phase='transition',diagnostic='PRIVATE_UNKNOWN_SENTINEL')
             public=publisher.identity_progress(root)['package']

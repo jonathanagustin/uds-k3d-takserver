@@ -528,7 +528,7 @@ def identity_progress(directory):
                         require(entry.get('phase') in ('shared','transition','strict','rollback') and
                                 entry.get('diagnostic') in ('no-observation','unstable-observation','workload-template-drift',
                                     'inconsistent-service-account-alias','other-invariant'), 'invalid identity timeout diagnostic')
-                        stage['diagnostic']=entry['diagnostic']
+                        stage.update(phase=entry['phase'],diagnostic=entry['diagnostic'])
                     if entry['stage']=='package-command-failed':
                         require(entry.get('role') in ('deploy','remove') and entry.get('phase') in ('transition','strict','rollback','shared') and
                                 type(entry.get('exitStatus')) is int and -255<=entry['exitStatus']<=255 and

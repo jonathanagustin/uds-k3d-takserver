@@ -232,6 +232,18 @@ class IdentityFixtures(unittest.TestCase):
                         instance.observe_pepr('strict')
                 instance.patch.assert_not_called()
 
+    def test_pure_pepr_validator_needs_no_cluster_and_does_not_mutate_inputs(self):
+        deployments, replicasets, pods = pepr_fixture()
+        baseline_uids = {name: d['metadata']['uid'] for name, d in deployments.items()}
+        fingerprints = {name: driver.template_fingerprint(d, True) for name, d in deployments.items()}
+        inputs = (list(deployments.values()), replicasets, pods)
+        original = copy.deepcopy(inputs)
+        result = driver.validate_pepr(*inputs, 'strict', baseline_uids, fingerprints)
+        self.assertEqual(len(result), len(driver.PEPR))
+        self.assertEqual(inputs, original)
+        with self.assertRaisesRegex(ValueError, 'two exact Pepr Deployments'):
+            driver.validate_pepr(inputs[0] * 2, replicasets, pods, 'strict', baseline_uids, fingerprints)
+
     def test_requested_policy_observation_refuses_concurrent_uid_or_rule_drift(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=driver.Driver(Path(directory)/'journal.json')

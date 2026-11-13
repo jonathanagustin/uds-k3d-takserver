@@ -164,6 +164,53 @@ def validate_workloads(deployments, replicasets, pods, account, baseline_uids):
     return identities
 
 
+def validate_pepr(deployments, replicasets, observed_pods, phase, baseline_uids, template_fingerprints):
+    """Validate a complete read-only Pepr observation without a cluster client."""
+    require(phase in PHASES, 'unknown Pepr observation phase')
+    require(len(deployments) == len(PEPR) and {d['metadata']['name'] for d in deployments} == set(PEPR),
+            'two exact Pepr Deployments required')
+    deployments = {d['metadata']['name']: d for d in deployments}
+    result = []
+    for name in PEPR:
+        deployment = deployments[name]
+        require(deployment['metadata']['uid'] == baseline_uids[name], 'Pepr Deployment replaced')
+        helm_owner(deployment, 'takserver-oidc', 'pepr-system')
+        require(template_fingerprint(deployment, True) == template_fingerprints[name], 'Pepr template drift')
+        deployed_phases = [e.get('value') for c in deployment['spec']['template']['spec']['containers']
+                           for e in c.get('env', []) if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
+        require(deployed_phases == [phase], 'Pepr Deployment phase has not converged')
+        ready(deployment)
+        count = deployment['spec'].get('replicas', 1)
+        require(count > 0 and deployment['status'].get('replicas') == count and
+                deployment['status'].get('updatedReplicas') == count and
+                deployment['status'].get('readyReplicas') == count and deployment['status'].get('availableReplicas') == count and
+                deployment['status'].get('unavailableReplicas', 0) == 0, 'Pepr rollout incomplete')
+        rsuids = {r['metadata']['uid'] for r in replicasets if any(o.get('controller') is True and
+                  o.get('uid') == deployment['metadata']['uid'] for o in r['metadata'].get('ownerReferences', []))}
+        selector = deployment['spec'].get('selector', {}).get('matchLabels', {})
+        require(selector, 'Pepr selector is empty')
+        pods = [p for p in observed_pods if any(
+            o.get('uid') in rsuids for o in p['metadata'].get('ownerReferences', [])) or
+            all(p['metadata'].get('labels', {}).get(k) == v for k, v in selector.items())]
+        require(len(pods) == count, 'stale or mixed Pepr Pods')
+        active = [r for r in replicasets if r['metadata']['uid'] in rsuids and r['spec'].get('replicas', 1) > 0]
+        require(len(active) == 1 and active[0]['spec'].get('replicas', 1) == count and
+                not active[0]['metadata'].get('deletionTimestamp') and
+                template_fingerprint(active[0], exact=True) == template_fingerprint(deployment, exact=True), 'mixed active Pepr ReplicaSets')
+        for pod in pods:
+            owners = [o for o in pod['metadata'].get('ownerReferences', []) if o.get('controller') is True]
+            require(len(owners) == 1 and owners[0].get('uid') in rsuids, 'foreign Pepr Pod matches the selector')
+            require(owners[0]['uid'] == active[0]['metadata']['uid'], 'Pepr Pod is owned by an inactive ReplicaSet')
+            require(not pod['metadata'].get('deletionTimestamp') and pod['spec'].get('serviceAccountName') == name and
+                    pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True'
+                    for c in pod['status'].get('conditions', [])), 'Pepr Pod identity/readiness mismatch')
+            phases = [e.get('value') for c in pod['spec']['containers'] for e in c.get('env', [])
+                      if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
+            require(phases == [phase], 'old Pepr phase Pod remains')
+        result.append((name, deployment['metadata']['generation'], sorted(p['metadata']['uid'] for p in pods)))
+    return result
+
+
 def validate_rbac(resources):
     require(len(resources) == len(RBAC) and {(r['kind'], r['metadata']['name']) for r in resources} == RBAC, 'unexpected dedicated RBAC render')
     discovery = [{'apiGroups': [''], 'resources': ['pods', 'endpoints'], 'verbs': ['get', 'list', 'watch']},
@@ -344,49 +391,12 @@ class Driver:
     def observe_pepr(self, phase):
         """Observe exact original Pepr deployments and their converged phase; never mutate."""
         require(phase in PHASES, 'unknown Pepr observation phase')
-        result = []
-        deployments = {name: self.get('deployment', name, 'pepr-system') for name in PEPR}
+        deployments = [self.get('deployment', name, 'pepr-system') for name in PEPR]
         replicasets = self.get('replicasets', namespace='pepr-system')['items']
-        observed_pods = self.get('pods', namespace='pepr-system')['items']
-        for name in PEPR:
-            deployment = deployments[name]
-            require(deployment['metadata']['uid'] == self.state['peprUIDs'][name], 'Pepr Deployment replaced')
-            helm_owner(deployment, 'takserver-oidc', 'pepr-system')
-            require(template_fingerprint(deployment, True) == self.state['peprTemplateFingerprints'][name], 'Pepr template drift')
-            deployed_phases = [e.get('value') for c in deployment['spec']['template']['spec']['containers']
-                               for e in c.get('env', []) if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
-            require(deployed_phases == [phase], 'Pepr Deployment phase has not converged')
-            ready(deployment)
-            count = deployment['spec'].get('replicas', 1)
-            require(count > 0 and deployment['status'].get('replicas') == count and
-                    deployment['status'].get('updatedReplicas') == count and
-                    deployment['status'].get('readyReplicas') == count and deployment['status'].get('availableReplicas') == count and
-                    deployment['status'].get('unavailableReplicas', 0) == 0, 'Pepr rollout incomplete')
-            rsuids = {r['metadata']['uid'] for r in replicasets if any(o.get('controller') is True and
-                      o.get('uid') == deployment['metadata']['uid'] for o in r['metadata'].get('ownerReferences', []))}
-            selector = deployment['spec'].get('selector', {}).get('matchLabels', {})
-            require(selector, 'Pepr selector is empty')
-            pods = [p for p in observed_pods if any(
-                o.get('uid') in rsuids for o in p['metadata'].get('ownerReferences', [])) or
-                all(p['metadata'].get('labels', {}).get(k) == v for k, v in selector.items())]
-            require(len(pods) == count, 'stale or mixed Pepr Pods')
-            active = [r for r in replicasets if r['metadata']['uid'] in rsuids and r['spec'].get('replicas', 1) > 0]
-            require(len(active) == 1 and active[0]['spec'].get('replicas', 1) == count and
-                    not active[0]['metadata'].get('deletionTimestamp') and
-                    template_fingerprint(active[0], exact=True) == template_fingerprint(deployment, exact=True), 'mixed active Pepr ReplicaSets')
-            for pod in pods:
-                owners = [o for o in pod['metadata'].get('ownerReferences', []) if o.get('controller') is True]
-                require(len(owners) == 1 and owners[0].get('uid') in rsuids, 'foreign Pepr Pod matches the selector')
-                require(owners[0]['uid'] == active[0]['metadata']['uid'], 'Pepr Pod is owned by an inactive ReplicaSet')
-                require(not pod['metadata'].get('deletionTimestamp') and pod['spec'].get('serviceAccountName') == name and
-                        pod['status'].get('phase') == 'Running' and any(c.get('type') == 'Ready' and c.get('status') == 'True'
-                        for c in pod['status'].get('conditions', [])), 'Pepr Pod identity/readiness mismatch')
-                phases = [e.get('value') for c in pod['spec']['containers'] for e in c.get('env', [])
-                          if e['name'] == 'TAK_WORKLOAD_IDENTITY_PHASE']
-                require(phases == [phase], 'old Pepr phase Pod remains')
-            result.append((name, deployment['metadata']['generation'], sorted(p['metadata']['uid'] for p in pods)))
-        self._last_pepr_observation = {'deployments': list(deployments.values()),
-                                       'replicasets': replicasets, 'pods': observed_pods}
+        pods = self.get('pods', namespace='pepr-system')['items']
+        result = validate_pepr(deployments, replicasets, pods, phase,
+                               self.state['peprUIDs'], self.state['peprTemplateFingerprints'])
+        self._last_pepr_observation = {'deployments': deployments, 'replicasets': replicasets, 'pods': pods}
         return result
 
     def stage_admission(self, phase):

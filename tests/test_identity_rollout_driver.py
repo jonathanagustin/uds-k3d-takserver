@@ -85,6 +85,23 @@ def pepr_fixture(phase='strict'):
 
 class IdentityFixtures(unittest.TestCase):
     @unittest.skipUnless(shutil.which('helm'), 'Helm required for actual source RBAC render')
+    def test_disjoint_port_filter_cannot_hide_invalid_or_wildcard_branches(self):
+        package,policies,network,baseline=policy_fixture()
+        for rule in package['spec']['network']['allow']:rule['port']=5432
+        for policy in policies:
+            for rule in policy['spec']['rules']:
+                for target in rule['to']:target['operation']['ports']=['5432']
+        def check(branches):
+            extra={'metadata':{'name':'foreign','namespace':'takserver','uid':'foreign','resourceVersion':'1'},
+                   'spec':{'selector':copy.deepcopy(policies[0]['spec']['selector']),
+                           'rules':[{'from':[{'source':{'principals':['cluster.local/ns/foreign/sa/foreign']}}],
+                                     'to':[{'operation':{'ports':ports}} for ports in branches]}]}}
+            return driver.validate_policies(package,policies+[extra],network,baseline)
+        self.assertTrue(check([['443']]))
+        for branches in [[['443','*']],[['443','invalid']],[['0']],[['65536']],['443'],[443],[[443]],
+                         [['443'],['*']],[['443'],[]],[['443'],['5432']],[['5432']]]:
+            with self.subTest(branches=branches),self.assertRaises(ValueError):check(branches)
+
     def test_actual_chart_rbac_contract_rejects_permission_expansion(self):
         rendered=subprocess.run(['helm','template','uds-takserver-config',str(ROOT/'charts/takserver'),
                                  '--namespace','takserver','--set','workloadIdentityPhase=transition'],

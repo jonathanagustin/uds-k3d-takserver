@@ -319,6 +319,60 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('STAGED_AGE_ARCHIVE') and os.environ.get('STAGED_AGE_KEYGEN'),
                      'opt-in official age archive/keygen required for genuine roundtrip')
 class GenuineAgeProof(unittest.TestCase):
+    def test_real_official_package_collector_roundtrip_and_wrong_key(self):
+        pin = AGE.PINS['x86_64']
+        archive = Path(os.environ['STAGED_AGE_ARCHIVE']).read_bytes()
+        keygen = Path(os.environ['STAGED_AGE_KEYGEN'])
+        keygen_hash = '0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899'
+        self.assertEqual(AGE.digest(keygen.read_bytes()), keygen_hash)
+        with tempfile.TemporaryDirectory(prefix='staged-package-age-proof-') as temporary:
+            root = Path(temporary)
+            self.assertNotIn(AGE.ROOT, root.parents)
+            folder, output, env, payload, journal, _owner = package_fixture(root)
+            head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=AGE.ROOT).decode().strip()
+            payload['binding']['sourceSHA'] = journal['guard']['sourceSHA'] = head
+            save_package(folder, payload, journal)
+            private = folder / AGE.PACKAGE_NAME
+            plain = private.read_bytes()
+            self.assertIn(b'PRIVATE_SECRET_STDOUT', plain)
+            self.assertIn(b'PRIVATE_SECRET_STDERR', plain)
+            for name in ('correct', 'wrong'):
+                key = root / (name + '.key')
+                subprocess.run([str(keygen), '-o', str(key)], capture_output=True, timeout=10, check=True)
+                self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+            recipient = subprocess.run([str(keygen), '-y', str(root/'correct.key')],
+                                       capture_output=True, timeout=10, check=True).stdout.decode().strip()
+            self.assertTrue(AGE.RECIPIENT.fullmatch(recipient))
+            env.update(STAGED_AGE_RECIPIENT=recipient, GITHUB_EVENT_NAME='workflow_dispatch',
+                       GITHUB_REF='refs/heads/main', GITHUB_REPOSITORY='jonathanagustin/uds-takserver',
+                       GITHUB_SHA=head)
+            def acquire(directory):
+                return AGE.extract_age(archive, pin, directory), pin
+            captured = io.StringIO()
+            # Actual context, source checks, sealed snapshot and encryption run;
+            # only the official archive's network acquisition is replaced.
+            with patch.dict(os.environ, env, clear=True), patch.object(AGE, 'acquire_age', side_effect=acquire), \
+                    contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                self.assertEqual(AGE.main(), 0)
+            cipher = root / AGE.OUTPUT_NAME / 'first-failure.age'
+            self.assertEqual(output.read_bytes(), b'ready=true\n')
+            self.assertEqual([path.name for path in cipher.parent.iterdir()], ['first-failure.age'])
+            self.assertEqual(cipher.stat().st_mode & 0o777, 0o600)
+            self.assertLessEqual(cipher.stat().st_size, AGE.CIPHER_LIMIT)
+            self.assertTrue(private.read_bytes() == plain)
+            self.assertNotIn('PRIVATE_SECRET', captured.getvalue())
+            tools = root / 'decrypt-tools'; tools.mkdir()
+            binary = AGE.extract_age(archive, pin, tools)
+            decrypted = subprocess.run([str(binary), '--decrypt', '-i', str(root/'correct.key'), str(cipher)],
+                                       capture_output=True, timeout=10, check=True)
+            # Boolean comparison prevents secret-bearing bytes in a failed diff.
+            self.assertTrue(decrypted.stdout == plain)
+            wrong = subprocess.run([str(binary), '--decrypt', '-i', str(root/'wrong.key'), str(cipher)],
+                                   capture_output=True, timeout=10)
+            self.assertNotEqual(wrong.returncode, 0)
+            self.assertEqual(wrong.stdout, b'')
+            self.assertEqual(AGE.digest(keygen.read_bytes()), keygen_hash)
+
     def test_real_official_keygen_encrypt_decrypt_wrong_key_and_integrity(self):
         pin = AGE.PINS['x86_64']
         archive = Path(os.environ['STAGED_AGE_ARCHIVE']).read_bytes()

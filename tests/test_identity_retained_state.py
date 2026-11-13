@@ -23,6 +23,32 @@ class RetainedStateGuards(unittest.TestCase):
                 'users':[{'user':{'client-certificate-data':'Zml4dHVyZQ==','client-key-data':'Zml4dHVyZQ=='}}]}
         return SimpleNamespace(guard=lambda:None,core_unchanged=lambda:None,
             get=lambda *a,**k:{'items':[]},kube=lambda *a:'{}' if a[1]=='namespace' else json.dumps(obj),command=lambda argv:json.dumps(client))
+    def test_sentinel_operations_pass_exact_namespace_container_and_safe_diagnostics(self):
+        for namespace in ('takserver','cloudtak'):
+            for operation in ('create','read','remove'):
+                with self.subTest(namespace=namespace,operation=operation):
+                    driver=SimpleNamespace(exec=MagicMock(return_value=SimpleNamespace(returncode=7,stderr='private remote error')),journal=MagicMock())
+                    R.sentinel_exec(driver,operation,namespace,'bound-pod','bound-container',['private command'],'private input')
+                    driver.exec.assert_called_once_with('bound-pod','bound-container',['private command'],'private input',namespace=namespace)
+                    driver.journal.assert_called_once_with('retained-sentinel-exec',operation=operation,namespace=namespace,exitStatus=7,stderrPresent=True)
+        with self.assertRaises(ValueError):R.sentinel_exec(driver,'create','kube-system','pod','container',[])
+
+    def test_mount_selects_actual_pvc_container_and_rejects_ambiguous_or_foreign_mount(self):
+        pvc={'metadata':{'name':'data-db-0','namespace':'cloudtak'}}
+        pod={'metadata':{'name':'db-0','ownerReferences':[{'controller':True,'kind':'StatefulSet','uid':'db-owner'}]},
+             'spec':{'volumes':[{'name':'data','persistentVolumeClaim':{'claimName':'data-db-0'}}],
+                     'containers':[{'name':'sidecar','volumeMounts':[]},{'name':'postgis','volumeMounts':[{'name':'data','mountPath':'/data'}]}]}}
+        driver=SimpleNamespace(get=lambda *a,**kw:{'items':[pod]})
+        with patch.object(R,'claim_parent',return_value={'statefulSetUID':'db-owner'}):
+            self.assertEqual(R.mount(driver,pvc),('db-0','postgis','/data'))
+            pod['spec']['containers'][0]['volumeMounts']=[{'name':'data','mountPath':'/other'}]
+            with self.assertRaises(ValueError):R.mount(driver,pvc)
+            pod['spec']['containers'][0]['volumeMounts']=[]
+            pod['spec']['containers'][1]['name']='invalid container'
+            with self.assertRaises(ValueError):R.mount(driver,pvc)
+        pvc['metadata']['namespace']='kube-system'
+        with self.assertRaises(ValueError):R.mount(driver,pvc)
+
     def test_delete_sends_actual_uid_and_resourceversion_preconditions(self):
         obj=self.secret();rec=self.record(obj);driver=self.driver(obj);opener=MagicMock();opener.open.return_value.__enter__.return_value.status=200
         with patch.object(R.ssl,'create_default_context',return_value=MagicMock()),patch.object(R.urllib.request,'build_opener',return_value=opener):R.conditional_delete(driver,rec)

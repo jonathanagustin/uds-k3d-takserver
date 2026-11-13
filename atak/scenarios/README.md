@@ -211,8 +211,13 @@ The actual acceptance phases are:
 1. Build the canonical package from the mission lane's locked fixture sources.
    Check the official Android gitlink is still `9f6893d`; compare the installed
    device APK SHA-256 with `/atak-civ.apk` in the already-selected driver image.
-   Stage the package, open the native navigation menu and **All tools & plugins**
-   (the icon toolbar has no textual accessibility labels in this source), then
+   Stage the package, open the native navigation menu's current-loadout
+   **Tools** grid, return through its settings action to **Toolbars**, and
+   select the labelled **All tools & plugins** row. Current-loadout overflow
+   excludes visible toolbar tools such as Import and Overlays. The settings
+   action is selected from the source-defined toolbar hierarchy immediately
+   before its close button, using live bounds and strict shape checks; its
+   unlabelled icon is not found by fixed coordinates. Then
    use **Import → Local SD → Download → selected
    DPK → OK → Copy** UI route. No launcher action, private broadcast or invented
    content URI stands in for import. Find the actual marker in Overlays, open
@@ -252,8 +257,13 @@ three phases, not just dispatch or baseline e2e. UI Broadcast plus a fresh
 Android-only challenge establishes the tested sequence; it is not a universal
 claim about attribution of unrelated auto-broadcast traffic. Attachment opening
 and other peer/client/platform versions remain outside these acceptance gates.
-No hosted scenario execution, new footage or new interoperability success has
-yet qualified this source extension.
+The first hosted attempt passed the existing device/TLS/location/viewer baseline
+and staged this package, then failed in navigation before import. Its receipt
+retains zero passed scenario phases; owned cleanup verified actual absence.
+The Tools-grid selector correction and name-edit behavior have offline coverage
+and still require a new actual device run. No new interoperability success is
+claimed. The minimal actual UI fixture and exact official source references are
+in `tests/fixtures/atak-tools-grid.README.md`.
 
 The workflow excludes inactive scenario documentation but explicitly reincludes
 all three runtime scenario scripts. Changes to the consumed mission builder,

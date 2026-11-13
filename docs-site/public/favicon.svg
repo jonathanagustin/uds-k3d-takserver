@@ -1,17 +1,2 @@
 <!-- Copyright 2026 uds-takserver authors; SPDX-License-Identifier: GPL-3.0-only -->
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">TAK on UDS — Connected stack</title>
-  <desc id="desc">Three platform layers share a connected relay that ends in a navigation heading.</desc>
-  <style>
-    .ink { fill: #0F172A; }
-    @media (prefers-color-scheme: dark) { .ink { fill: #F8FAFC; } }
-  </style>
-  <g class="ink" fill="#0F172A">
-    <rect x="8" y="16" width="40" height="8" rx="2"/>
-    <rect x="8" y="32" width="40" height="8" rx="2"/>
-    <rect x="8" y="48" width="40" height="8" rx="2"/>
-    <path d="M40 20H48V52H40Z"/>
-    <path d="M56 4 52 32 40 20 28 12Z"/>
-  </g>
-  <path fill="#22D3EE" d="m51 10-2 12-5-6-6-2Z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title"><title id="title">TAK Server on UDS — Field mark</title><style>.ink{fill:#000}@media(prefers-color-scheme:dark){.ink{fill:#fff}}</style><path class="ink" d="M12 8H96L84 24H56V64H40V24H0Z M14 32H32V72H64V32H82V72L66 88H30L14 72Z"/></svg>

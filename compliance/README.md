@@ -9,22 +9,22 @@ are procedures to rerun, not claims that a new live assessment passed.
 
 Issue [#37](https://github.com/jonathanagustin/uds-takserver/issues/37) was
 explicitly deferred until Lula releases again or compliance becomes a priority.
-The latest npm version is still 0.9.5, with registry activity last modified on
-2026-03-12. The foundational mappings are separate from activating the deferred automated crawler.
+This preparation uses the published npm version 0.9.5. The foundational mappings
+are separate from activating the deferred automated crawler.
 All source associations have mapping status `planned` pending review; their
 presence does not turn the parent control into an implemented control.
 
 ## Inspect the evidence
 
-Use the pinned CLI from the repository root:
+Use the pinned command-line program from the repository root:
 
 ```bash
 npx --yes lula2@0.9.5 ui --dir compliance --port 3000 --no-open-browser
 ```
 
-Open `http://localhost:3000` locally. The UI is an editor with no application
+Open `http://localhost:3000` locally. The user interface is an editor with no application
 authentication; use it on a trusted local machine and do not publish it.
-The pinned CLI was opened locally with all fourteen controls and mappings,
+The pinned program was opened locally with all fourteen controls and mappings,
 and the implementation view was inspected:
 
 ![Lula 0.9.5 displaying the draft SC-8 implementation](evidence/lula-0.9.5.png)
@@ -39,7 +39,7 @@ uv run --no-project --with pyyaml==6.0.3 python -B .github/scripts/check-complia
 uv run --no-project --with pyyaml==6.0.3 python -B -m unittest tests.test_compliance_mappings -v
 ```
 
-The checker rejects missing files, unsafe paths, unknown/duplicate UUIDs,
+The checker rejects missing files, unsafe paths, unknown or duplicate universally unique identifiers (UUIDs),
 unknown control IDs, undeclared source locations, incomplete marker pairs, and
 crossed markers. It scans tracked and untracked source files while respecting
 Git ignore rules, so a new marker cannot silently bypass local validation.
@@ -47,56 +47,50 @@ Multiple distinct blocks may share a UUID when all locations are declared.
 
 ## What the workflow can prove
 
-The automatic Lula workflow validates mappings for every pull request, including
-forks. It does not crawl PRs or post comments. Automated live crawler activation
-remains deferred under issue #37; the foundational marker set can be reviewed
-separately from that activation decision.
+The existing read-only Lula workflow validates mappings for every pull request,
+including forks. It does not post comments. This branch prepares a separate
+comment workflow for maintainer review; it has not been published or activated.
+Once merged, the prepared workflow will use the same safety variant for eligible
+`pull_request_target` events and explicitly authorized manual requests.
 
-A local, not-yet-published workflow preparation adds a trusted-main
-`pull_request_target` comment path alongside the explicitly authorized manual
-path. Both use the same live preflight, target only open non-draft same-repository
-PRs into `main`, reject more than 30 changed files, and require the existing
-mapped CoreConfig base marker pair. They check out only immutable `github.sha`: the trusted base commit for
-`pull_request_target` and the guarded main run commit for manual dispatch, never
-PR code. The existing read-only PR mapping validation remains separate.
+Both paths require an open, non-draft, same-repository pull request targeting
+`main`, with the existing mapped CoreConfig base marker pair. They check out only
+immutable `github.sha`: the trusted base commit for the automatic event or the
+guarded main run commit for manual dispatch. They never check out or execute
+pull-request code. Both paths share one queue per pull request.
 
-The prepared paths share per-PR serialization and use an explicit project safety
-variant of the pinned official crawler. It verifies the npm archive before
-installation, disables install scripts, verifies the exact original bundled
-source before patching, and grants the API token only to API preflight/posting
-steps. Source SHA/count bindings are rechecked before posting. The variant refuses
-partial file analysis, creates a replacement before cleanup, and removes only
-older exact-header comments by the authenticated GitHub Actions bot. With no
-findings it leaves prior comments unchanged; those may be stale historical
-findings. No workflow publication, crawl, or actual comment acceptance is claimed
-from this local preparation.
+The prepared workflow verifies the npm archive before installation, disables
+installation scripts, and checks the exact original bundled source before
+patching. Only preflight and posting steps receive a GitHub application
+programming interface (API) token. Preflight binds the source commit hashes and
+file count; the crawler checks them again before posting. The variant refuses
+partial file analysis, creates a replacement first, and removes only older
+exact-header comments by the authenticated GitHub Actions bot. With no findings,
+prior comments remain and may be stale.
 
-A later small PR must modify an already mapped block and demonstrate the
-expected UUID in its actual comment, with the workflow source, run and PR source
-identities retained. This foundation's newly introduced markers cannot prove
-that acceptance. Publication/activation requires a separate maintainer review
-of the prior deferral; this local work does not silently lift it.
+Two verified limits in the pinned official command still apply:
 
-Two verified limits in the pinned 0.9.5 CLI prevent claiming complete crawl
-acceptance today:
-
-- `crawl` calls `octokit.pulls.listFiles` without pagination or `per_page`.
-  GitHub therefore returns at most the first 30 changed files. The workflow
-  fails its preflight for larger pull requests instead of silently reporting
-  no compliance impact. This draft itself adds more than 30 files.
-- Its `getChangedBlocks` skips a UUID when the base file has no corresponding
-  marked block. A pull request introducing markers does not demonstrate that
-  later edits will produce the expected comment. After the marker set is
-  merged by a maintainer, a separate small pull request must change an
-  existing mapped block and verify the comment contains that UUID.
+- `crawl` calls `octokit.pulls.listFiles` without pagination or `per_page`, so
+  GitHub returns at most 30 changed files. A valid automatic request over that
+  limit skips with fixed reason `unsupported_changed_file_count`, before Node
+  installation or comment changes. Manual requests over the limit fail.
+  Malformed responses, invalid source bindings and other guard errors remain
+  failures; there is no blanket error suppression.
+- `getChangedBlocks` skips a mapping identifier when the base file has no
+  corresponding marked block. Introducing markers does not prove later edits
+  will produce a comment. The marker foundation is already merged; a separate
+  small pull request must change an existing mapped block and demonstrate its
+  expected UUID in an actual comment. Retain the run, workflow source and
+  pull-request source identities with that evidence.
 
 These observations come from the published `lula2@0.9.5` bundle's
-`cli/commands/crawl.ts` code in `dist/index.js`. Further review found that
-unmodified cleanup selects the signature substring without an author check,
-even with no findings. The prepared workflows therefore explicitly use the
-[declared project safety variant](../.github/lula/README.md), retaining official
-analysis and accurate version/license provenance. Its mocked API tests are not
-live comment acceptance. Do not substitute unmodified upstream cleanup.
+`cli/commands/crawl.ts` code in `dist/index.js`. Unmodified cleanup selects the
+signature substring without checking the author, even with no findings. The
+prepared workflow therefore uses the explicitly
+[declared project safety variant](../.github/lula/README.md), preserving official
+analysis and accurate version/license provenance. Local simulated-API tests do
+not establish live comment acceptance. Publication requires maintainer review
+of the prior deferral; this preparation does not silently lift it.
 
 ## Evidence boundaries
 
@@ -118,16 +112,7 @@ logic when the implementation is upstream-owned. In particular,
 `publish-cert-configmap.sh` is supplied by the TAK image; the mapped cert-init
 Job invokes it but this repository does not vendor that script.
 
-The manual preflight requires the API response for the exact mapped CoreConfig
-path and complete, ordered XML-comment marker pairs. Marker substrings in a
-value, reversed pairs, and unfinished or nested blocks do not establish the
-existing baseline. These checks do not replace the outstanding live comment
-acceptance or activate automatic posting.
-
-In the local activation preparation, a valid automatic PR exceeding the pinned
-30-file limit skips with fixed reason `unsupported_changed_file_count`; no Node
-installation, crawler execution, binding file or comment mutation follows.
-Manual requests over that limit still fail. Malformed API/JSON responses,
-invalid source bindings and other guard errors remain failures; there is no
-blanket error suppression. Checkout uses the workflow run's immutable trusted
-commit rather than a mutable main ref.
+The shared preflight requires the API response for the exact mapped CoreConfig
+path and complete, ordered XML-comment marker pairs. Marker text inside a value,
+reversed pairs, and unfinished or nested blocks do not establish the existing
+baseline. These checks do not replace the outstanding live comment acceptance.

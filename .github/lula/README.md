@@ -1,74 +1,78 @@
-# Lula 0.9.5 safety variant (local activation preparation)
+# Lula 0.9.5 safety variant
+
+This branch prepares automatic comment posting for maintainer review. It has not
+been published or activated, and no live comment acceptance is claimed. Once
+merged, the workflow will use this variant for manual requests and eligible
+pull requests targeting `main`. The separate mapping validator remains read-only.
 
 The official `lula2@0.9.5` command has only `review` and `comment` posting modes;
-neither is a render-only mode. In comment mode its cleanup selects comments by
-the `LULA_SIGNATURE` substring without author checks. It also cleans up when
-there are no findings, and catches individual file-fetch errors. Automatic use
-of that unmodified command could delete a human comment quoting its signature.
+neither produces findings without posting. Its cleanup selects comments by the
+`LULA_SIGNATURE` substring without checking the author. It also deletes matching
+comments when there are no findings and continues after individual file-read
+errors. Unmodified automatic use could delete a human comment quoting a finding.
 
-This directory contains a narrow, explicit project variant, not a new upstream
-release or a replacement compliance crawler. `source.lock.json` records the
-published npm archive integrity and exact original file hashes. The unchanged
-official crawl module is retained for actual-source mocked API tests under its
-original Apache-2.0 license. The patch helper is project GPL-3.0-only tooling;
-generated upstream-derived JavaScript retains the upstream license. Distribute
-the included upstream license and this modification notice with that output.
+`source.lock.json` records the published npm archive integrity and original file
+hashes. The unchanged official crawl module is retained for tests that run its
+actual analysis against a simulated GitHub application programming interface
+(API). It retains its Apache-2.0 license. The patch helper is project
+GPL-3.0-only tooling; generated JavaScript retains the upstream license.
+Distribute the included upstream license and this modification notice with it.
+This is an explicit project variant, not a new upstream Lula release.
 
-The patch changes only posting safety and fatal propagation of file-read errors:
+The variant keeps official block analysis and comment formatting, with these
+posting safeguards:
 
-- Support comment mode only; retain official block analysis and comment format.
-- Stop on modified/deleted file-read errors before any comment mutation.
-- With no findings, neither create nor delete comments. Prior findings therefore
-  remain historical and may become stale; no clean/current assessment is implied.
-- Create the new finding first. Its API response identifies the actual author
-  used by the token. Cleanup requires the exact GitHub.com Actions bot ID
-  `41898282`, login `github-actions[bot]`, and type `Bot`. Other token authors
-  are unsupported. Unexpected identity stops cleanup after creation.
-- Enumerate comments before deleting anything. Delete only older comments with
-  that same author identity and the exact opening Lula signature/header. Human
-  quotations, other bots, a copied marker elsewhere, and the new comment survive.
-  A failed create cannot remove the old finding; cleanup failure leaves duplicates
-  and fails the command rather than claiming replacement succeeded.
+- Support comment mode only. Stop on modified or deleted file-read errors before
+  changing any comment.
+- With no findings, neither create nor delete comments. Prior comments may become
+  stale; their presence does not establish a current assessment.
+- Create the replacement first. Its API response identifies the token's actual
+  author. Cleanup requires GitHub.com Actions bot identifier `41898282`, login
+  `github-actions[bot]`, and type `Bot`. Other token authors are unsupported.
+  An unexpected author stops cleanup after creation.
+- Finish listing comments before deleting anything. Delete only comments older
+  than the replacement, with that same bot identity and exact opening Lula
+  signature/header. Human quotations, other bots and newer comments survive.
+  Creation failure leaves old findings intact; cleanup failure leaves duplicates
+  and fails the command.
 
-Both official `dist/index.js` (the actual bundled CLI entry) and the standalone
-`dist/cli/commands/crawl.js` are supported by exact pre-patch hashes. For an
-already installed official package, prepare an exclusive new sibling file:
+Both official `dist/index.js` (the bundled command-line entry point) and
+`dist/cli/commands/crawl.js` are supported by exact original hashes. For an
+installed official package, create a new sibling file:
 
 ```sh
 python3 .github/lula/patch_crawl.py --archive /verified/lula2-0.9.5.tgz \
   /installed/lula2/dist/index.js /installed/lula2/dist/index.safe.mjs
 ```
 
-The helper verifies archive SHA-512 and original source SHA-256, rejects source
-drift and existing output, and performs no network requests or execution. It
-does not install npm dependencies, fetch credentials, or invoke the generated
-CLI. Version pinning of the package does not freeze every transitive dependency.
+The helper verifies Secure Hash Algorithm (SHA) checksums: SHA-512 for the archive
+and SHA-256 for original source. It rejects changed source and existing output.
+It makes no network requests, installs no dependencies and executes no generated
+code. Pinning the package version does not freeze every indirect dependency.
 
-The local workflow preparation uses this variant for both manual and automatic
-`pull_request_target` entry points, with immutable trusted `github.sha` checkout only (base commit for PR-target,
-guarded main run commit for manual), same-repository
-open non-draft main-target PR guards, the 30-file bound, existing base SC-8 markers,
-and job-only PR write permission. It does not check out or execute PR code or
-interpolate PR metadata into shell code. Both entry points serialize the same PR.
-Archive integrity is verified before npm installation; install scripts are disabled,
-and the installation step receives no API credential. The crawler binds live
-base/head SHAs and file count to preflight, checks complete file-list length, and
-reads current PR state again immediately before posting. A changed/unsupported PR
-fails before mutation. A change after that final API read cannot be made atomic
-with GitHub comment creation; comments are observations, not an approval or merge
-check. This local branch has not been published or activated. The read-only
-mapping workflow remains separate and never posts.
+After merge, manual and `pull_request_target` runs will share one queue per pull
+request. Checkout is the immutable trusted `github.sha`: the base commit for the
+automatic event and the guarded main run commit for manual dispatch. The workflow
+never checks out or executes pull-request code or inserts its metadata into shell
+code. Write permission is limited to the comment job.
 
-The existing deferral until a new Lula release or explicit compliance priority
-still applies. Local mocked API tests establish these safety behaviors, not live
-comment acceptance. A later authorized small PR changing an existing mapped block
-must produce an actual comment with the expected UUID and preserved run/source
-and PR identities. No crawl, comment, or GitHub write was performed here.
+Both paths use the same preflight checks for an open, non-draft, same-repository
+pull request targeting `main`, with existing base SC-8 markers. A valid automatic
+request exceeding 30 changed files skips with fixed reason
+`unsupported_changed_file_count`, before Node installation or comment changes.
+Manual requests over that limit fail. Malformed responses, invalid source
+bindings and other guard errors remain failures.
 
-In the local activation preparation, a valid automatic PR exceeding the pinned
-30-file limit skips with fixed reason `unsupported_changed_file_count`; no Node
-installation, crawler execution, binding file or comment mutation follows.
-Manual requests over that limit still fail. Malformed API/JSON responses,
-invalid source bindings and other guard errors remain failures; there is no
-blanket error suppression. Checkout uses the workflow run's immutable trusted
-commit rather than a mutable main ref.
+Archive integrity is checked before npm installation, installation scripts are
+disabled, and that step receives no API credential. The crawler binds base/head
+commit hashes and file count to preflight, requires a complete file list, and
+checks current pull-request state again immediately before posting. A later
+change cannot be made atomic with GitHub comment creation; these comments are
+observations, not approval or merge checks.
+
+The prior deferral until a new Lula release or explicit compliance priority
+requires maintainer review before publication. Local simulated-API tests prove
+the safeguards above, not live acceptance. A later authorized small pull request
+must change an existing mapped block and produce an actual comment containing
+its expected mapping identifier, with run, source and pull-request identities
+retained. No GitHub write was performed during this preparation.

@@ -178,6 +178,8 @@ class PackageTrial(D.Driver):
     def stage_admission(self,*args):raise ValueError('direct admission phase mutation forbidden in package trial')
 
     def initialize(self):
+        binding=self.bind_zarf_domain(Path(self.bound['plan']))
+        D.require(binding['configSHA256']==self.bound['configSHA256'] and binding['DOMAIN']==self.bound['variables']['DOMAIN'],'package/render DOMAIN binding differs')
         self.prepare()  # Initial shared observation only; creates no trial resources.
         D.require(Path(self.bound['archive']).name.startswith('zarf-package-takserver-'+self.state['architecture']+'-'),'bound archive architecture differs from guarded node')
         self.require_cloudtak()

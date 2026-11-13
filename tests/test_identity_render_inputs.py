@@ -158,7 +158,7 @@ class RenderInputTests(unittest.TestCase):
         for versions in (['v1'], ['monitoring.coreos.com/v1', 'v1']):
             with self.subTest(versions=versions), tempfile.TemporaryDirectory() as directory:
                 instance = driver.Driver(Path(directory) / 'journal.json')
-                instance.values = {}
+                instance.values = {'domain':'capability-fixture.example'}
                 instance._package_schema = {'type': 'object'}
                 instance.observe_render_inputs = lambda: {'apiVersions': versions}
                 commands = []
@@ -204,3 +204,62 @@ class RenderInputTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DomainPostrenderTests(unittest.TestCase):
+    def plan(self,directory,domain='bound.example'):
+        import yaml
+        root=Path(directory);config=root/'uds-config.yaml';config.write_text(yaml.safe_dump({'variables':{'takserver':{'DOMAIN':domain,'TAK_IMAGE_TAG':'unchanged'}}}))
+        plan=root/'plan.json';plan.write_text(json.dumps({'schema':1,'sourceSHA':'a'*40,'files':{'config':{'path':config.name,'sha256':driver.hashlib.sha256(config.read_bytes()).hexdigest()}}}))
+        return plan,config
+
+    def test_only_known_domain_token_changes_and_unbound_token_refuses(self):
+        original={'sso':[{'attributes':{'post.logout.redirect.uris':'https://takserver.###ZARF_VAR_DOMAIN###/login/redirect','other':'###ZARF_VAR_OTHER###'},'redirectUris':['https://takserver.###ZARF_VAR_DOMAIN###/login/redirect'],'publicClient':False}]}
+        before=copy.deepcopy(original)
+        with self.assertRaisesRegex(ValueError,'hash-bound'):inputs.postrender_domain(original)
+        result=inputs.postrender_domain(original,'bound.example')
+        self.assertEqual(original,before)
+        self.assertEqual(result['sso'][0]['redirectUris'],['https://takserver.bound.example/login/redirect'])
+        self.assertEqual(result['sso'][0]['attributes']['post.logout.redirect.uris'],result['sso'][0]['redirectUris'][0])
+        self.assertEqual(result['sso'][0]['attributes']['other'],'###ZARF_VAR_OTHER###');self.assertFalse(result['sso'][0]['publicClient'])
+        self.assertEqual(inputs.postrender_domain({'url':'explicit.example'}),{'url':'explicit.example'})
+
+    def test_plan_source_config_hash_domain_and_paths_are_not_inferred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan,config=self.plan(directory)
+            binding=inputs.bind_domain_plan(plan,'a'*40);self.assertEqual(binding['DOMAIN'],'bound.example')
+            with self.assertRaisesRegex(ValueError,'source differs'):inputs.bind_domain_plan(plan,'b'*40)
+            config.write_text('changed')
+            with self.assertRaisesRegex(ValueError,'hash differs'):inputs.bind_domain_plan(plan,'a'*40)
+        for domain in ('bad/name','bad name','bad\nname','bad..name','-bad.example','bad.example:443'):
+            with self.subTest(domain=domain),tempfile.TemporaryDirectory() as directory:
+                plan,_=self.plan(directory,domain)
+                with self.assertRaisesRegex(ValueError,'DNS name'):inputs.bind_domain_plan(plan,'a'*40)
+        with tempfile.TemporaryDirectory() as directory:
+            plan,_=self.plan(directory);value=json.loads(plan.read_text());value['files']['config']['path']='../outside';plan.write_text(json.dumps(value))
+            with self.assertRaisesRegex(ValueError,'unsafe'):inputs.bind_domain_plan(plan,'a'*40)
+
+    @unittest.skipUnless(shutil.which('helm'),'Helm required for real DOMAIN postrender regression')
+    def test_actual_helm_raw_values_postrender_both_uris_and_keep_other_sso_drift_visible(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(driver.os.environ,{'GITHUB_SHA':'a'*40}):
+            plan,config=self.plan(directory)
+            instance=driver.Driver(Path(directory)/'journal');instance.guard=lambda:None
+            instance.bind_zarf_domain(plan);instance.values={'domain':'###ZARF_VAR_DOMAIN###'}
+            instance._package_schema={'type':'object'};instance.observe_render_inputs=lambda:{'apiVersions':['v1']}
+            payloads=[]
+            def command(argv,payload=None):
+                payloads.append(json.loads(payload));return subprocess.run(argv,input=payload,text=True,capture_output=True,check=True).stdout
+            instance.command=command
+            rendered,_=instance.render('shared')
+            self.assertEqual(payloads[0]['domain'],'###ZARF_VAR_DOMAIN###')
+            sso=rendered['spec']['sso'][0];self.assertEqual(sso['redirectUris'],['https://takserver.bound.example/login/redirect'])
+            self.assertEqual(sso['attributes']['post.logout.redirect.uris'],sso['redirectUris'][0])
+            literal=subprocess.run(['helm','template','uds-takserver-config',str(ROOT/'charts/takserver'),'--namespace','takserver','--set','domain=bound.example'],text=True,capture_output=True,check=True).stdout
+            import yaml
+            actual=next(x for x in yaml.safe_load_all(literal) if x and x.get('kind')=='Package')
+            self.assertEqual(rendered['spec'],actual['spec'])
+            altered=copy.deepcopy(actual['spec']);altered['sso'][0]['publicClient']=True
+            self.assertNotEqual(rendered['spec'],altered)
+            self.assertIn('/spec/sso/0/publicClient',inputs.safe_difference(rendered['spec'],altered)['differingPaths'])
+            config.write_text('changed')
+            with self.assertRaisesRegex(ValueError,'config hash differs'):instance.render('shared')

@@ -164,3 +164,44 @@ def safe_difference(expected, actual):
     visit(expected, actual, '/spec')
     return {'expectedSHA256': digest(expected), 'actualSHA256': digest(actual),
             'differingPaths': paths, 'pathsTruncated': truncated}
+
+
+def bind_domain_plan(plan_path, source_sha):
+    """Read the reviewed staged plan/config; never infer a value from live URLs."""
+    from pathlib import Path, PurePosixPath
+    import yaml
+    require(isinstance(source_sha,str) and re.fullmatch(r'[a-f0-9]{40}',source_sha),'deployment source identity invalid')
+    def read(path):
+        path=Path(path).absolute()
+        require(path.resolve()==path and path.is_file() and not any(p.is_symlink() for p in (path,*path.parents)) and path.stat().st_size<=MAX_BYTES,'deployment binding is not a bounded canonical file')
+        data=path.read_bytes();require(len(data)<=MAX_BYTES,'deployment binding exceeds bound')
+        return path,data
+    plan_path,raw_plan=read(plan_path);plan=json.loads(raw_plan)
+    require(plan.get('schema')==1 and plan.get('sourceSHA')==source_sha,'deployment plan source differs')
+    item=plan['files']['config'];relative=PurePosixPath(item['path'])
+    require(not relative.is_absolute() and '..' not in relative.parts and relative.parts,'unsafe deployment config reference')
+    config_path,raw_config=read(plan_path.parent/relative)
+    require(hashlib.sha256(raw_config).hexdigest()==item['sha256'],'deployment config hash differs')
+    config=yaml.safe_load(raw_config)
+    require(isinstance(config,dict) and set(config)=={'variables'} and isinstance(config['variables'],dict) and set(config['variables'])=={'takserver'} and isinstance(config['variables']['takserver'],dict),'deployment variables contract differs')
+    domain=config['variables']['takserver']['DOMAIN']
+    require(isinstance(domain,str) and 0<len(domain)<=253 and all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?',label) for label in domain.split('.')),'bound deployment DOMAIN is not a DNS name')
+    return {'plan':str(plan_path),'planSHA256':hashlib.sha256(raw_plan).hexdigest(),'config':str(config_path),'configSHA256':hashlib.sha256(raw_config).hexdigest(),'DOMAIN':domain}
+
+
+def postrender_domain(value, domain=None):
+    """Emulate only Zarf's known DOMAIN token, leaving other Helm data intact."""
+    _shape(value)
+    marker='###ZARF_VAR_DOMAIN###'
+    def visit(node):
+        if isinstance(node,str):
+            if marker not in node:return node
+            require(domain is not None,'Zarf DOMAIN token requires a hash-bound candidate plan')
+            return node.replace(marker,domain)
+        if isinstance(node,dict):
+            require(all(marker not in key for key in node),'DOMAIN token in an unsupported structural key')
+            return {key:visit(item) for key,item in node.items()}
+        if isinstance(node,list):return [visit(item) for item in node]
+        return copy.deepcopy(node)
+    result=visit(value);require(len(encoded(result))<=MAX_BYTES,'postrendered specification exceeds bound')
+    return result

@@ -231,6 +231,8 @@ def identity_receipt(directory, arch):
                     ordered.append((name, None))
             require(ordered == wanted, 'package phase traffic/application ordering incomplete')
             require(not fresh or 'fresh-strict-verified' in stages, 'fresh strict verification absent')
+            cloudtak=[step.get('phase') for step in journal['stages'] if step['stage']=='cloudtak-basemap-application-checks' and step.get('passed') is True]
+            require(cloudtak==['baseline','strict']+(['fresh-strict'] if fresh else []),'actual CloudTAK baseline/strict checks absent')
             bindings = journal.get('inputBindings') or {}
             require(set(bindings) == {'archiveSHA256', 'planSHA256', 'configSHA256'}
                     and all(re.fullmatch('[a-f0-9]{64}', h) for h in bindings.values()), 'package input bindings absent')

@@ -115,6 +115,7 @@ class IdentityPublicationTests(unittest.TestCase):
                                   {'stage': 'package-application-checks', 'phase': alias},
                                   {'stage': 'package-phase-evidence-'+alias, 'accepted': True},
                                   {'stage': 'package-observed-'+alias}]
+        for alias in ['baseline','strict']+(['fresh-strict'] if fresh else []):journal['stages'].append({'stage':'cloudtak-basemap-application-checks','phase':alias,'passed':True})
         if fresh: journal['stages'].append({'stage': 'fresh-strict-verified'})
         journal['stages'].append({'stage': 'package-roundtrip-verified'})
         (folder/'journal.json').write_text(json.dumps(journal))
@@ -130,11 +131,12 @@ class IdentityPublicationTests(unittest.TestCase):
                 value = S.publish(root, root/'public', 'amd64')
                 self.assertTrue(value['accepted'], value)
                 self.assertTrue(S.verify(root/'public/receipts')['accepted'])
-                for defect in ['traffic', 'order', 'archive']:
+                for defect in ['traffic', 'order', 'archive','cloudtak']:
                     broken = copy.deepcopy(journal)
                     if defect == 'traffic': broken['stages'][0]['checks'] = []
                     if defect == 'order': broken['stages'][0], broken['stages'][1] = broken['stages'][1], broken['stages'][0]
                     if defect == 'archive': broken['inputBindings']['archiveSHA256'] = '0'*64
+                    if defect == 'cloudtak':broken['stages']=[x for x in broken['stages'] if x['stage']!='cloudtak-basemap-application-checks']
                     (root/'package-identity/journal.json').write_text(json.dumps(broken))
                     with self.assertRaises(ValueError): S.receipt(root, 'amd64')
                 (root/'package-identity/journal.json').write_text(json.dumps(journal))

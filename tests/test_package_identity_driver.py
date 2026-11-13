@@ -46,7 +46,7 @@ class PackageGuards(unittest.TestCase):
         for kind in ['persistentvolumeclaims','secrets','configmaps','serviceaccounts','deployments']:
             with self.subTest(kind=kind),self.assertRaisesRegex(ValueError,'retained application state'):
                 P.require_clean_objects('takserver',kind,[{'metadata':{'name':'retained'}}])
-        P.require_clean_objects('takserver','configmaps',[{'metadata':{'name':'kube-root-ca.crt'}}])
+        with self.assertRaises(ValueError):P.require_clean_objects('takserver','configmaps',[{'metadata':{'name':'kube-root-ca.crt'}}])
         P.require_clean_objects('pepr-system','deployments',[{'metadata':{'name':'unrelated-core'}}])
     def test_changed_bound_config_or_archive_rejected(self):
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'GITHUB_SHA':'a'*40}):
@@ -99,3 +99,21 @@ class PackageGuards(unittest.TestCase):
                     instance.observe('strict')
                 self.assertEqual(calls,[('strict','package-fresh-strict' if fresh else 'package-strict')])
                 self.assertEqual(sum(args[0]=='package-application-checks' for args,kw in events),1)
+
+    def test_actual_cloudtak_task_is_required_at_baseline_strict_and_fresh_strict(self):
+        for phase in ('baseline','strict','fresh-strict'):
+            with self.subTest(phase=phase),tempfile.TemporaryDirectory() as directory:
+                instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None;instance.require_cloudtak=lambda:{'namespace':'same','deployment':'same','package':'same'}
+                calls=[];events=[];instance.command=lambda argv,**kw:(calls.append(argv) or '')
+                instance.journal=lambda stage,**kw:events.append((stage,kw))
+                instance.application_checks(phase)
+                self.assertIn(['uds','run','test:cloudtak','--no-progress'],calls)
+                self.assertIn(('cloudtak-basemap-application-checks',{'phase':phase,'passed':True}),events)
+    def test_cloudtak_missing_or_existing_task_skip_cannot_establish_acceptance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None
+            instance.require_cloudtak=lambda:{'namespace':'same'}
+            instance.command=lambda argv,**kw:'The cloudtak component is not deployed. Skipping.'
+            with self.assertRaisesRegex(ValueError,'skipped'):instance.application_checks('strict')
+            instance.require_cloudtak=lambda:(_ for _ in ()).throw(ValueError('missing component'))
+            with self.assertRaisesRegex(ValueError,'missing'):instance.application_checks('strict')

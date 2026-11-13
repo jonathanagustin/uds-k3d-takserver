@@ -215,3 +215,23 @@ also accompany rendering, so API capability/default changes cannot be waived.
 Public output contains fixed verdicts and reviewed input/guard/capture hashes,
 not private manifests. Existing f3c09ad1 runs do not establish this new schema's
 acceptance merely because their booleans or phase names look similar.
+
+Known API-generated retained state is source-bound rather than broadly ignored:
+`takserver-startup` must have the literal completed startup annotation and ready
+value. The CloudTAK admin copy must have its source label and exactly match the
+current certificate/keystore parents. The optional watcher enrollment cache is
+recognized only by its source label; active TakClient resources prevent retirement.
+UID/resourceVersion checks still apply to every exact deletion.
+
+Known infrastructure trust maps are never deleted by this cleanup. Before removal,
+their exact UID, public certificate data and source metadata are bound to the
+retained Kubernetes/Istio/Core authority map UID/data. The UDS bundle additionally
+requires the exact Package owner reference and controller labels from Core1.16.
+Only these bound observations may remain during clean-state checks; a reserved
+name alone, an extra payload, or changed UID/data/source still refuses acceptance.
+
+CloudTAK is required, not an optional skip, for this issue's package acceptance.
+The existing `test:cloudtak` task runs at baseline, strict and fresh strict, including
+its actual basemap positive/negative checks. Component identities are checked on
+both sides and explicit passed stages are required by the publisher. Other phases
+retain TLS/API/flow checks without repeatedly invoking mutation-heavy `test:all`.

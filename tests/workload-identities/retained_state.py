@@ -16,11 +16,25 @@ import yaml
 
 APP_RELEASES={'takserver':{'takserver','uds-takserver-config'},'cloudtak':{'uds-cloudtak'}}
 GENERATED_SECRETS={'takserver-ca-key','takserver-certs','tak-health-client'}
+SOURCE_CLEANUP={(ns,'Secret',name) for ns,name in [('takserver',name) for name in GENERATED_SECRETS|{'takserver-keystore','takclient-enrollment'}]+[('cloudtak','cloudtak-tak-admin')]}|{('takserver','ConfigMap','cert-migration'),('takserver','ConfigMap','takserver-startup')}
+
+def cleanup_allowed(rec):
+    return rec['namespace'] in APP_RELEASES and (rec['kind']=='PersistentVolumeClaim' and 'parent' in rec or (rec['namespace'],rec['kind'],rec['name']) in SOURCE_CLEANUP)
 
 def require(value,message):
     if not value:raise ValueError(message)
 
 def sha(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+
+SOURCE_FILES=('pepr/capabilities/workload.ts','pepr/capabilities/cloudtak-admin.ts','pepr/capabilities/takclient-credentials.ts')
+
+def source_files():
+    return {name:hashlib.sha256((Path(__file__).resolve().parents[2]/name).read_bytes()).hexdigest() for name in SOURCE_FILES}
+
+def require_origin(rec):
+    origin=rec.get('origin',{})
+    require(set(origin)=={'sourceFilesSHA256','storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256'} and origin['sourceFilesSHA256']==source_files(),'retained cleanup has no unchanged bound source origin')
+    require(all(re.fullmatch(r'[a-f0-9]{64}',origin[key]) for key in ('storedHooksSHA256','sourceGeneratorJobSHA256','keystoreHookSHA256')),'retained source origin hashes invalid')
 
 def resource_record(obj):
     meta=obj['metadata']
@@ -39,7 +53,8 @@ def hooks(driver):
     require(GENERATED_SECRETS|{'takserver-keystore'}<=named,'stored source-generator RBAC differs')
     job=next(obj for obj in objects if obj.get('kind')=='Job' and obj['metadata']['name']=='takserver-cert-init')
     require(job['spec']['template']['spec']['serviceAccountName']=='takserver-cert-init','stored source generator identity differs')
-    return {'storedHooksSHA256':hashlib.sha256(text.encode()).hexdigest(),'sourceGeneratorJobSHA256':sha(job),'keystoreHookSHA256':sha(secret)}
+    sources=source_files()
+    return {'sourceFilesSHA256':sources,'storedHooksSHA256':hashlib.sha256(text.encode()).hexdigest(),'sourceGeneratorJobSHA256':sha(job),'keystoreHookSHA256':sha(secret)}
 
 def claim_parent(driver,pvc):
     name=pvc['metadata']['name'];namespace=pvc['metadata']['namespace'];matches=[]
@@ -100,10 +115,13 @@ def capture(driver):
         for secret in driver.get('secrets',namespace=namespace)['items']:
             name=secret['metadata']['name']
             annotations=secret['metadata'].get('annotations',{})
-            if name in referenced or namespace=='takserver' and name in GENERATED_SECRETS|{'takserver-keystore'}:
+            extra=(namespace,name) in {('cloudtak','cloudtak-tak-admin'),('takserver','takclient-enrollment')}
+            if extra:generated_secret(driver,secret)
+            if name in referenced or namespace=='takserver' and name in GENERATED_SECRETS|{'takserver-keystore'} or extra:
                 rec=resource_record(secret);rec['dataSHA256']=sha(secret.get('data',{}));rec['recreatedHook']=namespace=='takserver' and name=='takserver-keystore';records.append(rec)
     for config in driver.get('configmaps')['items']:
-        if config['metadata']['name']=='cert-migration':
+        if config['metadata']['name']=='takserver-startup':startup_map(config)
+        if config['metadata']['name'] in ('cert-migration','takserver-startup'):
             rec=resource_record(config);rec['dataSHA256']=sha({'data':config.get('data',{}),'binaryData':config.get('binaryData',{})});records.append(rec)
     require(any(x['name']=='takserver-keystore' for x in records) and any(x['name']=='cert-migration' for x in records),'source-generated credential state missing')
     return {'source':origin,'records':records}
@@ -134,8 +152,11 @@ def verify(driver,proof,remove_sentinels=False):
 def cleanup_snapshot(driver,proof):
     verify(driver,proof,remove_sentinels=True);result=[]
     for rec in proof['records']:
-        if rec['kind']=='PersistentVolumeClaim' or rec['name'] in GENERATED_SECRETS|{'takserver-keystore','cert-migration'}:
-            current=driver.get(rec['kind'],rec['name'],namespace=rec['namespace']);item=resource_record(current);item['origin']=proof['source']
+        if cleanup_allowed(rec):
+            current=driver.get(rec['kind'],rec['name'],namespace=rec['namespace'])
+            if rec['name']=='takserver-startup':startup_map(current)
+            if rec['name'] in ('cloudtak-tak-admin','takclient-enrollment'):generated_secret(driver,current,cleanup=True)
+            item=resource_record(current);item['origin']=proof['source']
             if rec['kind']=='PersistentVolumeClaim':item['parent']=claim_parent(driver,current)
             result.append(item)
     return result
@@ -147,7 +168,8 @@ def consumers_gone(driver):
     return {'consumersGone':True}
 
 def conditional_delete(driver,rec):
-    require(rec['namespace'] in APP_RELEASES and (rec['kind']=='PersistentVolumeClaim' and 'parent' in rec or rec['namespace']=='takserver' and (rec['kind']=='Secret' and rec['name'] in GENERATED_SECRETS|{'takserver-keystore'} or rec['kind']=='ConfigMap' and rec['name']=='cert-migration')),'cleanup outside exact retained application scope')
+    require(cleanup_allowed(rec),'cleanup outside exact retained application scope')
+    require_origin(rec)
     driver.guard();driver.core_unchanged()
     consumers_gone(driver)
     if not driver.kube('get','namespace',rec['namespace'],'--ignore-not-found','-o','json').strip():return
@@ -174,3 +196,70 @@ def conditional_delete(driver,rec):
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=context))
         with opener.open(request,timeout=30) as response:require(response.status in (200,202),'conditional application cleanup refused')
     driver.core_unchanged()
+
+
+def startup_map(obj):
+    require(obj['kind']=='ConfigMap' and obj['metadata'].get('namespace')=='takserver' and obj['metadata']['name']=='takserver-startup' and obj['metadata'].get('annotations',{}).get('uds.dev/tak-startup')=='complete' and obj.get('data')=={'ready':'true'} and not obj.get('binaryData'),'startup map is not the literal source-generated checkpoint')
+
+
+def generated_secret(driver,obj,cleanup=False):
+    meta=obj['metadata'];name=meta['name'];namespace=meta['namespace']
+    if namespace=='cloudtak' and name=='cloudtak-tak-admin':
+        require(meta.get('labels',{}).get('app.kubernetes.io/part-of')=='cloudtak','admin copy source label differs')
+        config=driver.get('configmap','cert-migration');keystore=driver.get('secret','takserver-keystore')
+        raw=driver.kube('get','secret','takserver-certs','-n','takserver','--ignore-not-found','-o','json')
+        certificates=json.loads(raw).get('data',{}) if raw.strip() else {}
+        binary=config.get('binaryData',{})
+        expected={'ca.pem':binary.get('ca.pem') or certificates.get('ca.pem'),'admin.pem':binary.get('admin.pem') or certificates.get('admin.pem'),
+                  'admin.key':certificates.get('admin.key') or binary.get('admin.key'),'CAPASS':keystore.get('data',{}).get('CAPASS')}
+        require(all(expected.values()) and obj.get('data')==expected,'admin copy does not match exact source credentials')
+        return True
+    if namespace=='takserver' and name=='takclient-enrollment':
+        require(meta.get('labels',{}).get('app.kubernetes.io/managed-by')=='takserver-oidc','enrollment cache source label differs')
+        if cleanup:require(not driver.get('takclients.tak.jonathanagustin.github.io',namespace='takclients')['items'],'active client enrollment credentials must not be retired')
+        return True
+    return False
+
+
+def trust_binding(driver,obj):
+    """Bind public trust data to retained Core authority and exact source metadata."""
+    meta=obj['metadata'];namespace=meta['namespace'];name=meta['name']
+    require(namespace in APP_RELEASES and not obj.get('binaryData'),'trust map namespace/payload differs')
+    if name=='kube-root-ca.crt':
+        source_namespace,source_name,key,source_key='kube-system',name,'ca.crt','ca.crt'
+        source_owner='kubernetes-root-ca-publisher'
+    elif name=='istio-ca-root-cert':
+        require(meta.get('labels',{}).get('istio.io/config')=='true','Istio trust source marker missing')
+        source_namespace,source_name,key,source_key='istio-system',name,'root-cert.pem','root-cert.pem'
+        source_owner='istio-namespace-controller'
+    elif name=='uds-trust-bundle':
+        labels=meta.get('labels',{});require(labels.get('uds/package')==namespace and labels.get('uds/ca-bundle')=='true','UDS bundle source labels differ')
+        package=driver.get('package',namespace,namespace=namespace)
+        owners=meta.get('ownerReferences',[])
+        require(any(x.get('kind')=='Package' and x.get('uid')==package['metadata']['uid'] for x in owners),'UDS bundle has no exact Package owner')
+        source_namespace,source_name,key,source_key='istio-system',name,'ca-bundle.pem','extra.pem'
+        source_owner='uds-core-ca-bundle-controller'
+    else:raise ValueError('unknown trust map')
+    source=driver.get('configmap',source_name,namespace=source_namespace)
+    require(set(obj.get('data',{}))=={key} and obj['data'][key] and obj['data'][key]==source.get('data',{}).get(source_key),'trust map is not the bound Core authority data')
+    rec=resource_record(obj)
+    rec.update(dataSHA256=sha(obj['data']),sourceOwner=source_owner,sourceNamespace=source_namespace,sourceName=source_name,sourceUID=source['metadata']['uid'],sourceDataSHA256=sha(source.get('data',{})))
+    return rec
+
+
+def capture_trust(driver):
+    result=[]
+    for namespace in APP_RELEASES:
+        if not driver.kube('get','namespace',namespace,'--ignore-not-found','-o','json').strip():continue
+        for obj in driver.get('configmaps',namespace=namespace)['items']:
+            if obj['metadata']['name'] in ('kube-root-ca.crt','istio-ca-root-cert','uds-trust-bundle'):result.append(trust_binding(driver,obj))
+    return result
+
+
+def preserved_trust(driver,obj,bindings):
+    matches=[r for r in bindings if r['namespace']==obj['metadata'].get('namespace') and r['name']==obj['metadata']['name']]
+    require(len(matches)==1,'trust map has no bound source authority')
+    rec=matches[0];require({k:v for k,v in resource_record(obj).items() if k!='resourceVersion'}=={k:rec[k] for k in ('kind','name','namespace','uid','metadataSHA256')} and sha(obj.get('data',{}))==rec['dataSHA256'],'bound trust map changed before clean-state observation')
+    source=driver.get('configmap',rec['sourceName'],namespace=rec['sourceNamespace'])
+    require(source['metadata']['uid']==rec['sourceUID'] and sha(source.get('data',{}))==rec['sourceDataSHA256'],'retained Core trust authority changed')
+    return True

@@ -56,7 +56,6 @@ def require_clean_objects(namespace,kind,objects):
     if namespace=='pepr-system':
         objects=[x for x in objects if x['metadata']['name'] in D.PEPR or x['metadata'].get('labels',{}).get('name')=='takserver-oidc']
     if kind=='serviceaccounts':objects=[x for x in objects if x['metadata']['name']!='default']
-    if kind=='configmaps':objects=[x for x in objects if x['metadata']['name']!='kube-root-ca.crt']
     D.require(not objects,'retained application state prevents clean strict install: '+kind)
 
 class PackageTrial(D.Driver):
@@ -123,7 +122,7 @@ class PackageTrial(D.Driver):
         else:data_evidence=R.verify(self,self.state['dataInvariants'])
         self.journal('private-application-data-verified',phase=alias,observations=data_evidence)
         self.traffic(identities,phase,evidence_phase='package-'+alias)
-        self.application_checks(prepare=not self.state['packagePhases'] or self.state.get('initializingFresh',False))
+        self.application_checks(phase=alias,prepare=not self.state['packagePhases'] or self.state.get('initializingFresh',False))
         self.journal('package-application-checks',phase=alias)
         self.capture_phase(phase,expected)
         self.state['packagePhases'].append(phase);self.journal('package-observed-'+alias,pods=identities)
@@ -140,7 +139,15 @@ class PackageTrial(D.Driver):
         self.run_package(deploy_command(self.bound,phase),1500)
         self.inputs_unchanged();self.observe(phase)
 
-    def application_checks(self,prepare=False):
+    def require_cloudtak(self):
+        namespace=self.get('namespace','cloudtak',namespace='cloudtak');deployment=self.get('deployment','cloudtak',namespace='cloudtak')
+        package=self.get('package','cloudtak',namespace='cloudtak')
+        D.require(not namespace['metadata'].get('deletionTimestamp'),'CloudTAK namespace terminating')
+        D.ready(deployment);D.ready(package)
+        D.require(package['status'].get('phase')=='Ready' and deployment['status'].get('availableReplicas',0)>0,'CloudTAK component is required for issue32 acceptance')
+        return {key:obj['metadata']['uid'] for key,obj in (('namespace',namespace),('deployment',deployment),('package',package))}
+
+    def application_checks(self,phase,prepare=False):
         self.guard()
         if prepare:
             self.command(['uds','run','setup:keycloak-user','--with','group=/UDS Core/Admin','--no-progress'],timeout=300)
@@ -149,6 +156,11 @@ class PackageTrial(D.Driver):
         self.command(['uds','run','test:web-tls','--no-progress'],timeout=420)
         self.command(['uds','run','test:api-smoke','--no-progress'],timeout=720)
         self.command(['uds','run','test:flows','--no-progress'],timeout=300)
+        before=self.require_cloudtak()
+        if phase in ('baseline','strict','fresh-strict'):
+            output=self.command(['uds','run','test:cloudtak','--no-progress'],timeout=900)
+            D.require('The cloudtak component is not deployed. Skipping.' not in output and self.require_cloudtak()==before,'CloudTAK check skipped or component changed')
+            self.journal('cloudtak-basemap-application-checks',phase=phase,passed=True)
 
     def patch(self,kind,obj,path,value,namespace=D.NS):
         D.require(kind=='Pod' and path=='/metadata/labels','package phases must use Zarf, not direct phase patches')
@@ -160,6 +172,7 @@ class PackageTrial(D.Driver):
     def initialize(self):
         self.prepare()  # Initial shared observation only; creates no trial resources.
         D.require(Path(self.bound['archive']).name.startswith('zarf-package-takserver-'+self.state['architecture']+'-'),'bound archive architecture differs from guarded node')
+        self.require_cloudtak()
         self.state['coreSnapshot']=self.core_snapshot();self.compile_probe()
         self.state['dataInvariants']=R.capture(self)
         self.create({'apiVersion':'v1','kind':'ServiceAccount','metadata':{'name':self.state['negativeAccount']},'automountServiceAccountToken':False})
@@ -173,6 +186,13 @@ class PackageTrial(D.Driver):
             if not namespace.strip():continue
             for kind in kinds:
                 objects=self.get(kind,namespace=ns)['items']
+                if kind=='configmaps':
+                    retained=[]
+                    for obj in objects:
+                        if obj['metadata']['name'] in ('kube-root-ca.crt','istio-ca-root-cert','uds-trust-bundle'):
+                            R.preserved_trust(self,obj,self.state['preservedTrustMaps'])
+                        else:retained.append(obj)
+                    objects=retained
                 require_clean_objects(ns,kind,objects)
         return {'clean':True}
 
@@ -182,6 +202,7 @@ class PackageTrial(D.Driver):
         # Remove only this exact application's installed Zarf package, never a bundle/Core.
         for entry in list(self.state['created']):
             if entry['kind']=='ServiceAccount' and not entry.get('deleted'):self.delete_created(entry['kind'],entry['name'])
+        self.state['preservedTrustMaps']=R.capture_trust(self)
         self.state['retainedCleanup']=R.cleanup_snapshot(self,self.state['dataInvariants'])
         installed=self.get('secret','zarf-package-takserver','zarf')
         self.state['removedPackageSecretUID']=installed['metadata']['uid'];self.journal('application-remove-start')

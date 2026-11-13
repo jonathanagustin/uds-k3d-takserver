@@ -55,6 +55,31 @@ def loadout_list_button(tree):
     return buttons[-2]
 
 
+def local_import_button(tree):
+    """Pinned ImportManagerView adds Local SD first; TileButtonDialog keeps order."""
+    select(tree, rid='alertTitle', text='Select Import Type')
+    container = select(tree, rid='container')
+    rows = list(container)
+    if len(rows) != 1 or len(rows[0]) != 5:
+        raise LookupError('unexpected pinned import tile layout')
+    buttons = list(rows[0])
+    previous_right = None
+    vertical = None
+    for button in buttons:
+        if (button.get('class') != 'android.view.View'
+                or button.get('clickable') != 'true' or list(button)
+                or button.get('resource-id') or button.get('text')
+                or button.get('content-desc')):
+            raise LookupError('unexpected pinned import tile')
+        select(button)
+        left, top, right, bottom = map(int, re.findall(r'\d+', button.get('bounds')))
+        if ((previous_right is not None and left != previous_right)
+                or (vertical is not None and vertical != (top, bottom))):
+            raise LookupError('unexpected pinned import tile order')
+        previous_right, vertical = right, (top, bottom)
+    return buttons[0]
+
+
 class AndroidUI:
     def __init__(self, output, device='atak-device-adb.atak.svc.cluster.local:5555', pod='atak-demo-adb'):
         self.output = Path(output)
@@ -145,7 +170,8 @@ class AndroidUI:
 
     def import_package(self):
         self.tool('Import')
-        self.tap(text='Local SD')
+        self.find(rid='alertTitle', text='Select Import Type')
+        self.tap_node(local_import_button(self.tree()))
         self.tap(rid='phone')
         for _ in range(5):
             current = self.find(rid='importBrowserCurrentDirectory').get('text', '').rstrip('/')

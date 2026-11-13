@@ -128,13 +128,13 @@ class ActualUIStates(unittest.TestCase):
 
     def test_import_uses_actual_file_browser_and_broadcast_target(self):
         device = ui.AndroidUI('/unused')
-        with patch.object(device, 'confirm_file_selected') as selection, patch.object(device, 'tool') as tool, patch.object(device, 'tap') as tap, patch.object(device, 'find', return_value=ET.Element('node', text='/sdcard')):
+        with patch.object(device, 'tree', return_value=ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot()), patch.object(device, 'tap_node') as tile_tap, patch.object(device, 'confirm_file_selected') as selection, patch.object(device, 'tool') as tool, patch.object(device, 'tap') as tap, patch.object(device, 'find', return_value=ET.Element('node', text='/sdcard')):
             device.import_package()
             device.share_dialog()
             device.broadcast()
         tool.assert_called_once_with('Import')
         selection.assert_called_once_with('atak-synthetic-scenario.dpk')
-        self.assertIn(unittest.mock.call(text='Local SD'), tap.call_args_list)
+        self.assertEqual(tile_tap.call_args[0][0].get('bounds'), '[109,593][209,673]')
         self.assertIn(unittest.mock.call(rid='importManagerBrowserFileName', text='atak-synthetic-scenario.dpk'), tap.call_args_list)
         self.assertEqual(tap.call_args_list[-1], unittest.mock.call(rid='contact_list_button_send_to_all', text='Broadcast'))
         self.assertFalse(any('peer' in str(call) for call in tap.call_args_list))
@@ -179,6 +179,23 @@ class ActualUIStates(unittest.TestCase):
             unittest.mock.call('shell', 'input', 'tap', '666', '650'),
             unittest.mock.call('shell', 'input', 'tap', '50', '20'),
             unittest.mock.call('shell', 'input', 'tap', '50', '20')])
+
+    def test_actual_import_tiles_select_local_sd_and_reject_invalid_layout(self):
+        tree = ET.parse(ROOT/'atak/scenarios/fixtures/atak-import-type.xml').getroot()
+        with self.assertRaises(LookupError): ui.select(tree, text='Local SD')
+        self.assertEqual(ui.local_import_button(tree).get('bounds'), '[109,593][209,673]')
+        for fault in ('disabled', 'extra', 'reordered', 'wrong-title'):
+            broken = copy.deepcopy(tree)
+            container = ui.select(broken, rid='container')
+            row = list(container)[0]
+            if fault == 'disabled': row[0].set('enabled', 'false')
+            elif fault == 'extra': row.append(copy.deepcopy(row[0]))
+            elif fault == 'reordered':
+                first = row[0]
+                row.remove(first)
+                row.insert(1, first)
+            else: ui.select(broken, rid='alertTitle').set('text', 'Unexpected')
+            with self.assertRaises(LookupError): ui.local_import_button(broken)
 
     def test_unknown_disabled_or_ambiguous_tools_toolbar_fails_without_tap(self):
         native = ET.parse(ROOT/'atak/scenarios/fixtures/atak-tools-grid.xml').getroot()

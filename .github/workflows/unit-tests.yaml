@@ -165,6 +165,8 @@ jobs:
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_resource_inputs.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_source_families.py' -v
           python3 -B -m unittest discover -s takx/kernel-regressions -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/sdk-package -p 'test_composition.py' -v
+          python3 -B -m unittest discover -s takx/sdk-package -p 'test_native_source_*.py' -v
           python3 -B -m unittest discover -s takx/native-deps -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-las -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/native-assimp -p 'test_build.py' -v

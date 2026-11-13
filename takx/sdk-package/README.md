@@ -179,11 +179,11 @@ The package sidecar describes assembly provenance; runtime qualification is reco
 separately in the completion receipt. Neither grants renderer or client acceptance.
 
 The complete six-format regression suite belongs to the separately reviewed
-`takx/kernel-regressions` change (draft #506); this change does not substitute an
-unreviewed copy of that directory. Apply `patches/obj-two-fixture-regression.patch`
-to that reviewed source before its full qualification: it preserves the original
-171-byte tetrahedron and repeats the identical analytic geometry assertions on a
-compact valid fixture. Retain DTED, MBTiles, GeoPackage, KML, elevation and OBJ,
+`takx/kernel-regressions` change (#506); this change does not substitute an
+unreviewed copy of that directory. Its reviewed source already preserves the
+original tetrahedron and repeats the identical analytic geometry assertions on a
+compact valid fixture. The retained patch is source-history evidence, not an
+additional patch to apply to that updated suite. Retain DTED, MBTiles, GeoPackage, KML, elevation and OBJ,
 relocation and both resource omissions as required acceptance controls.
 
 The separate actual candidate04 composition completed all eleven phases, six
@@ -234,3 +234,26 @@ current source files remain untouched. There is no runtime comment normalization
 or general source-hash exception. Existing provider, staged-source, toolchain and
 native ELF checks remain mandatory, and the new SDK recipe independently hashes
 its current consumer/helper closure.
+
+
+The portable manifest is distributed as
+`native-source-snapshots/public-kernel-native-45-v1.json` (SHA-256
+`f8c05d74060ede8407f6cd9fbdf7c9dc0071c4cf232e9dd40409e054f80bb63b`).
+Construct its byte-identical evidence bundle offline from a repository that
+already contains the pinned Git objects:
+
+```sh
+python3 -B takx/sdk-package/materialize_native_source_bundle.py \
+  --repository /path/to/uds-takserver --output /fresh/source-bundle
+```
+
+The constructor disables Git lazy fetch/network protocols, checks each original
+Git blob and exact declared prefix/preimage, then writes all 45 source members,
+the frozen recipe JSON and canonical manifest read-only. It never checks out,
+imports or executes historical Python. The bundle may be transported through an
+offline archive/store if its exact member paths, bytes and read-only permissions
+are preserved; the consumer rechecks the known manifest and complete membership.
+A construction pass or source-verification pass does not build native products
+or grant SDK, renderer or client acceptance. Current public recipe verification
+has not passed: the next unresolved guard is the strict baseline provider history
+binding, after successful source-bundle admission.

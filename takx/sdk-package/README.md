@@ -110,7 +110,7 @@ oracle correction, with fresh runtime data and native extraction; it did not
 rebuild the artifact or native libraries. The earlier resource-complete SDK
 artifact and failed-oracle evidence remain unchanged.
 
-### Shader-source lengths (source change pending qualification)
+### Shader-source lengths
 
 The assembler now stages the pinned official GLES20.java and rebuilds its real
 class family with the supported JOGL null IntBuffer shader-source length overload.
@@ -124,7 +124,13 @@ remain in place. GLES20Constants is a separate family and is not replaced.
 An isolated real JOGL comparison with the unchanged provider demonstrated six
 critical-scope warnings using heap lengths and zero with direct or null lengths,
 with real shader compile/link and pixel readback. Its heap baseline failed strict
-qualification. That evidence identifies the repair target; this new SDK recipe and
-its production GLES20 family have not yet been compiled or qualified. Existing
-package qualification above refers to the prior recipe, not this source revision.
-Full headed TAK renderer and SDK/client acceptance remain pending.
+qualification. The genuine GLES20 family then compiled inside a complete 2,697-class derived
+view, with GLES20 as the sole changed class. A fresh checked-JNI process registered
+a real JOGL context through JOGLGLES and called the production GLES20.glShaderSource
+wrapper. Both shaders compiled and linked, two exact red pixels matched, and the
+context disposed cleanly with zero JNI or critical-region warnings. Actual class
+origins and the loaded native providers matched their pinned inputs.
+
+These component checks cover shader upload through the real wrapper. A newly
+assembled SDK bundle, full TAK renderer and complete client still need qualification.
+The package qualification above refers to the prior recipe.

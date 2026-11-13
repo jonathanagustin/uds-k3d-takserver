@@ -30,7 +30,7 @@
     "source_file": "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java",
     "before": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5",
     "after": "310aac9829e9baada3b713b7c72ba12e1d6f9d11d21d3552260339fb7b9846ab",
-    "patch_sha256": "4076aef29cbda5010d26da665972147ccc3f80133453fdd55213a9b6e66b57e6",
+    "patch_sha256": "cb47b4bc88a82ae85fa5cc7772e18834d8c81b34e5929d7fb57e6cb71ec59013",
     "family": "gov/tak/platform/commons/opengl/GLES20",
     "scope": "supported JOGL null IntBuffer shader-source lengths; no native or version change"
   }

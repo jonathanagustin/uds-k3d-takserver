@@ -1,11 +1,7 @@
 --- a/GLES20.java
 +++ b/GLES20.java
-@@ -1381,7 +1381,7 @@
-             if (glsl != null && glsl.equals("1.20"))
-                 string = JOGLGLES.glsl120Compatible(string);
+@@ -1383,3 +1383,3 @@
          }
 -        JOGLGLES.gl2().glShaderSource(shader, 1, new String[] {string}, new int[] {string.length()}, 0);
 +        JOGLGLES.gl2().glShaderSource(shader, 1, new String[] {string}, (java.nio.IntBuffer) null);
      }
- 
-     // C function void glStencilFunc ( GLenum func, GLint ref, GLuint mask )

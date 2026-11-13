@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Explicit offline protocol/state fixtures; no device, server or TLS network use."""
 import contextlib
+import copy
 import hashlib
 import importlib.util
 import json
@@ -152,10 +153,52 @@ class ActualUIStates(unittest.TestCase):
         tree = ET.fromstring('<hierarchy><node><node text="atak-synthetic-scenario.dpk" resource-id="app:id/importManagerBrowserFileName" enabled="true" bounds="[0,0][100,100]"/><node resource-id="app:id/importManagerBrowserFileSelected" checked="false"/></node></hierarchy>')
         with patch.object(device, 'tree', return_value=tree):
             with self.assertRaises(ValueError): device.confirm_file_selected('atak-synthetic-scenario.dpk')
-        with patch.object(device, 'tree', return_value=ET.Element('hierarchy')), patch.object(device, 'tap'), patch.object(device, 'find', return_value=ET.Element('node', bounds='[0,0][100,100]')), patch.object(device, 'adb') as adb:
+        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        with patch.object(device, 'tree', return_value=native), patch.object(device, 'tap'), patch.object(device, 'find', return_value=ET.Element('node', bounds='[0,0][100,100]')), patch.object(device, 'adb') as adb:
             with self.assertRaises(LookupError): device.tool('Import')
-        self.assertEqual(adb.call_count, 6)
-        self.assertTrue(all('swipe' in call.args for call in adb.call_args_list))
+        self.assertEqual(adb.call_count, 7)  # Settings action, then six bounded scans.
+        self.assertEqual(adb.call_args_list[0], unittest.mock.call('shell', 'input', 'tap', '666', '650'))
+        self.assertTrue(all('swipe' in call.args for call in adb.call_args_list[1:]))
+
+    def test_real_tools_grid_routes_via_loadout_list_before_named_tool(self):
+        # First state is a minimal projection of the actual hosted failure.
+        # Later states model the pinned source contract, not device acceptance.
+        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        self.assertEqual(ui.loadout_list_button(native).get('bounds'), '[648,632][684,668]')
+        with self.assertRaises(LookupError): ui.select(native, text='All tools & plugins')
+        loadouts = ET.fromstring('<hierarchy><node resource-id="app:id/toolbar_title_item_text" text="All tools &amp; plugins" enabled="true" bounds="[0,0][100,40]"/></hierarchy>')
+        all_tools = copy.deepcopy(native)
+        listing = ui.select(all_tools, rid='tools_list')
+        listing.append(ET.Element('node', {'resource-id':'app:id/tak_nav_item_text', 'text':'Import', 'enabled':'true', 'bounds':'[0,0][100,40]'}))
+        device = ui.AndroidUI('/unused')
+        states = [native, native, native, loadouts, all_tools, all_tools]
+        with patch.object(device, 'tree', side_effect=states), patch.object(device, 'adb') as adb:
+            device.tool('Import')
+        self.assertEqual(adb.call_args_list, [
+            unittest.mock.call('shell', 'input', 'tap', '696', '48'),
+            unittest.mock.call('shell', 'input', 'tap', '666', '650'),
+            unittest.mock.call('shell', 'input', 'tap', '50', '20'),
+            unittest.mock.call('shell', 'input', 'tap', '50', '20')])
+
+    def test_unknown_disabled_or_ambiguous_tools_toolbar_fails_without_tap(self):
+        native = ET.parse(ROOT/'tests/fixtures/atak-tools-grid.xml').getroot()
+        for fault in ('disabled', 'close-order', 'duplicate-toolbar', 'unexpected-child'):
+            tree = copy.deepcopy(native)
+            toolbar = ui.select(tree, rid='nav_stack_toolbar_buttons')
+            if fault == 'disabled': toolbar[-2].set('enabled', 'false')
+            elif fault == 'close-order': toolbar[-1].set('resource-id', '')
+            elif fault == 'duplicate-toolbar': tree.append(copy.deepcopy(toolbar))
+            else: toolbar.append(ET.Element('node'))
+            with self.subTest(fault=fault), self.assertRaises(LookupError):
+                ui.loadout_list_button(tree)
+
+    def test_name_edit_never_opens_affiliation_dialog(self):
+        device = ui.AndroidUI('/unused')
+        current, renamed = ET.Element('node', text='OLD'), ET.Element('node', text='TEST aabbccdd')
+        with patch.object(device, 'find', side_effect=[current, renamed]), patch.object(device, 'tap') as tap, patch.object(device, 'hide_keyboard') as hide, patch.object(device, 'adb', return_value=b'123'):
+            self.assertEqual(device.rename('TEST aabbccdd'), 123)
+        self.assertEqual(tap.call_args_list, [unittest.mock.call(rid='cotInfoNameEdit')])
+        hide.assert_called_once_with()
 
     def test_return_search_replaces_retained_query_and_only_hides_active_ime(self):
         device = ui.AndroidUI('/unused')

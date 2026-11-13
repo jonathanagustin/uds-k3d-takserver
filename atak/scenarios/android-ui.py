@@ -30,6 +30,31 @@ def select(tree, *, rid=None, text=None):
     return matches[0]
 
 
+def loadout_list_button(tree):
+    """The pinned Tools toolbar's last action pops to the labelled loadout list.
+
+    LoadoutToolsDropDown.getButtons() appends settings after edit/export/layout;
+    DropDownNavigationStack appends its close button. The icons have no accessible
+    labels, so require that exact live hierarchy rather than fixed coordinates.
+    """
+    select(tree, rid='nav_stack_toolbar_title', text='Tools')
+    select(tree, rid='tools_list')
+    toolbar = select(tree, rid='nav_stack_toolbar_buttons')
+    buttons = list(toolbar)
+    if not 3 <= len(buttons) <= 5:
+        raise LookupError('unexpected pinned Tools toolbar shape')
+    for index, button in enumerate(buttons):
+        if (button.get('class') != 'android.widget.ImageButton'
+                or button.get('clickable') != 'true'):
+            raise LookupError('unexpected pinned Tools toolbar action')
+        select(button)  # Exactly one enabled, visible, positive-bounds node.
+        expected = ':id/nav_stack_close' if index == len(buttons)-1 else ''
+        rid = button.get('resource-id', '')
+        if (expected and not rid.endswith(expected)) or (not expected and rid):
+            raise LookupError('unexpected pinned Tools toolbar order')
+    return buttons[-2]
+
+
 class AndroidUI:
     def __init__(self, output, device='atak-device-adb.atak.svc.cluster.local:5555', pod='atak-demo-adb'):
         self.output = Path(output)
@@ -67,7 +92,10 @@ class AndroidUI:
                 time.sleep(.25)
 
     def tap(self, **selector):
-        node = self.find(**selector)
+        self.tap_node(self.find(**selector))
+
+    def tap_node(self, node):
+        select(node)
         x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
         self.adb('shell', 'input', 'tap', str((x1+x2)//2), str((y1+y2)//2))
 
@@ -83,14 +111,18 @@ class AndroidUI:
         (self.output / (name + '.png')).write_bytes(image)
 
     def tool(self, name):
-        # NavButton icons have no textual accessibility label in this source.
-        # Use the native, labelled All Tools list instead of guessing an icon.
+        # Hamburger opens CURRENT-loadout overflow, which excludes toolbar tools
+        # such as Import and Overlays. Its settings action opens Toolbars; the
+        # labelled All tools & plugins row then opens the complete native grid.
         self.tap(rid='tak_nav_menu_button')
-        self.tap(text='All tools & plugins')
+        self.find(rid='nav_stack_toolbar_title', text='Tools')
+        self.tap_node(loadout_list_button(self.tree()))
+        self.tap(rid='toolbar_title_item_text', text='All tools & plugins')
         for _ in range(6):
             try:
-                select(self.tree(), text=name)
-                self.tap(text=name)
+                listing = select(self.tree(), rid='tools_list')
+                select(listing, rid='tak_nav_item_text', text=name)
+                self.tap(rid='tak_nav_item_text', text=name)
                 return
             except LookupError:
                 listing = self.find(rid='tools_list')
@@ -175,10 +207,11 @@ class AndroidUI:
         self.adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
         self.adb('shell', 'input', 'keyevent', *(['KEYCODE_DEL'] * len(current)))
         self.adb('shell', 'input', 'text', callsign.replace(' ', '%s'))
-        self.tap(rid='cotInfoNameTitle')
+        # CoTInfoView updates the marker from its text watcher. The name-title
+        # icon opens affiliation options, so it is not a focus/commit target.
+        self.hide_keyboard()
         if self.find(rid='cotInfoNameEdit').get('text') != callsign:
             raise ValueError('Android callsign edit not visible')
-        self.hide_keyboard()
         return int(self.adb('shell', 'date', '+%s').strip())
 
     def share_dialog(self):

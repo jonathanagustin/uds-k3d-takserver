@@ -1297,5 +1297,47 @@
     "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
     "reason": "Original stopped dependency producer retained by completed Cesium lineage",
     "arbitrary_frozen_recipes_accepted": false
+  },
+  "gdal_jni": {
+    "kind": "exact-consumed-owned-producer-source-variant",
+    "recipe": {
+      "native-gdal-jni/build.py": "aa64fec65d3da7350a68886b116effe5a3645f22878068efe89c1a574fb98a4c",
+      "native-gdal-jni/GdalJniProbe.java": "0441b39c6512fd51796c9527b4149ebfd1a25ab2727b17091ee5482896cfc9c7",
+      "kernel-scene/kernel.py": "69b6dabf1b16d7639c364814fd96204a9aa0a606a7d2ca7503d0fcf6b4780a3e",
+      "kernel-scene/build.py": "b0a6019c5a9235725f5626930c4fe94c001afb35e07784d791062fda0a532ba8",
+      "kernel-scene/producer.py": "6d0e875376955331a9ab0664edb17d86b6859a57834127b8beebeb92b59a66aa",
+      "kernel-scene/normalize_la.py": "54375a0b2252b05cfdaf9ad90e8ddf62922268c2de36dd0013cfc2e30a33cfc9",
+      "kernel-scene/inputs.lock.json": "30e179d87d9e50d24edd011a7cc55997c533b05c7d385da01d74cd2c752b2d24",
+      "native-deps/build.py": "3831834729d9022e5a79b9dba1a4745f8b25b43990d7064b3a95661966d0b3ae",
+      "native-las/build.py": "6efd28cbd3d8293123caaa9dc06c7652c93141a9ece47c7941fd09de4f803b38",
+      "native-assimp/build.py": "7f9bce45c16cf8d6525e52e20e7e3f871ac68d1148224346662386d3e1ea25d2",
+      "native-proj/build.py": "01a3861032ce5c11eab059823c2b54975d90316ad6cc66e5115bb9019ff25773",
+      "native-deps/inputs.lock.json": "799dde845c41c9b00b5c40ac00cd79c207a7672d378f0dbafe9b236e417e52a1",
+      "native-las/inputs.lock.json": "2cafc2b5abe083e4e7fd4f5e756dd1454301b2487fb336451c931d31c931cdd6",
+      "native-assimp/inputs.lock.json": "34676f8994b3e4593bb9d82c746c4a0c9b871ca877806e5d6c83829d287ec604",
+      "native-proj/inputs.lock.json": "cdb53c69cfbb774407511fb95925374aa1059d6f628f94d9c9a3cf72361e563b",
+      "kernel-java/build.py": "dba29276f5f3fd9bf396f31c2a58f1bb550834e6724191e653958e61d8fc6627",
+      "kernel-java/inputs.lock.json": "40756dea76b571be44b4611ff9bb853b40206ae8377aac20ec82c1614432b1dc",
+      "gis-java/build.py": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
+      "gis-java/sources.lock.json": "e5bd2646800be4f47571725243dd266cc0f86c349d62856f185ae6fad1f79a1c",
+      "gis-java/CompileApiProbe.java": "f8462cda1c179c1e12cfb82d225351c187ad554e20be9b8298cd02bfc15fbee2"
+    },
+    "variants": {
+      "native-gdal-jni/build.py": {
+        "snapshot": "historical-producers/gdal-jni-baseline/native-gdal-jni/build.py.txt",
+        "sha256": "aa64fec65d3da7350a68886b116effe5a3645f22878068efe89c1a574fb98a4c",
+        "bytes": 13422,
+        "delta_to_current_sha256": "c86fca4e5e581b45742a6ea3f60c5c9acf33886c44af6a3a33ae6e10ffa642d9"
+      },
+      "gis-java/build.py": {
+        "snapshot": "historical-producers/gdal-jni-baseline/gis-java/build.py.txt",
+        "sha256": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
+        "bytes": 12485,
+        "delta_to_current_sha256": "e2ee9197ab4bc093b48ea1cdf80c46edf04fa8d54ef38bedff9a80a59cf92dbd"
+      }
+    },
+    "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+    "reason": "Original reduced GDAL JNI baseline consumed by the completed public Kernel native proof; no strict JNI or KML profile acceptance",
+    "arbitrary_frozen_recipes_accepted": false
   }
 }

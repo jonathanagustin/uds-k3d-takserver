@@ -455,6 +455,36 @@ class Driver:
         print(json.dumps({'stage': 'preflight-package-mismatch', **{key: diagnostic[key] for key in
             ('expectedSHA256', 'actualSHA256', 'differingPaths', 'pathsTruncated')}}, sort_keys=True))
 
+    def authorization_policy_list(self, namespace):
+        require(namespace in (NS,'istio-system'),'unsupported policy inventory namespace')
+        # kubectl get's generic printer rebuilds a core/v1 List with empty
+        # ListMeta (kubectl v0.37.1 pkg/cmd/get/get.go745-755). Raw preserves
+        # the API server's actual List resourceVersion; never synthesize one.
+        path='/apis/security.istio.io/v1/namespaces/'+namespace+'/authorizationpolicies'
+        value=json.loads(self.kube('get','--raw',path))
+        require(isinstance(value,dict) and value.get('apiVersion')=='security.istio.io/v1' and
+                value.get('kind')=='AuthorizationPolicyList','invalid raw policy List schema')
+        meta=value.get('metadata',{})
+        require(isinstance(meta,dict) and isinstance(meta.get('resourceVersion'),str) and
+                re.fullmatch(phase_evidence.TOKEN,meta['resourceVersion']) and
+                meta.get('continue','')=='' and
+                ('remainingItemCount' not in meta or type(meta['remainingItemCount']) is int and meta['remainingItemCount']==0),
+                'incomplete raw policy List metadata')
+        objects=value.get('items')
+        require(isinstance(objects,list) and len(objects)<=phase_evidence.MAX_ITEMS,'invalid raw policy inventory bound')
+        names,uids=set(),set()
+        for obj in objects:
+            require(isinstance(obj,dict) and obj.get('apiVersion')=='security.istio.io/v1' and
+                    obj.get('kind')=='AuthorizationPolicy' and isinstance(obj.get('spec'),dict),
+                    'invalid raw policy item schema')
+            metadata=obj.get('metadata',{})
+            require(isinstance(metadata,dict) and metadata.get('namespace')==namespace and
+                    all(isinstance(metadata.get(key),str) and re.fullmatch(phase_evidence.TOKEN,metadata[key])
+                        for key in ('name','uid','resourceVersion')),'invalid raw policy item identity')
+            require(metadata['name'] not in names and metadata['uid'] not in uids,'duplicate raw policy identity')
+            names.add(metadata['name']);uids.add(metadata['uid'])
+        return value
+
     def policies(self):
         package = self.get('package', NS)
         require(package['metadata']['uid'] == self.state['packageUID'] and
@@ -463,8 +493,8 @@ class Driver:
         mesh = self.get('configmap', 'istio', 'istio-system')
         require(mesh['metadata']['uid'] == self.state['meshConfigUID'] and sha(mesh.get('data', {}).get('mesh')) == self.state['meshConfigHash'],
                 'Istio mesh/root-namespace configuration changed')
-        local = self.get('authorizationpolicies.security.istio.io')
-        root = self.get('authorizationpolicies.security.istio.io', namespace='istio-system')
+        local = self.authorization_policy_list(NS)
+        root = self.authorization_policy_list('istio-system')
         policies = local['items'] + root['items']
         network = self.get('networkpolicies', labels='uds/package=' + NS)['items']
         fingerprint = validate_policies(package, policies, network, self.state['baselineNetwork'])

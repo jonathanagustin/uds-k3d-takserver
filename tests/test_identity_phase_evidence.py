@@ -139,6 +139,7 @@ class PhaseEvidenceTests(unittest.TestCase):
                     return {'metadata': {'resourceVersion': '100'}, 'items': policies}
                 return {'items': data[{'networkpolicies': 'network_policies'}.get(kind, kind)]}
             instance.get = get
+            instance.authorization_policy_list=lambda namespace:get('authorizationpolicies.security.istio.io',namespace=namespace)
             instance.wait = lambda callback: callback()
             instance.observe_render_inputs = lambda: data['render_inputs']
             verdict = instance.capture_phase('strict', 'dedicated')

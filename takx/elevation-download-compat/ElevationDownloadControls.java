@@ -45,6 +45,23 @@ public final class ElevationDownloadControls {
         Method m = ElevationDownloader.class.getDeclaredMethod("getDownloadBounds", GeoBounds.class);
         m.setAccessible(true); return (int[]) m.invoke(null, b);
     }
+    private static final class BorrowedWatcher extends Dt2FileWatcher {
+        private Listener added;
+        private int scans;
+        BorrowedWatcher(Path root) { super(java.util.Collections.singletonList(root.toFile())); }
+        @Override public synchronized void addListener(Listener listener) {
+            check(added == null); added = listener; super.addListener(listener);
+        }
+        @Override public synchronized void removeListener(Listener listener) {
+            check(added == listener); added = null; super.removeListener(listener);
+        }
+        @Override public void scan() { scans++; super.scan(); }
+        @Override public void start() { throw new AssertionError("borrowed watcher started"); }
+        @Override public void dispose() { throw new AssertionError("borrowed watcher disposed"); }
+    }
+    private static final class Borrower extends ElevationDownloader {
+        Borrower(IResourceManager resource, BorrowedWatcher watcher) { super(resource, watcher); }
+    }
     public static void main(String[] args) throws Exception {
         Path root = Path.of(args[0]);
         check(!Files.exists(root)); Files.createDirectory(root);
@@ -91,6 +108,13 @@ public final class ElevationDownloadControls {
             rejects(unavailable::getRemoteCoverageSnapshot, IllegalStateException.class);
             rejects(() -> unavailable.getMissingTileCount(new GeoBounds[0]), IllegalStateException.class);
         } finally { unavailable.dispose(); }
+        BorrowedWatcher borrowedWatcher = new BorrowedWatcher(root);
+        Borrower borrower = new Borrower(resource(remote), borrowedWatcher);
+        check(borrowedWatcher.scans == 0);
+        borrower.getLocalCoverageSnapshot();
+        check(borrowedWatcher.scans == 1);
+        borrower.dispose();
+        check(borrowedWatcher.added == null);
         System.out.println("PASS_REAL_ELEVATION_DOWNLOAD_CONTROLS assertions=" + assertions);
     }
 }

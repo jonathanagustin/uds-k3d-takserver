@@ -66,7 +66,9 @@ bindings and other guard errors remain failures.
 Archive integrity is checked before npm installation, installation scripts are
 disabled, and that step receives no API credential. The crawler binds base/head
 commit hashes and file count to preflight, requires a complete file list, and
-checks current pull-request state again immediately before posting. A later
+checks current pull-request state again immediately before posting. Preflight
+logs only the repository, base and head hashes, and changed-file count as a
+source receipt. A later
 change cannot be made atomic with GitHub comment creation; these comments are
 observations, not approval or merge checks.
 

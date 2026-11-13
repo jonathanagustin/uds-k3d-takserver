@@ -85,6 +85,8 @@ if __name__ == "__main__":
         elif args.binding:
             with args.binding.open("x") as output:
                 json.dump(binding, output)
+        if binding is not None:
+            print("Lula source binding: " + json.dumps(binding, sort_keys=True))
         if args.github_output:
             with args.github_output.open("a") as output:
                 output.write("ready=" + ("true" if binding is not None else "false") + "\n")

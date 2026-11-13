@@ -1,9 +1,9 @@
 # Lula 0.9.5 safety variant
 
-This branch prepares automatic comment posting for maintainer review. It has not
-been published or activated, and no live comment acceptance is claimed. Once
-merged, the workflow will use this variant for manual requests and eligible
-pull requests targeting `main`. The separate mapping validator remains read-only.
+The comment workflow uses this variant for manual requests and eligible pull
+requests targeting `main`. The separate mapping validator remains read-only.
+Local tests cover the posting safeguards; a live comment from a changed mapped
+block is still required to complete acceptance.
 
 The official `lula2@0.9.5` command has only `review` and `comment` posting modes;
 neither produces findings without posting. Its cleanup selects comments by the
@@ -50,15 +50,15 @@ and SHA-256 for original source. It rejects changed source and existing output.
 It makes no network requests, installs no dependencies and executes no generated
 code. Pinning the package version does not freeze every indirect dependency.
 
-After merge, manual and `pull_request_target` runs will share one queue per pull
-request. Checkout is the immutable trusted `github.sha`: the base commit for the
-automatic event and the guarded main run commit for manual dispatch. The workflow
+Manual and `pull_request_target` runs share one queue per pull request. Checkout
+is the immutable trusted `github.sha`: the base commit for the automatic event and the guarded main run commit for manual dispatch. The workflow
 never checks out or executes pull-request code or inserts its metadata into shell
 code. Write permission is limited to the comment job.
 
 Both paths use the same preflight checks for an open, non-draft, same-repository
-pull request targeting `main`, with existing base SC-8 markers. A valid automatic
-request exceeding 30 changed files skips with fixed reason
+pull request targeting `main`, with existing base markers for control SC-8
+(Transmission Confidentiality and Integrity). A valid automatic request
+exceeding 30 changed files skips with fixed reason
 `unsupported_changed_file_count`, before Node installation or comment changes.
 Manual requests over that limit fail. Malformed responses, invalid source
 bindings and other guard errors remain failures.
@@ -70,9 +70,9 @@ checks current pull-request state again immediately before posting. A later
 change cannot be made atomic with GitHub comment creation; these comments are
 observations, not approval or merge checks.
 
-The prior deferral until a new Lula release or explicit compliance priority
-requires maintainer review before publication. Local simulated-API tests prove
-the safeguards above, not live acceptance. A later authorized small pull request
-must change an existing mapped block and produce an actual comment containing
-its expected mapping identifier, with run, source and pull-request identities
-retained. No GitHub write was performed during this preparation.
+Local simulated-API tests verify the safeguards above. Live acceptance remains
+pending: change an existing mapped block in a small pull request and confirm
+that the workflow posts its expected mapping identifier. Retain the workflow
+run, workflow source commit, pull-request source commit and comment link with
+that evidence. A passing local test does not establish that GitHub posted a
+comment.

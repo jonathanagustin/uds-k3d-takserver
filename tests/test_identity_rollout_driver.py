@@ -367,6 +367,7 @@ class IdentityFixtures(unittest.TestCase):
             instance.stage_config=lambda phase: events.append(('config',phase))
             instance.stage_admission=lambda phase: events.append(('admission',phase)) or []
             instance.traffic=lambda identities,phase: events.append(('traffic',phase))
+            instance.capture_phase=lambda phase,account: events.append(('evidence',phase,account))
             instance.patch=lambda *a,**k: None
             instance.wait=lambda callback: callback()
             instance.identities=lambda account: []
@@ -379,8 +380,8 @@ class IdentityFixtures(unittest.TestCase):
                 return value
             instance.get=get
             instance.reverse()
-            self.assertEqual(events,[('config','rollback'),('admission','rollback'),('traffic','rollback'),
-                                     ('config','shared'),('admission','shared'),('traffic','shared')])
+            self.assertEqual(events,[('config','rollback'),('admission','rollback'),('traffic','rollback'),('evidence','rollback','shared'),
+                                     ('config','shared'),('admission','shared'),('traffic','shared'),('evidence','shared','shared')])
             self.assertTrue(instance.state['completed'])
             self.assertFalse(instance.state['accepted'], 'completion alone cannot manufacture missing forward acceptance')
             events.clear();instance.state['completed']=False

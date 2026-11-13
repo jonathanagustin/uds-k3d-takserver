@@ -51,6 +51,49 @@ class PhaseEvidenceTests(unittest.TestCase):
         changed = dict(snapshot['binding'], runID='999')
         self.assertFalse(evidence.validate_phase(snapshot, driver, changed)['accepted'])
 
+    def test_driver_capture_reuses_observation_inputs_and_recovery_does_not_overwrite(self):
+        bind, data = fixture()
+        mesh = {'metadata': {'uid': bind['meshConfigUID']}, 'data': {'mesh': 'rootNamespace: istio-system'}}
+        with tempfile.TemporaryDirectory() as directory:
+            instance = driver.Driver(Path(directory) / 'journal.json')
+            instance.state.update(guard={k: bind[k] for k in ('sourceSHA', 'runID', 'runAttempt', 'clusterUID')},
+                meshConfigUID=bind['meshConfigUID'], meshConfigHash=driver.sha(mesh['data']['mesh']),
+                packageUID=data['package']['metadata']['uid'],
+                packageInvariant=driver.package_invariant(data['package']),
+                currentAllow=data['package']['spec']['network']['allow'], baselineNetwork=data['baseline_network'],
+                deploymentUIDs=data['baseline_uids'], templateFingerprints=data['template_fingerprints'],
+                peprUIDs=data['pepr_uids'], peprTemplateFingerprints=data['pepr_template_fingerprints'])
+            calls = []
+            def get(kind, name=None, namespace='takserver', labels=None):
+                calls.append((kind, namespace))
+                if namespace == 'pepr-system':
+                    if kind == 'deployment':
+                        return next(d for d in data['pepr']['deployments'] if d['metadata']['name'] == name)
+                    return {'items': data['pepr'][kind]}
+                if kind == 'package': return data['package']
+                if kind == 'configmap': return mesh
+                if kind.startswith('authorization'):
+                    policies = [] if namespace == 'istio-system' else data['policies']
+                    return {'metadata': {'resourceVersion': '100'}, 'items': policies}
+                return {'items': data[{'networkpolicies': 'network_policies'}.get(kind, kind)]}
+            instance.get = get
+            instance.wait = lambda callback: callback()
+            instance.observe_render_inputs = lambda: data['render_inputs']
+            verdict = instance.capture_phase('strict', 'dedicated')
+            self.assertTrue(verdict['accepted'])
+            self.assertEqual(len(calls), 12, 'capture helper must not fetch another observation')
+            reference = instance.state['phaseEvidence'][0]['reference']
+            stored = evidence.read_phase(Path(directory) / 'phases', reference)
+            self.assertEqual(stored['binding']['phase'], 'strict')
+            self.assertTrue(evidence.validate_phase(stored, driver)['accepted'])
+            instance.state['recoveryOnly'] = True
+            self.assertTrue(instance.capture_phase('strict', 'dedicated')['accepted'])
+            self.assertEqual(len(instance.state['phaseEvidence']), 1)
+            self.assertFalse(instance.state['accepted'])
+            self.assertEqual(evidence.read_phase(Path(directory) / 'phases', reference), stored)
+            with self.assertRaisesRegex(ValueError, 'unsupported extra phase binding'):
+                instance.capture_phase('strict', 'dedicated', {'sourceSHA': 'c' * 40})
+
     def test_old_journal_and_missing_complete_root_inventory_are_insufficient(self):
         for value in ({'schema': 1, 'accepted': True, 'stages': []}, {}):
             self.assertEqual(evidence.validate_phase(value, driver)['reason'], 'insufficient_evidence')

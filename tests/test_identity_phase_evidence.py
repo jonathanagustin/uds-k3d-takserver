@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from tests.test_identity_rollout_driver import driver, policy_fixture, workload_fixture, pepr_fixture
 
@@ -50,6 +51,67 @@ class PhaseEvidenceTests(unittest.TestCase):
         self.assertEqual(result['inventoryCounts']['policies'], 4)
         changed = dict(snapshot['binding'], runID='999')
         self.assertFalse(evidence.validate_phase(snapshot, driver, changed)['accepted'])
+
+    def test_capture_diagnostic_has_fixed_projection_step_without_partial_payload(self):
+        cases = [
+            ('render_inputs', 'inventory_bound', lambda data: data['render_inputs'].update(apiVersions=['SECRET_SENTINEL'] * (evidence.MAX_ITEMS + 1))),
+            ('package_projection', 'malformed_input', lambda data: data['package'].pop('status')),
+            ('policy_inventory', 'policy_inventory_incomplete', lambda data: data['policy_lists'].pop('istio-system')),
+            ('policy_projection', 'unsupported_policy_condition', lambda data: data['policies'][0]['spec']['rules'][0].update(
+                when=[{'key': 'SECRET_SENTINEL', 'values': ['SECRET_SENTINEL']}]))]
+        for step, reason, change in cases:
+            with self.subTest(step=step):
+                bind, data = fixture()
+                data['package']['metadata']['annotations'] = {'SECRET_SENTINEL': 'SECRET_SENTINEL'}
+                change(data)
+                value = evidence.capture(bind, **data)
+                self.assertFalse(value['complete'])
+                self.assertEqual(value['diagnostic'], {'scope': 'capture', 'step': step, 'reason': reason})
+                self.assertNotIn('package', value)
+                self.assertNotIn('policies', value)
+                self.assertNotIn('SECRET_SENTINEL', json.dumps(value))
+                verdict = evidence.validate_phase(value, driver)
+                self.assertFalse(verdict['accepted'])
+                self.assertEqual(verdict['reason'], 'insufficient_evidence')
+                self.assertEqual(verdict['diagnostic'], value['diagnostic'])
+
+    def test_replay_diagnostic_distinguishes_schema_binding_and_guard_rejection(self):
+        value = self.snapshot()
+        self.assertNotIn('diagnostic', evidence.validate_phase(value, driver))
+        for step, change in [
+            ('render_inputs', lambda item: item.pop('renderInputs')),
+            ('source_binding', lambda item: item.update(guardSHA256='0' * 64)),
+            ('inventory_counts', lambda item: item['counts'].update(pods=999)),
+            ('application_templates', lambda item: item['deployments'][0].update(templateSHA256='0' * 64))]:
+            with self.subTest(step=step):
+                changed = copy.deepcopy(value)
+                change(changed)
+                result = evidence.validate_phase(changed, driver)
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['diagnostic']['scope'], 'replay')
+                self.assertEqual(result['diagnostic']['step'], step)
+                evidence.public_diagnostic(result['diagnostic'])
+        for name, step in [('validate_policies', 'policy_guard'), ('validate_workloads', 'application_guard'),
+                           ('validate_pepr', 'pepr_guard')]:
+            with self.subTest(name=name), mock.patch.object(driver, name, side_effect=ValueError('SECRET_SENTINEL')):
+                result = evidence.validate_phase(value, driver)
+                self.assertFalse(result['accepted'])
+                self.assertEqual(result['diagnostic'], {'scope': 'replay', 'step': step, 'reason': 'guard_rejected'})
+                self.assertNotIn('SECRET_SENTINEL', json.dumps(result))
+
+    def test_public_diagnostic_rejects_arbitrary_strings_and_extra_fields(self):
+        safe = {'scope': 'capture', 'step': 'policy_projection', 'reason': 'unsupported_schema'}
+        self.assertEqual(evidence.public_diagnostic(safe), safe)
+        for value in [None, {**safe, 'scope': 'SECRET_SENTINEL'}, {**safe, 'step': 'SECRET_SENTINEL'},
+                      {**safe, 'reason': 'SECRET_SENTINEL'}, {**safe, 'name': 'SECRET_SENTINEL'},
+                      {**safe, 'step': 'policy_guard'}, {**safe, 'reason': True}]:
+            with self.subTest(value=value), self.assertRaises(evidence.EvidenceError):
+                evidence.public_diagnostic(value)
+        bind, data = fixture()
+        with mock.patch.object(evidence, 'package_rules', side_effect=evidence.EvidenceError('SECRET_SENTINEL')):
+            value = evidence.capture(bind, **data)
+        self.assertEqual(value['diagnostic'], {'scope': 'capture', 'step': 'package_projection', 'reason': 'unsupported_schema'})
+        self.assertNotIn('SECRET_SENTINEL', json.dumps(value))
 
     def test_driver_capture_reuses_observation_inputs_and_recovery_does_not_overwrite(self):
         bind, data = fixture()

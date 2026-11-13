@@ -15,6 +15,17 @@ MAX_PHASES = 16
 PHASES = {'baseline', 'dual-before-rollout', 'transition', 'strict', 'rollback', 'shared', 'fresh-strict'}
 HEX = r'[a-f0-9]{64}'
 TOKEN = r'[A-Za-z0-9_.:/@*+-]{1,253}'
+DIAGNOSTIC_STEPS = {
+    'capture': frozenset({'render_inputs', 'application_baseline', 'package_projection', 'policy_inventory',
+        'policy_projection', 'network_projection', 'application_deployments', 'application_replicasets',
+        'application_pods', 'pepr_baseline', 'pepr_deployments', 'pepr_replicasets', 'pepr_pods', 'snapshot_bound'}),
+    'replay': frozenset({'snapshot_schema', 'binding', 'render_inputs', 'source_binding', 'policy_inventory',
+        'inventory_counts', 'network_baseline', 'policy_guard', 'application_templates', 'application_guard',
+        'pepr_guard', 'verdict'}),
+}
+DIAGNOSTIC_SCOPES = frozenset(DIAGNOSTIC_STEPS)
+DIAGNOSTIC_REASONS = frozenset({'unsupported_schema', 'inventory_bound', 'unsupported_policy_condition',
+    'policy_inventory_incomplete', 'snapshot_bound', 'malformed_input', 'guard_rejected'})
 
 
 class EvidenceError(ValueError):
@@ -24,6 +35,25 @@ class EvidenceError(ValueError):
 def require(value, code='unsupported_schema'):
     if not value:
         raise EvidenceError(code)
+
+
+def public_diagnostic(value):
+    """Closed public enum only; never exception text, object names or input paths."""
+    require(isinstance(value, dict) and set(value) == {'scope', 'step', 'reason'})
+    require(all(isinstance(value[key], str) for key in ('scope', 'step', 'reason')))
+    require(value['scope'] in DIAGNOSTIC_SCOPES and value['step'] in DIAGNOSTIC_STEPS[value['scope']])
+    require(value['reason'] in DIAGNOSTIC_REASONS)
+    return {key: value[key] for key in ('scope', 'step', 'reason')}
+
+
+def _failure_diagnostic(scope, step, error):
+    reason = 'malformed_input'
+    if isinstance(error, EvidenceError):
+        code = error.args[0] if error.args else None
+        reason = code if isinstance(code, str) and code in DIAGNOSTIC_REASONS else 'unsupported_schema'
+    elif scope == 'replay' and step in {'policy_guard', 'application_guard', 'pepr_guard'} and isinstance(error, (ValueError, StopIteration)):
+        reason = 'guard_rejected'
+    return public_diagnostic({'scope': scope, 'step': step, 'reason': reason})
 
 
 def digest(value):
@@ -210,47 +240,62 @@ def capture(bind, *, guards, package, policies, network_policies, baseline_netwo
     result = {'schema': 1, 'binding': binding(bind), 'complete': True,
               'guardSHA256': hashlib.sha256(Path(guards.__file__).read_bytes()).hexdigest(),
               'captureSHA256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    step = 'render_inputs'
     try:
         inputs, semantic_hash = validate_render_inputs(render_inputs)
         require(result['binding'].get('renderInputsSHA256', semantic_hash) == semantic_hash)
         result['binding']['renderInputsSHA256'] = semantic_hash
         result['renderInputs'] = inputs
+        step = 'application_baseline'
         require(account in ('shared', 'dedicated'))
         require(set(baseline_uids) == set(guards.APPS) == set(template_fingerprints))
         result.update(account=account, baselineUIDs={k: token(v) for k, v in baseline_uids.items()},
                       templateFingerprints=dict(template_fingerprints))
         require(all(re.fullmatch(HEX, h) for h in template_fingerprints.values()))
+        step = 'package_projection'
         result['package'] = {'metadata': metadata(package), 'status': {
             'phase': token(package['status']['phase']), 'observedGeneration': number(package['status']['observedGeneration'])},
             'spec': {'network': {'allow': package_rules(package)}}}
+        step = 'policy_inventory'
         require(set(policy_lists) == {'takserver', 'istio-system'}, 'policy_inventory_incomplete')
         result['policyLists'] = {namespace: {'resourceVersion': token(entry['resourceVersion']), 'itemCount': number(entry['itemCount'])}
                                  for namespace, entry in policy_lists.items()}
+        step = 'policy_projection'
         result['policies'] = [policy(p) for p in items(policies)]
+        step = 'policy_inventory'
         require(all(sum(p['metadata']['namespace'] == namespace for p in result['policies']) == entry['itemCount']
                     for namespace, entry in result['policyLists'].items()), 'policy_inventory_incomplete')
         require(len({(p['metadata']['namespace'], p['metadata']['name']) for p in result['policies']}) == len(result['policies']))
+        step = 'network_projection'
         result['network'] = [{'metadata': {**metadata(p), 'labels': {
             k: token(v) for k, v in p['metadata'].get('labels', {}).items() if k in ('uds/package', 'uds/generation')}},
             'specSHA256': digest(p['spec'])} for p in items(network_policies)]
         result['baselineNetwork'] = list(baseline_network)
         require(all(re.fullmatch(HEX, h) for h in baseline_network))
+        step = 'application_deployments'
         result['deployments'] = [workload(d, 'Deployment', guards) for d in items(deployments)
                                  if d['metadata']['name'] in guards.APPS]
+        step = 'application_replicasets'
         result['replicasets'] = [workload(r, 'ReplicaSet', guards) for r in items(replicasets)]
+        step = 'application_pods'
         result['pods'] = [workload(p, 'Pod', guards) for p in items(pods)]
+        step = 'pepr_baseline'
         require(set(pepr_uids) == set(guards.PEPR) == set(pepr_template_fingerprints))
-        result['pepr'] = {key: [workload(obj, kind, guards, True) for obj in items(pepr[key])]
-                          for key, kind in [('deployments', 'Deployment'), ('replicasets', 'ReplicaSet'), ('pods', 'Pod')]}
+        result['pepr'] = {}
+        for key, kind in [('deployments', 'Deployment'), ('replicasets', 'ReplicaSet'), ('pods', 'Pod')]:
+            step = 'pepr_' + key
+            result['pepr'][key] = [workload(obj, kind, guards, True) for obj in items(pepr[key])]
+        step = 'pepr_baseline'
         result['pepr']['baselineUIDs'] = {k: token(v) for k, v in pepr_uids.items()}
         result['pepr']['templateFingerprints'] = dict(pepr_template_fingerprints)
         require(all(re.fullmatch(HEX, h) for h in pepr_template_fingerprints.values()))
         result['counts'] = {k: len(result[k]) for k in ('policies', 'network', 'deployments', 'replicasets', 'pods')}
+        step = 'snapshot_bound'
         require(len(encoded(result)) <= MAX_BYTES, 'snapshot_bound')
-    except (EvidenceError, KeyError, TypeError, AttributeError, ValueError, OverflowError):
+    except (EvidenceError, KeyError, TypeError, AttributeError, ValueError, OverflowError) as error:
         # No partial inventory can masquerade as complete proof or leak payload.
         return {k: result[k] for k in ('schema', 'binding', 'guardSHA256', 'captureSHA256')} | {
-            'complete': False, 'reason': 'insufficient_evidence'}
+            'complete': False, 'reason': 'insufficient_evidence', 'diagnostic': _failure_diagnostic('capture', step, error)}
     return result
 
 
@@ -295,33 +340,48 @@ def _validate_pepr(snapshot, guards):
 def validate_phase(snapshot, guards, expected_binding=None):
     """Fixed public verdict; reuses live policy/workload guards, never a fallback read."""
     verdict = {'schema': 1, 'accepted': False, 'reason': 'insufficient_evidence'}
+    step = 'snapshot_schema'
     try:
+        if isinstance(snapshot, dict) and snapshot.get('complete') is False and 'diagnostic' in snapshot:
+            verdict['diagnostic'] = public_diagnostic(snapshot['diagnostic'])
+            return verdict
         require(isinstance(snapshot, dict) and snapshot.get('schema') == 1 and snapshot.get('complete') is True)
         require(len(encoded(snapshot)) <= MAX_BYTES)
+        step = 'binding'
         bind = binding(snapshot['binding'])
         require(expected_binding is None or bind == expected_binding)
+        step = 'render_inputs'
         _inputs, semantic_hash = validate_render_inputs(snapshot['renderInputs'])
         require(bind.get('renderInputsSHA256') == semantic_hash)
+        step = 'source_binding'
         guard_hash = hashlib.sha256(Path(guards.__file__).read_bytes()).hexdigest()
         require(snapshot['guardSHA256'] == guard_hash)
         require(snapshot['captureSHA256'] == hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+        step = 'policy_inventory'
         require(set(snapshot['policyLists']) == {'takserver', 'istio-system'})
         require(all(sum(p['metadata']['namespace'] == namespace for p in snapshot['policies']) == entry['itemCount']
                     and token(entry['resourceVersion']) for namespace, entry in snapshot['policyLists'].items()))
+        step = 'inventory_counts'
         require(snapshot['counts'] == {k: len(snapshot[k]) for k in ('policies', 'network', 'deployments', 'replicasets', 'pods')})
+        step = 'network_baseline'
         require(sorted({p['specSHA256'] for p in snapshot['network']}) == snapshot['baselineNetwork'])
         network = [{'metadata': p['metadata'], 'spec': {'capturedSpecSHA256': p['specSHA256']}} for p in snapshot['network']]
         baseline = sorted({guards.sha(p['spec']) for p in network})
+        step = 'policy_guard'
         fingerprint = guards.validate_policies(snapshot['package'], snapshot['policies'], network, baseline)
+        step = 'application_templates'
         for deployment in snapshot['deployments']:
             require(deployment['templateSHA256'] == snapshot['templateFingerprints'][deployment['metadata']['name']])
+        step = 'application_guard'
         identities = guards.validate_workloads([_restore_workload(d) for d in snapshot['deployments']],
             [_restore_workload(r) for r in snapshot['replicasets']], snapshot['pods'], snapshot['account'], snapshot['baselineUIDs'])
+        step = 'pepr_guard'
         pepr_result = _validate_pepr(snapshot, guards)
+        step = 'verdict'
         verdict.update(accepted=True, reason='passed', binding=bind, inputSHA256=digest(snapshot), guardSHA256=guard_hash,
                        captureSHA256=snapshot['captureSHA256'], policyFingerprint=fingerprint, workloadCount=len(identities), peprWorkloadCount=len(pepr_result), inventoryCounts=snapshot['counts'])
-    except (EvidenceError, KeyError, TypeError, AttributeError, ValueError, StopIteration, OverflowError):
-        pass
+    except (EvidenceError, KeyError, TypeError, AttributeError, ValueError, StopIteration, OverflowError) as error:
+        verdict['diagnostic'] = _failure_diagnostic('replay', step, error)
     return verdict
 
 

@@ -143,6 +143,42 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(diagnostic['identityFailures'][0]['callsite'], proof)
             self.assertNotIn('PRIVATE_HELP_SENTINEL', ''.join(p.read_text() for p in (root/'public').rglob('*.json')))
 
+    def test_driver_journals_rejected_verdict_before_failclosed_guard(self):
+        from tests.test_identity_phase_evidence import fixture
+        bind,data=fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.D.Driver(Path(directory)/'journal.json')
+            instance.state.update(guard={k:bind[k] for k in ('sourceSHA','runID','runAttempt','clusterUID')},
+                meshConfigUID=bind['meshConfigUID'],meshConfigHash=bind['meshConfigHash'],baselineNetwork=data['baseline_network'],
+                deploymentUIDs=data['baseline_uids'],templateFingerprints=data['template_fingerprints'],
+                peprUIDs=data['pepr_uids'],peprTemplateFingerprints=data['pepr_template_fingerprints'])
+            instance._last_policy_observation={key:data[key] for key in ('package','policies','network_policies','policy_lists')}
+            instance._last_identity_observation={key:data[key] for key in ('deployments','replicasets','pods')}
+            instance._last_pepr_observation=data['pepr']
+            instance.wait=lambda callback:callback();instance.policies=lambda:None;instance.identities=lambda account:None;instance.observe_pepr=lambda phase:None
+            instance.observe_render_inputs=lambda:data['render_inputs']
+            diagnostic={'scope':'replay','step':'application_guard','reason':'guard_rejected'}
+            with patch.object(P.D.phase_evidence,'validate_phase',return_value={'accepted':False,'diagnostic':diagnostic}):
+                with self.assertRaisesRegex(ValueError,'typed identity phase evidence is insufficient'):instance.capture_phase('strict','dedicated')
+            self.assertEqual(instance.state['stages'][-1],{'stage':'typed-phase-rejected','phase':'strict','diagnostic':diagnostic})
+            self.assertFalse(instance.state['accepted']);self.assertFalse((Path(directory)/'phases').exists())
+
+    def test_typed_phase_rejection_progress_exports_only_closed_helper_diagnostic(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            instance=P.D.Driver(folder/'journal.json')
+            instance.state['guard']={field:ENV[env] for field,env in [('sourceSHA','GITHUB_SHA'),('runID','GITHUB_RUN_ID'),('runAttempt','GITHUB_RUN_ATTEMPT')]}
+            diagnostic={'scope':'capture','step':'policy_projection','reason':'unsupported_policy_condition'}
+            instance.journal('typed-phase-rejected',phase='baseline',diagnostic=diagnostic,private='SECRET')
+            value=S.identity_progress(root)['package']
+            self.assertEqual(value['stages'],[{'stage':'typed-phase-rejected','phase':'baseline','diagnostic':diagnostic}])
+            self.assertNotIn('SECRET',json.dumps(value))
+            for changed in [{**diagnostic,'reason':'PRIVATE_SECRET'},{**diagnostic,'scope':'foreign'},
+                            {**diagnostic,'step':'PRIVATE_PATH'},{**diagnostic,'stderr':'PRIVATE_SECRET'}]:
+                instance.state['stages']=[];instance.journal('typed-phase-rejected',phase='baseline',diagnostic=changed)
+                value=S.identity_progress(root)['package']
+                self.assertEqual(value['status'],'unavailable');self.assertNotIn('PRIVATE',json.dumps(value))
+
     def test_compact_progress_binds_large_private_journal_without_acceptance(self):
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{**ENV,'IDENTITY_METHOD':'package'},clear=True):
             root=Path(directory);folder=root/'package-identity';folder.mkdir()

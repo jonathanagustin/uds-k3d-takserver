@@ -128,8 +128,11 @@ check_match ".github/workflows/staged-migrations.yaml.bak" relevant
 check_match ".github/scripts/staged-migrations-extra.py" relevant
 check_match ".github/scripts/staged-migrations.sh.bak" relevant
 # These exact files have only manual staged-migration and unconditional Unit
-# callers. Their shared identity/render/data/flow dependencies stay sensitive.
+# callers. Production flow, Pepr, chart and values dependencies stay sensitive.
 optional_identity_paths=(
+  tests/workload-identities/drive.py
+  tests/workload-identities/retained_state.py
+  tests/workload-identities/render_inputs.py
   tests/workload-identities/package_roundtrip.py
   tests/workload-identities/phase_evidence.py
   tests/workload-identities/failure_evidence.py
@@ -145,10 +148,8 @@ for optional_identity in "${optional_identity_paths[@]}"; do
   check_match "${optional_identity}/nested-helper.py" relevant
 done
 check_decide false "$(printf '%s\n' "${optional_identity_paths[@]}")"
-for sensitive_identity in tests/workload-identities/drive.py tests/workload-identities/render_inputs.py tests/workload-identities/retained_state.py tests/flows.py; do
-  check_match "${sensitive_identity}" relevant
-  check_decide true $'tests/workload-identities/package_roundtrip.py\n'"${sensitive_identity}"
-done
+check_match tests/flows.py relevant
+check_decide true $'tests/workload-identities/package_roundtrip.py\ntests/flows.py'
 check_match "tests/workload-identities/new-helper.py" relevant
 check_match "tests/workload-identities/package_roundtrip_extra.py" relevant
 check_match "tests/workload-identities/README-extra.md" relevant
@@ -175,7 +176,7 @@ with tempfile.TemporaryDirectory(prefix='identity-paths-') as directory:
     folder = root / 'tests/workload-identities'
     folder.mkdir(parents=True)
     (folder / 'package_roundtrip.py').write_text('optional fixture\n')
-    (folder / 'drive.py').write_text('shared runtime fixture\n')
+    (folder / 'runtime-probe.py').write_text('runtime fixture\n')
     git('add', '.')
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base')
     def check(want):
@@ -189,21 +190,52 @@ with tempfile.TemporaryDirectory(prefix='identity-paths-') as directory:
     (folder / 'package_roundtrip.py').rename(folder / 'unreviewed-probe.py')
     check('true')
     git('reset', '--hard', '-q', 'HEAD')
-    (folder / 'drive.py').rename(folder / 'phase_evidence.py')
+    (folder / 'runtime-probe.py').rename(folder / 'phase_evidence.py')
     check('true')
     git('reset', '--hard', '-q', 'HEAD')
-    (folder / 'drive.py').unlink()
+    (folder / 'runtime-probe.py').unlink()
     check('true')
     git('reset', '--hard', '-q', 'HEAD')
     (folder / 'package_roundtrip.py').unlink()
     check('false')  # optional deletion still runs the unconditional safety tests
 PY
+# Native paths-ignore is path-only: deleting/renaming an optional helper can
+# skip cluster matrices. The unconditional Unit import must fail instead.
+python3 - "${root}" <<'PYTHON'
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+source = Path(sys.argv[1])
+tracked = subprocess.check_output(['git', '-C', str(source), 'ls-files', '-z', '--', 'tests/']).decode().split('\0')
+for helper, suite in [('drive.py', 'test_identity_rollout_driver'),
+                      ('retained_state.py', 'test_identity_retained_state'),
+                      ('render_inputs.py', 'test_identity_render_inputs')]:
+    for operation in ('delete', 'rename'):
+        with tempfile.TemporaryDirectory(prefix='identity-import-') as directory:
+            root = Path(directory)
+            for relative in filter(None, tracked):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / relative, target)
+            path = root / 'tests/workload-identities' / helper
+            if operation == 'delete':
+                path.unlink()
+            else:
+                path.rename(path.with_suffix('.renamed'))
+            result = subprocess.run([sys.executable, '-B', '-m', 'unittest', 'tests.' + suite],
+                                    cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            assert result.returncode != 0 and 'FileNotFoundError' in result.stdout and helper in result.stdout, (helper, operation, result.stdout)
+            print('ok: unconditional Unit import rejects', operation, helper)
+PYTHON
 for shared_path in tests/backup-restore.sh tests/backup-names.sh tests/ephemeral-cluster.py tests/upgrade-agent-watch.py .github/scripts/node-agent-ready.sh tasks/test.yaml bundle/full/uds-bundle.yaml; do
   check_match "${shared_path}" relevant
   check_decide true $'.github/scripts/staged-migrations.sh\n'"${shared_path}"
 done
 # Deeper drivers stay sensitive; no migration directory wildcard is excluded.
-for driver_path in tests/velero-ownership/drive.py tests/velero-ownership/candidate.py tests/workload-identities/drive.py tests/workload-identities/ProtocolProbe.java tests/velero-ownership/new-helper.py; do
+for driver_path in tests/velero-ownership/drive.py tests/velero-ownership/candidate.py tests/workload-identities/ProtocolProbe.java tests/velero-ownership/new-helper.py; do
   check_match "${driver_path}" relevant
   check_decide true $'.github/scripts/staged-migrations.py\n'"${driver_path}"
 done
@@ -340,7 +372,7 @@ must_relevant() {
       ;;
     tests/*)
       case "${path}" in
-        tests/workload-identities/package_roundtrip.py | tests/workload-identities/phase_evidence.py | tests/workload-identities/failure_evidence.py | tests/workload-identities/README.md) return 1 ;;
+        tests/workload-identities/drive.py | tests/workload-identities/retained_state.py | tests/workload-identities/render_inputs.py | tests/workload-identities/package_roundtrip.py | tests/workload-identities/phase_evidence.py | tests/workload-identities/failure_evidence.py | tests/workload-identities/README.md) return 1 ;;
         tests/demo/* | tests/test_* | tests/playwright.demo.config.ts) return 1 ;;
         *) return 0 ;;
       esac

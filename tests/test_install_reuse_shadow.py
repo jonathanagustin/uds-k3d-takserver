@@ -92,6 +92,85 @@ class PolicyTests(unittest.TestCase):
                          'runDetails': {'metadata': {'invocationId': invocation}}}}
         return [{'verificationResult': {'signature': {'certificate': cert}, 'statement': statement}}]
 
+    def prospective(self):
+        return {'context': {'event': 'push', 'run_id': 200, 'attempt': 1,
+                            'arch': 'amd64', 'scenario': 'install'},
+                'checkout': {'source': {'checkout_commit': self.target, 'checkout_tree': self.tree},
+                             'workflow': copy.deepcopy(self.receipt['workflow'])},
+                'inputs': copy.deepcopy(self.receipt['inputs'])}
+
+    def test_acquired_inputs_match_but_shadow_always_requires_fresh(self):
+        raw = json.dumps(self.receipt).encode()
+        self.api.artifact.return_value = raw
+        result = SHADOW.shadow(self.api, raw, self.verification(raw), 5, self.target,
+                               self.policy, self.prospective())
+        self.assertTrue(result['evidence_qualified'])
+        self.assertTrue(result['prospective_comparison']['inputs_equal'])
+        self.assertEqual(result['prospective_comparison']['historical_inputs_sha256'],
+                         result['prospective_comparison']['prospective_inputs_sha256'])
+        self.assertEqual(result['decision'], 'execute-fresh')
+        self.assertFalse(result['reuse_authorized'])
+        self.assertIn('prospective-input-equivalence-not-proven', result['blockers'])
+
+    def test_cli_consumes_acquired_snapshot_after_historical_verification(self):
+        raw = json.dumps(self.receipt).encode()
+        self.api.artifact.return_value = raw
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'receipt.json').write_bytes(raw)
+            (root / 'bundle.jsonl').write_text('{}')
+            (root / 'prospective.json').write_text(json.dumps(self.prospective()))
+            argv = ['shadow', '--receipt', str(root / 'receipt.json'), '--bundle', str(root / 'bundle.jsonl'),
+                    '--pr', '5', '--target', self.target, '--policy-ref', self.policy,
+                    '--prospective', str(root / 'prospective.json')]
+            with mock.patch.object(sys, 'argv', argv), mock.patch.object(SHADOW, 'GitHub', return_value=self.api), \
+                    mock.patch.object(SHADOW, 'command', return_value=json.dumps(self.verification(raw))), \
+                    mock.patch.object(sys, 'stdout', new=io.StringIO()) as output:
+                SHADOW.main()
+            result = json.loads(output.getvalue())
+        self.assertTrue(result['prospective_comparison']['inputs_equal'])
+        self.assertEqual(result['decision'], 'execute-fresh')
+        self.assertFalse(result['reuse_authorized'])
+
+    def test_each_image_digest_difference_is_observed(self):
+        for image in SHADOW.ENCODER.IMAGES:
+            prospective = self.prospective()
+            prospective['inputs']['image_digests'][image] = 'sha256:' + 'e' * 64
+            with self.subTest(image=image):
+                self.assertFalse(SHADOW.compare_prospective(self.receipt, prospective,
+                                                           self.target)['inputs_equal'])
+
+    def test_every_actual_input_difference_stays_fresh(self):
+        for field in SHADOW.ENCODER.INPUTS:
+            with self.subTest(field=field):
+                prospective = self.prospective()
+                if field == 'image_digests':
+                    prospective['inputs'][field]['cloudtak'] = 'sha256:' + 'e' * 64
+                elif field == 'package_key':
+                    prospective['inputs'][field] = 'amd64-' + 'e' * 16
+                elif field == 'uds_version':
+                    prospective['inputs'][field] = '0.42.0'
+                else:
+                    prospective['inputs'][field] = 'sha256:' + 'e' * 64
+                self.assertFalse(SHADOW.compare_prospective(self.receipt, prospective,
+                                                           self.target)['inputs_equal'])
+
+    def test_prospective_source_run_scenario_and_schema_fail_closed(self):
+        changes = [lambda p: p['context'].update(event='pull_request'),
+                   lambda p: p['context'].update(run_id=True),
+                   lambda p: p['context'].update(arch='arm64'),
+                   lambda p: p['context'].update(scenario='install-airgap'),
+                   lambda p: p['checkout']['source'].update(checkout_commit=self.head),
+                   lambda p: p['checkout']['source'].update(checkout_tree=self.head),
+                   lambda p: p['checkout']['workflow'].update(sha256='a' * 64),
+                   lambda p: p['inputs'].update(secret='SENTINEL'),
+                   lambda p: p['inputs']['image_digests'].pop('cloudtak')]
+        for change in changes:
+            p = self.prospective(); change(p)
+            with self.assertRaises(SHADOW.Unavailable) as caught:
+                SHADOW.compare_prospective(self.receipt, p, self.target)
+            self.assertNotIn('SENTINEL', str(caught.exception))
+
     def result(self, verified_change=None):
         raw = json.dumps(self.receipt).encode()
         self.api.artifact.return_value = raw

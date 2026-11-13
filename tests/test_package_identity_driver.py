@@ -26,10 +26,12 @@ class PackageGuards(unittest.TestCase):
         with self.assertRaises(ValueError):P.deploy_command(self.bound(),'unknown')
     def test_cli_capabilities_fail_before_any_deployment(self):
         calls=[]
-        def help(argv):calls.append(argv);return '--confirm --features --set-values --set'
+        def help(argv):
+            calls.append(argv)
+            return (ROOT/'tests/workload-identities/fixtures'/('uds-0.41.0-'+argv[3]+'-flags.txt')).read_text()
         P.cli_preflight(help);self.assertEqual([x[3] for x in calls],['deploy','remove'])
         self.assertTrue(all(x[-1]=='--help' for x in calls))
-        with self.assertRaises(ValueError):P.cli_preflight(lambda argv:'--confirm --set')
+        with self.assertRaisesRegex(ValueError,'--features, --set-values'):P.cli_preflight(lambda argv:'  -c, --confirm  Confirms\n      --set-variables stringToString Variables\n')
     def test_actual_deploy_path_dispatches_supported_command_then_observes(self):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.bound['archiveSHA256']='a'*64
@@ -117,3 +119,21 @@ class PackageGuards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'skipped'):instance.application_checks('strict')
             instance.require_cloudtak=lambda:(_ for _ in ()).throw(ValueError('missing component'))
             with self.assertRaisesRegex(ValueError,'missing'):instance.application_checks('strict')
+
+    def test_actual_pinned_help_declares_canonical_variables_not_hidden_alias(self):
+        root=ROOT/'tests/workload-identities/fixtures';proof=json.loads((root/'uds-0.41.0-help-provenance.json').read_text())
+        self.assertEqual(proof['version'],'0.41.0');self.assertEqual(proof['embeddedZarfVersion'],'0.89.0')
+        for op,item in proof['commands'].items():self.assertEqual(P.digest(root/item['fixture']),item['fixtureSHA256'])
+        actual=P.declared_flags((root/'uds-0.41.0-deploy-flags.txt').read_text())
+        self.assertEqual(actual,{'--confirm','--features','--set-values','--set-variables'})
+        self.assertNotIn('--set',actual)
+        command=P.deploy_command(self.bound(),'strict')
+        self.assertNotIn('--set',command);self.assertEqual(command.count('--set-variables'),len(self.bound()['variables'])+1)
+
+    def test_flag_parser_rejects_suffixes_prefixes_prose_and_examples(self):
+        for text in ['      --set-variables-extra value','      --set-variablesX value','x--set-variables value','_--set-variables value',
+                     'Example: deploy --set-variables NAME=value','Supported option --set-variables']:
+            with self.subTest(text=text):self.assertNotIn('--set-variables',P.declared_flags(text))
+        for text in ['      --set-variables stringToString variables','  -s, --set-variables stringToString variables','      --set-variables=value']:
+            with self.subTest(text=text):self.assertIn('--set-variables',P.declared_flags(text))
+        self.assertEqual(P.declared_flags('      --set-values-extra value'),{'--set-values-extra'})

@@ -14,6 +14,15 @@ spec.loader.exec_module(GATE)
 
 
 class WorkflowWiringTests(unittest.TestCase):
+    def test_runner_and_agent_failure_fixtures_are_unconditional(self):
+        document = yaml.safe_load((ROOT / GATE.WORKFLOW).read_text())
+        step = next(step for step in document['jobs']['coverage']['steps']
+                    if step.get('name') == 'Profiles, benchmark harness, and Full Core summary')
+        self.assertNotIn('if', step)
+        modules = set(re.findall(r'tests\.test_[A-Za-z_]+', step['run']))
+        self.assertTrue({'tests.test_runner_wedge_probe', 'tests.test_runner_wedge_kernel',
+                         'tests.test_upgrade_agent_diagnostics', 'tests.test_upgrade_agent_api_snapshot'} <= modules)
+
     def test_only_pepr_and_real_render_class_are_conditional(self):
         document = yaml.safe_load((ROOT / GATE.WORKFLOW).read_text())
         steps = document['jobs']['package-values']['steps']

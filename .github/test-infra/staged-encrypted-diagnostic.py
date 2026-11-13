@@ -5,6 +5,7 @@
 import hashlib
 import fcntl
 import io
+import types
 import json
 import os
 from pathlib import Path
@@ -32,8 +33,11 @@ PINS = {
 RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 INPUT_LIMIT = 65536
 CIPHER_LIMIT = 73728
+VALIDATION_INPUT_LIMIT = 128 * 1024
+VALIDATION_CIPHER_LIMIT = VALIDATION_INPUT_LIMIT + 8192
 OUTPUT_NAME = 'staged-encrypted-diagnostic'
 PACKAGE_NAME = 'PRIVATE-package-command-failure.json'
+VALIDATION_NAME = 'PRIVATE-retained-source-validation.json'
 PACKAGE_JOURNAL_LIMIT = 16 * 1024 * 1024  # Diagnostic authentication only, never acceptance.
 
 
@@ -139,7 +143,9 @@ def acquire_age(directory):
     return extract_age(bytes(archive), pin, directory), pin
 
 
-def encrypt_private(binary, pin, descriptor, recipient):
+def encrypt_private(binary, pin, descriptor, recipient, input_limit=INPUT_LIMIT):
+    require(input_limit in (INPUT_LIMIT, VALIDATION_INPUT_LIMIT))
+    cipher_limit = CIPHER_LIMIT if input_limit == INPUT_LIMIT else VALIDATION_CIPHER_LIMIT
     def verified_binary():
         fd = regular_descriptor(binary, pin[3])
         try:
@@ -151,14 +157,14 @@ def encrypt_private(binary, pin, descriptor, recipient):
     require(bounded_process([str(binary), '--version']).strip() == VERSION.encode())
     require(verified_binary())
     os.lseek(descriptor, 0, os.SEEK_SET)
-    before = os.read(descriptor, INPUT_LIMIT + 1)
-    require(len(before) <= INPUT_LIMIT)
+    before = os.read(descriptor, input_limit + 1)
+    require(len(before) <= input_limit)
     os.lseek(descriptor, 0, os.SEEK_SET)
     ciphertext = bounded_process([str(binary), '--encrypt', '--recipient', recipient],
-                                 stdin=descriptor, limit=CIPHER_LIMIT)
+                                 stdin=descriptor, limit=cipher_limit)
     os.lseek(descriptor, 0, os.SEEK_SET)
-    require(os.read(descriptor, INPUT_LIMIT + 1) == before and verified_binary())
-    require(ciphertext.startswith(b'age-encryption.org/v1\n') and len(ciphertext) <= CIPHER_LIMIT)
+    require(os.read(descriptor, input_limit + 1) == before and verified_binary())
+    require(ciphertext.startswith(b'age-encryption.org/v1\n') and len(ciphertext) <= cipher_limit)
     return ciphertext
 
 
@@ -251,7 +257,7 @@ def reviewed_source_hash(relative):
     return digest(raw)
 
 
-def package_input(temporary):
+def package_input(temporary, with_limit=False):
     folder = temporary / 'staged-migrations/package-identity'
     journal, _journal_raw, journal_hash = private_json(folder / 'journal.json', PACKAGE_JOURNAL_LIMIT)
     progress, _progress_raw, _progress_hash = private_json(folder / 'journal-progress.json', 256 * 1024)
@@ -262,6 +268,23 @@ def package_input(temporary):
     require(type(progress.get('schema')) is int and progress['schema'] == 1
             and progress.get('guard') == expected and progress.get('journalSHA256') == journal_hash)
     require(all(journal.get('guard', {}).get(key) == value for key, value in expected.items()))
+    first=journal.get('firstPrivateFailure')
+    if 'firstPrivateFailure' in journal:
+        require(isinstance(first,dict) and set(first)=={'schema','kind','reference'} and
+                type(first['schema']) is int and first['schema']==1 and
+                first['kind'] in ('package-command','retained-source-validation'))
+        key={'package-command':'packageCommandFailure','retained-source-validation':'retainedSourceValidationFailure'}[first['kind']]
+        require(first['reference']==journal.get(key) and isinstance(first['reference'],dict))
+        failures=[entry for entry in journal.get('stages',[]) if entry.get('stage') in
+                  ('package-command-failed','retained-source-validation-failed')]
+        require(failures and failures[0]['stage']=={'package-command':'package-command-failed',
+                'retained-source-validation':'retained-source-validation-failed'}[first['kind']])
+        if first['kind']=='retained-source-validation':
+            descriptor=validation_input(folder,journal,expected)
+            return (descriptor,VALIDATION_INPUT_LIMIT) if with_limit else descriptor
+    else:
+        # Only old command-only journals get the legacy fallback. Never guess.
+        require('retainedSourceValidationFailure' not in journal)
     reference = journal.get('packageCommandFailure', {})
     require(set(reference) == {'file', 'sha256', 'bytes'} and reference['file'] == PACKAGE_NAME
             and type(reference['bytes']) is int and 0 < reference['bytes'] <= INPUT_LIMIT
@@ -284,6 +307,10 @@ def package_input(temporary):
     for key, relative in [('packageDriverSHA256', 'tests/workload-identities/package_roundtrip.py'),
                           ('driverSHA256', 'tests/workload-identities/drive.py')]:
         require(payload[key] == journal.get(key) == reviewed_source_hash(relative))
+    descriptor=sealed_payload(raw)
+    return (descriptor,INPUT_LIMIT) if with_limit else descriptor
+
+def sealed_payload(raw):
     # Encrypt the validated snapshot, not a pathname that can change after checks.
     descriptor = os.memfd_create('staged-package-failure', os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
     try:
@@ -297,25 +324,55 @@ def package_input(temporary):
         raise
 
 
-def select_private(temporary):
+
+def validation_input(folder,journal,expected):
+    reference=journal.get('retainedSourceValidationFailure',{})
+    require(set(reference)=={'file','sha256','bytes'} and reference['file']==VALIDATION_NAME and
+            type(reference['bytes']) is int and 0<reference['bytes']<=VALIDATION_INPUT_LIMIT and
+            isinstance(reference['sha256'],str) and re.fullmatch('[a-f0-9]{64}',reference['sha256']))
+    payload,raw,checksum=private_json(folder/VALIDATION_NAME,VALIDATION_INPUT_LIMIT)
+    require(len(raw)==reference['bytes'] and checksum==reference['sha256'])
+    require(set(payload)=={'schema','type','kind','binding','phase','snapshot','packageDriverSHA256','driverSHA256','retainedSourceSHA256'} and
+            type(payload['schema']) is int and payload['schema']==1 and payload['type']=='retained-source-validation' and
+            payload['kind']=='stored-hooks-drift' and payload['binding']==expected and
+            payload['phase'] in ('shared','transition','strict','rollback'))
+    failed=next((entry for entry in journal.get('stages',[]) if entry.get('stage')=='retained-source-validation-failed'),None)
+    require(failed is not None and failed.get('phase')==payload['phase'])
+    for key,relative in [('packageDriverSHA256','tests/workload-identities/package_roundtrip.py'),
+                         ('driverSHA256','tests/workload-identities/drive.py'),
+                         ('retainedSourceSHA256','tests/workload-identities/retained_state.py')]:
+        require(payload[key]==journal.get(key)==reviewed_source_hash(relative))
+    # The reviewed retained-source helper admits only the versioned hash inventory.
+    path=ROOT/'tests/workload-identities/retained_state.py'
+    descriptor=regular_descriptor(path,256*1024)
+    try:source=os.read(descriptor,256*1024+1)
+    finally:os.close(descriptor)
+    require(len(source)<=256*1024 and digest(source)==payload['retainedSourceSHA256'])
+    retained=types.ModuleType('encrypted_retained_source');retained.__file__=str(path)
+    exec(compile(source,str(path),'exec'),retained.__dict__)
+    retained.validate_source_failure(payload['snapshot'])
+    return sealed_payload(raw)
+
+
+def select_private(temporary, with_limit=False):
     scenario = os.environ.get('SCENARIO', '')
     candidates = []
     try:
         if scenario in ('', 'velero', 'all'):
             owner_identity(temporary / 'staged-migrations/owner/journal.json')
-            candidates.append(regular_descriptor(temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT))
+            candidates.append((regular_descriptor(temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT),INPUT_LIMIT))
     except Exception:
         pass  # An ineligible channel never authorizes its private bytes.
     try:
         if scenario in ('identities', 'all') and os.environ.get('IDENTITY_METHOD') in ('package', 'combined'):
-            candidates.append(package_input(temporary))
+            candidates.append(package_input(temporary,with_limit=True))
     except Exception:
         pass
     if len(candidates) != 1:
-        for descriptor in candidates:
+        for descriptor,_limit in candidates:
             os.close(descriptor)
         require(False)
-    return candidates[0]
+    return candidates[0] if with_limit else candidates[0][0]
 
 
 def main():
@@ -338,12 +395,13 @@ def main():
         destination = temporary / OUTPUT_NAME
         require(not destination.exists() and not destination.is_symlink())
         stage = 'private-input'
-        descriptor = select_private(temporary)
+        descriptor,input_limit = select_private(temporary,with_limit=True)
         stage = 'verified-tool'
         with tempfile.TemporaryDirectory(prefix='staged-age-tool-', dir=temporary) as tools:
             binary, pin = acquire_age(Path(tools))
             stage = 'encryption'
-            ciphertext = encrypt_private(binary, pin, descriptor, recipient)
+            ciphertext = (encrypt_private(binary,pin,descriptor,recipient) if input_limit==INPUT_LIMIT else
+                          encrypt_private(binary,pin,descriptor,recipient,input_limit=input_limit))
         os.close(descriptor)
         descriptor = None
         context()

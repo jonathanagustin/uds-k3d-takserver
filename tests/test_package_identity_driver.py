@@ -81,6 +81,36 @@ class PackageGuards(unittest.TestCase):
             self.assertEqual(public['status'],'unavailable')
             self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
 
+    def test_retained_validation_capture_is_typed_first_and_preserves_original_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);folder.chmod(0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'accepted':False,'method':'package','stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            snapshot={'schema':1,'baseline':None,'observed':None,'baselineObjects':None,'observedObjects':None,
+                      'diagnostic':{'hook':'inventory','category':'inventory','fieldClass':'inventory'}}
+            original=ValueError('original retained validation failed')
+            def verify(driver,proof):
+                driver._retained_source_failure=snapshot
+                raise original
+            with patch.object(P.R,'verify',side_effect=verify):
+                with self.assertRaises(ValueError) as failure:trial.retained_verify({},'transition')
+            self.assertIs(failure.exception,original)
+            private=folder/P.VALIDATION_FAILURE;plain=private.read_bytes();payload=json.loads(plain)
+            self.assertEqual(payload['type'],'retained-source-validation')
+            self.assertEqual(payload['kind'],'stored-hooks-drift');self.assertEqual(payload['snapshot'],snapshot)
+            self.assertNotIn('stdout',payload);self.assertNotIn('exitStatus',payload)
+            self.assertEqual(private.stat().st_mode&0o777,0o600)
+            self.assertEqual(trial.state['firstPrivateFailure']['kind'],'retained-source-validation')
+            trial.capture_retained_validation(snapshot,'rollback')
+            self.assertTrue(private.read_bytes()==plain)
+            self.assertIsNone(trial._retained_source_failure)
+        with tempfile.TemporaryDirectory() as directory:
+            trial=object.__new__(P.PackageTrial);trial.evidence=Path(directory)/'journal.json'
+            trial.state={'packageCommandFailure':{'file':P.PACKAGE_FAILURE}}
+            trial.capture_retained_validation(snapshot,'transition')
+            self.assertFalse((Path(directory)/P.VALIDATION_FAILURE).exists())
+
     def setUp(self):
         directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
         self.phase_directory=Path(directory.name)

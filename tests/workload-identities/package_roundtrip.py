@@ -110,6 +110,7 @@ def require_clean_objects(namespace,kind,objects):
     D.require(not objects,'retained application state prevents clean strict install: '+kind)
 
 PACKAGE_FAILURE='PRIVATE-package-command-failure.json'
+VALIDATION_FAILURE='PRIVATE-retained-source-validation.json'
 PACKAGE_CATEGORIES=('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown')
 
 def bounded_package_run(argv,timeout):
@@ -236,6 +237,44 @@ class PackageTrial(D.Driver):
                 self.journal('package-identity-timeout', phase=phase, diagnostic=reason)
             raise
 
+    def retained_verify(self, proof, phase):
+        D.require(phase in D.PHASES, 'unknown retained validation phase')
+        self._retained_source_failure=None
+        try:
+            return R.verify(self,proof)
+        except ValueError:
+            snapshot=self._retained_source_failure
+            if snapshot is not None:
+                try:self.capture_retained_validation(snapshot,phase)
+                except (ValueError,OSError):
+                    self.journal('retained-source-diagnostic-unavailable',phase=phase)
+            raise
+        finally:
+            self._retained_source_failure=None
+
+    def capture_retained_validation(self, snapshot, phase):
+        # First private failure wins; later cleanup failures cannot replace it.
+        if 'firstPrivateFailure' in self.state or 'packageCommandFailure' in self.state:return
+        D.require(phase in D.PHASES, 'unknown retained validation phase')
+        R.validate_source_failure(snapshot)
+        hashes={'packageDriverSHA256':digest(Path(__file__)), 'driverSHA256':digest(HERE/'drive.py'),
+                'retainedSourceSHA256':digest(HERE/'retained_state.py')}
+        payload={'schema':1,'type':'retained-source-validation','kind':'stored-hooks-drift',
+                 'binding':{key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')},
+                 'phase':phase,'snapshot':snapshot,**hashes}
+        data=json.dumps(payload,sort_keys=True,separators=(',',':')).encode()
+        D.require(len(data)<=128*1024,'retained validation diagnostic bound')
+        folder=self.evidence.parent
+        D.require(stat.S_IMODE(folder.stat().st_mode)==0o700 and not any(path.is_symlink() for path in (folder,*folder.parents)),
+                  'retained validation directory is not private')
+        descriptor=os.open(folder/VALIDATION_FAILURE,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(descriptor,'wb') as output:output.write(data)
+        reference={'file':VALIDATION_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+        self.state.update(hashes)
+        self.state['retainedSourceValidationFailure']=reference
+        self.state['firstPrivateFailure']={'schema':1,'kind':'retained-source-validation','reference':dict(reference)}
+        self.journal('retained-source-validation-failed',phase=phase)
+
     def observe(self,phase):
         desired,_=self.render(phase);current=self.get('package',D.NS)
         D.require(current['spec']==desired['spec'],'package deployment differs from exact phase render')
@@ -249,8 +288,8 @@ class PackageTrial(D.Driver):
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
         if self.state.get('initializingFresh'):
             self.state['freshDataInvariants']=R.capture(self)
-            data_evidence=R.verify(self,self.state['freshDataInvariants'])
-        else:data_evidence=R.verify(self,self.state['dataInvariants'])
+            data_evidence=self.retained_verify(self.state['freshDataInvariants'],phase)
+        else:data_evidence=self.retained_verify(self.state['dataInvariants'],phase)
         self.journal('private-application-data-verified',phase=alias,observations=data_evidence)
         self.traffic(identities,phase,evidence_phase='package-'+alias)
         self.application_checks(phase=alias,prepare=not self.state['packagePhases'] or self.state.get('initializingFresh',False))
@@ -290,6 +329,7 @@ class PackageTrial(D.Driver):
             else:
                 with os.fdopen(fd,'wb') as output:output.write(data)
                 self.state['packageCommandFailure']={'file':PACKAGE_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            self.state.setdefault('firstPrivateFailure',{'schema':1,'kind':'package-command','reference':dict(self.state['packageCommandFailure'])})
             self.journal('package-command-failed',role=role,phase=phase,exitStatus=result['exitStatus'],timedOut=result['timedOut'],
                          category=command_failure_category(result),stdoutPresent=bool(result['stdout']),stderrPresent=bool(result['stderr']))
             raise ValueError('supported package command failed; inspect bounded private evidence')

@@ -114,6 +114,45 @@ def hook_diagnostic(baseline,observed):
 
 SOURCE_FAILURE_LIMIT=127*1024
 
+CORE_DRIFT_CATEGORIES=frozenset(('namespace','workload','mesh','mixed'))
+CORE_DRIFT_CHANGES=frozenset(('added','removed','changed','mixed'))
+
+def core_failure(baseline,observed,operation):
+    """Private UID/hash projections only; never Kubernetes resource bodies."""
+    changed=[key for key in set(baseline)|set(observed) if baseline.get(key)!=observed.get(key)]
+    require(changed,'Core inventory has no difference')
+    categories={('mesh' if key=='mesh' else 'namespace' if key.startswith('namespace/') else 'workload') for key in changed}
+    changes={('added' if key not in baseline else 'removed' if key not in observed else 'changed') for key in changed}
+    result={'schema':1,'baseline':baseline,'observed':observed,'operation':operation,
+            'diagnostic':{'category':next(iter(categories)) if len(categories)==1 else 'mixed',
+                          'change':next(iter(changes)) if len(changes)==1 else 'mixed'}}
+    validate_core_failure(result)
+    return result
+
+def validate_core_failure(snapshot):
+    require(isinstance(snapshot,dict) and set(snapshot)=={'schema','baseline','observed','operation','diagnostic'} and
+            type(snapshot['schema']) is int and snapshot['schema']==1 and
+            snapshot['operation'] in ('observed','application-removed'),'Core failure schema differs')
+    for name in ('baseline','observed'):
+        inventory=snapshot[name]
+        require(isinstance(inventory,dict) and 1<=len(inventory)<=2048,'Core inventory bound differs')
+        for key,value in inventory.items():
+            require(isinstance(key,str) and isinstance(value,str),'Core inventory value type differs')
+            if key=='mesh':require(re.fullmatch('[a-f0-9]{64}',value),'Core mesh hash differs')
+            else:
+                require(re.fullmatch(r'(?:namespace/[a-z0-9][a-z0-9.-]{0,252}|[a-z0-9][a-z0-9.-]{0,252}/(?:deployments|statefulsets|daemonsets|packages\.uds\.dev)/[a-z0-9][a-z0-9.-]{0,252})',key) and
+                        re.fullmatch('[A-Za-z0-9-]{1,128}',value),'Core identity projection differs')
+    changed=[key for key in set(snapshot['baseline'])|set(snapshot['observed'])
+             if snapshot['baseline'].get(key)!=snapshot['observed'].get(key)]
+    require(changed,'Core inventory has no difference')
+    categories={('mesh' if key=='mesh' else 'namespace' if key.startswith('namespace/') else 'workload') for key in changed}
+    changes={('added' if key not in snapshot['baseline'] else 'removed' if key not in snapshot['observed'] else 'changed') for key in changed}
+    expected={'category':next(iter(categories)) if len(categories)==1 else 'mixed',
+              'change':next(iter(changes)) if len(changes)==1 else 'mixed'}
+    require(snapshot['diagnostic']==expected,'Core failure diagnostic differs')
+    require(len(json.dumps(snapshot,sort_keys=True,separators=(',',':')).encode())<=SOURCE_FAILURE_LIMIT,'Core failure bound')
+    return snapshot
+
 def validate_source_failure(snapshot):
     require(isinstance(snapshot,dict) and set(snapshot)=={'schema','baseline','observed','diagnostic','baselineObjects','observedObjects'} and
             type(snapshot['schema']) is int and snapshot['schema']==1,'retained hook failure schema differs')

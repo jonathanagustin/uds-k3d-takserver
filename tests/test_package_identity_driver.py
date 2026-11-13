@@ -19,6 +19,115 @@ spec=importlib.util.spec_from_file_location('package_trial',ROOT/'tests/workload
 P=importlib.util.module_from_spec(spec);spec.loader.exec_module(P)
 
 class PackageGuards(unittest.TestCase):
+    def namespace_trial(self, directory, owned=True):
+        names=['default',*P.CORE_NAMESPACES,'takserver','cloudtak','takclients']
+        client={'metadata':{'name':'takclients','uid':'original-app-namespace','labels':{'app.kubernetes.io/managed-by':'Helm'},
+                'annotations':{'meta.helm.sh/release-name':'takserver-oidc','meta.helm.sh/release-namespace':'pepr-system'}}}
+        if not owned:client['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+        workloads={};mesh={'value':'bound'}
+        def get(kind,name=None,namespace=None):
+            if kind=='namespaces':return {'items':[{'metadata':{'name':item}} for item in names]}
+            if kind=='namespace':return client if name=='takclients' else {'metadata':{'uid':'namespace-'+name}}
+            if kind=='configmap':return {'data':mesh}
+            return {'items':workloads.get((namespace,kind),[])}
+        trial=P.PackageTrial(Path(directory)/'journal.json',self.bound());trial.get=get
+        trial.bind_application_namespace();trial.state['coreSnapshot']=trial.core_snapshot()
+        return trial,names,client,workloads,mesh
+
+    def test_owned_client_namespace_removal_is_not_core_removal_and_rebind_is_scoped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            self.assertNotIn('namespace/takclients',trial.state['coreSnapshot'])
+            names.remove('takclients')
+            with self.assertRaisesRegex(ValueError,'bound application namespace missing'):trial.core_unchanged()
+            trial.state['applicationNamespaceRemoved']=True
+            trial.core_unchanged()
+            names.append('takclients');client['metadata']['uid']='fresh-app-namespace'
+            with self.assertRaisesRegex(ValueError,'identity/owner changed'):trial.core_unchanged()
+            trial.bind_application_namespace(fresh=True);trial.core_unchanged()
+            self.assertFalse(trial.state['applicationNamespaceRemoved'])
+            self.assertEqual(trial.state['applicationNamespaceBinding']['uid'],'fresh-app-namespace')
+            with self.assertRaisesRegex(ValueError,'outside fresh install'):trial.bind_application_namespace(fresh=True)
+
+    def test_client_namespace_ownership_never_waives_foreign_objects_or_owner_flip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            client['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+            with self.assertRaisesRegex(ValueError,'identity/owner changed'):trial.core_unchanged()
+            client['metadata']['annotations']['meta.helm.sh/release-name']='takserver-oidc'
+            workloads[('takclients','deployments')]=[{'metadata':{'name':'foreign','uid':'foreign-uid'}}]
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+            trial.state['coreSnapshot']=trial.core_snapshot()
+            names.remove('takclients');trial.state['applicationNamespaceRemoved']=True
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory,owned=False)
+            self.assertEqual(trial.state['coreSnapshot']['namespace/takclients'],'original-app-namespace')
+            client['metadata']['annotations']['meta.helm.sh/release-name']='takserver-oidc'
+            client['metadata']['uid']='replacement'
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+            trial.state['applicationNamespaceRemoved']=True
+            trial.bind_application_namespace(fresh=True)
+            self.assertIsNone(trial.state['applicationNamespaceBinding'])
+
+    def test_core_drift_diagnostic_is_hash_uid_only_typed_first_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);folder.chmod(0o700)
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            trial.state['guard']={'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}
+            mesh['value']='PRIVATE_MESH_VALUE_SENTINEL'
+            with self.assertRaisesRegex(ValueError,'retained Core identity/config changed'):trial.core_unchanged()
+            payload=json.loads((folder/P.VALIDATION_FAILURE).read_bytes())
+            self.assertEqual(payload['kind'],'core-inventory-drift')
+            self.assertEqual(payload['snapshot']['diagnostic'],{'category':'mesh','change':'changed'})
+            self.assertNotIn('PRIVATE_MESH_VALUE_SENTINEL',json.dumps(payload))
+            self.assertIs(trial.state['accepted'],False)
+            original=(folder/P.VALIDATION_FAILURE).read_bytes()
+            trial.core_snapshot=lambda:{'namespace/kube-system':'new-uid'}
+            with self.assertRaises(ValueError):trial.core_unchanged()
+            self.assertEqual((folder/P.VALIDATION_FAILURE).read_bytes(),original)
+            self.assertEqual(trial.state['firstPrivateFailure']['kind'],'retained-source-validation')
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            mesh['value']='drift'
+            trial.capture_retained_validation=lambda *args,**kwargs:(_ for _ in ()).throw(OSError('private I/O detail'))
+            with self.assertRaisesRegex(ValueError,'retained Core identity/config changed'):trial.core_unchanged()
+
+    def test_core_drift_schema_rejects_raw_bodies_unknown_keys_and_forged_diagnostic(self):
+        import copy
+        snapshot=P.R.core_failure({'namespace/kube-system':'old-uid','mesh':'a'*64},
+                                  {'namespace/kube-system':'new-uid','mesh':'a'*64},'application-removed')
+        self.assertEqual(snapshot['diagnostic'],{'category':'namespace','change':'changed'})
+        for mutate in (lambda value:value['baseline'].update({'Secret/private':{'data':'private'}}),
+                       lambda value:value['observed'].update({'mesh':'raw mesh config'}),
+                       lambda value:value['diagnostic'].update(category='mesh'),
+                       lambda value:value.update(operation='unreviewed')):
+            value=copy.deepcopy(snapshot);mutate(value)
+            with self.assertRaises(ValueError):P.R.validate_core_failure(value)
+
+    def test_core_public_projection_exports_only_fixed_category_and_change(self):
+        spec=importlib.util.spec_from_file_location('core_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{
+                'IDENTITY_METHOD':'package','GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            trial,names,client,workloads,mesh=self.namespace_trial(folder)
+            trial.state['guard']={'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}
+            mesh['value']='PRIVATE_MESH_VALUE_SENTINEL'
+            with self.assertRaises(ValueError):trial.core_unchanged()
+            result=publisher.identity_progress(root)['package']
+            self.assertEqual(result['status'],'observed')
+            self.assertEqual(result['stages'],[{'stage':'retained-core-drift','category':'mesh','change':'changed'}])
+            self.assertNotIn('PRIVATE_MESH_VALUE_SENTINEL',json.dumps(result))
+            self.assertNotIn('baseline',json.dumps(result));self.assertNotIn('observedObjects',json.dumps(result))
+            for unknown in ('category','change'):
+                trial.state['stages']=[]
+                diagnostic={'category':'mesh','change':'changed'};diagnostic[unknown]='PRIVATE_DIAGNOSTIC_SENTINEL'
+                trial.journal('retained-core-drift',**diagnostic)
+                value=publisher.identity_progress(root)['package']
+                self.assertEqual(value['status'],'unavailable')
+                self.assertNotIn('PRIVATE_DIAGNOSTIC_SENTINEL',json.dumps(value))
+
     def test_identity_wait_timeout_journals_only_fixed_reason_and_preserves_failure(self):
         for raw, code in [('workload template drift', 'workload-template-drift'),
                           ('inconsistent workload service account alias', 'inconsistent-service-account-alias'),

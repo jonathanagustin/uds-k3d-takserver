@@ -130,6 +130,32 @@ def save_validation(folder,payload,journal):
 
 
 class EncryptedDiagnosticGuards(unittest.TestCase):
+    def test_core_validation_is_sealed_and_rejects_raw_or_forged_inventory(self):
+        for mutation in ('valid','raw-body','unknown-key','diagnostic','unchanged','operation','kind-alias'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)
+                payload['kind']='core-inventory-drift'
+                payload['snapshot']={'schema':1,'operation':'application-removed',
+                    'baseline':{'namespace/kube-system':'original-uid','mesh':'a'*64},
+                    'observed':{'namespace/kube-system':'replacement-uid','mesh':'a'*64},
+                    'diagnostic':{'category':'namespace','change':'changed'}}
+                if mutation=='raw-body':payload['snapshot']['observed']['namespace/kube-system']={'data':'PRIVATE_CORE_SENTINEL'}
+                elif mutation=='unknown-key':payload['snapshot']['observed']['secrets/private']='PRIVATE_CORE_SENTINEL'
+                elif mutation=='diagnostic':payload['snapshot']['diagnostic']['category']='mesh'
+                elif mutation=='unchanged':payload['snapshot']['observed']=copy.deepcopy(payload['snapshot']['baseline'])
+                elif mutation=='operation':payload['snapshot']['operation']='PRIVATE_CORE_SENTINEL'
+                elif mutation=='kind-alias':payload['kind']='stored-hooks-drift'
+                save_validation(folder,payload,journal)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.VALIDATION_INPUT_LIMIT+1),(folder/AGE.VALIDATION_NAME).read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises(ValueError):AGE.package_input(root)
+
     def test_typed_validation_is_sealed_and_later_command_does_not_replace_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)

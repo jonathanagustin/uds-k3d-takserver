@@ -30,6 +30,15 @@ VARIABLES={'DOMAIN','TAK_IMAGE_TAG','FILESYSTEM_BACKUP','POSTGRES_STORAGE_CLASS'
 # core-identity-authorization (Keycloak); Velero is not a SLIM component.
 # https://github.com/defenseunicorns/uds-core/blob/v1.16.0/bundles/k3d-slim-dev/uds-bundle.yaml
 CORE_NAMESPACES=('kube-system','istio-system','pepr-system','keycloak')
+APPLICATION_NAMESPACE='takclients'
+
+
+def owned_application_namespace(obj):
+    metadata=obj.get('metadata',{})
+    return (metadata.get('name')==APPLICATION_NAMESPACE and
+            metadata.get('annotations',{}).get('meta.helm.sh/release-name')=='takserver-oidc' and
+            metadata.get('annotations',{}).get('meta.helm.sh/release-namespace')=='pepr-system' and
+            metadata.get('labels',{}).get('app.kubernetes.io/managed-by')=='Helm')
 
 def digest(path):
     h=hashlib.sha256()
@@ -193,8 +202,17 @@ class PackageTrial(D.Driver):
         namespaces=self.get('namespaces',namespace='default')['items']
         retained=sorted(obj['metadata']['name'] for obj in namespaces if obj['metadata']['name'] not in (D.NS,'cloudtak'))
         D.require(set(CORE_NAMESPACES)<=set(retained),'required Core namespaces missing')
+        binding=self.state.get('applicationNamespaceBinding')
+        if binding and APPLICATION_NAMESPACE not in retained:
+            D.require(self.state.get('applicationNamespaceRemoved') is True,'bound application namespace missing')
         for ns in retained:
-            result['namespace/'+ns]=self.get('namespace',ns,ns)['metadata']['uid']
+            namespace=self.get('namespace',ns,ns)
+            if ns==APPLICATION_NAMESPACE and binding:
+                # The app Pepr chart owns this namespace, not Core. Freeze its
+                # owner and UID separately; never infer a new exemption later.
+                D.require(owned_application_namespace(namespace) and namespace['metadata']['uid']==binding['uid'],
+                          'bound application namespace identity/owner changed')
+            else:result['namespace/'+ns]=namespace['metadata']['uid']
             for kind in ('deployments','statefulsets','daemonsets','packages.uds.dev'):
                 for obj in self.get(kind,namespace=ns)['items']:
                     if ns=='pepr-system' and obj['metadata']['name'] in D.PEPR:continue
@@ -205,8 +223,37 @@ class PackageTrial(D.Driver):
         result['mesh']=D.sha(self.get('configmap','istio','istio-system').get('data',{}))
         return result
 
+    def bind_application_namespace(self, fresh=False):
+        """Bind only the exact namespace installed by this app's Pepr chart."""
+        old=self.state.get('applicationNamespaceBinding')
+        if fresh:
+            D.require(self.state.get('applicationNamespaceRemoved') is True,'application namespace rebind outside fresh install')
+            # A foreign/pre-existing namespace never becomes exempt on reinstall.
+            if old is None:
+                self.state['applicationNamespaceRemoved']=False
+                return
+        present=any(obj['metadata']['name']==APPLICATION_NAMESPACE
+                    for obj in self.get('namespaces',namespace='default')['items'])
+        obj=self.get('namespace',APPLICATION_NAMESPACE,APPLICATION_NAMESPACE) if present else None
+        if fresh:D.require(obj is not None and owned_application_namespace(obj),'fresh application namespace owner differs')
+        self.state['applicationNamespaceBinding']=({'uid':obj['metadata']['uid']}
+            if obj is not None and owned_application_namespace(obj) else None)
+        self.state['applicationNamespaceRemoved']=False
+
     def core_unchanged(self):
-        D.require(self.core_snapshot()==self.state['coreSnapshot'],'retained Core identity/config changed')
+        observed=self.core_snapshot();baseline=self.state['coreSnapshot']
+        if observed!=baseline:
+            self.state['accepted']=False
+            try:
+                snapshot=R.core_failure(baseline,observed,
+                    'application-removed' if self.state.get('applicationNamespaceRemoved') else 'observed')
+                self.journal('retained-core-drift',**snapshot['diagnostic'])
+                self.capture_retained_validation(snapshot,(self.state.get('packagePhases') or ['shared'])[-1],
+                                                 kind='core-inventory-drift')
+            except Exception:
+                # Optional diagnostics never replace this original invariant.
+                pass
+            raise ValueError('retained Core identity/config changed')
 
     def capture_phase(self,phase,account):
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
@@ -256,14 +303,15 @@ class PackageTrial(D.Driver):
         finally:
             self._retained_source_failure=None
 
-    def capture_retained_validation(self, snapshot, phase):
+    def capture_retained_validation(self, snapshot, phase, kind='stored-hooks-drift'):
         # First private failure wins; later cleanup failures cannot replace it.
         if 'firstPrivateFailure' in self.state or 'packageCommandFailure' in self.state:return
         D.require(phase in D.PHASES, 'unknown retained validation phase')
-        R.validate_source_failure(snapshot)
+        D.require(kind in ('stored-hooks-drift','core-inventory-drift'),'unknown retained validation kind')
+        (R.validate_source_failure if kind=='stored-hooks-drift' else R.validate_core_failure)(snapshot)
         hashes={'packageDriverSHA256':digest(Path(__file__)), 'driverSHA256':digest(HERE/'drive.py'),
                 'retainedSourceSHA256':digest(HERE/'retained_state.py')}
-        payload={'schema':1,'type':'retained-source-validation','kind':'stored-hooks-drift',
+        payload={'schema':1,'type':'retained-source-validation','kind':kind,
                  'binding':{key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')},
                  'phase':phase,'snapshot':snapshot,**hashes}
         data=json.dumps(payload,sort_keys=True,separators=(',',':')).encode()
@@ -383,6 +431,7 @@ class PackageTrial(D.Driver):
         self.prepare()  # Initial shared observation only; creates no trial resources.
         D.require(Path(self.bound['archive']).name.startswith('zarf-package-takserver-'+self.state['architecture']+'-'),'bound archive architecture differs from guarded node')
         self.require_cloudtak()
+        self.bind_application_namespace()
         self.state['coreSnapshot']=self.core_snapshot();self.compile_probe()
         self.state['dataInvariants']=R.capture(self)
         self.create({'apiVersion':'v1','kind':'ServiceAccount','metadata':{'name':self.state['negativeAccount']},'automountServiceAccountToken':False})
@@ -417,6 +466,7 @@ class PackageTrial(D.Driver):
         installed=self.get('secret','zarf-package-takserver','zarf')
         self.state['removedPackageSecretUID']=installed['metadata']['uid'];self.journal('application-remove-start')
         self.run_package(['uds','zarf','package','remove','takserver','--confirm'],900)
+        self.state['applicationNamespaceRemoved']=True
         self.core_unchanged()
         self.wait(lambda:R.consumers_gone(self),300)
         for record in self.state['retainedCleanup']:
@@ -425,7 +475,9 @@ class PackageTrial(D.Driver):
         self.wait(self.clean_application_state,300)
         # New install has new Deployment/Package UIDs; retain old observations in journal.
         self.state['previousInstall']={k:self.state[k] for k in ('packageUID','deploymentUIDs','peprUIDs','backendTargets')}
-        self.run_package(deploy_command(self.bound,'strict'),1500);self.inputs_unchanged();self.core_unchanged()
+        self.run_package(deploy_command(self.bound,'strict'),1500)
+        self.bind_application_namespace(fresh=True)
+        self.inputs_unchanged();self.core_unchanged()
         package=self.get('package',D.NS);deployments={x['metadata']['name']:x for x in self.get('deployments')['items'] if x['metadata']['name'] in D.APPS}
         D.require(set(deployments)==set(D.APPS),'fresh strict workloads missing')
         self.state.update(packageUID=package['metadata']['uid'],packageInvariant=D.package_invariant(package),deploymentUIDs={n:x['metadata']['uid'] for n,x in deployments.items()},templateFingerprints={n:D.template_fingerprint(x) for n,x in deployments.items()},peprUIDs={n:self.get('deployment',n,'pepr-system')['metadata']['uid'] for n in D.PEPR},peprTemplateFingerprints={n:D.template_fingerprint(self.get('deployment',n,'pepr-system'),True) for n in D.PEPR})

@@ -334,7 +334,7 @@ def validation_input(folder,journal,expected):
     require(len(raw)==reference['bytes'] and checksum==reference['sha256'])
     require(set(payload)=={'schema','type','kind','binding','phase','snapshot','packageDriverSHA256','driverSHA256','retainedSourceSHA256'} and
             type(payload['schema']) is int and payload['schema']==1 and payload['type']=='retained-source-validation' and
-            payload['kind']=='stored-hooks-drift' and payload['binding']==expected and
+            payload['kind'] in ('stored-hooks-drift','core-inventory-drift') and payload['binding']==expected and
             payload['phase'] in ('shared','transition','strict','rollback'))
     failed=next((entry for entry in journal.get('stages',[]) if entry.get('stage')=='retained-source-validation-failed'),None)
     require(failed is not None and failed.get('phase')==payload['phase'])
@@ -350,7 +350,7 @@ def validation_input(folder,journal,expected):
     require(len(source)<=256*1024 and digest(source)==payload['retainedSourceSHA256'])
     retained=types.ModuleType('encrypted_retained_source');retained.__file__=str(path)
     exec(compile(source,str(path),'exec'),retained.__dict__)
-    retained.validate_source_failure(payload['snapshot'])
+    (retained.validate_source_failure if payload['kind']=='stored-hooks-drift' else retained.validate_core_failure)(payload['snapshot'])
     return sealed_payload(raw)
 
 

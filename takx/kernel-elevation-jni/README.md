@@ -51,8 +51,8 @@ All prior failures, objects, original sources and consumed recipe snapshots rema
 retained. The causal relinks are not adopted as fresh full native variants.
 
 Four offline guards and real exact preparation pass. A new complete 815-unit
-composition is being built separately. Actual-library controls must be repeated
-against that result. Other elevation entry points, listener/bounds fault cases,
+composition and actual-library replays now pass; see [QUALIFICATION.md](QUALIFICATION.md).
+The public source preparer is still not a portable native builder. Other elevation entry points, listener/bounds fault cases,
 concurrency and rendering remain outside the current 13-case qualification scope.
 No full elevation API, SDK or client acceptance follows from these source fixes.
 Refs #374 and #486.

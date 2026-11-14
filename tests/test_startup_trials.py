@@ -76,6 +76,29 @@ def pair(commands=Commands):
 
 
 class StartupTrials(unittest.TestCase):
+    def test_failure_location_never_exports_exception_values_or_foreign_paths(self):
+        try:
+            trial.token('PRIVATE_TOKEN_SENTINEL /PRIVATE_PATH_SENTINEL')
+        except trial.Invalid as error:
+            diagnostic = trial.failure_diagnostic(error)
+        self.assertEqual(diagnostic['kind'], 'guard-rejection')
+        self.assertEqual(diagnostic['module'], 'startup_trials')
+        self.assertGreater(diagnostic['line'], 0)
+        self.assertEqual(diagnostic['source_sha256'], trial.hashlib.sha256(Path(trial.__file__).read_bytes()).hexdigest())
+        try:
+            trial.token('PRIVATE_TOKEN_SENTINEL/INVALID')
+        except trial.Invalid as error:
+            with patch.object(Path, 'read_bytes', side_effect=OSError('PRIVATE_IO_SENTINEL')):
+                unavailable = trial.failure_diagnostic(error)
+        self.assertEqual(unavailable['module'], 'startup_trials')
+        self.assertIsNone(unavailable['source_sha256'])
+        self.assertNotIn('PRIVATE', json.dumps(unavailable))
+        for error in (KeyError('PRIVATE_KEY_SENTINEL'), RuntimeError('PRIVATE_RAW_SENTINEL')):
+            value = trial.failure_diagnostic(error)
+            self.assertEqual(value['module'], 'unavailable')
+            self.assertEqual(value['line'], 0)
+            self.assertNotIn('PRIVATE', json.dumps(value))
+
     def test_actual_capture_path_uses_numeric_existing_observer_and_new_incarnations(self):
         cold, warm = pair(); verdict = trial.validate_pair(cold, warm)
         self.assertTrue(verdict['accepted']); self.assertEqual(warm['warm_s'], 6)

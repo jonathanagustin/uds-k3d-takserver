@@ -76,6 +76,11 @@ It requires an already published package matching the keyed application inputs;
 it fails before cluster work when that package is missing. It has no schedule,
 pull-request trigger, load test, or automatic retry. An active run is preserved.
 
+Rejected startup observations report a fixed failure kind and the collector's
+module, source line and source-file hash. Exception values and resource bodies
+are omitted. This diagnostic identifies the failed collector callsite; it is
+not an accepted startup measurement or a reason to relax identity/timing checks.
+
 `python3 -m bench.startup_trials` records one application install and one
 subsequent rollout on the same disposable cluster. It does not install,
 restart, remove, or tune anything. It adds no scheduled or pull-request run.

@@ -28,6 +28,34 @@ class Invalid(Exception):
     pass
 
 
+def failure_diagnostic(error):
+    """Fixed exception kinds and source locations, never exception/data values."""
+    modules = {str(Path(module.__file__).resolve()): (name, Path(module.__file__))
+               for name, module in (('jvm_metrics', jvm), ('phases', phases))}
+    modules[str(Path(__file__).resolve())] = ('startup_trials', Path(__file__))
+    result = {'kind': 'other', 'module': 'unavailable', 'line': 0, 'source_sha256': None}
+    for kind, classes in (('invalid-json', (json.JSONDecodeError,)),
+                          ('invalid-text', (UnicodeError,)), ('missing-field', (KeyError,)),
+                          ('type-error', (TypeError,)), ('guard-rejection', (Invalid,)),
+                          ('observer-unavailable', (jvm.Unavailable,)),
+                          ('invalid-value', (ValueError,)), ('io-error', (OSError,))):
+        if isinstance(error, classes):
+            result['kind'] = kind
+            break
+    current = error.__traceback__
+    while current is not None:
+        selected = modules.get(current.tb_frame.f_code.co_filename)
+        if selected is not None and 0 < current.tb_lineno < 10000:
+            name, path = selected
+            try:
+                source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError:
+                source_sha256 = None
+            result.update(module=name, line=current.tb_lineno, source_sha256=source_sha256)
+        current = current.tb_next
+    return result
+
+
 def require(value, reason):
     if not value:
         raise Invalid(reason)
@@ -454,7 +482,8 @@ def main():
         return 0
     except Exception as error:
         reason = str(error) if isinstance(error, Invalid) and str(error) in REASONS else 'unsupported_schema'
-        print(json.dumps({'schema': 1, 'accepted': False, 'reason': reason}))
+        print(json.dumps({'schema': 1, 'accepted': False, 'reason': reason,
+                          'diagnostic': failure_diagnostic(error)}))
         return 1
 
 

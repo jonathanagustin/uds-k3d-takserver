@@ -182,7 +182,8 @@ cannot establish acceptance; unsupported/missing observations fail closed.
 
 `fresh_strict=true` additionally authorizes removal of only the bound `takserver`
 application package after a successful reversal. Core namespace/controller/Package
-UIDs must remain unchanged. The source-owned local backup node-agent is part of
+UIDs must remain unchanged, except for the exact source-owned shared ambient
+egress Deployment described below. The source-owned local backup node-agent is part of
 this application package; it is distinguished from the retained Core Velero server.
 Before removal, cleanup binds exact application persistent volume claim (PVC) UIDs and persistent volume (PV) claim references and
 StatefulSet/chart ownership, stored Helm hooks, and the known certificate generator.
@@ -191,6 +192,20 @@ using API UID/resourceVersion preconditions. Unknown or foreign leftovers refuse
 fresh acceptance; no namespace deletion or broad PVC/Secret cleanup is used.
 The same archive then installs strict with new application UID baselines and the
 original Core guard. This is separate from migration/rollback acceptance.
+
+Core 1.16.0 intentionally removes `istio-egress-ambient/egress-waypoint` when
+its last ambient `remoteHost` consumer leaves ([pinned controller source](https://github.com/defenseunicorns/uds-core/blob/fd9769cd9e791d9b6ad86251af0f4899992a9ae5/src/pepr/operator/controllers/istio/egress-ambient.ts)).
+The trial binds the exact Gateway spec, source labels and consumer annotations,
+Gateway/controller-owned Deployment UIDs, Core namespace UID, and the Helm-owned
+application Package UIDs before removal. Only this derived Deployment has a separate
+lifecycle; every other Core workload and the mesh hash retain their original guard.
+A foreign consumer preserves the original exact Core snapshot instead. Cleanup
+requires three consecutive absent observations within 60 seconds, never deletes
+Core resources, and rejects changed ownership, replacement UIDs or new consumers.
+Fresh installation can rebind only an originally bound, verified-removed singleton
+with the same consumer identities and retained Core namespace. Unsupported Core
+versions refuse this exception. These guards are source-tested; another native
+package pilot must validate the live ownership/defaulted-spec contract before acceptance.
 
 Across the five phase deployments, private credential-data hashes must remain
 unchanged. The known `before-hook-creation` keystore Secret may legitimately get a

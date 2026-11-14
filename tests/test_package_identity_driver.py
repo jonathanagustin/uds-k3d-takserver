@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Offline command and fail-closed guards; never live identity acceptance."""
 import importlib.util
+import copy
 import json
 import os
 from pathlib import Path
@@ -669,3 +670,162 @@ class PackageGuards(unittest.TestCase):
         for text in ['      --set-variables stringToString variables','  -s, --set-variables stringToString variables','      --set-variables=value']:
             with self.subTest(text=text):self.assertIn('--set-variables',P.declared_flags(text))
         self.assertEqual(P.declared_flags('      --set-values-extra value'),{'--set-values-extra'})
+
+
+class AmbientEgressGuards(unittest.TestCase):
+    setUp=PackageGuards.setUp
+    bound=PackageGuards.bound
+    namespace_trial=PackageGuards.namespace_trial
+
+    def fixture(self,directory,bind=True):
+        trial,names,client,objects,mesh=self.namespace_trial(directory)
+        names.append('istio-egress-ambient');trial.guard=lambda:None
+        package={'metadata':{'name':'cloudtak','namespace':'cloudtak','uid':'cloudtak-package-uid',
+                 'labels':{'app.kubernetes.io/managed-by':'Helm'},'annotations':{
+                 'meta.helm.sh/release-name':'uds-cloudtak','meta.helm.sh/release-namespace':'cloudtak'}},
+                 'spec':{'network':{'serviceMesh':{'mode':'ambient'},'allow':[{'direction':'Egress','remoteHost':'maps.example.test','port':443}]}}}
+        packages=[package]
+        gateway={'metadata':{'name':'egress-waypoint','namespace':'istio-egress-ambient','uid':'gateway-uid',
+                 'labels':{'uds/package':'shared-ambient-egress-resource','istio.io/gateway-name':'egress-waypoint'},
+                 'annotations':{'uds.dev/user-cloudtak-cloudtak':'user'}},
+                 'spec':{'gatewayClassName':'istio-waypoint','listeners':[{'name':'mesh','port':15008,'protocol':'HBONE',
+                          'allowedRoutes':{'namespaces':{'from':'All'},'kinds':[{'group':'networking.istio.io','kind':'ServiceEntry'}]}}],
+                         'infrastructure':{'parametersRef':{'group':'','kind':'ConfigMap','name':'egress-waypoint-config'}}}}
+        deployment={'metadata':{'name':'egress-waypoint','namespace':'istio-egress-ambient','uid':'waypoint-deployment-uid',
+                    'labels':{'gateway.networking.k8s.io/gateway-name':'egress-waypoint'},'ownerReferences':[
+                    {'apiVersion':'gateway.networking.k8s.io/v1','kind':'Gateway','name':'egress-waypoint',
+                     'uid':'gateway-uid','controller':True,'blockOwnerDeletion':True}]}}
+        objects[('istio-egress-ambient','gateways.gateway.networking.k8s.io')]=[gateway]
+        objects[('istio-egress-ambient','deployments')]=[deployment]
+        def kube(*args,**kwargs):
+            self.assertEqual(args,('get','packages.uds.dev','--all-namespaces','-o','json'))
+            return json.dumps({'items':packages})
+        trial.kube=kube
+        if bind:trial.bind_ambient_egress()
+        trial.state['coreSnapshot']=trial.core_snapshot()
+        return trial,names,client,objects,packages,gateway,deployment,mesh
+
+    def remove(self,fixture):
+        trial,names,_client,objects,packages,*_=fixture
+        packages.clear();objects[('istio-egress-ambient','gateways.gateway.networking.k8s.io')]=[]
+        objects[('istio-egress-ambient','deployments')]=[];names.remove('takclients')
+        trial.state['applicationNamespaceRemoved']=True
+        with patch.object(P.time,'sleep'):trial.core_unchanged()
+
+    def test_only_source_owned_singleton_has_separate_lifecycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,_names,_client,objects,*_=self.fixture(directory)
+            self.assertNotIn('istio-egress-ambient/deployments/egress-waypoint',trial.state['coreSnapshot'])
+            self.assertIn('namespace/istio-egress-ambient',trial.state['coreSnapshot'])
+            objects[('istio-egress-ambient','deployments')].append({'metadata':{'name':'another-core-deployment','uid':'other-uid'}})
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+
+    def test_removed_and_fresh_waypoint_uids_do_not_change_static_core(self):
+        with tempfile.TemporaryDirectory() as directory:
+            f=self.fixture(directory);trial,names,client,objects,packages,gateway,deployment,_=f
+            old=copy.deepcopy(trial.state['ambientEgressBinding']);self.remove(f)
+            self.assertTrue(trial.state['ambientEgressBinding']['removed'])
+            with self.assertRaisesRegex(ValueError,'contributors changed'):trial.bind_ambient_egress(fresh=True)
+            package={'metadata':{'name':'cloudtak','namespace':'cloudtak','uid':'fresh-package-uid',
+                     'labels':{'app.kubernetes.io/managed-by':'Helm'},'annotations':{
+                     'meta.helm.sh/release-name':'uds-cloudtak','meta.helm.sh/release-namespace':'cloudtak'}},
+                     'spec':{'network':{'allow':[{'direction':'Egress','remoteHost':'maps.example.test'}]}}}
+            packages.append(package);gateway['metadata']['uid']='fresh-gateway-uid'
+            deployment['metadata']['uid']='fresh-deployment-uid';deployment['metadata']['ownerReferences'][0]['uid']='fresh-gateway-uid'
+            objects[('istio-egress-ambient','gateways.gateway.networking.k8s.io')]=[gateway]
+            objects[('istio-egress-ambient','deployments')]=[deployment]
+            names.append('takclients');client['metadata']['uid']='fresh-app-namespace'
+            trial.bind_ambient_egress(fresh=True);trial.bind_application_namespace(fresh=True);trial.core_unchanged()
+            self.assertEqual(trial.state['previousAmbientEgressBinding']['gatewayUID'],old['gatewayUID'])
+            self.assertEqual(trial.state['ambientEgressBinding']['gatewayUID'],'fresh-gateway-uid')
+            self.assertFalse(trial.state['ambientEgressBinding']['removed'])
+
+    def test_other_contributors_keep_original_core_uid_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            f=self.fixture(directory,bind=False);trial,_names,_client,objects,packages,*_=f
+            other=copy.deepcopy(packages[0]);other['metadata'].update(name='other',namespace='other',uid='other-package-uid');packages.append(other)
+            trial.bind_ambient_egress();self.assertIsNone(trial.state['ambientEgressBinding'])
+            trial.state['coreSnapshot']=trial.core_snapshot()
+            self.assertIn('istio-egress-ambient/deployments/egress-waypoint',trial.state['coreSnapshot'])
+            objects[('istio-egress-ambient','deployments')]=[]
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+
+    def test_uid_controller_consumer_and_spec_changes_are_refused(self):
+        for mutation in ('deployment-uid','gateway-uid','controller','consumer','spec','helm-owner','deleting'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                trial,_names,_client,_objects,packages,gateway,deployment,_=self.fixture(directory)
+                if mutation=='deployment-uid':deployment['metadata']['uid']='replacement'
+                elif mutation=='gateway-uid':gateway['metadata']['uid']='replacement'
+                elif mutation=='controller':deployment['metadata']['ownerReferences'][0]['controller']=False
+                elif mutation=='consumer':gateway['metadata']['annotations']['uds.dev/user-foreign-user']='user'
+                elif mutation=='spec':gateway['spec']['listeners'][0]['port']=80
+                elif mutation=='helm-owner':packages[0]['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+                elif mutation=='deleting':gateway['metadata']['deletionTimestamp']='2030-01-01T00:00:00Z'
+                with self.assertRaises(ValueError):trial.core_unchanged()
+
+    def test_missing_active_waypoint_is_not_accepted_as_cleanup(self):
+        for kind in ('gateways.gateway.networking.k8s.io','deployments'):
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as directory:
+                trial,_names,_client,objects,*_=self.fixture(directory)
+                objects[('istio-egress-ambient',kind)]=[]
+                with self.assertRaisesRegex(ValueError,'resources missing'):trial.core_unchanged()
+
+    def test_removal_never_adopts_a_new_consumer_or_resource(self):
+        for mutation in ('consumer','deployment','gateway'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                f=self.fixture(directory);trial,_names,_client,_objects,packages,gateway,deployment,_=f
+                trial.state['applicationNamespaceRemoved']=True
+                if mutation=='consumer':
+                    other=copy.deepcopy(packages[0]);other['metadata'].update(name='other',namespace='other');packages.append(other)
+                elif mutation=='deployment':deployment['metadata']['uid']='replacement'
+                else:gateway['metadata']['uid']='replacement'
+                with self.assertRaises(ValueError):trial.core_unchanged()
+
+    def test_confirmed_removal_cannot_reappear_without_fresh_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            f=self.fixture(directory);trial,_names,_client,objects,_packages,gateway,_deployment,_=f;self.remove(f)
+            objects[('istio-egress-ambient','gateways.gateway.networking.k8s.io')]=[gateway]
+            with self.assertRaisesRegex(ValueError,'reappeared'):trial.core_unchanged()
+
+    def test_cleanup_timeout_preserves_unfinished_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,*_=self.fixture(directory);trial.state['applicationNamespaceRemoved']=True
+            with patch.object(P.time,'monotonic',side_effect=[0,61]),self.assertRaisesRegex(ValueError,'cleanup timeout'):
+                trial.core_unchanged()
+            self.assertFalse(trial.state['ambientEgressBinding']['removed'])
+
+    def test_shared_namespace_and_mesh_remain_retained(self):
+        for mutation in ('namespace','mesh'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                trial,names,_client,_objects,_packages,_gateway,_deployment,mesh=self.fixture(directory)
+                if mutation=='namespace':names.remove('istio-egress-ambient')
+                else:mesh['value']='changed'
+                with self.assertRaises(ValueError):trial.core_unchanged()
+
+    def test_unbound_fresh_install_never_creates_an_exemption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,*_=self.fixture(directory,bind=False)
+            with self.assertRaisesRegex(ValueError,'outside fresh install'):trial.bind_ambient_egress(fresh=True)
+            trial.state['applicationNamespaceRemoved']=True;trial.bind_ambient_egress(fresh=True)
+            self.assertIsNone(trial.state.get('ambientEgressBinding'))
+
+    def test_original_baseline_cannot_be_rebound_after_observation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,*_=self.fixture(directory)
+            with self.assertRaisesRegex(ValueError,'already bound'):trial.bind_ambient_egress()
+
+    def test_unsupported_core_version_refuses_lifecycle_binding(self):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'SLIM_CORE_VERSION':'1.17.0'}):
+            trial,*_=self.fixture(directory,bind=False)
+            with self.assertRaisesRegex(ValueError,'reviewed Core 1.16.0'):trial.bind_ambient_egress()
+
+    def test_consumer_classification_matches_core_default_mode_and_priority(self):
+        package={'metadata':{'name':'test','namespace':'apps'},'spec':{'network':{'allow':[{'direction':'Egress','remoteHost':'maps.example.test'}]}}}
+        self.assertEqual(set(P.ambient_host_consumers([package])),{'test-apps'})
+        package['spec']['network']['serviceMesh']={'mode':None}
+        self.assertEqual(set(P.ambient_host_consumers([package])),{'test-apps'})
+        package['spec']['network']['serviceMesh']['mode']='sidecar';self.assertEqual(P.ambient_host_consumers([package]),{})
+        package['spec']['network']['serviceMesh']['mode']='ambient'
+        package['spec']['network']['allow'][0]['remoteGenerated']='Anywhere';self.assertEqual(P.ambient_host_consumers([package]),{})
+        package['spec']['network']['allow'][0].pop('remoteGenerated');package['metadata']['deletionTimestamp']='2030-01-01T00:00:00Z'
+        self.assertEqual(P.ambient_host_consumers([package]),{})

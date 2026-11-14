@@ -684,8 +684,8 @@ class PackageTrial(D.Driver):
         self.run_package(['uds','zarf','package','remove','takserver','--confirm'],900)
         self.state['applicationNamespaceRemoved']=True
         self.core_unchanged()
-        R.cleanup_setup_hook(self,setup_hook)
         try:
+            R.cleanup_setup_hook(self,setup_hook)
             self.wait(lambda:R.consumers_gone(self),300)
         except ValueError:
             self.state['accepted']=False

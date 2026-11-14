@@ -5,6 +5,7 @@ import gov.tak.api.engine.map.RenderContext;
 import gov.tak.api.engine.map.RenderSurface2;
 public final class ManagedBridgeProbe {
     static final RuntimeException SENTINEL = new RuntimeException("owned callback sentinel");
+    static final RuntimeException CLEANUP = new RuntimeException("owned cleanup sentinel");
     static String throwing = "";
     static int removed, destroyed;
     static void call(String name) { if (throwing.equals(name) || (throwing.equals("cleanupDpi") && name.equals("dpi"))) throw SENTINEL; }
@@ -15,7 +16,10 @@ public final class ManagedBridgeProbe {
         public int getSurfaceWidth() { call("width"); return 160; }
         public int getSurfaceHeight() { call("height"); return 120; }
         public void addOnSizeChangedListener(OnSizeChangedListener l) { call("addListener"); }
-        public void removeOnSizeChangedListener(OnSizeChangedListener l) { call("removeListener"); removed++; }
+        public void removeOnSizeChangedListener(OnSizeChangedListener l) {
+            call("removeListener"); removed++;
+            if(throwing.equals("cleanupDpi")) throw CLEANUP;
+        }
     }
     static final class Context implements RenderContext<Surface> {
         final Surface surface = new Surface();
@@ -33,7 +37,9 @@ public final class ManagedBridgeProbe {
         public boolean isContinuousRenderEnabled() { call("continuous"); return continuous; }
         public boolean supportsChildContext() { call("supportsChild"); return throwing.startsWith("child"); }
         public RenderContext createChildContext() { call("childCreate"); return new Context(true); }
-        public void destroyChildContext(RenderContext child) { destroyed++; call("childDestroy"); }
+        public void destroyChildContext(RenderContext child) { destroyed++;
+            if(throwing.equals("childSurface")) throw CLEANUP;
+            call("childDestroy"); }
         public boolean isAttached() { call("attached"); return true; }
         public boolean attach() { call("attach"); return true; }
         public boolean detach() { call("detach"); return true; }

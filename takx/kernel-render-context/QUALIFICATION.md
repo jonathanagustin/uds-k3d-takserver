@@ -302,3 +302,9 @@ all five stages reconstruct exactly. A new full graph build and the owned fixtur
 linked to its actual JNI library are required before attributing that result to
 the complete variant. The failed missing-classpath, missing-generated-header and
 invalid null-runnable-payload attempts remain retained separately.
+
+The strengthened CPU control also throws a distinct secondary exception during
+listener and child cleanup. It still returns the exact primary callback throwable
+and completes all 22 controls with zero JNI diagnostics. This remains an isolated
+candidate result, receipt SHA-256
+`947150f3442459362acca39652cd281901a624a2501499f1ba659b53c87cba35`.

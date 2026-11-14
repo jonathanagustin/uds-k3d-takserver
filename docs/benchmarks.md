@@ -71,7 +71,12 @@ A setting is copied into the package only after a report puts it on the front. T
 ## Collect one startup pair without load
 
 The manual-only [Startup pair workflow](../.github/workflows/startup.yaml) runs
-this procedure on one AMD64 runner from `main`, with a 60-minute job ceiling.
+this procedure from `main`, with a 60-minute ceiling per selected native runner.
+Its `architecture` input defaults to `amd64`; select `arm64` to qualify ARM
+without repeating AMD, or `both` for independent pairs on both architectures.
+ARM uses `ubuntu-22.04-arm`; AMD retains the `TEST_RUNNER` override. A native
+machine check precedes setup and cluster work. Each architecture has its own
+cohort and artifact, and a failed architecture cannot count as a qualified pair.
 It requires an already published package matching the keyed application inputs;
 it fails before cluster work when that package is missing. It has no schedule,
 pull-request trigger, load test, or automatic retry. An active run is preserved.

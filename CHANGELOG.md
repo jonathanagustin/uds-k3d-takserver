@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.7](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.6...v0.16.7) (2026-11-14)
+
+
+### Bug Fixes
+
+* retire the retained database setup hook during fresh-strict cleanup ([#587](https://github.com/jonathanagustin/uds-takserver/issues/587)) ([41aa17d](https://github.com/jonathanagustin/uds-takserver/commit/41aa17dc2325b393ffa65697e12643fa149b6c39))
+
 ## [0.16.6](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.5...v0.16.6) (2026-11-14)
 
 

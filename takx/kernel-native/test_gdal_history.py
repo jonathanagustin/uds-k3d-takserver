@@ -50,7 +50,7 @@ class GdalHistory(unittest.TestCase):
 
     def test_exact_curated_twenty_file_variant_and_reviewed_deltas(self):
         self.assertEqual(len(self.history['recipe']),20)
-        self.assertEqual(set(self.history['variants']),{'native-gdal-jni/build.py','gis-java/build.py'})
+        self.assertEqual(set(self.history['variants']),{'native-gdal-jni/build.py','gis-java/build.py','kernel-scene/kernel.py'})
         with patch.object(p,'module',return_value=self.producer):
             self.assertTrue(p.recipe_check('gdal_jni',self.record))
         for entry in self.history['variants'].values():

@@ -1334,6 +1334,12 @@
         "sha256": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
         "bytes": 12485,
         "delta_to_current_sha256": "e2ee9197ab4bc093b48ea1cdf80c46edf04fa8d54ef38bedff9a80a59cf92dbd"
+      },
+      "kernel-scene/kernel.py": {
+        "snapshot": "historical-producers/gdal-jni-baseline/kernel-scene/kernel.py.txt",
+        "sha256": "69b6dabf1b16d7639c364814fd96204a9aa0a606a7d2ca7503d0fcf6b4780a3e",
+        "bytes": 11504,
+        "delta_to_current_sha256": "311e7c20efc8f2a5d9da0d0bc17149349bc9f2215a026f4f5f68bc992ec59cb7"
       }
     },
     "official_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",

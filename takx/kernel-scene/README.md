@@ -94,3 +94,9 @@ snapshots. Original failed outputs and complete snapshots remain preserved.
 The completed continuation retained all 1,056 GDAL object bodies. An explicit
 Python helper normalizes generated libtool metadata without a fake tool alias.
 Historical resumed output always records `fresh_build: false`.
+
+Dependency consumers validate the complete pinned `gdal` and `libkml` source
+families. A completed scene producer also has a separate sibling `kernel`
+checkout, added after the dependency receipt; that sibling is not a GIS input.
+Unknown source families and links in dependency inputs remain rejected, and
+configuration, tools, object closure and installed inventories are unchanged.

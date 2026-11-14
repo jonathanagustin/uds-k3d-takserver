@@ -196,8 +196,11 @@ original Core guard. This is separate from migration/rollback acceptance.
 Core 1.16.0 intentionally removes `istio-egress-ambient/egress-waypoint` when
 its last ambient `remoteHost` consumer leaves ([pinned controller source](https://github.com/defenseunicorns/uds-core/blob/fd9769cd9e791d9b6ad86251af0f4899992a9ae5/src/pepr/operator/controllers/istio/egress-ambient.ts)).
 The trial binds the exact Gateway spec, source labels and consumer annotations,
-Gateway/controller-owned Deployment UIDs, Core namespace UID, and the Helm-owned
-application Package UIDs before removal. Only this derived Deployment has a separate
+Gateway/derived Deployment UIDs, Core namespace UID, and the Helm-owned
+application Package UIDs before removal. The Deployment must carry the exact
+four-field Gateway owner reference and mesh-controller/class labels from
+[pinned Istio 1.31.2](https://github.com/istio/istio/blob/e2f3a7949a358af7dd901a6f9ccd6ecdd7270271/manifests/charts/istio-control/istio-discovery/files/waypoint.yaml);
+its source template omits `controller` and `blockOwnerDeletion`. Only this derived Deployment has a separate
 lifecycle; every other Core workload and the mesh hash retain their original guard.
 A foreign consumer preserves the original exact Core snapshot instead. Cleanup
 requires three consecutive absent observations within 60 seconds, never deletes

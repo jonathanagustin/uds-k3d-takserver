@@ -491,8 +491,9 @@ class PackageTrial(D.Driver):
         # First private failure wins; later cleanup failures cannot replace it.
         if 'firstPrivateFailure' in self.state or 'packageCommandFailure' in self.state:return
         D.require(phase in D.PHASES, 'unknown retained validation phase')
-        D.require(kind in ('stored-hooks-drift','core-inventory-drift'),'unknown retained validation kind')
-        (R.validate_source_failure if kind=='stored-hooks-drift' else R.validate_core_failure)(snapshot)
+        D.require(kind in ('stored-hooks-drift','core-inventory-drift','cleanup-consumers'),'unknown retained validation kind')
+        {'stored-hooks-drift':R.validate_source_failure,'core-inventory-drift':R.validate_core_failure,
+         'cleanup-consumers':R.validate_consumer_failure}[kind](snapshot)
         hashes={'packageDriverSHA256':digest(Path(__file__)), 'driverSHA256':digest(HERE/'drive.py'),
                 'retainedSourceSHA256':digest(HERE/'retained_state.py')}
         payload={'schema':1,'type':'retained-source-validation','kind':kind,
@@ -682,7 +683,17 @@ class PackageTrial(D.Driver):
         self.run_package(['uds','zarf','package','remove','takserver','--confirm'],900)
         self.state['applicationNamespaceRemoved']=True
         self.core_unchanged()
-        self.wait(lambda:R.consumers_gone(self),300)
+        try:
+            self.wait(lambda:R.consumers_gone(self),300)
+        except ValueError:
+            self.state['accepted']=False
+            try:
+                self.capture_retained_validation(R.consumer_failure(self),'rollback',kind='cleanup-consumers')
+            except Exception as error:
+                self.capture_retained_diagnostic_callsite(error)
+                try:self.journal('retained-source-diagnostic-unavailable',phase='rollback')
+                except Exception:pass
+            raise
         for record in self.state['retainedCleanup']:
             R.conditional_delete(self,record)
             self.journal('retained-object-conditionally-removed',kind=record['kind'],name=record['name'],uid=record['uid'])

@@ -376,6 +376,44 @@ def cleanup_snapshot(driver,proof):
             result.append(item)
     return result
 
+def validate_consumer_failure(snapshot):
+    require(isinstance(snapshot,dict) and set(snapshot)=={'schema','consumers'} and
+            type(snapshot['schema']) is int and snapshot['schema']==1,'consumer failure schema differs')
+    records=snapshot['consumers']
+    require(isinstance(records,list) and 1<=len(records)<=128,'consumer inventory bound differs')
+    seen=set()
+    for rec in records:
+        require(isinstance(rec,dict) and set(rec)=={'kind','namespace','name','uid','resourceVersion','deleting','phase','owners'},'consumer record differs')
+        require(rec['kind'] in ('Pod','Deployment','StatefulSet') and rec['namespace'] in APP_RELEASES,'consumer scope differs')
+        for key in ('name','uid','resourceVersion'):
+            require(isinstance(rec[key],str) and re.fullmatch('[A-Za-z0-9._-]{1,253}',rec[key]),'consumer identity differs')
+        identity=(rec['namespace'],rec['kind'],rec['name'])
+        require(identity not in seen,'duplicate consumer');seen.add(identity)
+        require(type(rec['deleting']) is bool and rec['phase'] in ('','Pending','Running','Succeeded','Failed','Unknown'),'consumer state differs')
+        require(isinstance(rec['owners'],list) and len(rec['owners'])<=8,'consumer owner bound differs')
+        for owner in rec['owners']:
+            require(isinstance(owner,dict) and set(owner)=={'apiVersion','kind','name','uid'},'consumer owner schema differs')
+            for key,value in owner.items():
+                require(isinstance(value,str) and re.fullmatch('[A-Za-z0-9./_-]{1,253}',value),'consumer owner identity differs')
+    require(len(json.dumps(snapshot).encode())<=SOURCE_FAILURE_LIMIT,'consumer failure byte bound')
+    return snapshot
+
+def consumer_failure(driver):
+    records=[]
+    for namespace in APP_RELEASES:
+        if not driver.kube('get','namespace',namespace,'--ignore-not-found','-o','json').strip():continue
+        for kind in ('pods','deployments','statefulsets'):
+            for obj in driver.get(kind,namespace=namespace)['items']:
+                meta=obj['metadata']
+                records.append({'kind':obj['kind'],'namespace':namespace,'name':meta['name'],
+                    'uid':meta['uid'],'resourceVersion':meta['resourceVersion'],
+                    'deleting':bool(meta.get('deletionTimestamp')),
+                    'phase':obj.get('status',{}).get('phase','') if obj['kind']=='Pod' else '',
+                    'owners':[{key:owner[key] for key in ('apiVersion','kind','name','uid')}
+                              for owner in meta.get('ownerReferences',[])]})
+                require(len(records)<=128,'consumer inventory bound differs')
+    return validate_consumer_failure({'schema':1,'consumers':records})
+
 def consumers_gone(driver):
     for namespace in APP_RELEASES:
         if not driver.kube('get','namespace',namespace,'--ignore-not-found','-o','json').strip():continue

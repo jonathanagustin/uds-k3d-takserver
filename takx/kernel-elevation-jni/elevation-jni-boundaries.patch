@@ -1,0 +1,363 @@
+--- a/takkernel/engine/src/main/jni/interop/elevation/Interop.cpp
++++ b/takkernel/engine/src/main/jni/interop/elevation/Interop.cpp
+@@ -67,7 +67,9 @@
+     LockPtr lock(NULL, NULL);
+     if(!force) {
+         // check if it's a wrapper, and return
+-        if(Interop_isWrapper<ElevationSource>(env, msource)) {
++        const bool wrapper = Interop_isWrapper<ElevationSource>(env, msource);
++        if(env->ExceptionCheck()) return TE_Err;
++        if(wrapper) {
+             do {
+                 Java::JNILocalRef msourcePtr(*env, env->GetObjectField(msource, NativeElevationSource_class.pointer));
+                 if(!Pointer_makeShared<ElevationSource>(env, msourcePtr))
+@@ -98,6 +100,7 @@
+     }
+ 
+     value = ElevationSourcePtr(new ManagedElevationSource(env, msource), Memory_deleter_const<ElevationSource, ManagedElevationSource>);
++    if(env->ExceptionCheck()) return TE_Err;
+     if(!force)
+         ElevationSourceInterop.managedElevationSourceInstances[env->NewWeakGlobalRef(msource)] = value;
+ 
+--- a/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp
++++ b/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp
+@@ -25,6 +25,29 @@
+ using namespace TAKEngineJNI::Interop::Java;
+ 
+ namespace {
++    // Cleanup must run without replacing the original Java failure.
++    class PreserveElevationException
++    {
++        JNIEnv &env;
++        jthrowable first;
++    public:
++        explicit PreserveElevationException(JNIEnv &value) NOTHROWS : env(value), first(value.ExceptionOccurred())
++        { if(first) env.ExceptionClear(); }
++        void capture() NOTHROWS
++        {
++            if(!env.ExceptionCheck()) return;
++            jthrowable next = env.ExceptionOccurred();
++            env.ExceptionClear();
++            if(!first) first = next; else env.DeleteLocalRef(next);
++        }
++        bool failed() const NOTHROWS { return first != NULL; }
++        ~PreserveElevationException() NOTHROWS
++        {
++            capture();
++            if(first) { env.Throw(first); env.DeleteLocalRef(first); }
++        }
++    };
++
+     struct {
+         jclass id;
+         jmethodID getName;
+@@ -111,22 +134,28 @@
+ ManagedElevationSource::ManagedElevationSource(JNIEnv *env_, jobject impl_) NOTHROWS :
+     impl(env_->NewGlobalRef(impl_))
+ {
++    if(env_->ExceptionCheck() || !impl) return;
+     static bool clinit = ElevationSource_class_init(env_);
++    if(env_->ExceptionCheck() || !clinit) return;
+ 
+     JNILocalRef mname(*env_, env_->CallObjectMethod(impl, ElevationSource_class.getName));
++    if(env_->ExceptionCheck()) return;
+     JNIStringUTF_get(name, *env_, (jstring)mname.get());
+ }
+ ManagedElevationSource::~ManagedElevationSource() NOTHROWS
+ {
+     if(impl) {
+         LocalJNIEnv env;
++        PreserveElevationException primary(*env);
+ 
+         // unbind all of the registered listeners
+         for(auto it = listeners.begin(); it != listeners.end(); it++) {
+             // remove the listener from Java
+             env->CallVoidMethod(impl, ElevationSource_class.removeOnContentChangedListener, it->second);
++            primary.capture();
+             // finalize
+             env->CallVoidMethod(it->second, NativeOnContentChangedListener_class.finalize);
++            primary.capture();
+             env->DeleteGlobalRef(it->second);
+         }
+         listeners.clear();
+@@ -149,8 +178,10 @@
+         return TE_Err;
+ 
+     JNILocalRef mparams(*env, env->NewObject(ElevationSource_QueryParameters_class.id, ElevationSource_QueryParameters_class.ctor));
++    if(env->ExceptionCheck() || !mparams) return TE_Err;
+     if(cparams.spatialFilter.get()) {
+         JNILocalRef mgeom(*env, Feature::Interop_create(env, *cparams.spatialFilter));
++        if(env->ExceptionCheck() || !mgeom) return TE_Err;
+         env->SetObjectField(mparams, ElevationSource_QueryParameters_class.spatialFilter, mgeom);
+     }
+     env->SetDoubleField(mparams, ElevationSource_QueryParameters_class.maxResolution, cparams.maxResolution);
+@@ -158,6 +189,7 @@
+     env->SetDoubleField(mparams, ElevationSource_QueryParameters_class.targetResolution, cparams.targetResolution);
+     if(cparams.types.get()) {
+         JNILocalRef mparams_types = Java::JNICollection_create(*env, Java::HashSet);
++        if(env->ExceptionCheck() || !mparams_types) return TE_Err;
+         if(!cparams.types->empty()) {
+             using namespace TAK::Engine::Port;
+             Collection<String>::IteratorPtr iter(NULL, NULL);
+@@ -182,12 +214,14 @@
+     }
+     if(cparams.authoritative.get()) {
+         JNILocalRef mauthoritative = Java::Boolean_valueOf(*env, *cparams.authoritative);
++        if(env->ExceptionCheck() || !mauthoritative) return TE_Err;
+         env->SetObjectField(mparams, ElevationSource_QueryParameters_class.authoritative, mauthoritative.get());
+     }
+     env->SetDoubleField(mparams, ElevationSource_QueryParameters_class.minCE, cparams.minCE);
+     env->SetDoubleField(mparams, ElevationSource_QueryParameters_class.minLE, cparams.minLE);
+     if(cparams.order.get()) {
+         JNILocalRef mparams_order = Java::JNICollection_create(*env, Java::LinkedList);
++        if(env->ExceptionCheck() || !mparams_order) return TE_Err;
+         if(!cparams.order->empty()) {
+             using namespace TAK::Engine::Port;
+             Collection<ElevationSource::QueryParameters::Order>::IteratorPtr iter(NULL, NULL);
+@@ -234,6 +268,7 @@
+     }
+     if (cparams.flags.get()) {
+         JNILocalRef mflags = Java::Integer_valueOf(*env, *cparams.flags);
++        if(env->ExceptionCheck() || !mflags) return TE_Err;
+         env->SetObjectField(mparams, ElevationSource_QueryParameters_class.flags, mflags.get());
+     }
+ 
+@@ -250,7 +285,9 @@
+ {
+     LocalJNIEnv env;
+     Envelope2 bounds(NAN, NAN, NAN, NAN, NAN, NAN);
++    if(env->ExceptionCheck()) return bounds;
+     JNILocalRef mbounds(*env, env->CallObjectMethod(impl, ElevationSource_class.getBounds));
++    if(env->ExceptionCheck()) return bounds;
+     Feature::Interop_copy(&bounds, env, mbounds);
+     return bounds;
+ }
+@@ -283,11 +320,14 @@
+     lock.reset();
+ 
+     env->CallVoidMethod(impl, ElevationSource_class.addOnContentChangedListener, mlistener.get());
++    if(env->ExceptionCheck()) return TE_Err;
+     return code;
+ }
+ TAKErr ManagedElevationSource::removeOnContentChangedListener(TAK::Engine::Elevation::ElevationSource::OnContentChangedListener *l) NOTHROWS
+ {
+     TAKErr code(TE_Ok);
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     if(!l)
+         return TE_InvalidArg;
+ 
+@@ -304,20 +344,15 @@
+     listeners.erase(entry);
+     lock.reset();
+ 
+-    LocalJNIEnv env;
+-
+-    if(env->ExceptionCheck())
+-        return TE_Err;
++    PreserveElevationException primary(*env);
+     // remove the listener from Java
+     env->CallVoidMethod(impl, ElevationSource_class.removeOnContentChangedListener, mlistener);
+-    if(env->ExceptionCheck())
+-        return TE_Err;
++    primary.capture();
+     // finalize
+     env->CallVoidMethod(mlistener, NativeOnContentChangedListener_class.finalize);
+-    if(env->ExceptionCheck())
+-        return TE_Err;
++    primary.capture();
+     env->DeleteGlobalRef(mlistener);
+-    return code;
++    return primary.failed() ? TE_Err : code;
+ }
+ 
+ namespace {
+@@ -329,7 +364,9 @@
+     {
+         if(impl) {
+             LocalJNIEnv env;
++            PreserveElevationException primary(*env);
+             DB::RowIterator_close(env, impl);
++            primary.capture();
+             env->DeleteGlobalRef(impl);
+             impl = NULL;
+         }
+@@ -358,6 +395,7 @@
+         // XXX - check to see if it's a native wrap...not well suited with unique_ptr
+ 
+         value = ElevationChunkPtr(new ManagedElevationChunk(env, mchunk), Memory_deleter_const<ElevationChunk, ManagedElevationChunk>);
++        if(env->ExceptionCheck()) return TE_Err;
+         return TE_Ok;
+     }
+     TAKErr ManagedElevationChunkCursor::getResolution(double *value) NOTHROWS
+@@ -417,6 +455,7 @@
+         if(env->ExceptionCheck())
+             return TE_Err;
+         JNILocalRef muri(*env, env->CallObjectMethod(impl, ElevationSource_Cursor_class.getUri));
++        if(env->ExceptionCheck()) return TE_Err;
+         code = JNIStringUTF_get(uri, *env, (jstring)muri);
+         TE_CHECKRETURN_CODE(code);
+         *value = uri;
+@@ -431,6 +470,7 @@
+         if(env->ExceptionCheck())
+             return TE_Err;
+         JNILocalRef mtype(*env, env->CallObjectMethod(impl, ElevationSource_Cursor_class.getType));
++        if(env->ExceptionCheck()) return TE_Err;
+         code = JNIStringUTF_get(uri, *env, (jstring)mtype);
+         TE_CHECKRETURN_CODE(code);
+         *value = uri;
+@@ -446,6 +486,7 @@
+             if (env->ExceptionCheck())
+                 return TE_Err;
+             JNILocalRef mbounds(*env, env->CallObjectMethod(impl, ElevationSource_Cursor_class.getBounds));
++            if(env->ExceptionCheck()) return TE_Err;
+             code = Feature::Interop_create(bounds, env, mbounds);
+             TE_CHECKRETURN_CODE(code);
+         }
+@@ -481,7 +522,7 @@
+         ElevationSource_class.removeOnContentChangedListener = env->GetMethodID(ElevationSource_class.id, "removeOnContentChangedListener", "(Lcom/atakmap/map/elevation/ElevationSource$OnContentChangedListener;)V");
+ 
+         ElevationSource_QueryParameters_class.id = ATAKMapEngineJNI_findClass(env, "com/atakmap/map/elevation/ElevationSource$QueryParameters");
+-        ElevationSource_QueryParameters_class.ctor = env->GetMethodID(ElevationSource_class.id, "<init>", "()V");
++        ElevationSource_QueryParameters_class.ctor = env->GetMethodID(ElevationSource_QueryParameters_class.id, "<init>", "()V");
+         ElevationSource_QueryParameters_class.spatialFilter = env->GetFieldID(ElevationSource_QueryParameters_class.id, "spatialFilter", "Lcom/atakmap/map/layer/feature/geometry/Geometry;");
+         ElevationSource_QueryParameters_class.maxResolution = env->GetFieldID(ElevationSource_QueryParameters_class.id, "maxResolution", "D");
+         ElevationSource_QueryParameters_class.minResolution = env->GetFieldID(ElevationSource_QueryParameters_class.id, "minResolution", "D");
+--- a/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationChunk.cpp
++++ b/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationChunk.cpp
+@@ -26,6 +26,29 @@
+ 
+ namespace
+ {
++    // Cleanup must run without replacing the original Java failure.
++    class PreserveElevationException
++    {
++        JNIEnv &env;
++        jthrowable first;
++    public:
++        explicit PreserveElevationException(JNIEnv &value) NOTHROWS : env(value), first(value.ExceptionOccurred())
++        { if(first) env.ExceptionClear(); }
++        void capture() NOTHROWS
++        {
++            if(!env.ExceptionCheck()) return;
++            jthrowable next = env.ExceptionOccurred();
++            env.ExceptionClear();
++            if(!first) first = next; else env.DeleteLocalRef(next);
++        }
++        bool failed() const NOTHROWS { return first != NULL; }
++        ~PreserveElevationException() NOTHROWS
++        {
++            capture();
++            if(first) { env.Throw(first); env.DeleteLocalRef(first); }
++        }
++    };
++
+     struct
+     {
+         jclass id;
+@@ -59,13 +82,18 @@
+     impl(env_->NewGlobalRef(impl_)),
+     bounds(NULL, NULL)
+ {
++    if(env_->ExceptionCheck() || !impl) return;
+     static bool clinit = ElevationChunk_class_init(env_);
++    if(env_->ExceptionCheck() || !clinit) return;
+ 
+     JNILocalRef mtype(*env_, env_->CallObjectMethod(impl, ElevationChunk_class.getType));
++    if(env_->ExceptionCheck()) return;
+     JNIStringUTF_get(type, *env_, (jstring)mtype.get());
+     JNILocalRef muri(*env_, env_->CallObjectMethod(impl, ElevationChunk_class.getUri));
++    if(env_->ExceptionCheck()) return;
+     JNIStringUTF_get(uri, *env_, (jstring)muri.get());
+     JNILocalRef mbounds(*env_, env_->CallObjectMethod(impl, ElevationChunk_class.getBounds));
++    if(env_->ExceptionCheck()) return;
+     Feature::Interop_create(bounds, env_, mbounds);
+ 
+ }
+@@ -73,7 +101,9 @@
+ {
+     if(impl) {
+         LocalJNIEnv env;
++        PreserveElevationException primary(*env);
+         env->CallVoidMethod(impl, ElevationChunk_class.dispose);
++        primary.capture();
+         env->DeleteGlobalRef(impl);
+         impl = NULL;
+     }
+@@ -89,7 +119,10 @@
+ double ManagedElevationChunk::getResolution() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallDoubleMethod(impl, ElevationChunk_class.getResolution);
++    if(env->ExceptionCheck()) return NAN;
++    const auto value = env->CallDoubleMethod(impl, ElevationChunk_class.getResolution);
++    if(env->ExceptionCheck()) return NAN;
++    return value;
+ }
+ const Polygon2 *ManagedElevationChunk::getBounds() const NOTHROWS
+ {
+@@ -102,6 +135,7 @@
+         return TE_IllegalState;
+ 
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     JNILocalRef mdata(*env, env->CallObjectMethod(impl, ElevationChunk_class.createData));
+     if(env->ExceptionCheck())
+         return TE_Err;
+@@ -142,6 +176,7 @@
+     if(!value)
+         return TE_InvalidArg;
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     const double hae = env->CallDoubleMethod(impl, ElevationChunk_class.sample_DD, latitude, longitude);
+     if(env->ExceptionCheck())
+         return TE_Err;
+@@ -158,7 +193,9 @@
+     if(!value)
+         return TE_InvalidArg;
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     JNILocalRef jarr(*env, env->NewDoubleArray(count*3));
++    if(env->ExceptionCheck() || !jarr) return TE_Err;
+     {
+         JNIDoubleArray jarr_w(*env, (jdoubleArray)jarr.get(), 0);
+         for (std::size_t i = 0; i < count; i++) {
+@@ -183,22 +220,34 @@
+ double ManagedElevationChunk::getCE() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallDoubleMethod(impl, ElevationChunk_class.getCE);
++    if(env->ExceptionCheck()) return NAN;
++    const auto value = env->CallDoubleMethod(impl, ElevationChunk_class.getCE);
++    if(env->ExceptionCheck()) return NAN;
++    return value;
+ }
+ double ManagedElevationChunk::getLE() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallDoubleMethod(impl, ElevationChunk_class.getLE);
++    if(env->ExceptionCheck()) return NAN;
++    const auto value = env->CallDoubleMethod(impl, ElevationChunk_class.getLE);
++    if(env->ExceptionCheck()) return NAN;
++    return value;
+ }
+ bool ManagedElevationChunk::isAuthoritative() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, ElevationChunk_class.isAuthoritative);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, ElevationChunk_class.isAuthoritative);
++    if(env->ExceptionCheck()) return false;
++    return value;
+ }
+ unsigned int ManagedElevationChunk::getFlags() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallIntMethod(impl, ElevationChunk_class.getFlags);
++    if(env->ExceptionCheck()) return 0;
++    const auto value = env->CallIntMethod(impl, ElevationChunk_class.getFlags);
++    if(env->ExceptionCheck()) return 0;
++    return value;
+ }
+ 
+ namespace

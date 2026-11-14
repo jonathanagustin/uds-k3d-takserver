@@ -405,6 +405,9 @@ def consumer_failure(driver):
         for kind in ('pods','deployments','statefulsets'):
             for obj in driver.get(kind,namespace=namespace)['items']:
                 meta=obj['metadata']
+                require(meta.get('namespace')==namespace and obj.get('kind')==
+                        {'pods':'Pod','deployments':'Deployment','statefulsets':'StatefulSet'}[kind],
+                        'consumer query scope differs')
                 records.append({'kind':obj['kind'],'namespace':namespace,'name':meta['name'],
                     'uid':meta['uid'],'resourceVersion':meta['resourceVersion'],
                     'deleting':bool(meta.get('deletionTimestamp')),

@@ -24,7 +24,7 @@ class SourceGuards(unittest.TestCase):
                 P.main(argv)
 
     def test_contract_refuses_scope_change_and_acceptance_escalation(self):
-        for field, value in (('file', '../foreign.cpp'), ('strict_elevation_accepted', True)):
+        for field, value in (('files', {'../foreign.cpp': {}}), ('strict_elevation_accepted', True)):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary) / 'profile'
                 shutil.copytree(HERE, root)
@@ -39,9 +39,10 @@ class SourceGuards(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / 'source'
-            path = source / P.FILE
-            path.parent.mkdir(parents=True)
-            path.write_text('unreviewed source')
+            for name in P.FILES:
+                path = source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('unreviewed source')
             output = root / 'output'
             with self.assertRaisesRegex(ValueError, 'official source bytes'):
                 P.prepare(source, output)

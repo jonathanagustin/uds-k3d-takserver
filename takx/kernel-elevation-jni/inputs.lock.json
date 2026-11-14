@@ -1,13 +1,28 @@
 {
   "schema": 1,
-  "profile": "public-elevation-query-constructor-v1",
+  "profile": "public-elevation-jni-boundaries-v1",
   "actual_kernel_version": "8.30.5",
   "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "scope": "source-only correction of the JNI query-parameter constructor class; no strict elevation or client acceptance",
-  "file": "takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp",
-  "before": "71929be830ee86f6385090aba0ddaaa1b3bbb5fcf83f23bdd1e24797e673df8c",
-  "after": "c4862644cf276258f740d0dd04cd6df064f14bb197d928e1f8600223647477f7",
-  "patch_sha256": "513bf7efcc6edfc6e88556b3c81ffd9380ddb281177587f7936c972fc453c62a",
+  "scope": "source-only elevation constructor and checked callback/cleanup boundaries; no full native or client acceptance",
+  "files": {
+    "takkernel/engine/src/main/jni/interop/elevation/Interop.cpp": {
+      "before": "e51a26e49c158f91cb95f2c6a14fa1672f6794abe217a398f0436d4168f2c7da",
+      "after": "9d350b7de340f2e4da9c62a3346835698d8eff8dddb864fc7462f50841e719fb"
+    },
+    "takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp": {
+      "before": "71929be830ee86f6385090aba0ddaaa1b3bbb5fcf83f23bdd1e24797e673df8c",
+      "after": "43258a5ede9f5cf5c4d81e55f00fd70505f6f63e783589bfc6142cc207491ee5"
+    },
+    "takkernel/engine/src/main/jni/interop/elevation/ManagedElevationChunk.cpp": {
+      "before": "7f585faccab070b33ae810120884b5803a365c03f19be674b68a9c3d8824c4b0",
+      "after": "bc0757bb5eb455be256df0d0f5866ccca0765359f1f5182a4e49963460b7fe47"
+    }
+  },
+  "patch_sha256": "851fdacceb8a347e945035587d3e77bb84bb620b83cbaac71a62f3ee9cf0025e",
+  "owned_controls": {
+    "tests/ElevationJNIControls.java": "c5a9f332f66b24046d462796d5462b2c1bee781c91994183fa3186f587c54d31",
+    "tests/ElevationFaultControls.java": "acd870f34496294b23438e33ba65434c575d88f34a355cd84875b1caaa3c7ca3"
+  },
   "native_builder_integration": false,
   "strict_elevation_accepted": false,
   "full_sdk_accepted": false,

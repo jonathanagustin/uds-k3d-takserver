@@ -1,18 +1,23 @@
-# Public elevation JNI constructor correction
+# Public elevation JNI source corrections
 
 Official Kernel 8.30.5 at `9f6893dd657feacc35ec5de03dad721c2e44170e`
-looks up `ElevationSource.QueryParameters`' constructor using `ElevationSource`'s
-class. It then passes that method ID to `NewObject` with the QueryParameters
-class. These classes are unrelated. A real attached public elevation source
-reaches this path during `ElevationManager.getElevation` bulk sampling and aborts
-under `-Xcheck:jni` with `Wrong object class or methodID passed to JNI call`.
+looks up the QueryParameters constructor on the unrelated ElevationSource class.
+Real attached-source bulk sampling aborts under `-Xcheck:jni` with `Wrong object
+class or methodID passed to JNI call`. The patch obtains the constructor from its
+declaring class and checks the actual source/query/chunk callback boundaries.
 
-The one-line patch obtains the constructor from its declaring QueryParameters
-class. Both source images and the exact patch are locked. `prepare.py` defaults
-to local verification without starting any process. Its explicit prepare phase
-reads one exact cached official source, performs only the reviewed substitution,
-verifies the complete postimage, and writes a fresh disjoint output. It neither
-builds nor loads a library, and changes no cached official source.
+A pending callback error stops further ordinary JNI operations. Cursor, listener
+and chunk cleanup saves the first Java error, clears it while attempting cleanup,
+and restores it afterward. A later cleanup error cannot replace that first error.
+The source lookup checks its wrapper callback before creating/interning a managed
+source. Query allocation/boxing and metadata callbacks are checked before their
+results are passed to subsequent JNI operations.
+
+All three original source images, corrected images, patch bytes and both owned
+control sources are locked. Default verification starts no process. Explicit
+preparation copies the exact cached official sources into a fresh disjoint output,
+applies the closed three-file patch without fuzz, and checks every postimage and
+unchanged input. It builds and loads nothing and changes no cached source.
 
 ```sh
 python3 -B takx/kernel-elevation-jni/prepare.py
@@ -21,27 +26,33 @@ python3 -B takx/kernel-elevation-jni/prepare.py --phase prepare \
   --source /path/to/cached/official/source --output /path/to/new/source-output
 ```
 
-`tests/ElevationJNIControls.java` uses the actual public elevation registry,
-source builder, chunk sampler and native bulk sampling. Its owned analytic plane
-checks attachment, all 81 sampled elevations, detach and the absence of values
-after detach. Its no-resource sampler has nothing to release in `dispose`.
-The first argument is an independently reviewed native load-order manifest of
-`SHA256 absolute-library-path` lines, as produced by the full native experiment;
-the fixture is not a loader/authentication front door. Default CI never runs it.
+The two fixtures use actual public elevation interfaces, the real native registry,
+source builder, chunk sampler and bulk sampling. The positive fixture checks an
+owned analytic plane's 81 values, attach/detach and absence after detach (166
+checks). The fault fixture wraps the actual public interfaces to inject errors;
+it does not shadow SDK classes. Thirteen cases cover source naming/query, cursor
+iteration/get/close, chunk metadata/sampling/disposal, and secondary cleanup errors.
+Each case verifies the primary exception identity and successful sampling recovery;
+cases owning cursor/chunk state also require their cleanup to be attempted.
+The fixtures take an independently authenticated native load-order manifest; they
+are not loader/authentication front doors and are never launched by default CI.
 
-The original complete native composition aborts and emits two JNI warnings.
-Failure receipt:
-`1d90b0ae9ac1b83354ffe1cd36f5a0ea256af8cb8a32de1634a22aab892f3cbe`.
-An isolated one-source recompile/relink corrects the abort and passes all 166
-functional checks, including actual Java sampler callbacks. It still emits seven
-unchecked-exception JNI warnings, so strict validation fails. Failure receipt:
+The original complete composition aborts and emits two JNI warnings. Its failure
+receipt is `1d90b0ae9ac1b83354ffe1cd36f5a0ea256af8cb8a32de1634a22aab892f3cbe`.
+The constructor-only causal relink passes 166 functional checks but still fails
+strict validation on seven warnings; receipt
 `97c5c34d8508cdec446330a03078065f2ae163daa75ea9570d2e4cefe584cb6f`.
-Original sources/objects and both failures are retained. This causal relink is
-not a fresh complete native variant and is not adopted as a qualified artifact.
+A separate three-source causal recompile/relink passes the same positive control
+with zero strict JNI diagnostics (receipt
+`37d0b1f1b05be12780dace18c6a347b7031172f064635da3f09e019c3e1d7206`)
+and all 13 fault cases with zero strict JNI diagnostics (receipt
+`955456d32c585e3b04d4b9381d9669c1aaa6f13d79365e59684690f3180cc81f`).
+All prior failures, objects, original sources and consumed recipe snapshots remain
+retained. The causal relinks are not adopted as fresh full native variants.
 
-Four offline guards and exact real source preparation pass. Remaining work
-includes callback/cleanup exception boundaries, primary error preservation,
-authenticated full-graph native integration and strict actual-library controls.
-The independent contour grid algorithm does not resolve those native failures.
-No strict elevation, full SDK or client acceptance follows from this source fix.
+Four offline guards and real exact preparation pass. A new complete 815-unit
+composition is being built separately. Actual-library controls must be repeated
+against that result. Other elevation entry points, listener/bounds fault cases,
+concurrency and rendering remain outside the current 13-case qualification scope.
+No full elevation API, SDK or client acceptance follows from these source fixes.
 Refs #374 and #486.

@@ -46,6 +46,8 @@ def failure_diagnostic(error):
             'pod_schema', 'pod_namespace_or_deleted', 'pod_name', 'pod_uid', 'named_container_missing',
             'container_id', 'image_id', 'restart_count', 'timestamp_schema'}:
         result['observer_reason'] = error.args[0]
+    if isinstance(error, jvm.CommandFailure):
+        result['command'] = error.diagnostic()
     current = error.__traceback__
     while current is not None:
         selected = modules.get(current.tb_frame.f_code.co_filename)

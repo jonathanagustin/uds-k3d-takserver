@@ -77,3 +77,34 @@ actual primitive accessors and sampling, constructor metadata failures,
 `createData` callback failure, pending-exception entry guards, destructor error
 preservation and fresh-chunk recovery. It does not qualify successful mesh
 materialization or concurrent chunk access.
+
+### Opt-in frozen-build consumer
+
+`python3 -B takx/kernel-elevation-jni/controls.py` verifies the owned source
+profile without starting a process. To replay the listener and chunk probes,
+explicitly supply the reviewed Native07 root, canonical Java producer root,
+reviewed JDK root, and a fresh output directory:
+
+```sh
+python3 -B takx/kernel-elevation-jni/controls.py --phase run \
+  --native /path/to/context-fresh-native-07 \
+  --java /path/to/client-java-native07-01 \
+  --jdk /path/to/reviewed-jdk \
+  --output /path/to/fresh-consumer-output
+```
+
+This consumer requires the exact frozen producer receipts and their recorded
+absolute dependency/JDK paths. It verifies staged native/Java sources, closed
+class/header membership, classpath archives, the native load manifest, mapped
+ELFs, compiler/JDK bytes, JNI headers and the owned control sources before any
+compiler or JVM starts. Inputs and closed compiled products are rechecked between
+commands. Each command has a 40-second deadline; failures retain logs and a typed
+first-failure receipt. An existing, overlapping or symlink output refuses before
+execution. Runtime acceptance requires the exact 112/231 check markers and zero
+strict JNI diagnostics. The receipt fingerprints commands, inputs, products and
+logs while keeping all broad acceptance flags false.
+
+It does not build Native07, download dependencies, relocate the frozen layout,
+or provide a hermetic compiler toolchain. System compiler headers remain part of
+the qualified local host environment. A portable native producer remains an open
+gate; a matching receipt digest alone does not grant SDK/client acceptance.

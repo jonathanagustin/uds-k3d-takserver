@@ -75,3 +75,13 @@ second test-only manifest expansion; the original full native build remains
 frozen under its earlier two-control recipe. Class initialization under failure,
 successful createData mesh conversion, other builder/wrapper entry points and
 concurrent chunk/source access are not accepted by these controls.
+
+The public opt-in `controls.py` consumer now replays both owned probes against
+the frozen full composition. Its third retained experiment verifies 5,555 inputs
+and seven compiled products, completes all six compile/runtime commands, and
+passes the same 343 assertions with zero strict JNI diagnostics. Receipt:
+`b178d3da8776d6c381b1a70abce7a001e7fa788a68fe5f537a716a2e80776b3b`.
+The earlier consumer experiments remain retained separately. Eight source and
+consumer guards pass without native execution. This is a consumer of the exact
+frozen local producer and its host toolchain, not native-builder integration or
+a portable/full-SDK acceptance claim. The three native postimages are unchanged.

@@ -2,6 +2,8 @@
 
 Thanks for your interest in uds-takserver. Bug reports, feature requests, and pull requests are all welcome.
 
+This project follows the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Report conduct violations through the private channel in [SECURITY.md](SECURITY.md), the same way as a vulnerability. Do not open a public issue for one.
+
 ## Reporting bugs and requesting features
 
 Open an issue at <https://github.com/jonathanagustin/uds-takserver/issues>. Search the existing issues first, since yours may already be there.

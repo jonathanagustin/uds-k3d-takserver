@@ -450,9 +450,22 @@ IDENTITY_ALIASES = frozenset(('baseline', 'dual-before-rollout', 'transition', '
 IDENTITY_PROGRESS_STAGES = frozenset(('preflight', 'probe-compiled', 'stopped', 'reversed-and-verified',
     'package-deploy-start', 'application-remove-start', 'fresh-strict-verified', 'package-roundtrip-verified',
     'package-application-checks', 'private-application-data-verified', 'cloudtak-basemap-application-checks',
-    'package-command-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
+    'retained-hook-drift', 'retained-core-drift', 'package-identity-timeout', 'package-command-failed', 'application-check-failed', 'typed-phase-rejected', 'retained-object-conditionally-removed', 'retained-sentinel-start', 'retained-sentinel-exec')) | frozenset(prefix + alias for prefix in
     ('traffic-', 'traffic-package-', 'package-phase-evidence-', 'package-observed-', 'workloads-',
      'config-requested-', 'policy-converged-') for alias in IDENTITY_ALIASES)
+
+
+
+# Only the finite diagnostics emitted by the reviewed retained-source guard.
+RETAINED_HOOK_FIELDS={
+    'keystore':{'metadata':{'metadata'},'credential-data':{'credential'},'object-fields':{'inventory','credential'}},
+    'cert-network':{'metadata':{'metadata'},'network-policy':{'authorization'},'object-fields':{'inventory'}},
+    'cert-account':{'metadata':{'metadata'},'identity-spec':{'authorization'},'object-fields':{'inventory'}},
+    'cert-role':{'metadata':{'metadata'},'rbac':{'authorization'},'object-fields':{'inventory'}},
+    'cert-binding':{'metadata':{'metadata'},'rbac':{'authorization'},'object-fields':{'inventory'}},
+    'cert-job':{'metadata':{'metadata'},'job-spec':{'generator'},'object-fields':{'inventory','generator'}},
+    'inventory':{'inventory':{'inventory'}},'source-code':{'source-code':{'source-code'}},
+}
 
 
 def diagnostic_journal_hash(path):
@@ -524,6 +537,24 @@ def identity_progress(directory):
                     stage = {'stage': entry['stage']}
                     if entry.get('phase') in IDENTITY_ALIASES:
                         stage['phase'] = entry['phase']
+                    if entry['stage']=='retained-hook-drift':
+                        require(set(entry)=={'stage','hook','category','fieldClass'} and
+                                isinstance(entry.get('hook'),str) and isinstance(entry.get('fieldClass'),str) and
+                                isinstance(entry.get('category'),str) and
+                                entry['category'] in RETAINED_HOOK_FIELDS.get(entry['hook'],{}).get(entry['fieldClass'],set()),
+                                'invalid retained hook diagnostic')
+                        stage.update({key:entry[key] for key in ('hook','category','fieldClass')})
+                    if entry['stage']=='retained-core-drift':
+                        require(set(entry)=={'stage','category','change'} and
+                                entry.get('category') in ('namespace','workload','mesh','mixed') and
+                                entry.get('change') in ('added','removed','changed','mixed'),
+                                'invalid Core drift diagnostic')
+                        stage.update({key:entry[key] for key in ('category','change')})
+                    if entry['stage']=='package-identity-timeout':
+                        require(entry.get('phase') in ('shared','transition','strict','rollback') and
+                                entry.get('diagnostic') in ('no-observation','unstable-observation','workload-template-drift',
+                                    'inconsistent-service-account-alias','other-invariant'), 'invalid identity timeout diagnostic')
+                        stage.update(phase=entry['phase'],diagnostic=entry['diagnostic'])
                     if entry['stage']=='package-command-failed':
                         require(entry.get('role') in ('deploy','remove') and entry.get('phase') in ('transition','strict','rollback','shared') and
                                 type(entry.get('exitStatus')) is int and -255<=entry['exitStatus']<=255 and
@@ -531,6 +562,14 @@ def identity_progress(directory):
                                 entry.get('category') in ('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown'),
                                 'invalid package command diagnostic')
                         stage.update({key:entry[key] for key in ('role','exitStatus','timedOut','category','stdoutPresent','stderrPresent')})
+                    if entry['stage']=='application-check-failed':
+                        require(set(entry)=={'stage','check','phase','exitStatus','timedOut','stdoutPresent','stderrPresent'} and
+                                entry.get('check') in ('web-tls','api-smoke','flows','cloudtak') and
+                                entry.get('phase') in IDENTITY_ALIASES and type(entry.get('exitStatus')) is int and
+                                -255<=entry['exitStatus']<=255 and
+                                all(type(entry.get(key)) is bool for key in ('timedOut','stdoutPresent','stderrPresent')) and
+                                (entry['exitStatus']!=0 or entry['timedOut']), 'invalid application check diagnostic')
+                        stage.update({key:entry[key] for key in ('check','exitStatus','timedOut','stdoutPresent','stderrPresent')})
                     if entry['stage']=='typed-phase-rejected':
                         require(entry.get('phase') in IDENTITY_ALIASES,'invalid typed phase alias')
                         _guards,capture=identity_modules()

@@ -1,0 +1,14 @@
+--- a/GdalLibrary.java
++++ b/GdalLibrary.java
+@@ -83,7 +83,10 @@
+ 
+         // XXX - use of Driver::Deregister() is observed NOT to work
+ 
+-        gdal.SetConfigOption("GDAL_SKIP", "MBTiles,GPKG");
++        // Explicit public-cpu-gdal244-kml-v1 source variant only: its
++        // hash-verified native profile compiles both SQLite drivers out.
++        // There is nothing to skip; preserve any caller-supplied GDAL_SKIP.
++        // Other native profiles retain the upstream exclusion assignment.
+ 
+         // construct the classpath path to the GDAL_DATA content
+         String gdalDataPath = null;

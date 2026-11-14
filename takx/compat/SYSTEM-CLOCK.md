@@ -66,9 +66,12 @@ server deployment or default workflow builds/loads it.
 python3 takx/compat/test-system-clock.py --java-home /path/to/jdk17
 ```
 
-The test source-builds the actual runtime library and an independent reference
-JNI library, then brackets 100 reads of each public Java method with native
-reads of the corresponding kernel clock. Sleep progression, ordering and boot
+The test compiles the runtime library, the reference JNI library, and the
+link-time fixture with AddressSanitizer and UndefinedBehaviorSanitizer
+(`-fsanitize=address,undefined`). If the selected `cc` cannot link those
+runtimes, the test uses `gcc`. `build-system-clock.py` without that test still
+builds the unsanitized library. The test then brackets 100 reads of each public
+Java method with native reads of the corresponding kernel clock. Sleep progression, ordering and boot
 origin are checked (203 real-kernel assertions). Separate, explicitly named
 link-time fixtures supply distinct clock values and test clock selection,
 truncation to milliseconds, errors and overflow. Those fixtures are not included

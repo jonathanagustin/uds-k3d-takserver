@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Offline guards; genuine age proof is opt-in and keeps keys outside Git."""
 import contextlib
+import copy
 import hashlib
 import importlib.util
 import io
@@ -68,7 +69,195 @@ def save_package(folder, payload, journal):
     companion.write_text(json.dumps(progress)); companion.chmod(0o600)
 
 
+def validation_fixture(root):
+    folder,output,env,_command,journal,owner=package_fixture(root)
+    codes={'keystore':('metadata','credential-data','object-fields'),
+           'cert-network':('metadata','network-policy','object-fields'),
+           'cert-account':('metadata','identity-spec','object-fields'),
+           'cert-role':('metadata','rbac','object-fields'),'cert-binding':('metadata','rbac','object-fields'),
+           'cert-job':('metadata','job-spec','object-fields')}
+    source_names=('pepr/capabilities/workload.ts','pepr/capabilities/cloudtak-admin.ts','pepr/capabilities/takclient-credentials.ts')
+    def sha(value):return AGE.digest(json.dumps(value,sort_keys=True,separators=(',',':')).encode())
+    def meta(name):return {'name':name,'namespace':'takserver','annotations':{'helm.sh/hook':'pre-install,pre-upgrade'}}
+    objects=[{'apiVersion':'v1','kind':'Secret','metadata':meta('takserver-keystore'),'data':{'KEYSTORE_SOURCE':'PRIVATE_KEYSTORE_SOURCE'}},
+        {'apiVersion':'networking.k8s.io/v1','kind':'NetworkPolicy','metadata':meta('takserver-cert-init-kube-api'),'spec':{'podSelector':{}}},
+        {'apiVersion':'v1','kind':'ServiceAccount','metadata':meta('takserver-cert-init'),'automountServiceAccountToken':False},
+        {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':meta('takserver-cert-init'),'rules':[]},
+        {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'RoleBinding','metadata':meta('takserver-cert-init'),'roleRef':{},'subjects':[]},
+        {'apiVersion':'batch/v1','kind':'Job','metadata':meta('takserver-cert-init'),'spec':{'template':{'spec':{'containers':[
+            {'name':'cert-init','image':'PRIVATE_JOB_IMAGE:fixture','command':['/bin/sh','-c','PRIVATE_JOB_COMMAND'],
+             'env':[{'name':'FIXTURE','value':'PRIVATE_JOB_ENV_'+('x'*32768)}]}]}}}}]
+    groups={'metadata':{'metadata'},'credential-data':{'data','stringData','type','immutable'},'job-spec':{'spec'},
+            'rbac':{'rules','roleRef','subjects'},'network-policy':{'spec'},
+            'identity-spec':{'automountServiceAccountToken','secrets','imagePullSecrets'}}
+    def origin_for(bodies):
+        inventory={}
+        for (code,classes),obj in zip(codes.items(),bodies):
+            used=set();fields={}
+            for group in classes[:-1]:
+                names=groups[group];used|=names;fields[group]=sha({key:obj[key] for key in names if key in obj})
+            fields['object-fields']=sha({key:value for key,value in obj.items() if key not in used})
+            inventory[code]={'sha256':sha(obj),'fieldSHA256':fields}
+        return {'sourceFilesSHA256':{name:'a'*64 for name in source_names},'storedHooksSHA256':'a'*64,
+                'sourceGeneratorJobSHA256':sha(bodies[-1]),'keystoreHookSHA256':sha(bodies[0]),
+                'hookInventory':{'schema':1,'objects':inventory}}
+    observed_objects=copy.deepcopy(objects);observed_objects[0]['data']['KEYSTORE_SOURCE']='PRIVATE_CHANGED_KEYSTORE'
+    snapshot={'schema':1,'baseline':origin_for(objects),'observed':origin_for(observed_objects),
+              'baselineObjects':objects,'observedObjects':observed_objects,
+              'diagnostic':{'hook':'keystore','category':'credential','fieldClass':'credential-data'}}
+    payload={'schema':1,'type':'retained-source-validation','kind':'stored-hooks-drift','binding':journal['guard'],
+             'phase':'transition','snapshot':snapshot,**{key:journal[key] for key in ('packageDriverSHA256','driverSHA256')},
+             'retainedSourceSHA256':AGE.digest((AGE.ROOT/'tests/workload-identities/retained_state.py').read_bytes())}
+    journal.pop('packageCommandFailure');journal['retainedSourceSHA256']=payload['retainedSourceSHA256']
+    journal['stages']=[{'stage':'retained-source-validation-failed','phase':'transition'}]
+    save_validation(folder,payload,journal)
+    return folder,output,env,payload,journal,owner
+
+
+def save_validation(folder,payload,journal):
+    private=folder/AGE.VALIDATION_NAME;private.write_text(json.dumps(payload));private.chmod(0o600)
+    reference={'file':AGE.VALIDATION_NAME,'sha256':AGE.digest(private.read_bytes()),'bytes':private.stat().st_size}
+    previous=journal.get('retainedSourceValidationFailure')
+    first=journal.get('firstPrivateFailure')
+    journal['retainedSourceValidationFailure']=reference
+    if previous is None:
+        journal.setdefault('firstPrivateFailure',{'schema':1,'kind':'retained-source-validation','reference':reference})
+    elif isinstance(first,dict) and first.get('reference')==previous:
+        first['reference']=reference
+    path=folder/'journal.json';path.write_text(json.dumps(journal));path.chmod(0o600)
+    companion=folder/'journal-progress.json'
+    companion.write_text(json.dumps({'schema':1,'guard':journal['guard'],'journalSHA256':AGE.digest(path.read_bytes())}));companion.chmod(0o600)
+
+
 class EncryptedDiagnosticGuards(unittest.TestCase):
+    def test_core_validation_is_sealed_and_rejects_raw_or_forged_inventory(self):
+        for mutation in ('valid','raw-body','unknown-key','diagnostic','unchanged','operation','kind-alias'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)
+                payload['kind']='core-inventory-drift'
+                payload['snapshot']={'schema':1,'operation':'application-removed',
+                    'baseline':{'namespace/kube-system':'original-uid','mesh':'a'*64},
+                    'observed':{'namespace/kube-system':'replacement-uid','mesh':'a'*64},
+                    'diagnostic':{'category':'namespace','change':'changed'}}
+                if mutation=='raw-body':payload['snapshot']['observed']['namespace/kube-system']={'data':'PRIVATE_CORE_SENTINEL'}
+                elif mutation=='unknown-key':payload['snapshot']['observed']['secrets/private']='PRIVATE_CORE_SENTINEL'
+                elif mutation=='diagnostic':payload['snapshot']['diagnostic']['category']='mesh'
+                elif mutation=='unchanged':payload['snapshot']['observed']=copy.deepcopy(payload['snapshot']['baseline'])
+                elif mutation=='operation':payload['snapshot']['operation']='PRIVATE_CORE_SENTINEL'
+                elif mutation=='kind-alias':payload['kind']='stored-hooks-drift'
+                save_validation(folder,payload,journal)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.VALIDATION_INPUT_LIMIT+1),(folder/AGE.VALIDATION_NAME).read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises(ValueError):AGE.package_input(root)
+
+    def test_application_check_binding_selection_and_private_schema(self):
+        for mutation in ('valid','task','phase','binding','hash','stage','earlier','missing-first','link','mode'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_out,env,payload,journal,_owner=package_fixture(root)
+                payload.pop('role');payload['check']='api-smoke'
+                journal.pop('packageCommandFailure')
+                journal['stages']=[dict(stage='application-check-failed',check='api-smoke',phase='transition',exitStatus=1,timedOut=False)]
+                if mutation=='task':payload['check']='arbitrary'
+                if mutation=='phase':payload['phase']='arbitrary'
+                if mutation=='binding':payload['binding']={**payload['binding'],'runID':'999'}
+                if mutation=='hash':payload['driverSHA256']='0'*64
+                if mutation=='stage':journal['stages'][0]['check']='flows'
+                if mutation=='earlier':journal['stages'].insert(0,{'stage':'package-command-failed'})
+                private=folder/AGE.APPLICATION_NAME;private.write_text(json.dumps(payload));private.chmod(0o600)
+                reference=dict(file=AGE.APPLICATION_NAME,sha256=AGE.digest(private.read_bytes()),bytes=private.stat().st_size)
+                journal['applicationCheckFailure']=reference
+                journal['firstPrivateFailure']=dict(schema=1,kind='application-check',reference=dict(reference))
+                if mutation=='missing-first':journal.pop('firstPrivateFailure')
+                path=folder/'journal.json';path.write_text(json.dumps(journal));path.chmod(0o600)
+                companion=folder/'journal-progress.json'
+                companion.write_text(json.dumps(dict(schema=1,guard=journal['guard'],journalSHA256=AGE.digest(path.read_bytes()))));companion.chmod(0o600)
+                if mutation=='mode':private.chmod(0o644)
+                if mutation=='link':
+                    original=folder/'foreign';private.rename(original);private.symlink_to(original)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.INPUT_LIMIT+1),private.read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises((ValueError,OSError)):AGE.package_input(root)
+
+    def test_typed_validation_is_sealed_and_later_command_does_not_replace_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)
+            journal['packageCommandFailure']={'file':AGE.PACKAGE_NAME,'sha256':'f'*64,'bytes':1}
+            journal['stages'].append({'stage':'package-command-failed','role':'remove','phase':'shared','exitStatus':1,'timedOut':False})
+            save_validation(folder,payload,journal)
+            original=(folder/AGE.VALIDATION_NAME).read_bytes()
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                descriptor=AGE.package_input(root)
+            try:
+                self.assertTrue(os.read(descriptor,AGE.VALIDATION_INPUT_LIMIT+1)==original)
+                with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+            finally:os.close(descriptor)
+
+    def test_explicit_command_first_remains_selected_and_legacy_schema_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);folder,_output,env,command,journal,_owner=package_fixture(root)
+            original=(folder/AGE.PACKAGE_NAME).read_bytes()
+            self.assertEqual(set(command),{'schema','binding','role','phase','exitStatus','timedOut','stdout','stderr',
+                                          'stdoutTruncated','stderrTruncated','packageDriverSHA256','driverSHA256'})
+            journal['firstPrivateFailure']={'schema':1,'kind':'package-command','reference':dict(journal['packageCommandFailure'])}
+            journal['retainedSourceValidationFailure']={'file':AGE.VALIDATION_NAME,'sha256':'f'*64,'bytes':1}
+            journal['stages'].append({'stage':'retained-source-validation-failed','phase':'shared'})
+            save_package(folder,command,journal)
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                descriptor=AGE.package_input(root)
+            try:self.assertTrue(os.read(descriptor,AGE.INPUT_LIMIT+1)==original)
+            finally:os.close(descriptor)
+
+    def test_validation_malformed_alias_oversize_binding_order_and_private_paths_rejected(self):
+        cases=('missing-first','ambiguous-first','first-schema','reference-alias','earlier-command','schema','type','kind',
+               'source','run','attempt','phase','stage','source-hash','snapshot-key','inventory-code','diagnostic','oversize',
+               'private-link','private-mode','duplicate-key','body-alias','body-field','body-duplicate')
+        for case in cases:
+            with self.subTest(case=case),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,output,env,payload,journal,_owner=validation_fixture(root)
+                if case=='missing-first':journal.pop('firstPrivateFailure')
+                elif case=='ambiguous-first':journal['firstPrivateFailure']['kind']='unknown'
+                elif case=='first-schema':journal['firstPrivateFailure']['schema']=True
+                elif case=='reference-alias':journal['firstPrivateFailure']['reference']={**journal['retainedSourceValidationFailure'],'file':AGE.PACKAGE_NAME}
+                elif case=='earlier-command':journal['stages'].insert(0,{'stage':'package-command-failed'})
+                elif case in ('schema','type','kind'):payload[case]='PRIVATE_SENTINEL'
+                elif case in ('source','run','attempt'):payload['binding'][{'source':'sourceSHA','run':'runID','attempt':'runAttempt'}[case]]='PRIVATE_SENTINEL'
+                elif case=='phase':payload['phase']='baseline'
+                elif case=='stage':journal['stages'][0]['phase']='strict'
+                elif case=='source-hash':payload['retainedSourceSHA256']=journal['retainedSourceSHA256']='0'*64
+                elif case=='snapshot-key':payload['snapshot']['raw']='PRIVATE_SENTINEL'
+                elif case=='inventory-code':payload['snapshot']['baseline']['hookInventory']['objects']['unknown']=payload['snapshot']['baseline']['hookInventory']['objects'].pop('keystore')
+                elif case=='diagnostic':payload['snapshot']['diagnostic']['category']='PRIVATE_SENTINEL'
+                elif case=='body-alias':payload['snapshot']['baselineObjects']=payload['snapshot']['observedObjects']
+                elif case=='body-field':payload['snapshot']['observedObjects'][-1]['spec']['template']['spec']['containers'][0]['image']='PRIVATE_SENTINEL'
+                elif case=='body-duplicate':payload['snapshot']['observedObjects'].append(copy.deepcopy(payload['snapshot']['observedObjects'][0]))
+                elif case=='oversize':payload['snapshot']['raw']='PRIVATE_SENTINEL'*6000
+                save_validation(folder,payload,journal)
+                private=folder/AGE.VALIDATION_NAME
+                if case=='private-link':private.unlink();private.symlink_to(root/'foreign')
+                elif case=='private-mode':private.chmod(0o644)
+                elif case=='duplicate-key':
+                    data=private.read_text().replace('"schema": 1','"schema": 1, "schema": 1',1);private.write_text(data)
+                captured=io.StringIO()
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'context'), \
+                     patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())), \
+                     patch.object(AGE,'acquire_age',side_effect=AssertionError('must not acquire')) as acquire, \
+                     contextlib.redirect_stdout(captured),contextlib.redirect_stderr(captured):
+                    self.assertEqual(AGE.main(),1)
+                acquire.assert_not_called();self.assertEqual(output.read_bytes(),b'')
+                self.assertFalse((root/AGE.OUTPUT_NAME).exists());self.assertNotIn('PRIVATE_SENTINEL',captured.getvalue())
+
     def test_package_only_validated_snapshot_reaches_ciphertext_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -319,6 +508,90 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('STAGED_AGE_ARCHIVE') and os.environ.get('STAGED_AGE_KEYGEN'),
                      'opt-in official age archive/keygen required for genuine roundtrip')
 class GenuineAgeProof(unittest.TestCase):
+    def test_real_official_validation_collector_roundtrip_wrong_key_and_integrity(self):
+        keygen=Path(os.environ['STAGED_AGE_KEYGEN']);binary=keygen.with_name('age');pin=AGE.PINS['x86_64']
+        self.assertEqual(AGE.digest(binary.read_bytes()),pin[4])
+        self.assertEqual(AGE.digest(keygen.read_bytes()),'0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899')
+        with tempfile.TemporaryDirectory(prefix='validation-age-proof-') as temporary:
+            root=Path(temporary);folder,output,env,payload,journal,_owner=validation_fixture(root)
+            head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=AGE.ROOT).decode().strip()
+            # Persist through the real producer, then authenticate/encrypt that file.
+            from tests.test_package_identity_driver import P
+            for child in folder.iterdir():child.unlink()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'method':'package','accepted':False,'stages':[],
+                         'guard':{'sourceSHA':head,'runID':'123','runAttempt':'1'}}
+            trial.capture_retained_validation(payload['snapshot'],'transition')
+            plain=(folder/AGE.VALIDATION_NAME).read_bytes()
+            journal_text=trial.evidence.read_text()
+            for value in ('PRIVATE_JOB_IMAGE','PRIVATE_JOB_COMMAND','PRIVATE_JOB_ENV','PRIVATE_KEYSTORE_SOURCE'):
+                self.assertNotIn(value,journal_text)
+                self.assertNotIn(value,(folder/'journal-progress.json').read_text())
+            for name in ('correct','wrong'):
+                subprocess.run([str(keygen),'-o',str(root/(name+'.key'))],capture_output=True,timeout=10,check=True)
+            recipient=subprocess.run([str(keygen),'-y',str(root/'correct.key')],capture_output=True,timeout=10,check=True).stdout.decode().strip()
+            env.update(STAGED_AGE_RECIPIENT=recipient,GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_REF='refs/heads/main',
+                       GITHUB_REPOSITORY='jonathanagustin/uds-takserver',GITHUB_SHA=head)
+            captured=io.StringIO()
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'acquire_age',return_value=(binary,pin)), \
+                    contextlib.redirect_stdout(captured),contextlib.redirect_stderr(captured):
+                self.assertEqual(AGE.main(),0)
+            cipher=root/AGE.OUTPUT_NAME/'first-failure.age'
+            self.assertEqual(output.read_bytes(),b'ready=true\n')
+            self.assertEqual([item.name for item in cipher.parent.iterdir()],['first-failure.age'])
+            self.assertEqual(cipher.stat().st_mode&0o777,0o600)
+            decrypted=subprocess.run([str(binary),'--decrypt','-i',str(root/'correct.key'),str(cipher)],capture_output=True,timeout=10)
+            self.assertEqual(decrypted.returncode,0);self.assertTrue(decrypted.stdout==plain)
+            restored=json.loads(decrypted.stdout)
+            job=restored['snapshot']['baselineObjects'][-1]['spec']['template']['spec']['containers'][0]
+            self.assertEqual(job['image'],'PRIVATE_JOB_IMAGE:fixture')
+            self.assertEqual(job['command'],['/bin/sh','-c','PRIVATE_JOB_COMMAND'])
+            self.assertTrue(job['env'][0]['value'].startswith('PRIVATE_JOB_ENV_'))
+            self.assertEqual(restored['snapshot']['baselineObjects'][0]['data']['KEYSTORE_SOURCE'],'PRIVATE_KEYSTORE_SOURCE')
+            self.assertGreater(len(plain),AGE.INPUT_LIMIT)
+            self.assertLessEqual(len(plain),AGE.VALIDATION_INPUT_LIMIT)
+            self.assertLessEqual(cipher.stat().st_size,AGE.VALIDATION_CIPHER_LIMIT)
+            for value in ('PRIVATE_JOB_IMAGE','PRIVATE_JOB_COMMAND','PRIVATE_JOB_ENV','PRIVATE_KEYSTORE_SOURCE'):
+                self.assertNotIn(value,captured.getvalue())
+            wrong=subprocess.run([str(binary),'--decrypt','-i',str(root/'wrong.key'),str(cipher)],capture_output=True,timeout=10)
+            self.assertNotEqual(wrong.returncode,0);self.assertEqual(wrong.stdout,b'')
+            damaged=bytearray(cipher.read_bytes());damaged[-3]^=1;cipher.write_bytes(damaged)
+            altered=subprocess.run([str(binary),'--decrypt','-i',str(root/'correct.key'),str(cipher)],capture_output=True,timeout=10)
+            self.assertNotEqual(altered.returncode,0)
+            self.assertTrue((folder/AGE.VALIDATION_NAME).read_bytes()==plain)
+            self.assertNotIn('stored-hooks-drift',captured.getvalue())
+
+    def test_real_application_collector_encryption_roundtrip(self):
+        from tests.test_package_identity_driver import P
+        pin=AGE.PINS['x86_64'];keygen=Path(os.environ['STAGED_AGE_KEYGEN'])
+        binary=keygen.with_name('age');self.assertEqual(AGE.digest(binary.read_bytes()),pin[4])
+        with tempfile.TemporaryDirectory(prefix='application-age-proof-') as temporary:
+            root=Path(temporary);folder,output,env,_payload,journal,_owner=package_fixture(root)
+            for child in folder.iterdir():child.unlink()
+            head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=AGE.ROOT).decode().strip()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={**journal,'guard':{**journal['guard'],'sourceSHA':head},'stages':[]}
+            trial.state.pop('packageCommandFailure');trial.guard=lambda:None;trial.deadline=P.time.monotonic()+60
+            result=dict(exitStatus=3,timedOut=False,stdout='PRIVATE_APPLICATION_STDOUT',stderr='PRIVATE_APPLICATION_STDERR',
+                        stdoutTruncated=False,stderrTruncated=False)
+            with patch.object(P,'bounded_package_run',return_value=result):
+                with self.assertRaises(ValueError):trial.run_application_check('api-smoke','shared')
+            plain=(folder/AGE.APPLICATION_NAME).read_bytes()
+            subprocess.run([str(keygen),'-o',str(root/'key')],capture_output=True,timeout=10,check=True)
+            recipient=subprocess.run([str(keygen),'-y',str(root/'key')],capture_output=True,timeout=10,check=True).stdout.decode().strip()
+            env.update(STAGED_AGE_RECIPIENT=recipient,GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_REF='refs/heads/main',
+                       GITHUB_REPOSITORY='jonathanagustin/uds-takserver',GITHUB_SHA=head)
+            captured=io.StringIO()
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'acquire_age',return_value=(binary,pin)), \
+                    contextlib.redirect_stdout(captured),contextlib.redirect_stderr(captured):
+                self.assertEqual(AGE.main(),0)
+            cipher=root/AGE.OUTPUT_NAME/'first-failure.age'
+            decrypted=subprocess.run([str(binary),'--decrypt','-i',str(root/'key'),str(cipher)],capture_output=True,timeout=10,check=True)
+            self.assertEqual(decrypted.stdout,plain)
+            for text in (trial.evidence.read_text(),(folder/'journal-progress.json').read_text(),captured.getvalue()):
+                self.assertNotIn('PRIVATE_APPLICATION_',text)
+            self.assertEqual(output.read_bytes(),b'ready=true\n')
+
     def test_real_official_package_collector_roundtrip_and_wrong_key(self):
         pin = AGE.PINS['x86_64']
         archive = Path(os.environ['STAGED_AGE_ARCHIVE']).read_bytes()

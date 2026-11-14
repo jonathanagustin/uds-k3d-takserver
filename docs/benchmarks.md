@@ -68,6 +68,70 @@ The markdown report includes the observed CPU, working set, throughput, latency,
 
 A setting is copied into the package only after a report puts it on the front. The nightly records are one 10-client run per config. Do not treat any config, or either [values profile](profiles.md), as a sizing result yet.
 
+## Collect one startup pair without load
+
+The manual-only [Startup pair workflow](../.github/workflows/startup.yaml) runs
+this procedure on one AMD64 runner from `main`, with a 60-minute job ceiling.
+It requires an already published package matching the keyed application inputs;
+it fails before cluster work when that package is missing. It has no schedule,
+pull-request trigger, load test, or automatic retry. An active run is preserved.
+
+Rejected startup observations report a fixed failure kind and the collector's
+module, source line and source-file hash. Exception values and resource bodies
+are omitted. This diagnostic identifies the failed collector callsite; it is
+not an accepted startup measurement or a reason to relax identity/timing checks.
+
+`python3 -m bench.startup_trials` records one application install and one
+subsequent rollout on the same disposable cluster. It does not install,
+restart, remove, or tune anything. It adds no scheduled or pull-request run.
+Use it between existing deployment steps, after Core is ready but before the
+TAK application is installed. Recreating Core between observations changes
+the node identities and invalidates the pair.
+
+Create an owner-only output directory with `mkdir -m 700 startup-evidence`.
+Place `bindings.json` there with a `source` SHA-256 binding and any other
+named input hashes, for example `config`. These are caller-supplied bindings,
+not an attestation that the checkout or running images belong to that source.
+Use the same file, context, and cohort for both observations.
+
+```sh
+python3 -m bench.startup_trials begin --context k3d-uds --cohort startup-a \
+  --bindings startup-evidence/bindings.json --output startup-evidence/cold-begin.json
+# Perform the existing application deployment and wait for its readiness checks.
+python3 -m bench.startup_trials finish --begin startup-evidence/cold-begin.json \
+  --mode cold --output startup-evidence/cold.json
+python3 -m bench.startup_trials begin --context k3d-uds --cohort startup-a \
+  --bindings startup-evidence/bindings.json --output startup-evidence/warm-begin.json
+# Restart both application Deployments using the existing rollout procedure.
+python3 -m bench.startup_trials finish --begin startup-evidence/warm-begin.json \
+  --mode warm --output startup-evidence/warm.json
+python3 -m bench.startup_trials pair --cold startup-evidence/cold.json \
+  --warm startup-evidence/warm.json --output startup-evidence/pair.json
+```
+
+The cold boundary must contain neither application Pods nor Deployments.
+The warm boundary must match the accepted cold result. Both new application
+Pods and Java virtual machines (JVMs) must have new identities, with unchanged
+application, sidecar, and init-container image digests, deployment configuration,
+referenced configuration resources, and node platform. Startup log, numeric JVM-start, init, and Ready timestamps
+must join exactly; missing evidence rejects the pair. `warm_s` is the span from
+the earliest new application Pod creation to the latest application Ready
+transition, not the time taken by the rollout command.
+
+Records contain numeric telemetry, typed identities, timestamps, and hashes.
+Secret reads request only their unique identifiers and resource versions;
+configuration values and raw logs are not stored. Kubelet image inventory and
+pull-event projections describe observed image-cache evidence. Pull duration is
+the sum of observed complete event pairs; missing pairs stay unmeasured and do
+not prove zero pull time. Every reported phase duration is recomputed from its
+typed evidence. Numeric samples must fall inside the finish observation window,
+with ordered brackets and consistent wall-clock/monotonic elapsed times.
+The image observations do not prove that filesystem or operating-system caches
+were cold. Class counts are
+observed after startup, not class-loading durations. A valid pair alone does
+not justify class data sharing, probe tuning, or a performance improvement;
+repeated measurements and observer-overhead checks remain necessary.
+
 ## Check capacity before a larger load
 
 New records retain `capacity.containers` from the same five-second kubelet
@@ -88,3 +152,19 @@ margin is not evidence that a larger load fits.
 
 The collector bounds its stored identities and retains aggregates, not a
 time-series dump. It changes neither client-count defaults nor workload limits.
+
+Startup command-failure diagnostics publish only a fixed Kubernetes operation,
+a fixed error-pattern category and bounded numeric exit status. The collector
+keeps at most 4 KiB of stderr in memory for classification and discards its raw
+bytes. Arguments, resource names, URLs, command output and exception values are
+not published. The original request, stream, process-group and total deadline
+bounds remain enforced. Pattern categories are observations, not causal proof or
+accepted startup timing.
+
+The startup configuration snapshot honors an explicitly boolean `optional: true`
+on ConfigMap references, including the admission module's optional
+`uds-trust-bundle`. A successful named lookup with `--ignore-not-found` may bind
+absence; present objects retain UID, resource-version and content hashes. Required
+references take precedence over optional references to the same name. Permission,
+transport and other command failures still fail, and appearance or disappearance
+between cold and warm snapshots changes the configuration binding.

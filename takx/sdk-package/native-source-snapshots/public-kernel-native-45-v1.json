@@ -1,0 +1,652 @@
+{
+  "files": [
+    {
+      "bytes": 13723,
+      "origin": {
+        "blobOID": "c5e124de43ca73fc776729a4d6aae2ee65c447df",
+        "blobSHA256": "c33d461c6deb2ba634c58366036f24ae3b66dc58c8cd81bb3ce3e709c2f598d2",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/build.py"
+      },
+      "receiptRecipePath": "build.py",
+      "repositoryPath": "takx/kernel-native/build.py",
+      "sha256": "c33d461c6deb2ba634c58366036f24ae3b66dc58c8cd81bb3ce3e709c2f598d2",
+      "snapshotPath": "source/takx/kernel-native/build.py"
+    },
+    {
+      "bytes": 16835,
+      "origin": {
+        "blobOID": "bce28b5b019674d17a4fe0a3f70bbca275b8e02c",
+        "blobSHA256": "61fe37df68a5242b5d80bef745895763584515c5d6708acc882d953ed3ab921a",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/providers.py"
+      },
+      "receiptRecipePath": "providers.py",
+      "repositoryPath": "takx/kernel-native/providers.py",
+      "sha256": "61fe37df68a5242b5d80bef745895763584515c5d6708acc882d953ed3ab921a",
+      "snapshotPath": "source/takx/kernel-native/providers.py"
+    },
+    {
+      "bytes": 3556,
+      "origin": {
+        "blobOID": "0ee22f7114e3f521ab8d25c1d159f73603fa7c05",
+        "blobSHA256": "6a37ad44844133477b6e75a1921c3396bb7c4ef1daac178ade0ba728c214af6a",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/sources.py"
+      },
+      "receiptRecipePath": "sources.py",
+      "repositoryPath": "takx/kernel-native/sources.py",
+      "sha256": "6a37ad44844133477b6e75a1921c3396bb7c4ef1daac178ade0ba728c214af6a",
+      "snapshotPath": "source/takx/kernel-native/sources.py"
+    },
+    {
+      "bytes": 8832,
+      "origin": {
+        "blobOID": "3f8711cc7a797bcb2bd0f9899e7fdad4e5ea8192",
+        "blobSHA256": "8bf42f3956e262e0ab651c442c1c75d3911db7a48b66bba6ec64a400ae6c0fd7",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/audit.py"
+      },
+      "receiptRecipePath": "audit.py",
+      "repositoryPath": "takx/kernel-native/audit.py",
+      "sha256": "8bf42f3956e262e0ab651c442c1c75d3911db7a48b66bba6ec64a400ae6c0fd7",
+      "snapshotPath": "source/takx/kernel-native/audit.py"
+    },
+    {
+      "bytes": 5042,
+      "origin": {
+        "blobOID": "fd54407f6ed7e7668d5739376097cff32f921868",
+        "blobSHA256": "aa89685b4e999dd4c075abc6f031ba07195801fa637a06e885ad84738fe79e6d",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/toolchain.py"
+      },
+      "receiptRecipePath": "toolchain.py",
+      "repositoryPath": "takx/kernel-native/toolchain.py",
+      "sha256": "aa89685b4e999dd4c075abc6f031ba07195801fa637a06e885ad84738fe79e6d",
+      "snapshotPath": "source/takx/kernel-native/toolchain.py"
+    },
+    {
+      "bytes": 9117,
+      "origin": {
+        "blobOID": "5181bd030d4ab686d625db1cd39d6fa8ade1f073",
+        "blobSHA256": "aafcc0166e60e0261d5fa40fc1eb4aaac86b74840beefd58abad23824903d1cc",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "exact-license-prefix-preimage",
+        "removedPrefixSHA256": "d2e2cf3382eb392135c1e94e7fe6250968aa3d56b675cd2b2587efbd43df7796",
+        "removedPrefixUTF8": "# Copyright 2026 uds-takserver authors\n# SPDX-License-Identifier: GPL-3.0-only\n",
+        "repositoryPath": "takx/kernel-native/CMakeLists.txt"
+      },
+      "receiptRecipePath": "CMakeLists.txt",
+      "repositoryPath": "takx/kernel-native/CMakeLists.txt",
+      "sha256": "6a065f02d1f3040c50e878faf72adec558300d91f2a64de44c742fe3a0b316ed",
+      "snapshotPath": "source/takx/kernel-native/CMakeLists.txt"
+    },
+    {
+      "bytes": 2115,
+      "origin": {
+        "blobOID": "0ea9c95fd771fdd34eef1c2e7424cbc4b927a1dc",
+        "blobSHA256": "7a01aa154aa01e19ea573dbac9e38d2cadc0aa32c7aee0175eb5729519acc371",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/inputs.lock.json"
+      },
+      "receiptRecipePath": "inputs.lock.json",
+      "repositoryPath": "takx/kernel-native/inputs.lock.json",
+      "sha256": "7a01aa154aa01e19ea573dbac9e38d2cadc0aa32c7aee0175eb5729519acc371",
+      "snapshotPath": "source/takx/kernel-native/inputs.lock.json"
+    },
+    {
+      "bytes": 322594,
+      "origin": {
+        "blobOID": "786f562d5d922ce67facb998366c745a362778c7",
+        "blobSHA256": "7ebdfa726cfd02b5dbe8f3c8fbb9a91e6dad9db8662c412637b6118a61ecd9bb",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/native-sources.lock.json"
+      },
+      "receiptRecipePath": "native-sources.lock.json",
+      "repositoryPath": "takx/kernel-native/native-sources.lock.json",
+      "sha256": "7ebdfa726cfd02b5dbe8f3c8fbb9a91e6dad9db8662c412637b6118a61ecd9bb",
+      "snapshotPath": "source/takx/kernel-native/native-sources.lock.json"
+    },
+    {
+      "bytes": 48716,
+      "origin": {
+        "blobOID": "4014241e4ad691eae7f0a52bf8f371a29f560e1c",
+        "blobSHA256": "22ed6363c8fbde6ee3ecc5fcf1221b3db62b297040c1d99da4970775ba7d7c86",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/gltf-inputs.lock.json"
+      },
+      "receiptRecipePath": "gltf-inputs.lock.json",
+      "repositoryPath": "takx/kernel-native/gltf-inputs.lock.json",
+      "sha256": "22ed6363c8fbde6ee3ecc5fcf1221b3db62b297040c1d99da4970775ba7d7c86",
+      "snapshotPath": "source/takx/kernel-native/gltf-inputs.lock.json"
+    },
+    {
+      "bytes": 618,
+      "origin": {
+        "blobOID": "250804646d6684a737ee68a7aace6d7de6f3822c",
+        "blobSHA256": "df52c4b11351263c2f9fd2df81fe4ee77f7d52458c529dc15922a802794884c8",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/gles1-headers.lock.json"
+      },
+      "receiptRecipePath": "gles1-headers.lock.json",
+      "repositoryPath": "takx/kernel-native/gles1-headers.lock.json",
+      "sha256": "df52c4b11351263c2f9fd2df81fe4ee77f7d52458c529dc15922a802794884c8",
+      "snapshotPath": "source/takx/kernel-native/gles1-headers.lock.json"
+    },
+    {
+      "bytes": 53566,
+      "origin": {
+        "blobOID": "7eb98ddb3d49a45b521aab36c3c1691bb70d58af",
+        "blobSHA256": "41ba94ad0987fac0ab106a4e7f7d2a8f7fbf85959e56f58e53c4a01ebc593b56",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/producer-history.lock.json"
+      },
+      "receiptRecipePath": "producer-history.lock.json",
+      "repositoryPath": "takx/kernel-native/producer-history.lock.json",
+      "sha256": "41ba94ad0987fac0ab106a4e7f7d2a8f7fbf85959e56f58e53c4a01ebc593b56",
+      "snapshotPath": "source/takx/kernel-native/producer-history.lock.json"
+    },
+    {
+      "bytes": 76772,
+      "origin": {
+        "blobOID": "35311e52e8c3981a04c8caac8293e89aca7f1fdb",
+        "blobSHA256": "83dd3584761d46d4e40b7b00a4b911c721303b0472cded367336c98da7982a65",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/core-sqlcipher.map"
+      },
+      "receiptRecipePath": "core-sqlcipher.map",
+      "repositoryPath": "takx/kernel-native/core-sqlcipher.map",
+      "sha256": "83dd3584761d46d4e40b7b00a4b911c721303b0472cded367336c98da7982a65",
+      "snapshotPath": "source/takx/kernel-native/core-sqlcipher.map"
+    },
+    {
+      "bytes": 255,
+      "origin": {
+        "blobOID": "cf429b739f5f94dd5738e2564ddccb4099c4f8e6",
+        "blobSHA256": "def3c88fecea2ae464243174a7cb9fae35c4a91ef0909d2e647e00702e0b0977",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/patches/atomic-counter-platform.patch"
+      },
+      "receiptRecipePath": "patches/atomic-counter-platform.patch",
+      "repositoryPath": "takx/kernel-native/patches/atomic-counter-platform.patch",
+      "sha256": "def3c88fecea2ae464243174a7cb9fae35c4a91ef0909d2e647e00702e0b0977",
+      "snapshotPath": "source/takx/kernel-native/patches/atomic-counter-platform.patch"
+    },
+    {
+      "bytes": 2990,
+      "origin": {
+        "blobOID": "1b23e0793d02eec3677c63a306d5af08c6675c10",
+        "blobSHA256": "975ec1f41870793301731ffffafca70b082d30f32e32b2cd0b7293f32866ef85",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/patches/jni-exception-correctness.patch"
+      },
+      "receiptRecipePath": "patches/jni-exception-correctness.patch",
+      "repositoryPath": "takx/kernel-native/patches/jni-exception-correctness.patch",
+      "sha256": "975ec1f41870793301731ffffafca70b082d30f32e32b2cd0b7293f32866ef85",
+      "snapshotPath": "source/takx/kernel-native/patches/jni-exception-correctness.patch"
+    },
+    {
+      "bytes": 7311,
+      "origin": {
+        "blobOID": "93c0e25311f8ef20c3cff2d20d7631f9fc36bfd4",
+        "blobSHA256": "421a4be016a6a478a19f568a54d23b5089faef5a0c6f57786d8830e0239f7c2b",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "exact-license-prefix-preimage",
+        "removedPrefixSHA256": "fe40bf356c3cbe437c7bb2a6897fcc6bf1a77686ac68846f7dc627430206c259",
+        "removedPrefixUTF8": "// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n",
+        "repositoryPath": "takx/kernel-native/KernelRuntimeSmoke.java"
+      },
+      "receiptRecipePath": "KernelRuntimeSmoke.java",
+      "repositoryPath": "takx/kernel-native/KernelRuntimeSmoke.java",
+      "sha256": "f51c92544361203de85dc108992559503c68ab97aff86c5d5255b73cdb8d1480",
+      "snapshotPath": "source/takx/kernel-native/KernelRuntimeSmoke.java"
+    },
+    {
+      "bytes": 3363,
+      "origin": {
+        "blobOID": "54d5de318e8cf6592759e4aef280a92c5ecc8e39",
+        "blobSHA256": "38b5dc32f5dc6e0544ec293f55f1d0af02a8e03303b5c766bb18173fe165f5fc",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "exact-license-prefix-preimage",
+        "removedPrefixSHA256": "fe40bf356c3cbe437c7bb2a6897fcc6bf1a77686ac68846f7dc627430206c259",
+        "removedPrefixUTF8": "// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n",
+        "repositoryPath": "takx/kernel-native/NativeDatabaseCandidate.java"
+      },
+      "receiptRecipePath": "NativeDatabaseCandidate.java",
+      "repositoryPath": "takx/kernel-native/NativeDatabaseCandidate.java",
+      "sha256": "d137e0a93c0631bc6c9b39d418b821b962a78359b8a550c78b079f9b79f1f80b",
+      "snapshotPath": "source/takx/kernel-native/NativeDatabaseCandidate.java"
+    },
+    {
+      "bytes": 2869,
+      "origin": {
+        "blobOID": "1342940e044b7230d05eb936c09ca66fb5caa17e",
+        "blobSHA256": "6902ef0d939b27b8e9e8b88858be99ab0626d794567b68a7d2a73eda2fdbf072",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "exact-license-prefix-preimage",
+        "removedPrefixSHA256": "fe40bf356c3cbe437c7bb2a6897fcc6bf1a77686ac68846f7dc627430206c259",
+        "removedPrefixUTF8": "// Copyright 2026 uds-takserver authors\n// SPDX-License-Identifier: GPL-3.0-only\n",
+        "repositoryPath": "takx/kernel-native/KernelThrowingLoggerCandidate.java"
+      },
+      "receiptRecipePath": "KernelThrowingLoggerCandidate.java",
+      "repositoryPath": "takx/kernel-native/KernelThrowingLoggerCandidate.java",
+      "sha256": "ee5a0b4436506c68e49d925b29a9c403e2ed8fa07e5e6768474a9a48e6005a8c",
+      "snapshotPath": "source/takx/kernel-native/KernelThrowingLoggerCandidate.java"
+    },
+    {
+      "bytes": 3738,
+      "origin": {
+        "blobOID": "88eab0c72d5e56c85661d200b585d005692f3164",
+        "blobSHA256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium/test_acquire.py.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium/test_acquire.py.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium/test_acquire.py.txt",
+      "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium/test_acquire.py.txt"
+    },
+    {
+      "bytes": 24018,
+      "origin": {
+        "blobOID": "5b0131018018eea29b3d4f09733dfb8cc0f72049",
+        "blobSHA256": "e9816c34b0c5d72cb60078d55335c373260abc11ff55723b9e8256f4077d6c4d",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium/build-plan.json.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium/build-plan.json.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium/build-plan.json.txt",
+      "sha256": "e9816c34b0c5d72cb60078d55335c373260abc11ff55723b9e8256f4077d6c4d",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium/build-plan.json.txt"
+    },
+    {
+      "bytes": 50568,
+      "origin": {
+        "blobOID": "d5b4b52dbdbff3393b9c1355c0c935e3a92a16d4",
+        "blobSHA256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium/metadata.lock.json.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium/metadata.lock.json.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium/metadata.lock.json.txt",
+      "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium/metadata.lock.json.txt"
+    },
+    {
+      "bytes": 13015,
+      "origin": {
+        "blobOID": "ed8db77808e727a7fdfeff6892615b2b97010b21",
+        "blobSHA256": "659234b63caa129ea25b5c91cc0d2be46953d9afba36c962760eda2acc5df7dd",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium/build.py.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium/build.py.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium/build.py.txt",
+      "sha256": "659234b63caa129ea25b5c91cc0d2be46953d9afba36c962760eda2acc5df7dd",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium/build.py.txt"
+    },
+    {
+      "bytes": 17088,
+      "origin": {
+        "blobOID": "f51dff9c9241a112e524240e16613e84508f2085",
+        "blobSHA256": "29dce10591590efb00cd76f17bbf99a481f60b90837ba3530443efd9ad8b855f",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/kml/build.py.txt"
+      },
+      "receiptRecipePath": "historical-producers/kml/build.py.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/kml/build.py.txt",
+      "sha256": "29dce10591590efb00cd76f17bbf99a481f60b90837ba3530443efd9ad8b855f",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/kml/build.py.txt"
+    },
+    {
+      "bytes": 3738,
+      "origin": {
+        "blobOID": "88eab0c72d5e56c85661d200b585d005692f3164",
+        "blobSHA256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/test_acquire.py.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium-ancestor/test_acquire.py.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/test_acquire.py.txt",
+      "sha256": "95c374e462cc8406d55fd0d99815682727cfa13c355dad463ebe9a772b8f1cea",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium-ancestor/test_acquire.py.txt"
+    },
+    {
+      "bytes": 23999,
+      "origin": {
+        "blobOID": "1f85a9334d50933ff182113f274957d0307e5e8a",
+        "blobSHA256": "e7757885918d9e5b0ee4a6c8476f811c9c966e80673946b3440172cfdcc75708",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/build-plan.json.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium-ancestor/build-plan.json.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/build-plan.json.txt",
+      "sha256": "e7757885918d9e5b0ee4a6c8476f811c9c966e80673946b3440172cfdcc75708",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium-ancestor/build-plan.json.txt"
+    },
+    {
+      "bytes": 50568,
+      "origin": {
+        "blobOID": "d5b4b52dbdbff3393b9c1355c0c935e3a92a16d4",
+        "blobSHA256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/metadata.lock.json.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium-ancestor/metadata.lock.json.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/metadata.lock.json.txt",
+      "sha256": "328c6d184eecbec900b2d3a1ac34aa90525950c1ea5c004a876336b86042318a",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium-ancestor/metadata.lock.json.txt"
+    },
+    {
+      "bytes": 11140,
+      "origin": {
+        "blobOID": "e9a3e04d228b5b0c47119a2ce93a8590a1c5157b",
+        "blobSHA256": "e94b17a3b3aba49eae33e4899cecd0c9c2a45f454f9abcd1084674f887b544ae",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/build.py.txt"
+      },
+      "receiptRecipePath": "historical-producers/cesium-ancestor/build.py.txt",
+      "repositoryPath": "takx/kernel-native/historical-producers/cesium-ancestor/build.py.txt",
+      "sha256": "e94b17a3b3aba49eae33e4899cecd0c9c2a45f454f9abcd1084674f887b544ae",
+      "snapshotPath": "source/takx/kernel-native/historical-producers/cesium-ancestor/build.py.txt"
+    },
+    {
+      "bytes": 12485,
+      "origin": {
+        "blobOID": "6c5d4506d6e8863b05777a8bb47eb26481797030",
+        "blobSHA256": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/gis-java/build.py"
+      },
+      "receiptRecipePath": "../gis-java/build.py",
+      "repositoryPath": "takx/gis-java/build.py",
+      "sha256": "8e5353a9568c61615689797c0055c0849f2121c631e0f74407421a548089fcc2",
+      "snapshotPath": "source/takx/gis-java/build.py"
+    },
+    {
+      "bytes": 24079,
+      "origin": {
+        "blobOID": "2579a70b381862532b6e4e81aec2ab9329a88613",
+        "blobSHA256": "dba29276f5f3fd9bf396f31c2a58f1bb550834e6724191e653958e61d8fc6627",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-java/build.py"
+      },
+      "receiptRecipePath": "../kernel-java/build.py",
+      "repositoryPath": "takx/kernel-java/build.py",
+      "sha256": "dba29276f5f3fd9bf396f31c2a58f1bb550834e6724191e653958e61d8fc6627",
+      "snapshotPath": "source/takx/kernel-java/build.py"
+    },
+    {
+      "bytes": 11504,
+      "origin": {
+        "blobOID": "552342497105a5ed166c40c6490efe2879269210",
+        "blobSHA256": "69b6dabf1b16d7639c364814fd96204a9aa0a606a7d2ca7503d0fcf6b4780a3e",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-scene/kernel.py"
+      },
+      "receiptRecipePath": "../kernel-scene/kernel.py",
+      "repositoryPath": "takx/kernel-scene/kernel.py",
+      "sha256": "69b6dabf1b16d7639c364814fd96204a9aa0a606a7d2ca7503d0fcf6b4780a3e",
+      "snapshotPath": "source/takx/kernel-scene/kernel.py"
+    },
+    {
+      "bytes": 25177,
+      "origin": {
+        "blobOID": "1714a76f75f685fe7ab018d79e610877f6ced5a3",
+        "blobSHA256": "d105ae8b8c90712d7bc740471f600d2b0edb38bf227232d20fcdf0df64f12466",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/kernel-spatial-db/build.py"
+      },
+      "receiptRecipePath": "../kernel-spatial-db/build.py",
+      "repositoryPath": "takx/kernel-spatial-db/build.py",
+      "sha256": "d105ae8b8c90712d7bc740471f600d2b0edb38bf227232d20fcdf0df64f12466",
+      "snapshotPath": "source/takx/kernel-spatial-db/build.py"
+    },
+    {
+      "bytes": 26344,
+      "origin": {
+        "blobOID": "ec64e315b90760e6ca47153bf03b509938df4f51",
+        "blobSHA256": "7f9bce45c16cf8d6525e52e20e7e3f871ac68d1148224346662386d3e1ea25d2",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-assimp/build.py"
+      },
+      "receiptRecipePath": "../native-assimp/build.py",
+      "repositoryPath": "takx/native-assimp/build.py",
+      "sha256": "7f9bce45c16cf8d6525e52e20e7e3f871ac68d1148224346662386d3e1ea25d2",
+      "snapshotPath": "source/takx/native-assimp/build.py"
+    },
+    {
+      "bytes": 12248,
+      "origin": {
+        "blobOID": "27e7eb98fb60020d96b0d791066e3a373019c3b2",
+        "blobSHA256": "c067f3585347f52230c544f827c9831e9a4c9932b04812e885409fd37f4348b9",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-cesium/acquire.py"
+      },
+      "receiptRecipePath": "../native-cesium/acquire.py",
+      "repositoryPath": "takx/native-cesium/acquire.py",
+      "sha256": "c067f3585347f52230c544f827c9831e9a4c9932b04812e885409fd37f4348b9",
+      "snapshotPath": "source/takx/native-cesium/acquire.py"
+    },
+    {
+      "bytes": 14952,
+      "origin": {
+        "blobOID": "37675e5b8aeb8a0af860050764b06d8fd1a8dd70",
+        "blobSHA256": "3db0f81113a3d70184a82ffc0aec72652387ac04d0214aec10774d9d937af22c",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-cesium/build.py"
+      },
+      "receiptRecipePath": "../native-cesium/build.py",
+      "repositoryPath": "takx/native-cesium/build.py",
+      "sha256": "3db0f81113a3d70184a82ffc0aec72652387ac04d0214aec10774d9d937af22c",
+      "snapshotPath": "source/takx/native-cesium/build.py"
+    },
+    {
+      "bytes": 1329,
+      "origin": {
+        "blobOID": "64bbb9347a8443998cd021d42880eb7722c06575",
+        "blobSHA256": "42c69e5160fbfb825422467ee40e5457674635f7a81fb04759e44660211e963c",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-cesium/providers.cmake"
+      },
+      "receiptRecipePath": "../native-cesium/providers.cmake",
+      "repositoryPath": "takx/native-cesium/providers.cmake",
+      "sha256": "42c69e5160fbfb825422467ee40e5457674635f7a81fb04759e44660211e963c",
+      "snapshotPath": "source/takx/native-cesium/providers.cmake"
+    },
+    {
+      "bytes": 2309,
+      "origin": {
+        "blobOID": "01c1ae9d23897978fc49a4d64907f0275c296398",
+        "blobSHA256": "bf8a1888bdfb89f1ab8548a273e26c48514fcfd72f40b46ba8dbf3345dbd9313",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-commoncommo/runner.py"
+      },
+      "receiptRecipePath": "../native-commoncommo/runner.py",
+      "repositoryPath": "takx/native-commoncommo/runner.py",
+      "sha256": "bf8a1888bdfb89f1ab8548a273e26c48514fcfd72f40b46ba8dbf3345dbd9313",
+      "snapshotPath": "source/takx/native-commoncommo/runner.py"
+    },
+    {
+      "bytes": 13310,
+      "origin": {
+        "blobOID": "55db63629debb9d6f8315bf6bcc70421dd81c72a",
+        "blobSHA256": "a6e90a9fe534638a7e5d5335fddadc76441e5d89bf891456eef9ccec78c55317",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-curl/build.py"
+      },
+      "receiptRecipePath": "../native-curl/build.py",
+      "repositoryPath": "takx/native-curl/build.py",
+      "sha256": "a6e90a9fe534638a7e5d5335fddadc76441e5d89bf891456eef9ccec78c55317",
+      "snapshotPath": "source/takx/native-curl/build.py"
+    },
+    {
+      "bytes": 19519,
+      "origin": {
+        "blobOID": "85739d2b05a4ec6a4047bb92b743a1bc620ff83e",
+        "blobSHA256": "3831834729d9022e5a79b9dba1a4745f8b25b43990d7064b3a95661966d0b3ae",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-deps/build.py"
+      },
+      "receiptRecipePath": "../native-deps/build.py",
+      "repositoryPath": "takx/native-deps/build.py",
+      "sha256": "3831834729d9022e5a79b9dba1a4745f8b25b43990d7064b3a95661966d0b3ae",
+      "snapshotPath": "source/takx/native-deps/build.py"
+    },
+    {
+      "bytes": 13422,
+      "origin": {
+        "blobOID": "168eaf4ac7fe691f5053dabd52baeddd8797e1b2",
+        "blobSHA256": "aa64fec65d3da7350a68886b116effe5a3645f22878068efe89c1a574fb98a4c",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-gdal-jni/build.py"
+      },
+      "receiptRecipePath": "../native-gdal-jni/build.py",
+      "repositoryPath": "takx/native-gdal-jni/build.py",
+      "sha256": "aa64fec65d3da7350a68886b116effe5a3645f22878068efe89c1a574fb98a4c",
+      "snapshotPath": "source/takx/native-gdal-jni/build.py"
+    },
+    {
+      "bytes": 12057,
+      "origin": {
+        "blobOID": "7b712fc8f9b82422c59d9788a4c28fbf2a306fe3",
+        "blobSHA256": "e0942ebeab64707271a3be1cdba6e9826d2391fa813615affd12f07621f42be1",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-geos/build.py"
+      },
+      "receiptRecipePath": "../native-geos/build.py",
+      "repositoryPath": "takx/native-geos/build.py",
+      "sha256": "e0942ebeab64707271a3be1cdba6e9826d2391fa813615affd12f07621f42be1",
+      "snapshotPath": "source/takx/native-geos/build.py"
+    },
+    {
+      "bytes": 13076,
+      "origin": {
+        "blobOID": "08ef2afd9231d9bf3447ddb5acc4255b6457ef5f",
+        "blobSHA256": "467c73f875a64ea8d5e60ff73a630a82f278e562cecac94b8de84790a382c89e",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-gles/build.py"
+      },
+      "receiptRecipePath": "../native-gles/build.py",
+      "repositoryPath": "takx/native-gles/build.py",
+      "sha256": "467c73f875a64ea8d5e60ff73a630a82f278e562cecac94b8de84790a382c89e",
+      "snapshotPath": "source/takx/native-gles/build.py"
+    },
+    {
+      "bytes": 17183,
+      "origin": {
+        "blobOID": "6e3ddab6e9e8cf1661fe9a232f407e1668de438c",
+        "blobSHA256": "9ccdd4ee34ad2208293261dcc7ab5664ebb0c534406ab26b380c8a8e2e09df6a",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-kml/build.py"
+      },
+      "receiptRecipePath": "../native-kml/build.py",
+      "repositoryPath": "takx/native-kml/build.py",
+      "sha256": "9ccdd4ee34ad2208293261dcc7ab5664ebb0c534406ab26b380c8a8e2e09df6a",
+      "snapshotPath": "source/takx/native-kml/build.py"
+    },
+    {
+      "bytes": 23775,
+      "origin": {
+        "blobOID": "2ab335c11f0e09e76220f2a2deaa0d265814f216",
+        "blobSHA256": "6efd28cbd3d8293123caaa9dc06c7652c93141a9ece47c7941fd09de4f803b38",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-las/build.py"
+      },
+      "receiptRecipePath": "../native-las/build.py",
+      "repositoryPath": "takx/native-las/build.py",
+      "sha256": "6efd28cbd3d8293123caaa9dc06c7652c93141a9ece47c7941fd09de4f803b38",
+      "snapshotPath": "source/takx/native-las/build.py"
+    },
+    {
+      "bytes": 12998,
+      "origin": {
+        "blobOID": "822423a6ec7d6c9c290ac5ddf135c1ec52ff7b3d",
+        "blobSHA256": "1531045b7602821bf5971f5560cdd19f09f0879f5697d880c2f8c6a93cb3b87b",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-mdbtools/build.py"
+      },
+      "receiptRecipePath": "../native-mdbtools/build.py",
+      "repositoryPath": "takx/native-mdbtools/build.py",
+      "sha256": "1531045b7602821bf5971f5560cdd19f09f0879f5697d880c2f8c6a93cb3b87b",
+      "snapshotPath": "source/takx/native-mdbtools/build.py"
+    },
+    {
+      "bytes": 11065,
+      "origin": {
+        "blobOID": "f81aed828fc54a1d5b31c143aa03298c55a5a85f",
+        "blobSHA256": "01a3861032ce5c11eab059823c2b54975d90316ad6cc66e5115bb9019ff25773",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-proj/build.py"
+      },
+      "receiptRecipePath": "../native-proj/build.py",
+      "repositoryPath": "takx/native-proj/build.py",
+      "sha256": "01a3861032ce5c11eab059823c2b54975d90316ad6cc66e5115bb9019ff25773",
+      "snapshotPath": "source/takx/native-proj/build.py"
+    },
+    {
+      "bytes": 20089,
+      "origin": {
+        "blobOID": "a06b8246b8b0b38912bda2c9856eb00d3e5e42c3",
+        "blobSHA256": "1f44f09f59ff1466ffd47ae78b095f29f5765d9d5e2b093af87d273247d3fdfa",
+        "commit": "3780209d7bed4407568cfac902977fecef58727a",
+        "kind": "git-blob",
+        "repositoryPath": "takx/native-sqlcipher/build.py"
+      },
+      "receiptRecipePath": "../native-sqlcipher/build.py",
+      "repositoryPath": "takx/native-sqlcipher/build.py",
+      "sha256": "1f44f09f59ff1466ffd47ae78b095f29f5765d9d5e2b093af87d273247d3fdfa",
+      "snapshotPath": "source/takx/native-sqlcipher/build.py"
+    }
+  ],
+  "gitSourceCommit": "3780209d7bed4407568cfac902977fecef58727a",
+  "nativeRecipeSHA256": "2af1857972d05cb7edfd949b42c37dc835b431c7ea475c1560081df4c679f01f",
+  "profile": "public-kernel-native-45-v1",
+  "recipeFile": {
+    "bytes": 4605,
+    "path": "recipe.json",
+    "sha256": "f86cc244dcc4a1ee9d20454727c5b2bef645fc050aa1acd4657813ef554b7414"
+  },
+  "schema": 1,
+  "sourceCount": 45
+}

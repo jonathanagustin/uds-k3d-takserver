@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -128,15 +129,34 @@ class CheckpointIdentityTests(unittest.TestCase):
         for name in ('deploy-slim-core.sh', 'checkpoint-identity.py'):
             (scripts / name).write_bytes((ROOT / '.github/scripts' / name).read_bytes())
         zarf = root / 'zarf'
-        zarf.write_text('#!/bin/sh\n[ "$1 $2" = "package deploy" ] || exit 91\nexit 0\n')
+        calls = root / 'calls.jsonl'
+        zarf.write_text('#!' + sys.executable + '\n'
+                        'import json,os,sys\n'
+                        'with open(os.environ["CHECKPOINT_CALLS"],"a") as f: '
+                        'f.write(json.dumps(sys.argv[1:])+"\\n")\n'
+                        'sys.exit(0 if sys.argv[1:3]==["package","deploy"] else 91)\n')
         zarf.chmod(0o755)
-        env = {**os.environ, 'SLIM_PACKAGE_DIR': self.temp.name,
-               'INSTALL_RECEIPT_METADATA': 'true', 'SLIM_K3D_EXTRA_ARGS': ''}
-        result = subprocess.run(['bash', str(scripts / 'deploy-slim-core.sh')], env=env,
-                                capture_output=True, text=True, check=False)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('identity omitted', result.stdout)
-        self.assertIn('Deploying', result.stdout)
+        before = self.archive.read_bytes()
+        observed = []
+        runner = root / 'runner'
+        runner.mkdir()
+        for metadata in ('false', 'true'):
+            env = {**os.environ, 'SLIM_PACKAGE_DIR': self.temp.name,
+                   'INSTALL_RECEIPT_METADATA': metadata, 'SLIM_K3D_EXTRA_ARGS': '',
+                   'RUNNER_TEMP': str(runner), 'GITHUB_ENV': str(runner / 'env'),
+                   'CHECKPOINT_CALLS': str(calls)}
+            result = subprocess.run(['bash', str(scripts / 'deploy-slim-core.sh')], env=env,
+                                    capture_output=True, text=True, check=False, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            if metadata == 'true':
+                self.assertIn('identity omitted', result.stdout)
+            self.assertIn('Deploying', result.stdout)
+            observed.append([json.loads(line) for line in calls.read_text().splitlines()])
+            calls.unlink()
+            self.assertEqual(self.archive.read_bytes(), before)
+        self.assertEqual(observed[0], observed[1])
+        self.assertEqual(len(observed[0]), 1)
+        self.assertEqual(observed[0][0][:2], ['package', 'deploy'])
 
     def test_shell_fresh_pull_uses_verified_digest_and_failed_pull_is_not_success(self):
         root = Path(self.temp.name) / 'fresh-checkout'

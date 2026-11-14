@@ -1,0 +1,53 @@
+--- a/Platform/src/main/java/gov/takx/api/terrain/experimental/ElevationSourceUtils.java
++++ b/Platform/src/main/java/gov/takx/api/terrain/experimental/ElevationSourceUtils.java
+@@ -353,7 +353,13 @@
+     public static int getMissingDtedFileCount(@Nonnull File dtedDir, @Nonnull GeoBounds[] geoBounds)
+     {
+         var elevationDownloader = new DtedDownloaderTask(geoBounds, dtedDir, null, null);
+-        return elevationDownloader.getMissingFileCount();
++        try
++        {
++            return elevationDownloader.getMissingFileCount();
++        } finally
++        {
++            elevationDownloader.dispose();
++        }
+     }
+ 
+     /**
+@@ -421,34 +427,7 @@
+ 
+         private int getMissingFileCount()
+         {
+-            int missing = 0;
+-            for (GeoBounds geoBounds : getCurrentAreasOfInterest())
+-            {
+-                int[] b = getDownloadBounds(geoBounds);
+-                if (b == null) continue;
+-
+-                int minLng = b[0];
+-                int minLat = b[1];
+-                int maxLng = b[2];
+-                int maxLat = b[3];
+-                BitSet coverage = dt2FileWatcher.getCoverage(0);
+-
+-                for (int lat = minLat; lat <= maxLat; lat++)
+-                {
+-                    for (int lng = minLng; lng <= maxLng; lng++)
+-                    {
+-                        // IDL wrap
+-                        int lngWrapped = lng;
+-                        if (lngWrapped >= 180) lngWrapped -= 360;
+-                        if (lngWrapped < -180) lngWrapped += 360;
+-
+-                        int idx = Dt2FileWatcher.getCoverageIndex(lat, lngWrapped);
+-
+-                        if (remote_coverage.get(idx) && !coverage.get(idx)) missing++;
+-                    }
+-                }
+-            }
+-            return missing;
++            return getMissingTileCount(getCurrentAreasOfInterest());
+         }
+     }
+ 

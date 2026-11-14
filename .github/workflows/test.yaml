@@ -49,6 +49,7 @@ on:
       - "compliance/README.md"
       - ".github/workflows/commitlint.yaml"
       - ".github/workflows/codeql.yaml"
+      - ".github/workflows/native-sanitizers.yaml"
       - ".github/workflows/dependency-review.yaml"
       - ".github/workflows/scorecard.yaml"
       - ".github/workflows/scorecard-analysis.yaml"
@@ -59,6 +60,7 @@ on:
       - ".github/workflows/cosign.yaml"
       - ".github/workflows/demo.yaml"
       - ".github/workflows/benchmark.yaml"
+      - ".github/workflows/startup.yaml"
       - ".github/workflows/full-core.yaml"
       - ".github/workflows/unit-tests.yaml"
       - ".github/workflows/mutation.yaml"
@@ -79,6 +81,7 @@ on:
       - ".github/scripts/runner-wedge-probe.sh"
       - ".github/scripts/runner-wedge-kernel.py"
       - ".github/scripts/install-reuse-shadow.py"
+      - ".github/scripts/collect-install-receipt.py"
       - ".github/scripts/ci-apt.py"
       - ".github/scripts/check-docs-browser.py"
       - ".github/scripts/docs-browser-smoke.cjs"
@@ -100,6 +103,7 @@ on:
       - "README.md"
       - "SECURITY.md"
       - "CONTRIBUTING.md"
+      - "CODE_OF_CONDUCT.md"
       - "CHANGELOG.md"
       - "renovate.json"
       - ".release-please-manifest.json"
@@ -122,6 +126,9 @@ on:
       - "pepr/capabilities/*.test.ts"
       - "pepr/mutation/**"
       - "pepr/scripts/coverage-summary.mjs"
+      - ".github/workflows/codeql-extended.yaml"
+      - ".github/workflows/codeql-language.yaml"
+      - ".github/scripts/codeql-languages.py"
 
   # The same install runs again after a relevant pull request merges.
   push:

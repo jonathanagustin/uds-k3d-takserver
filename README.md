@@ -47,6 +47,7 @@ Zarf packages the application charts, container images, and deployment configura
 - [Known limitations](#known-limitations)
 - [Security](#security)
 - [Contributing](#contributing)
+- [Code of conduct](#code-of-conduct)
 - [License](#license)
 
 </details>
@@ -144,7 +145,7 @@ To work on the repository itself, [mise](https://mise.jdx.dev/) installs every p
 From 0.11 on, releases use `oci://ghcr.io/jonathanagustin/uds-takserver/takserver:<version>-upstream`, with one entry per architecture. Releases through 0.10 keep their original registry coordinates; follow the documentation for that release. Add it to a UDS bundle next to UDS Core with the [`keylessVerification`](#verify-a-release) block below, or deploy it directly onto a cluster that already runs UDS Core with the passthrough gateway:
 
 ```bash
-VERSION=0.14.3 # x-release-please-version
+VERSION=0.16.1 # x-release-please-version
 uds zarf package deploy "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" --confirm
 ```
 
@@ -260,7 +261,7 @@ https://github.com/user-attachments/assets/2773b517-9793-45b9-811b-147ce0671d69
 From v0.4.0 on, each release package is signed keylessly by `.github/workflows/release.yaml` on `main`, and the signature is in the public Sigstore transparency log. Check it before you deploy, once per architecture:
 
 ```bash
-VERSION=0.14.3 # x-release-please-version
+VERSION=0.16.1 # x-release-please-version
 uds zarf package verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" \
   --architecture amd64 \
   --certificate-identity-regexp '^https://github\.com/jonathanagustin/(uds-k3d-takserver|uds-takserver)/\.github/workflows/release\.yaml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+|heads/main)$' \
@@ -281,7 +282,7 @@ For releases from 0.11 on, put the same check on the package entry, as `core-bas
 The package index also has signed SLSA v1 build provenance, stored in GHCR and in the repository's attestations. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```bash
-VERSION=0.14.3 # x-release-please-version
+VERSION=0.16.1 # x-release-please-version
 gh attestation verify "oci://ghcr.io/jonathanagustin/uds-takserver/takserver:${VERSION}-upstream" \
   --owner jonathanagustin \
   --signer-workflow jonathanagustin/uds-takserver/.github/workflows/release.yaml
@@ -492,6 +493,10 @@ Report vulnerabilities through a private GitHub security advisory. See [SECURITY
 ## Contributing
 
 Questions and bug reports are welcome in [GitHub issues](https://github.com/jonathanagustin/uds-takserver/issues), and pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards and the test policy. Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), which [Release Please](https://github.com/googleapis/release-please) uses for releases. [Renovate](https://docs.renovatebot.com/) opens dependency updates, with major versions in their own pull requests.
+
+## Code of conduct
+
+Contributors follow the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Report conduct violations through the private channel in [SECURITY.md](SECURITY.md).
 
 ## License
 

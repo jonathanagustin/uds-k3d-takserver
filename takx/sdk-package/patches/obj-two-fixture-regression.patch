@@ -1,0 +1,23 @@
+--- a/takx/kernel-regressions/java/KernelFormatRegressions.java
++++ b/takx/kernel-regressions/java/KernelFormatRegressions.java
+@@ -45,6 +45,10 @@
+         System.out.println("PASS_REAL_FORMAT_CATEGORY name=" + category + " assertions=" + assertions);
+     }
+     private static void objCpuImport(Path path) throws Exception {
++        objCpuImport(path, false);
++        objCpuImport(path.resolveSibling("compact-tetrahedron.obj"), true);
++    }
++    private static void objCpuImport(Path path, boolean compact) throws Exception {
+         // Authored analytic fixture: the public upstream teapot test assets are
+         // absent. This exercises the genuine production OBJ parser/mesh path,
+         // not the unavailable teapot regression or a graphics renderer.
+@@ -52,6 +56,9 @@
+             + "o tetrahedron\nv 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+             + "vt 0 0\nvt 1 0\nvt 0 1\n"
+             + "f 1/1 3/2 2/3\nf 1/1 2/2 4/3\nf 1/1 4/2 3/3\nf 2/1 3/2 4/3\n";
++        if (compact) fixture = fixture.substring(fixture.indexOf('\n') + 1);
++        check(fixture.getBytes(StandardCharsets.UTF_8).length < 192,
++            "small valid OBJ exercises sub-eight-byte estimated index growth");
+         Files.writeString(path, fixture, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+         com.atakmap.map.layer.model.ModelInfo info = new com.atakmap.map.layer.model.ModelInfo();
+         info.uri = path.toString();

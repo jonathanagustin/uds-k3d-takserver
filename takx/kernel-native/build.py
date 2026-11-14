@@ -21,7 +21,7 @@ HERE=Path(__file__).resolve().parent
 RUNNER_PATH=HERE.parent/'native-commoncommo/runner.py'
 _runner_spec=importlib.util.spec_from_file_location('kernel_native_runner',RUNNER_PATH)
 runner=importlib.util.module_from_spec(_runner_spec);_runner_spec.loader.exec_module(runner)
-LOCK_SHA='57ee4105f9e01d18d5aa01ec2d88bf1469c4bf4b1dd3506b2361fd3c519117fe'
+LOCK_SHA='92aa9ad3cb9674f9d18166bca1878eb12ed227eb706e63d05526113d981dbade'
 
 def validate_lock(lock):
     if hashlib.sha256(json.dumps(lock,sort_keys=True).encode()).hexdigest()!=LOCK_SHA:raise ValueError('unreviewed Kernel source/tool/patch/feature contract')

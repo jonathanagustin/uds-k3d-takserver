@@ -19,6 +19,282 @@ spec=importlib.util.spec_from_file_location('package_trial',ROOT/'tests/workload
 P=importlib.util.module_from_spec(spec);spec.loader.exec_module(P)
 
 class PackageGuards(unittest.TestCase):
+    def namespace_trial(self, directory, owned=True):
+        names=['default',*P.CORE_NAMESPACES,'takserver','cloudtak','takclients']
+        client={'metadata':{'name':'takclients','uid':'original-app-namespace','labels':{'app.kubernetes.io/managed-by':'Helm'},
+                'annotations':{'meta.helm.sh/release-name':'takserver-oidc','meta.helm.sh/release-namespace':'pepr-system'}}}
+        if not owned:client['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+        workloads={};mesh={'value':'bound'}
+        def get(kind,name=None,namespace=None):
+            if kind=='namespaces':return {'items':[{'metadata':{'name':item}} for item in names]}
+            if kind=='namespace':return client if name=='takclients' else {'metadata':{'uid':'namespace-'+name}}
+            if kind=='configmap':return {'data':mesh}
+            return {'items':workloads.get((namespace,kind),[])}
+        trial=P.PackageTrial(Path(directory)/'journal.json',self.bound());trial.get=get
+        trial.bind_application_namespace();trial.state['coreSnapshot']=trial.core_snapshot()
+        return trial,names,client,workloads,mesh
+
+    def test_owned_client_namespace_removal_is_not_core_removal_and_rebind_is_scoped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            self.assertNotIn('namespace/takclients',trial.state['coreSnapshot'])
+            names.remove('takclients')
+            with self.assertRaisesRegex(ValueError,'bound application namespace missing'):trial.core_unchanged()
+            trial.state['applicationNamespaceRemoved']=True
+            trial.core_unchanged()
+            names.append('takclients');client['metadata']['uid']='fresh-app-namespace'
+            with self.assertRaisesRegex(ValueError,'identity/owner changed'):trial.core_unchanged()
+            trial.bind_application_namespace(fresh=True);trial.core_unchanged()
+            self.assertFalse(trial.state['applicationNamespaceRemoved'])
+            self.assertEqual(trial.state['applicationNamespaceBinding']['uid'],'fresh-app-namespace')
+            with self.assertRaisesRegex(ValueError,'outside fresh install'):trial.bind_application_namespace(fresh=True)
+
+    def test_client_namespace_ownership_never_waives_foreign_objects_or_owner_flip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            client['metadata']['annotations']['meta.helm.sh/release-name']='foreign'
+            with self.assertRaisesRegex(ValueError,'identity/owner changed'):trial.core_unchanged()
+            client['metadata']['annotations']['meta.helm.sh/release-name']='takserver-oidc'
+            workloads[('takclients','deployments')]=[{'metadata':{'name':'foreign','uid':'foreign-uid'}}]
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+            trial.state['coreSnapshot']=trial.core_snapshot()
+            names.remove('takclients');trial.state['applicationNamespaceRemoved']=True
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory,owned=False)
+            self.assertEqual(trial.state['coreSnapshot']['namespace/takclients'],'original-app-namespace')
+            client['metadata']['annotations']['meta.helm.sh/release-name']='takserver-oidc'
+            client['metadata']['uid']='replacement'
+            with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
+            trial.state['applicationNamespaceRemoved']=True
+            trial.bind_application_namespace(fresh=True)
+            self.assertIsNone(trial.state['applicationNamespaceBinding'])
+
+    def test_core_drift_diagnostic_is_hash_uid_only_typed_first_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);folder.chmod(0o700)
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            trial.state['guard']={'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}
+            mesh['value']='PRIVATE_MESH_VALUE_SENTINEL'
+            with self.assertRaisesRegex(ValueError,'retained Core identity/config changed'):trial.core_unchanged()
+            payload=json.loads((folder/P.VALIDATION_FAILURE).read_bytes())
+            self.assertEqual(payload['kind'],'core-inventory-drift')
+            self.assertEqual(payload['snapshot']['diagnostic'],{'category':'mesh','change':'changed'})
+            self.assertNotIn('PRIVATE_MESH_VALUE_SENTINEL',json.dumps(payload))
+            self.assertIs(trial.state['accepted'],False)
+            original=(folder/P.VALIDATION_FAILURE).read_bytes()
+            trial.core_snapshot=lambda:{'namespace/kube-system':'new-uid'}
+            with self.assertRaises(ValueError):trial.core_unchanged()
+            self.assertEqual((folder/P.VALIDATION_FAILURE).read_bytes(),original)
+            self.assertEqual(trial.state['firstPrivateFailure']['kind'],'retained-source-validation')
+        with tempfile.TemporaryDirectory() as directory:
+            trial,names,client,workloads,mesh=self.namespace_trial(directory)
+            mesh['value']='drift'
+            trial.capture_retained_validation=lambda *args,**kwargs:(_ for _ in ()).throw(OSError('private I/O detail'))
+            with self.assertRaisesRegex(ValueError,'retained Core identity/config changed'):trial.core_unchanged()
+
+    def test_core_drift_schema_rejects_raw_bodies_unknown_keys_and_forged_diagnostic(self):
+        import copy
+        snapshot=P.R.core_failure({'namespace/kube-system':'old-uid','mesh':'a'*64},
+                                  {'namespace/kube-system':'new-uid','mesh':'a'*64},'application-removed')
+        self.assertEqual(snapshot['diagnostic'],{'category':'namespace','change':'changed'})
+        for mutate in (lambda value:value['baseline'].update({'Secret/private':{'data':'private'}}),
+                       lambda value:value['observed'].update({'mesh':'raw mesh config'}),
+                       lambda value:value['diagnostic'].update(category='mesh'),
+                       lambda value:value.update(operation='unreviewed')):
+            value=copy.deepcopy(snapshot);mutate(value)
+            with self.assertRaises(ValueError):P.R.validate_core_failure(value)
+
+    def test_core_public_projection_exports_only_fixed_category_and_change(self):
+        spec=importlib.util.spec_from_file_location('core_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{
+                'IDENTITY_METHOD':'package','GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            trial,names,client,workloads,mesh=self.namespace_trial(folder)
+            trial.state['guard']={'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}
+            mesh['value']='PRIVATE_MESH_VALUE_SENTINEL'
+            with self.assertRaises(ValueError):trial.core_unchanged()
+            result=publisher.identity_progress(root)['package']
+            self.assertEqual(result['status'],'observed')
+            self.assertEqual(result['stages'],[{'stage':'retained-core-drift','category':'mesh','change':'changed'}])
+            self.assertNotIn('PRIVATE_MESH_VALUE_SENTINEL',json.dumps(result))
+            self.assertNotIn('baseline',json.dumps(result));self.assertNotIn('observedObjects',json.dumps(result))
+            for unknown in ('category','change'):
+                trial.state['stages']=[]
+                diagnostic={'category':'mesh','change':'changed'};diagnostic[unknown]='PRIVATE_DIAGNOSTIC_SENTINEL'
+                trial.journal('retained-core-drift',**diagnostic)
+                value=publisher.identity_progress(root)['package']
+                self.assertEqual(value['status'],'unavailable')
+                self.assertNotIn('PRIVATE_DIAGNOSTIC_SENTINEL',json.dumps(value))
+
+    def test_identity_wait_timeout_journals_only_fixed_reason_and_preserves_failure(self):
+        for raw, code in [('workload template drift', 'workload-template-drift'),
+                          ('inconsistent workload service account alias', 'inconsistent-service-account-alias'),
+                          ('private secret server-address value', 'other-invariant')]:
+            with self.subTest(code=code):
+                trial = object.__new__(P.PackageTrial)
+                entries = []
+                trial.journal = lambda stage, **fields: entries.append({'stage': stage, **fields})
+                def identities(expected):
+                    self.assertEqual(expected, 'dedicated')
+                    raise ValueError(raw)
+                trial.identities = identities
+                def wait(callback):
+                    try: callback()
+                    except ValueError: pass
+                    raise ValueError('convergence timeout: ' + raw)
+                trial.wait = wait
+                with self.assertRaisesRegex(ValueError, 'convergence timeout'):
+                    trial.wait_identities('dedicated', 'transition')
+                self.assertEqual(entries, [{'stage':'package-identity-timeout', 'phase':'transition', 'diagnostic':code}])
+                self.assertNotIn(raw, json.dumps(entries))
+        trial = object.__new__(P.PackageTrial)
+        trial.identities = lambda expected: ['unchanged-result']
+        trial.wait = lambda callback: callback()
+        trial.journal = lambda *args, **kwargs: self.fail('successful wait must not journal timeout')
+        self.assertEqual(trial.wait_identities('shared', 'rollback'), ['unchanged-result'])
+        trial.wait = lambda callback: (_ for _ in ()).throw(ValueError('guard budget exhausted'))
+        with self.assertRaisesRegex(ValueError, 'guard budget exhausted'):
+            trial.wait_identities('shared', 'rollback')
+
+    def test_identity_timeout_companion_projects_only_fixed_diagnostic(self):
+        spec=importlib.util.spec_from_file_location('timeout_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+                'IDENTITY_METHOD':'package', 'GITHUB_SHA':'a'*40, 'GITHUB_RUN_ID':'123', 'GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'stages':[], 'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            trial.identities=lambda expected: (_ for _ in ()).throw(ValueError('PRIVATE_UNKNOWN_SENTINEL'))
+            def wait(callback):
+                try: callback()
+                except ValueError: pass
+                raise ValueError('convergence timeout: PRIVATE_UNKNOWN_SENTINEL')
+            trial.wait=wait
+            with self.assertRaises(ValueError):trial.wait_identities('dedicated','transition')
+            public=publisher.identity_progress(root)['package']
+            self.assertEqual(public['status'],'observed')
+            self.assertEqual(public['stages'],[{'stage':'package-identity-timeout','phase':'transition','diagnostic':'other-invariant'}])
+            self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
+            for phase in ('shared','transition','strict','rollback'):
+                trial.state['stages']=[]
+                with self.assertRaises(ValueError):trial.wait_identities('dedicated',phase)
+                projected=publisher.identity_progress(root)['package']
+                self.assertEqual(projected['status'],'observed')
+                self.assertEqual(projected['stages'][0]['phase'],phase)
+                self.assertEqual(projected['stages'][0]['diagnostic'],'other-invariant')
+            # Even a source/run-bound companion must reject an arbitrary diagnostic.
+            trial.journal('package-identity-timeout',phase='transition',diagnostic='PRIVATE_UNKNOWN_SENTINEL')
+            public=publisher.identity_progress(root)['package']
+            self.assertEqual(public['status'],'unavailable')
+            self.assertNotIn('PRIVATE_UNKNOWN_SENTINEL',json.dumps(public))
+
+    def test_optional_retained_capture_and_fallback_journal_cannot_replace_first_cause(self):
+        for capture_error in (OSError('capture I/O'),RuntimeError('capture failure')):
+            for journal_error in (OSError('journal I/O'),RuntimeError('journal failure')):
+                with self.subTest(capture=type(capture_error).__name__,journal=type(journal_error).__name__):
+                    trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+                    original=ValueError('original retained source invariant')
+                    def verify(driver,proof):
+                        driver._retained_source_failure={'fixture':'private snapshot'}
+                        raise original
+                    trial.capture_retained_validation=lambda *args: (_ for _ in ()).throw(capture_error)
+                    trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(journal_error)
+                    with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(ValueError) as failure:
+                        trial.retained_verify({},'transition')
+                    self.assertIs(failure.exception,original)
+                    self.assertIs(trial.state['accepted'],False)
+                    self.assertIsNone(trial._retained_source_failure)
+        for interrupted in ('capture','journal'):
+            trial=object.__new__(P.PackageTrial);trial.state={'accepted':True}
+            def verify(driver,proof):
+                driver._retained_source_failure={'fixture':'private snapshot'}
+                raise ValueError('known invariant')
+            def capture(*args):raise KeyboardInterrupt() if interrupted=='capture' else OSError('capture I/O')
+            trial.capture_retained_validation=capture
+            trial.journal=lambda *args,**kwargs: (_ for _ in ()).throw(KeyboardInterrupt())
+            with patch.object(P.R,'verify',side_effect=verify),self.assertRaises(KeyboardInterrupt):
+                trial.retained_verify({},'transition')
+            self.assertIs(trial.state['accepted'],False)
+
+    def test_retained_validation_capture_is_typed_first_and_preserves_original_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);folder.chmod(0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'accepted':False,'method':'package','stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            snapshot={'schema':1,'baseline':None,'observed':None,'baselineObjects':None,'observedObjects':None,
+                      'diagnostic':{'hook':'inventory','category':'inventory','fieldClass':'inventory'}}
+            original=ValueError('original retained validation failed')
+            def verify(driver,proof):
+                driver._retained_source_failure=snapshot
+                raise original
+            with patch.object(P.R,'verify',side_effect=verify):
+                with self.assertRaises(ValueError) as failure:trial.retained_verify({},'transition')
+            self.assertIs(failure.exception,original)
+            private=folder/P.VALIDATION_FAILURE;plain=private.read_bytes();payload=json.loads(plain)
+            self.assertEqual(payload['type'],'retained-source-validation')
+            self.assertEqual(payload['kind'],'stored-hooks-drift');self.assertEqual(payload['snapshot'],snapshot)
+            self.assertNotIn('stdout',payload);self.assertNotIn('exitStatus',payload)
+            self.assertEqual(private.stat().st_mode&0o777,0o600)
+            self.assertEqual(trial.state['firstPrivateFailure']['kind'],'retained-source-validation')
+            trial.capture_retained_validation(snapshot,'rollback')
+            self.assertTrue(private.read_bytes()==plain)
+            self.assertIsNone(trial._retained_source_failure)
+        with tempfile.TemporaryDirectory() as directory:
+            trial=object.__new__(P.PackageTrial);trial.evidence=Path(directory)/'journal.json'
+            trial.state={'packageCommandFailure':{'file':P.PACKAGE_FAILURE}}
+            trial.capture_retained_validation(snapshot,'transition')
+            self.assertFalse((Path(directory)/P.VALIDATION_FAILURE).exists())
+
+    @unittest.skipUnless(__import__('shutil').which('helm'),'existing Helm required for real hook source render')
+    def test_real_retained_verify_journal_companion_public_projection_never_exports_hook_bodies(self):
+        import copy
+        spec=importlib.util.spec_from_file_location('retained_projection',ROOT/'.github/scripts/staged-migrations.py')
+        publisher=importlib.util.module_from_spec(spec);spec.loader.exec_module(publisher)
+        raw=subprocess.check_output(['helm','template','uds-takserver-config',str(ROOT/'charts/takserver'),
+                                     '--namespace','takserver'],timeout=20)
+        objects=[obj for obj in yaml.safe_load_all(raw) if isinstance(obj,dict) and
+                 obj.get('metadata',{}).get('annotations',{}).get('helm.sh/hook')]
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'IDENTITY_METHOD':'package',
+                'GITHUB_SHA':'a'*40,'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1'}):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={'schema':1,'method':'package','accepted':False,'stages':[],
+                         'guard':{'sourceSHA':'a'*40,'runID':'123','runAttempt':'1'}}
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(objects)
+            baseline=P.R.hooks(trial)
+            # Seed only the ephemeral body cache populated by capture(); no cluster/PVC work.
+            trial._retained_hook_baseline={'inventorySHA256':P.R.sha(baseline['hookInventory']),
+                                          'objects':copy.deepcopy(objects)}
+            changed=copy.deepcopy(objects)
+            job=next(obj for obj in changed if obj['kind']=='Job')
+            job['spec']['template']['spec']['containers'][0]['image']='PRIVATE_HOOK_IMAGE_SENTINEL'
+            trial.command=lambda *args,**kwargs:yaml.safe_dump_all(changed)
+            with self.assertRaisesRegex(ValueError,'stored source generator/hook changed'):
+                trial.retained_verify({'source':baseline,'records':[]},'transition')
+            private=(folder/P.VALIDATION_FAILURE).read_text()
+            self.assertIn('PRIVATE_HOOK_IMAGE_SENTINEL',private)
+            result=publisher.identity_progress(root)['package']
+            self.assertEqual(result['status'],'observed')
+            self.assertEqual(result['stages'],[{'stage':'retained-hook-drift','hook':'cert-job',
+                                               'category':'generator','fieldClass':'job-spec'}])
+            for value in (trial.evidence.read_text(),(folder/'journal-progress.json').read_text(),json.dumps(result)):
+                self.assertNotIn('PRIVATE_HOOK_IMAGE_SENTINEL',value)
+                self.assertNotIn('baselineObjects',value);self.assertNotIn('observedObjects',value)
+            for field in ('hook','category','fieldClass'):
+                trial.state['stages']=[]
+                diagnostic={'hook':'cert-job','category':'generator','fieldClass':'job-spec'}
+                diagnostic[field]='PRIVATE_PROJECTION_SENTINEL'
+                trial.journal('retained-hook-drift',**diagnostic)
+                rejected=publisher.identity_progress(root)['package']
+                self.assertEqual(rejected['status'],'unavailable')
+                self.assertNotIn('PRIVATE_PROJECTION_SENTINEL',json.dumps(rejected))
+            trial.state['stages']=[]
+            trial.journal('retained-hook-drift',hook='cert-job',category='credential',fieldClass='job-spec')
+            self.assertEqual(publisher.identity_progress(root)['package']['status'],'unavailable')
+
     def setUp(self):
         directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
         self.phase_directory=Path(directory.name)
@@ -128,6 +404,42 @@ class PackageGuards(unittest.TestCase):
             with patch.object(P,'bounded_package_run',return_value=result):
                 with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
             self.assertEqual(foreign.read_text(),'untouched')
+
+    def test_application_failure_is_bounded_private_and_first_failure_wins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);root.chmod(0o700)
+            instance=P.PackageTrial(root/'journal.json',self.bound())
+            instance.state['guard']={'sourceSHA':'a'*40,'runID':'1','runAttempt':'1'}
+            instance.guard=lambda:None
+            result={'exitStatus':7,'timedOut':False,'stdout':'PRIVATE_TOKEN','stderr':'PRIVATE_ERROR',
+                    'stdoutTruncated':False,'stderrTruncated':False}
+            with patch.object(P,'bounded_package_run',return_value=result) as run:
+                with self.assertRaises(ValueError):instance.run_application_check('api-smoke','transition')
+                self.assertEqual(run.call_args.args[0],['uds','run','test:api-smoke','--no-progress'])
+                target=root/P.APPLICATION_FAILURE;first=target.read_bytes()
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+                self.assertEqual(json.loads(first)['stderr'],'PRIVATE_ERROR')
+                self.assertNotIn('PRIVATE_ERROR',json.dumps(instance.state))
+                self.assertNotIn('PRIVATE_ERROR',(root/'journal-progress.json').read_text())
+                result['stderr']='LATER'
+                with self.assertRaises(ValueError):instance.run_application_check('flows','strict')
+                self.assertEqual(target.read_bytes(),first)
+                with self.assertRaises(ValueError):instance.run_application_check('arbitrary-task','transition')
+                self.assertEqual(run.call_count,2)
+                result['exitStatus']=0
+                self.assertEqual(instance.run_application_check('web-tls','baseline'),'PRIVATE_TOKEN')
+
+    def test_application_check_accepts_every_real_package_phase_including_final_shared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.PackageTrial(Path(directory)/'journal.json',self.bound());instance.guard=lambda:None
+            result={'exitStatus':0,'timedOut':False,'stdout':'passed','stderr':'',
+                    'stdoutTruncated':False,'stderrTruncated':False}
+            with patch.object(P,'bounded_package_run',return_value=result) as run:
+                for phase in ('baseline','transition','strict','rollback','shared','fresh-strict'):
+                    self.assertEqual(instance.run_application_check('web-tls',phase),'passed')
+                self.assertEqual(run.call_count,6)
+                with self.assertRaises(ValueError):instance.run_application_check('web-tls','unknown')
+                self.assertEqual(run.call_count,6)
 
     def test_only_legacy_upstream_chart_uses_client_side_apply_compatibility(self):
         package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
@@ -326,7 +638,7 @@ class PackageGuards(unittest.TestCase):
         for phase in ('baseline','strict','fresh-strict'):
             with self.subTest(phase=phase),tempfile.TemporaryDirectory() as directory:
                 instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None;instance.require_cloudtak=lambda:{'namespace':'same','deployment':'same','package':'same'}
-                calls=[];events=[];instance.command=lambda argv,**kw:(calls.append(argv) or '')
+                calls=[];events=[];instance.run_application_check=lambda check,phase:(calls.append(['uds','run','test:'+check,'--no-progress']) or '')
                 instance.journal=lambda stage,**kw:events.append((stage,kw))
                 instance.application_checks(phase)
                 self.assertIn(['uds','run','test:cloudtak','--no-progress'],calls)
@@ -335,7 +647,7 @@ class PackageGuards(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None
             instance.require_cloudtak=lambda:{'namespace':'same'}
-            instance.command=lambda argv,**kw:'The cloudtak component is not deployed. Skipping.'
+            instance.run_application_check=lambda check,phase:'The cloudtak component is not deployed. Skipping.'
             with self.assertRaisesRegex(ValueError,'skipped'):instance.application_checks('strict')
             instance.require_cloudtak=lambda:(_ for _ in ()).throw(ValueError('missing component'))
             with self.assertRaisesRegex(ValueError,'missing'):instance.application_checks('strict')

@@ -260,3 +260,10 @@ chart/Core values supplied as `STAGED_VELERO_CHART_ARCHIVE` and
 checks input hashes, the actual schedule name and `spec.paused: true` in all
 three variants, preserving every other rendered schedule field. This render is
 not live owner handoff or backup/restore acceptance.
+
+The ownership trial opts into `REQUIRE_CLEAN_BACKUP_RESTORE=true` in the existing
+backup/restore helper. This applies its already-required zero-warning/error
+completion gate immediately, so the existing sanitized Velero describe/log
+collection runs before a later observer rejection. The default helper behavior
+is unchanged. Fixed status facts exclude object names and raw failure reasons;
+`PartiallyFailed`, unknown/malformed status and nonzero counts still fail.

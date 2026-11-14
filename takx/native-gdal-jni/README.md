@@ -54,3 +54,10 @@ private directory and verify the observed libraries. Default guard tests never
 compile native code or load JNI.
 The trusted external JDK/platform runtime bytes are recorded as host inputs;
 they are not represented as source-built SDK outputs.
+
+`finalization_validation.py` exposes read-only validation of the supported historic
+GNU-inventory failure. It preserves the failed producer and validates original
+source, command/evidence inventory, actual products and consumed providers against
+an explicitly supplied plan. This is a separate finalizer API, not producer replay
+or a successful `complete.json` for the failed execution. SDK composition can bind
+its existing finalization receipt separately from original native-provider records.

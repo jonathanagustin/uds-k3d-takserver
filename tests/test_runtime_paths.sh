@@ -94,15 +94,23 @@ check_match "README.md" ignore
 check_match "CHANGELOG.md" ignore
 check_match "SECURITY.md" ignore
 check_match "CONTRIBUTING.md" ignore
+check_match "CODE_OF_CONDUCT.md" ignore
 check_match "renovate.json" ignore
 check_match "hk.pkl" ignore
 check_match "commitlint.config.js" ignore
 check_match ".github/workflows/lint.yaml" ignore
 check_match ".github/workflows/codeql.yaml" ignore
+check_match ".github/workflows/native-sanitizers.yaml" ignore
+check_match ".github/workflows/codeql-extended.yaml" ignore
+check_match ".github/workflows/codeql-language.yaml" ignore
+check_match ".github/scripts/codeql-languages.py" ignore
 check_match ".github/workflows/dependency-review.yaml" ignore
 check_match ".github/workflows/unit-tests.yaml" ignore
 check_match ".github/workflows/scorecard-analysis.yaml" ignore
 check_match ".github/workflows/benchmark.yaml" ignore
+check_match ".github/workflows/startup.yaml" ignore
+check_decide false ".github/workflows/startup.yaml"
+check_match ".github/workflows/startup-extra.yaml" relevant
 check_match ".github/workflows/demo.yaml" ignore
 check_match ".github/workflows/release.yaml" ignore
 check_match ".github/workflows/mutation.yaml" ignore
@@ -256,7 +264,7 @@ done
 check_decide false $'.github/workflows/staged-migrations.yaml\n.github/scripts/staged-migrations.py\n.github/scripts/staged-migrations.sh\ndocs/ci.md\ntests/test_staged_migrations.py'
 check_decide true $'.github/scripts/staged-migrations.sh\n.github/workflows/test.yaml'
 check_decide true $'.github/scripts/staged-migrations.py\n.github/workflows/package.yaml'
-for receipt_helper in install-receipt.py collect-install-receipt.py install-artifact-inputs.py checkpoint-identity.py; do
+for receipt_helper in install-receipt.py install-artifact-inputs.py checkpoint-identity.py; do
   check_match ".github/scripts/${receipt_helper}" relevant
   check_decide true $'.github/scripts/install-reuse-shadow.py\n'".github/scripts/${receipt_helper}"
 done
@@ -315,6 +323,17 @@ check_match "upstream/cloudtak" relevant
 check_match "mise.toml" relevant
 
 check_decide false "docs/ci.md"
+# These two exact observer helpers affect evidence only, not deployment inputs.
+for observer in collect-install-receipt.py install-reuse-shadow.py; do
+  check_match ".github/scripts/${observer}" ignore
+  check_decide false ".github/scripts/${observer}"
+  check_match ".github/scripts/${observer}/nested.py" relevant
+  check_match ".github/scripts/${observer}.bak" relevant
+  for runtime in .github/scripts/dev-package.sh .github/scripts/pin-image-tags.sh .github/scripts/deploy-slim-core.sh .github/workflows/test.yaml charts/takserver/values.yaml tests/flows.py; do
+    check_decide true ".github/scripts/${observer}"$'\n'"${runtime}"
+  done
+done
+check_decide false $'.github/scripts/collect-install-receipt.py\n.github/scripts/install-reuse-shadow.py'
 check_decide false '.github/scripts/install-reuse-shadow.py'
 check_decide false $'.github/scripts/install-reuse-shadow.py\ndocs/ci-install-receipts.md\ntests/test_install_reuse_shadow.py'
 check_decide true $'.github/scripts/install-reuse-shadow.py\n.github/scripts/dev-package.sh'

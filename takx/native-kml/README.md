@@ -53,3 +53,8 @@ convenience HTTP-client code is retained: its upstream default SendRequest
 performs no I/O and applications supply a transport. Network behavior is not
 accepted here. Full Kernel, JNI, SDK assembly and client acceptance remain
 separate genuine integration gates.
+
+A fresh completed Cesium producer uses `--cesium-proof` without
+`--cesium-stopped-snapshot`. Its receipt must attest both fresh dependency and
+Cesium builds. Continued producers still require the exact stopped snapshot and
+unchanged predecessor inventory; a snapshot is rejected for fresh producers.

@@ -182,7 +182,7 @@ class Driver:
         self.idle()
         self.guarded()
         self.execute(['bash', str(ROOT / 'tests/backup-restore.sh')], timeout=2100,
-                     env={'REQUIRE_FS_BACKUP': 'true', 'BACKUP_TRIAL_SUFFIX': suffix, 'BACKUP_TRIAL_CONTEXT': self.context})
+                     env={'REQUIRE_FS_BACKUP': 'true', 'REQUIRE_CLEAN_BACKUP_RESTORE': 'true', 'BACKUP_TRIAL_SUFFIX': suffix, 'BACKUP_TRIAL_CONTEXT': self.context})
         backup = 'tak-ci-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '-' + suffix
         self.observe(stage, group, backup)
 

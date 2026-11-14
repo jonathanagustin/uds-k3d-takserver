@@ -69,14 +69,28 @@ def verify_las(root):
     return boost,{'receipt_sha256':native.digest(root/'complete.json'),'boost_headers':inventory(boost/'boost')}
 
 
+def verify_cesium_lineage(complete,snapshot):
+    lineage=complete.get('lineage')
+    if lineage is None:
+        if complete.get('fresh_dependency_build') is not True or complete.get('fresh_cesium_build') is not True:
+            raise ValueError('fresh Cesium build evidence required')
+        if snapshot is not None:
+            raise ValueError('fresh Cesium producer has no stopped snapshot')
+        return
+    if complete.get('fresh_dependency_build') is not False or snapshot is None:
+        raise ValueError('continued Cesium requires original stopped snapshot')
+    previous=Path(lineage['previous_output'])
+    if native.digest(snapshot)!=lineage['stopped_inventory_sha256'] or inventory(previous)!=json.loads(snapshot.read_text()):
+        raise ValueError('Cesium original dependency producer changed')
+
+
 def verify_cesium(root,snapshot):
     data=json.loads((root/'observed-products.json').read_text());complete=json.loads((root/'complete.json').read_text())
     if not complete.get('full_cesium_build_acceptance') or native.digest(root/'complete.json')!=data['complete_sha256']:raise ValueError('Cesium actual graph evidence missing')
     for name,item in data['all_files'].items():
         p=root/native.relative(name)
         if p.is_symlink() or p.stat().st_size!=item['bytes'] or native.digest(p)!=item['sha256']:raise ValueError('Cesium producer files changed')
-    lineage=complete['lineage'];previous=Path(lineage['previous_output'])
-    if native.digest(snapshot)!=lineage['stopped_inventory_sha256'] or inventory(previous)!=json.loads(snapshot.read_text()):raise ValueError('Cesium original dependency producer changed')
+    verify_cesium_lineage(complete,snapshot)
     for tool in complete['tools'].values():
         if native.digest(Path(tool['path']))!=tool['sha256']:raise ValueError('Cesium tool differs')
     prefix=root/'install';header=(prefix/'include/uriparser/UriBase.h').read_text()
@@ -110,11 +124,12 @@ def recipe():
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ('output','libkml-archive','expat-archive','las-proof','assimp-proof','minizip-root','minizip-proof','cesium-proof','cesium-stopped-snapshot'):p.add_argument('--'+name,type=Path,required=True)
+    for name in ('output','libkml-archive','expat-archive','las-proof','assimp-proof','minizip-root','minizip-proof','cesium-proof'):p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--cesium-stopped-snapshot',type=Path)
     args=p.parse_args();out=native.external(args.output)
     if out.exists():raise ValueError('new external output required')
     for name,value in vars(args).items():
-        if name=='output':continue
+        if name=='output' or value is None:continue
         if out==value.resolve() or out in value.resolve().parents or value.resolve() in out.parents:raise ValueError('output overlaps input')
     if HERE==out or HERE in out.parents or out in HERE.parents:raise ValueError('output overlaps recipe')
     lock=json.loads((HERE/'inputs.lock.json').read_text());post=json.loads((HERE/'source-postimages.json').read_text())

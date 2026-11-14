@@ -339,3 +339,10 @@ and retained schemas. They contain no exception messages, resource names, values
 or paths. A rejected channel never authorizes private bytes; exactly one eligible
 channel is still required. These codes diagnose evidence delivery and do not
 explain or relax the retained-Core assertion.
+
+When a public diagnostic recipient is supplied and staged acceptance fails, the
+workflow seals and attempts the narrow first-failure ciphertext upload before
+public/passive artifact uploads. A stalled public upload therefore cannot prevent
+those earlier steps from being attempted. Encryption remains optional and its
+failure does not skip public evidence or change acceptance. Runner loss can still
+prevent evidence delivery; ordering is not an availability guarantee.

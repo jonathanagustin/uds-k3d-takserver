@@ -32,7 +32,7 @@ class SourceGuards(unittest.TestCase):
         lock, data = p.load_contract()
         self.assertEqual(p.digest(data), lock['context_patch_sha256'])
         self.assertEqual(lock['stage_order'], ['official', 'baseline', 'texture', 'context', 'client_jni'])
-        self.assertEqual(len(lock['stages']['official']), 60)
+        self.assertEqual(len(lock['stages']['official']), 61)
         self.assertFalse(lock['native_builder_integration'])
         self.assertFalse(lock['gpu_qualified'])
 
@@ -79,7 +79,8 @@ class SourceGuards(unittest.TestCase):
 
     def test_traversal_and_other_components_refused(self):
         for name in ['../x', '/takkernel/engine/src/x', 'takkernel/engine/src/../../x',
-                     'commoncommo/src/x', 'takkernel\\engine\\src\\x']:
+                     'commoncommo/src/x', 'takkernel\\engine\\src\\x',
+                     'takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES30.java']:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 p.relative(name)
 

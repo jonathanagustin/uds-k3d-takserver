@@ -437,3 +437,21 @@ warnings. Strict acceptance therefore still fails. Failed candidates and their
 logs are retained, including the first candidate's table-exception warning.
 No production runtime, portable font producer, full renderer, SDK or client
 acceptance is claimed.
+
+
+Native write-stack tracing attributes the 132 critical-array warnings to the
+pinned JOGL desktop `glShaderSource` dispatcher: 44 each at GetArrayLength,
+GetObjectArrayElement and ReleaseStringUTFChars during string cleanup with the
+heap length array pinned. Trace SHA-256:
+`6e45bb0ba4dd54a01972723b066fcc50a3c08595daca57ee18782300ce8e441a`.
+A one-class causal experiment uses a direct IntBuffer for the explicit length,
+preserving the existing length value and GLSL compatibility transformation. With
+the second private font candidate it completes the owned headed lifecycle with
+zero strict JNI diagnostics. This experiment used a Java class overlay and is not
+canonical composed-source acceptance.
+
+The context profile now pins that wrapper correction as its 61st source path.
+Only this exact JRE port path is admitted outside the existing engine prefix.
+All five sparse source stages and ten offline guards pass. A fresh complete
+native/Java build and its actual-library controls remain required for the changed
+profile. Full renderer, SDK, client and portable runtime acceptance remain false.

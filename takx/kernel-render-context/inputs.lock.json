@@ -33,8 +33,8 @@
     },
     "selected_patch_sha256": "6917693ff5aa58cd467deb7cf841298b83dd0b4aab2ab1c71abea00c61505073"
   },
-  "context_patch_sha256": "1a64ad4bccf32b4dafa0461c111c29647cf19fb38c19cd8394ac8a4e9c1060ef",
-  "context_scope_sha256": "35ee648f97d223b3b5b0bef5c8edd452d5e1dc8015ebbae2afb86b67ea6580e9",
+  "context_patch_sha256": "5c476d9ee13e5f28c671acaa881dbc434c018f9ab2a776b33e83d03f2302e48b",
+  "context_scope_sha256": "7b0651c1604b5cd6d1adc9dd0ca38be9ed422b126003bc868851594264014807",
   "full_sdk_accepted": false,
   "gpu_qualified": false,
   "native_builder_integration": false,
@@ -109,7 +109,8 @@
       "takkernel/engine/src/main/jni/jglmapview.cpp": "074fe83abc40862b5b3edbc94583799aa669a5b8439d0499d20cc3e2e295f4a0",
       "takkernel/engine/src/main/jni/jgltext.cpp": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
       "takkernel/engine/src/main/jni/jscenelayer.cpp": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a",
-      "takkernel/engine/src/main/jni/jstyle.cpp": "f96336e2a2521d946a0f544cbf3d94203a01eea875be460b567f5e5ee5a3756b"
+      "takkernel/engine/src/main/jni/jstyle.cpp": "f96336e2a2521d946a0f544cbf3d94203a01eea875be460b567f5e5ee5a3756b",
+      "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5"
     },
     "client_jni": {
       "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java": "5f1b2466d29597bf8441c41ff444e4c094116fb3a675b56f081875cde77921db",
@@ -171,7 +172,8 @@
       "takkernel/engine/src/main/jni/jglmapview.cpp": "dddc8f73fe5c5c35d44304671cddf88d1da8043258f759ec8eebf68e39ab2a57",
       "takkernel/engine/src/main/jni/jgltext.cpp": "146cf8869eef0b98a8413af7ece855ad8d25cce9f7c0a6eccd60544f4556d36e",
       "takkernel/engine/src/main/jni/jscenelayer.cpp": "ce13372200af75494fddd784d74eb6cc58dadfe075847b0ab91a455a9c66859a",
-      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b"
+      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b",
+      "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java": "787d890f33874a84ac7bca6abd2b234b298edc0249729f9cb42c277736250f44"
     },
     "context": {
       "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java": "5f1b2466d29597bf8441c41ff444e4c094116fb3a675b56f081875cde77921db",
@@ -233,7 +235,8 @@
       "takkernel/engine/src/main/jni/jglmapview.cpp": "dddc8f73fe5c5c35d44304671cddf88d1da8043258f759ec8eebf68e39ab2a57",
       "takkernel/engine/src/main/jni/jgltext.cpp": "146cf8869eef0b98a8413af7ece855ad8d25cce9f7c0a6eccd60544f4556d36e",
       "takkernel/engine/src/main/jni/jscenelayer.cpp": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a",
-      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b"
+      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b",
+      "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java": "787d890f33874a84ac7bca6abd2b234b298edc0249729f9cb42c277736250f44"
     },
     "official": {
       "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java": "f929cb0a9b9917a8fa45a43433d02cd9f0c9802b7c5b2af87554a034c7f9159f",
@@ -295,7 +298,8 @@
       "takkernel/engine/src/main/jni/jglmapview.cpp": "074fe83abc40862b5b3edbc94583799aa669a5b8439d0499d20cc3e2e295f4a0",
       "takkernel/engine/src/main/jni/jgltext.cpp": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
       "takkernel/engine/src/main/jni/jscenelayer.cpp": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a",
-      "takkernel/engine/src/main/jni/jstyle.cpp": "f96336e2a2521d946a0f544cbf3d94203a01eea875be460b567f5e5ee5a3756b"
+      "takkernel/engine/src/main/jni/jstyle.cpp": "f96336e2a2521d946a0f544cbf3d94203a01eea875be460b567f5e5ee5a3756b",
+      "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5"
     },
     "texture": {
       "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java": "f929cb0a9b9917a8fa45a43433d02cd9f0c9802b7c5b2af87554a034c7f9159f",
@@ -357,7 +361,8 @@
       "takkernel/engine/src/main/jni/jglmapview.cpp": "074fe83abc40862b5b3edbc94583799aa669a5b8439d0499d20cc3e2e295f4a0",
       "takkernel/engine/src/main/jni/jgltext.cpp": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
       "takkernel/engine/src/main/jni/jscenelayer.cpp": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a",
-      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b"
+      "takkernel/engine/src/main/jni/jstyle.cpp": "1bb09da5eebdaa2fd8bf102de7e5d0136ce15efe8fed83c83d0bc7eb901d302b",
+      "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5"
     }
   },
   "texture": {

@@ -4063,3 +4063,18 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
      env->DeleteWeakGlobalRef(entry->second);
      listeners.erase(entry);
  }
+diff --git a/takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java b/takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java
+--- a/takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java
++++ b/takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java
+@@ -1381,7 +1381,10 @@
+             if (glsl != null && glsl.equals("1.20"))
+                 string = JOGLGLES.glsl120Compatible(string);
+         }
+-        JOGLGLES.gl2().glShaderSource(shader, 1, new String[] {string}, new int[] {string.length()}, 0);
++        java.nio.IntBuffer length = java.nio.ByteBuffer.allocateDirect(Integer.BYTES)
++                .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
++        length.put(0, string.length());
++        JOGLGLES.gl2().glShaderSource(shader, 1, new String[] {string}, length);
+     }
+ 
+     // C function void glStencilFunc ( GLenum func, GLint ref, GLuint mask )

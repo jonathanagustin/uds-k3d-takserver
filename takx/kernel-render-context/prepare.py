@@ -42,7 +42,9 @@ def regular(path, limit=2*1024**2):
 
 def relative(name):
     path = PurePosixPath(name)
-    if path.is_absolute() or '..' in path.parts or '\\' in name or path.parts[:3] != ('takkernel', 'engine', 'src'):
+    unrelated = (path.parts[:3] != ('takkernel', 'engine', 'src') and
+                 name != 'takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java')
+    if path.is_absolute() or '..' in path.parts or '\\' in name or unrelated:
         raise ValueError('unsafe or unrelated source path')
     return path.parts
 

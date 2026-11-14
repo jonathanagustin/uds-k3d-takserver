@@ -65,6 +65,15 @@ and the reviewed Java classpath. Compile the C++ probe as a shared library again
 that build's `interop/elevation/ManagedElevationSource.h`, JNI headers,
 `libtakenginejni` and `libtakengine` with `-Wl,-z,defs`. Run the Java main with
 `-Xcheck:jni`, the reviewed runtime-native SHA-256 manifest, and the probe library
-path as its two arguments. The source preparer verifies all four owned control
+path as its two arguments. The source preparer verifies all six owned control
 files but performs no compilation or native execution. Scoped results and
 remaining gates are recorded in `QUALIFICATION.md`.
+
+The direct chunk control uses `tests/ElevationChunkProbe.java` and
+`tests/ElevationChunkProbe.cpp` with the same build/classpath requirements,
+compiling against `ManagedElevationChunk.h`. Run `ElevationChunkProbe` with the
+runtime-native manifest and its separately compiled probe library. It covers
+actual primitive accessors and sampling, constructor metadata failures,
+`createData` callback failure, pending-exception entry guards, destructor error
+preservation and fresh-chunk recovery. It does not qualify successful mesh
+materialization or concurrent chunk access.

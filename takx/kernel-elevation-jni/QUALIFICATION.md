@@ -23,6 +23,7 @@ Actual full-library controls pass with zero strict JNI diagnostics:
 | 13 bulk fault cases, 97 assertions | `afe1ae09214ae291d5f7c9f9d8ecd3b2d28c2158434a5af67136c3c5bfb3da3d` |
 | Six additional scalar fault cases | `97363c17ee41ea57f03ca0db0bdacdc96539258954fe218ae41530800cb81d03` |
 | Listener/bounds lifecycle, 112 checks | `822d0d31640639ae46c1fad5329fcebf498ebdbd056dbb4d35cd70ccad34b87f` |
+| Direct chunk boundaries and fresh-object recovery, 231 checks | `11076ab81598530c79f5e04c372d39c766874c3ae5d09d4fc5c8b66934325fe7` |
 | 22 throwing bridge operations | `2b540d4292068b07cfa04e2e8e42d2a1bf7ecb0ff19c667b22eae0482cbf76bf` |
 | 62 feature lookups and typed options/envelope | `41dfbf9977348a9f1f287a2b7a341b847aac36b9b8510dd3ecea455d87e94e7e` |
 | Both surface construction orders and 100 concurrent calls | `117ed8ec4d1aafc7aa0b444c19ade773b4578c574bdf2dbb44b7318a680add69` |
@@ -39,7 +40,7 @@ The extra scalar fixture is a separately authenticated local regression source,
 not part of the two source-preparation-owned fixtures. The native build remains
 a separately reviewed local composition experiment, not this profile's public
 builder. Public native-builder integration, other elevation entry points,
-direct chunk primitive/createData fault cases, concurrency beyond the listed surface control,
+successful createData mesh materialization, concurrency beyond the listed surface control,
 renderer cache bounds and full contour/SDK/client acceptance remain open.
 All broad acceptance flags stay false.
 
@@ -56,3 +57,21 @@ bytes match the separately authenticated listener experiment. Native07's frozen
 receipt and 64 recipe snapshots retain the earlier two-control manifest. Adding
 these test sources does not change or retroactively relabel that native build:
 the three native postimages and all 815 producer objects are unchanged.
+
+The direct chunk probe also links the actual complete Native07 libraries. It
+exercises five primitive getter failures, createData/scalar/bulk callback failures,
+constructor type/URI/bounds failures and destructor failure. After each primary
+callback error it calls all reviewed guarded primitive/data/sample methods with
+the exception still pending, checks native sentinel/error results and verifies
+that no further Java callback ran. Primary throwable identity is preserved even
+when disposal throws a secondary error. Each fault is followed by normal
+primitive and analytic scalar/bulk sampling on a fresh owned chunk. The 49
+sequential cases pass 231 assertions with zero strict JNI diagnostics. The first
+25-case experiment is retained separately; the listed receipt is the subsequent
+recovery-expanded experiment. No native production source changed between them.
+
+The two chunk probe sources are now also source-preparation-owned. This is a
+second test-only manifest expansion; the original full native build remains
+frozen under its earlier two-control recipe. Class initialization under failure,
+successful createData mesh conversion, other builder/wrapper entry points and
+concurrent chunk/source access are not accepted by these controls.

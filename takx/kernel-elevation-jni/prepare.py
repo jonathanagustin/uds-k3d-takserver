@@ -17,7 +17,8 @@ HERE = Path(__file__).resolve().parent
 PREFIX = 'takkernel/engine/src/main/jni/interop/elevation/'
 FILES = {PREFIX + name for name in ('Interop.cpp', 'ManagedElevationSource.cpp', 'ManagedElevationChunk.cpp')}
 CONTROLS = {'tests/ElevationJNIControls.java', 'tests/ElevationFaultControls.java',
-            'tests/ElevationListenerProbe.java', 'tests/ElevationListenerProbe.cpp'}
+            'tests/ElevationListenerProbe.java', 'tests/ElevationListenerProbe.cpp',
+            'tests/ElevationChunkProbe.java', 'tests/ElevationChunkProbe.cpp'}
 FLAGS = ('native_builder_integration', 'strict_elevation_accepted', 'full_sdk_accepted', 'full_client_accepted')
 LIMIT = 256 * 1024
 

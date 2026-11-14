@@ -1,0 +1,288 @@
+{
+  "status": "source-only rebuild plan; not build authorization",
+  "read_only_baseline_build": "/workspace/kernel-native-public-qualification/build",
+  "method": "ninja -t deps; exact original cpp/jni source-relative path suffix; changed header consumers plus direct translation units",
+  "deps_sha256": "dd4faa9aeaeb2181afb2f5d354ddfc71184f85b71e86aa11042c81b31e81fe2b",
+  "context_patch_sha256": "d52f2683e1762776efae7cbeb1e820e27c54e9a6874f48d1ce348fe4d12d1eae",
+  "headers": {
+    "takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLBackground.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLDepthSampler.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLES20FixedPipeline.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLNinePatch.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLRenderBatch2.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLText2.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLTexture2.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAtmosphere.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLContentIndicator.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobe.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeBase.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeSurfaceRenderer.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabel.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabelManager.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapView2.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapViewDebug.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainSlopeAngleLayer.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryRenderer4.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchLineString3.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPoint3.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPolygon3.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLVectorTiles.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLBatch.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLC3DTRenderer.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLMesh.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLScene.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLES20FixedPipeline.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLText2.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLWorkers.cpp.o",
+      "kernel-jni/CMakeFiles/takenginejni.dir/c3dt/jtileset.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/RenderContextLifecycle.h": [],
+    "takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h": [
+      "kernel-cpp/CMakeFiles/takengine.dir/core/AtakMapView.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAntiMeridianHelper.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAtmosphere.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLDiagnostics.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobe.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeSurfaceRenderer.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapViewDebug.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLElevationHeatMapLayer.cpp.o",
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp.o",
+      "kernel-jni/CMakeFiles/takenginejni.dir/jglmapview.cpp.o"
+    ],
+    "takkernel/engine/src/main/jni/c3dt/RenderContextLifecycle.h": []
+  },
+  "direct_cpp": {
+    "takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLES20FixedPipeline.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLOffscreenFramebuffer.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/GLText2.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLText2.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLWorkers.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/Shader.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/Shader.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAtmosphere.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobe.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeBase.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapRenderGlobals.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLElevationHeatMapLayer.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainSlopeAngleLayer.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainTile.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryRenderer4.cpp.o"
+    ],
+    "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp": [
+      "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryShaders.cpp.o"
+    ],
+    "takkernel/engine/src/main/jni/c3dt/jtileset.cpp": [
+      "kernel-jni/CMakeFiles/takenginejni.dir/c3dt/jtileset.cpp.o"
+    ],
+    "takkernel/engine/src/main/jni/jglmapview.cpp": [
+      "kernel-jni/CMakeFiles/takenginejni.dir/jglmapview.cpp.o"
+    ],
+    "takkernel/engine/src/main/jni/jgltext.cpp": [
+      "kernel-jni/CMakeFiles/takenginejni.dir/jgltext.cpp.o"
+    ]
+  },
+  "context_union": [
+    "kernel-cpp/CMakeFiles/takengine.dir/core/AtakMapView.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLBackground.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLDepthSampler.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLES20FixedPipeline.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLNinePatch.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLOffscreenFramebuffer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLRenderBatch2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLText2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLTexture2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLWorkers.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/Shader.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAntiMeridianHelper.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAtmosphere.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLContentIndicator.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLDiagnostics.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobe.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeBase.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeSurfaceRenderer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabel.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabelManager.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapRenderGlobals.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapView2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapViewDebug.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLElevationHeatMapLayer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainSlopeAngleLayer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainTile.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryRenderer4.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryShaders.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchLineString3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPoint3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPolygon3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLVectorTiles.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLBatch.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLC3DTRenderer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLMesh.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLScene.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/c3dt/jtileset.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jglmapview.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jgltext.cpp.o"
+  ],
+  "context_count": 40,
+  "texture_count": 78,
+  "combined_union": [
+    "kernel-cpp/CMakeFiles/takengine.dir/core/AtakMapView.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/DataDrivenStyleSheet.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/DefaultDriverDefinition.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/DefaultDriverDefinition2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FDB.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/Feature.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/Feature2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FeatureCursor2Filter.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FeatureDataSource.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FeatureDataSource2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FeatureDataStore.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/FeatureDataStore3Adapter.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/GeometryFactory.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/KMLDriverDefinition2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/LegacyAdapters.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/OGR_FeatureDataSource.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/PersistentDataSourceFeatureDataStore2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/ShapefileDriverDefinition2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/Style.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/feature/StyleSheet.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/mbtiles/MVTFeatureDataStore.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/mbtiles/MapBoxGLStyleSheet.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/mbtiles/VectorTile.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/AutoStyleSchemaHandler.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/OGRFeatureDataStore.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/OGRUtils.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/OGR_Content.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/OGR_Content2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/ogr/OGR_FeatureDataSource2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/formats/pfps/FalconViewFeatureDataSource.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLBackground.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLDepthSampler.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLES20FixedPipeline.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLNinePatch.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLOffscreenFramebuffer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLRenderBatch2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLText2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLTexture2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/GLWorkers.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/Shader.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAntiMeridianHelper.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLAtmosphere.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLContentIndicator.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLDiagnostics.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobe.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeBase.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLGlobeSurfaceRenderer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabel.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLLabelManager.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapRenderGlobals.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapView2.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/GLMapViewDebug.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/core/controls/FeaturesLabelControl.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLElevationHeatMapLayer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainSlopeAngleLayer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/elevation/GLTerrainTile.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/DefaultSpatialFilterControl.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometry3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryCollection3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryRenderer4.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchGeometryShaders.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchLineString3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPoint3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLBatchPolygon3.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLGeometryBatchBuilder.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/feature/GLVectorTiles.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLBatch.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLC3DTRenderer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLMesh.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLScene.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLSceneFactory.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLSceneLayer.cpp.o",
+    "kernel-cpp/CMakeFiles/takengine.dir/renderer/model/GLSceneNode.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/c3dt/jtileset.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/elevation/Interop.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/elevation/ManagedElevationChunk.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/elevation/ManagedElevationSource.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/feature/Interop.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/feature/ManagedFeatureDataSource2.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/feature/ManagedFeatureDataStore2.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/feature/ManagedFeatureDefinition.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/model/Interop.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/raster/tilematrix/ManagedTileClient.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/interop/raster/tilematrix/ManagedTileMatrix.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jcachingservice.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jelevationmanager.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jelmgrterrainrenderservice.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jfeature.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jfeatureslabelcontrol.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jgeometry.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jgeometryfactory.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jglantialiasedline.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jglbatchgeometryfeaturedatastorerenderer2.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jglmapview.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jgltext.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jglvectortiles.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativedatastorecontentchangedlistener.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativefeaturecursor.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativefeaturedatasource.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativefeaturedatastore.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativefeaturedatastore4.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativefeaturedefinition.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jnativetilematrix.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jsceneinfofactory.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jscenelayer.cpp.o",
+    "kernel-jni/CMakeFiles/takenginejni.dir/jstyle.cpp.o"
+  ],
+  "combined_count": 107,
+  "baseline_object_bytes": 8843480,
+  "new_headers_require_dependency_rescan": true,
+  "must_relink": [
+    "Core",
+    "JNI"
+  ],
+  "composition": "Texture then Context",
+  "client_jni_inputs": {
+    "receipt": "/workspace/kernel-client-interop-public-bitmap-controls-01/complete.json",
+    "receipt_sha256": "8511ba7f3ddd5f64a3285593e205a6448130442af0673a42f3cccb045487ac12",
+    "projection": "/workspace/kernel-client-interop-public-bitmap-controls-01/source",
+    "verified_postimages": {
+      "takkernel/engine/src/main/jni/interop/feature/Interop.cpp": "50bab2559f86d4c26cf2e155b245e1ca6015d1cffc3c1afaeedb2ee340a71150",
+      "takkernel/engine/src/main/jni/jscenelayer.cpp": "ce13372200af75494fddd784d74eb6cc58dadfe075847b0ab91a455a9c66859a"
+    },
+    "objects": [
+      "kernel-jni/CMakeFiles/takenginejni.dir/interop/feature/Interop.cpp.o",
+      "kernel-jni/CMakeFiles/takenginejni.dir/jscenelayer.cpp.o"
+    ]
+  }
+}

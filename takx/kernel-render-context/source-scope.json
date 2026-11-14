@@ -1,0 +1,227 @@
+{
+  "status": "source-work-in-progress-not-runtime-qualified",
+  "upstream_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "patch_sha256": "5c476d9ee13e5f28c671acaa881dbc434c018f9ab2a776b33e83d03f2302e48b",
+  "files": [
+    {
+      "path": "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java",
+      "preimage_sha256": "f929cb0a9b9917a8fa45a43433d02cd9f0c9802b7c5b2af87554a034c7f9159f",
+      "postimage_sha256": "5f1b2466d29597bf8441c41ff444e4c094116fb3a675b56f081875cde77921db"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.cpp",
+      "preimage_sha256": "58b1b9b49272a8243d45d45d5993171be3c6a1fdf2a94b75e208b33673d6816f",
+      "postimage_sha256": "52673a207ec7844dc39a0a9060cc91f24cab135e785545b8eec57947a66bcf62"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLES20FixedPipeline.h",
+      "preimage_sha256": "32f44e382d7abde1118115447ba99a8bb3d222bf09a1b73b0f16c8593a2800f5",
+      "postimage_sha256": "00b7767ae48a760b491670fc53d1abea5639c85c86fcfa169eb76048c951c685"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLOffscreenFramebuffer.cpp",
+      "preimage_sha256": "8dfdb5d1bf04ac884d0f3ecd5a10d9de81d98890fd4ce83d5d4421b0a8a51b54",
+      "postimage_sha256": "1be2502b2dbc9f5a6d2a3260ee86479ccac0ab4f5bbf29100157126eb8e51456"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLText2.cpp",
+      "preimage_sha256": "d01d01f71c76b3c199f83cb6b0f39a1fbe8e09e26f6d4684f6164828623b6e6f",
+      "postimage_sha256": "f657f15e50adbafdf1d7911d6721a836fc905cefb1e9c4e471dd53abd509dd35"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLTextureAtlas2.cpp",
+      "preimage_sha256": "5287cc8e2c848df28b55a31473dca4b12d38a4b4acdc49239d7290eccbf40de7",
+      "postimage_sha256": "ea8164c0fce797d701d5bbc9753ee8d26cd685055e9b50ac9ab866f0ed8ec603"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/GLWorkers.cpp",
+      "preimage_sha256": "6d3a0499752cd64a2d15364a2234050c25bd20e8ae803bf784505502f926f997",
+      "postimage_sha256": "a7d07046b54e439da7f5ca966743b2adbb0e9c56f13fb8749b02f994a511f55b"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/RenderContextAssociatedCache.h",
+      "preimage_sha256": "93fcae497ba463d9e4eb7b7e9d6e588b701e15dabd547d867f3cc809c115f307",
+      "postimage_sha256": "bd8a74d9f9fa79f6e1729d5c87d79c4e821ab77e207d5898661d3c80f1f5aa91"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/RenderContextLifecycle.h",
+      "preimage_sha256": null,
+      "postimage_sha256": "9357cf4e6a9bfd6e4e425587bcd7a93c439a736723cd8a99106cea09ceb1ed82"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/Shader.cpp",
+      "preimage_sha256": "a2382e6735b20517d0915190386539ccc30362cf20a90fff8c88a5e106e5e2fa",
+      "postimage_sha256": "7031f9b2336e7bf683225115484e9680a73cf368c8506e96ea2398dc50641e9c"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.cpp",
+      "preimage_sha256": "6a6d6f59df6765332ee8f3ebf7d562c0536db260081ecfe2e9221fd7b1c56c9d",
+      "postimage_sha256": "2ab940708cf84ce312a1bd61018de09124dd8211d5f76a405890554f1b3e0410"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/core/GLAtmosphere.h",
+      "preimage_sha256": "e83a7fa0ca1657f0f46c93931f47c04461563a0deb3bb6058124e464cf45b104",
+      "postimage_sha256": "c25e951ece08ac3d93c08030164dcaa475a03c2186135b2fc305269b924d196c"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp",
+      "preimage_sha256": "29bf993bdc7bd23c65bdbb46925417c77887feec95bcede3abd8a5945feb3fe5",
+      "postimage_sha256": "5f708abeea9e0b9b94b882a22e74754025b6469b67b1c663a06ae3f1a0805cac"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp",
+      "preimage_sha256": "ab0ab35be25029e35e8b6b0ccb60ae9ef177153c8feccfb0d274801921b58b9e",
+      "postimage_sha256": "a754b433d98a98eaafa8dd78bdf2dd26a30b766c50a9ddc24c1311862a50bbeb"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/core/GLMapRenderGlobals.cpp",
+      "preimage_sha256": "2bdf793b6f091a3d45054cdc994a4be5e92a5515d2452847cf6129077c2b1fa7",
+      "postimage_sha256": "2144a494d9da70b50e1dcc5d25d17c0371288b359c180fa9ec6f29f3058568c5"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/elevation/GLElevationHeatMapLayer.cpp",
+      "preimage_sha256": "d612c31b019e1937e689c217d2987d97cfdf8d2824e5d08aa6432f36b6b2a4b5",
+      "postimage_sha256": "3f73a0ce1744b4c5089cf23c2f44b70f524be224769322a5ae835d60cf7f7f34"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainSlopeAngleLayer.cpp",
+      "preimage_sha256": "88de21bb04811226bd685caaec5d51203137212c71e6a6bbd030983fcc2aad70",
+      "postimage_sha256": "359bbf44abca239bba96a808807c7d987a320cd309f2b4f6e8a03bfb9dad9c9e"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/elevation/GLTerrainTile.cpp",
+      "preimage_sha256": "79a0edc2afdf8cacdb39f7e71f8a79eee4815d7ac2aa96f7c5323e1c2fa97657",
+      "postimage_sha256": "c4a3f9db8d348a6c9c405e6881adb277e1417ec1c0ed1568b5099c7b1eebe55d"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryFeatureDataStoreRenderer3.cpp",
+      "preimage_sha256": "f761b5849a417f063abd523d9d0e71552da0075a0ee1240da6c7b1cdfef2480b",
+      "postimage_sha256": "8d332b57602869378d2cfa13b7397178db8c8ff7a5520b7fbec4d3ec3bd67c31"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryRenderer4.cpp",
+      "preimage_sha256": "e97f70c3d389c59033bdd0397be0685360e5a168d32f07b9faf4617c80f17fbf",
+      "postimage_sha256": "99e1cba1d8e395ac9f08edae80b009e50468392aeeabd315ecfd0e67f3fe5c9d"
+    },
+    {
+      "path": "takkernel/engine/src/main/cpp/renderer/feature/GLBatchGeometryShaders.cpp",
+      "preimage_sha256": "68bd9466a02fb85c430fc043adbcf0c3a0ffaa34fab8beaa47759d30f8e095a2",
+      "postimage_sha256": "b203fa1422ed74730a9dce7808d55913e1db2d3459a0f193e92d6f741fb2ebd5"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java",
+      "preimage_sha256": "20b95759bbc2c2e0193025eb7c72ad659a07299983508281546d00852b5a39c2",
+      "postimage_sha256": "5accf704c0b6b922aaa6c4dc33743246d1e6d13b582130e6df0cd84cbac33990"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java",
+      "preimage_sha256": "9f5eb09dae786bdd6bf0a6608dc0e4066d6267764ec9f4d184d66ce41003d273",
+      "postimage_sha256": "72d22d98693387425e32536baac47cfd90dde7eac43104bec5082570a3fee7a2"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java",
+      "preimage_sha256": null,
+      "postimage_sha256": "e524bb57c1d778c77e988961710a568449250eaa5fdf9b6f0443d9ffd0c9d998"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java",
+      "preimage_sha256": "433c03ee6a6ea674526e2faed99315e565b722e5edf5822ca512298cd9a85770",
+      "postimage_sha256": "bb17d73f8654cc84ddc47d06d34c543b752b53a33287f813ce597be02dabcf6d"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeContextResources.java",
+      "preimage_sha256": "98c3bbfbf9d5f2d527f1ba15960af126d5f5484117deb4d600ee7d1d99d66f8a",
+      "postimage_sha256": "fbea28b56e6ebed75506dac0f4885ab925bf996252282e1686c5f2d282041e54"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/NodeCore.java",
+      "preimage_sha256": "7dcf1c31ac13fcf933e892e055f3ac325ba4e62a970fa0f34ca2effb4d45cf7e",
+      "postimage_sha256": "ede1d67e5a3781d6782891e19f4ef323384972cdf98da3ea67e3c379748160cd"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/opengl/GLMapView.java",
+      "preimage_sha256": "50e6f513e36a151f0b46229f7e6e58f735b788c44699d0bac09667d44d5e367c",
+      "postimage_sha256": "67847bff67b1ac167289b817e2ea17c1960c2b207e0e3d2728a8e78d8e5fcee1"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/opengl/GLRenderGlobals.java",
+      "preimage_sha256": "1f510744e7f177696f61602a3764bd5d1da3c0008a49c3e345a9844da8394da2",
+      "postimage_sha256": "63ab99f33955d5b0594221aac21549e9ed8315ad6c041d6f9c12908411740d22"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/map/opengl/RenderContextBinding.java",
+      "preimage_sha256": null,
+      "postimage_sha256": "b9a98b11111013f915387ada2b1224738824e9c588a91704bc70b86c23c81de2"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/opengl/GLES20FixedPipeline.java",
+      "preimage_sha256": "3b907a8ef252d568b1cd2b52640fc8c4362cd22128be98971944fb29be162898",
+      "postimage_sha256": "1e95fc22fed50ab2a1ed4b06144bf9fea919672f3d1d8bde6be8e9463ab2729e"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/opengl/GLNinePatch.java",
+      "preimage_sha256": "5a21b81e86e53d09600c012740af8e0c125991c697c2298407e00a93fa9ac1f2",
+      "postimage_sha256": "e0f4221f391e70d38105e153a956b311125be86b0c5e0a3fee5c4d6c0b778158"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/opengl/GLText.java",
+      "preimage_sha256": "037127b28292167eaeff22324aed1a26220b20532b565cee786f6094ae27c941",
+      "postimage_sha256": "8d6507b7c5eac4a8a7a6eeb338873187768c4a82658de72570b5cec169b35f6b"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/com/atakmap/opengl/Shader.java",
+      "preimage_sha256": "95bc27c013c5ee07688031f581942158d9561099a2297ca67753d2d937d8eb55",
+      "postimage_sha256": "d03cc4f290d08afa07d8b9cb9027dd5deec4bef82770e2e20991f8e9b43db779"
+    },
+    {
+      "path": "takkernel/engine/src/main/java/gov/tak/api/engine/Shader.java",
+      "preimage_sha256": "13c55f709907370f2777722601d660493ce9f22dc31c17068f13e8cf7192e651",
+      "postimage_sha256": "314eb22a7cf96ee29a6cb5ce549f4d44c719d7550e6008948ec6b9b845bac765"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/c3dt/RenderContextLifecycle.h",
+      "preimage_sha256": null,
+      "postimage_sha256": "56d039b20b6c644aab93b9911ad7b0fd0108cfc5630a5df093b6c379ef0a0c12"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/c3dt/jtileset.cpp",
+      "preimage_sha256": "bf8eafa1e5be1ae1c6d62971956eb06a2f74376a328a2706b092e01d3994a5a4",
+      "postimage_sha256": "c70154c60dadfedfa20baf76aea71c1042e8cafbb521a03a81c024df971523f2"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/renderer/ManagedTextFormat2.cpp",
+      "preimage_sha256": "17da43229496520590cd981ec07c464789a9b2e4dfd5221a1bc2815bf6b04169",
+      "postimage_sha256": "9f691a922a92531975e9bd0755782d90dcd3c43c8ad00b51bb59f3e4611d41ea"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRenderable2.cpp",
+      "preimage_sha256": "31db74e690053053abec25f47563ec28cbb9256e2c9051ff6df552c222697daa",
+      "postimage_sha256": "4e7816552a3862dd581d25c04b3e8ae820cd65db5e869a28e16eabf8158b3284"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/jglmapview.cpp",
+      "preimage_sha256": "074fe83abc40862b5b3edbc94583799aa669a5b8439d0499d20cc3e2e295f4a0",
+      "postimage_sha256": "dddc8f73fe5c5c35d44304671cddf88d1da8043258f759ec8eebf68e39ab2a57"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/jgltext.cpp",
+      "preimage_sha256": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
+      "postimage_sha256": "146cf8869eef0b98a8413af7ece855ad8d25cce9f7c0a6eccd60544f4556d36e"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp",
+      "preimage_sha256": "f9a319746390f3a22c20aeb6a6ec02a6c8b90ba541817a23ad4d11b48a474dc5",
+      "postimage_sha256": "94f82f8c642a532d61926842a606a84922406a8c6271d54a65c5f2d4770b4d80"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp",
+      "preimage_sha256": "c731b396a55d93b06b8e9591a6fd009a8a47d2197e93b9700a43fa39c257a26e",
+      "postimage_sha256": "e28d6e1dff72227fa249f22789aede513e5b18a19663b4c6af4e9c50db35ca19"
+    },
+    {
+      "path": "takkernel/port/src/jre/java/gov/tak/platform/commons/opengl/GLES20.java",
+      "preimage_sha256": "2e17bf9b61fe9579bc8bb5e628d8b02ebf2eeb9959a3b641697a0339089daaa5",
+      "postimage_sha256": "787d890f33874a84ac7bca6abd2b234b298edc0249729f9cb42c277736250f44"
+    }
+  ]
+}

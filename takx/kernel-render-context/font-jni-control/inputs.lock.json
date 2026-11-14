@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "scope": "source-only experimental font JNI correction; not runtime or SDK admission",
+  "official_repository": "https://github.com/openjdk/jdk17u",
+  "official_revision": "e8adc958475b92b9f251145c6ce20532be16d806",
+  "official_tag": "jdk-17.0.21+9",
+  "vendor_source_revision": "551f220d8884",
+  "stock_source_binary_equivalence": false,
+  "patch_license": "GPL-2.0-only WITH Classpath-exception-2.0",
+  "patch_sha256": "b3f6e687e743a824d7886da7f3507127941de84632e1e551ad0a859542f014a0",
+  "files": {
+    "src/java.desktop/share/native/libfontmanager/HBShaper.c": {
+      "before": "2fbbde51399d24f49737f960b3df860ba5f8d11494c68ff82f78f1be2262d617",
+      "after": "201a6c7d049c0e251733bed9783390aa5d8e401946de599ed93057da2b32b5e5"
+    },
+    "src/java.desktop/share/native/libfontmanager/freetypeScaler.c": {
+      "before": "9905ffd2decb0ba5048a63f28779d07ee06039b4c8fad0fced0f795e4e1779ef",
+      "after": "0a83c9266452cec16cf0652a905be2545dc66e2d2a263935fe78b4636f38f0dc"
+    },
+    "src/java.desktop/share/native/libfontmanager/hb-jdk-font.cc": {
+      "before": "8027d83a94f5bbb00ffc26cf8a46e4ee6b6181d53456db5ceb8637a2083a9544",
+      "after": "245749d5831b64705ca4e47820ecf570fdf33898891eae6b85d1c7438e5febd1"
+    }
+  },
+  "native_builder_integration": false,
+  "runtime_accepted": false,
+  "full_sdk_accepted": false
+}

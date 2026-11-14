@@ -435,6 +435,10 @@ def conditional_delete(driver,rec):
     if rec['kind']=='PersistentVolumeClaim':
         volume=driver.get('persistentvolume',rec['parent']['volumeName'],namespace='default')
         require(volume['metadata']['uid']==rec['parent']['volumeUID'] and volume['spec']['claimRef']['uid']==rec['uid'] and volume['spec']['claimRef']['namespace']==rec['namespace'] and volume['spec']['claimRef']['name']==rec['name'],'retained PVC volume ownership changed')
+    delete_record(driver,rec)
+
+
+def delete_record(driver,rec):
     config=json.loads(driver.command(['kubectl','--context','k3d-uds','config','view','--minify','--raw','-o','json']))
     require(len(config['clusters'])==len(config['users'])==1,'ambiguous local delete client')
     cluster,user=config['clusters'][0]['cluster'],config['users'][0]['user'];host=urllib.parse.urlsplit(cluster['server'])
@@ -445,13 +449,83 @@ def conditional_delete(driver,rec):
         cert,key=Path(temp)/'client.crt',Path(temp)/'client.key'
         for path,field in ((cert,'client-certificate-data'),(key,'client-key-data')):path.write_bytes(base64.b64decode(user[field],validate=True));path.chmod(0o600)
         context.load_cert_chain(cert,key)
-        plural={'Secret':'secrets','ConfigMap':'configmaps','PersistentVolumeClaim':'persistentvolumeclaims'}[rec['kind']]
-        endpoint=cluster['server'].rstrip('/')+'/api/v1/namespaces/'+rec['namespace']+'/'+plural+'/'+urllib.parse.quote(rec['name'],safe='')
+        plural={'Secret':'secrets','ConfigMap':'configmaps','PersistentVolumeClaim':'persistentvolumeclaims','Job':'jobs'}[rec['kind']]
+        prefix='/apis/batch/v1' if rec['kind']=='Job' else '/api/v1'
+        endpoint=cluster['server'].rstrip('/')+prefix+'/namespaces/'+rec['namespace']+'/'+plural+'/'+urllib.parse.quote(rec['name'],safe='')
         options={'apiVersion':'v1','kind':'DeleteOptions','preconditions':{'uid':rec['uid'],'resourceVersion':rec['resourceVersion']},'propagationPolicy':'Foreground'}
         request=urllib.request.Request(endpoint,data=json.dumps(options).encode(),method='DELETE',headers={'Content-Type':'application/json'})
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=context))
         with opener.open(request,timeout=30) as response:require(response.status in (200,202),'conditional application cleanup refused')
     driver.core_unchanged()
+
+
+
+def setup_hook_snapshot(driver):
+    """Bind the retained upstream hook before uninstall; never infer from a pod name."""
+    text=driver.command(['helm','--kube-context','k3d-uds','get','hooks','takserver','-n','takserver'])
+    require(len(text.encode())<=256*1024,'upstream hook input bound')
+    objects=[obj for obj in yaml.safe_load_all(text) if obj is not None]
+    # Server 5.7-RELEASE-14, 5187abd46d827d37cfc5708805eced197a837e49,
+    # templates/post-install-hook-postgres.yaml is the only upstream hook.
+    if not objects:
+        require(not driver.get('jobs',namespace='takserver')['items'],'unexpected application Job without stored hook')
+        return None
+    require(len(objects)==1,'upstream hook inventory differs')
+    hook=objects[0];meta=hook.get('metadata',{});annotations=meta.get('annotations',{})
+    require(hook.get('apiVersion')=='batch/v1' and hook.get('kind')=='Job' and
+            meta.get('name')=='takserver-db-setup' and meta.get('namespace') in (None,'takserver') and
+            annotations=={'helm.sh/hook':'post-install','helm.sh/hook-weight':'-5',
+                         'helm.sh/hook-delete-policy':'before-hook-creation'} and
+            meta.get('labels',{}).get('app.kubernetes.io/instance')=='takserver' and
+            meta.get('labels',{}).get('app.kubernetes.io/managed-by')=='Helm', 'upstream setup hook ownership differs')
+    job=driver.get('job','takserver-db-setup',namespace='takserver')
+    validate_setup_hook(job)
+    # Defaults and admission additions are allowed, but every stored field must
+    # survive unchanged. Container inventories cannot be extended.
+    def contains(actual,expected):
+        if isinstance(expected,dict):return isinstance(actual,dict) and all(k in actual and contains(actual[k],v) for k,v in expected.items())
+        if isinstance(expected,list):return isinstance(actual,list) and len(actual)==len(expected) and all(contains(a,b) for a,b in zip(actual,expected))
+        return actual==expected
+    require(contains(job['spec'],hook['spec']) and contains(job['metadata'],meta),'live setup hook differs from stored release')
+    return {'record':resource_record(job),'specSHA256':sha(job['spec']),
+            'storedHookSHA256':sha(hook)}
+
+
+def validate_setup_hook(job):
+    meta=job.get('metadata',{});status=job.get('status',{})
+    require(job.get('apiVersion')=='batch/v1' and job.get('kind')=='Job' and
+            meta.get('namespace')=='takserver' and meta.get('name')=='takserver-db-setup' and
+            not meta.get('ownerReferences') and not meta.get('deletionTimestamp') and
+            type(status.get('succeeded')) is int and status.get('succeeded')==1 and not status.get('active',0) and not status.get('failed',0) and
+            any(c.get('type')=='Complete' and c.get('status')=='True' for c in status.get('conditions',[])),
+            'setup hook is not an owned completed Job')
+
+
+def cleanup_setup_hook(driver,proof):
+    if proof is None:return
+    driver.guard();driver.core_unchanged()
+    rec=proof['record']
+    require(rec['kind']=='Job' and rec['namespace']=='takserver' and rec['name']=='takserver-db-setup', 'setup cleanup scope differs')
+    raw=driver.kube('get','job',rec['name'],'-n','takserver','--ignore-not-found','-o','json')
+    if not raw.strip():return
+    job=json.loads(raw);validate_setup_hook(job)
+    require(resource_record(job)==rec and sha(job['spec'])==proof['specSHA256'], 'setup hook identity/spec changed after uninstall')
+    for namespace in APP_RELEASES:
+        if not driver.kube('get','namespace',namespace,'--ignore-not-found','-o','json').strip():continue
+        require(not driver.get('deployments',namespace=namespace)['items'] and
+                not driver.get('statefulsets',namespace=namespace)['items'],'application workloads remain before hook cleanup')
+        for pod in driver.get('pods',namespace=namespace)['items']:
+            owners=pod['metadata'].get('ownerReferences',[])
+            require(namespace=='takserver' and pod.get('status',{}).get('phase')=='Succeeded' and
+                    len(owners)==1 and owners[0].get('apiVersion')=='batch/v1' and
+                    owners[0].get('kind')=='Job' and owners[0].get('name')==rec['name'] and
+                    owners[0].get('uid')==rec['uid'] and owners[0].get('controller') is True,
+                    'foreign or live consumer before setup hook cleanup')
+    # Foreground GC removes only this exact Job's children. All ordinary
+    # consumer checks and retained-data cleanup remain unchanged.
+    delete_record(driver,rec)
+    driver.wait(lambda:consumers_gone(driver),300)
+    driver.journal('completed-setup-hook-conditionally-removed',uid=rec['uid'])
 
 
 def startup_map(obj):

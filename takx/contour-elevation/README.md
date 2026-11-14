@@ -93,8 +93,9 @@ placement, client contour API or complete client runtime. Those gates stay open.
 features into a real `FeatureSetDatabase2` and exposes its `FeatureLayer3`. It
 requires a new database file, refuses symlink ancestors, and creates the file
 with POSIX owner-only permissions. Existing files are never overwritten. The
-input feature batch stays caller-owned. Close the layer owner before releasing
-its datastore; previously borrowed layer/store references are then out of scope.
+input feature batch stays caller-owned. The wrapper owns and disposes the datastore; callers must not dispose borrowed
+layer/store references. Detach any borrowed layer from its map before closing
+the owner. Borrowed references are then out of scope.
 Closing is idempotent and leaves the database file for explicit caller retention.
 On construction failure, the owned store is disposed and the new file remains
 available for diagnosis. The wrapper is for single-thread use on the qualified

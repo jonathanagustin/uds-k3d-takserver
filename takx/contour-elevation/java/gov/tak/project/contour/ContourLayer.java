@@ -42,7 +42,7 @@ public final class ContourLayer implements AutoCloseable {
         FeatureSetDatabase2 store = null;
         try {
             store = new FeatureSetDatabase2(file.toFile());
-            long id = store.insertFeatureSet(new FeatureSet("project-contours", "contours", name, 0, 0));
+            long id = store.insertFeatureSet(new FeatureSet("project-contours", "contours", name, Double.MAX_VALUE, 0));
             for (Feature original : features) {
                 try (Owned temporary = new Owned()) {
                     var geometry = temporary.add(original.getGeometry());

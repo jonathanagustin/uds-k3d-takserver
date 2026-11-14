@@ -96,6 +96,13 @@ public final class ElevationContourControls {
                     var layer=owner.layer();
                     check(layer.getName().equals("Owned native contour layer"),"native layer name differs");
                     check(layer.getDataStore().queryFeaturesCount(null)==storedLines.size(),"native layer feature count differs");
+                    for(double resolution:new double[]{156543.034,500,1,.001}){
+                        var query=new com.atakmap.map.layer.feature.FeatureDataStore2.FeatureQueryParameters();
+                        query.visibleOnly=true;
+                        query.featureSetFilter=new com.atakmap.map.layer.feature.FeatureDataStore2.FeatureSetQueryParameters();
+                        query.featureSetFilter.maxResolution=resolution;
+                        check(layer.getDataStore().queryFeaturesCount(query)==storedLines.size(),"renderer resolution query omitted contours at "+resolution);
+                    }
                     layer.setVisible(false);check(!layer.isVisible(),"layer visibility false ignored");
                     layer.setVisible(true);check(layer.isVisible(),"layer visibility true ignored");
                     int read=0;

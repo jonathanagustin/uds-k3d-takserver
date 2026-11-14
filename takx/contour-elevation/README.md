@@ -133,3 +133,21 @@ The subsequent experiment consolidated the test into one owned database, keeping
 all existing quotas and ownership guards. Native producer code remains unchanged.
 Rendered pixels, GL drawing, label placement, complete client API/runtime and
 full renderer/cache qualification remain open.
+
+## Zoom-filter regression and remaining rendering gates
+
+The first renderer-style resolution query exposed a feature-set bug: a zero/zero
+resolution range maps to the highest LOD and hides contours at ordinary camera
+zooms. The wrapper now follows the actual upstream outlines convention,
+`Double.MAX_VALUE` to zero. Four visible-only queries at world, regional, metre
+and millimetre resolution pass. The corrected source-locked CPU replay completes
+597 assertions with zero strict JNI diagnostics. Receipt:
+`849bf62e2f3adb19cd8c87c8f13af0c234b94e78ab1b0a6ac76e5b71e1239606`.
+The original failing resolution query, exact owned source snapshots and the
+preceding passing experiments remain retained separately.
+
+A separate owned-display experiment now produces actual contour pixels, but
+fails strict JNI and the subsequent hide control. Its reviewed diagnostic source
+and precise limits are in `experiments/README.md`. Default verification locks
+that diagnostic source without compiling or executing it. These failures do not
+change the passing CPU scope or grant rendered-layer/client acceptance.

@@ -43,11 +43,14 @@ def module(name, path):
 def contract():
     lock = json.loads((HERE / 'inputs.lock.json').read_text())
     require(type(lock['schema']) is int and lock['schema'] == 1 and lock['profile'] == 'public-elevation-contours-v1', 'profile identity differs')
-    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 593, 'closed source/control inventory differs')
+    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 597, 'closed source/control inventory differs')
     require(all(lock[key] is False for key in FLAGS), 'project adapter cannot grant client contour acceptance')
     for name, digest in lock['owned'].items():
         require(sha(HERE / name) == digest, 'owned adapter bytes differ')
     require(sha(GRID) == lock['grid_sha256'] and sha(CLIP) == lock['clip_sha256'], 'reviewed contour algorithm differs')
+    require(set(lock['experimental_controls']) == {'experiments/ContourDrawProbe.java'}, 'experimental source membership differs')
+    for name, digest in lock['experimental_controls'].items():
+        require(sha(HERE / name) == digest, 'experimental source bytes differ')
     return lock
 
 
@@ -68,6 +71,7 @@ def controls(args):
         inputs[str(profile / name)] = digest
     paths = [*(HERE / name for name in SOURCES), GRID, CLIP, HERE / 'inputs.lock.json', Path(__file__).resolve(),
              REPO / 'takx/native-commoncommo/runner.py', REPO / 'takx/jni_diagnostics.py']
+    paths.extend(HERE / name for name in lock['experimental_controls'])
     for path in paths:
         inputs[str(path)] = sha(path)
     runner = module('contour_elevation_bounded_executor', REPO / 'takx/native-commoncommo/runner.py')
@@ -116,9 +120,9 @@ def controls(args):
                 require(0 < len(products) <= 32, 'compiled product bound differs')
             unchanged()
         text = (output / 'runtime.log').read_text()
-        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=593\b', text) and
+        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=597\b', text) and
                 not diagnostics.strict_jni_failures(text), 'actual elevation controls failed')
-        record.update(completed=True, checks=593, strict_jni_diagnostics=0,
+        record.update(completed=True, checks=597, strict_jni_diagnostics=0,
                       artifacts={'owned-contours.sqlite': sha(output / 'owned-contours.sqlite')})
         write()
     except BaseException as error:

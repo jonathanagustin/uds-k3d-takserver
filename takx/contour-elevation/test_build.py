@@ -25,7 +25,7 @@ class ProviderGuards(unittest.TestCase):
                     B.main(argv)
 
     def test_owned_source_and_acceptance_changes_refuse(self):
-        for change in (*B.SOURCES, 'acceptance'):
+        for change in (*B.SOURCES, 'experiments/ContourDrawProbe.java', 'acceptance'):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary) / 'profile'
                 shutil.copytree(HERE, root)

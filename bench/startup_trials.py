@@ -28,6 +28,37 @@ class Invalid(Exception):
     pass
 
 
+PHASE_REASONS = frozenset(('pod_schema', 'pod_namespace_or_deleted', 'pod_name', 'pod_uid',
+    'named_container_missing', 'container_id', 'image_id', 'restart_count', 'timestamp_schema',
+    'app_unsupported', 'context_required', 'pod_ambiguous', 'pod_incarnation_changed',
+    'jvm_incarnation_changed', 'class_counter_reset', 'jvm_start_outside_lifetime',
+    'phase_identity_mismatch', 'jvm_start_after_marker', 'marker_after_ready',
+    'metrics_size', 'metrics_encoding', 'metrics_schema', 'metrics_duplicate', 'metrics_missing',
+    'metrics_number', 'metrics_epoch', 'metrics_count', 'pod_json', 'pod_duplicate_field',
+    'command_failed', 'command_timeout', 'command_unavailable', 'cleanup_deadline',
+    'deadline', 'output_size', 'unsupported_schema'))
+PHASE_STAGES = frozenset(('begin-observer', 'finish-join'))
+
+
+class PhaseUnavailable(Invalid):
+    """Retain only fixed phase facts, never the observer payload or raw reason."""
+    def __init__(self, app, stage, reason):
+        super().__init__('phase_unavailable')
+        self.app = app if isinstance(app, str) and app in APPS else None
+        self.stage = stage if isinstance(stage, str) and stage in PHASE_STAGES else 'unknown'
+        self.reason = reason if isinstance(reason, str) and reason in PHASE_REASONS else 'unsupported_schema'
+
+    def diagnostic(self):
+        return {'app': self.app if isinstance(self.app, str) and self.app in APPS else None,
+                'stage': self.stage if isinstance(self.stage, str) and self.stage in PHASE_STAGES else 'unknown',
+                'reason': self.reason if isinstance(self.reason, str) and self.reason in PHASE_REASONS else 'unsupported_schema'}
+
+
+def available_phase(observation, app, stage):
+    if observation.get('available') is not True:
+        raise PhaseUnavailable(app, stage, observation.get('reason'))
+
+
 def failure_diagnostic(error):
     """Fixed exception kinds and source locations, never exception/data values."""
     modules = {str(Path(module.__file__).resolve()): (name, Path(module.__file__))
@@ -48,6 +79,8 @@ def failure_diagnostic(error):
         result['observer_reason'] = error.args[0]
     if isinstance(error, jvm.CommandFailure):
         result['command'] = error.diagnostic()
+    if isinstance(error, PhaseUnavailable):
+        result['phase'] = error.diagnostic()
     current = error.__traceback__
     while current is not None:
         selected = modules.get(current.tb_frame.f_code.co_filename)
@@ -224,8 +257,8 @@ def begin(context, cohort, bindings, commands=None, observer=None):
     starts = {}
     for app, identity in observed['identities'].items():
         observation = observer(app, context)
-        require(observation.get('available') is True and
-                all(observation['identity'].get(key) == value for key, value in identity.items() if key != 'node_uid'), 'phase_unavailable')
+        available_phase(observation, app, 'begin-observer')
+        require(all(observation['identity'].get(key) == value for key, value in identity.items() if key != 'node_uid'), 'phase_identity')
         starts[app] = observation['jvm_start_time_unix_ms']
     after, _ = snapshot(commands)
     require(all(after[key] == observed[key] for key in ('cluster_uid', 'platform', 'config_sha256', 'identities', 'container_images')), 'phase_identity')
@@ -268,7 +301,7 @@ def finish(initial, mode, commands=None, observer=None):
         phase['image_pull_scope'] = 'sum of observed complete Pulling/Pulled pairs; missing events do not prove cache presence or zero pull time'
         observation = observer(app, initial['context'])
         jvm.join_phase(phase, observation)  # Preserve #533's independent-metrics semantics unchanged.
-        require(phase['jvm_observation'].get('available') is True, 'phase_unavailable')
+        available_phase(phase['jvm_observation'], app, 'finish-join')
         require(phase['jvm_to_log_s'] is not None and phase['log_to_ready_s'] is not None, 'timestamp_join')
         require(jvm.epoch_ms(phase['evidence']['ready_at']) >= jvm.epoch_ms(phase['evidence']['startup_log_at']), 'timestamp_join')
         require(observation['identity']['pod_uid'] == identity['pod_uid'], 'phase_identity')

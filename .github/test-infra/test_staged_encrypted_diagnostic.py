@@ -156,6 +156,40 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
                     else:
                         with self.assertRaises(ValueError):AGE.package_input(root)
 
+    def test_application_check_binding_selection_and_private_schema(self):
+        for mutation in ('valid','task','phase','binding','hash','stage','earlier','missing-first','link','mode'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_out,env,payload,journal,_owner=package_fixture(root)
+                payload.pop('role');payload['check']='api-smoke'
+                journal.pop('packageCommandFailure')
+                journal['stages']=[dict(stage='application-check-failed',check='api-smoke',phase='transition',exitStatus=1,timedOut=False)]
+                if mutation=='task':payload['check']='arbitrary'
+                if mutation=='phase':payload['phase']='arbitrary'
+                if mutation=='binding':payload['binding']={**payload['binding'],'runID':'999'}
+                if mutation=='hash':payload['driverSHA256']='0'*64
+                if mutation=='stage':journal['stages'][0]['check']='flows'
+                if mutation=='earlier':journal['stages'].insert(0,{'stage':'package-command-failed'})
+                private=folder/AGE.APPLICATION_NAME;private.write_text(json.dumps(payload));private.chmod(0o600)
+                reference=dict(file=AGE.APPLICATION_NAME,sha256=AGE.digest(private.read_bytes()),bytes=private.stat().st_size)
+                journal['applicationCheckFailure']=reference
+                journal['firstPrivateFailure']=dict(schema=1,kind='application-check',reference=dict(reference))
+                if mutation=='missing-first':journal.pop('firstPrivateFailure')
+                path=folder/'journal.json';path.write_text(json.dumps(journal));path.chmod(0o600)
+                companion=folder/'journal-progress.json'
+                companion.write_text(json.dumps(dict(schema=1,guard=journal['guard'],journalSHA256=AGE.digest(path.read_bytes()))));companion.chmod(0o600)
+                if mutation=='mode':private.chmod(0o644)
+                if mutation=='link':
+                    original=folder/'foreign';private.rename(original);private.symlink_to(original)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.INPUT_LIMIT+1),private.read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises(ValueError):AGE.package_input(root)
+
     def test_typed_validation_is_sealed_and_later_command_does_not_replace_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)

@@ -234,6 +234,29 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
                     else:
                         with self.assertRaises(ValueError):AGE.package_input(root)
 
+    def test_cleanup_consumer_inventory_is_source_bound_and_sealed(self):
+        for mutation in ('valid','empty','body','foreign','kind-alias'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_out,env,payload,journal,_owner=validation_fixture(root)
+                payload['kind']='cleanup-consumers'
+                payload['snapshot']={'schema':1,'consumers':[{'kind':'Pod','namespace':'takserver',
+                    'name':'remaining','uid':'bound-uid','resourceVersion':'123','deleting':True,
+                    'phase':'Succeeded','owners':[]}]}
+                if mutation=='empty':payload['snapshot']['consumers']=[]
+                elif mutation=='body':payload['snapshot']['consumers'][0]['spec']={'private':'PRIVATE_SENTINEL'}
+                elif mutation=='foreign':payload['snapshot']['consumers'][0]['namespace']='istio-system'
+                elif mutation=='kind-alias':payload['kind']='stored-hooks-drift'
+                save_validation(folder,payload,journal)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.VALIDATION_INPUT_LIMIT+1),(folder/AGE.VALIDATION_NAME).read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises(ValueError):AGE.package_input(root)
+
     def test_application_check_binding_selection_and_private_schema(self):
         for mutation in ('valid','task','phase','binding','hash','stage','earlier','missing-first','link','mode'):
             with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:

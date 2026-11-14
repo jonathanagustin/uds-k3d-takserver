@@ -1,0 +1,63 @@
+{
+  "datasets": [
+    {
+      "architecture": "amd64",
+      "archive_bytes": 10336,
+      "archive_sha256": "fa3a908bddbf7c4eebd58d5b7820c6fd294a3bc3c050174d781662e4bc09f931",
+      "artifact_id": 14097052698,
+      "artifact_name": "startup-pair-amd64-43551469352-1",
+      "attempt": 1,
+      "files": {
+        "bindings.json": "64e39923df968fb93b49e3c41f655fcabd520f31bfde2d5cb6a1d9373ea0bbdc",
+        "cold-begin.json": "7b65a195a6fc3c5a7a787cb9feb8c7b2f928a72a17e002f70a43f5186c7234b1",
+        "cold.json": "adbcced3ee91d8322ccb442109ec2d775e38f5c58ef0723be811a5b2149fbf96",
+        "pair.json": "377f00af62e63160b3448562f0d67b816a695019f608833c8d4bed8dca88861c",
+        "warm-begin.json": "34145487baab0face3af07cdb700cd5296cd47eb3c3109025453f64c79e597cc",
+        "warm.json": "4909ef405c5fdab7a6ba62815f89d483db9afd4a95554751eaf206d362182ebe"
+      },
+      "job_id": 132314666076,
+      "job_name": "startup",
+      "run_id": 43551469352,
+      "runner_labels": [
+        "ubuntu-22.04"
+      ],
+      "source_commit": "76750bb7ad32ea74e10949af4b4e191c3f6bc72a",
+      "workflow_id": 417819272,
+      "workflow_snapshot": "source/amd64-startup.yaml.txt"
+    },
+    {
+      "architecture": "arm64",
+      "archive_bytes": 10372,
+      "archive_sha256": "14acdf4358e3225f2d5cfbe85350cd466cd2fd1589341dc7fdaf07a99998cc89",
+      "artifact_id": 14098301859,
+      "artifact_name": "startup-pair-arm64-43554526073-1",
+      "attempt": 1,
+      "files": {
+        "bindings.json": "476d51fd1fd643bb51373843e33822b1ca7557c82f24847c4fdd0110b17a3e2e",
+        "cold-begin.json": "ef8e69ea3c88c379a5271a9e4fdd4df545ff75f10e8dabf131d002dd856c4fde",
+        "cold.json": "014afcddf665e60fa86f8f3897c792781370616d330bd31273a18ff25b490a64",
+        "pair.json": "7dfe073589384d3ff8a6b3cf5e6aac5eeb6af754e1321fa8f741e4d470845b70",
+        "warm-begin.json": "822e3b25d89d634a265223b7a1d7beb6383349afab503c096973d8711021414d",
+        "warm.json": "5834afd4d9a87f42e8dcf49ad9a5750341f5d7b92e6b68793c9de6a13bf5d6ee"
+      },
+      "job_id": 132324282695,
+      "job_name": "startup (arm64, ubuntu-22.04-arm)",
+      "run_id": 43554526073,
+      "runner_labels": [
+        "ubuntu-22.04-arm"
+      ],
+      "source_commit": "bf368f4e6be87b008127b87d1973158b60cf2723",
+      "workflow_id": 417819272,
+      "workflow_snapshot": "source/arm64-startup.yaml.txt"
+    }
+  ],
+  "schema": 1,
+  "scope": "one qualified cold/warm application pair per native architecture",
+  "source_files": {
+    "source/amd64-startup.yaml.txt": "704d3eec5a40f0e2b66bdcc70e073c381d62f85929ad36b6f6d92bef3c4d08e8",
+    "source/arm64-startup.yaml.txt": "96c812a43b92d2fc1255cf93e2778acebc41707f6ac522bc6a741ca2d503251b",
+    "source/jvm_metrics.py.txt": "4aefb225f62752e233b116a1874e730edc2c8b8c99a072fd472845f3147061d3",
+    "source/phases.py.txt": "46ee653922f7670ec793798d56745d5c84c6cb979669474e2b64586e184762c8",
+    "source/startup_trials.py.txt": "7b8bc4030dafb080d0ae27bf21cba8899f16676ed0fcf7ccc57d31417cd4d32e"
+  }
+}

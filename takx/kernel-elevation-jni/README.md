@@ -56,3 +56,15 @@ The public source preparer is still not a portable native builder. Other elevati
 concurrency and rendering remain outside the current 13-case qualification scope.
 No full elevation API, SDK or client acceptance follows from these source fixes.
 Refs #374 and #486.
+
+The owned listener/bounds control consists of `tests/ElevationListenerProbe.java`
+and `tests/ElevationListenerProbe.cpp`. It requires the actual complete Kernel
+Java classes and native libraries plus the matching source headers; it is not a
+standalone SDK implementation. Compile Java with `javac --release 17 -proc:none`
+and the reviewed Java classpath. Compile the C++ probe as a shared library against
+that build's `interop/elevation/ManagedElevationSource.h`, JNI headers,
+`libtakenginejni` and `libtakengine` with `-Wl,-z,defs`. Run the Java main with
+`-Xcheck:jni`, the reviewed runtime-native SHA-256 manifest, and the probe library
+path as its two arguments. The source preparer verifies all four owned control
+files but performs no compilation or native execution. Scoped results and
+remaining gates are recorded in `QUALIFICATION.md`.

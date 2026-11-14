@@ -22,6 +22,7 @@ Actual full-library controls pass with zero strict JNI diagnostics:
 | Analytic source/81 samples/attach/detach, 166 checks | `c530992bcb80bf3666e484151921c01fe28fd2889e44cb7b5162197b2aae3053` |
 | 13 bulk fault cases, 97 assertions | `afe1ae09214ae291d5f7c9f9d8ecd3b2d28c2158434a5af67136c3c5bfb3da3d` |
 | Six additional scalar fault cases | `97363c17ee41ea57f03ca0db0bdacdc96539258954fe218ae41530800cb81d03` |
+| Listener/bounds lifecycle, 112 checks | `822d0d31640639ae46c1fad5329fcebf498ebdbd056dbb4d35cd70ccad34b87f` |
 | 22 throwing bridge operations | `2b540d4292068b07cfa04e2e8e42d2a1bf7ecb0ff19c667b22eae0482cbf76bf` |
 | 62 feature lookups and typed options/envelope | `41dfbf9977348a9f1f287a2b7a341b847aac36b9b8510dd3ecea455d87e94e7e` |
 | Both surface construction orders and 100 concurrent calls | `117ed8ec4d1aafc7aa0b444c19ade773b4578c574bdf2dbb44b7318a680add69` |
@@ -38,6 +39,20 @@ The extra scalar fixture is a separately authenticated local regression source,
 not part of the two source-preparation-owned fixtures. The native build remains
 a separately reviewed local composition experiment, not this profile's public
 builder. Public native-builder integration, other elevation entry points,
-listener/bounds fault cases, concurrency beyond the listed surface control,
+direct chunk primitive/createData fault cases, concurrency beyond the listed surface control,
 renderer cache bounds and full contour/SDK/client acceptance remain open.
 All broad acceptance flags stay false.
+
+The listener/bounds probe links the actual full Native07 libraries and uses
+`ManagedElevationSource` from the reviewed source layout. Its two native listeners
+outlive the managed source. Controls cover add/remove callback failure, bounds
+failure, constructor name failure, destructor cleanup, primary exception identity
+with secondary cleanup errors, listener pointer retirement, late callbacks after
+retirement, and recovery with a fresh owned source. It does not replace the
+production implementation.
+
+The two listener probe files are now source-preparation-owned controls; their
+bytes match the separately authenticated listener experiment. Native07's frozen
+receipt and 64 recipe snapshots retain the earlier two-control manifest. Adding
+these test sources does not change or retroactively relabel that native build:
+the three native postimages and all 815 producer objects are unchanged.

@@ -35,6 +35,16 @@ class SourceGuards(unittest.TestCase):
                 with patch.object(P, 'HERE', root), self.assertRaises(ValueError):
                     P.contract()
 
+    def test_each_owned_control_requires_exact_bytes(self):
+        for name in P.CONTROLS:
+            with self.subTest(control=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / 'profile'
+                shutil.copytree(HERE, root)
+                source = root / name
+                source.write_bytes(source.read_bytes() + b'\n// changed control\n')
+                with patch.object(P, 'HERE', root), self.assertRaisesRegex(ValueError, 'control source bytes'):
+                    P.contract()
+
     def test_wrong_source_refuses_before_output_creation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

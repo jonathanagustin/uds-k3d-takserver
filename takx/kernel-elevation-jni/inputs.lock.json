@@ -21,7 +21,9 @@
   "patch_sha256": "851fdacceb8a347e945035587d3e77bb84bb620b83cbaac71a62f3ee9cf0025e",
   "owned_controls": {
     "tests/ElevationJNIControls.java": "c5a9f332f66b24046d462796d5462b2c1bee781c91994183fa3186f587c54d31",
-    "tests/ElevationFaultControls.java": "acd870f34496294b23438e33ba65434c575d88f34a355cd84875b1caaa3c7ca3"
+    "tests/ElevationFaultControls.java": "acd870f34496294b23438e33ba65434c575d88f34a355cd84875b1caaa3c7ca3",
+    "tests/ElevationListenerProbe.java": "368fb7903780df51263927037f956e50b3debebe5869352ccdc96c6ec4b7d73f",
+    "tests/ElevationListenerProbe.cpp": "f7f8b8eb1b35c541e4ac0c2f36f5fab6e494ffd324eeb2562d6392807346bab0"
   },
   "native_builder_integration": false,
   "strict_elevation_accepted": false,

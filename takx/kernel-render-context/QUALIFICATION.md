@@ -403,10 +403,37 @@ and both mixed-interface construction orders plus 100 concurrent calls
 (`ddaceb70ac180e792859cb0de23d8b9342a4372000639ca0553e72006d5bdd74`).
 
 Its headed JVM again returns normally after all functional controls. There are
-zero project JNI warnings and 2,249 JDK font warnings in the 7,245,835-byte log;
-strict overall acceptance remains false. Functional-only receipt SHA-256:
+2,249 unchecked-call warnings attributed to JDK font routines and no project
+unchecked-call warnings in the 7,245,835-byte log. A subsequent full diagnostic
+review also counted 132 critical-array warnings without Java attribution; these
+were present in this original run. Strict overall acceptance remains false. Functional-only receipt SHA-256:
 `602904fc540733ad32d1d88e88de98cc220363f55f91db34b66edf3730750112`.
 The original Temurin runtime remains unchanged. Matching official OpenJDK source
 is being used for an independent, unmodified font-module rebuild baseline before
 attempting a runtime correction. No derived runtime, full renderer, SDK, client or
 portable-producer acceptance follows from these scoped controls.
+
+
+An independent unmodified official OpenJDK font-module baseline now compiles all
+63 translation units and retains all 44 JNI exports. Its six headless raster cases
+match the vendor runtime in pixel hashes and float metric bits; both produce 426
+unchecked-call warnings. Raster receipt SHA-256:
+`8c1f67107be4b0124a85d63134f88d9008be5f17f18992dca67e2ff51efbcc64`.
+Official source revision `e8adc958475b92b9f251145c6ce20532be16d806` matches the
+runtime version, but differs from the vendor release's recorded source revision.
+This establishes bounded raster parity, not stock source/binary equivalence.
+
+A private three-file exception-check candidate, built afresh from all 63 units,
+retains the same 44 JNI exports. In its second revision, the same six raster cases
+match with zero JNI warnings (vendor control: 426); receipt SHA-256:
+`19256b7423f674489e12cbbdec00710bb2f20dbb78b5f268d030c9905b173bf8`.
+Actual SunLayoutEngine JNI tests exercise positive output and throwing font-table
+and glyph-metrics callbacks, preserving each original exception identity without
+JNI diagnostics; receipt SHA-256:
+`75926325e32be6c02ac6bce917e26db5d19074f3a61693d65147997d810de2a3`.
+The owned headed lifecycle completes with this derived runtime and removes the
+2,249 unchecked-call warnings, but retains all 132 pre-existing critical-array
+warnings. Strict acceptance therefore still fails. Failed candidates and their
+logs are retained, including the first candidate's table-exception warning.
+No production runtime, portable font producer, full renderer, SDK or client
+acceptance is claimed.

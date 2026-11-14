@@ -30,7 +30,7 @@ python3 -B -m unittest discover -s . -p 'test_*.py' -v
 ```
 
 The opt-in controls consume the independently reviewed SHA-256 of a complete
-1,239-source/2,702-class public Java composition receipt, all of its real JARs,
+`public-context-client-java` receipt (1,239 sources / 2,702 classes), all of its real JARs,
 and an explicit JDK. They verify all class/dependency hashes before and after
 execution and preserve failures in a fresh, disjoint output directory:
 
@@ -43,3 +43,5 @@ python3 build.py --phase controls --java-proof /path/to/full-java-proof \
 The profile downloads and installs nothing. The complete 5.8 Platform/Client,
 contour generation/layers, real vehicle assets/meshes, peer interoperability and
 portable SDK assembly remain separate qualification gates.
+
+The composition recipe is staged in #499 as `takx/kernel-render-context/client_java.py`. Its source revision and reviewed native/Java input receipts remain explicit prerequisites; this metadata profile does not build them or silently select a legacy checkpoint.

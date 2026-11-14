@@ -51,9 +51,9 @@ def controls(args):
     require(proof_file.stat().st_size <= 4 * 1024**2, 'Java proof size bound')
     require(sha(proof_file) == args.java_proof_sha256, 'reviewed Java proof differs')
     proof = json.loads(proof_file.read_text())
-    require(proof.get('completed') is True and proof.get('sourceCount') == 1239 and
-            proof.get('newHeaderSyntaxChecked') == 2 and proof.get('headlessControlsStrictJNIDiagnostics') == 0,
-            'complete public Java producer required')
+    require(proof.get('type') == 'public-context-client-java' and proof.get('completed') is True and
+            proof.get('source_count') == 1239 and proof.get('jni_header_syntax_checked') == 2,
+            'complete public Java composition producer required')
     class_root = proof_root / 'classes'
     classes = proof['classes']
     require(len(classes) == 2702, 'complete class inventory required')

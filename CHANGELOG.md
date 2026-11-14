@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.6](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.5...v0.16.6) (2026-11-14)
+
+
+### Bug Fixes
+
+* retain encrypted application cleanup consumer evidence ([#584](https://github.com/jonathanagustin/uds-takserver/issues/584)) ([e2ebbb6](https://github.com/jonathanagustin/uds-takserver/commit/e2ebbb6ed3dafb427d236c80d4e0c892cfd443df))
+
 ## [0.16.5](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.4...v0.16.5) (2026-11-14)
 
 

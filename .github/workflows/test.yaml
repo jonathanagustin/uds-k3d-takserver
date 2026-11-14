@@ -49,6 +49,7 @@ on:
       - "compliance/README.md"
       - ".github/workflows/commitlint.yaml"
       - ".github/workflows/codeql.yaml"
+      - ".github/workflows/native-sanitizers.yaml"
       - ".github/workflows/dependency-review.yaml"
       - ".github/workflows/scorecard.yaml"
       - ".github/workflows/scorecard-analysis.yaml"

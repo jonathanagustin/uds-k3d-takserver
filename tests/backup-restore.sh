@@ -182,6 +182,7 @@ velero_details() {
   local kind="${1:-}"
   local name="${2:-}"
   local verb=""
+  local server_pod=""
   case "${kind}" in
     backup.velero.io) verb="backup" ;;
     restore.velero.io) verb="restore" ;;
@@ -190,19 +191,27 @@ velero_details() {
   # The server image is also the CLI. describe --details lists each error,
   # and the logs say which item failed. Neither is in the CR status.
   local filter="${root}/.github/scripts/redact-then-filter.sh"
-  if [[ -n "${verb}" ]]; then
-    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details 2>&1 \
+  # The Deployment selector may overlap the node-agent. Resolve its exact UID
+  # ownership chain once and use only the unique live server pod for diagnostics.
+  server_pod="$(k get deployment,replicaset,pod -n velero -o json 2>/dev/null \
+    | python3 "${root}/.github/scripts/velero-server-pod.py")" || server_pod=""
+  if [[ -n "${verb}" && -n "${server_pod}" ]]; then
+    k exec -n velero "pod/${server_pod}" -c velero -- /velero "${verb}" describe "${name}" --details 2>&1 \
       | "${filter}" >&2 || echo "velero describe command or redaction failed" >&2
     # CLI transport errors need not be structured Velero log records. Keep the
     # redacted tail of the combined stream so those failures remain diagnosable.
-    k exec -n velero deploy/velero -c velero -- /velero "${verb}" logs "${name}" 2>&1 \
+    k exec -n velero "pod/${server_pod}" -c velero -- /velero "${verb}" logs "${name}" 2>&1 \
       | "${filter}" --tail 40 >&2 || echo "velero logs command or redaction failed" >&2
   fi
   k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
     -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' 2>/dev/null \
     | "${filter}" >&2 || echo "omitted unsanitizable volume list" >&2
-  k logs -n velero deploy/velero 2>/dev/null \
-    | "${filter}" --grep 'level=(error|warning)' --tail 40 >&2 || echo "omitted unsanitizable velero log" >&2
+  if [[ -n "${server_pod}" ]]; then
+    k logs -n velero "pod/${server_pod}" -c velero 2>/dev/null \
+      | "${filter}" --grep 'level=(error|warning)' --tail 40 >&2 || echo "omitted unsanitizable velero log" >&2
+  else
+    echo "Velero server diagnostics unavailable: no unique live owned server pod" >&2
+  fi
   # The node-agent runs the data path; a canceled PVB says why only here,
   # and in the data-mover pod, which Velero deletes when it ends.
   echo "--- node-agent log (PVB/PVR, errors)" >&2

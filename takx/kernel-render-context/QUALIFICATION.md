@@ -455,3 +455,53 @@ Only this exact JRE port path is admitted outside the existing engine prefix.
 All five sparse source stages and ten offline guards pass. A fresh complete
 native/Java build and its actual-library controls remain required for the changed
 profile. Full renderer, SDK, client and portable runtime acceptance remain false.
+
+
+The 61-path profile now passes a complete fresh native/Java producer and an
+independent output/source review. Producer SHA-256:
+`93fde574b2bc9425b409ba99ef2d453de52b729f25adfd1a14a5123c11be143c`;
+independent review:
+`736cce8137e12c56d036fc5a55ea2a93bb7bd219a0fddacdb80cd7270413a3fa`.
+It compiles all 815 native units and 1,238 Java sources, produces 2,701 classes and
+119 JNI headers, and preserves all 1,326 baseline JNI exports (1,337 total).
+All three producer CPU JNI controls pass. Additional actual-library receipts are:
+
+- Bridge, including 22 throwing cases and cleanup:
+  `fb62ddca31355703629a929a739cc6f9bc25f75ff4ee752580567d33e3e1ad63`.
+- All 62 lookups plus typed options/envelope transfer:
+  `9f5dc449de21dd229fc811d903c20839a0a584e68d64773e9b1448274e044436`.
+- Both mixed surface construction orders and 100 concurrent calls:
+  `c0c53be680f9108909cf6c945b607906bdd3b16c3df76bfc8b708e0efaee5e6c`.
+- Actual worker wrapper/control:
+  `8eb1c906104ffc7899b5e1b2269017b77c8005b4f769f2bf6c7738256bc4cdad`.
+
+The canonical stock-runtime headed run completes all functional controls, has no
+critical-array warnings, and still fails strict validation on 2,249 font warnings.
+Its failure receipt is
+`2d0f323a9b1bd9c233858c166deb3ffa4de462fa43a21e3817a3d106d5fd7ae8`.
+The same complete source variant, without a production Java class overlay,
+completes the owned Xvfb/Mesa lifecycle with zero strict JNI diagnostics using the
+third private derived font runtime. This includes three real recreations, three
+fresh identities, eleven worker retirements and three terminal GC controls.
+Scoped complete receipt:
+`067cf510eb7a881ab82f91495d33726c23e7f759757738d8ff5448eac98bbdcd`.
+The dependent chain receipt is
+`71f6a5f2e5e2a722e120449d08fda303e55958a8d1dc474c47fee62f6b503fb4`;
+58 consumed recipe files are snapshotted with their verified original hashes.
+
+The third font candidate also passes six raster cases with identical pixels and
+metric bits and zero JNI diagnostics (vendor control: 426 warnings), three real
+HarfBuzz callback cases and six FreeType initialization/read-error cases. Glyph
+read failures preserve their original exception and allow subsequent recovery;
+no new policy of destroying a scaler on every glyph failure was introduced.
+Raster/HarfBuzz/FreeType receipts respectively:
+`6a0f743cdb2c8e7334b2b30edd42a03b2d4e0a232da33867c5b5578b65b6e400`,
+`7d666b686ee0e2c3b48862f1c9778faab9ea0be02a7bf13dd6befc08564d14f6`,
+`ae2d78d0985e8919828788ec8ab189c6d6ca14a493beb85601b4e826bb52ab26`.
+
+The separate `font-jni-control` profile makes these three source changes
+reviewable, with four offline guards and a successful exact preparation receipt
+`8f2277ae8d14287971821408b6ec0e86a742bfdd5ab842cd7efaeebdc0e87581`.
+It does not build, install or accept a runtime. CPU ownership/cache bounds,
+portable typed variant/runtime producers, both Client recompiles against the
+actual component profile, and full renderer/SDK/client acceptance remain open.

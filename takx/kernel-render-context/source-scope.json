@@ -1,7 +1,7 @@
 {
   "status": "source-work-in-progress-not-runtime-qualified",
   "upstream_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "patch_sha256": "0e9751db156583d545d3ed399ae19f03703501d13e972d3f39df0e09abaf25d8",
+  "patch_sha256": "1a64ad4bccf32b4dafa0461c111c29647cf19fb38c19cd8394ac8a4e9c1060ef",
   "files": [
     {
       "path": "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java",
@@ -216,7 +216,7 @@
     {
       "path": "takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp",
       "preimage_sha256": "c731b396a55d93b06b8e9591a6fd009a8a47d2197e93b9700a43fa39c257a26e",
-      "postimage_sha256": "cd9fadd7c63231adcf3eb3cd5317ba288d4eae58c2633a969cdca4ef0d69acff"
+      "postimage_sha256": "e28d6e1dff72227fa249f22789aede513e5b18a19663b4c6af4e9c50db35ca19"
     }
   ]
 }

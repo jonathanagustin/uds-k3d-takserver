@@ -3959,7 +3959,11 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp
 diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp b/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
 --- a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
 +++ b/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
-@@ -40,19 +40,34 @@
+@@ -36,23 +36,36 @@
+     } NativeRenderSurfaceSizeChangedListener_class;
+ 
+     bool RenderSurface_init(JNIEnv &env) NOTHROWS;
+-    bool isRenderSurface2;
  }
  
  ManagedRenderSurface::ManagedRenderSurface(JNIEnv &env_, jobject impl_) NOTHROWS :
@@ -3968,8 +3972,8 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
  {
 +    if(env_.ExceptionCheck() || !impl) return;
      static bool clinit = RenderSurface_init(env_);
+-    isRenderSurface2 = env_.IsInstanceOf(impl_, RenderSurface2_class.id);
 +    if(env_.ExceptionCheck()) return;
-     isRenderSurface2 = env_.IsInstanceOf(impl_, RenderSurface2_class.id);
  }
  ManagedRenderSurface::~ManagedRenderSurface() NOTHROWS
  {
@@ -3996,7 +4000,7 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
          }
          listeners.clear();
          env->DeleteWeakGlobalRef(impl);
-@@ -63,43 +78,49 @@
+@@ -63,43 +76,53 @@
  double ManagedRenderSurface::getDpi() const NOTHROWS
  {
      LocalJNIEnv env;
@@ -4013,7 +4017,9 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
 -    }
 -    return env->CallIntMethod(impl, RenderSurface_class.getWidth);
 +    if(env->ExceptionCheck()) return 0u;
-+    const auto value = env->CallIntMethod(impl, isRenderSurface2 ? RenderSurface2_class.getSurfaceWidth : RenderSurface_class.getWidth);
++    const auto surface2 = env->IsInstanceOf(impl, RenderSurface2_class.id);
++    if(env->ExceptionCheck()) return 0u;
++    const auto value = env->CallIntMethod(impl, surface2 ? RenderSurface2_class.getSurfaceWidth : RenderSurface_class.getWidth);
 +    return env->ExceptionCheck() ? 0u : value;
  }
  std::size_t ManagedRenderSurface::getHeight() const NOTHROWS
@@ -4024,7 +4030,9 @@ diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
 -    }
 -    return env->CallIntMethod(impl, RenderSurface_class.getHeight);
 +    if(env->ExceptionCheck()) return 0u;
-+    const auto value = env->CallIntMethod(impl, isRenderSurface2 ? RenderSurface2_class.getSurfaceHeight : RenderSurface_class.getHeight);
++    const auto surface2 = env->IsInstanceOf(impl, RenderSurface2_class.id);
++    if(env->ExceptionCheck()) return 0u;
++    const auto value = env->CallIntMethod(impl, surface2 ? RenderSurface2_class.getSurfaceHeight : RenderSurface_class.getHeight);
 +    return env->ExceptionCheck() ? 0u : value;
  }
  void ManagedRenderSurface::addOnSizeChangedListener(RenderSurface::OnSizeChangedListener *clistener) NOTHROWS

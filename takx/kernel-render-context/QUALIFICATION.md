@@ -358,3 +358,33 @@ All five revised source stages reconstruct and ten offline guards pass. A new
 complete Java/native build and direct controls against those classes/libraries
 remain required before a new headed replay. JDK font/global JNI, SDK and client
 gates remain open.
+
+
+The paired-source variant rebuilt all 815 units and both libraries with the complete
+fresh Java graph. Producer SHA-256:
+`7e56012b62cdd7c4c70ccfce48c79e63bb27e56a440cb3465b034452a752904a`.
+Its independent source/output review is
+`1e24e5735810d5ab09011b439c9b4614ba3bdfb8aac519b3818832929a89736d`.
+Direct actual-library controls pass with zero JNI diagnostics: the 22-case bridge
+receipt is `90c02b0cf998145911e6efba98163ec38c754363f94ca4b70c5efcb86a90855d`,
+and the 62-lookups/typed-options/envelope receipt is
+`09189aaa711f8abd2149f5d8c2c2b87a89beb93716733b0e90bced690e9a04b3`.
+The latter also compares Java default hints to independently constructed native
+options and uses the full new classes directly, without a class overlay.
+
+Its owned headed JVM again completed all functional controls and returned normally.
+All 2,267 remaining JNI warnings originate in JDK font routines; no project JNI
+warning remains in this workload. Strict overall acceptance is still rejected.
+Functional-only receipt SHA-256:
+`7ba68d0e8575ab983eeb353e5413ee67c66ee4896de3f439293224273e135a9d`.
+
+A separate mixed-surface CPU regression demonstrates a shared-state defect: the
+managed bridge cached RenderSurface2 mode globally, so constructing a legacy
+surface changed an existing modern surface's physical dimensions from 160x120 to
+80x60. The correction removes that shared flag and checks the actual instance type
+in each getter, preserving the class ABI. The isolated one-unit candidate passes
+both construction orders and 100 concurrent calls with zero JNI diagnostics;
+receipt `a3c62a522a25824dc99893a7cbe0efa77309ba3e4f714934ee5e0c141be7e153`.
+That source is now included in the locked patch. All five stages and ten offline
+guards pass. A complete rebuild and direct mixed-interface regression are still
+required for this new source; the earlier full variant is retained separately.

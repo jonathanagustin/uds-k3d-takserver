@@ -25,12 +25,12 @@ class ProviderGuards(unittest.TestCase):
                     B.main(argv)
 
     def test_owned_source_and_acceptance_changes_refuse(self):
-        for change in ('source', 'acceptance'):
+        for change in (*B.SOURCES, 'acceptance'):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary) / 'profile'
                 shutil.copytree(HERE, root)
-                if change == 'source':
-                    path = root / B.SOURCES[0]
+                if change != 'acceptance':
+                    path = root / change
                     path.write_bytes(path.read_bytes() + b'\n// changed\n')
                 else:
                     path = root / 'inputs.lock.json'

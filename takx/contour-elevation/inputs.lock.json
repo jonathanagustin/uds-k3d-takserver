@@ -1,10 +1,11 @@
 {
   "schema": 1,
   "profile": "public-elevation-contours-v1",
-  "scope": "project contour grid integrated with actual public Kernel elevation registry; no complete client contour API or layer acceptance",
+  "scope": "project contours from actual public Kernel elevation registry with native geometry, styles and features; no complete client contour API or rendered layer acceptance",
   "owned": {
     "java/gov/tak/project/contour/ElevationContours.java": "1b7d2f361e112558e3819f249b779ae45f5432d47398f6409e0a0f791b6dcf3d",
-    "tests/ElevationContourControls.java": "554eb71946e0871dfdfcb083428307109e2d6447551b769b569ac223a37360ba"
+    "java/gov/tak/project/contour/ContourFeatures.java": "5dd50f983b4f9f025f161e5a16335c056cf1b6cd2ff2795a2c4a8c279ba1320c",
+    "tests/ElevationContourControls.java": "bbb429c8c349249c7943fd24f0a3735c0a5d162d29672badb1199cf84a7deca1"
   },
   "grid_sha256": "a5a986409258cda81f147dd241f0dc2d9ccca48d5d56c032f12dc325a3f227c5",
   "elevation_profile": {
@@ -19,7 +20,7 @@
     "tests/ElevationChunkProbe.java": "15904d4d256107048e6b2792015913fb7dcce92b4b64d5999091b6ff87b91383",
     "tests/ElevationChunkProbe.cpp": "97c663a57501932982607318bf36606cce999fbf7476752e2dee1aabde4de433"
   },
-  "checks": 275,
+  "checks": 539,
   "contour_api_implemented": false,
   "layer_runtime_accepted": false,
   "full_client_accepted": false

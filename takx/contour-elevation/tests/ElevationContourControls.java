@@ -42,6 +42,49 @@ public final class ElevationContourControls {
             check(progress.get(0)==0&&progress.get(progress.size()-1)==100,"progress endpoints differ");
             for(int i=1;i<progress.size();i++)check(progress.get(i)>=progress.get(i-1),"progress regressed");
             rejects(()->result.lines().clear(),UnsupportedOperationException.class);
+            int minorColor=0xff336699,majorColor=0xffddaa33;
+            ContourFeatures batch=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1.5f,3,null);
+            try {
+                check(batch.features().size()==result.lines().size(),"native feature count differs");
+                rejects(()->batch.features().clear(),UnsupportedOperationException.class);
+                for(int i=0;i<batch.features().size();i++){
+                    var feature=batch.features().get(i);var line=result.lines().get(i);
+                    var geometry=(LineString)feature.getGeometry();
+                    var style=(com.atakmap.map.layer.feature.style.BasicStrokeStyle)feature.getStyle();
+                    var attributes=feature.getAttributes();
+                    try{
+                        boolean major=Math.floorMod((long)Math.rint(line.elevationMeters()/25),2)==0;
+                        check(geometry.getNumPoints()==line.points().size(),"native geometry point count differs");
+                        for(int point=0;point<geometry.getNumPoints();point++){
+                            check(geometry.getX(point)==line.points().get(point).longitude(),"native longitude differs");
+                            check(geometry.getY(point)==line.points().get(point).latitude(),"native latitude differs");
+                        }
+                        check(style.getColor()==(major?majorColor:minorColor),"major/minor color differs");
+                        check(style.getStrokeWidth()==(major?3:1.5f),"major/minor width differs");
+                        check(attributes.getDoubleAttribute("elevation_hae_m")==line.elevationMeters(),"elevation metadata lost");
+                        check(attributes.getLongAttribute("level_index")==Math.round(line.elevationMeters()/25),"level index lost");
+                        check(attributes.getStringAttribute("contour_class").equals(major?"major":"minor"),"classification metadata differs");
+                        check(feature.getName().endsWith(" m HAE"),"elevation datum label differs");
+                    }finally{geometry.dispose();style.dispose();attributes.dispose();}
+                }
+            }finally{batch.close();batch.close();}
+            rejects(batch::features,IllegalStateException.class);
+            rejects(()->ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,0,3,null),IllegalArgumentException.class);
+            rejects(()->ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,()->true),CancellationException.class);
+            var invalid=List.of(new ContourGrid.Line(12,List.of(new ContourGrid.Point(0,0),new ContourGrid.Point(1,1))));
+            rejects(()->ContourFeatures.create(invalid,25,0,2,minorColor,majorColor,1,3,null),IllegalArgumentException.class);
+            AtomicInteger conversionChecks=new AtomicInteger();
+            rejects(()->ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,
+                    ()->conversionChecks.incrementAndGet()>2*result.lines().size()+2),CancellationException.class);
+            check(conversionChecks.get()>2*result.lines().size()+2,"mid-conversion cancellation unused");
+            AtomicInteger throwingChecks=new AtomicInteger();boolean conversionCaught=false;
+            try{ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,()->{
+                if(throwingChecks.incrementAndGet()>2*result.lines().size()+2)throw primary;return false;
+            });}catch(RuntimeException error){conversionCaught=true;check(error==primary,"conversion callback primary replaced");}
+            check(conversionCaught,"conversion callback error swallowed");
+            try(var recovered=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,null)){
+                check(recovered.features().size()==result.lines().size(),"conversion recovery failed");
+            }
             int before=calls.get();var missing=generate("not-the-owned-source",null,null);
             check(!missing.fullySampled()&&missing.sampledPoints()==0&&missing.lines().isEmpty(),"source type filter ignored");
             check(calls.get()==before,"unselected source sampled");

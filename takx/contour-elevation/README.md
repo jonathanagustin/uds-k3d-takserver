@@ -51,8 +51,38 @@ typed receipt. It requires the frozen layout's absolute dependency/JDK paths and
 the qualified local compiler environment, rather than a portable native build.
 
 This is project-level provider integration. Complete TAKX 5.8 contour API,
-geometry/layer/style integration, spatial clipping, major/minor classification,
+feature datastore/rendered layer integration, spatial clipping,
 client compilation/runtime, private-SDK equivalence and complete renderer/SDK
 acceptance remain open. The existing pure-grid profile's provider flag remains
 false because that profile alone loads no provider. All broad acceptance flags
 in this adjacent adapter profile also remain false.
+
+## Native contour features and styles
+
+`ContourFeatures.create` converts contour polylines into the actual public
+Kernel `LineString`, `BasicStrokeStyle`, `AttributeSet` and `Feature` objects.
+Every Nth configured level, relative to the supplied base, is major; negative
+indices follow the same rule. Non-aligned levels, invalid coordinates and
+unbounded stroke/vertex configurations refuse before native allocation. Geometry
+is two-dimensional and features clamp to the surface. Labels and attributes
+explicitly identify elevations as metres HAE, matching ElevationManager output,
+rather than promising mean-sea-level heights.
+
+The batch owns its native features. Borrowed feature references must not be
+disposed by callers or used after the batch closes. Use try-with-resources for
+the batch. Temporary geometry/style/attribute objects are disposed after native
+feature construction; the controls verify that the features retain their actual
+geometry, stroke colors/widths and elevation/class/index metadata. Cancellation
+or callback failure after partial conversion disposes completed features and
+returns no partial batch. Closing is idempotent and prevents further batch access.
+
+The expanded published runner passes 539 assertions with zero strict JNI
+diagnostics. In addition to provider controls, it checks native geometry/style
+readback, immutable feature membership, negative/major/minor levels, borrowed
+lifetime, partial-allocation cancellation, callback exception identity, cleanup
+and recovery. Receipt:
+`9a77f536567ec4fc1fcec31f1b62c49ad9b72149cb6e14750133bd9bb9181baf`.
+The preceding 275-check provider-only and intermediate native-feature receipts
+remain retained. No native producer source changed. This covers native feature
+construction, not a feature datastore, rendered map layer, GL drawing, label
+placement, client contour API or complete client runtime. Those gates stay open.

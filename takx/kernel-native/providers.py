@@ -149,8 +149,26 @@ def declared_paths(paths):
 
 def verify_cesium_ancestry(paths):
     selected=paths['cesium']
-    if not isinstance(selected,dict) or set(selected)!={'root','dependency_root','stopped_inventory','acquisition_root'}:raise ValueError('Cesium requires complete declared retained ancestry')
+    if not isinstance(selected,dict):raise ValueError('Cesium requires declared producer and acquisition roots')
     root=root_of(paths,'cesium');complete=load(root/'complete.json');lineage=complete['lineage']
+    if lineage is None:
+        if set(selected)!={'root','acquisition_root'} or complete.get('fresh_dependency_build') is not True or complete.get('fresh_cesium_build') is not True:
+            raise ValueError('fresh Cesium requires honest freshness and only its acquisition root')
+        original=load(root/'producer.json');prepared=load(root/'prepared.json')
+        if original.get('lineage') is not None or original.get('fresh_dependency_build') is not True:
+            raise ValueError('fresh Cesium producer lineage differs')
+        recipe_check('cesium',original)
+        acquired=Path(selected['acquisition_root']).resolve()
+        acquisition=load(acquired/'acquired.json');sha=digest(acquired/'acquired.json')
+        if sha!=original['sources_receipt_sha256'] or sha!=prepared['sources_receipt_sha256']:
+            raise ValueError('fresh Cesium acquisition receipt differs')
+        for name,entry in acquisition['sources'].items():check_files(acquired/'source'/name,entry['files'])
+        providers=module('cesium').a.verify_providers(root_of(paths,'sqlcipher'),root_of(paths,'draco'))
+        if original['providers']!=providers or acquisition['providers']!=providers:
+            raise ValueError('fresh Cesium selected provider chain differs')
+        return {'fresh_dependency_build':True,'acquisition_sha256':sha,'original_recipe':original['recipe']}
+    if set(selected)!={'root','dependency_root','stopped_inventory','acquisition_root'}:
+        raise ValueError('continued Cesium requires complete declared retained ancestry')
     previous=Path(selected['dependency_root']).resolve();snapshot=Path(selected['stopped_inventory']);acquired=Path(selected['acquisition_root']).resolve()
     if previous!=Path(lineage['previous_output']).resolve():raise ValueError('Cesium ancestry relocation requires a separate accepted operation')
     if digest(snapshot)!=lineage['stopped_inventory_sha256']:raise ValueError('Cesium stopped source inventory differs')
@@ -173,7 +191,8 @@ def verify_cesium_ancestry(paths):
 def verify_cross_links(paths):
     kml=module('kml');kroot=root_of(paths,'kml');krecord=load(kroot/'complete.json')
     boost=kml.verify_las(root_of(paths,'las'))[1]
-    uri=kml.verify_cesium(root_of(paths,'cesium'),Path(paths['cesium']['stopped_inventory']))[1]
+    snapshot=paths['cesium'].get('stopped_inventory')
+    uri=kml.verify_cesium(root_of(paths,'cesium'),Path(snapshot) if snapshot is not None else None)[1]
     gdal=paths['gdal_jni'];proof=Path(gdal['dependency_proof']);dependency=Path(gdal['dependency_root'])
     reference=kroot/'source/libkml/third_party/zlib-1.2.3/contrib/minizip'
     minizip=kml.verify_minizip(dependency,proof,reference)[1]

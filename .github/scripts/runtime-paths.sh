@@ -124,6 +124,9 @@ tests/playwright.demo.config.ts
 pepr/capabilities/*.test.ts
 pepr/mutation/**
 pepr/scripts/coverage-summary.mjs
+.github/workflows/codeql-extended.yaml
+.github/workflows/codeql-language.yaml
+.github/scripts/codeql-languages.py
 EOF
 }
 

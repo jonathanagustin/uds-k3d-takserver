@@ -124,6 +124,9 @@ on:
       - "pepr/capabilities/*.test.ts"
       - "pepr/mutation/**"
       - "pepr/scripts/coverage-summary.mjs"
+      - ".github/workflows/codeql-extended.yaml"
+      - ".github/workflows/codeql-language.yaml"
+      - ".github/scripts/codeql-languages.py"
 
   # The same install runs again after a relevant pull request merges.
   push:

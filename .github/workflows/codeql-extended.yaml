@@ -1,0 +1,128 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Python, Java/Kotlin, and C/C++ CodeQL. JavaScript, TypeScript, and Actions
+# stay in codeql.yaml, which remains a pull-request check with no path filter.
+#
+# These languages run on a push to main only when a changed path belongs to
+# that language, and on Tuesday at 05:00 UTC. They do not run on pull requests.
+# build-mode none avoids autobuild: the TAKX Java and C/C++ trees are opt-in
+# source profiles, not a repository build CodeQL can compile. C/C++ is limited
+# to takx/. Java is takx/ plus the two first-party tests outside it.
+
+name: CodeQL languages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.py"
+      - "*.pyi"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "takx/*.java"
+      - "takx/**/*.java"
+      - "tests/*.java"
+      - "tests/**/*.java"
+      - "takx/*.c"
+      - "takx/**/*.c"
+      - "takx/*.cc"
+      - "takx/**/*.cc"
+      - "takx/*.cpp"
+      - "takx/**/*.cpp"
+      - "takx/*.cxx"
+      - "takx/**/*.cxx"
+      - "takx/*.h"
+      - "takx/**/*.h"
+      - "takx/*.hh"
+      - "takx/**/*.hh"
+      - "takx/*.hpp"
+      - "takx/**/*.hpp"
+      - "takx/*.hxx"
+      - "takx/**/*.hxx"
+      - ".github/workflows/codeql-extended.yaml"
+      - ".github/workflows/codeql-language.yaml"
+      - ".github/scripts/codeql-languages.py"
+  schedule:
+    - cron: "0 5 * * 2"
+
+permissions:
+  contents: read
+
+# A main push cancels only an older push of this workflow. The Tuesday run
+# uses a different event name, so it stays in its own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.langs.outputs.python }}
+      java: ${{ steps.langs.outputs.java }}
+      cpp: ${{ steps.langs.outputs.cpp }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select languages
+        id: langs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/codeql-languages.py
+
+  python:
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: ./.github/workflows/codeql-language.yaml
+    with:
+      language: python
+      build-mode: none
+      config: |
+        paths-ignore:
+          - upstream
+          - "**/node_modules"
+          - pepr/mutation/.stryker-tmp
+          - takx/compat/mutation/target
+
+  java:
+    needs: scope
+    if: needs.scope.outputs.java == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: ./.github/workflows/codeql-language.yaml
+    with:
+      language: java-kotlin
+      build-mode: none
+      config: |
+        paths:
+          - takx
+          - tests
+
+  cpp:
+    needs: scope
+    if: needs.scope.outputs.cpp == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: ./.github/workflows/codeql-language.yaml
+    with:
+      language: c-cpp
+      build-mode: none
+      config: |
+        paths:
+          - takx

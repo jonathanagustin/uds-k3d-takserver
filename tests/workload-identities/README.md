@@ -295,3 +295,10 @@ run43499139100, which did not retain that snapshot. A new live pilot is required
 The typed maps cover completed inventory comparisons. A missing required Core
 namespace or a changed bound application owner fails before a complete snapshot
 exists; those failures retain the reviewed callsite rather than partial maps.
+
+If retained-state diagnostic capture itself fails, a separate first-failure
+callsite records only its reviewed file/line hashes and fixed exception type.
+The publisher revalidates it under `identityDiagnosticFailures`; the primary
+invariant's callsite remains under `identityFailures`. Neither channel includes
+exception text, inventory keys or private payloads. Failure of either optional
+capture still leaves the original Core or retained-data guard failed.

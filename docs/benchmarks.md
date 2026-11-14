@@ -71,7 +71,12 @@ A setting is copied into the package only after a report puts it on the front. T
 ## Collect one startup pair without load
 
 The manual-only [Startup pair workflow](../.github/workflows/startup.yaml) runs
-this procedure on one AMD64 runner from `main`, with a 60-minute job ceiling.
+this procedure from `main`, with a 60-minute ceiling per selected native runner.
+Its `architecture` input defaults to `amd64`; select `arm64` to qualify ARM
+without repeating AMD, or `both` for independent pairs on both architectures.
+ARM uses `ubuntu-22.04-arm`; AMD retains the `TEST_RUNNER` override. A native
+machine check precedes setup and cluster work. Each architecture has its own
+cohort and artifact, and a failed architecture cannot count as a qualified pair.
 It requires an already published package matching the keyed application inputs;
 it fails before cluster work when that package is missing. It has no schedule,
 pull-request trigger, load test, or automatic retry. An active run is preserved.
@@ -160,6 +165,14 @@ bytes. Arguments, resource names, URLs, command output and exception values are
 not published. The original request, stream, process-group and total deadline
 bounds remain enforced. Pattern categories are observations, not causal proof or
 accepted startup timing.
+
+When the startup pilot rejects an unavailable JVM observation or phase join,
+its failure diagnostic retains the fixed application, observation stage and
+allowlisted observer reason. For example, `marker_after_ready` remains a timing
+rejection; the collector does not round Ready timestamps or accept a pair from
+that failure. Unknown reasons become `unsupported_schema`, and raw observer
+payloads, log lines and exception values are not published. These diagnostics
+identify the rejected check, not the cause of a historical pilot failure.
 
 The startup configuration snapshot honors an explicitly boolean `optional: true`
 on ConfigMap references, including the admission module's optional

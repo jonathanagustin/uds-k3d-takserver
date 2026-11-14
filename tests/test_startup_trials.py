@@ -5,7 +5,9 @@ import copy
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -76,6 +78,47 @@ def pair(commands=Commands):
 
 
 class StartupTrials(unittest.TestCase):
+    def test_finish_retains_actual_join_rejection_without_accepting_timing(self):
+        cold, warm = pair()
+        class LateMarker(Commands):
+            def run(self, args, limit):
+                if args[0] == 'logs':
+                    second = '26' if self.state == 'warm' else '06'
+                    return f'2024-01-01T00:00:{second}.001Z Started TAK Server\nPRIVATE_LOG\n'.encode()
+                return super().run(args, limit)
+        for mode, record in (('cold', cold), ('warm', warm)):
+            with self.subTest(mode=mode):
+                with self.assertRaises(trial.PhaseUnavailable) as caught:
+                    trial.finish(record['begin'], mode, LateMarker(mode),
+                                 lambda app, context: observation(app, context, mode == 'warm'))
+                self.assertEqual(str(caught.exception), 'phase_unavailable')
+                result = trial.failure_diagnostic(caught.exception)
+                self.assertEqual(result['phase'], {'app': jvm.APPS[0], 'stage': 'finish-join',
+                                                   'reason': 'marker_after_ready'})
+                self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_begin_and_finish_observer_failures_keep_only_fixed_phase_facts(self):
+        cold, _ = pair()
+        for reason in ('metrics_missing', 'command_failed', 'pod_incarnation_changed',
+                       'PRIVATE_REASON', None, {'PRIVATE': 'PAYLOAD'}):
+            for stage in ('begin-observer', 'finish-join'):
+                with self.subTest(reason=reason, stage=stage):
+                    def unavailable(app, context):
+                        return {'available': False, 'reason': reason, 'raw': 'PRIVATE_PAYLOAD'}
+                    with self.assertRaises(trial.PhaseUnavailable) as caught:
+                        if stage == 'begin-observer':
+                            trial.begin('owned', 'cohort-a', {'source': 'b'*64}, Commands('cold'), unavailable)
+                        else:
+                            trial.finish(cold['begin'], 'cold', Commands('cold'), unavailable)
+                    result = trial.failure_diagnostic(caught.exception)
+                    expected = reason if isinstance(reason, str) and reason in trial.PHASE_REASONS else 'unsupported_schema'
+                    self.assertEqual(result['phase'], {'app': jvm.APPS[0], 'stage': stage, 'reason': expected})
+                    self.assertNotIn('PRIVATE', json.dumps(result))
+        error = trial.PhaseUnavailable('PRIVATE_APP', 'PRIVATE_STAGE', 'PRIVATE_REASON')
+        error.app = ['PRIVATE']; error.stage = {'PRIVATE': True}; error.reason = 'PRIVATE_REASON'
+        self.assertEqual(trial.failure_diagnostic(error)['phase'],
+                         {'app': None, 'stage': 'unknown', 'reason': 'unsupported_schema'})
+
     def test_failure_location_never_exports_exception_values_or_foreign_paths(self):
         try:
             trial.token('PRIVATE_TOKEN_SENTINEL /PRIVATE_PATH_SENTINEL')
@@ -327,16 +370,59 @@ class StartupWorkflow(unittest.TestCase):
         self.job = self.document['jobs']['startup']
         self.steps = self.job['steps']
 
-    def test_only_manual_main_and_one_bounded_read_only_runner_can_run(self):
+    def test_only_manual_main_and_selected_bounded_read_only_runners_can_run(self):
         self.assertEqual(set(self.document.get('on', self.document.get(True))), {'workflow_dispatch'})
-        self.assertEqual(len(self.document['jobs']), 1)
+        dispatch = self.document.get('on', self.document.get(True))['workflow_dispatch']
+        self.assertEqual(dispatch['inputs']['architecture']['default'], 'amd64')
+        self.assertEqual(dispatch['inputs']['architecture']['options'], ['amd64', 'arm64', 'both'])
+        self.assertEqual(set(self.document['jobs']), {'plan', 'startup'})
         self.assertEqual(self.job['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
-        self.assertNotIn('strategy', self.job)
+        self.assertEqual(self.document['jobs']['plan']['if'], self.job['if'])
+        self.assertEqual(self.job['needs'], 'plan')
+        self.assertFalse(self.job['strategy']['fail-fast'])
+        self.assertEqual(self.job['runs-on'], '${{ matrix.runner }}')
         self.assertLessEqual(self.job['timeout-minutes'], 60)
         self.assertFalse(self.document['concurrency']['cancel-in-progress'])
         self.assertTrue(all(level == 'read' for level in self.document['permissions'].values()))
         self.assertNotIn('permissions', self.job)
         self.assertFalse(any(step.get('continue-on-error') for step in self.steps))
+
+    def test_actual_planner_selects_native_rows_and_rejects_unknown_inputs(self):
+        script = self.document['jobs']['plan']['steps'][0]['run']
+        for selected, runner, expected in [('amd64', 'ubuntu-24.04', {'amd64'}),
+                ('arm64', 'ubuntu-22.04', {'arm64'}), ('both', 'ubuntu-22.04', {'amd64', 'arm64'}),
+                ('arm64', 'PRIVATE\nunused-runner', {'arm64'}),
+                ('PRIVATE_SELECTION', 'ubuntu-22.04', None), ('both', 'PRIVATE\nrunner', None)]:
+            with self.subTest(selected=selected, runner=runner), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)/'output'; output.touch()
+                result = subprocess.run(['bash', '-e', '-c', script], capture_output=True, text=True,
+                    env={**os.environ, 'ARCHITECTURE': selected, 'AMD64_RUNNER': runner, 'GITHUB_OUTPUT': str(output)})
+                if expected is None:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(output.read_text(), '')
+                    self.assertNotIn('PRIVATE', result.stdout+result.stderr)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    rows = json.loads(output.read_text().removeprefix('matrix='))['include']
+                    self.assertEqual({row['arch'] for row in rows}, expected)
+                    self.assertEqual(len(rows), len(expected))
+                    for row in rows:
+                        self.assertEqual(row['runner'], 'ubuntu-22.04-arm' if row['arch']=='arm64' else runner)
+
+    def test_actual_native_machine_guard_rejects_cross_arch_and_unknown_runners(self):
+        step = next(step for step in self.steps if step['name']=='Verify native architecture before setup or cluster work')
+        with tempfile.TemporaryDirectory() as directory:
+            uname = Path(directory)/'uname'
+            uname.write_text('#!/bin/sh\nprintf "%s\\n" "$TEST_MACHINE"\n'); uname.chmod(0o700)
+            for arch, machine, accepted in [('amd64', 'x86_64', True), ('arm64', 'aarch64', True),
+                    ('amd64', 'aarch64', False), ('arm64', 'x86_64', False),
+                    ('arm64', 'PRIVATE_MACHINE', False), ('PRIVATE_ARCH', 'x86_64', False)]:
+                with self.subTest(arch=arch, machine=machine):
+                    result = subprocess.run(['bash', '-c', step['run']], capture_output=True, text=True,
+                        env={**os.environ, 'PATH': directory+os.pathsep+os.environ['PATH'],
+                             'STARTUP_ARCH': arch, 'TEST_MACHINE': machine})
+                    self.assertEqual(result.returncode==0, accepted)
+                    self.assertNotIn('PRIVATE', result.stdout+result.stderr)
 
     def test_fresh_cluster_and_published_input_guards_precede_deployment(self):
         scripts = [step.get('run', '') for step in self.steps]
@@ -348,7 +434,7 @@ class StartupWorkflow(unittest.TestCase):
         joined = '\n'.join(scripts)
         for forbidden in ('bench/run.py', 'tak_tester', 'create-dev-package', 'test-install', 'JAVA_OPTIONS', 'probe-tuning', 'wait-for-tak-images.sh'):
             self.assertNotIn(forbidden, joined)
-        self.assertIn('test "$(uname -m)" = x86_64', joined)
+        self.assertLess(index('Startup runner architecture mismatch'), index('ephemeral-cluster.py bootstrap'))
         self.assertIn('test "$(./.github/scripts/dev-package.sh prebuilt)" = true', joined)
 
     def test_warm_rollout_occurs_between_boundaries_and_pair_validation(self):
@@ -366,6 +452,8 @@ class StartupWorkflow(unittest.TestCase):
     def test_artifact_retains_only_typed_records_even_after_failure(self):
         uploads = [step for step in self.steps if step.get('uses', '').startswith('actions/upload-artifact@')]
         self.assertEqual(len(uploads), 1)
+        self.assertIn('${{ matrix.arch }}', uploads[0]['with']['name'])
+        self.assertIn('${{ matrix.arch }}', self.job['env']['COHORT'])
         self.assertEqual(uploads[0]['if'], "always() && steps.checkout.outcome == 'success'")
         paths = uploads[0]['with']['path'].splitlines()
         self.assertEqual({Path(path).name for path in paths}, {'bindings.json', 'cold-begin.json', 'cold.json', 'warm-begin.json', 'warm.json', 'pair.json'})

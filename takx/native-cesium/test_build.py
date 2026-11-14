@@ -17,7 +17,7 @@ class ResumeGuards(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);original=root/'vendor.patch';original.write_bytes(patch)
             source=root/'input.txt';source.write_bytes(b'before\n')
-            records=[];staged=B.stage_patch(original,root/'staged/port.patch',records)
+            records=[];staged=B.stage_patch(original,root/'staged/port.patch',records,root)
             result=subprocess.run(['patch','--binary','--batch','--fuzz=0','-p1','-d',str(root),'-i',str(staged)],capture_output=True,timeout=5)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertEqual(source.read_bytes(),b'after\n')
@@ -26,10 +26,31 @@ class ResumeGuards(unittest.TestCase):
             self.assertEqual(records[0]['preimage'],B.a.native.digest(original))
             self.assertEqual(records[0]['postimage'],B.a.native.digest(staged))
 
-    def test_lf_patch_is_unchanged_and_mixed_or_bare_cr_is_refused(self):
-        self.assertEqual(B.canonical_patch(b'patch\ncontent\n'),b'patch\ncontent\n')
-        for raw in (b'patch\rcontent\n',b'patch\r\ncontent\n'):
-            with self.assertRaisesRegex(ValueError,'port patch refused'):B.canonical_patch(raw)
+    def test_mixed_patch_preserves_crlf_target_content_and_lf_target_content(self):
+        raw=b'--- a/lf.txt\n+++ b/lf.txt\n@@ -1 +1 @@\n-before\n+after\n--- a/crlf.txt\n+++ b/crlf.txt\n@@ -1 +1 @@\n-before\r\n+after\r\n'
+        self.assertEqual(B.canonical_patch(raw,False),raw)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'lf.txt').write_bytes(b'before\n');(root/'crlf.txt').write_bytes(b'before\r\n')
+            patch=root/'mixed.patch';patch.write_bytes(raw)
+            result=subprocess.run(['patch','--binary','--batch','--fuzz=0','-p1','-d',str(root),'-i',str(patch)],capture_output=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual((root/'lf.txt').read_bytes(),b'after\n')
+            self.assertEqual((root/'crlf.txt').read_bytes(),b'after\r\n')
+
+    def test_lf_or_bare_cr_patch_content_is_not_normalized(self):
+        self.assertEqual(B.canonical_patch(b'patch\ncontent\n',True),b'patch\ncontent\n')
+        self.assertEqual(B.canonical_patch(b'patch\rcontent\n',True),b'patch\rcontent\n')
+
+    def test_uniform_patch_for_crlf_source_preserves_literal_carriage_returns(self):
+        raw=b'--- a/input.txt\r\n+++ b/input.txt\r\n@@ -1 +1 @@\r\n-before\r\n+after\r\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);original=root/'vendor.patch';original.write_bytes(raw)
+            source=root/'input.txt';source.write_bytes(b'before\r\n')
+            records=[];staged=B.stage_patch(original,root/'staged/port.patch',records,root)
+            self.assertEqual(staged.read_bytes(),raw)
+            result=subprocess.run(['patch','--binary','--batch','--fuzz=0','-p1','-d',str(root),'-i',str(staged)],capture_output=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(source.read_bytes(),b'after\r\n')
 
     def fixture(self,root,completed=None):
         old=root/'old';old.mkdir();(old/'install').mkdir()

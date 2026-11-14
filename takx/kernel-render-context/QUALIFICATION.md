@@ -388,3 +388,25 @@ receipt `a3c62a522a25824dc99893a7cbe0efa77309ba3e4f714934ee5e0c141be7e153`.
 That source is now included in the locked patch. All five stages and ten offline
 guards pass. A complete rebuild and direct mixed-interface regression are still
 required for this new source; the earlier full variant is retained separately.
+
+
+The mixed-surface correction now passes a complete fresh 815-unit rebuild and all
+three CPU JNI controls. Native producer SHA-256:
+`1142251f81f2ffe3e37e9de0e463ab715cc3b7b5bfce6c6a2107cc10cb3a7125`.
+Independent review:
+`51670cc0d160a4d169e51b5cb9c596add74fa83b6dccb2741f5358dbab30e0c8`.
+Actual-library, zero-JNI receipts cover the 22 bridge cases
+(`49bef5edf53a8ef8bcdab48d82d4b3fc9d93644c4998924eb1a95b7daa09baf8`),
+62 lookups and typed options/envelope cases
+(`4588ce38b587fcf812e2deb90f1b6c1c4983cab7ebe5a82992ea451bfdb81403`),
+and both mixed-interface construction orders plus 100 concurrent calls
+(`ddaceb70ac180e792859cb0de23d8b9342a4372000639ca0553e72006d5bdd74`).
+
+Its headed JVM again returns normally after all functional controls. There are
+zero project JNI warnings and 2,249 JDK font warnings in the 7,245,835-byte log;
+strict overall acceptance remains false. Functional-only receipt SHA-256:
+`602904fc540733ad32d1d88e88de98cc220363f55f91db34b66edf3730750112`.
+The original Temurin runtime remains unchanged. Matching official OpenJDK source
+is being used for an independent, unmodified font-module rebuild baseline before
+attempting a runtime correction. No derived runtime, full renderer, SDK, client or
+portable-producer acceptance follows from these scoped controls.

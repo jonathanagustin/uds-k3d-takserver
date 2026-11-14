@@ -243,3 +243,20 @@ session. Project JNI diagnostics from managed context/surface callbacks and JDK
 font diagnostics are still recorded. Global zero-JNI cleanliness, three complete
 recreation cycles, terminal collection and whole-process normal shutdown remain
 required. Renderer, SDK packaging and client acceptance remain false.
+
+
+The corrected full graph compiled successfully in a new output directory (fresh
+Java, native translation units and both shared libraries); all three CPU JNI
+controls passed again. The native experiment receipt SHA-256 is
+`eb003fec8c8a6af4502e5db559887043808e2b0f26c2d5ea17455fb6fe39ac62`.
+The following owned lifecycle replay completed three actual context recreations
+without the terrain crash. It then failed the terminal shader assertion: the test
+used raw canvas destruction rather than the public listener cleanup used for the
+recreation cycles. The probe now uses that same context-before-renderer disposal
+for every terminal path and requires the fourth cleanup callback explicitly.
+
+The next replay advanced through terminal cleanup, fresh views and borrowed-owner
+controls, but hit the unchanged 8 MiB command log quota while emitting JNI warnings.
+Its complete bounded output is retained; quota failure is not lifecycle acceptance.
+No diagnostics were filtered and no quota was raised. Whole-process completion,
+terminal GC results and global JNI cleanliness remain unqualified.

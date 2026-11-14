@@ -270,6 +270,14 @@ public final class ContextRecreationProbe {
         Object[] owners;
         long destroyedBefore;
     }
+    static void destroyView(View target) {
+        // Public JOGL disposal runs each genuine callback with a current context.
+        // Initialize this caller's dispatch before renderer cleanup, and remove
+        // listeners before AWT can repaint/reinitialize them during destruction.
+        target.canvas.disposeGLEventListener(target.actualContext,true);
+        target.canvas.disposeGLEventListener(target,true);
+        target.canvas.destroy();
+    }
     static BorrowedOwnerFixture terminalBorrowFixture(int retained) throws Exception {
         BorrowedOwnerFixture fixture=new BorrowedOwnerFixture();
         fixture.destroyedBefore=ContextWorkerProbe.terminalCounts()[1];
@@ -286,7 +294,7 @@ public final class ContextRecreationProbe {
                         callback.view.getControl(RenderContextControl.class)};
                 for(int index=0;index<fixture.owners.length;index++)
                     if(index!=retained) fixture.owners[index]=null;
-                callback.terminal=true; canvas.destroy(); healthy();
+                callback.terminal=true; destroyView(callback); healthy();
                 // Do not keep the renderer alive through this test's listener.
                 canvas.removeGLEventListener(callback);
             } finally { frame.dispose(); }
@@ -389,18 +397,7 @@ public final class ContextRecreationProbe {
                 GLContext previousContext=views[0].canvas.getContext();
                 Thread disposal=new Thread(() -> {
                     try {
-                        // GLCanvas.destroy routes through AWT's EDT. Use JOGL's
-                        // public current-context listener disposal on this caller
-                        // before destroying the canvas/context itself. This invokes
-                        // the genuine callback; it does not call View.dispose.
-                        // Preserve the registered callback order: the actual
-                        // context initializes this thread's JOGLGLES dispatch
-                        // before renderer cleanup uses it.
-                        views[0].canvas.disposeGLEventListener(views[0].actualContext,true);
-                        // Keep AWT repaint from reinitializing this listener in
-                        // the gap before actual context destruction.
-                        views[0].canvas.disposeGLEventListener(views[0],true);
-                        views[0].canvas.destroy();
+                        destroyView(views[0]);
                     } catch(Throwable error) { failure.compareAndSet(null,error); }
                 },"owned-context-dispose-"+cycle);
                 disposal.start(); disposal.join(30000);
@@ -425,7 +422,8 @@ public final class ContextRecreationProbe {
                         cycle+" init="+views[0].initCount+" release="+views[0].releaseCount);
                 check(views[1].initCount==1 && views[1].drawCount>liveDraws,"Other live view disrupted");
             }
-            views[0].terminal=true; views[0].canvas.destroy(); healthy();
+            views[0].terminal=true; destroyView(views[0]); healthy();
+            check(views[0].releaseCount==4,"Terminal renderer cleanup callback missing");
             check(views[0].threads.size()>=2,"Real context thread movement was not exercised");
             EventQueue.invokeAndWait(frames[0]::dispose); frames[0]=null;
             java.util.Set<Long> contextIdentities=new java.util.HashSet<>();
@@ -446,12 +444,12 @@ public final class ContextRecreationProbe {
                     check(views[0].shader.handle==0,"Terminal shader retained a GPU handle");
                     GLText.invalidate(); // skip old tombstones, update BOTH live B/C
                     fresh[0].canvas.display(); views[1].canvas.display(); healthy();
-                    fresh[0].terminal=true; fresh[0].canvas.destroy(); healthy();
+                    fresh[0].terminal=true; destroyView(fresh[0]); healthy();
                 } finally {
                     EventQueue.invokeAndWait(() -> { if(freshFrame[0]!=null) freshFrame[0].dispose(); });
                 }
             }
-            views[1].terminal=true; views[1].canvas.destroy(); healthy();
+            views[1].terminal=true; destroyView(views[1]); healthy();
             for(int borrow=0;borrow<3;borrow++) terminalBorrowGc(borrow);
             HeadedAdmission.verifyMaps("after-all-controls",true);
             java.util.Map<Path,String> finalMaps=mappedElfs("after-all-controls");

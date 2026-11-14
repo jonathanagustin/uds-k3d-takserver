@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "profile": "public-elevation-contours-v1",
+  "scope": "project contour grid integrated with actual public Kernel elevation registry; no complete client contour API or layer acceptance",
+  "owned": {
+    "java/gov/tak/project/contour/ElevationContours.java": "1b7d2f361e112558e3819f249b779ae45f5432d47398f6409e0a0f791b6dcf3d",
+    "tests/ElevationContourControls.java": "554eb71946e0871dfdfcb083428307109e2d6447551b769b569ac223a37360ba"
+  },
+  "grid_sha256": "a5a986409258cda81f147dd241f0dc2d9ccca48d5d56c032f12dc325a3f227c5",
+  "elevation_profile": {
+    "controls.py": "e683867fed8a4defb7b02be6e79b7177ed2d2de1a2b05e9d64594d22595b7309",
+    "prepare.py": "4223c829b8fa95d27b788fbad247ebde54b9a298e0f2ec42f873a9e4c6f8b468",
+    "inputs.lock.json": "b2000b89978c6d1c86c0b8d4a81e88b655d2ccacf29481d9049b93af062e5682",
+    "elevation-jni-boundaries.patch": "851fdacceb8a347e945035587d3e77bb84bb620b83cbaac71a62f3ee9cf0025e",
+    "tests/ElevationJNIControls.java": "c5a9f332f66b24046d462796d5462b2c1bee781c91994183fa3186f587c54d31",
+    "tests/ElevationFaultControls.java": "acd870f34496294b23438e33ba65434c575d88f34a355cd84875b1caaa3c7ca3",
+    "tests/ElevationListenerProbe.java": "368fb7903780df51263927037f956e50b3debebe5869352ccdc96c6ec4b7d73f",
+    "tests/ElevationListenerProbe.cpp": "f7f8b8eb1b35c541e4ac0c2f36f5fab6e494ffd324eeb2562d6392807346bab0",
+    "tests/ElevationChunkProbe.java": "15904d4d256107048e6b2792015913fb7dcce92b4b64d5999091b6ff87b91383",
+    "tests/ElevationChunkProbe.cpp": "97c663a57501932982607318bf36606cce999fbf7476752e2dee1aabde4de433"
+  },
+  "checks": 275,
+  "contour_api_implemented": false,
+  "layer_runtime_accepted": false,
+  "full_client_accepted": false
+}

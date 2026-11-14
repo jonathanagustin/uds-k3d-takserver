@@ -52,3 +52,8 @@ a failed receipt; success records complete class hashes and zero strict JNI
 diagnostics. The pure Java controls load no project SDK classes. The four JDK
 pins identify its compiler/modules, without claiming complete host equivalence.
 All contour API/provider/layer/client acceptance flags remain false.
+
+An adjacent project adapter in `../contour-elevation` now exercises this algorithm
+with the actual public Kernel elevation registry. It has a separate native
+consumer profile and coverage receipt. It does not change this pure-grid
+profile's source membership or acceptance flags.

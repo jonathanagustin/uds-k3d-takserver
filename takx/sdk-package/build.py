@@ -112,6 +112,14 @@ def verify_native(root,providers,source_snapshot=None,expected_receipt_sha256=No
 def native_files(root,roots):
     return {'GLdispatch':roots['gles']/'install/lib/libGLdispatch.so.0.0.0','GLESv2':roots['gles']/'install/lib/libGLESv2.so.2.1.0','las':roots['las']/'install/lib/liblas.so.2.4.0','las_c':roots['las']/'install/lib/liblas_c.so.2.4.0','gdal':roots['gdal_jni']/'lib/libgdal.so','gdalalljni':roots['gdal_jni']/'lib/libgdalalljni.so','assimp':roots['assimp']/'install/lib/libassimp.so.4.1.0','takengine':root/'build/kernel-cpp/libtakengine.so','takenginejni':root/'build/kernel-jni/libtakenginejni.so'}
 
+def notice_roots(providers,roots):
+    # Fresh Cesium dependencies live in the completed producer itself. A
+    # continued producer retains its original dependency source root.
+    selected=providers['cesium']
+    ancestor=Path(selected['dependency_root']) if 'dependency_root' in selected else roots['cesium']
+    return {**roots,'cesium_ancestor':ancestor,'gdal_dependency':Path(providers['gdal_jni']['dependency_root'])}
+
+
 def mapped_provider(name,sha,packaged,allowed,original_project):
     resolved=str(Path(name).resolve())
     if resolved in original_project or (resolved not in packaged and allowed.get(resolved)!=sha) or (resolved in packaged and packaged[resolved]!=sha) or p.digest(Path(resolved))!=sha:raise ValueError('unmanifested/original project provider mapped: '+resolved)
@@ -159,9 +167,9 @@ def main():
     if native_source_binding:record['original_native_source_binding']=native_source_binding
     if args.phase=='verify':(out/'verified.json').write_text(json.dumps(record,indent=2)+'\n');return
     package=out/'package';package.mkdir();licenses=package/'notices';licenses.mkdir();notice_lock=p.load(HERE/'notices.lock.json')
-    notice_roots={**roots,'cesium_ancestor':Path(providers['cesium']['dependency_root']),'gdal_dependency':Path(providers['gdal_jni']['dependency_root'])}
+    sources_for_notices=notice_roots(providers,roots)
     for item in notice_lock['files']:
-        source=p.regular(notice_roots[item['provider']]/item['path'])
+        source=p.regular(sources_for_notices[item['provider']]/item['path'])
         if p.digest(source)!=item['sha256'] or source.stat().st_size!=item['bytes']:raise ValueError('locked notice differs')
         dest=licenses/item['provider']/safe(item['path']);dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,dest)
     for index,item in enumerate(notice_lock['official_git']):

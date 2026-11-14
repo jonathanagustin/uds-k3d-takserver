@@ -286,3 +286,8 @@ native products. The historical GDAL producer still records failure; its separat
 finalization is validated explicitly. No fresh native build was performed. This
 acceptance covers CPU component behavior on the tested host, not KML elevation
 sampling, a renderer, cross-host portability or a full client.
+
+Fresh Cesium producer notices are copied from its own completed source tree.
+Continued producers retain the original dependency source root. Both paths use
+the same locked notice sizes and hashes after complete provider verification;
+no notice is omitted when there is no stopped predecessor.

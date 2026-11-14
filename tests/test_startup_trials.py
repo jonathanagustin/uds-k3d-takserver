@@ -99,6 +99,17 @@ class StartupTrials(unittest.TestCase):
             self.assertEqual(value['line'], 0)
             self.assertNotIn('PRIVATE', json.dumps(value))
 
+    def test_observer_guard_reports_reviewed_caller_and_only_fixed_reason(self):
+        try:
+            jvm.identity({}, 'takserver-api')
+        except jvm.Unavailable as error:
+            result=trial.failure_diagnostic(error)
+        self.assertEqual(result['module'],'jvm_metrics')
+        self.assertEqual(result['observer_reason'],'pod_namespace_or_deleted')
+        self.assertIn("'pod_namespace_or_deleted'",Path(jvm.__file__).read_text().splitlines()[result['line']-1])
+        self.assertNotIn('observer_reason',trial.failure_diagnostic(jvm.Unavailable('PRIVATE_SENTINEL')))
+        self.assertNotIn('PRIVATE',json.dumps(trial.failure_diagnostic(jvm.Unavailable('PRIVATE_SENTINEL'))))
+
     def test_actual_capture_path_uses_numeric_existing_observer_and_new_incarnations(self):
         cold, warm = pair(); verdict = trial.validate_pair(cold, warm)
         self.assertTrue(verdict['accepted']); self.assertEqual(warm['warm_s'], 6)

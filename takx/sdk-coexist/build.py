@@ -18,7 +18,7 @@ import time
 import zipfile
 
 HERE=Path(__file__).resolve().parent
-CAP=256*1024**2
+CAP=512*1024**2
 LOG_CAP=1024**2
 FILE_CAP=128*1024**2
 RESERVE=2*1024**2
@@ -85,6 +85,18 @@ def mapped(text,expected):
     return actual
 
 
+def native_capacity(jar,names):
+    total=0
+    with zipfile.ZipFile(jar) as archive:
+        for name in names:
+            files=[item for item in archive.infolist() if Path(item.filename).name==name]
+            require(len(files)==1 and 0<files[0].file_size<=FILE_CAP,'native resource exceeds data-file limit')
+            total+=((files[0].file_size+4095)//4096)*4096
+    required=2*total+RESERVE+8*1024**2+3*LOG_CAP
+    require(required<=CAP,'two native caches exceed output budget')
+    return required
+
+
 def child_limits(seconds):
     resource.setrlimit(resource.RLIMIT_FSIZE,(FILE_CAP,FILE_CAP))
     resource.setrlimit(resource.RLIMIT_CORE,(0,0))
@@ -134,10 +146,10 @@ def run(args):
     java=fresh.canonical(args.java_home,True);bindings=fresh.canonical(args.commoncommo_bindings)
     roots=[sdk,commo,java,bindings,HERE.parent,*fresh.bindings(bindings).values()]
     out=disjoint(args.output,roots)
-    require(shutil.disk_usage(out.parent).free>=FLOOR+CAP,'full256MiB reservation above2GiBfloor required')
+    require(shutil.disk_usage(out.parent).free>=FLOOR+CAP,'full512MiB reservation above2GiBfloor required')
     out.mkdir(mode=0o700);deadline=time.monotonic()+300;commands=[]
     def budget():
-        require(allocated(out)+RESERVE<=CAP,'inclusive256MiB output cap')
+        require(allocated(out)+RESERVE<=CAP,'inclusive512MiB output cap')
         require(shutil.disk_usage(out).free>=FLOOR,'2GiB physical free floor')
     def command(vector,label,seconds):
         return execute(vector,label,seconds,out,deadline,budget,commands)
@@ -167,10 +179,7 @@ def run(args):
         for name,item in receipt['owned_runtime_classes'].items():
             require(digest(classes/name)==item['sha256'],'stock control class bytes differ')
         native=receipt['manifest']['native_resources'];require(len(native)==9,'exact stock native group required')
-        with zipfile.ZipFile(jar) as archive:
-            for name in native:
-                files=[item for item in archive.infolist() if Path(item.filename).name==name]
-                require(len(files)==1 and 0<files[0].file_size<=FILE_CAP,'native resource exceeds data-file limit')
+        record['native_capacity_reservation']=native_capacity(jar,native)
         manifest=out/'native-resources.sha256';manifest.write_text(''.join(sha+' '+name+'\n' for name,sha in native.items()))
         resource_file=out/'runtime-resources.sha256';resource_file.write_text(''.join(
             item.get('lfs_payload',item)['sha256']+' '+item['kind']+' '+item['destination']+'\n'

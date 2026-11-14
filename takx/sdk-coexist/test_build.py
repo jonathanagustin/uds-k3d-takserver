@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
 from unittest.mock import patch
 
 HERE=Path(__file__).resolve().parent
@@ -52,6 +53,18 @@ class JoinedGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):B.mapped('JOINED_ELF '+digest+' '+str(path)+'\n',{str(path):digest})
             alias=root/'alias.so';alias.symlink_to(good)
             with self.assertRaises(ValueError):B.mapped('JOINED_ELF '+sha+' '+str(alias)+'\n',{str(alias):sha})
+
+    def test_both_native_caches_fit_before_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            jar=Path(temporary)/'fixture.jar'
+            with zipfile.ZipFile(jar,'w') as archive:archive.writestr('native/libcomponent.so',b'\x7fELFfixture')
+            needed=B.native_capacity(jar,['libcomponent.so'])
+            self.assertGreaterEqual(needed,2*4096+B.RESERVE)
+            with patch.object(B,'CAP',needed-1),self.assertRaisesRegex(ValueError,'two native caches'):
+                B.native_capacity(jar,['libcomponent.so'])
+            with patch.object(B,'FILE_CAP',4),self.assertRaisesRegex(ValueError,'data-file'):
+                B.native_capacity(jar,['libcomponent.so'])
+            with self.assertRaises(ValueError):B.native_capacity(jar,['missing.so'])
 
     def test_native_extraction_data_limit_is_separate_from_log_limit(self):
         code='''import importlib.util, pathlib, resource, sys

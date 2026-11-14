@@ -40,9 +40,10 @@ must match the qualified identities; original SDK build paths, shared crypto or
 SQLite, unexpected ELF providers and JNI/startup diagnostics fail acceptance.
 The final producer, package, tools and source inputs are rechecked.
 
-The runner has a 300-second total deadline, 256 MiB inclusive output cap, 2 GiB
+The runner has a 300-second total deadline, 512 MiB inclusive output cap, 2 GiB
 free-space floor, 1 MiB complete streamed log per command, and 128 MiB per data
 file. The independent data-file limit permits genuine native resource extraction.
+The preflight reserves both complete native caches from actual archive member sizes.
 Both JVMs use separate private application, home and extraction directories.
 Child process groups are reaped on failure; crash reports remain in private output.
 HOME and CODEX_HOME remain unchanged. No source download or native compilation runs.

@@ -162,6 +162,36 @@ class StartupTrials(unittest.TestCase):
         self.assertNotIn('PRIVATE_SENTINEL', json.dumps(initial))
         self.assertEqual(trial.references({'imagePullSecrets': [{'name': 'pull-key'}]})['secrets'], {'pull-key'})
 
+    def test_optional_configmap_absence_is_bound_and_required_references_win(self):
+        class OptionalCommands(Commands):
+            def __init__(self,optional=True,present=False,denied=False):
+                super().__init__('cold');self.optional=optional;self.present=present;self.denied=denied
+            def run(self,args,limit):
+                if args[:3]==['get','configmap','uds-trust-bundle']:
+                    self.calls.append(args)
+                    if self.denied:raise jvm.CommandFailure('configmap','forbidden',1)
+                    if not self.present:
+                        if '--ignore-not-found' not in args:raise jvm.CommandFailure('configmap','not-found',1)
+                        return b''
+                    return json.dumps({'metadata':{'uid':'trust-a','resourceVersion':'1'},'data':{'ca':'PRIVATE_TRUST_SENTINEL'}}).encode()
+                raw=super().run(args,limit)
+                if args[:2]==['get','deployments']:
+                    value=json.loads(raw)
+                    for deployment in value['items']:
+                        deployment['spec']['template']['spec']['volumes'].append({'configMap':{'name':'uds-trust-bundle','optional':self.optional}})
+                    return json.dumps(value).encode()
+                return raw
+        absent=OptionalCommands();missing,_=trial.snapshot(absent)
+        self.assertTrue(any('--ignore-not-found' in argv for argv in absent.calls))
+        present,_=trial.snapshot(OptionalCommands(present=True))
+        self.assertNotEqual(missing['config_sha256'],present['config_sha256'])
+        self.assertNotIn('PRIVATE_TRUST_SENTINEL',json.dumps(present))
+        for kwargs in ({'optional':False},{'optional':'true'},{'denied':True}):
+            with self.subTest(kwargs=kwargs),self.assertRaises(jvm.CommandFailure):trial.snapshot(OptionalCommands(**kwargs))
+        refs=trial.references({'volumes':[{'configMap':{'name':'same','optional':True}},
+                                         {'configMap':{'name':'same'}}]})
+        self.assertNotIn('same',refs['optional_configmaps'])
+
     def test_phase_identity_and_init_chronology_cannot_be_relabelled(self):
         cold, warm = pair(); app = jvm.APPS[0]
         for mutation in ('context', 'sample-start', 'container-start', 'late-init', 'cold-warm-value'):

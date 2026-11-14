@@ -53,6 +53,42 @@ class RetainedStateGuards(unittest.TestCase):
             delete.assert_not_called()
         self.assertIsNone(driver._retained_cleanup_drift)
 
+    def test_pvc_version_drift_fingerprints_spec_status_and_finalizers_without_delete(self):
+        for change in ('spec','status','finalizers','unavailable'):
+            obj={'kind':'PersistentVolumeClaim','metadata':{'namespace':'takserver','name':'retained-data',
+                 'uid':'original','resourceVersion':'1','finalizers':['kubernetes.io/pvc-protection']},
+                 'spec':{'volumeName':'PRIVATE_VOLUME_SENTINEL'},'status':{'phase':'Bound'}}
+            rec=self.record(obj);rec['parent']={'volumeName':'bound-volume','volumeUID':'bound-pv'}
+            rec['pvcState']=R.pvc_state(obj)
+            obj['metadata']['resourceVersion']='2'
+            if change=='spec':obj['spec']['volumeName']='PRIVATE_CHANGED_SENTINEL'
+            elif change=='status':obj['status']['phase']='Lost'
+            elif change=='finalizers':obj['metadata']['finalizers']=[]
+            else:rec['pvcState']={'private':'invalid descriptor'}
+            driver=self.driver(obj)
+            with patch.object(R,'delete_record') as delete:
+                with self.assertRaisesRegex(ValueError,'identity/metadata changed'):R.conditional_delete(driver,rec)
+                delete.assert_not_called()
+            snapshot=driver._retained_cleanup_drift
+            self.assertEqual(snapshot['changedFields'],['resourceVersion'])
+            self.assertNotIn('PRIVATE_',json.dumps(snapshot))
+            if change=='unavailable':
+                self.assertNotIn('pvcState',snapshot)
+                continue
+            before,after=snapshot['pvcState']['expected'],snapshot['pvcState']['observed']
+            for key in ('spec','status','finalizers'):
+                self.assertEqual(before[key+'SHA256']!=after[key+'SHA256'],key==change)
+            if change=='finalizers':
+                self.assertTrue(before['pvcProtection']);self.assertFalse(after['pvcProtection'])
+            self.assertEqual(R.validate_cleanup_drift(snapshot),snapshot)
+            for mutate in (lambda v:v['pvcState']['observed'].update(spec='PRIVATE_BODY'),
+                           lambda v:v['pvcState']['observed'].update(pvcProtection=1),
+                           lambda v:v['pvcState']['observed'].update(otherFinalizerCount=True),
+                           lambda v:v['pvcState']['observed'].update(statusSHA256='PRIVATE_BODY'),
+                           lambda v:v['pvcState'].update(extra={})):
+                bad=copy.deepcopy(snapshot);mutate(bad)
+                with self.assertRaises(ValueError):R.validate_cleanup_drift(bad)
+
     def setup_fixture(self):
         hook={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'takserver-db-setup',
             'labels':{'app.kubernetes.io/instance':'takserver','app.kubernetes.io/managed-by':'Helm'},

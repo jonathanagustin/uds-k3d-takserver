@@ -355,3 +355,13 @@ bodies, metadata values, and secret data are excluded. This uses the existing
 source-bound first-private-failure channel; capture failure preserves the
 original refusal. It neither refreshes the deletion preconditions nor proves
 that changed metadata is safe.
+
+For retained PVC version drift, the optional encrypted snapshot also records
+before/after spec, status and sorted-finalizer SHA-256 digests. It includes only
+the fixed PVC-protection presence flag and other-finalizer count, never raw
+spec/status/finalizer values. The baseline is taken alongside the pre-removal
+cleanup identity; the observation comes from the exact object read that refused
+conditional deletion. This distinguishes possible state changes without
+assuming that finalizers caused them. Invalid or unavailable extra state falls
+back to the existing basic identity diagnostic. None of these fingerprints
+refreshes resourceVersion, changes deletion preconditions or authorizes cleanup.

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "profile": "bounded-contour-grid-v1",
+  "scope": "bounded triangulated elevation-grid contour algorithm only; no elevation provider, TAK layer or complete contour API",
+  "owned": {
+    "java/gov/tak/project/contour/ContourGrid.java": "a5a986409258cda81f147dd241f0dc2d9ccca48d5d56c032f12dc325a3f227c5",
+    "tests/ContourGridControls.java": "3e3ede0d85054534f3a320c11b1fd42736f25098667080e4a116c3f07f979b55"
+  },
+  "checks": 865,
+  "contour_api_implemented": false,
+  "elevation_source_integrated": false,
+  "layer_runtime_accepted": false,
+  "full_client_accepted": false
+}

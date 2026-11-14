@@ -1,0 +1,212 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Opt-in native application startup pairs. Never starts the load tester or tunes flags.
+name: Startup pair
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Native architecture for one independent startup pair per selected runner
+        type: choice
+        options: [amd64, arm64, both]
+        default: amd64
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+# Preserve an active experiment; don't overlap another pair on the same runner pool.
+concurrency:
+  group: startup-pair
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      ARCHITECTURE: ${{ inputs.architecture || 'amd64' }}
+      AMD64_RUNNER: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
+    steps:
+      - name: Select only the requested native architectures
+        id: plan
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          selected = os.environ['ARCHITECTURE']
+          runner = os.environ['AMD64_RUNNER']
+          if selected not in ('amd64', 'arm64', 'both') or (selected != 'arm64' and not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', runner)):
+              raise SystemExit('Unsupported startup architecture or runner')
+          rows = []
+          if selected in ('amd64', 'both'):
+              rows.append({'arch': 'amd64', 'runner': runner})
+          if selected in ('arm64', 'both'):
+              rows.append({'arch': 'arm64', 'runner': 'ubuntu-22.04-arm'})
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + json.dumps({'include': rows}) + '\n')
+          PY
+
+  startup:
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      FLAVOR: upstream
+      GH_TOKEN: ${{ github.token }}
+      DEV_PACKAGE_WAIT_SECONDS: "0"
+      DEV_PACKAGE_SHA: ${{ github.sha }}
+      STARTUP_ARCH: ${{ matrix.arch }}
+      COHORT: startup-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact experiment source
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify native architecture before setup or cluster work
+        run: |
+          set -euo pipefail
+          case "${STARTUP_ARCH}:$(uname -m)" in
+            amd64:x86_64 | arm64:aarch64) ;;
+            *) echo "Startup runner architecture mismatch" >&2; exit 1 ;;
+          esac
+      - name: Install pinned client tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: uv helm k3d aqua:defenseunicorns/uds-cli
+          cache: true
+      - name: Set up test Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+      - name: Install Docker Compose
+        uses: docker/setup-compose-action@54042514f505b273907334ae2b9cdbb9a0213c1a # v2.4.0
+        with:
+          version: v5.7.0
+      - name: Use the pinned embedded Kubernetes client
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/startup-client-bin"
+          printf '#!/bin/sh\nexec uds zarf tools kubectl "$@"\n' > "$RUNNER_TEMP/startup-client-bin/kubectl"
+          chmod 700 "$RUNNER_TEMP/startup-client-bin/kubectl"
+          echo "$RUNNER_TEMP/startup-client-bin" >> "$GITHUB_PATH"
+          echo "EVIDENCE=$RUNNER_TEMP/startup-pair" >> "$GITHUB_ENV"
+      - name: Refuse a remote daemon or existing cluster before mutation
+        timeout-minutes: 1
+        run: python3 tests/ephemeral-cluster.py bootstrap --context k3d-uds
+      - name: Prepare the disposable runner
+        timeout-minutes: 6
+        env:
+          TRIM_SKIP_ABOVE_GB: "60"
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysctl -w fs.inotify.max_user_instances=1280 fs.inotify.max_user_watches=655360
+          ./.github/scripts/trim-runner.sh
+          ./.github/scripts/add-runner-swap.sh
+          printf '%s\n' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Acquire only the matching published application package
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./.github/scripts/pin-image-tags.sh
+          # Missing input packages fail before cluster work; this pilot never builds images/packages.
+          test "$(./.github/scripts/dev-package.sh prebuilt)" = true
+          umask 077
+          mkdir -m 700 "$EVIDENCE"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          sha = os.environ['GITHUB_SHA']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == sha
+          package = subprocess.check_output(['bash', '.github/scripts/dev-package.sh', 'key']).strip()
+          value = {'source': hashlib.sha256(sha.encode()).hexdigest(),
+                   'package': hashlib.sha256(package).hexdigest(),
+                   'workflow': hashlib.sha256(pathlib.Path('.github/workflows/startup.yaml').read_bytes()).hexdigest()}
+          (pathlib.Path(os.environ['EVIDENCE'])/'bindings.json').write_text(json.dumps(value)+'\n')
+          PY
+      - name: Restore the slim Core baseline without the application
+        timeout-minutes: 12
+        run: uds run deploy-slim-core --no-progress
+      - name: Bind this job's disposable cluster and fit the runner
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          python3 tests/ephemeral-cluster.py mark --context k3d-uds
+          uds run fit-runner --no-progress
+      - name: Begin the cold application boundary
+        timeout-minutes: 2
+        run: |
+          python3 -m bench.startup_trials begin --context k3d-uds --cohort "$COHORT" \
+            --bindings "$EVIDENCE/bindings.json" --output "$EVIDENCE/cold-begin.json"
+      - name: Deploy and validate the normal application bundle
+        timeout-minutes: 30
+        run: uv run --no-project --with pyyaml==6.0.3 uds run create-deploy-test-bundle --set FLAVOR=upstream --no-progress
+      - name: Finish the cold observation
+        timeout-minutes: 2
+        run: |
+          python3 -m bench.startup_trials finish --begin "$EVIDENCE/cold-begin.json" \
+            --mode cold --output "$EVIDENCE/cold.json"
+      - name: Begin the warm application boundary
+        timeout-minutes: 2
+        run: |
+          python3 -m bench.startup_trials begin --context k3d-uds --cohort "$COHORT" \
+            --bindings "$EVIDENCE/bindings.json" --output "$EVIDENCE/warm-begin.json"
+      - name: Restart only the two measured application Deployments
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          python3 tests/ephemeral-cluster.py verify --context k3d-uds
+          kubectl --context k3d-uds -n takserver rollout restart deployment/takserver-api deployment/takserver-messaging
+          kubectl --context k3d-uds -n takserver rollout status deployment/takserver-api --timeout=420s
+          kubectl --context k3d-uds -n takserver rollout status deployment/takserver-messaging --timeout=60s
+          # A rollout may be Ready while an old Pod is still terminating. The
+          # observer requires unique Pods; wait only for the two bound old names.
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess
+          from bench.startup_trials import APPS, validate_begin
+          value = validate_begin(json.loads((pathlib.Path(os.environ['EVIDENCE'])/'warm-begin.json').read_text()))
+          names = []
+          for app in APPS:
+              name = value['snapshot']['identities'][app]['pod_name']
+              assert re.fullmatch(re.escape(app)+r'-[a-z0-9-]{1,100}', name)
+              names.append('pod/'+name)
+          subprocess.run(['kubectl', '--context', 'k3d-uds', '-n', 'takserver', 'wait',
+                          '--for=delete', *names, '--timeout=60s'], check=True, timeout=65)
+          PY
+      - name: Finish and validate the warm pair
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          python3 -m bench.startup_trials finish --begin "$EVIDENCE/warm-begin.json" \
+            --mode warm --output "$EVIDENCE/warm.json"
+          python3 -m bench.startup_trials pair --cold "$EVIDENCE/cold.json" \
+            --warm "$EVIDENCE/warm.json" --output "$EVIDENCE/pair.json"
+      - name: Retain only typed startup evidence, including partial failures
+        if: always() && steps.checkout.outcome == 'success'
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: startup-pair-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/startup-pair/bindings.json
+            ${{ runner.temp }}/startup-pair/cold-begin.json
+            ${{ runner.temp }}/startup-pair/cold.json
+            ${{ runner.temp }}/startup-pair/warm-begin.json
+            ${{ runner.temp }}/startup-pair/warm.json
+            ${{ runner.temp }}/startup-pair/pair.json
+          if-no-files-found: warn
+          retention-days: 14

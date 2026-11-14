@@ -295,3 +295,19 @@ run43499139100, which did not retain that snapshot. A new live pilot is required
 The typed maps cover completed inventory comparisons. A missing required Core
 namespace or a changed bound application owner fails before a complete snapshot
 exists; those failures retain the reviewed callsite rather than partial maps.
+
+If retained-state diagnostic capture itself fails, a separate first-failure
+callsite records only its reviewed file/line hashes and fixed exception type.
+The publisher revalidates it under `identityDiagnosticFailures`; the primary
+invariant's callsite remains under `identityFailures`. Neither channel includes
+exception text, inventory keys or private payloads. Failure of either optional
+capture still leaves the original Core or retained-data guard failed.
+
+
+The optional encrypted channel reports only source-owned rejection codes after
+`private-input:` when input eligibility fails. These distinguish missing private
+references, journal/progress reads or bindings, retained files, reviewed source,
+and retained schemas. They contain no exception messages, resource names, values,
+or paths. A rejected channel never authorizes private bytes; exactly one eligible
+channel is still required. These codes diagnose evidence delivery and do not
+explain or relax the retained-Core assertion.

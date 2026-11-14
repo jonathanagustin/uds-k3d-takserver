@@ -42,8 +42,32 @@ VALIDATION_NAME = 'PRIVATE-retained-source-validation.json'
 PACKAGE_JOURNAL_LIMIT = 16 * 1024 * 1024  # Diagnostic authentication only, never acceptance.
 
 
-def require(value):
+INPUT_REASONS = frozenset(('package-journal', 'package-progress', 'package-binding',
+    'missing-private-reference', 'command-file', 'application-binding', 'retained-binding',
+    'retained-file', 'reviewed-source', 'retained-schema', 'owner-input',
+    'channels-unavailable', 'ambiguous-channels'))
+
+
+class InputRejected(ValueError):
+    """Only a source-owned code may be exposed; never exception text."""
+    def __init__(self, reason):
+        self.reason = reason if reason in INPUT_REASONS else 'channels-unavailable'
+        super().__init__('encrypted diagnostic input rejected')
+
+
+def input_check(reason, operation, *args, **kwargs):
+    try:
+        return operation(*args, **kwargs)
+    except InputRejected:
+        raise
+    except Exception:
+        raise InputRejected(reason) from None
+
+
+def require(value, reason=None):
     if not value:
+        if reason is not None:
+            raise InputRejected(reason)
         raise ValueError('encrypted diagnostic guard failed')
 
 
@@ -260,8 +284,8 @@ def reviewed_source_hash(relative):
 
 def package_input(temporary, with_limit=False):
     folder = temporary / 'staged-migrations/package-identity'
-    journal, _journal_raw, journal_hash = private_json(folder / 'journal.json', PACKAGE_JOURNAL_LIMIT)
-    progress, _progress_raw, _progress_hash = private_json(folder / 'journal-progress.json', 256 * 1024)
+    journal, _journal_raw, journal_hash = input_check('package-journal', private_json, folder / 'journal.json', PACKAGE_JOURNAL_LIMIT)
+    progress, _progress_raw, _progress_hash = input_check('package-progress', private_json, folder / 'journal-progress.json', 256 * 1024)
     expected = {'sourceSHA': os.environ['GITHUB_SHA'], 'runID': os.environ['GITHUB_RUN_ID'],
                 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT']}
     require(type(journal.get('schema')) is int and journal['schema'] == 1 and journal.get('accepted') is False
@@ -281,19 +305,20 @@ def package_input(temporary, with_limit=False):
         require(failures and failures[0]['stage']=={'package-command':'package-command-failed',
                 'retained-source-validation':'retained-source-validation-failed','application-check':'application-check-failed'}[first['kind']])
         if first['kind']=='application-check':
-            descriptor=application_input(folder,journal,expected)
+            descriptor=input_check('application-binding', application_input, folder,journal,expected)
             return (descriptor,INPUT_LIMIT) if with_limit else descriptor
         if first['kind']=='retained-source-validation':
-            descriptor=validation_input(folder,journal,expected)
+            descriptor=input_check('retained-binding', validation_input, folder,journal,expected)
             return (descriptor,VALIDATION_INPUT_LIMIT) if with_limit else descriptor
     else:
         # Only old command-only journals get the legacy fallback. Never guess.
         require('retainedSourceValidationFailure' not in journal and 'applicationCheckFailure' not in journal)
+    require('packageCommandFailure' in journal, 'missing-private-reference')
     reference = journal.get('packageCommandFailure', {})
     require(set(reference) == {'file', 'sha256', 'bytes'} and reference['file'] == PACKAGE_NAME
             and type(reference['bytes']) is int and 0 < reference['bytes'] <= INPUT_LIMIT
             and isinstance(reference['sha256'], str) and re.fullmatch('[a-f0-9]{64}', reference['sha256']))
-    payload, raw, private_hash = private_json(folder / PACKAGE_NAME, INPUT_LIMIT)
+    payload, raw, private_hash = input_check('command-file', private_json, folder / PACKAGE_NAME, INPUT_LIMIT)
     require(len(raw) == reference['bytes'] and private_hash == reference['sha256'])
     require(set(payload) == {'schema', 'binding', 'role', 'phase', 'exitStatus', 'timedOut', 'stdout', 'stderr',
             'stdoutTruncated', 'stderrTruncated', 'packageDriverSHA256', 'driverSHA256'})
@@ -336,7 +361,7 @@ def application_input(folder,journal,expected):
                                      for key in ('check','phase','exitStatus','timedOut')))
     for key,relative in [('packageDriverSHA256','tests/workload-identities/package_roundtrip.py'),
                          ('driverSHA256','tests/workload-identities/drive.py')]:
-        require(payload[key]==journal.get(key)==reviewed_source_hash(relative))
+        require(payload[key]==journal.get(key)==input_check('reviewed-source', reviewed_source_hash, relative))
     return sealed_payload(raw)
 
 
@@ -360,7 +385,7 @@ def validation_input(folder,journal,expected):
     require(set(reference)=={'file','sha256','bytes'} and reference['file']==VALIDATION_NAME and
             type(reference['bytes']) is int and 0<reference['bytes']<=VALIDATION_INPUT_LIMIT and
             isinstance(reference['sha256'],str) and re.fullmatch('[a-f0-9]{64}',reference['sha256']))
-    payload,raw,checksum=private_json(folder/VALIDATION_NAME,VALIDATION_INPUT_LIMIT)
+    payload,raw,checksum=input_check('retained-file', private_json, folder/VALIDATION_NAME,VALIDATION_INPUT_LIMIT)
     require(len(raw)==reference['bytes'] and checksum==reference['sha256'])
     require(set(payload)=={'schema','type','kind','binding','phase','snapshot','packageDriverSHA256','driverSHA256','retainedSourceSHA256'} and
             type(payload['schema']) is int and payload['schema']==1 and payload['type']=='retained-source-validation' and
@@ -371,7 +396,7 @@ def validation_input(folder,journal,expected):
     for key,relative in [('packageDriverSHA256','tests/workload-identities/package_roundtrip.py'),
                          ('driverSHA256','tests/workload-identities/drive.py'),
                          ('retainedSourceSHA256','tests/workload-identities/retained_state.py')]:
-        require(payload[key]==journal.get(key)==reviewed_source_hash(relative))
+        require(payload[key]==journal.get(key)==input_check('reviewed-source', reviewed_source_hash, relative))
     # The reviewed retained-source helper binds the full hook bodies to their hash inventory.
     path=ROOT/'tests/workload-identities/retained_state.py'
     descriptor=regular_descriptor(path,256*1024)
@@ -380,28 +405,32 @@ def validation_input(folder,journal,expected):
     require(len(source)<=256*1024 and digest(source)==payload['retainedSourceSHA256'])
     retained=types.ModuleType('encrypted_retained_source');retained.__file__=str(path)
     exec(compile(source,str(path),'exec'),retained.__dict__)
-    (retained.validate_source_failure if payload['kind']=='stored-hooks-drift' else retained.validate_core_failure)(payload['snapshot'])
+    input_check('retained-schema', retained.validate_source_failure if payload['kind']=='stored-hooks-drift' else retained.validate_core_failure, payload['snapshot'])
     return sealed_payload(raw)
 
 
 def select_private(temporary, with_limit=False):
     scenario = os.environ.get('SCENARIO', '')
-    candidates = []
+    candidates, rejected = [], []
     try:
         if scenario in ('', 'velero', 'all'):
-            owner_identity(temporary / 'staged-migrations/owner/journal.json')
-            candidates.append((regular_descriptor(temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT),INPUT_LIMIT))
-    except Exception:
-        pass  # An ineligible channel never authorizes its private bytes.
+            input_check('owner-input', owner_identity, temporary / 'staged-migrations/owner/journal.json')
+            descriptor = input_check('owner-input', regular_descriptor,
+                temporary / 'staged-migrations/owner/PRIVATE-command-failure.txt', INPUT_LIMIT)
+            candidates.append((descriptor, INPUT_LIMIT))
+    except InputRejected as error:
+        rejected.append(error.reason)
     try:
         if scenario in ('identities', 'all') and os.environ.get('IDENTITY_METHOD') in ('package', 'combined'):
-            candidates.append(package_input(temporary,with_limit=True))
-    except Exception:
-        pass
+            candidates.append(input_check('package-binding', package_input, temporary, with_limit=True))
+    except InputRejected as error:
+        rejected.append(error.reason)
     if len(candidates) != 1:
         for descriptor,_limit in candidates:
             os.close(descriptor)
-        require(False)
+        reason = ('ambiguous-channels' if candidates else
+                  rejected[0] if len(rejected) == 1 else 'channels-unavailable')
+        raise InputRejected(reason)
     return candidates[0] if with_limit else candidates[0][0]
 
 
@@ -451,9 +480,11 @@ def main():
         finally:
             os.close(output_fd)
         return 0
-    except Exception:
-        # No exception, recipient, input, argv, stderr or URL is printable here.
-        print('Encrypted staged diagnostic omitted: ' + stage, file=sys.stderr)
+    except Exception as error:
+        # No exception text, recipient, input, argv, stderr or URL is printable here.
+        detail = (':' + error.reason if stage == 'private-input' and type(error) is InputRejected
+                  and error.reason in INPUT_REASONS else '')
+        print('Encrypted staged diagnostic omitted: ' + stage + detail, file=sys.stderr)
         if owned:
             try:
                 (destination / 'first-failure.age').unlink(missing_ok=True)

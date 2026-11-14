@@ -692,9 +692,11 @@ class AmbientEgressGuards(unittest.TestCase):
                           'allowedRoutes':{'namespaces':{'from':'All'},'kinds':[{'group':'networking.istio.io','kind':'ServiceEntry'}]}}],
                          'infrastructure':{'parametersRef':{'group':'','kind':'ConfigMap','name':'egress-waypoint-config'}}}}
         deployment={'metadata':{'name':'egress-waypoint','namespace':'istio-egress-ambient','uid':'waypoint-deployment-uid',
-                    'labels':{'gateway.networking.k8s.io/gateway-name':'egress-waypoint'},'ownerReferences':[
+                    'labels':{'gateway.networking.k8s.io/gateway-name':'egress-waypoint',
+                              'gateway.networking.k8s.io/gateway-class-name':'istio-waypoint',
+                              'gateway.istio.io/managed':'istio.io-mesh-controller'},'ownerReferences':[
                     {'apiVersion':'gateway.networking.k8s.io/v1','kind':'Gateway','name':'egress-waypoint',
-                     'uid':'gateway-uid','controller':True,'blockOwnerDeletion':True}]}}
+                     'uid':'gateway-uid'}]}}
         objects[('istio-egress-ambient','gateways.gateway.networking.k8s.io')]=[gateway]
         objects[('istio-egress-ambient','deployments')]=[deployment]
         def kube(*args,**kwargs):
@@ -751,12 +753,19 @@ class AmbientEgressGuards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Core identity'):trial.core_unchanged()
 
     def test_uid_controller_consumer_and_spec_changes_are_refused(self):
-        for mutation in ('deployment-uid','gateway-uid','controller','consumer','spec','helm-owner','deleting'):
+        for mutation in ('deployment-uid','gateway-uid','controller','controller-false','block-owner','owner-api','owner-uid','extra-owner','managed-label','class-label','consumer','spec','helm-owner','deleting'):
             with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
                 trial,_names,_client,_objects,packages,gateway,deployment,_=self.fixture(directory)
                 if mutation=='deployment-uid':deployment['metadata']['uid']='replacement'
                 elif mutation=='gateway-uid':gateway['metadata']['uid']='replacement'
-                elif mutation=='controller':deployment['metadata']['ownerReferences'][0]['controller']=False
+                elif mutation=='controller':deployment['metadata']['ownerReferences'][0]['controller']=True
+                elif mutation=='controller-false':deployment['metadata']['ownerReferences'][0]['controller']=False
+                elif mutation=='block-owner':deployment['metadata']['ownerReferences'][0]['blockOwnerDeletion']=True
+                elif mutation=='owner-api':deployment['metadata']['ownerReferences'][0]['apiVersion']='gateway.networking.k8s.io/v1beta1'
+                elif mutation=='owner-uid':deployment['metadata']['ownerReferences'][0]['uid']='foreign-gateway'
+                elif mutation=='extra-owner':deployment['metadata']['ownerReferences'].append(copy.deepcopy(deployment['metadata']['ownerReferences'][0]))
+                elif mutation=='managed-label':deployment['metadata']['labels']['gateway.istio.io/managed']='foreign-controller'
+                elif mutation=='class-label':deployment['metadata']['labels']['gateway.networking.k8s.io/gateway-class-name']='foreign-class'
                 elif mutation=='consumer':gateway['metadata']['annotations']['uds.dev/user-foreign-user']='user'
                 elif mutation=='spec':gateway['spec']['listeners'][0]['port']=80
                 elif mutation=='helm-owner':packages[0]['metadata']['annotations']['meta.helm.sh/release-name']='foreign'

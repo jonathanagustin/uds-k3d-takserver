@@ -88,11 +88,16 @@ def validate_egress_deployment(deployment,gateway_uid,removing=False):
     meta=deployment.get('metadata',{});owners=meta.get('ownerReferences',[])
     D.require(meta.get('namespace')==EGRESS_NAMESPACE and meta.get('name')==EGRESS_WAYPOINT and
               meta.get('labels',{}).get('gateway.networking.k8s.io/gateway-name')==EGRESS_WAYPOINT and
+              meta.get('labels',{}).get('gateway.networking.k8s.io/gateway-class-name')=='istio-waypoint' and
+              meta.get('labels',{}).get('gateway.istio.io/managed')=='istio.io-mesh-controller' and
               len(owners)==1,'shared ambient Deployment ownership differs')
     owner=owners[0]
-    D.require(owner.get('apiVersion')=='gateway.networking.k8s.io/v1' and owner.get('kind')=='Gateway' and
-              owner.get('name')==EGRESS_WAYPOINT and owner.get('uid')==gateway_uid and owner.get('controller') is True,
-              'shared ambient Deployment controller differs')
+    # Istio 1.31.2 e2f3a7949a358af7dd901a6f9ccd6ecdd7270271,
+    # manifests/charts/istio-control/istio-discovery/files/waypoint.yaml:
+    # this GC owner reference deliberately has no controller/blockOwnerDeletion.
+    D.require(owner=={'apiVersion':'gateway.networking.k8s.io/v1','kind':'Gateway',
+                      'name':EGRESS_WAYPOINT,'uid':gateway_uid},
+              'shared ambient Deployment Gateway owner reference differs')
     D.require(removing or not meta.get('deletionTimestamp'),'live shared ambient Deployment is deleting')
     return egress_uid(deployment)
 

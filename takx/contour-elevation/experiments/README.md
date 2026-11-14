@@ -31,3 +31,25 @@ executes only the headless CPU controls. Next work is strict-JNI attribution and
 visibility/cache invalidation diagnosis, followed by a full fresh producer and
 owned-display replay for any native correction. The zero-diagnostic and negative
 visibility gates remain mandatory.
+
+## Native warning attribution
+
+A third, diagnostic-only run uses native write-stack tracing on the unchanged
+full Native07 library. Fourteen warning writes yield nine distinct native stack
+prefixes. Symbol resolution identifies these review targets:
+
+- Core `ManagedLayer.cpp`: constructor calls before interface marshaling.
+- Renderer core `ManagedGLLayerSpi2.cpp`: factory creation and marshaling.
+- Renderer core `ManagedGLLayer2.cpp`: constructor/subject marshaling.
+- Feature `ManagedFeatureDataStore2.cpp`: constructor and query callback paths.
+- Feature `Interop.cpp`: query-parameter marshaling.
+- Feature `ManagedFeatureDefinition.cpp`: raw geometry and raw style callbacks.
+
+The trace, exact library/source/tool hashes and symbolized prefixes are retained
+in `contour-draw-controls-03/warning-attribution.json`. Partial unwind prefixes
+are reported only as observed; missing frames are not inferred. Tracing changes
+timing: this run fails its visible-color condition before completing the hide
+test, so it is attribution evidence rather than functional acceptance. Review
+pending-exception checks and cleanup in these actual callback paths before any
+closed source correction and complete fresh native rebuild. No native producer
+or acceptance gate was modified for the trace.

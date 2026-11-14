@@ -678,12 +678,14 @@ class PackageTrial(D.Driver):
             if entry['kind']=='ServiceAccount' and not entry.get('deleted'):self.delete_created(entry['kind'],entry['name'])
         self.state['preservedTrustMaps']=R.capture_trust(self)
         self.state['retainedCleanup']=R.cleanup_snapshot(self,self.state['dataInvariants'])
+        setup_hook=R.setup_hook_snapshot(self)
         installed=self.get('secret','zarf-package-takserver','zarf')
         self.state['removedPackageSecretUID']=installed['metadata']['uid'];self.journal('application-remove-start')
         self.run_package(['uds','zarf','package','remove','takserver','--confirm'],900)
         self.state['applicationNamespaceRemoved']=True
         self.core_unchanged()
         try:
+            R.cleanup_setup_hook(self,setup_hook)
             self.wait(lambda:R.consumers_gone(self),300)
         except ValueError:
             self.state['accepted']=False

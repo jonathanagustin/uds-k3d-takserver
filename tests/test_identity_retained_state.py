@@ -26,6 +26,64 @@ class RetainedStateGuards(unittest.TestCase):
                 'users':[{'user':{'client-certificate-data':'Zml4dHVyZQ==','client-key-data':'Zml4dHVyZQ=='}}]}
         return SimpleNamespace(guard=lambda:None,core_unchanged=lambda:None,
             get=lambda *a,**k:{'items':[]},kube=lambda *a:'{}' if a[1]=='namespace' else json.dumps(obj),command=lambda argv:json.dumps(client))
+    def setup_fixture(self):
+        hook={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'takserver-db-setup',
+            'labels':{'app.kubernetes.io/instance':'takserver','app.kubernetes.io/managed-by':'Helm'},
+            'annotations':{'helm.sh/hook':'post-install','helm.sh/hook-weight':'-5','helm.sh/hook-delete-policy':'before-hook-creation'}},
+            'spec':{'template':{'spec':{'restartPolicy':'Never','containers':[{'name':'post-install-job','image':'real-source-image'}]}}}}
+        job=copy.deepcopy(hook);job['metadata'].update(namespace='takserver',uid='job-original',resourceVersion='9')
+        job['status']={'succeeded':1,'conditions':[{'type':'Complete','status':'True'}]}
+        pod={'metadata':{'namespace':'takserver','name':'setup-child','uid':'child',
+            'ownerReferences':[{'apiVersion':'batch/v1','kind':'Job','name':'takserver-db-setup','uid':'job-original','controller':True}]},
+            'status':{'phase':'Succeeded'}}
+        inventories={('takserver','pods'):[pod]}
+        def get(kind,name=None,namespace='takserver'):
+            return job if kind=='job' else {'items':inventories.get((namespace,kind),[])}
+        driver=SimpleNamespace(command=lambda argv:json.dumps(hook),get=get,
+            kube=lambda *args:json.dumps(job) if args[1]=='job' else '{}',guard=MagicMock(),
+            core_unchanged=MagicMock(),wait=MagicMock(),journal=MagicMock())
+        return driver,hook,job,pod,inventories
+
+    def test_setup_hook_binds_stored_release_and_deletes_only_exact_completed_parent(self):
+        driver,hook,job,pod,inventory=self.setup_fixture()
+        proof=R.setup_hook_snapshot(driver)
+        with patch.object(R,'delete_record') as delete:
+            R.cleanup_setup_hook(driver,proof)
+            delete.assert_called_once_with(driver,proof['record'])
+        self.assertEqual(driver.wait.call_args.args[1],300)
+        # An external-database release has no source hook and no cleanup grant.
+        driver.command=lambda argv:''
+        self.assertIsNone(R.setup_hook_snapshot(driver))
+        with patch.object(R,'delete_record') as delete:
+            R.cleanup_setup_hook(driver,None);delete.assert_not_called()
+
+    def test_setup_hook_rejects_source_and_terminal_state_drift(self):
+        for change in ('foreign-hook','changed-image','extra-container','running','failed','owned'):
+            with self.subTest(change=change):
+                driver,hook,job,pod,inventory=self.setup_fixture()
+                if change=='foreign-hook':hook['metadata']['name']='foreign'
+                elif change=='changed-image':job['spec']['template']['spec']['containers'][0]['image']='replacement'
+                elif change=='extra-container':job['spec']['template']['spec']['containers'].append({'name':'extra'})
+                elif change=='running':job['status']['active']=1
+                elif change=='failed':job['status']['failed']=1
+                else:job['metadata']['ownerReferences']=[{'uid':'foreign'}]
+                with self.assertRaises(ValueError):R.setup_hook_snapshot(driver)
+
+    def test_setup_hook_cleanup_refuses_replacement_or_any_live_foreign_consumer(self):
+        for change in ('uid','version','spec','pod-owner','pod-phase','foreign-namespace','deployment'):
+            with self.subTest(change=change):
+                driver,hook,job,pod,inventory=self.setup_fixture();proof=R.setup_hook_snapshot(driver)
+                if change=='uid':job['metadata']['uid']='replacement'
+                elif change=='version':job['metadata']['resourceVersion']='10'
+                elif change=='spec':job['spec']['template']['spec']['restartPolicy']='Always'
+                elif change=='pod-owner':pod['metadata']['ownerReferences'][0]['uid']='foreign'
+                elif change=='pod-phase':pod['status']['phase']='Running'
+                elif change=='foreign-namespace':inventory[('cloudtak','pods')]=[pod]
+                else:inventory[('takserver','deployments')]=[{'metadata':{'name':'remaining'}}]
+                with patch.object(R,'delete_record') as delete:
+                    with self.assertRaises(ValueError):R.cleanup_setup_hook(driver,proof)
+                    delete.assert_not_called()
+
     def test_sentinel_operations_pass_exact_namespace_container_and_safe_diagnostics(self):
         for namespace in ('takserver','cloudtak'):
             for operation in ('create','read','remove'):
@@ -74,6 +132,15 @@ class RetainedStateGuards(unittest.TestCase):
         request=opener.open.call_args.args[0]
         self.assertEqual(request.get_method(),'DELETE');self.assertEqual(request.full_url,'https://127.0.0.1:6443/api/v1/namespaces/takserver/secrets/takserver-keystore')
         self.assertEqual(json.loads(request.data)['preconditions'],{'uid':'original','resourceVersion':'7'})
+    def test_setup_job_delete_uses_batch_endpoint_and_foreground_preconditions(self):
+        _driver,_hook,job,_pod,_inventory=self.setup_fixture();driver=self.driver(job)
+        opener=MagicMock();opener.open.return_value.__enter__.return_value.status=202
+        with patch.object(R.ssl,'create_default_context',return_value=MagicMock()),patch.object(R.urllib.request,'build_opener',return_value=opener):
+            R.delete_record(driver,R.resource_record(job))
+        request=opener.open.call_args.args[0]
+        self.assertEqual(request.full_url,'https://127.0.0.1:6443/apis/batch/v1/namespaces/takserver/jobs/takserver-db-setup')
+        self.assertEqual(json.loads(request.data),{'apiVersion':'v1','kind':'DeleteOptions','preconditions':{'uid':'job-original','resourceVersion':'9'},'propagationPolicy':'Foreground'})
+
     def test_changed_uid_or_resourceversion_refuses_before_client_or_http(self):
         for field in ('uid','resourceVersion'):
             obj=self.secret();rec=self.record(obj);obj['metadata'][field]='replacement';driver=self.driver(obj)

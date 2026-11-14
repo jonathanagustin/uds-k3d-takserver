@@ -405,6 +405,30 @@ class PackageGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):instance.run_package(P.deploy_command(instance.bound,'strict'),5)
             self.assertEqual(foreign.read_text(),'untouched')
 
+    def test_application_failure_is_bounded_private_and_first_failure_wins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);root.chmod(0o700)
+            instance=P.PackageTrial(root/'journal.json',self.bound())
+            instance.state['guard']={'sourceSHA':'a'*40,'runID':'1','runAttempt':'1'}
+            instance.guard=lambda:None
+            result={'exitStatus':7,'timedOut':False,'stdout':'PRIVATE_TOKEN','stderr':'PRIVATE_ERROR',
+                    'stdoutTruncated':False,'stderrTruncated':False}
+            with patch.object(P,'bounded_package_run',return_value=result) as run:
+                with self.assertRaises(ValueError):instance.run_application_check('api-smoke','transition')
+                self.assertEqual(run.call_args.args[0],['uds','run','test:api-smoke','--no-progress'])
+                target=root/P.APPLICATION_FAILURE;first=target.read_bytes()
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+                self.assertEqual(json.loads(first)['stderr'],'PRIVATE_ERROR')
+                self.assertNotIn('PRIVATE_ERROR',json.dumps(instance.state))
+                self.assertNotIn('PRIVATE_ERROR',(root/'journal-progress.json').read_text())
+                result['stderr']='LATER'
+                with self.assertRaises(ValueError):instance.run_application_check('flows','strict')
+                self.assertEqual(target.read_bytes(),first)
+                with self.assertRaises(ValueError):instance.run_application_check('arbitrary-task','transition')
+                self.assertEqual(run.call_count,2)
+                result['exitStatus']=0
+                self.assertEqual(instance.run_application_check('web-tls','baseline'),'PRIVATE_TOKEN')
+
     def test_only_legacy_upstream_chart_uses_client_side_apply_compatibility(self):
         package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
         charts=[chart for component in package['components'] for chart in component.get('charts',[])]
@@ -602,7 +626,7 @@ class PackageGuards(unittest.TestCase):
         for phase in ('baseline','strict','fresh-strict'):
             with self.subTest(phase=phase),tempfile.TemporaryDirectory() as directory:
                 instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None;instance.require_cloudtak=lambda:{'namespace':'same','deployment':'same','package':'same'}
-                calls=[];events=[];instance.command=lambda argv,**kw:(calls.append(argv) or '')
+                calls=[];events=[];instance.run_application_check=lambda check,phase:(calls.append(['uds','run','test:'+check,'--no-progress']) or '')
                 instance.journal=lambda stage,**kw:events.append((stage,kw))
                 instance.application_checks(phase)
                 self.assertIn(['uds','run','test:cloudtak','--no-progress'],calls)
@@ -611,7 +635,7 @@ class PackageGuards(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             instance=P.PackageTrial(Path(directory)/'journal',self.bound());instance.guard=lambda:None
             instance.require_cloudtak=lambda:{'namespace':'same'}
-            instance.command=lambda argv,**kw:'The cloudtak component is not deployed. Skipping.'
+            instance.run_application_check=lambda check,phase:'The cloudtak component is not deployed. Skipping.'
             with self.assertRaisesRegex(ValueError,'skipped'):instance.application_checks('strict')
             instance.require_cloudtak=lambda:(_ for _ in ()).throw(ValueError('missing component'))
             with self.assertRaisesRegex(ValueError,'missing'):instance.application_checks('strict')

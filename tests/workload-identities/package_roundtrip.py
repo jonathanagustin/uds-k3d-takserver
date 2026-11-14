@@ -119,6 +119,8 @@ def require_clean_objects(namespace,kind,objects):
     D.require(not objects,'retained application state prevents clean strict install: '+kind)
 
 PACKAGE_FAILURE='PRIVATE-package-command-failure.json'
+APPLICATION_FAILURE='PRIVATE-application-check-failure.json'
+APPLICATION_CHECKS={'web-tls':420,'api-smoke':720,'flows':300,'cloudtak':900}
 VALIDATION_FAILURE='PRIVATE-retained-source-validation.json'
 PACKAGE_CATEGORIES=('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown')
 
@@ -403,18 +405,47 @@ class PackageTrial(D.Driver):
         D.require(package['status'].get('phase')=='Ready' and deployment['status'].get('availableReplicas',0)>0,'CloudTAK component is required for issue32 acceptance')
         return {key:obj['metadata']['uid'] for key,obj in (('namespace',namespace),('deployment',deployment),('package',package))}
 
+    def run_application_check(self,check,phase):
+        self.guard()
+        D.require(check in APPLICATION_CHECKS and phase in ('baseline','transition','strict','rollback','fresh-strict'),
+                  'unsupported application check')
+        result=bounded_package_run(['uds','run','test:'+check,'--no-progress'],
+                                  min(APPLICATION_CHECKS[check],max(1,int(self.deadline-time.monotonic()))))
+        if result['exitStatus']==0 and not result['timedOut']:return result['stdout']
+        # Keep raw command streams private. A diagnostic failure still fails the check.
+        if 'firstPrivateFailure' not in self.state:
+            folder=self.evidence.parent
+            D.require(stat.S_IMODE(folder.stat().st_mode)==0o700 and not any(path.is_symlink() for path in (folder,*folder.parents)),
+                      'application failure directory is not private')
+            payload={'schema':1,'binding':{key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')},
+                     'check':check,'phase':phase,**result,
+                     'packageDriverSHA256':digest(Path(__file__)),'driverSHA256':digest(HERE/'drive.py')}
+            data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            while len(data)>64*1024:
+                for stream in ('stdout','stderr'):
+                    payload[stream]=payload[stream][len(payload[stream])//2:];payload[stream+'Truncated']=True
+                data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            fd=os.open(folder/APPLICATION_FAILURE,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'wb') as output:output.write(data)
+            reference={'file':APPLICATION_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            self.state['applicationCheckFailure']=reference
+            self.state['firstPrivateFailure']={'schema':1,'kind':'application-check','reference':dict(reference)}
+        self.journal('application-check-failed',check=check,phase=phase,exitStatus=result['exitStatus'],
+                     timedOut=result['timedOut'],stdoutPresent=bool(result['stdout']),stderrPresent=bool(result['stderr']))
+        raise ValueError('supported application check failed; inspect bounded private evidence')
+
     def application_checks(self,phase,prepare=False):
         self.guard()
         if prepare:
             self.command(['uds','run','setup:keycloak-user','--with','group=/UDS Core/Admin','--no-progress'],timeout=300)
             self.command(['python3',str(D.ROOT/'tests/ensure-tak-group.py')],timeout=180)
             self.command(['uds','run','test:gateway','--no-progress'],timeout=420)
-        self.command(['uds','run','test:web-tls','--no-progress'],timeout=420)
-        self.command(['uds','run','test:api-smoke','--no-progress'],timeout=720)
-        self.command(['uds','run','test:flows','--no-progress'],timeout=300)
+        self.run_application_check('web-tls',phase)
+        self.run_application_check('api-smoke',phase)
+        self.run_application_check('flows',phase)
         before=self.require_cloudtak()
         if phase in ('baseline','strict','fresh-strict'):
-            output=self.command(['uds','run','test:cloudtak','--no-progress'],timeout=900)
+            output=self.run_application_check('cloudtak',phase)
             D.require('The cloudtak component is not deployed. Skipping.' not in output and self.require_cloudtak()==before,'CloudTAK check skipped or component changed')
             self.journal('cloudtak-basemap-application-checks',phase=phase,passed=True)
 

@@ -42,10 +42,14 @@ def failure_diagnostic(error):
         if isinstance(error, classes):
             result['kind'] = kind
             break
+    if isinstance(error, jvm.Unavailable) and len(error.args) == 1 and type(error.args[0]) is str and error.args[0] in {
+            'pod_schema', 'pod_namespace_or_deleted', 'pod_name', 'pod_uid', 'named_container_missing',
+            'container_id', 'image_id', 'restart_count', 'timestamp_schema'}:
+        result['observer_reason'] = error.args[0]
     current = error.__traceback__
     while current is not None:
         selected = modules.get(current.tb_frame.f_code.co_filename)
-        if selected is not None and 0 < current.tb_lineno < 10000:
+        if selected is not None and current.tb_frame.f_code.co_name != 'require' and 0 < current.tb_lineno < 10000:
             name, path = selected
             try:
                 source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()

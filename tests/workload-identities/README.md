@@ -256,6 +256,15 @@ preflight mismatch also prints only its existing safe field paths and whole-spec
 hashes after its exclusive private write succeeds; unknown map keys remain
 opaque hashes and no spec values or rendering inputs are printed.
 
+Reviewed web TLS, API smoke, flow and CloudTAK checks use the same bounded
+subprocess runner as package commands. On failure, their first private stream
+snapshot is available to the opt-in encrypted diagnostic, bound to the exact
+source, run, attempt, check and phase. Each stream is bounded and the full
+snapshot is at most 64 KiB, written exclusively with mode 0600. Public progress
+contains only the fixed check/phase, status and stream-presence flags. The first
+private failure remains selected across package, retained-state and application
+checks; a successful check or diagnostic capture never changes acceptance.
+
 Both manual and package trials bind the reviewed candidate plan and its config
 hash before rendering. Zarf replaces `###ZARF_VAR_DOMAIN###` after Helm rendering;
 the shared expected-render path now emulates only that known token using the

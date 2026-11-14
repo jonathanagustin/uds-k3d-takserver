@@ -156,6 +156,40 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
                     else:
                         with self.assertRaises(ValueError):AGE.package_input(root)
 
+    def test_application_check_binding_selection_and_private_schema(self):
+        for mutation in ('valid','task','phase','binding','hash','stage','earlier','missing-first','link','mode'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);folder,_out,env,payload,journal,_owner=package_fixture(root)
+                payload.pop('role');payload['check']='api-smoke'
+                journal.pop('packageCommandFailure')
+                journal['stages']=[dict(stage='application-check-failed',check='api-smoke',phase='transition',exitStatus=1,timedOut=False)]
+                if mutation=='task':payload['check']='arbitrary'
+                if mutation=='phase':payload['phase']='arbitrary'
+                if mutation=='binding':payload['binding']={**payload['binding'],'runID':'999'}
+                if mutation=='hash':payload['driverSHA256']='0'*64
+                if mutation=='stage':journal['stages'][0]['check']='flows'
+                if mutation=='earlier':journal['stages'].insert(0,{'stage':'package-command-failed'})
+                private=folder/AGE.APPLICATION_NAME;private.write_text(json.dumps(payload));private.chmod(0o600)
+                reference=dict(file=AGE.APPLICATION_NAME,sha256=AGE.digest(private.read_bytes()),bytes=private.stat().st_size)
+                journal['applicationCheckFailure']=reference
+                journal['firstPrivateFailure']=dict(schema=1,kind='application-check',reference=dict(reference))
+                if mutation=='missing-first':journal.pop('firstPrivateFailure')
+                path=folder/'journal.json';path.write_text(json.dumps(journal));path.chmod(0o600)
+                companion=folder/'journal-progress.json'
+                companion.write_text(json.dumps(dict(schema=1,guard=journal['guard'],journalSHA256=AGE.digest(path.read_bytes()))));companion.chmod(0o600)
+                if mutation=='mode':private.chmod(0o644)
+                if mutation=='link':
+                    original=folder/'foreign';private.rename(original);private.symlink_to(original)
+                with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=lambda name:AGE.digest((AGE.ROOT/name).read_bytes())):
+                    if mutation=='valid':
+                        descriptor=AGE.package_input(root)
+                        try:
+                            self.assertEqual(os.read(descriptor,AGE.INPUT_LIMIT+1),private.read_bytes())
+                            with self.assertRaises(OSError):os.write(descriptor,b'foreign')
+                        finally:os.close(descriptor)
+                    else:
+                        with self.assertRaises((ValueError,OSError)):AGE.package_input(root)
+
     def test_typed_validation_is_sealed_and_later_command_does_not_replace_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);folder,_output,env,payload,journal,_owner=validation_fixture(root)
@@ -475,8 +509,7 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
                      'opt-in official age archive/keygen required for genuine roundtrip')
 class GenuineAgeProof(unittest.TestCase):
     def test_real_official_validation_collector_roundtrip_wrong_key_and_integrity(self):
-        metadata=json.loads(Path(Path('/workspace/scratch/issue32-age-metadata-path.txt').read_text().strip()).read_text())
-        binary=Path(metadata['age']);keygen=Path(metadata['keygen']);pin=AGE.PINS['x86_64']
+        keygen=Path(os.environ['STAGED_AGE_KEYGEN']);binary=keygen.with_name('age');pin=AGE.PINS['x86_64']
         self.assertEqual(AGE.digest(binary.read_bytes()),pin[4])
         self.assertEqual(AGE.digest(keygen.read_bytes()),'0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899')
         with tempfile.TemporaryDirectory(prefix='validation-age-proof-') as temporary:
@@ -527,6 +560,37 @@ class GenuineAgeProof(unittest.TestCase):
             self.assertNotEqual(altered.returncode,0)
             self.assertTrue((folder/AGE.VALIDATION_NAME).read_bytes()==plain)
             self.assertNotIn('stored-hooks-drift',captured.getvalue())
+
+    def test_real_application_collector_encryption_roundtrip(self):
+        from tests.test_package_identity_driver import P
+        pin=AGE.PINS['x86_64'];keygen=Path(os.environ['STAGED_AGE_KEYGEN'])
+        binary=keygen.with_name('age');self.assertEqual(AGE.digest(binary.read_bytes()),pin[4])
+        with tempfile.TemporaryDirectory(prefix='application-age-proof-') as temporary:
+            root=Path(temporary);folder,output,env,_payload,journal,_owner=package_fixture(root)
+            for child in folder.iterdir():child.unlink()
+            head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=AGE.ROOT).decode().strip()
+            trial=object.__new__(P.PackageTrial);trial.evidence=folder/'journal.json'
+            trial.state={**journal,'guard':{**journal['guard'],'sourceSHA':head},'stages':[]}
+            trial.state.pop('packageCommandFailure');trial.guard=lambda:None;trial.deadline=P.time.monotonic()+60
+            result=dict(exitStatus=3,timedOut=False,stdout='PRIVATE_APPLICATION_STDOUT',stderr='PRIVATE_APPLICATION_STDERR',
+                        stdoutTruncated=False,stderrTruncated=False)
+            with patch.object(P,'bounded_package_run',return_value=result):
+                with self.assertRaises(ValueError):trial.run_application_check('api-smoke','transition')
+            plain=(folder/AGE.APPLICATION_NAME).read_bytes()
+            subprocess.run([str(keygen),'-o',str(root/'key')],capture_output=True,timeout=10,check=True)
+            recipient=subprocess.run([str(keygen),'-y',str(root/'key')],capture_output=True,timeout=10,check=True).stdout.decode().strip()
+            env.update(STAGED_AGE_RECIPIENT=recipient,GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_REF='refs/heads/main',
+                       GITHUB_REPOSITORY='jonathanagustin/uds-takserver',GITHUB_SHA=head)
+            captured=io.StringIO()
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'acquire_age',return_value=(binary,pin)), \
+                    contextlib.redirect_stdout(captured),contextlib.redirect_stderr(captured):
+                self.assertEqual(AGE.main(),0)
+            cipher=root/AGE.OUTPUT_NAME/'first-failure.age'
+            decrypted=subprocess.run([str(binary),'--decrypt','-i',str(root/'key'),str(cipher)],capture_output=True,timeout=10,check=True)
+            self.assertEqual(decrypted.stdout,plain)
+            for text in (trial.evidence.read_text(),(folder/'journal-progress.json').read_text(),captured.getvalue()):
+                self.assertNotIn('PRIVATE_APPLICATION_',text)
+            self.assertEqual(output.read_bytes(),b'ready=true\n')
 
     def test_real_official_package_collector_roundtrip_and_wrong_key(self):
         pin = AGE.PINS['x86_64']

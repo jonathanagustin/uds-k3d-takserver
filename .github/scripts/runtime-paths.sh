@@ -49,6 +49,7 @@ upstream/takx
 compliance/README.md
 .github/workflows/commitlint.yaml
 .github/workflows/codeql.yaml
+.github/workflows/native-sanitizers.yaml
 .github/workflows/dependency-review.yaml
 .github/workflows/scorecard.yaml
 .github/workflows/scorecard-analysis.yaml
@@ -102,6 +103,7 @@ CODEOWNERS
 README.md
 SECURITY.md
 CONTRIBUTING.md
+CODE_OF_CONDUCT.md
 CHANGELOG.md
 renovate.json
 .release-please-manifest.json
@@ -124,6 +126,9 @@ tests/playwright.demo.config.ts
 pepr/capabilities/*.test.ts
 pepr/mutation/**
 pepr/scripts/coverage-summary.mjs
+.github/workflows/codeql-extended.yaml
+.github/workflows/codeql-language.yaml
+.github/scripts/codeql-languages.py
 EOF
 }
 

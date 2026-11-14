@@ -102,6 +102,7 @@ CODEOWNERS
 README.md
 SECURITY.md
 CONTRIBUTING.md
+CODE_OF_CONDUCT.md
 CHANGELOG.md
 renovate.json
 .release-please-manifest.json

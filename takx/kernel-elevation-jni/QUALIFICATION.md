@@ -37,7 +37,7 @@ retained. No production class overlay or causal object replacement is adopted
 in these full-graph replays.
 
 The extra scalar fixture is a separately authenticated local regression source,
-not part of the two source-preparation-owned fixtures. The native build remains
+not part of the source-preparation-owned fixtures. The native build remains
 a separately reviewed local composition experiment, not this profile's public
 builder. Public native-builder integration, other elevation entry points,
 successful createData mesh materialization, concurrency beyond the listed surface control,

@@ -26,7 +26,7 @@ python3 -B takx/kernel-elevation-jni/prepare.py --phase prepare \
   --source /path/to/cached/official/source --output /path/to/new/source-output
 ```
 
-The two fixtures use actual public elevation interfaces, the real native registry,
+The original two fixtures use actual public elevation interfaces, the real native registry,
 source builder, chunk sampler and bulk sampling. The positive fixture checks an
 owned analytic plane's 81 values, attach/detach and absence after detach (166
 checks). The fault fixture wraps the actual public interfaces to inject errors;
@@ -52,7 +52,7 @@ retained. The causal relinks are not adopted as fresh full native variants.
 
 Four offline guards and real exact preparation pass. A new complete 815-unit
 composition and actual-library replays now pass; see [QUALIFICATION.md](QUALIFICATION.md).
-The public source preparer is still not a portable native builder. Other elevation entry points, listener/bounds fault cases,
+The public source preparer is still not a portable native builder. Other elevation entry points, successful mesh materialization,
 concurrency and rendering remain outside the current 13-case qualification scope.
 No full elevation API, SDK or client acceptance follows from these source fixes.
 Refs #374 and #486.

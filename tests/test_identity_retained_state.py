@@ -26,6 +26,33 @@ class RetainedStateGuards(unittest.TestCase):
                 'users':[{'user':{'client-certificate-data':'Zml4dHVyZQ==','client-key-data':'Zml4dHVyZQ=='}}]}
         return SimpleNamespace(guard=lambda:None,core_unchanged=lambda:None,
             get=lambda *a,**k:{'items':[]},kube=lambda *a:'{}' if a[1]=='namespace' else json.dumps(obj),command=lambda argv:json.dumps(client))
+    def test_cleanup_drift_is_private_digest_only_and_never_deletes(self):
+        for field in ('uid','resourceVersion','annotations'):
+            obj=self.secret();rec=self.record(obj);driver=self.driver(obj)
+            if field=='annotations':obj['metadata'][field]['private']='PRIVATE_VALUE_SENTINEL'
+            else:obj['metadata'][field]='changed'
+            with patch.object(R,'delete_record') as delete:
+                with self.assertRaisesRegex(ValueError,'identity/metadata changed'):R.conditional_delete(driver,rec)
+                delete.assert_not_called()
+            value=driver._retained_cleanup_drift
+            self.assertEqual(value['changedFields'],['metadataSHA256'] if field=='annotations' else
+                             ['uid','metadataSHA256'] if field=='uid' else ['resourceVersion'])
+            self.assertNotIn('PRIVATE_VALUE_SENTINEL',json.dumps(value))
+            self.assertEqual(R.validate_cleanup_drift(value),value)
+            for mutate in (lambda v:v['observed'].update(data='private'),
+                           lambda v:v['expected'].update(namespace='zarf'),
+                           lambda v:v.update(changedFields=[]),
+                           lambda v:v['observed'].update(metadataSHA256='private'),
+                           lambda v:v.update(schema=True)):
+                bad=copy.deepcopy(value);mutate(bad)
+                with self.assertRaises(ValueError):R.validate_cleanup_drift(bad)
+        obj=self.secret();rec=self.record(obj);obj['metadata']['resourceVersion']='8'
+        driver=self.driver(obj)
+        with patch.object(R,'validate_cleanup_drift',side_effect=OSError('private capture failure')),patch.object(R,'delete_record') as delete:
+            with self.assertRaisesRegex(ValueError,'identity/metadata changed'):R.conditional_delete(driver,rec)
+            delete.assert_not_called()
+        self.assertIsNone(driver._retained_cleanup_drift)
+
     def setup_fixture(self):
         hook={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'takserver-db-setup',
             'labels':{'app.kubernetes.io/instance':'takserver','app.kubernetes.io/managed-by':'Helm'},

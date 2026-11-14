@@ -423,6 +423,24 @@ def consumers_gone(driver):
         require(all(not driver.get(kind,namespace=namespace)['items'] for kind in ('pods','deployments','statefulsets')),'application still has consumers')
     return {'consumersGone':True}
 
+CLEANUP_IDENTITY_FIELDS=('kind','name','namespace','uid','resourceVersion','metadataSHA256')
+
+def validate_cleanup_drift(snapshot):
+    require(isinstance(snapshot,dict) and set(snapshot)=={'schema','expected','observed','changedFields'} and
+            type(snapshot['schema']) is int and snapshot['schema']==1,'cleanup drift schema differs')
+    for key in ('expected','observed'):
+        rec=snapshot[key]
+        require(isinstance(rec,dict) and set(rec)==set(CLEANUP_IDENTITY_FIELDS),'cleanup drift record differs')
+        require(rec['namespace'] in APP_RELEASES and (rec['kind']=='PersistentVolumeClaim' or
+                (rec['namespace'],rec['kind'],rec['name']) in SOURCE_CLEANUP),'cleanup drift scope differs')
+        for field in ('name','uid','resourceVersion'):
+            require(isinstance(rec[field],str) and re.fullmatch('[A-Za-z0-9._-]{1,253}',rec[field]),'cleanup drift identity differs')
+        require(isinstance(rec['metadataSHA256'],str) and re.fullmatch('[0-9a-f]{64}',rec['metadataSHA256']),'cleanup drift digest differs')
+    changed=[key for key in CLEANUP_IDENTITY_FIELDS if snapshot['expected'][key]!=snapshot['observed'][key]]
+    require(changed and snapshot['changedFields']==changed,'cleanup drift fields differ')
+    require(len(json.dumps(snapshot).encode())<=4096,'cleanup drift byte bound')
+    return snapshot
+
 def conditional_delete(driver,rec):
     require(cleanup_allowed(rec),'cleanup outside exact retained application scope')
     require_origin(rec)
@@ -431,7 +449,16 @@ def conditional_delete(driver,rec):
     if not driver.kube('get','namespace',rec['namespace'],'--ignore-not-found','-o','json').strip():return
     output=driver.kube('get',rec['kind'],rec['name'],'-n',rec['namespace'],'--ignore-not-found','-o','json')
     if not output.strip():return
-    current=json.loads(output);require(resource_record(current)=={k:rec[k] for k in ('kind','name','namespace','uid','resourceVersion','metadataSHA256')},'retained resource identity/metadata changed')
+    current=json.loads(output)
+    expected={key:rec[key] for key in CLEANUP_IDENTITY_FIELDS};observed=resource_record(current)
+    if observed!=expected:
+        # Record only identities and a metadata digest, never object bodies or values.
+        # Capture failure must not mask the deletion refusal or authorize a retry.
+        try:
+            driver._retained_cleanup_drift=validate_cleanup_drift({'schema':1,'expected':expected,'observed':observed,
+                'changedFields':[key for key in CLEANUP_IDENTITY_FIELDS if expected[key]!=observed[key]]})
+        except Exception:driver._retained_cleanup_drift=None
+        raise ValueError('retained resource identity/metadata changed')
     if rec['kind']=='PersistentVolumeClaim':
         volume=driver.get('persistentvolume',rec['parent']['volumeName'],namespace='default')
         require(volume['metadata']['uid']==rec['parent']['volumeUID'] and volume['spec']['claimRef']['uid']==rec['uid'] and volume['spec']['claimRef']['namespace']==rec['namespace'] and volume['spec']['claimRef']['name']==rec['name'],'retained PVC volume ownership changed')

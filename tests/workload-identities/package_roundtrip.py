@@ -491,9 +491,9 @@ class PackageTrial(D.Driver):
         # First private failure wins; later cleanup failures cannot replace it.
         if 'firstPrivateFailure' in self.state or 'packageCommandFailure' in self.state:return
         D.require(phase in D.PHASES, 'unknown retained validation phase')
-        D.require(kind in ('stored-hooks-drift','core-inventory-drift','cleanup-consumers'),'unknown retained validation kind')
+        D.require(kind in ('stored-hooks-drift','core-inventory-drift','cleanup-consumers','cleanup-resource-drift'),'unknown retained validation kind')
         {'stored-hooks-drift':R.validate_source_failure,'core-inventory-drift':R.validate_core_failure,
-         'cleanup-consumers':R.validate_consumer_failure}[kind](snapshot)
+         'cleanup-consumers':R.validate_consumer_failure,'cleanup-resource-drift':R.validate_cleanup_drift}[kind](snapshot)
         hashes={'packageDriverSHA256':digest(Path(__file__)), 'driverSHA256':digest(HERE/'drive.py'),
                 'retainedSourceSHA256':digest(HERE/'retained_state.py')}
         payload={'schema':1,'type':'retained-source-validation','kind':kind,
@@ -697,7 +697,14 @@ class PackageTrial(D.Driver):
                 except Exception:pass
             raise
         for record in self.state['retainedCleanup']:
-            R.conditional_delete(self,record)
+            self._retained_cleanup_drift=None
+            try:R.conditional_delete(self,record)
+            except ValueError:
+                try:
+                    if self._retained_cleanup_drift is not None:
+                        self.capture_retained_validation(self._retained_cleanup_drift,'rollback',kind='cleanup-resource-drift')
+                except Exception as error:self.capture_retained_diagnostic_callsite(error)
+                raise
             self.journal('retained-object-conditionally-removed',kind=record['kind'],name=record['name'],uid=record['uid'])
         self.wait(self.clean_application_state,300)
         # New install has new Deployment/Package UIDs; retain old observations in journal.

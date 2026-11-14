@@ -389,7 +389,7 @@ def validation_input(folder,journal,expected):
     require(len(raw)==reference['bytes'] and checksum==reference['sha256'])
     require(set(payload)=={'schema','type','kind','binding','phase','snapshot','packageDriverSHA256','driverSHA256','retainedSourceSHA256'} and
             type(payload['schema']) is int and payload['schema']==1 and payload['type']=='retained-source-validation' and
-            payload['kind'] in ('stored-hooks-drift','core-inventory-drift','cleanup-consumers') and payload['binding']==expected and
+            payload['kind'] in ('stored-hooks-drift','core-inventory-drift','cleanup-consumers','cleanup-resource-drift') and payload['binding']==expected and
             payload['phase'] in ('shared','transition','strict','rollback'))
     failed=next((entry for entry in journal.get('stages',[]) if entry.get('stage')=='retained-source-validation-failed'),None)
     require(failed is not None and failed.get('phase')==payload['phase'])
@@ -406,7 +406,7 @@ def validation_input(folder,journal,expected):
     retained=types.ModuleType('encrypted_retained_source');retained.__file__=str(path)
     exec(compile(source,str(path),'exec'),retained.__dict__)
     input_check('retained-schema', {'stored-hooks-drift':retained.validate_source_failure,'core-inventory-drift':retained.validate_core_failure,
-                                    'cleanup-consumers':retained.validate_consumer_failure}[payload['kind']], payload['snapshot'])
+                                    'cleanup-consumers':retained.validate_consumer_failure,'cleanup-resource-drift':retained.validate_cleanup_drift}[payload['kind']], payload['snapshot'])
     return sealed_payload(raw)
 
 

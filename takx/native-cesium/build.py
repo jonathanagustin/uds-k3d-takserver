@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,6 +27,31 @@ def replace(path,old,new,transforms):
     if raw.count(old)!=1:raise ValueError('exact packaging transform preimage missing')
     path.write_text(raw.replace(old,new))
     transforms.append({'path':str(path),'preimage':a.native.digest_bytes(before) if hasattr(a.native,'digest_bytes') else __import__('hashlib').sha256(before).hexdigest(),'postimage':a.native.digest(path)})
+
+
+def canonical_patch(raw,lf_targets):
+    """Normalize uniform transport only for LF targets; preserve CRLF content."""
+    remainder=raw.replace(b'\r\n',b'')
+    if lf_targets and raw.endswith(b'\r\n') and b'\r' not in remainder and b'\n' not in remainder:
+        return raw.replace(b'\r\n',b'\n')
+    return raw
+
+
+def stage_patch(original,destination,transforms,source):
+    raw=original.read_bytes();targets={};endings=set()
+    for name in re.findall(rb'(?m)^--- a/([^\r\n\t]+)',raw):
+        relative=a.native.relative(name.decode());target=source/relative
+        if not target.is_file() or target.is_symlink() or target.stat().st_size>32*1024*1024:
+            raise ValueError('regular bounded patch preimage required')
+        data=target.read_bytes();targets[str(relative)]=a.native.digest(target)
+        endings.add('crlf' if b'\r\n' in data else 'lf')
+    normalized=canonical_patch(raw,endings=={'lf'})
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    with destination.open('xb') as stream:stream.write(normalized)
+    transforms.append({'kind':'port-patch-line-endings','path':str(original),
+                       'preimage':__import__('hashlib').sha256(raw).hexdigest(),
+                       'postimage':a.native.digest(destination),'target_preimages':targets})
+    return destination
 
 
 def verify_resume(previous,snapshot,tools,providers,acquisition_sha256,order):
@@ -119,7 +145,8 @@ def main():
             if entry['selected_action']!='acquire_source':continue
             source=out/'source'/name;shutil.copytree(src/'source'/name,source)
             for number,patch in enumerate(entry['patches']):
-                command([tools['patch']['path'],'--binary','--batch','--fuzz=0','-p1','-d',source,'-i',HERE/'ports'/name/patch],name+'-patch-'+str(number),30)
+                staged=stage_patch(HERE/'ports'/name/patch,out/'patches'/name/patch,transforms,source)
+                command([tools['patch']['path'],'--binary','--batch','--fuzz=0','-p1','-d',source,'-i',staged],name+'-patch-'+str(number),30)
             if name=='ktx':(source/'other_include/zstd_errors.h').unlink()
             if entry['kind']=='install-real-headers':
                 headers=([source/'picosha2.h'] if name=='picosha2' else list(source.glob('*.h')) if name=='stb' else [source/'include/mapbox/earcut.hpp'])

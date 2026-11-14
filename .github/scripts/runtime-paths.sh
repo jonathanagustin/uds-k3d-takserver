@@ -103,6 +103,7 @@ CODEOWNERS
 README.md
 SECURITY.md
 CONTRIBUTING.md
+CODE_OF_CONDUCT.md
 CHANGELOG.md
 renovate.json
 .release-please-manifest.json
@@ -125,6 +126,9 @@ tests/playwright.demo.config.ts
 pepr/capabilities/*.test.ts
 pepr/mutation/**
 pepr/scripts/coverage-summary.mjs
+.github/workflows/codeql-extended.yaml
+.github/workflows/codeql-language.yaml
+.github/scripts/codeql-languages.py
 EOF
 }
 

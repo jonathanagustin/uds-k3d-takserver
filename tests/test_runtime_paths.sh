@@ -94,12 +94,16 @@ check_match "README.md" ignore
 check_match "CHANGELOG.md" ignore
 check_match "SECURITY.md" ignore
 check_match "CONTRIBUTING.md" ignore
+check_match "CODE_OF_CONDUCT.md" ignore
 check_match "renovate.json" ignore
 check_match "hk.pkl" ignore
 check_match "commitlint.config.js" ignore
 check_match ".github/workflows/lint.yaml" ignore
 check_match ".github/workflows/codeql.yaml" ignore
 check_match ".github/workflows/native-sanitizers.yaml" ignore
+check_match ".github/workflows/codeql-extended.yaml" ignore
+check_match ".github/workflows/codeql-language.yaml" ignore
+check_match ".github/scripts/codeql-languages.py" ignore
 check_match ".github/workflows/dependency-review.yaml" ignore
 check_match ".github/workflows/unit-tests.yaml" ignore
 check_match ".github/workflows/scorecard-analysis.yaml" ignore

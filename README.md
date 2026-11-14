@@ -47,6 +47,7 @@ Zarf packages the application charts, container images, and deployment configura
 - [Known limitations](#known-limitations)
 - [Security](#security)
 - [Contributing](#contributing)
+- [Code of conduct](#code-of-conduct)
 - [License](#license)
 
 </details>
@@ -492,6 +493,10 @@ Report vulnerabilities through a private GitHub security advisory. See [SECURITY
 ## Contributing
 
 Questions and bug reports are welcome in [GitHub issues](https://github.com/jonathanagustin/uds-takserver/issues), and pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards and the test policy. Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/), which [Release Please](https://github.com/googleapis/release-please) uses for releases. [Renovate](https://docs.renovatebot.com/) opens dependency updates, with major versions in their own pull requests.
+
+## Code of conduct
+
+Contributors follow the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Report conduct violations through the private channel in [SECURITY.md](SECURITY.md).
 
 ## License
 

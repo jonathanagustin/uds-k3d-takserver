@@ -37,6 +37,7 @@ VALIDATION_INPUT_LIMIT = 128 * 1024
 VALIDATION_CIPHER_LIMIT = VALIDATION_INPUT_LIMIT + 8192
 OUTPUT_NAME = 'staged-encrypted-diagnostic'
 PACKAGE_NAME = 'PRIVATE-package-command-failure.json'
+APPLICATION_NAME = 'PRIVATE-application-check-failure.json'
 VALIDATION_NAME = 'PRIVATE-retained-source-validation.json'
 PACKAGE_JOURNAL_LIMIT = 16 * 1024 * 1024  # Diagnostic authentication only, never acceptance.
 
@@ -272,19 +273,22 @@ def package_input(temporary, with_limit=False):
     if 'firstPrivateFailure' in journal:
         require(isinstance(first,dict) and set(first)=={'schema','kind','reference'} and
                 type(first['schema']) is int and first['schema']==1 and
-                first['kind'] in ('package-command','retained-source-validation'))
-        key={'package-command':'packageCommandFailure','retained-source-validation':'retainedSourceValidationFailure'}[first['kind']]
+                first['kind'] in ('package-command','retained-source-validation','application-check'))
+        key={'package-command':'packageCommandFailure','retained-source-validation':'retainedSourceValidationFailure','application-check':'applicationCheckFailure'}[first['kind']]
         require(first['reference']==journal.get(key) and isinstance(first['reference'],dict))
         failures=[entry for entry in journal.get('stages',[]) if entry.get('stage') in
-                  ('package-command-failed','retained-source-validation-failed')]
+                  ('package-command-failed','retained-source-validation-failed','application-check-failed')]
         require(failures and failures[0]['stage']=={'package-command':'package-command-failed',
-                'retained-source-validation':'retained-source-validation-failed'}[first['kind']])
+                'retained-source-validation':'retained-source-validation-failed','application-check':'application-check-failed'}[first['kind']])
+        if first['kind']=='application-check':
+            descriptor=application_input(folder,journal,expected)
+            return (descriptor,INPUT_LIMIT) if with_limit else descriptor
         if first['kind']=='retained-source-validation':
             descriptor=validation_input(folder,journal,expected)
             return (descriptor,VALIDATION_INPUT_LIMIT) if with_limit else descriptor
     else:
         # Only old command-only journals get the legacy fallback. Never guess.
-        require('retainedSourceValidationFailure' not in journal)
+        require('retainedSourceValidationFailure' not in journal and 'applicationCheckFailure' not in journal)
     reference = journal.get('packageCommandFailure', {})
     require(set(reference) == {'file', 'sha256', 'bytes'} and reference['file'] == PACKAGE_NAME
             and type(reference['bytes']) is int and 0 < reference['bytes'] <= INPUT_LIMIT
@@ -309,6 +313,32 @@ def package_input(temporary, with_limit=False):
         require(payload[key] == journal.get(key) == reviewed_source_hash(relative))
     descriptor=sealed_payload(raw)
     return (descriptor,INPUT_LIMIT) if with_limit else descriptor
+
+def application_input(folder,journal,expected):
+    reference=journal.get('applicationCheckFailure',{})
+    require(set(reference)=={'file','sha256','bytes'} and reference['file']==APPLICATION_NAME and
+            type(reference['bytes']) is int and 0<reference['bytes']<=INPUT_LIMIT and
+            isinstance(reference['sha256'],str) and re.fullmatch('[a-f0-9]{64}',reference['sha256']))
+    payload,raw,private_hash=private_json(folder/APPLICATION_NAME,INPUT_LIMIT)
+    require(len(raw)==reference['bytes'] and private_hash==reference['sha256'])
+    require(set(payload)=={'schema','binding','check','phase','exitStatus','timedOut','stdout','stderr',
+            'stdoutTruncated','stderrTruncated','packageDriverSHA256','driverSHA256'})
+    require(type(payload['schema']) is int and payload['schema']==1 and payload['binding']==expected and
+            payload['check'] in ('web-tls','api-smoke','flows','cloudtak') and
+            payload['phase'] in ('baseline','transition','strict','rollback','fresh-strict') and
+            type(payload['exitStatus']) is int and -255<=payload['exitStatus']<=255 and
+            type(payload['timedOut']) is bool and (payload['exitStatus']!=0 or payload['timedOut']))
+    for stream in ('stdout','stderr'):
+        require(isinstance(payload[stream],str) and len(payload[stream].encode('utf-8'))<=24*1024 and
+                type(payload[stream+'Truncated']) is bool)
+    failed=next((entry for entry in journal.get('stages',[]) if entry.get('stage')=='application-check-failed'),None)
+    require(failed is not None and all(type(failed.get(key)) is type(payload[key]) and failed[key]==payload[key]
+                                     for key in ('check','phase','exitStatus','timedOut')))
+    for key,relative in [('packageDriverSHA256','tests/workload-identities/package_roundtrip.py'),
+                         ('driverSHA256','tests/workload-identities/drive.py')]:
+        require(payload[key]==journal.get(key)==reviewed_source_hash(relative))
+    return sealed_payload(raw)
+
 
 def sealed_payload(raw):
     # Encrypt the validated snapshot, not a pathname that can change after checks.

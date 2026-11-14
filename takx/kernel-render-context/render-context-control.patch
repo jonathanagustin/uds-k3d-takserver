@@ -1020,7 +1020,7 @@ index c1f2620..dfa87d8 100644
 +            compute.visIndices.intersect.clear();
 +            compute.processed=false;
 +        }
-+        offscreen.terrainTiles2=nullptr;
++        offscreen.terrainTiles2=&offscreen.computeContext[0u].terrainTiles;
 +        offscreen.tileCullFboReadIdx=0u;
 +        offscreen.lastVersion.terrain=offscreen.lastVersion.scene=-1;
 +        offscreen.whitePixelTexId=GL_NONE; // borrowed; globals delete its owner

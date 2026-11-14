@@ -345,6 +345,9 @@ public final class ContextRecreationProbe {
             System.load(provider.toRealPath().toString());
         }
         System.load(Path.of(args[1]).toRealPath().toString());
+        // Match application initialization before constructing the real view.
+        // EngineLibrary owns shader context and protected application directories.
+        com.atakmap.map.EngineLibrary.initialize();
         // Exercise supported JOGL caller-thread context movement deliberately.
         // This test mode is recorded; it is not a production runtime setting.
         System.out.println("JOGL threading before="+Threading.getMode());
@@ -383,15 +386,43 @@ public final class ContextRecreationProbe {
             for(int cycle=0;cycle<3;cycle++) {
                 int liveDraws=views[1].drawCount;
                 String previousRenderThread=views[0].lastDisplayThread;
-                Thread disposal=new Thread(views[0].canvas::destroy,"owned-context-dispose-"+cycle);
+                GLContext previousContext=views[0].canvas.getContext();
+                Thread disposal=new Thread(() -> {
+                    try {
+                        // GLCanvas.destroy routes through AWT's EDT. Use JOGL's
+                        // public current-context listener disposal on this caller
+                        // before destroying the canvas/context itself. This invokes
+                        // the genuine callback; it does not call View.dispose.
+                        // Preserve the registered callback order: the actual
+                        // context initializes this thread's JOGLGLES dispatch
+                        // before renderer cleanup uses it.
+                        views[0].canvas.disposeGLEventListener(views[0].actualContext,true);
+                        // Keep AWT repaint from reinitializing this listener in
+                        // the gap before actual context destruction.
+                        views[0].canvas.disposeGLEventListener(views[0],true);
+                        views[0].canvas.destroy();
+                    } catch(Throwable error) { failure.compareAndSet(null,error); }
+                },"owned-context-dispose-"+cycle);
                 disposal.start(); disposal.join(30000);
                 check(!disposal.isAlive(),"Moved disposal thread exceeded deadline");
                 healthy();
-                check(disposal.getName().equals(views[0].lastDisposeThread),"Disposal did not run on selected moved thread");
+                check(disposal.getName().equals(views[0].lastDisposeThread),"Disposal did not run on selected moved thread: requested="+
+                        disposal.getName()+" actual="+views[0].lastDisposeThread+" previousRender="+previousRenderThread);
                 check(!disposal.getName().equals(previousRenderThread),"Disposal thread was not distinct from rendering");
+                check(!previousContext.isCreated(),"Old actual GL context survived destruction");
+                // A destroyed AWT GLCanvas needs a new peer/drawable. Real AWT
+                // remove/add notifications recreate it; display() alone cannot.
+                EventQueue.invokeAndWait(() -> {
+                    frames[0].remove(views[0].canvas);
+                    frames[0].add(views[0].canvas);
+                    frames[0].validate();
+                });
+                views[0].canvas.addGLEventListener(views[0]);
                 views[0].canvas.display(); healthy();
+                check(views[0].canvas.getContext()!=previousContext,"Actual GL context was not recreated");
                 views[1].canvas.display(); healthy();
-                check(views[0].initCount==cycle+2 && views[0].releaseCount==cycle+1,"Recreation callback order");
+                check(views[0].initCount==cycle+2 && views[0].releaseCount==cycle+1,"Recreation callback order: cycle="+
+                        cycle+" init="+views[0].initCount+" release="+views[0].releaseCount);
                 check(views[1].initCount==1 && views[1].drawCount>liveDraws,"Other live view disrupted");
             }
             views[0].terminal=true; views[0].canvas.destroy(); healthy();

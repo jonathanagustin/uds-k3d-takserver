@@ -1,7 +1,7 @@
 {
   "status": "source-work-in-progress-not-runtime-qualified",
   "upstream_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "patch_sha256": "69747e259a0bf43da470cd4865565d5ca14bdafabb961f73b252ed3a4b27a645",
+  "patch_sha256": "f80a69d96e652a0ba91438c82d66c5b694b6f2d815f1ed5869d173dc53386306",
   "files": [
     {
       "path": "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java",
@@ -66,7 +66,7 @@
     {
       "path": "takkernel/engine/src/main/cpp/renderer/core/GLGlobe.cpp",
       "preimage_sha256": "29bf993bdc7bd23c65bdbb46925417c77887feec95bcede3abd8a5945feb3fe5",
-      "postimage_sha256": "c10f7a6e988cb01dc4e6e4228013f2a6a8b4b51a838ff418ef313ccf2161b790"
+      "postimage_sha256": "5f708abeea9e0b9b94b882a22e74754025b6469b67b1c663a06ae3f1a0805cac"
     },
     {
       "path": "takkernel/engine/src/main/cpp/renderer/core/GLGlobeBase.cpp",

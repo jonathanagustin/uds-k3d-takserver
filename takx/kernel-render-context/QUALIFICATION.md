@@ -191,3 +191,55 @@ identify a destroyed renderer. A timeout fails qualification. Independent source
 review and full provider maps remain necessary; Java GC alone proves no GPU
 cleanup. Binding/font/shader CPU cache identities remain retained for process
 lifetime and have no fixed bound across unlimited view or font creation.
+
+
+## Independent full rebuild and terrain restart correction (2026-11-14)
+
+A new local experiment rebuilt the pre-correction profile from verified source,
+without adopting predecessor objects: 1,238 Java sources, 2,701 classes, 119 JNI
+headers and the entire 815-unit native graph (483 Core, 159 JNI, 173 Cesium).
+Both libraries, backend privacy and the single SQLCipher owner passed inspection.
+All three actual CPU JNI controls passed with zero diagnostics. All 1,326 baseline
+Java JNI exports remain present, with 11 added. Local experiment receipt SHA-256:
+`5daab0c0d2b839d507f97d23725da609ad958b720777fc5fd47360099bcc662b`.
+Independent final source/output inventory review:
+`c2a121bd7d3d34511ec955c161c62ff4b49e15754f59d4d5dff938ce747ffb7e`.
+These are local integrity records; a portable variant producer and publisher/cache
+admission remain separate work.
+
+The real Texture style control also passed its 50 clone/serialization/ownership
+iterations with zero JNI diagnostics. Its separate CPU checkpoint is
+`2f9e2abe7de98731231bf2f183bdc93b48a1dfcbcc185cb4f46ebcb9a5425fcc`.
+It does not exercise URI decoding, asynchronous atlas loading or textured pixels.
+
+The subsequent Xvfb/Mesa lifecycle attempt reached real moved-thread disposal and
+resolved all 512 queued Work futures (96 completed, 416 cancelled in the final
+pre-correction attempt); both held old workers rejected new submissions. It then
+crashed in `GLGlobe::getTerrainMeshElevation` during the first context recreation.
+The failed log and JVM crash report remain preserved; no lifecycle acceptance
+follows. The release patch cleared its terrain vectors and set `terrainTiles2` to
+null, although elevation/picking paths assume a valid vector. The correction
+restores the constructor's pointer to the cleared first compute vector. GPU
+objects remain deleted and the existing terrain-service fallback is unchanged.
+A new complete build and real lifecycle replay must validate this correction;
+the earlier successful CPU build is not proof for the changed source.
+
+The corrected source reconstructs exactly from all five locked stages. The genuine
+CPU worker control passes again at this source contract, receipt
+`f6f29e78c7c4cdb79599b56eabca8976f5503eae2b7193a337ad16354c82fca2`.
+
+The owned headed control now initializes EngineLibrary normally and requires the
+actual public resource catalog. Its local resource-only JAR contains the 118
+verified payloads plus their catalog, with no production classes or native
+libraries. JOGL public listener-disposal calls retain context-before-renderer
+ordering on the selected GL thread; removing the view listener prevents an AWT
+repaint from reinitializing it before destruction. Real AWT peer recreation must
+produce a different created context. Thread/currentness, callback counts and
+worker ownership assertions remain mandatory, and disposal-thread failures reach
+the main assertion path.
+
+These attempts use an owned Xvfb software display, not the earlier managed Xorg
+session. Project JNI diagnostics from managed context/surface callbacks and JDK
+font diagnostics are still recorded. Global zero-JNI cleanliness, three complete
+recreation cycles, terminal collection and whole-process normal shutdown remain
+required. Renderer, SDK packaging and client acceptance remain false.

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """No-launch and failed-input guards for the explicit frozen-build consumer."""
 import importlib.util
+import json
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -33,6 +35,31 @@ class ConsumerGuards(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'reviewed input bytes'):
                     C.run(native, java, jdk, output)
             self.assertFalse(output.exists())
+
+    def test_live_log_quota_retains_first_failure_and_stops_later_commands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native, java, jdk = [root / name for name in ('native', 'java', 'jdk')]
+            for path in (native, java, jdk):
+                path.mkdir()
+            (jdk / 'bin').mkdir()
+            compiler = jdk / 'bin/javac'
+            compiler.write_text('#!' + sys.executable + '\nprint("x" * (3 * 1024 * 1024))\n')
+            compiler.chmod(0o700)
+            output = root / 'output'
+            with patch.object(C, 'verify_inputs', return_value=({}, [], Path('/usr/bin/g++'))):
+                with self.assertRaisesRegex(ValueError, 'log quota'):
+                    C.run(native, java, jdk, output)
+            receipt = json.loads((output / 'receipt.json').read_text())
+            self.assertTrue(receipt['failed'])
+            self.assertFalse(receipt['completed'])
+            self.assertFalse(receipt['full_sdk_accepted'])
+            self.assertEqual(receipt['failure_type'], 'ValueError')
+            self.assertEqual(len(receipt['commands']), 1)
+            log = output / 'ElevationListenerProbe/compile-java.log'
+            self.assertLessEqual(log.stat().st_size, 2 * 1024 * 1024)
+            self.assertEqual(receipt['commands'][0]['log_sha256'], C.sha(log))
+            self.assertFalse((output / 'ElevationChunkProbe').exists())
 
     def test_existing_symlink_and_overlapping_outputs_refuse(self):
         with tempfile.TemporaryDirectory() as temporary:

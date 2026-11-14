@@ -85,3 +85,12 @@ The earlier consumer experiments remain retained separately. Eight source and
 consumer guards pass without native execution. This is a consumer of the exact
 frozen local producer and its host toolchain, not native-builder integration or
 a portable/full-SDK acceptance claim. The three native postimages are unchanged.
+
+The fourth consumer replay uses the repository's existing bounded executor,
+enforcing time/log/disk quotas during execution and preserving the first failing
+command's log hash. It again passes all 343 assertions with zero strict JNI
+diagnostics, authenticating 5,556 inputs and seven products. Receipt:
+`35d8116ad9138adf40b4f304c2a8a9417269e0c6abf27da801776847cf883fe3`.
+Nine profile/consumer guards pass, including a real over-quota subprocess that
+retains bounded first-failure evidence and prevents later commands from running.
+The earlier receipts remain frozen.

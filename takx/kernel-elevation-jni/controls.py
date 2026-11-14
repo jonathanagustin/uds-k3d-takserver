@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
 import subprocess
 
 HERE = Path(__file__).resolve().parent
@@ -108,6 +107,9 @@ def run(native, java, jdk, output):
     diagnostics_path = HERE.parent / 'jni_diagnostics.py'
     inputs[str(diagnostics_path)] = sha(diagnostics_path)
     diagnostics = module('elevation_control_diagnostics', diagnostics_path)
+    runner_path = HERE.parent / 'native-commoncommo/runner.py'
+    inputs[str(runner_path)] = sha(runner_path)
+    runner = module('elevation_bounded_executor', runner_path)
 
     artifacts = {}
 
@@ -154,19 +156,14 @@ def run(native, java, jdk, output):
                 item = {'probe': probe, 'phase': label, 'argv': list(map(str, argv))}
                 record['commands'].append(item)
                 write()
-                with log.open('wb') as stream:
-                    child = subprocess.Popen(item['argv'], cwd=folder, env=env, stdout=stream,
-                                             stderr=subprocess.STDOUT, start_new_session=True)
-                    try:
-                        code = child.wait(timeout=40)
-                    except BaseException:
-                        if child.poll() is None:
-                            os.killpg(child.pid, signal.SIGKILL)
-                        child.wait()
-                        raise
-                item.update(exit=code, log_sha256=sha(log))
-                write()
-                require(code == 0 and log.stat().st_size <= 8 * 1024 * 1024, 'bounded control command failed')
+                try:
+                    runner.execute(item['argv'], folder, label, 40, env, capture=False,
+                                   disk_limit=8 * 1024 * 1024, log_limit=2 * 1024 * 1024)
+                    item['exit'] = 0
+                finally:
+                    if log.is_file():
+                        item['log_sha256'] = sha(log)
+                    write()
                 if label in ('compile-java', 'compile-probe'):
                     products = list((folder / 'classes').rglob('*.class')) if label == 'compile-java' else [library]
                     require(0 < len(products) <= 32, 'bounded compiler outputs required')

@@ -98,7 +98,8 @@ absolute dependency/JDK paths. It verifies staged native/Java sources, closed
 class/header membership, classpath archives, the native load manifest, mapped
 ELFs, compiler/JDK bytes, JNI headers and the owned control sources before any
 compiler or JVM starts. Inputs and closed compiled products are rechecked between
-commands. Each command has a 40-second deadline; failures retain logs and a typed
+commands. The shared executor enforces a 40-second deadline, 2 MiB log limit and 8 MiB
+aggregate per-probe output limit while each command runs; failures retain logs and a typed
 first-failure receipt. An existing, overlapping or symlink output refuses before
 execution. Runtime acceptance requires the exact 112/231 check markers and zero
 strict JNI diagnostics. The receipt fingerprints commands, inputs, products and

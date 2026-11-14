@@ -39,3 +39,9 @@ Default tests perform no downloads, compiler, CMake, JVM or native execution:
 ```sh
 python3 -B -m unittest discover -s takx/kernel-native -p test_build.py -v
 ```
+
+A fresh Cesium producer declares only `root` and `acquisition_root`; continued
+producers retain all four ancestry paths in the example. Fresh records require
+both fresh flags, exact producer/preparation acquisition hashes, unchanged raw
+acquired sources and the selected SQLCipher/Draco provider chain. KML joins the
+same fresh or continued URI provider without inventing a stopped predecessor.

@@ -252,9 +252,9 @@ class PackageTrial(D.Driver):
                 self.journal('retained-core-drift',**snapshot['diagnostic'])
                 self.capture_retained_validation(snapshot,(self.state.get('packagePhases') or ['shared'])[-1],
                                                  kind='core-inventory-drift')
-            except Exception:
+            except Exception as error:
                 # Optional diagnostics never replace this original invariant.
-                pass
+                self.capture_retained_diagnostic_callsite(error)
             raise ValueError('retained Core identity/config changed')
 
     def capture_phase(self,phase,account):
@@ -296,14 +296,21 @@ class PackageTrial(D.Driver):
             try:
                 snapshot=self._retained_source_failure
                 if snapshot is not None:self.capture_retained_validation(snapshot,phase)
-            except Exception:
+            except Exception as error:
                 # Optional evidence must never replace the original invariant.
                 # Interrupts inherit BaseException and deliberately propagate.
+                self.capture_retained_diagnostic_callsite(error)
                 try:self.journal('retained-source-diagnostic-unavailable',phase=phase)
                 except Exception:pass
             raise
         finally:
             self._retained_source_failure=None
+
+    def capture_retained_diagnostic_callsite(self, error):
+        # Keep the primary invariant's first-failure capture independent. Only
+        # reviewed source locations, hashes and fixed exception types can escape.
+        try:F.write(self.evidence.parent/'retained-diagnostic-callsite',error)
+        except Exception:pass
 
     def capture_retained_validation(self, snapshot, phase, kind='stored-hooks-drift'):
         # First private failure wins; later cleanup failures cannot replace it.

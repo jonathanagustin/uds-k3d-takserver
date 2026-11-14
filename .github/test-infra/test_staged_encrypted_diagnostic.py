@@ -131,6 +131,20 @@ def save_validation(folder,payload,journal):
 
 
 class EncryptedDiagnosticGuards(unittest.TestCase):
+    def test_cleanup_drift_uses_authenticated_private_validation_channel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder,output,env,payload,journal,owner=validation_fixture(Path(directory))
+            expected={'kind':'Secret','namespace':'takserver','name':'takserver-keystore',
+                      'uid':'bound-uid','resourceVersion':'1','metadataSHA256':'a'*64}
+            payload.update(kind='cleanup-resource-drift',snapshot={'schema':1,'expected':expected,
+                'observed':{**expected,'resourceVersion':'2'},'changedFields':['resourceVersion']})
+            save_validation(folder,payload,journal)
+            def source(name):return AGE.digest((AGE.ROOT/name).read_bytes())
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=source):
+                capsule=AGE.package_input(Path(directory))
+            self.assertIsInstance(capsule,int)
+            os.close(capsule)
+
     def test_input_rejection_reports_only_fixed_reason_without_encrypting(self):
         cases = {'journal': 'package-journal', 'progress': 'package-progress',
                  'progress-binding': 'package-binding', 'missing-reference': 'missing-private-reference',

@@ -346,3 +346,12 @@ public/passive artifact uploads. A stalled public upload therefore cannot preven
 those earlier steps from being attempted. Encryption remains optional and its
 failure does not skip public evidence or change acceptance. Runner loss can still
 prevent evidence delivery; ordering is not an availability guarantee.
+
+Retained cleanup identity drift remains a hard refusal. A failure at the
+conditional delete comparison captures an encrypted `cleanup-resource-drift`
+snapshot containing only the expected/observed kind, namespace, name, UID,
+resourceVersion, metadata SHA-256, and the exact changed field names. Object
+bodies, metadata values, and secret data are excluded. This uses the existing
+source-bound first-private-failure channel; capture failure preserves the
+original refusal. It neither refreshes the deletion preconditions nor proves
+that changed metadata is safe.

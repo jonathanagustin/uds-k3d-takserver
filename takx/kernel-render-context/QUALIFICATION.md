@@ -275,6 +275,7 @@ Reproduce the font isolation in a fresh temporary directory (each runtime result
 must retain its own complete bounded log and exact JDK identity):
 
 ```bash
+FONT_PROBE_OUT="$(mktemp -d)"
 javac -d "$FONT_PROBE_OUT" takx/kernel-render-context/tests/FontJniProbe.java
 java -Xcheck:jni -Djava.awt.headless=true -cp "$FONT_PROBE_OUT" FontJniProbe
 ```

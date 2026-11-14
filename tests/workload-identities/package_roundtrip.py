@@ -407,7 +407,7 @@ class PackageTrial(D.Driver):
 
     def run_application_check(self,check,phase):
         self.guard()
-        D.require(check in APPLICATION_CHECKS and phase in ('baseline','transition','strict','rollback','fresh-strict'),
+        D.require(check in APPLICATION_CHECKS and phase in ('baseline','transition','strict','rollback','shared','fresh-strict'),
                   'unsupported application check')
         result=bounded_package_run(['uds','run','test:'+check,'--no-progress'],
                                   min(APPLICATION_CHECKS[check],max(1,int(self.deadline-time.monotonic()))))

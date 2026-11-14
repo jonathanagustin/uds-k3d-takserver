@@ -50,6 +50,10 @@ def audit_dynamic(path,text):
 def replay(proof):
     data=json.loads((proof/'complete.json').read_text())
     if data['recipe']!=recipe():raise ValueError('replay recipe differs')
+    return replay_artifacts(proof,data)
+
+def replay_artifacts(proof,data):
+    """Artifact integrity only; caller must independently admit the exact recipe."""
     if file_hashes(proof/'lib')!=data['products']:raise ValueError('replay products differ')
     if file_hashes(proof/'classes')!=data['probe_classes']:raise ValueError('replay probe classes differ')
     unchanged(data['bound_files']);unchanged(data['mapped_providers'])

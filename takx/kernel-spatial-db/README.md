@@ -1,5 +1,9 @@
 # Joined Kernel spatial database profile
 
+The pinned libxml2 archive is an ordinary Git blob, so its download uses the
+official raw-content endpoint. The media/LFS endpoint returns 404 for that file.
+Its revision, archive size, hash and extracted-source contract are unchanged.
+
 This opt-in Linux amd64 experiment compiles unchanged official Kernel legacy database, Port and pthread translation units. It joins real Spatialite 4.3.0a, libiconv 1.15 and libxml2 2.13.3 with receipt-verified GEOS, PROJ and SQLCipher/OpenSSL and zlib prefixes. It preserves TTP-enabled GEOS, PROJ, iconv and XML features and the genuine 1024-connection cache generator.
 
 The consumer must pass actual Kernel SQL geometry/coordinate conversion, prepared typed rows, commit/rollback and reopen checks. This is not modern Database2 encrypted-open, GDAL/ZIP, full SDK, JNI, renderer, target ABI, security or TAKX client acceptance. The legacy API has no explicit key argument; using SQLCipher as its engine does not establish encrypted-open behavior.

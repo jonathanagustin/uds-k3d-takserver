@@ -270,7 +270,14 @@ def template_fingerprint(deployment, pepr=False, exact=False):
                     require(env.get('value') in PHASES and 'valueFrom' not in env, 'unknown Pepr phase')
                     env['value'] = '<phase>'
     else:
-        template['spec'].pop('serviceAccountName', None)
+        spec = template['spec']
+        # Kubernetes serializes this deprecated alias from ServiceAccountName.
+        # Ignore only a consistent identity alias, never contradictory input.
+        if 'serviceAccount' in spec:
+            require('serviceAccountName' in spec and spec['serviceAccount'] == spec['serviceAccountName'],
+                    'inconsistent workload service account alias')
+            spec.pop('serviceAccount')
+        spec.pop('serviceAccountName', None)
     return sha(template)
 
 
@@ -355,7 +362,7 @@ class Driver:
         temporary.write_text(json.dumps(self.state, indent=2, sort_keys=True) + '\n')
         temporary.chmod(0o600)
         temporary.replace(self.evidence)
-        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory','diagnostic','role','timedOut','category','stdoutPresent')
+        fields=('stage','phase','operation','namespace','exitStatus','stderrPresent','protocol','controlRole','outerExit','stdoutCategory','diagnostic','role','timedOut','category','change','stdoutPresent','hook','fieldClass','check')
         stages=[{key:entry[key] for key in fields if key in entry} for entry in self.state['stages']
                 if entry['stage'] not in ('protocol-start','protocol-result')]
         protocol={stage:next(({key:entry[key] for key in fields if key in entry}

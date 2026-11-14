@@ -336,7 +336,34 @@ def qualify(api, receipt, raw, verified, pr_number, target, policy_ref):
             'tested_tree': source['tree']['sha'], 'target_commit': target}
 
 
-def shadow(api, raw, verified, pr, target, policy):
+def compare_prospective(receipt, prospective, target):
+    """Compare actual acquisition snapshot; execution policy still requires fresh."""
+    try:
+        ENCODER.fields(prospective, {'context', 'checkout', 'inputs'}, 'prospective')
+        ctx, checkout = prospective['context'], prospective['checkout']
+        ENCODER.fields(ctx, {'event', 'run_id', 'attempt', 'arch', 'scenario'}, 'context')
+        require(ctx['event'] == 'push' and all(type(ctx[k]) is int and ctx[k] > 0
+                for k in ('run_id', 'attempt')), 'prospective-run-invalid')
+        require(ctx['arch'] == receipt['scenario']['architecture'] and
+                ctx['scenario'] == receipt['scenario']['name'], 'prospective-scenario-mismatch')
+        ENCODER.fields(checkout, {'source', 'workflow'}, 'checkout')
+        ENCODER.fields(checkout['source'], {'checkout_commit', 'checkout_tree'}, 'source')
+        require(checkout['source'] == {'checkout_commit': target,
+                'checkout_tree': receipt['source']['checkout_tree']} and
+                checkout['workflow'] == receipt['workflow'], 'prospective-source-mismatch')
+        ENCODER.validate_inputs(prospective['inputs'], ctx['arch'])
+        canonical = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True,
+                                                separators=(',', ':')).encode()).hexdigest()
+        return {'inputs_equal': prospective['inputs'] == receipt['inputs'],
+                'historical_inputs_sha256': canonical(receipt['inputs']),
+                'prospective_inputs_sha256': canonical(prospective['inputs']),
+                'target_commit': target, 'run_id': ctx['run_id'], 'attempt': ctx['attempt'],
+                'reuse_authorized': False}
+    except (KeyError, TypeError, ValueError):
+        raise Unavailable('prospective-schema-invalid') from None
+
+
+def shadow(api, raw, verified, pr, target, policy, prospective=None):
     result = {'schema_version': 1, 'mode': 'shadow', 'reuse_authorized': False,
               'decision': 'execute-fresh', 'evidence_qualified': False,
               'blockers': ['prospective-input-equivalence-not-proven',
@@ -348,6 +375,10 @@ def shadow(api, raw, verified, pr, target, policy):
         receipt = json.loads(raw, object_pairs_hook=unique_fields)
         result['evidence'] = qualify(api, receipt, raw, verified, pr, target, policy)
         result['evidence_qualified'] = True
+        if prospective is not None:
+            result['prospective_comparison'] = compare_prospective(receipt, prospective, target)
+            if not result['prospective_comparison']['inputs_equal']:
+                result['blockers'].insert(0, 'prospective-inputs-differ')
     except Unavailable as exc:
         result['blockers'].insert(0, str(exc))
     except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
@@ -371,6 +402,7 @@ def main():
     parser.add_argument('--pr', type=int, required=True)
     parser.add_argument('--target', required=True, help='Exact proposed pushed squash commit SHA')
     parser.add_argument('--policy-ref', required=True, help='Exact independently reviewed producer/workflow commit')
+    parser.add_argument('--prospective', type=Path, help='Actual acquired-input snapshot; never authorizes reuse')
     parser.add_argument('--gh', default='gh', help='GitHub CLI with attestation verification support')
     args = parser.parse_args()
     result = None
@@ -394,7 +426,9 @@ def main():
                                 '--deny-self-hosted-runners', '--source-ref', ref,
                                 '--source-digest', receipt['source']['checkout_commit'],
                                 '--signer-digest', receipt['source']['checkout_commit']])
-        result = shadow(GitHub(args.gh), raw, verified, args.pr, args.target, args.policy_ref)
+        prospective = (json.loads(bounded_file(args.prospective, 16384), object_pairs_hook=unique_fields)
+                       if args.prospective else None)
+        result = shadow(GitHub(args.gh), raw, verified, args.pr, args.target, args.policy_ref, prospective)
     except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError, Unavailable):
         result = {'schema_version': 1, 'mode': 'shadow', 'reuse_authorized': False,
                   'decision': 'execute-fresh', 'evidence_qualified': False,

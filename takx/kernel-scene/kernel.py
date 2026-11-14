@@ -69,6 +69,20 @@ def reference_sources(args, output, lock, run):
     return build.inventory(reference)
 
 
+def dependency_sources(root):
+    # The scene producer adds its own Kernel checkout after emitting the GIS
+    # receipt. It is a sibling, never an input to a GDAL/minizip consumer.
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('regular dependency source directory required')
+    children={p.name for p in root.iterdir()}
+    if not {'gdal','libkml'}<=children or children-{'gdal','libkml','kernel'}:
+        raise ValueError('unknown dependency source family')
+    if 'kernel' in children and ((root/'kernel').is_symlink() or not (root/'kernel').is_dir()):
+        raise ValueError('regular sibling Kernel directory required')
+    return {family+'/'+name:value for family in ('gdal','libkml')
+            for name,value in build.inventory(root/family).items()}
+
+
 def verify_producer(args, reference, deps):
     root=args.dependency_root.resolve()
     receipt_path=args.dependency_proof/'dependencies-built.json'
@@ -93,7 +107,7 @@ def verify_producer(args, reference, deps):
         path=args.dependency_producer/relative
         if path.is_symlink() or not path.is_file() or build.native.digest(path)!=sha:
             raise ValueError('dependency producer recipe bytes differ')
-    source=build.inventory(root/'source')
+    source=dependency_sources(root/'source')
     if source!=reference or data['source_postimages']!=reference:
         raise ValueError('dependency sources differ from pinned archives and project patches')
     if build.native.inventory(root/'gdal-install')!=data['gdal_installed']:

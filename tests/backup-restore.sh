@@ -14,6 +14,10 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${root}"
 
+# The ownership observer already requires zero warnings/errors. Opt into the
+# same gate here so its existing bounded diagnostic path runs on that failure.
+case "${REQUIRE_CLEAN_BACKUP_RESTORE:-false}" in true | false) ;; *) exit 2 ;; esac
+
 log="out/backup-restore.txt"
 mkdir -p out
 : > "${log}"
@@ -222,6 +226,14 @@ wait_phase() {
     say "${kind} ${name} phase=${phase:-empty}"
     case "${phase}" in
       Completed)
+        if [[ "${REQUIRE_CLEAN_BACKUP_RESTORE:-false}" == true ]]; then
+          if ! k get "${kind}" -n velero "${name}" -o json \
+            | python3 "${root}/.github/scripts/velero-clean-completion.py" >&2; then
+            say "${kind} ${name} is Completed but failed the strict clean-status gate" >&2
+            velero_details "${kind}" "${name}"
+            return 1
+          fi
+        fi
         return 0
         ;;
       Failed | FailedValidation | PartiallyFailed)

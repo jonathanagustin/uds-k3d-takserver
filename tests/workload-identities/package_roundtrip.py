@@ -30,6 +30,15 @@ VARIABLES={'DOMAIN','TAK_IMAGE_TAG','FILESYSTEM_BACKUP','POSTGRES_STORAGE_CLASS'
 # core-identity-authorization (Keycloak); Velero is not a SLIM component.
 # https://github.com/defenseunicorns/uds-core/blob/v1.16.0/bundles/k3d-slim-dev/uds-bundle.yaml
 CORE_NAMESPACES=('kube-system','istio-system','pepr-system','keycloak')
+APPLICATION_NAMESPACE='takclients'
+
+
+def owned_application_namespace(obj):
+    metadata=obj.get('metadata',{})
+    return (metadata.get('name')==APPLICATION_NAMESPACE and
+            metadata.get('annotations',{}).get('meta.helm.sh/release-name')=='takserver-oidc' and
+            metadata.get('annotations',{}).get('meta.helm.sh/release-namespace')=='pepr-system' and
+            metadata.get('labels',{}).get('app.kubernetes.io/managed-by')=='Helm')
 
 def digest(path):
     h=hashlib.sha256()
@@ -110,6 +119,9 @@ def require_clean_objects(namespace,kind,objects):
     D.require(not objects,'retained application state prevents clean strict install: '+kind)
 
 PACKAGE_FAILURE='PRIVATE-package-command-failure.json'
+APPLICATION_FAILURE='PRIVATE-application-check-failure.json'
+APPLICATION_CHECKS={'web-tls':420,'api-smoke':720,'flows':300,'cloudtak':900}
+VALIDATION_FAILURE='PRIVATE-retained-source-validation.json'
 PACKAGE_CATEGORIES=('timeout','helm-hook','helm-upgrade','resource-conflict','package-validation','unknown')
 
 def bounded_package_run(argv,timeout):
@@ -192,8 +204,17 @@ class PackageTrial(D.Driver):
         namespaces=self.get('namespaces',namespace='default')['items']
         retained=sorted(obj['metadata']['name'] for obj in namespaces if obj['metadata']['name'] not in (D.NS,'cloudtak'))
         D.require(set(CORE_NAMESPACES)<=set(retained),'required Core namespaces missing')
+        binding=self.state.get('applicationNamespaceBinding')
+        if binding and APPLICATION_NAMESPACE not in retained:
+            D.require(self.state.get('applicationNamespaceRemoved') is True,'bound application namespace missing')
         for ns in retained:
-            result['namespace/'+ns]=self.get('namespace',ns,ns)['metadata']['uid']
+            namespace=self.get('namespace',ns,ns)
+            if ns==APPLICATION_NAMESPACE and binding:
+                # The app Pepr chart owns this namespace, not Core. Freeze its
+                # owner and UID separately; never infer a new exemption later.
+                D.require(owned_application_namespace(namespace) and namespace['metadata']['uid']==binding['uid'],
+                          'bound application namespace identity/owner changed')
+            else:result['namespace/'+ns]=namespace['metadata']['uid']
             for kind in ('deployments','statefulsets','daemonsets','packages.uds.dev'):
                 for obj in self.get(kind,namespace=ns)['items']:
                     if ns=='pepr-system' and obj['metadata']['name'] in D.PEPR:continue
@@ -204,8 +225,37 @@ class PackageTrial(D.Driver):
         result['mesh']=D.sha(self.get('configmap','istio','istio-system').get('data',{}))
         return result
 
+    def bind_application_namespace(self, fresh=False):
+        """Bind only the exact namespace installed by this app's Pepr chart."""
+        old=self.state.get('applicationNamespaceBinding')
+        if fresh:
+            D.require(self.state.get('applicationNamespaceRemoved') is True,'application namespace rebind outside fresh install')
+            # A foreign/pre-existing namespace never becomes exempt on reinstall.
+            if old is None:
+                self.state['applicationNamespaceRemoved']=False
+                return
+        present=any(obj['metadata']['name']==APPLICATION_NAMESPACE
+                    for obj in self.get('namespaces',namespace='default')['items'])
+        obj=self.get('namespace',APPLICATION_NAMESPACE,APPLICATION_NAMESPACE) if present else None
+        if fresh:D.require(obj is not None and owned_application_namespace(obj),'fresh application namespace owner differs')
+        self.state['applicationNamespaceBinding']=({'uid':obj['metadata']['uid']}
+            if obj is not None and owned_application_namespace(obj) else None)
+        self.state['applicationNamespaceRemoved']=False
+
     def core_unchanged(self):
-        D.require(self.core_snapshot()==self.state['coreSnapshot'],'retained Core identity/config changed')
+        observed=self.core_snapshot();baseline=self.state['coreSnapshot']
+        if observed!=baseline:
+            self.state['accepted']=False
+            try:
+                snapshot=R.core_failure(baseline,observed,
+                    'application-removed' if self.state.get('applicationNamespaceRemoved') else 'observed')
+                self.journal('retained-core-drift',**snapshot['diagnostic'])
+                self.capture_retained_validation(snapshot,(self.state.get('packagePhases') or ['shared'])[-1],
+                                                 kind='core-inventory-drift')
+            except Exception:
+                # Optional diagnostics never replace this original invariant.
+                pass
+            raise ValueError('retained Core identity/config changed')
 
     def capture_phase(self,phase,account):
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
@@ -214,6 +264,71 @@ class PackageTrial(D.Driver):
         self.journal('package-phase-evidence-'+alias,accepted=verdict['accepted'])
         return verdict
 
+    def wait_identities(self, expected, phase):
+        # Only fixed codes enter the journal; exception text can contain private data.
+        D.require(phase in D.PHASES, 'unknown identity observation phase')
+        reason = 'no-observation'
+        def observe_identity():
+            nonlocal reason
+            try:
+                result = self.identities(expected)
+                reason = 'unstable-observation'
+                return result
+            except ValueError as error:
+                reason = {'workload template drift': 'workload-template-drift',
+                          'inconsistent workload service account alias': 'inconsistent-service-account-alias'}.get(
+                              str(error), 'other-invariant')
+                raise
+        try:
+            return self.wait(observe_identity)
+        except ValueError as error:
+            if str(error).startswith('convergence timeout: '):
+                self.journal('package-identity-timeout', phase=phase, diagnostic=reason)
+            raise
+
+    def retained_verify(self, proof, phase):
+        D.require(phase in D.PHASES, 'unknown retained validation phase')
+        self._retained_source_failure=None
+        try:
+            return R.verify(self,proof)
+        except ValueError:
+            self.state['accepted']=False
+            try:
+                snapshot=self._retained_source_failure
+                if snapshot is not None:self.capture_retained_validation(snapshot,phase)
+            except Exception:
+                # Optional evidence must never replace the original invariant.
+                # Interrupts inherit BaseException and deliberately propagate.
+                try:self.journal('retained-source-diagnostic-unavailable',phase=phase)
+                except Exception:pass
+            raise
+        finally:
+            self._retained_source_failure=None
+
+    def capture_retained_validation(self, snapshot, phase, kind='stored-hooks-drift'):
+        # First private failure wins; later cleanup failures cannot replace it.
+        if 'firstPrivateFailure' in self.state or 'packageCommandFailure' in self.state:return
+        D.require(phase in D.PHASES, 'unknown retained validation phase')
+        D.require(kind in ('stored-hooks-drift','core-inventory-drift'),'unknown retained validation kind')
+        (R.validate_source_failure if kind=='stored-hooks-drift' else R.validate_core_failure)(snapshot)
+        hashes={'packageDriverSHA256':digest(Path(__file__)), 'driverSHA256':digest(HERE/'drive.py'),
+                'retainedSourceSHA256':digest(HERE/'retained_state.py')}
+        payload={'schema':1,'type':'retained-source-validation','kind':kind,
+                 'binding':{key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')},
+                 'phase':phase,'snapshot':snapshot,**hashes}
+        data=json.dumps(payload,sort_keys=True,separators=(',',':')).encode()
+        D.require(len(data)<=128*1024,'retained validation diagnostic bound')
+        folder=self.evidence.parent
+        D.require(stat.S_IMODE(folder.stat().st_mode)==0o700 and not any(path.is_symlink() for path in (folder,*folder.parents)),
+                  'retained validation directory is not private')
+        descriptor=os.open(folder/VALIDATION_FAILURE,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(descriptor,'wb') as output:output.write(data)
+        reference={'file':VALIDATION_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+        self.state.update(hashes)
+        self.state['retainedSourceValidationFailure']=reference
+        self.state['firstPrivateFailure']={'schema':1,'kind':'retained-source-validation','reference':dict(reference)}
+        self.journal('retained-source-validation-failed',phase=phase)
+
     def observe(self,phase):
         desired,_=self.render(phase);current=self.get('package',D.NS)
         D.require(current['spec']==desired['spec'],'package deployment differs from exact phase render')
@@ -221,14 +336,14 @@ class PackageTrial(D.Driver):
         self.wait(self.policies)
         self.wait(lambda:self.observe_pepr(phase))
         expected='dedicated' if phase in ('transition','strict') else 'shared'
-        identities=self.wait(lambda:self.identities(expected));self.core_unchanged()
+        identities=self.wait_identities(expected,phase);self.core_unchanged()
         values=json.loads(self.command(['helm','--kube-context',D.CONTEXT,'get','values','uds-takserver-config','-n',D.NS,'-o','json']))
         D.require(values.get('workloadIdentityPhase','shared')==phase,'stored config Helm value differs')
         alias='fresh-strict' if self.state.get('initializingFresh') else ('baseline' if not self.state['packagePhases'] else phase)
         if self.state.get('initializingFresh'):
             self.state['freshDataInvariants']=R.capture(self)
-            data_evidence=R.verify(self,self.state['freshDataInvariants'])
-        else:data_evidence=R.verify(self,self.state['dataInvariants'])
+            data_evidence=self.retained_verify(self.state['freshDataInvariants'],phase)
+        else:data_evidence=self.retained_verify(self.state['dataInvariants'],phase)
         self.journal('private-application-data-verified',phase=alias,observations=data_evidence)
         self.traffic(identities,phase,evidence_phase='package-'+alias)
         self.application_checks(phase=alias,prepare=not self.state['packagePhases'] or self.state.get('initializingFresh',False))
@@ -268,6 +383,7 @@ class PackageTrial(D.Driver):
             else:
                 with os.fdopen(fd,'wb') as output:output.write(data)
                 self.state['packageCommandFailure']={'file':PACKAGE_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            self.state.setdefault('firstPrivateFailure',{'schema':1,'kind':'package-command','reference':dict(self.state['packageCommandFailure'])})
             self.journal('package-command-failed',role=role,phase=phase,exitStatus=result['exitStatus'],timedOut=result['timedOut'],
                          category=command_failure_category(result),stdoutPresent=bool(result['stdout']),stderrPresent=bool(result['stderr']))
             raise ValueError('supported package command failed; inspect bounded private evidence')
@@ -289,18 +405,47 @@ class PackageTrial(D.Driver):
         D.require(package['status'].get('phase')=='Ready' and deployment['status'].get('availableReplicas',0)>0,'CloudTAK component is required for issue32 acceptance')
         return {key:obj['metadata']['uid'] for key,obj in (('namespace',namespace),('deployment',deployment),('package',package))}
 
+    def run_application_check(self,check,phase):
+        self.guard()
+        D.require(check in APPLICATION_CHECKS and phase in ('baseline','transition','strict','rollback','shared','fresh-strict'),
+                  'unsupported application check')
+        result=bounded_package_run(['uds','run','test:'+check,'--no-progress'],
+                                  min(APPLICATION_CHECKS[check],max(1,int(self.deadline-time.monotonic()))))
+        if result['exitStatus']==0 and not result['timedOut']:return result['stdout']
+        # Keep raw command streams private. A diagnostic failure still fails the check.
+        if 'firstPrivateFailure' not in self.state:
+            folder=self.evidence.parent
+            D.require(stat.S_IMODE(folder.stat().st_mode)==0o700 and not any(path.is_symlink() for path in (folder,*folder.parents)),
+                      'application failure directory is not private')
+            payload={'schema':1,'binding':{key:self.state['guard'][key] for key in ('sourceSHA','runID','runAttempt')},
+                     'check':check,'phase':phase,**result,
+                     'packageDriverSHA256':digest(Path(__file__)),'driverSHA256':digest(HERE/'drive.py')}
+            data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            while len(data)>64*1024:
+                for stream in ('stdout','stderr'):
+                    payload[stream]=payload[stream][len(payload[stream])//2:];payload[stream+'Truncated']=True
+                data=json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()
+            fd=os.open(folder/APPLICATION_FAILURE,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'wb') as output:output.write(data)
+            reference={'file':APPLICATION_FAILURE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            self.state['applicationCheckFailure']=reference
+            self.state['firstPrivateFailure']={'schema':1,'kind':'application-check','reference':dict(reference)}
+        self.journal('application-check-failed',check=check,phase=phase,exitStatus=result['exitStatus'],
+                     timedOut=result['timedOut'],stdoutPresent=bool(result['stdout']),stderrPresent=bool(result['stderr']))
+        raise ValueError('supported application check failed; inspect bounded private evidence')
+
     def application_checks(self,phase,prepare=False):
         self.guard()
         if prepare:
             self.command(['uds','run','setup:keycloak-user','--with','group=/UDS Core/Admin','--no-progress'],timeout=300)
             self.command(['python3',str(D.ROOT/'tests/ensure-tak-group.py')],timeout=180)
             self.command(['uds','run','test:gateway','--no-progress'],timeout=420)
-        self.command(['uds','run','test:web-tls','--no-progress'],timeout=420)
-        self.command(['uds','run','test:api-smoke','--no-progress'],timeout=720)
-        self.command(['uds','run','test:flows','--no-progress'],timeout=300)
+        self.run_application_check('web-tls',phase)
+        self.run_application_check('api-smoke',phase)
+        self.run_application_check('flows',phase)
         before=self.require_cloudtak()
         if phase in ('baseline','strict','fresh-strict'):
-            output=self.command(['uds','run','test:cloudtak','--no-progress'],timeout=900)
+            output=self.run_application_check('cloudtak',phase)
             D.require('The cloudtak component is not deployed. Skipping.' not in output and self.require_cloudtak()==before,'CloudTAK check skipped or component changed')
             self.journal('cloudtak-basemap-application-checks',phase=phase,passed=True)
 
@@ -317,6 +462,7 @@ class PackageTrial(D.Driver):
         self.prepare()  # Initial shared observation only; creates no trial resources.
         D.require(Path(self.bound['archive']).name.startswith('zarf-package-takserver-'+self.state['architecture']+'-'),'bound archive architecture differs from guarded node')
         self.require_cloudtak()
+        self.bind_application_namespace()
         self.state['coreSnapshot']=self.core_snapshot();self.compile_probe()
         self.state['dataInvariants']=R.capture(self)
         self.create({'apiVersion':'v1','kind':'ServiceAccount','metadata':{'name':self.state['negativeAccount']},'automountServiceAccountToken':False})
@@ -351,6 +497,7 @@ class PackageTrial(D.Driver):
         installed=self.get('secret','zarf-package-takserver','zarf')
         self.state['removedPackageSecretUID']=installed['metadata']['uid'];self.journal('application-remove-start')
         self.run_package(['uds','zarf','package','remove','takserver','--confirm'],900)
+        self.state['applicationNamespaceRemoved']=True
         self.core_unchanged()
         self.wait(lambda:R.consumers_gone(self),300)
         for record in self.state['retainedCleanup']:
@@ -359,7 +506,9 @@ class PackageTrial(D.Driver):
         self.wait(self.clean_application_state,300)
         # New install has new Deployment/Package UIDs; retain old observations in journal.
         self.state['previousInstall']={k:self.state[k] for k in ('packageUID','deploymentUIDs','peprUIDs','backendTargets')}
-        self.run_package(deploy_command(self.bound,'strict'),1500);self.inputs_unchanged();self.core_unchanged()
+        self.run_package(deploy_command(self.bound,'strict'),1500)
+        self.bind_application_namespace(fresh=True)
+        self.inputs_unchanged();self.core_unchanged()
         package=self.get('package',D.NS);deployments={x['metadata']['name']:x for x in self.get('deployments')['items'] if x['metadata']['name'] in D.APPS}
         D.require(set(deployments)==set(D.APPS),'fresh strict workloads missing')
         self.state.update(packageUID=package['metadata']['uid'],packageInvariant=D.package_invariant(package),deploymentUIDs={n:x['metadata']['uid'] for n,x in deployments.items()},templateFingerprints={n:D.template_fingerprint(x) for n,x in deployments.items()},peprUIDs={n:self.get('deployment',n,'pepr-system')['metadata']['uid'] for n in D.PEPR},peprTemplateFingerprints={n:D.template_fingerprint(self.get('deployment',n,'pepr-system'),True) for n in D.PEPR})

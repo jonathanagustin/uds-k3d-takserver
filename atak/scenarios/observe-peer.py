@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Observe an actual Android-shared fixture marker on an explicit TLS TAK peer."""
 import argparse
+import contextlib
+import datetime
+import hashlib
+import re
 import importlib.util
 import json
 from pathlib import Path
@@ -18,7 +22,62 @@ spec.loader.exec_module(scenario)
 LIMIT = 1024 * 1024
 
 
-def observe(stream, markers, deadline):
+@contextlib.contextmanager
+def open_peer(args, deadline):
+    context = ssl.create_default_context(cafile=args.ca)
+    pin = getattr(args, "server_leaf_sha256", None)
+    if pin:
+        if not re.fullmatch("[0-9a-f]{64}", pin):
+            raise ValueError("invalid deployment leaf pin")
+        # Explicit CA+leaf identity mode. Chain validation remains mandatory;
+        # pin is extracted from authenticated deployment data, never the wire.
+        context.check_hostname = False
+    if context.verify_mode != ssl.CERT_REQUIRED:
+        raise ValueError("peer requires CA verification")
+    context.load_cert_chain(args.cert, args.key)
+    with socket.create_connection((getattr(args, "connect_host", None) or args.host, args.port), timeout=min(10, max(.001, deadline-time.monotonic()))) as raw:
+        raw.settimeout(max(.001, min(10, deadline-time.monotonic())))
+        with context.wrap_socket(raw, server_hostname=args.host) as stream:
+            if pin and hashlib.sha256(stream.getpeercert(binary_form=True)).hexdigest() != pin:
+                raise ValueError("deployment leaf mismatch")
+            yield stream
+
+
+def write_control(path, payload):
+    with path.open("x") as stream:
+        json.dump(payload, stream)
+
+
+def share_fence(stream, directory, deadline):
+    """Drain before Share; only the Android UI controller writes share.json."""
+    discarded = 0
+    write_control(directory / "ready.json", {"ready": True})
+    quiet_since = time.monotonic()
+    armed = False
+    while time.monotonic() < deadline:
+        if (directory / "prepare.json").exists() and not armed and time.monotonic()-quiet_since >= .5:
+            write_control(directory / "armed.json", {"armed": True})
+            armed = True
+        if armed and (directory / "share.json").exists():
+            cutoff = json.loads((directory / "share.json").read_text())["android_not_before"]
+            if not isinstance(cutoff, int) or cutoff <= 0:
+                raise ValueError("invalid Android time fence")
+            return cutoff, discarded
+        stream.settimeout(.1)
+        try:
+            chunk = stream.recv(65536)
+        except socket.timeout:
+            continue
+        if not chunk:
+            raise RuntimeError("peer closed before Share")
+        discarded += len(chunk)
+        if discarded > LIMIT:
+            raise ValueError("pre-share receive budget exceeded")
+        quiet_since = time.monotonic()
+    raise TimeoutError("Share readiness deadline")
+
+
+def observe(stream, markers, deadline, not_before=None):
     """Read only; no CoT transmission, protocol negotiation or replay."""
     pending = b""
     total = 0
@@ -48,6 +107,12 @@ def observe(stream, markers, deadline):
                 raise ValueError("DTD/entity peer event rejected")
             event = ET.fromstring(payload)
             uid = event.get("uid")
+            if not_before is not None:
+                stamp = datetime.datetime.fromisoformat(event.get("time", "").replace("Z", "+00:00"))
+                if stamp.tzinfo is None:
+                    raise ValueError("event time has no zone")
+                if stamp.timestamp() < not_before:
+                    continue
             if uid not in expected:
                 continue
             point = event.find("point")
@@ -60,7 +125,8 @@ def observe(stream, markers, deadline):
                 raise ValueError("matching UID arrived with different point or callsign")
             observed.add(uid)
             if observed == set(expected):
-                return {"received_matching_uids": sorted(observed), "received_bytes": total}
+                return {"received_matching_uids": sorted(observed), "received_bytes": total,
+                        "fresh_event_time": event.get("time"), "android_not_before": not_before}
     raise TimeoutError("no matching Android-shared marker within peer deadline")
 
 
@@ -69,6 +135,10 @@ def main():
     parser.add_argument("--mission-package", required=True, type=Path)
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, default=8089)
+    parser.add_argument("--connect-host")
+    parser.add_argument("--server-leaf-sha256")
+    parser.add_argument("--challenge", help="8 lowercase hex digits edited only through Android UI")
+    parser.add_argument("--control", type=Path)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
@@ -78,6 +148,11 @@ def main():
     if not 1 <= args.seconds <= 120 or not 1 <= args.port <= 65535:
         parser.error("seconds must be 1..120 and port 1..65535")
     inputs = scenario.inspect_package(args.mission_package)
+    if args.challenge:
+        if not re.fullmatch("[0-9a-f]{8}", args.challenge) or args.control is None:
+            parser.error("challenge requires eight hex digits and control directory")
+        for marker in inputs["markers"]:
+            marker["callsign"] += " " + args.challenge
     args.output.mkdir(parents=True, exist_ok=False)
     receipt = {"package_sha256": inputs["package_sha256"], "status": "failed",
                "execution": "real-tls-observer", "sends_cot": False,
@@ -88,14 +163,13 @@ def main():
     signal.alarm(args.seconds)
     started = time.monotonic()
     try:
-        context = ssl.create_default_context(cafile=args.ca)
-        context.load_cert_chain(args.cert, args.key)
-        # Socket connect+TLS+receive share one finite overall deadline.
         deadline = started + args.seconds
-        with socket.create_connection((args.host, args.port), timeout=min(10, args.seconds)) as raw:
-            raw.settimeout(max(0.001, min(10, deadline - time.monotonic())))
-            with context.wrap_socket(raw, server_hostname=args.host) as stream:
-                receipt.update(observe(stream, inputs["markers"], deadline))
+        with open_peer(args, deadline) as stream:
+            cutoff = None
+            if args.control:
+                cutoff, discarded = share_fence(stream, args.control, deadline)
+                receipt["pre_share_discarded_bytes"] = discarded
+            receipt.update(observe(stream, inputs["markers"], deadline, cutoff))
         receipt["status"] = "peer-observed-matching-cot"
     except Exception as error:
         receipt["error_type"] = type(error).__name__

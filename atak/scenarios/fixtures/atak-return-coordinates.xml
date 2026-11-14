@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Copyright 2026 uds-takserver authors
+SPDX-License-Identifier: GPL-3.0-only -->
+<hierarchy>
+  <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[18,228][702,1028]">
+    <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[18,228][702,1028]">
+      <node text="" resource-id="android:id/content" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[18,228][702,1028]">
+        <node text="" resource-id="android:id/parentPanel" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[26,228][694,1028]">
+          <node text="" resource-id="android:id/topPanel" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[26,228][694,276]">
+            <node text="Enter Coordinate: " resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[34,236][686,274]" />
+            <node text="" resource-id="android:id/titleDivider" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[34,274][686,276]" />
+          </node>
+          <node text="" resource-id="android:id/customPanel" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[26,276][694,965]">
+            <node text="" resource-id="android:id/custom" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[34,276][686,965]">
+              <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,276][686,965]">
+                <node text="" resource-id="com.atakmap.app.civ:id/coordEntryHolderPortrait" class="android.widget.HorizontalScrollView" content-desc="" clickable="false" enabled="true" bounds="[34,276][686,347]">
+                  <node text="" resource-id="com.atakmap.app.civ:id/coordEntryList" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,276][686,347]">
+                    <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="true" enabled="true" bounds="[34,276][284,347]">
+                      <node text="" resource-id="com.atakmap.app.civ:id/portrait_handle_container" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[34,276][284,311]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_handle" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[134,276][184,311]" />
+                      </node>
+                      <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,311][284,338]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/portrait_line" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[37,314][38,338]" />
+                        <node text="MGRS" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_name" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[41,311][272,338]" />
+                      </node>
+                    </node>
+                    <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="true" enabled="true" bounds="[284,276][534,347]">
+                      <node text="" resource-id="com.atakmap.app.civ:id/portrait_handle_container" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[284,276][534,311]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_handle" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[384,276][434,311]" />
+                      </node>
+                      <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[284,311][534,338]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/portrait_line" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[287,314][288,338]" />
+                        <node text="DD" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_name" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[291,311][522,338]" />
+                      </node>
+                      <node text="" resource-id="com.atakmap.app.civ:id/portrait_selected" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[287,341][531,347]" />
+                    </node>
+                    <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="true" enabled="true" bounds="[534,276][686,347]">
+                      <node text="" resource-id="com.atakmap.app.civ:id/portrait_handle_container" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[534,276][686,311]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_handle" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[634,276][684,311]" />
+                      </node>
+                      <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[534,311][686,338]">
+                        <node text="" resource-id="com.atakmap.app.civ:id/portrait_line" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[537,314][538,338]" />
+                        <node text="DM" resource-id="com.atakmap.app.civ:id/coordinate_entry_item_name" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[541,311][686,338]" />
+                      </node>
+                    </node>
+                  </node>
+                </node>
+                <node text="" resource-id="com.atakmap.app.civ:id/portrait_divider" class="android.view.View" content-desc="" clickable="false" enabled="true" bounds="[37,350][683,351]" />
+                <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,351][686,965]">
+                  <node text="" resource-id="" class="android.widget.RelativeLayout" content-desc="" clickable="false" enabled="true" bounds="[34,351][686,965]">
+                    <node text="" resource-id="com.atakmap.app.civ:id/currentCoordPane" class="android.widget.FrameLayout" content-desc="" clickable="false" enabled="true" bounds="[34,351][686,965]">
+                      <node text="" resource-id="com.atakmap.app.civ:id/coordDialogDDView" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,351][686,965]">
+                        <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,353][686,393]">
+                          <node text="Latitude" resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[34,362][229,385]" />
+                          <node text="0.00100" resource-id="com.atakmap.app.civ:id/coordDialogDDLatText" class="android.widget.EditText" content-desc="" clickable="true" enabled="false" bounds="[229,353][653,393]" />
+                          <node text="°" resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[653,362][686,385]" />
+                        </node>
+                        <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,393][686,433]">
+                          <node text="Longitude" resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[34,402][229,425]" />
+                          <node text="0.00200" resource-id="com.atakmap.app.civ:id/coordDialogDDLonText" class="android.widget.EditText" content-desc="" clickable="true" enabled="false" bounds="[229,393][653,433]" />
+                          <node text="°" resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[653,402][686,425]" />
+                        </node>
+                      </node>
+                    </node>
+                    <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,837][686,965]">
+                      <node text="" resource-id="com.atakmap.app.civ:id/coordDialogElevationView" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,837][686,884]">
+                        <node text="Elevation" resource-id="" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[40,846][109,869]" />
+                        <node text="-56.30" resource-id="com.atakmap.app.civ:id/coordDialogElevationText" class="android.widget.EditText" content-desc="" clickable="true" enabled="false" bounds="[115,837][220,877]" />
+                        <node text="ft MSL" resource-id="com.atakmap.app.civ:id/coordDialogElevationUnits" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[226,849][580,868]" />
+                        <node text="Pull Elevation" resource-id="com.atakmap.app.civ:id/coordDialogDtedButton" class="android.widget.Button" content-desc="" clickable="true" enabled="false" bounds="[586,837][686,884]" />
+                      </node>
+                      <node text="???" resource-id="com.atakmap.app.civ:id/coordDialogElevationSource" class="android.widget.TextView" content-desc="" clickable="false" enabled="true" bounds="[54,884][72,901]" />
+                      <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,901][686,965]">
+                        <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,901][425,965]" />
+                        <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[425,901][686,933]">
+                          <node text="Auto Fill" resource-id="com.atakmap.app.civ:id/coordDialogMGRSGridButton" class="android.widget.Button" content-desc="" clickable="true" enabled="false" bounds="[425,901][549,933]" />
+                          <node text="Clear" resource-id="com.atakmap.app.civ:id/clearButton" class="android.widget.Button" content-desc="" clickable="true" enabled="false" bounds="[549,901][642,933]" />
+                          <node text="" resource-id="com.atakmap.app.civ:id/copyButton" class="android.widget.ImageButton" content-desc="" clickable="true" enabled="true" bounds="[642,901][686,933]" />
+                        </node>
+                      </node>
+                    </node>
+                  </node>
+                </node>
+              </node>
+            </node>
+          </node>
+          <node text="" resource-id="android:id/buttonPanel" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[26,965][694,1028]">
+            <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" clickable="false" enabled="true" bounds="[34,966][686,1020]">
+              <node text="Cancel" resource-id="android:id/button2" class="android.widget.Button" content-desc="" clickable="true" enabled="true" bounds="[34,966][359,1020]" />
+              <node text="OK" resource-id="android:id/button1" class="android.widget.Button" content-desc="" clickable="true" enabled="true" bounds="[360,966][686,1020]" />
+            </node>
+          </node>
+        </node>
+      </node>
+    </node>
+  </node>
+</hierarchy>

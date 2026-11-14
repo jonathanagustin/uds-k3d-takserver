@@ -49,16 +49,19 @@ def bound_files(values,root=None):
 def recipe_check(family,record,history_key=None):
     producer=module(family)
     current=producer.recipe() if hasattr(producer,'recipe') else producer.a.inventory(producer.HERE) if family=='cesium' else {n:digest(producer.HERE/n) for n in ('build.py','inputs.lock.json','DracoSourceProbe.cpp')}
-    if record['recipe']!=current:
+    historical = record['recipe']!=current
+    if historical:
         allowed=load(HERE/'producer-history.lock.json').get(history_key or family)
         if not allowed or record['recipe']!=allowed['recipe']:raise ValueError('unreviewed consumed producer source variant: '+family)
         for name,value in record['recipe'].items():
             expected=value['sha256'] if isinstance(value,dict) else value
-            candidate=HERE/allowed['variants'][name]['snapshot'] if name in allowed['variants'] else producer.HERE/name
+            recipe_root=TAKX if family=='gdal_jni' else producer.HERE
+            candidate=HERE/allowed['variants'][name]['snapshot'] if name in allowed['variants'] else recipe_root/name
             if not candidate.resolve().is_relative_to(TAKX.resolve()) or digest(regular(candidate))!=expected:raise ValueError('historical consumed source body differs')
     for name,tool in record.get('tools',{}).items():
         path,expected=(tool['path'],tool['sha256']) if isinstance(tool,dict) else (name,tool)
         if digest(regular(path))!=expected:raise ValueError('producer tool changed')
+    return historical
 def verify_java(root):
     mod=module('kernel_java');record=load(root/'inputs.json');result=load(root/'result.json')
     if record['recipe_sha256']!=digest(mod.HERE/'build.py') or record['lock_sha256']!=digest(mod.HERE/'inputs.lock.json'):raise ValueError('Java normative recipe differs')
@@ -76,7 +79,7 @@ def verify(family,root):
     if root.is_symlink() or not root.is_dir():raise ValueError('regular producer root required')
     root=root.resolve()
     if family=='kernel_java':return verify_java(root)
-    record=load(root/'complete.json');before=digest(root/'complete.json');recipe_check(family,record);producer=module(family)
+    record=load(root/'complete.json');before=digest(root/'complete.json');historical=recipe_check(family,record);producer=module(family)
     if family in ('sqlcipher','geos','proj','assimp'):
         # Existing normative contract also checks sources, installed files, tools,
         # positive outputs and runtime for these source-built component families.
@@ -101,7 +104,12 @@ def verify(family,root):
         bound_files(record['outputs'],root);producer.las.verify_runtime(record['runtime_closure'])
     elif family=='gdal_jni':
         # This pure verifier preserves its frozen stopped-producer ancestry.
-        producer.replay(root)
+        if historical:
+            if any(record.get(key) not in (None,False) for key in ('kml_profile_enabled','strict_jni_diagnostics_free')) or record.get('kml_build') is not None:
+                raise ValueError('historical GDAL baseline cannot claim strict JNI or KML acceptance')
+            producer.replay_artifacts(root,record)
+        else:
+            producer.replay(root)
     elif family=='gles':
         if not record.get('genuine_surfaceless_es3_clear_readback'):raise ValueError('real GLES controls absent')
         check_files(root/'source',record['source_inventory']);check_files(root/'install',record['installed']);bound_files(record['headers'],root/'include');bound_files(record['host_inputs']);bound_files(record['runtime_providers'])
@@ -141,8 +149,26 @@ def declared_paths(paths):
 
 def verify_cesium_ancestry(paths):
     selected=paths['cesium']
-    if not isinstance(selected,dict) or set(selected)!={'root','dependency_root','stopped_inventory','acquisition_root'}:raise ValueError('Cesium requires complete declared retained ancestry')
+    if not isinstance(selected,dict):raise ValueError('Cesium requires declared producer and acquisition roots')
     root=root_of(paths,'cesium');complete=load(root/'complete.json');lineage=complete['lineage']
+    if lineage is None:
+        if set(selected)!={'root','acquisition_root'} or complete.get('fresh_dependency_build') is not True or complete.get('fresh_cesium_build') is not True:
+            raise ValueError('fresh Cesium requires honest freshness and only its acquisition root')
+        original=load(root/'producer.json');prepared=load(root/'prepared.json')
+        if original.get('lineage') is not None or original.get('fresh_dependency_build') is not True:
+            raise ValueError('fresh Cesium producer lineage differs')
+        recipe_check('cesium',original)
+        acquired=Path(selected['acquisition_root']).resolve()
+        acquisition=load(acquired/'acquired.json');sha=digest(acquired/'acquired.json')
+        if sha!=original['sources_receipt_sha256'] or sha!=prepared['sources_receipt_sha256']:
+            raise ValueError('fresh Cesium acquisition receipt differs')
+        for name,entry in acquisition['sources'].items():check_files(acquired/'source'/name,entry['files'])
+        providers=module('cesium').a.verify_providers(root_of(paths,'sqlcipher'),root_of(paths,'draco'))
+        if original['providers']!=providers or acquisition['providers']!=providers:
+            raise ValueError('fresh Cesium selected provider chain differs')
+        return {'fresh_dependency_build':True,'acquisition_sha256':sha,'original_recipe':original['recipe']}
+    if set(selected)!={'root','dependency_root','stopped_inventory','acquisition_root'}:
+        raise ValueError('continued Cesium requires complete declared retained ancestry')
     previous=Path(selected['dependency_root']).resolve();snapshot=Path(selected['stopped_inventory']);acquired=Path(selected['acquisition_root']).resolve()
     if previous!=Path(lineage['previous_output']).resolve():raise ValueError('Cesium ancestry relocation requires a separate accepted operation')
     if digest(snapshot)!=lineage['stopped_inventory_sha256']:raise ValueError('Cesium stopped source inventory differs')
@@ -165,7 +191,8 @@ def verify_cesium_ancestry(paths):
 def verify_cross_links(paths):
     kml=module('kml');kroot=root_of(paths,'kml');krecord=load(kroot/'complete.json')
     boost=kml.verify_las(root_of(paths,'las'))[1]
-    uri=kml.verify_cesium(root_of(paths,'cesium'),Path(paths['cesium']['stopped_inventory']))[1]
+    snapshot=paths['cesium'].get('stopped_inventory')
+    uri=kml.verify_cesium(root_of(paths,'cesium'),Path(snapshot) if snapshot is not None else None)[1]
     gdal=paths['gdal_jni'];proof=Path(gdal['dependency_proof']);dependency=Path(gdal['dependency_root'])
     reference=kroot/'source/libkml/third_party/zlib-1.2.3/contrib/minizip'
     minizip=kml.verify_minizip(dependency,proof,reference)[1]

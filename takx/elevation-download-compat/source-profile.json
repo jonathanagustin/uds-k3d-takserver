@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "kernelRevision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "takxRevision": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
+  "sources": {
+    "kernel": {
+      "path": "takkernel/shared/src/main/java/gov/tak/platform/client/dted/ElevationDownloader.java",
+      "preimageSHA256": "993fd5bc37ec390b597362869cd7d5d6da993aaa92dd42d73c69d0af76e82b5c",
+      "postimageSHA256": "23b6de6c9fee809f2b187e937285b7b97e5db095b7f16e03076890f6472c9201",
+      "patch": "kernel.patch",
+      "patchSHA256": "6af6bc23529ffea16d1f495c319c21dc9ea9ac05e505389f75a52e75460cc338"
+    },
+    "takx58": {
+      "path": "Platform/src/main/java/gov/takx/api/terrain/experimental/ElevationSourceUtils.java",
+      "preimageSHA256": "96020a32ef09d857bb81d12f1be23ee8ec829b5913474387f6ed6702b8fe25de",
+      "postimageSHA256": "255208d452839e15ad90a4543383601afbd6197162f5c44720247fd6437c8a6a",
+      "patch": "takx58.patch",
+      "patchSHA256": "03fb2557e44e7832e46e939a65b8037d924d0c3edff6830f3e7e5d54de79bb6a"
+    }
+  }
+}

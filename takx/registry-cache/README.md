@@ -92,8 +92,23 @@ existing key fails closed. No PR or scheduled writer is introduced.
 The reader requires an explicitly approved producer source SHA; it does not
 trust a source revision merely because unsigned metadata names it. A read-only
 PR consumer can use that reader later; no automatic PR restore is wired here.
-No authenticated registry specimen has been qualified yet. The first hosted
-experiment remains required before #482 can close.
+The first hosted registry experiment completed in
+[run 43088282608](https://github.com/jonathanagustin/uds-takserver/actions/runs/43088282608),
+attempt 1, from protected source `3415a69bfd52d4210d8c7308f51f77d29a358f94`.
+It built Draco 1.5.7 with GCC 14.2, passed codec and whole-archive PIC controls,
+published signed OCI data, verified authenticated and anonymous readback, and
+passed real consumers in two restored prefixes before promoting the key.
+
+The qualified component subject is
+`ghcr.io/jonathanagustin/uds-takserver/native-cache/draco@sha256:0af201d0e28cb089f11497b211c337db084d13b662012c27953ee3dcfa1f0d2c`.
+Its key is `registry-v2-cbd008864ed102ca31f168f53629540482d70603297626c25d1e1e505cd7ed4b`;
+the capsule SHA-256 is `86cfa7ac0071b95238828d82dcdb227154434b15f0f9efd5c2edaef6a6b6729d`.
+The accepted receipt is retained in
+[artifact 13887622883](https://github.com/jonathanagustin/uds-takserver/actions/runs/43088282608/artifacts/13887622883).
+Consumers must still verify the immutable subject and trusted provenance under
+the reader policy above. Automatic PR restore is not wired. Complete SDK
+qualification and publication remain separate open gates in #482 and #477;
+this component result does not qualify a renderer or TAKX client.
 
 A newly created GHCR package can be private even when its source repository is
 public. Anonymous readback deliberately fails until its package visibility is
@@ -114,7 +129,7 @@ Build failures retain only complete command logs with observed exit status and
 matching size/hash records. The failure-only sanitizer redacts each entire
 stream before upload; it omits interrupted, oversized, unrecorded or
 unsanitizable captures. These diagnostics never count as native qualification
-and contain no recorded command argument vectors. The first hosted attempt
+and contain no recorded command argument vectors. An earlier hosted attempt
 failed before producing a candidate; its private inner log was not retained,
 so its precise container failure remains unknown.
 

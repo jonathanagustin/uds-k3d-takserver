@@ -13,6 +13,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+
+import yaml
 from unittest.mock import patch
 
 from tests import test_install_artifact_inputs as artifact_fixtures
@@ -101,6 +103,55 @@ class CollectorTests(unittest.TestCase):
         self.assertNotEqual(result['source']['checkout_commit'], self.env['GITHUB_SHA'])
         self.assertIn('INSTALL_RECEIPT_METADATA=true', Path(self.env['GITHUB_ENV']).read_text())
         self.assertIn('ready=true', Path(self.env['GITHUB_OUTPUT']).read_text())
+
+    def test_changed_source_fails_before_execution_and_expensive_resolution(self):
+        collector.capture(self.root, self.env, self.directory)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Fixture', '-c',
+                        'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-qm', 'changed'],
+                       check=True, capture_output=True, timeout=5)
+        with patch.object(collector, 'execution') as execution, \
+                patch.object(collector, 'pinned_inputs') as inputs, \
+                self.assertRaisesRegex(ValueError, 'checkout or run identity changed'):
+            collector.collect(self.root, self.env, self.directory)
+        execution.assert_not_called()
+        inputs.assert_not_called()
+        self.assertFalse(list(self.directory.glob('install-receipt-*.json')))
+
+    def test_actual_acquisition_snapshot_precedes_execution_and_never_is_receipt(self):
+        fixture = self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        pending = {**self.env, 'INSTALL_OUTCOME': '', 'SANITIZE_OK': 'false'}
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16,
+                                                           'v0.41.0', fixture.expected_app]):
+            value = collector.prospective(self.root, pending, self.directory)
+        self.assertEqual(value['inputs']['image_digests'], fixture.expected_images)
+        self.assertEqual(value['inputs']['package_archive_sha256'], collector.checkpoint.sha(b'package bytes'))
+        self.assertEqual(value['checkout'], collector.snapshot(self.root, pending)['checkout'])
+        self.assertEqual(value, json.loads((self.directory / 'install-prospective.json').read_text()))
+        self.assertNotIn('execution', value)
+        self.assertNotIn('reuse_authorized', value)
+        self.assertFalse(list(self.directory.glob('install-receipt-*.json')))
+        self.assertFalse(Path(self.env['GITHUB_OUTPUT']).exists())
+        with self.assertRaises(ValueError):
+            collector.collect(self.root, pending, self.directory)
+
+    def test_prospective_requires_current_acquisition_not_stale_checkpoint_marker(self):
+        self.inputs()
+        collector.capture(self.root, self.env, self.directory)
+        with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']):
+            collector.pinned(self.root, self.env, self.directory)
+        for change in ('marker', 'package'):
+            with self.subTest(change=change):
+                env = dict(self.env)
+                if change == 'marker':
+                    env['INSTALL_RECEIPT_CHECKPOINT_VALIDATED'] = 'false'
+                else:
+                    (self.root / 'zarf-package-takserver-amd64-dev.tar.zst').write_bytes(b'changed')
+                with patch.object(collector, 'command', side_effect=['amd64-' + 'c' * 16, 'v0.41.0']), self.assertRaises(ValueError):
+                    collector.prospective(self.root, env, self.directory)
+                self.assertFalse((self.directory / 'install-prospective.json').exists())
 
     def test_airgap_requires_correct_execution_and_restore_success(self):
         env = {**self.env, 'AIRGAP_TEST': 'true', 'INSTALL_OUTCOME': 'skipped',
@@ -258,6 +309,35 @@ class CollectorTests(unittest.TestCase):
             collector.command(self.root, [sys.executable, '-c', 'import time; time.sleep(60)'],
                               dict(os.environ), seconds=0.1)
         self.assertLess(time.monotonic() - started, 5)
+
+    def test_observer_steps_are_nonfatal_and_their_unit_coverage_is_unconditional(self):
+        document = yaml.safe_load((ROOT / '.github/workflows/test.yaml').read_text())
+        steps = document['jobs']['validate-install']['steps']
+        names = {'Capture install receipt source', 'Capture pinned install inputs',
+                 'Collect optional install receipt'}
+        observed = {step['name'] for step in steps if step.get('name') in names}
+        self.assertEqual(observed, names)
+        for step in steps:
+            if step.get('name') in names:
+                self.assertTrue(step['continue-on-error'])
+                self.assertLessEqual(step['timeout-minutes'], 3)
+                self.assertIn('timeout --kill-after=2s', step['run'])
+        unit = yaml.safe_load((ROOT / '.github/workflows/unit-tests.yaml').read_text())
+        for trigger in unit.get('on', unit.get(True)).values():
+            if isinstance(trigger, dict):
+                self.assertNotIn('paths', trigger)
+                self.assertNotIn('paths-ignore', trigger)
+        producer = []
+        for job in unit['jobs'].values():
+            for step in job.get('steps', []):
+                if step.get('name') == 'Install execution receipt producers':
+                    self.assertNotIn('if', job)
+                    self.assertNotIn('if', step)
+                    producer.append(step)
+        self.assertEqual(len(producer), 1)
+        for module in ('test_install_receipt', 'test_checkpoint_identity', 'test_install_artifact_inputs',
+                       'test_collect_install_receipt', 'test_install_reuse_shadow'):
+            self.assertIn('tests.' + module, producer[0]['run'])
 
     def test_workflow_captures_before_pin_and_only_uploads_authenticated_success(self):
         source = (ROOT / '.github/workflows/test.yaml').read_text()

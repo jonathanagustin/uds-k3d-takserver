@@ -9,6 +9,7 @@ import stat
 import re
 import os
 import selectors
+import signal
 import time
 from pathlib import Path, PurePosixPath
 import subprocess
@@ -20,7 +21,7 @@ LIMIT = 1024 * 1024
 
 def run_bounded(command, limit=8 * LIMIT, timeout=45):
     """Bound captured stdout and wall time; never emit raw tool diagnostics."""
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as process:
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True) as process:
         try:
             deadline = time.monotonic() + timeout
             output = bytearray()
@@ -44,7 +45,7 @@ def run_bounded(command, limit=8 * LIMIT, timeout=45):
             return bytes(output)
         finally:
             if process.poll() is None:
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
 
 

@@ -15,6 +15,30 @@ HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE))
 spec=importlib.util.spec_from_file_location('kernel_native_profile',HERE/'build.py');B=importlib.util.module_from_spec(spec);spec.loader.exec_module(B)
 class Guards(unittest.TestCase):
+    def test_fresh_cesium_checks_acquisition_sources_and_selected_providers(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);out=root/'out';out.mkdir();acquired=root/'acquisition';acquired.mkdir()
+            source=acquired/'source/tiny';source.mkdir(parents=True);(source/'header').write_text('pinned')
+            providers={'selected':'provider'}
+            receipt={'sources':{'tiny':{'files':B.p.inventory(source)}},'providers':providers}
+            (acquired/'acquired.json').write_text(json.dumps(receipt));sha=B.p.digest(acquired/'acquired.json')
+            original={'lineage':None,'fresh_dependency_build':True,'sources_receipt_sha256':sha,'providers':providers,'recipe':{}}
+            complete={'lineage':None,'fresh_dependency_build':True,'fresh_cesium_build':True}
+            for name,value in [('producer.json',original),('complete.json',complete),('prepared.json',{'sources_receipt_sha256':sha})]:
+                (out/name).write_text(json.dumps(value))
+            paths={'cesium':{'root':str(out),'acquisition_root':str(acquired)},'sqlcipher':'/unused-sql','draco':'/unused-draco'}
+            mod=SimpleNamespace(a=SimpleNamespace(verify_providers=lambda *args:providers))
+            with patch.object(B.p,'module',return_value=mod),patch.object(B.p,'recipe_check'):
+                self.assertTrue(B.p.verify_cesium_ancestry(paths)['fresh_dependency_build'])
+                (source/'header').write_text('changed')
+                with self.assertRaises(ValueError):B.p.verify_cesium_ancestry(paths)
+                (source/'header').write_text('pinned')
+                bad={**paths,'cesium':{**paths['cesium'],'stopped_inventory':'/foreign'}}
+                with self.assertRaises(ValueError):B.p.verify_cesium_ancestry(bad)
+                original['providers']={};(out/'producer.json').write_text(json.dumps(original))
+                with self.assertRaises(ValueError):B.p.verify_cesium_ancestry(paths)
+
     def test_exact_source_version_counts_patches_and_history(self):
         lock=B.p.load(HERE/'inputs.lock.json');B.validate_lock(lock)
         self.assertEqual(lock['source_counts'],{'core':483,'jni':159,'cesium':173});self.assertEqual(lock['native_file_count'],1396)

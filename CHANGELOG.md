@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.16.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.0...v0.16.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **bench:** bind absent optional ConfigMaps in startup snapshots ([4d1af8c](https://github.com/jonathanagustin/uds-takserver/commit/4d1af8cfdf0783fd714043a368e1aee794303084))
+* **bench:** classify failed startup observer commands ([94b3fe6](https://github.com/jonathanagustin/uds-takserver/commit/94b3fe6b10be45f79d0ec2e25cbbf9584f0da956))
+* **bench:** identify rejected startup collector callsites ([f3e9777](https://github.com/jonathanagustin/uds-takserver/commit/f3e9777c3d3b47e61bd65d9df0f8bf913ed993ba))
+* **bench:** identify the rejected JVM observer guard ([feb728a](https://github.com/jonathanagustin/uds-takserver/commit/feb728ac6d50b283b05887ce058ebba025b6d688))
+* **ci:** accept final shared identity application checks ([83d19ae](https://github.com/jonathanagustin/uds-takserver/commit/83d19aef3c03186714bb945a6beb03f7b58bbdca))
+* **ci:** diagnose unclean staged backup completion ([a368243](https://github.com/jonathanagustin/uds-takserver/commit/a3682430788b75011ba8b6bcc6785a1a72c21697))
+* **ci:** retain bounded identity application check failures ([743c76b](https://github.com/jonathanagustin/uds-takserver/commit/743c76b11281e71b9e17918101025be3b3cf9a0b))
+* **deps:** override minimatch to 11.0.8 ([#561](https://github.com/jonathanagustin/uds-takserver/issues/561)) ([4419dc1](https://github.com/jonathanagustin/uds-takserver/commit/4419dc1fab77d75b33b7d4731bc0a4c97860029c))
+* **takx:** collect notices from fresh Cesium producers ([c78e734](https://github.com/jonathanagustin/uds-takserver/commit/c78e73448277d731f88dceb4bfd8148f50bb05eb))
+* **takx:** consume fresh native dependency proofs ([ff09728](https://github.com/jonathanagustin/uds-takserver/commit/ff097282b5e10fa45d27050a4bf4a52e85ad282e))
+* **takx:** fetch pinned libxml2 from its raw Git endpoint ([03ece83](https://github.com/jonathanagustin/uds-takserver/commit/03ece83b26e041ff4be7c411d8e558ee417e9e13))
+* **takx:** preserve source-aware Cesium port patch lines ([446cea7](https://github.com/jonathanagustin/uds-takserver/commit/446cea7ac70933d51e49a83724ae3ae0f059a63e))
+* **takx:** verify fresh Cesium provider ancestry ([c66ccd6](https://github.com/jonathanagustin/uds-takserver/commit/c66ccd6937515acc573dcc502675d407638fb985))
+
+## [0.16.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.15.0...v0.16.0) (2026-11-13)
+
+
+### Features
+
+* **takx:** stage elevation download compatibility for 5.8 ([e69fc2c](https://github.com/jonathanagustin/uds-takserver/commit/e69fc2c8c3801104a9235459f1967fa23766d172))
+
+## [0.15.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.3...v0.15.0) (2026-11-13)
+
+
+### Features
+
+* publish reviewed UI scenes as immutable prereleases ([f3c09ad](https://github.com/jonathanagustin/uds-takserver/commit/f3c09ad192da7ffb62951ccbb98c24cbee6b20f2))
+
+
+### Bug Fixes
+
+* **bench:** retain bound JVM metrics when timing joins fail ([c47a1af](https://github.com/jonathanagustin/uds-takserver/commit/c47a1af5132ac82126383906bc8f2ad1c46f4b49))
+* bind identity renders to the deployed Zarf domain ([#525](https://github.com/jonathanagustin/uds-takserver/issues/525)) ([267c875](https://github.com/jonathanagustin/uds-takserver/commit/267c875a90aca4fc026d18491acfb250263ab6e0))
+* capture encrypted package migration failure evidence ([791ebf0](https://github.com/jonathanagustin/uds-takserver/commit/791ebf0117e758448e64c71fdb695eae8cfcd3ee))
+* **docs:** update Astro for image endpoint security advisory [GHSA-r3h5-4585-7x3w](https://github.com/advisories/GHSA-r3h5-4585-7x3w) ([#541](https://github.com/jonathanagustin/uds-takserver/issues/541)) ([a475725](https://github.com/jonathanagustin/uds-takserver/commit/a475725cadde54dcd5397a9aa943d2df43dbd5d9))
+* enable guarded Lula comment analysis ([f34f772](https://github.com/jonathanagustin/uds-takserver/commit/f34f77228dbe7d8d25be1a59af90b61927af4f30))
+* expose typed phase failures and limit staged-helper CI ([#529](https://github.com/jonathanagustin/uds-takserver/issues/529)) ([c67fc61](https://github.com/jonathanagustin/uds-takserver/commit/c67fc61200158a1c33a8b18dca0931da0d877525))
+* keep preview links on the docs home page ([#524](https://github.com/jonathanagustin/uds-takserver/issues/524)) ([7268d25](https://github.com/jonathanagustin/uds-takserver/commit/7268d2534288c968fcb59697419feb975e87dae2))
+* preserve identities and chart values during package upgrades ([a060478](https://github.com/jonathanagustin/uds-takserver/commit/a0604781dd408b50be6a8cdfcb1cf6bae0298982))
+* preserve protocol probe results across kubectl exec ([#528](https://github.com/jonathanagustin/uds-takserver/issues/528)) ([379bb8f](https://github.com/jonathanagustin/uds-takserver/commit/379bb8f701902ab34a471c660d3a3f501ced59a6))
+* retain actionable identity trial failure evidence ([#523](https://github.com/jonathanagustin/uds-takserver/issues/523)) ([6d308ca](https://github.com/jonathanagustin/uds-takserver/commit/6d308cac71f6aa84ce1d974d240792be3b686e3a))
+* retain server revisions in identity policy evidence ([#531](https://github.com/jonathanagustin/uds-takserver/issues/531)) ([b00364b](https://github.com/jonathanagustin/uds-takserver/commit/b00364bb24e8b9a50a82005aab19d4d48f277590))
+* scope retained PVC checks to their application namespace ([#527](https://github.com/jonathanagustin/uds-takserver/issues/527)) ([f3f0169](https://github.com/jonathanagustin/uds-takserver/commit/f3f0169ef78cd67b3e4249097c6158610134159d))
+* use documented Zarf variables in staged identity trials ([#521](https://github.com/jonathanagustin/uds-takserver/issues/521)) ([2e4153d](https://github.com/jonathanagustin/uds-takserver/commit/2e4153d073f096db1ba3d132854e4c38062ae9e3))
+* validate identity policy ports before disjoint filtering ([#530](https://github.com/jonathanagustin/uds-takserver/issues/530)) ([d098922](https://github.com/jonathanagustin/uds-takserver/commit/d09892280316b1c90c6f045e439b17a13aed740d))
+* validate staged workload identity migrations through Zarf ([6e6871c](https://github.com/jonathanagustin/uds-takserver/commit/6e6871c6857c0c91553fc0136f9e6c6d2ba9b485))
+
 ## [0.14.3](https://github.com/jonathanagustin/uds-takserver/compare/v0.14.2...v0.14.3) (2026-11-13)
 
 
@@ -50,7 +102,7 @@
 
 ### Bug Fixes
 
-* **deps:** update ATAK viewer node-forge to 1.4.3 ([#450](https://github.com/jonathanagustin/uds-takserver/issues/450)) ([c671ccd](https://github.com/jonathanagustin/uds-takserver/commit/c671ccdf303f3b0303cab0f4947973e94babade9))
+* **deps:** update ATAK viewer node-forge to 1.4.3 ([#450](https://github.com/jonathanagustin/uds-takserver/issues/450)) ([c671ccd](https://github.com/jonathanagustin/uds-takserver/commit/c671ccdf303f3b0303cab0f4947973e94babade9)); fixes [GHSA-j8rw-jp99-435v](https://github.com/advisories/GHSA-j8rw-jp99-435v), [GHSA-6cv4-p8m7-4r25](https://github.com/advisories/GHSA-6cv4-p8m7-4r25), [GHSA-w4xr-hqv8-ch44](https://github.com/advisories/GHSA-w4xr-hqv8-ch44), [GHSA-6889-vf6x-f3g5](https://github.com/advisories/GHSA-6889-vf6x-f3g5)
 
 ## [0.12.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.12.0...v0.12.1) (2026-11-10)
 
@@ -273,9 +325,9 @@
 * **backup:** gzip the logical database dumps ([#237](https://github.com/jonathanagustin/uds-takserver/issues/237)) ([f16d14e](https://github.com/jonathanagustin/uds-takserver/commit/f16d14e98a946faf2805abf4bb64dcb959df67b2))
 * **bench:** put each config's changes back before the next one ([#228](https://github.com/jonathanagustin/uds-takserver/issues/228)) ([ef05472](https://github.com/jonathanagustin/uds-takserver/commit/ef05472c073d00f90329869899dfcfd4d40a3bf6))
 * **ci:** give Full Core 8G of swap and stop SIGPIPE from failing its checks ([#233](https://github.com/jonathanagustin/uds-takserver/issues/233)) ([28d86e3](https://github.com/jonathanagustin/uds-takserver/commit/28d86e3a9598cafbfbb9700609869964b62550f9))
-* **deps:** update node-forge to 1.4.2 and hold minimatch 10 so the OSV check passes ([#224](https://github.com/jonathanagustin/uds-takserver/issues/224)) ([8e1ad37](https://github.com/jonathanagustin/uds-takserver/commit/8e1ad37b66f5fe67b07b58910f1f99d2a3314017))
+* **deps:** update node-forge to 1.4.2 and hold minimatch 10 so the OSV check passes ([#224](https://github.com/jonathanagustin/uds-takserver/issues/224)) ([8e1ad37](https://github.com/jonathanagustin/uds-takserver/commit/8e1ad37b66f5fe67b07b58910f1f99d2a3314017)); fixes [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), [GHSA-4487-j8r4-4g2f](https://github.com/advisories/GHSA-4487-j8r4-4g2f), [GHSA-4642-5mcj-2rqw](https://github.com/advisories/GHSA-4642-5mcj-2rqw), [GHSA-525v-9gp9-w22h](https://github.com/advisories/GHSA-525v-9gp9-w22h), [GHSA-5cwg-6vw7-rj6p](https://github.com/advisories/GHSA-5cwg-6vw7-rj6p), [GHSA-5x38-2vff-x55p](https://github.com/advisories/GHSA-5x38-2vff-x55p), [GHSA-6wvx-3r32-xmcg](https://github.com/advisories/GHSA-6wvx-3r32-xmcg), [GHSA-7wch-p9px-956x](https://github.com/advisories/GHSA-7wch-p9px-956x), [GHSA-8hrf-8g6f-7xwp](https://github.com/advisories/GHSA-8hrf-8g6f-7xwp), [GHSA-h6cr-wjv9-3cpp](https://github.com/advisories/GHSA-h6cr-wjv9-3cpp), [GHSA-hqq3-7jhf-c5jx](https://github.com/advisories/GHSA-hqq3-7jhf-c5jx), [GHSA-jc66-7q78-782g](https://github.com/advisories/GHSA-jc66-7q78-782g)
 * **deps:** update tak server support dependencies ([#218](https://github.com/jonathanagustin/uds-takserver/issues/218)) ([2f70651](https://github.com/jonathanagustin/uds-takserver/commit/2f70651f598ed4b4c78b2ac77763d17c879e3235))
-* **deps:** update undici to 8.12.3 and body-parser to 2.4.0 in the Pepr module ([#152](https://github.com/jonathanagustin/uds-takserver/issues/152)) ([ed67a99](https://github.com/jonathanagustin/uds-takserver/commit/ed67a99028ba5bbbfa4a09a42ecb51f04b99beb9))
+* **deps:** update undici to 8.12.3 and body-parser to 2.4.0 in the Pepr module ([#152](https://github.com/jonathanagustin/uds-takserver/issues/152)) ([ed67a99](https://github.com/jonathanagustin/uds-takserver/commit/ed67a99028ba5bbbfa4a09a42ecb51f04b99beb9)); fixes undici [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472), [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c) and body-parser [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828)
 * give the takserver-oidc watcher 512Mi so it is not OOM-killed ([#234](https://github.com/jonathanagustin/uds-takserver/issues/234)) ([ae5dc46](https://github.com/jonathanagustin/uds-takserver/commit/ae5dc4660f39459dd23affc023a2d6113a6b0536))
 * keep keystore passwords in a Secret ([#168](https://github.com/jonathanagustin/uds-takserver/issues/168)) ([3e777d1](https://github.com/jonathanagustin/uds-takserver/commit/3e777d1533023cf1d9e8dabd5b50c0608e9f7661)), closes [#67](https://github.com/jonathanagustin/uds-takserver/issues/67)
 * keep TAK private keys out of ConfigMaps ([#205](https://github.com/jonathanagustin/uds-takserver/issues/205)) ([e06628a](https://github.com/jonathanagustin/uds-takserver/commit/e06628a210b3e358341e7c5f01115e3b409b8581)), closes [#67](https://github.com/jonathanagustin/uds-takserver/issues/67)

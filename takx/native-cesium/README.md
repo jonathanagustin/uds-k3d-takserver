@@ -37,6 +37,16 @@ patched upstream source; upstream does not provide an installed Cesium EXPORT.
 Static transitive dependencies follow the genuine target graph rather than a
 handwritten archive order.
 
+Port patches retain their pinned vendor bytes. Before binary-mode application,
+the builder stages an LF copy of a uniformly CRLF patch only when its existing
+target files use LF. It records patch hashes and exact target preimages.
+CRLF-target and mixed patches are preserved byte-for-byte: they can encode LF
+headers and literal CRLF target-file content. The source files and patch
+additions/deletions are unchanged; application still
+requires zero fuzz. A fresh build exposed this transport mismatch at both JPEG
+CMake files, after seventeen dependency stages. That failed output stays
+separate; both exact JPEG patches pass the corrected source replay.
+
 Archive links are refused except explicitly attested KTX license and zstd
 CLI test fixtures, which are materialized to exact same-root regular target
 bytes and recorded with logical source-link metadata and postimage hashes.

@@ -1,0 +1,55 @@
+# Copyright 2026 uds-takserver authors
+# SPDX-License-Identifier: GPL-3.0-only
+
+# AddressSanitizer and UndefinedBehaviorSanitizer for first-party C that already
+# has an offline test. This job builds and runs takx/compat system-clock.c plus
+# clock-reference.c and clock-routing-fixture.c. Other takx C/C++ probes link
+# fetched third-party trees. native-las already instruments its consumer inside
+# that opt-in proof, and those builds stay off this workflow.
+#
+# A push to main runs only when one of the paths below changes. Wednesday 04:30
+# UTC is the weekly backstop. Pull requests do not start this job.
+
+name: Native sanitizers
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "takx/compat/build-system-clock.py"
+      - "takx/compat/test-system-clock.py"
+      - "takx/compat/src/main/native/**"
+      - "takx/compat/src/test/native/**"
+      - "takx/compat/src/main/java/android/os/SystemClock.java"
+      - "takx/compat/src/test/java/clock/**"
+      - ".github/workflows/native-sanitizers.yaml"
+      - "tests/test_native_sanitizers.py"
+  schedule:
+    - cron: "30 4 * * 3"
+
+permissions:
+  contents: read
+
+# A main push cancels only an older push of this workflow. The Wednesday run
+# uses a different event name, so it stays in its own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  system-clock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: SystemClock under AddressSanitizer and UBSan
+        env:
+          CC: gcc
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcc --version
+          python3 takx/compat/test-system-clock.py

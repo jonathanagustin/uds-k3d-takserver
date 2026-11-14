@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "profile": "public-vehicle-metadata-v1",
+  "scope": "real CoT vehicle metadata import/export through caller-owned state; no mesh/contour or full client acceptance",
+  "actual_kernel": "8.30.5 + explicit project API",
+  "caller_revision": "af54a3e1fe8796b6e109e2e5925dbef524ea7e31",
+  "wire_source_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "wire_source_path": "atak/ATAK/app/src/main/java/com/atakmap/android/vehicle/model/cot/VehicleModelDetailHandler.java",
+  "wire_source_sha256": "296e201abe231da528810421a149c573d9f00a842e0c0649d83193e4dcc74aea",
+  "caller_source_sha256": "7a70f3275f464a9afa208fe4ed59a03ddaa3c55910f5c9d83d188fc8c39bd6c2",
+  "owned": {
+    "java/gov/tak/api/cot/detail/VehicleModelDetailHandler.java": "21117bbaf6fe3a30c46a0e1ce6539ccb468acb400a25efdff44fcf035002119b",
+    "tests/VehicleModelControls.java": "db9f15e922dd1d8648141687bddc83db94a4d43cd62065d374c024da3e46cc63"
+  },
+  "private_sdk_equivalence": false,
+  "vehicle_mesh_runtime_accepted": false,
+  "contours_implemented": false,
+  "full_client_accepted": false
+}

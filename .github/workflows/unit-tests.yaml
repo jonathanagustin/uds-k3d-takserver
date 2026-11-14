@@ -173,6 +173,7 @@ jobs:
           python3 -B -m unittest discover -s takx/kernel-native -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/kernel-native -p 'test_gdal_history.py' -v
           python3 -B -m unittest discover -s takx/kernel-client-interop -p 'test_build.py' -v
+          python3 -B -m unittest discover -s takx/client58-public-api -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/client-compiler -p 'test_build.py' -v
           python3 -B -m unittest discover -s takx/client-compiler -p 'test_platform_producer.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_build.py' -v

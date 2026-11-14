@@ -110,6 +110,11 @@ jobs:
       - name: CI concurrency groups
         run: bash tests/test_ci_concurrency.sh
 
+      - name: CodeQL language scope
+        env:
+          PYYAML_VERSION: 6.0.3
+        run: uv run --no-project --with "pyyaml==${PYYAML_VERSION}" python -B -m unittest tests.test_codeql_languages -v
+
       - name: Dump Secret restore helper
         run: bash tests/test_db_dump_secret.sh
 

@@ -503,5 +503,22 @@ The separate `font-jni-control` profile makes these three source changes
 reviewable, with four offline guards and a successful exact preparation receipt
 `8f2277ae8d14287971821408b6ec0e86a742bfdd5ab842cd7efaeebdc0e87581`.
 It does not build, install or accept a runtime. CPU ownership/cache bounds,
-portable typed variant/runtime producers, both Client recompiles against the
-actual component profile, and full renderer/SDK/client acceptance remain open.
+portable native variant/runtime producers, the complete 5.8 Client recompile,
+and full renderer/SDK/client acceptance remain open.
+
+
+The portable complete Java producer compiled 1,239 sources into 2,702 classes
+and 119 JNI headers, with both native header consumers passing syntax checks.
+Every class and header matches the independently tested whole Java composition.
+Receipt: `5d00f4bfb02bf3683e460b1770fd20146cf2ea63c051d17c1274677a30f99b05`.
+The complete 5.7 Platform (1,815 sources) and Client (1,678 sources) compile against
+the actual public component composition; Client output is 2,815 classes. Receipt:
+`077763c6869244cb7586fd9aad759a1f723bd13f7de51544facb300b7c0a4752`.
+This is compile evidence, with no client runtime or private SDK equivalence claim.
+
+Actual Scene JNI query/visibility/removal controls pass with zero strict JNI
+diagnostics: `63da8c1f115bfdc32aae612aa9c526f3862a78c2d89fa93596da3255e41f7cc3`.
+The public 5.8 vehicle metadata profile resolves the observed vehicle API
+references. A complete 5.8 Platform compile still reports 15 initial contour API
+errors; failed Platform outputs are not adopted for a Client compile. This is
+not yet a complete inventory of the remaining 5.8 gaps.

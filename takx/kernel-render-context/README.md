@@ -23,7 +23,7 @@ reads exact blobs from an already cached official Git repository, creates a fres
    `jscenelayer.cpp`) plus their paired `FeatureLayer3.Options` Java source.
    The options field and native access must land together.
 
-Every stage checks all 60 selected paths, including required absence of new files.
+Every stage checks all 61 selected paths, including required absence of new files.
 `inputs.lock.json` binds original and intermediate/final Secure Hash Algorithm
 (SHA-256) images. Baseline
 and Texture contracts must match the selected locks. The client profile's full
@@ -77,7 +77,7 @@ Default continuous integration (CI) runs only these small offline guards; it doe
 sources, acquire dependencies, start Java or open a display:
 
 ```sh
-python3 -B -m unittest discover -s takx/kernel-render-context -p test_prepare.py -v
+python3 -B -m unittest discover -s takx/kernel-render-context -p 'test_*.py' -v
 ```
 
 The separate opt-in CPU worker regression control requires cached official source
@@ -96,3 +96,21 @@ their verified local header closure. It uses genuine Kernel Work and control
 queues; an explicit error delegate checks that real errors are still propagated.
 No engine library, JNI, renderer or OpenGL context is built or exercised. The
 control runs no source acquisition and cannot qualify the headed lifecycle.
+
+## Complete Java composition
+
+`client_java.py` provides a separate opt-in `--phase java` producer. Default
+verification starts no compiler. The producer requires reviewed SHA-256 values
+for the complete 815-unit native receipt and compilation database, the bound
+baseline Java input manifest, explicit cached JAR roots and the pinned JDK. It
+recompiles all 1,239 sources, including the remaining canonical client Java
+changes, and checks both paired native header consumers without writing native
+objects. It verifies input hashes before and after execution and preserves failed
+output separately. Run `python3 -B takx/kernel-render-context/client_java.py --help`
+for the explicit paths. No dependency acquisition or application launch occurs.
+
+The resulting `public-context-client-java` receipt records the complete classes,
+JNI headers and ordered classpath. It is a Java composition proof; full SDK and
+client acceptance remain false. `tests/SceneJNIControls.java` is a separate actual
+Scene JNI fixture with an owned georeferenced triangle, query/ID/URI visibility,
+removal and cursor closure checks; it does not qualify mesh rendering.

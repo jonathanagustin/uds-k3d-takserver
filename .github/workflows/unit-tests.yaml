@@ -179,7 +179,7 @@ jobs:
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_resource_inputs.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_source_families.py' -v
           python3 -B -m unittest discover -s takx/kernel-regressions -p 'test_build.py' -v
-          python3 -B -m unittest discover -s takx/kernel-render-context -p 'test_prepare.py' -v
+          python3 -B -m unittest discover -s takx/kernel-render-context -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/kernel-render-context/font-jni-control -p 'test_*.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_composition.py' -v
           python3 -B -m unittest discover -s takx/sdk-package -p 'test_native_source_*.py' -v

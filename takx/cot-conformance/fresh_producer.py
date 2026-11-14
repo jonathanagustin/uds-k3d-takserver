@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import platform
 import re
 import subprocess
 import tempfile
@@ -143,6 +144,7 @@ def verify(config, prefix, receipt, jdk, expected_sha, workspace):
     receipt, prefix, jdk = canonical(receipt), canonical(prefix, True), canonical(jdk, True)
     raw_receipt = read(receipt)
     require(hashlib.sha256(raw_receipt).hexdigest() == expected_sha, 'reviewed receipt differs')
+    require((platform.system(), platform.machine()) == ('Linux', 'x86_64'), 'supported Linux amd64 producer required')
     root = receipt.parent
     require(receipt.name == 'complete.json' and prefix == root/'install' and not (root/'failed.json').exists(),
             'complete original producer root required')

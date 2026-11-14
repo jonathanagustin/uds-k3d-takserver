@@ -68,6 +68,9 @@ class FreshProducerGuards(unittest.TestCase):
             with patch.object(F, 'builder', side_effect=AssertionError('must not load')):
                 with self.assertRaisesRegex(ValueError, 'reviewed receipt differs'):
                     F.verify(root/'missing-inputs.json', prefix, receipt, jdk, '0'*64, root/'output')
+                with patch.object(F.platform, 'machine', return_value='aarch64'):
+                    with self.assertRaisesRegex(ValueError, 'supported Linux amd64'):
+                        F.verify(root/'missing-inputs.json', prefix, receipt, jdk, F.digest(receipt), root/'output')
 
     def test_output_inside_input_is_rejected_before_creation(self):
         with tempfile.TemporaryDirectory() as temporary:

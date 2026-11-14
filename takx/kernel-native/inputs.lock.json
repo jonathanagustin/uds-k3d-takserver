@@ -48,6 +48,6 @@
     "jni_seconds": 1200,
     "output_bytes": 3221225472
   },
-  "historical_producer_sources_sha256": "8799e1a08be45c8754b11316c66c68beb0f7f52092286785a7edb25bc6c29292",
+  "historical_producer_sources_sha256": "ec140b54830e9696d3b9f968f2b1ce9419605f40a2ab487a7781eacc131faa14",
   "source_patch_acceptance_scope": "Approved classloader+ManagedLogger changes; independent strict basic, Database2/GDAL, real throwing-listener controls passed; no full SDK/client acceptance"
 }

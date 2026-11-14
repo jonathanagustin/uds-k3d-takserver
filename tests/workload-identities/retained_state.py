@@ -372,7 +372,10 @@ def cleanup_snapshot(driver,proof):
             if rec['name']=='takserver-startup':startup_map(current)
             if rec['name'] in ('cloudtak-tak-admin','takclient-enrollment'):generated_secret(driver,current,cleanup=True)
             item=resource_record(current);item['origin']=proof['source']
-            if rec['kind']=='PersistentVolumeClaim':item['parent']=claim_parent(driver,current)
+            if rec['kind']=='PersistentVolumeClaim':
+                item['parent']=claim_parent(driver,current)
+                try:item['pvcState']=pvc_state(current)
+                except Exception:pass  # Optional evidence cannot change cleanup authorization.
             result.append(item)
     return result
 
@@ -425,8 +428,26 @@ def consumers_gone(driver):
 
 CLEANUP_IDENTITY_FIELDS=('kind','name','namespace','uid','resourceVersion','metadataSHA256')
 
+def validate_pvc_state(value):
+    require(isinstance(value,dict) and set(value)=={'specSHA256','statusSHA256','finalizersSHA256','pvcProtection','otherFinalizerCount'},'PVC state schema differs')
+    for key in ('specSHA256','statusSHA256','finalizersSHA256'):
+        require(isinstance(value[key],str) and re.fullmatch('[0-9a-f]{64}',value[key]),'PVC state digest differs')
+    require(type(value['pvcProtection']) is bool and type(value['otherFinalizerCount']) is int and
+            0<=value['otherFinalizerCount']<=32,'PVC finalizer facts differ')
+    return value
+
+def pvc_state(obj):
+    require(obj.get('kind')=='PersistentVolumeClaim' and obj['metadata'].get('namespace') in APP_RELEASES,'PVC diagnostic scope differs')
+    finalizers=obj['metadata'].get('finalizers',[])
+    require(isinstance(finalizers,list) and len(finalizers)<=32 and all(isinstance(value,str) and
+            re.fullmatch('[A-Za-z0-9./_-]{1,253}',value) for value in finalizers),'PVC finalizer input differs')
+    require(len(json.dumps({'spec':obj.get('spec',{}),'status':obj.get('status',{})}).encode())<=64*1024,'PVC diagnostic input bound')
+    return validate_pvc_state({'specSHA256':sha(obj.get('spec',{})),'statusSHA256':sha(obj.get('status',{})),
+        'finalizersSHA256':sha(sorted(finalizers)),'pvcProtection':'kubernetes.io/pvc-protection' in finalizers,
+        'otherFinalizerCount':sum(value!='kubernetes.io/pvc-protection' for value in finalizers)})
+
 def validate_cleanup_drift(snapshot):
-    require(isinstance(snapshot,dict) and set(snapshot)=={'schema','expected','observed','changedFields'} and
+    require(isinstance(snapshot,dict) and set(snapshot) in ({'schema','expected','observed','changedFields'}, {'schema','expected','observed','changedFields','pvcState'}) and
             type(snapshot['schema']) is int and snapshot['schema']==1,'cleanup drift schema differs')
     for key in ('expected','observed'):
         rec=snapshot[key]
@@ -438,6 +459,10 @@ def validate_cleanup_drift(snapshot):
         require(isinstance(rec['metadataSHA256'],str) and re.fullmatch('[0-9a-f]{64}',rec['metadataSHA256']),'cleanup drift digest differs')
     changed=[key for key in CLEANUP_IDENTITY_FIELDS if snapshot['expected'][key]!=snapshot['observed'][key]]
     require(changed and snapshot['changedFields']==changed,'cleanup drift fields differ')
+    if 'pvcState' in snapshot:
+        require(snapshot['expected']['kind']==snapshot['observed']['kind']=='PersistentVolumeClaim' and
+                isinstance(snapshot['pvcState'],dict) and set(snapshot['pvcState'])=={'expected','observed'},'PVC state envelope differs')
+        for value in snapshot['pvcState'].values():validate_pvc_state(value)
     require(len(json.dumps(snapshot).encode())<=4096,'cleanup drift byte bound')
     return snapshot
 
@@ -455,8 +480,14 @@ def conditional_delete(driver,rec):
         # Record only identities and a metadata digest, never object bodies or values.
         # Capture failure must not mask the deletion refusal or authorize a retry.
         try:
-            driver._retained_cleanup_drift=validate_cleanup_drift({'schema':1,'expected':expected,'observed':observed,
-                'changedFields':[key for key in CLEANUP_IDENTITY_FIELDS if expected[key]!=observed[key]]})
+            snapshot={'schema':1,'expected':expected,'observed':observed,
+                'changedFields':[key for key in CLEANUP_IDENTITY_FIELDS if expected[key]!=observed[key]]}
+            if rec['kind']=='PersistentVolumeClaim' and 'pvcState' in rec:
+                try:
+                    baseline=validate_pvc_state(rec['pvcState']);current_state=pvc_state(current)
+                    snapshot['pvcState']={'expected':baseline,'observed':current_state}
+                except Exception:pass  # Keep the basic identity diagnostic if extra capture fails.
+            driver._retained_cleanup_drift=validate_cleanup_drift(snapshot)
         except Exception:driver._retained_cleanup_drift=None
         raise ValueError('retained resource identity/metadata changed')
     if rec['kind']=='PersistentVolumeClaim':

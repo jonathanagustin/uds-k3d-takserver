@@ -145,6 +145,22 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
             self.assertIsInstance(capsule,int)
             os.close(capsule)
 
+    def test_pvc_state_extension_passes_exact_source_encrypted_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder,output,env,payload,journal,owner=validation_fixture(Path(directory))
+            expected={'kind':'PersistentVolumeClaim','namespace':'takserver','name':'retained-data',
+                      'uid':'bound-uid','resourceVersion':'1','metadataSHA256':'a'*64}
+            state={'specSHA256':'b'*64,'statusSHA256':'c'*64,'finalizersSHA256':'d'*64,
+                   'pvcProtection':True,'otherFinalizerCount':0}
+            payload.update(kind='cleanup-resource-drift',snapshot={'schema':1,'expected':expected,
+                'observed':{**expected,'resourceVersion':'2'},'changedFields':['resourceVersion'],
+                'pvcState':{'expected':state,'observed':{**state,'finalizersSHA256':'e'*64,'pvcProtection':False}}})
+            save_validation(folder,payload,journal)
+            def source(name):return AGE.digest((AGE.ROOT/name).read_bytes())
+            with patch.dict(os.environ,env,clear=True),patch.object(AGE,'reviewed_source_hash',side_effect=source):
+                descriptor=AGE.package_input(Path(directory))
+            self.assertIsInstance(descriptor,int);os.close(descriptor)
+
     def test_input_rejection_reports_only_fixed_reason_without_encrypting(self):
         cases = {'journal': 'package-journal', 'progress': 'package-progress',
                  'progress-binding': 'package-binding', 'missing-reference': 'missing-private-reference',

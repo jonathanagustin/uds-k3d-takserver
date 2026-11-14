@@ -308,3 +308,23 @@ listener and child cleanup. It still returns the exact primary callback throwabl
 and completes all 22 controls with zero JNI diagnostics. This remains an isolated
 candidate result, receipt SHA-256
 `947150f3442459362acca39652cd281901a624a2501499f1ba659b53c87cba35`.
+
+
+The complete variant now rebuilt all 815 native translation units and both shared
+libraries from fresh objects; all three CPU JNI controls passed. Native producer
+SHA-256: `1b91d535d2b21b1a238c2881ea3a68396fd5ad32b733446fb9f28593eedee874`.
+An independent audit verified all 1,399 native files, 1,238 Java sources, 2,701
+classes, 119 headers and retention of all 1,326 baseline JNI exports (1,337 total).
+Independent review SHA-256:
+`aad9ff17d9e057d3667de999e24647e256409d07b12541b63da3b8ae36063866`.
+
+The owned bridge fixture linked to this actual complete JNI library, without
+production translation-unit overrides or `-Bsymbolic`, passes the 22 throwing
+controls, positive value/native-runnable round trips, four listener removals and
+two child cleanup calls with zero JNI diagnostics. It also preserves the primary
+throwable when cleanup raises a distinct secondary exception. Scoped CPU bridge
+receipt SHA-256:
+`b42fbd8fb6cb15072078b2378f78eac9243812c2dd729b3c97f86d1105756305`.
+A fresh headed replay is running against these exact libraries. This CPU bridge
+result does not qualify fonts, other native bridges, the full lifecycle, a
+renderer, SDK or client.

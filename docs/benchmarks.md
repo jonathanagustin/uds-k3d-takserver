@@ -161,6 +161,14 @@ not published. The original request, stream, process-group and total deadline
 bounds remain enforced. Pattern categories are observations, not causal proof or
 accepted startup timing.
 
+When the startup pilot rejects an unavailable JVM observation or phase join,
+its failure diagnostic retains the fixed application, observation stage and
+allowlisted observer reason. For example, `marker_after_ready` remains a timing
+rejection; the collector does not round Ready timestamps or accept a pair from
+that failure. Unknown reasons become `unsupported_schema`, and raw observer
+payloads, log lines and exception values are not published. These diagnostics
+identify the rejected check, not the cause of a historical pilot failure.
+
 The startup configuration snapshot honors an explicitly boolean `optional: true`
 on ConfigMap references, including the admission module's optional
 `uds-trust-bundle`. A successful named lookup with `--ignore-not-found` may bind

@@ -76,6 +76,47 @@ def pair(commands=Commands):
 
 
 class StartupTrials(unittest.TestCase):
+    def test_finish_retains_actual_join_rejection_without_accepting_timing(self):
+        cold, warm = pair()
+        class LateMarker(Commands):
+            def run(self, args, limit):
+                if args[0] == 'logs':
+                    second = '26' if self.state == 'warm' else '06'
+                    return f'2024-01-01T00:00:{second}.001Z Started TAK Server\nPRIVATE_LOG\n'.encode()
+                return super().run(args, limit)
+        for mode, record in (('cold', cold), ('warm', warm)):
+            with self.subTest(mode=mode):
+                with self.assertRaises(trial.PhaseUnavailable) as caught:
+                    trial.finish(record['begin'], mode, LateMarker(mode),
+                                 lambda app, context: observation(app, context, mode == 'warm'))
+                self.assertEqual(str(caught.exception), 'phase_unavailable')
+                result = trial.failure_diagnostic(caught.exception)
+                self.assertEqual(result['phase'], {'app': jvm.APPS[0], 'stage': 'finish-join',
+                                                   'reason': 'marker_after_ready'})
+                self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_begin_and_finish_observer_failures_keep_only_fixed_phase_facts(self):
+        cold, _ = pair()
+        for reason in ('metrics_missing', 'command_failed', 'pod_incarnation_changed',
+                       'PRIVATE_REASON', None, {'PRIVATE': 'PAYLOAD'}):
+            for stage in ('begin-observer', 'finish-join'):
+                with self.subTest(reason=reason, stage=stage):
+                    def unavailable(app, context):
+                        return {'available': False, 'reason': reason, 'raw': 'PRIVATE_PAYLOAD'}
+                    with self.assertRaises(trial.PhaseUnavailable) as caught:
+                        if stage == 'begin-observer':
+                            trial.begin('owned', 'cohort-a', {'source': 'b'*64}, Commands('cold'), unavailable)
+                        else:
+                            trial.finish(cold['begin'], 'cold', Commands('cold'), unavailable)
+                    result = trial.failure_diagnostic(caught.exception)
+                    expected = reason if isinstance(reason, str) and reason in trial.PHASE_REASONS else 'unsupported_schema'
+                    self.assertEqual(result['phase'], {'app': jvm.APPS[0], 'stage': stage, 'reason': expected})
+                    self.assertNotIn('PRIVATE', json.dumps(result))
+        error = trial.PhaseUnavailable('PRIVATE_APP', 'PRIVATE_STAGE', 'PRIVATE_REASON')
+        error.app = ['PRIVATE']; error.stage = {'PRIVATE': True}; error.reason = 'PRIVATE_REASON'
+        self.assertEqual(trial.failure_diagnostic(error)['phase'],
+                         {'app': None, 'stage': 'unknown', 'reason': 'unsupported_schema'})
+
     def test_failure_location_never_exports_exception_values_or_foreign_paths(self):
         try:
             trial.token('PRIVATE_TOKEN_SENTINEL /PRIVATE_PATH_SENTINEL')

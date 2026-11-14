@@ -282,3 +282,23 @@ java -Xcheck:jni -Djava.awt.headless=true -cp "$FONT_PROBE_OUT" FontJniProbe
 
 `FONT_PROBE_COMPLETED` establishes that this font workload returned normally;
 it does not override diagnostics or establish renderer acceptance.
+
+
+The owned managed-context/surface CPU fixture now isolates project callbacks from
+font and GL dependencies. The unchanged bridge completed its original 15 throwing
+controls with 31 JNI diagnostics. A candidate with explicit upcall exception checks
+passes 22 throwing controls and positive value/runnable/listener round trips with
+zero JNI diagnostics, four listener removals and two child cleanup calls. It
+preserves the exact original throwable, including across cleanup, and refuses
+further upcalls with an exception pending. Cleanup retains the primary failure
+while attempting all owned listener removals.
+
+This candidate experiment compiled the two bridge translation units into a test
+DSO using `-Bsymbolic` against the qualified Native02 dependencies; it is not a
+fresh complete JNI library or renderer qualification. Its receipt SHA-256 is
+`62c05dc295594eb2a5848d0d6a0d317256e5a11bd216a81c43037c48c6589f37`.
+The production profile now locks these two additional files (59 stage paths);
+all five stages reconstruct exactly. A new full graph build and the owned fixture
+linked to its actual JNI library are required before attributing that result to
+the complete variant. The failed missing-classpath, missing-generated-header and
+invalid null-runnable-payload attempts remain retained separately.

@@ -22,7 +22,7 @@ reads exact blobs from an already cached official Git repository, creates a fres
 5. Only the two selected client JNI sections (`interop/feature/Interop.cpp` and
    `jscenelayer.cpp`), not unrelated client Java policies.
 
-Every stage checks all 57 selected paths, including required absence of new files.
+Every stage checks all 59 selected paths, including required absence of new files.
 `inputs.lock.json` binds original and intermediate/final Secure Hash Algorithm
 (SHA-256) images. Baseline
 and Texture contracts must match the selected locks. The client profile's full

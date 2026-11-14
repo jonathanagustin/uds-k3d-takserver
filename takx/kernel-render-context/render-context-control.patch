@@ -3749,3 +3749,309 @@ diff --git a/takkernel/engine/src/main/jni/interop/renderer/core/ManagedGLMapRen
  
          return true;
      }
+diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp b/takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp
+--- a/takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp
++++ b/takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp
+@@ -35,6 +35,12 @@
+         jmethodID getRenderSurface;
+     } RenderContext_class;
+ 
++    jobject checkedGlobalRef(JNIEnv &env, jobject value) NOTHROWS
++    {
++        if(env.ExceptionCheck() || !value) return nullptr;
++        jobject result = env.NewGlobalRef(value);
++        return env.ExceptionCheck() ? nullptr : result;
++    }
+     bool RenderContext_class_init(JNIEnv &env) NOTHROWS;
+     jobject RenderContext_getRenderSurface(JNIEnv &env, jobject mcontext) NOTHROWS;
+ }
+@@ -43,10 +49,11 @@
+     ManagedRenderContext(env_, impl_, NULL)
+ {}
+ ManagedRenderContext::ManagedRenderContext(JNIEnv &env_, jobject impl_, jobject parent_) NOTHROWS :
+-    impl(env_.NewGlobalRef(impl_)),
+-    parent(parent_ ? env_.NewGlobalRef(parent_) : NULL),
++    impl(checkedGlobalRef(env_, impl_)),
++    parent(checkedGlobalRef(env_, parent_)),
+     surface(env_, RenderContext_getRenderSurface(env_, impl_))
+ {
++    if(env_.ExceptionCheck()) return;
+     static bool clinit = RenderContext_class_init(env_);
+ }
+ ManagedRenderContext::~ManagedRenderContext() NOTHROWS
+@@ -55,7 +62,17 @@
+         LocalJNIEnv env;
+         // if a child context, need to have parent invoke destroy
+         if(parent) {
++            // Cleanup may invoke Java even while unwinding a callback failure.
++            // Retain the original throwable and restore it after child cleanup.
++            jthrowable failure = env->ExceptionOccurred();
++            if(failure) env->ExceptionClear();
+             env->CallVoidMethod(parent, RenderContext_class.destroyChildContext, impl);
++            env->ExceptionCheck();
++            if(failure) {
++                if(env->ExceptionCheck()) env->ExceptionClear();
++                env->Throw(failure);
++                env->DeleteLocalRef(failure);
++            }
+ 
+             env->DeleteGlobalRef(parent);
+             parent = NULL;
+@@ -67,80 +84,107 @@
+ bool ManagedRenderContext::isRenderThread() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.isRenderThread);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.isRenderThread);
++    return env->ExceptionCheck() ? false : value;
+ }
+ TAKErr ManagedRenderContext::queueEvent(void(*runnable)(void *) NOTHROWS, std::unique_ptr<void, void(*)(const void *)> &&opaque) NOTHROWS
+ {
+     TAKErr code(TE_Ok);
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     Java::JNILocalRef mrunnable(*env, NULL);
+     code = Java::Interop_marshal(mrunnable, *env, runnable, std::move(opaque));
+     TE_CHECKRETURN_CODE(code);
+ 
++    if(env->ExceptionCheck()) return TE_Err;
+     env->CallVoidMethod(impl, RenderContext_class.queueEvent, mrunnable.get());
+-    return code;
++    return env->ExceptionCheck() ? TE_Err : code;
+ }
+ void ManagedRenderContext::requestRefresh() NOTHROWS
+ {
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return;
+     env->CallVoidMethod(impl, RenderContext_class.requestRefresh);
++    env->ExceptionCheck();
+ }
+ TAKErr ManagedRenderContext::setFrameRate(const float rate) NOTHROWS
+ {
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
+     env->CallVoidMethod(impl, RenderContext_class.setFrameRate, rate);
++    return env->ExceptionCheck() ? TE_Err : TE_Ok;
++}
++float ManagedRenderContext::getFrameRate() const NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return 0.f;
++    const auto value = env->CallFloatMethod(impl, RenderContext_class.getFrameRate);
++    return env->ExceptionCheck() ? 0.f : value;
++}
++void ManagedRenderContext::setContinuousRenderEnabled(const bool enabled) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return;
++    env->CallVoidMethod(impl, RenderContext_class.setContinuousRenderEnabled, enabled);
++    env->ExceptionCheck();
++}
++bool ManagedRenderContext::isContinuousRenderEnabled() NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.isContinuousRenderEnabled);
++    return env->ExceptionCheck() ? false : value;
++}
++bool ManagedRenderContext::supportsChildContext() const NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.supportsChildContext);
++    return env->ExceptionCheck() ? false : value;
++}
++TAKErr ManagedRenderContext::createChildContext(RenderContextPtr &value) NOTHROWS
++{
++    LocalJNIEnv env;
++    if(env->ExceptionCheck()) return TE_Err;
++    const auto supported = env->CallBooleanMethod(impl, RenderContext_class.supportsChildContext);
++    if(env->ExceptionCheck()) return TE_Err;
++    if(!supported) return TE_IllegalState;
++    Java::JNILocalRef mchild(*env, env->CallObjectMethod(impl, RenderContext_class.createChildContext));
++    if(env->ExceptionCheck() || !mchild)
++        return TE_Err;
++    RenderContextPtr candidate(new ManagedRenderContext(*env, mchild, impl), Memory_deleter_const<RenderContext, ManagedRenderContext>);
++    if(env->ExceptionCheck()) return TE_Err;
++    value = std::move(candidate);
+     return TE_Ok;
+ }
+-float ManagedRenderContext::getFrameRate() const NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallFloatMethod(impl, RenderContext_class.getFrameRate);
+-}
+-void ManagedRenderContext::setContinuousRenderEnabled(const bool enabled) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    env->CallVoidMethod(impl, RenderContext_class.setContinuousRenderEnabled, enabled);
+-}
+-bool ManagedRenderContext::isContinuousRenderEnabled() NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.isContinuousRenderEnabled);
+-}
+-bool ManagedRenderContext::supportsChildContext() const NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.supportsChildContext);
+-}
+-TAKErr ManagedRenderContext::createChildContext(RenderContextPtr &value) NOTHROWS
+-{
+-    LocalJNIEnv env;
+-    if(!env->CallBooleanMethod(impl, RenderContext_class.supportsChildContext))
+-        return TE_IllegalState;
+-    Java::JNILocalRef mchild(*env, env->CallObjectMethod(impl, RenderContext_class.createChildContext));
+-    if(!mchild)
+-        return TE_Err;
+-    value = RenderContextPtr(new ManagedRenderContext(*env, mchild, impl), Memory_deleter_const<RenderContext, ManagedRenderContext>);
+-    return TE_Ok;
+-}
+ bool ManagedRenderContext::isAttached() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.isAttached);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.isAttached);
++    return env->ExceptionCheck() ? false : value;
+ }
+ bool ManagedRenderContext::attach() NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.attach);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.attach);
++    return env->ExceptionCheck() ? false : value;
+ }
+ bool ManagedRenderContext::detach() NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.detach);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.detach);
++    return env->ExceptionCheck() ? false : value;
+ }
+ bool ManagedRenderContext::isMainContext() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallBooleanMethod(impl, RenderContext_class.isMainContext);
++    if(env->ExceptionCheck()) return false;
++    const auto value = env->CallBooleanMethod(impl, RenderContext_class.isMainContext);
++    return env->ExceptionCheck() ? false : value;
+ }
+ RenderSurface *ManagedRenderContext::getRenderSurface() const NOTHROWS
+ {
+@@ -175,7 +219,10 @@
+     }
+     jobject RenderContext_getRenderSurface(JNIEnv &env, jobject mcontext) NOTHROWS
+     {
++        if(env.ExceptionCheck() || !mcontext) return nullptr;
+         static bool clinit = RenderContext_class_init(env);
+-        return env.CallObjectMethod(mcontext, RenderContext_class.getRenderSurface);
+-    }
+-}
++        if(env.ExceptionCheck()) return nullptr;
++        jobject value = env.CallObjectMethod(mcontext, RenderContext_class.getRenderSurface);
++        return env.ExceptionCheck() ? nullptr : value;
++    }
++}
+diff --git a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp b/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
+--- a/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
++++ b/takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp
+@@ -40,19 +40,34 @@
+ }
+ 
+ ManagedRenderSurface::ManagedRenderSurface(JNIEnv &env_, jobject impl_) NOTHROWS :
+-    impl(env_.NewWeakGlobalRef(impl_))
++    impl(!env_.ExceptionCheck() && impl_ ? env_.NewWeakGlobalRef(impl_) : nullptr)
+ {
++    if(env_.ExceptionCheck() || !impl) return;
+     static bool clinit = RenderSurface_init(env_);
++    if(env_.ExceptionCheck()) return;
+     isRenderSurface2 = env_.IsInstanceOf(impl_, RenderSurface2_class.id);
+ }
+ ManagedRenderSurface::~ManagedRenderSurface() NOTHROWS
+ {
+     if(impl) {
+         LocalJNIEnv env;
+-        // clear all native listeners
++        // Attempt every owned listener cleanup while retaining the primary
++        // callback failure (or the first cleanup failure) for the Java caller.
++        jthrowable failure = env->ExceptionOccurred();
++        if(failure) env->ExceptionClear();
+         for(auto entry = listeners.begin(); entry != listeners.end(); entry++) {
+             env->CallVoidMethod(impl, RenderSurface_class.removeOnSizeChangedListener, entry->second);
++            if(env->ExceptionCheck()) {
++                jthrowable next = env->ExceptionOccurred();
++                env->ExceptionClear();
++                if(!failure) failure = next;
++                else env->DeleteLocalRef(next);
++            }
+             env->DeleteWeakGlobalRef(entry->second);
++        }
++        if(failure) {
++            env->Throw(failure);
++            env->DeleteLocalRef(failure);
+         }
+         listeners.clear();
+         env->DeleteWeakGlobalRef(impl);
+@@ -63,43 +78,49 @@
+ double ManagedRenderSurface::getDpi() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    return env->CallDoubleMethod(impl, RenderSurface_class.getDpi);
++    if(env->ExceptionCheck()) return 0.;
++    const auto value = env->CallDoubleMethod(impl, RenderSurface_class.getDpi);
++    return env->ExceptionCheck() ? 0. : value;
+ }
+ std::size_t ManagedRenderSurface::getWidth() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    if (isRenderSurface2) {
+-        return env->CallIntMethod(impl, RenderSurface2_class.getSurfaceWidth);
+-    }
+-    return env->CallIntMethod(impl, RenderSurface_class.getWidth);
++    if(env->ExceptionCheck()) return 0u;
++    const auto value = env->CallIntMethod(impl, isRenderSurface2 ? RenderSurface2_class.getSurfaceWidth : RenderSurface_class.getWidth);
++    return env->ExceptionCheck() ? 0u : value;
+ }
+ std::size_t ManagedRenderSurface::getHeight() const NOTHROWS
+ {
+     LocalJNIEnv env;
+-    if (isRenderSurface2) {
+-        return env->CallIntMethod(impl, RenderSurface2_class.getSurfaceHeight);
+-    }
+-    return env->CallIntMethod(impl, RenderSurface_class.getHeight);
++    if(env->ExceptionCheck()) return 0u;
++    const auto value = env->CallIntMethod(impl, isRenderSurface2 ? RenderSurface2_class.getSurfaceHeight : RenderSurface_class.getHeight);
++    return env->ExceptionCheck() ? 0u : value;
+ }
+ void ManagedRenderSurface::addOnSizeChangedListener(RenderSurface::OnSizeChangedListener *clistener) NOTHROWS
+ {
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return;
+     Lock lock(mutex);
+     if(listeners.find(clistener) != listeners.end())
+         return;
+     Java::JNILocalRef mlistenerPointer(*env, NewReference(env, *clistener));
++    if(env->ExceptionCheck()) return;
+     Java::JNILocalRef mlistener(*env, env->NewObject(NativeRenderSurfaceSizeChangedListener_class.id, NativeRenderSurfaceSizeChangedListener_class.init, INTPTR_TO_JLONG(static_cast<RenderSurface *>(this)), mlistenerPointer.get()));
++    if(env->ExceptionCheck()) return;
+     env->CallVoidMethod(impl, RenderSurface_class.addOnSizeChangedListener, mlistener.get());
++    if(env->ExceptionCheck()) return;
+     listeners[clistener] = env->NewWeakGlobalRef(mlistener);
+ }
+ void ManagedRenderSurface::removeOnSizeChangedListener(const RenderSurface::OnSizeChangedListener &clistener) NOTHROWS
+ {
+     LocalJNIEnv env;
++    if(env->ExceptionCheck()) return;
+     Lock lock(mutex);
+     auto entry = listeners.find(&clistener);
+     if(entry == listeners.end())
+         return;
+     env->CallVoidMethod(impl, RenderSurface_class.removeOnSizeChangedListener, entry->second);
++    if(env->ExceptionCheck()) return;
+     env->DeleteWeakGlobalRef(entry->second);
+     listeners.erase(entry);
+ }

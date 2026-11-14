@@ -1,7 +1,7 @@
 {
   "status": "source-work-in-progress-not-runtime-qualified",
   "upstream_commit": "9f6893dd657feacc35ec5de03dad721c2e44170e",
-  "patch_sha256": "f80a69d96e652a0ba91438c82d66c5b694b6f2d815f1ed5869d173dc53386306",
+  "patch_sha256": "0e9751db156583d545d3ed399ae19f03703501d13e972d3f39df0e09abaf25d8",
   "files": [
     {
       "path": "takkernel/engine/src/jre/java/gov/tak/platform/engine/JOGLRenderContext.java",
@@ -207,6 +207,16 @@
       "path": "takkernel/engine/src/main/jni/jgltext.cpp",
       "preimage_sha256": "6f2b875c182d6203e1c3ba0cde8525d002fa13281aaac0d5596e353b7eb5f5fa",
       "postimage_sha256": "146cf8869eef0b98a8413af7ece855ad8d25cce9f7c0a6eccd60544f4556d36e"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/core/ManagedRenderContext.cpp",
+      "preimage_sha256": "f9a319746390f3a22c20aeb6a6ec02a6c8b90ba541817a23ad4d11b48a474dc5",
+      "postimage_sha256": "94f82f8c642a532d61926842a606a84922406a8c6271d54a65c5f2d4770b4d80"
+    },
+    {
+      "path": "takkernel/engine/src/main/jni/interop/core/ManagedRenderSurface.cpp",
+      "preimage_sha256": "c731b396a55d93b06b8e9591a6fd009a8a47d2197e93b9700a43fa39c257a26e",
+      "postimage_sha256": "cd9fadd7c63231adcf3eb3cd5317ba288d4eae58c2633a969cdca4ef0d69acff"
     }
   ]
 }

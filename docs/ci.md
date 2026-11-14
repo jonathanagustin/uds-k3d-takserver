@@ -97,6 +97,7 @@ To force a rebuild of every keyed image, change `KEY_SALT` in `device-images.sh`
 | Full Core | `full-core.yaml` | daily at 07:17, by hand, pull requests labeled `full-core`, and pull requests or pushes to `main` that change backup, monitoring, UDS Core integration, the bundles, or Full Core's own workflow and tests (`.github/scripts/full-core-paths.sh`) | The `full-core` job reports success when the run passed or was not needed, so it can be a required check. A cancelled validation skips that job instead of failing it. Deploys full UDS Core and the package on amd64 and arm64, then runs `test:all` and `test:full-core`. See [ADR 15](../adr/0015-full-core-is-a-scheduled-gate.md) |
 | Benchmark | `benchmark.yaml` | Mondays at 09:41, by hand, and pull requests labeled `benchmark` | Installs the current branch, runs the TAK load tester, and plots the results. Adding a different label does not start it and does not cancel a run already going. See [Benchmarks](benchmarks.md) |
 | Scorecard | `scorecard.yaml` | Saturdays at 01:30, pushes to `main`, branch protection changes, and by hand | OpenSSF Scorecard, through the shared uds-common workflow |
+| Native sanitizers | `native-sanitizers.yaml` | pushes to `main` that change the SystemClock JNI sources or their test, and Wednesdays at 04:30 | AddressSanitizer and UndefinedBehaviorSanitizer on `takx/compat` `system-clock.c`, `clock-reference.c`, and `clock-routing-fixture.c`. The libLAS consumer sanitizer stays in the opt-in native-las proof. This job does not run on pull requests |
 | Mirror the UDS Core checkpoint | `mirror-checkpoint.yaml` | changes to the checkpoint versions, and by hand | Copies each `k3d-core-slim-dev` version that CI deploys into this repository's GHCR, with the same digest |
 | Demo Video | `demo.yaml` | pull requests that change the demo scripts, and by hand | Records the demo videos. Only a manual run from `main` publishes and signs them. See [Demo videos](../CONTRIBUTING.md#demo-videos) |
 | CodeQL languages | `codeql-extended.yaml` | pushes to `main` that change Python, TAKX Java, or first-party C/C++ under `takx/`, and Tuesdays at 05:00 | CodeQL for Python, Java/Kotlin, and C/C++ with `build-mode: none`. A push runs only the languages whose paths changed. The Tuesday run scans all three. Pull requests do not start it. Checkout and CodeQL use the same pinned digests as `codeql.yaml` |
@@ -210,7 +211,7 @@ required title check.
 Build, index, scan, and reporting jobs have explicit job timeouts rather than
 GitHub's six-hour default. Fast aggregate checks stop within five minutes;
 manifest/index jobs within fifteen; lint within twenty; CodeQL and docs builds
-within thirty; image scan comparison within sixty. OpenTofu scaffold validation
+within thirty; the native sanitizer job within ten; image scan comparison within sixty. OpenTofu scaffold validation
 and Release Please stop within fifteen minutes. Existing cluster, image-build,
 and release-publishing limits are unchanged. A timeout remains a failed check;
 these limits do not suppress errors or automatically retry failed work.

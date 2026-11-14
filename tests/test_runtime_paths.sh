@@ -100,6 +100,7 @@ check_match "hk.pkl" ignore
 check_match "commitlint.config.js" ignore
 check_match ".github/workflows/lint.yaml" ignore
 check_match ".github/workflows/codeql.yaml" ignore
+check_match ".github/workflows/native-sanitizers.yaml" ignore
 check_match ".github/workflows/codeql-extended.yaml" ignore
 check_match ".github/workflows/codeql-language.yaml" ignore
 check_match ".github/scripts/codeql-languages.py" ignore

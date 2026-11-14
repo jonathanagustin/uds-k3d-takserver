@@ -80,8 +80,11 @@ def stamp():
     return datetime.now(timezone.utc).isoformat()
 
 
-def read_json(commands, args):
+def read_json(commands, args, optional=False):
     data = commands.run(args, LIMIT)
+    if optional and not data.strip():
+        require('--ignore-not-found' in args, 'configuration')
+        return None
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -94,13 +97,16 @@ def read_json(commands, args):
 
 
 def references(template):
-    found = {'configmaps': set(), 'secrets': set()}
+    found = {'configmaps': set(), 'secrets': set(), 'optional_configmaps': set()}
+    required_configmaps = set()
     def visit(value):
         if isinstance(value, dict):
             for key, child in value.items():
                 if key in ('configMapKeyRef', 'configMapRef', 'configMap') and isinstance(child, dict):
                     name = child.get('name')
-                    if name: found['configmaps'].add(token(name))
+                    if name:
+                        name = token(name); found['configmaps'].add(name)
+                        (found['optional_configmaps'] if child.get('optional') is True else required_configmaps).add(name)
                 if key in ('secretKeyRef', 'secretRef', 'secret') and isinstance(child, dict):
                     name = child.get('name', child.get('secretName'))
                     if name: found['secrets'].add(token(name))
@@ -110,7 +116,8 @@ def references(template):
         elif isinstance(value, list):
             for child in value: visit(child)
     visit(template)
-    require(sum(map(len, found.values())) <= 32, 'configuration')
+    found['optional_configmaps'] -= required_configmaps
+    require(len(found['configmaps'])+len(found['secrets']) <= 32, 'configuration')
     return found
 
 
@@ -180,7 +187,13 @@ def snapshot(commands):
             template.setdefault('metadata', {}).setdefault('annotations', {}).pop('kubectl.kubernetes.io/restartedAt', None)
             refs = references(template); resources = {}
             for name in sorted(refs['configmaps']):
-                cm = read_json(commands, ['get', 'configmap', name, '-n', 'takserver', '-o', 'json'])
+                optional = name in refs['optional_configmaps']
+                args = ['get', 'configmap', name, '-n', 'takserver', '-o', 'json']
+                if optional: args.append('--ignore-not-found')
+                cm = read_json(commands, args, optional=optional)
+                if cm is None:
+                    resources['cm/'+name] = {'present': False}
+                    continue
                 resources['cm/'+name] = {'uid': token(cm['metadata']['uid']), 'rv': token(cm['metadata']['resourceVersion']),
                                         'sha256': digest({k: cm.get(k) for k in ('data', 'binaryData', 'immutable')})}
             for name in sorted(refs['secrets']):

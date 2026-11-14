@@ -160,3 +160,11 @@ bytes. Arguments, resource names, URLs, command output and exception values are
 not published. The original request, stream, process-group and total deadline
 bounds remain enforced. Pattern categories are observations, not causal proof or
 accepted startup timing.
+
+The startup configuration snapshot honors an explicitly boolean `optional: true`
+on ConfigMap references, including the admission module's optional
+`uds-trust-bundle`. A successful named lookup with `--ignore-not-found` may bind
+absence; present objects retain UID, resource-version and content hashes. Required
+references take precedence over optional references to the same name. Permission,
+transport and other command failures still fail, and appearance or disappearance
+between cold and warm snapshots changes the configuration binding.

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.3](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.2...v0.16.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **ci:** provide retained diagnostic validator dependencies ([#579](https://github.com/jonathanagustin/uds-takserver/issues/579)) ([c115116](https://github.com/jonathanagustin/uds-takserver/commit/c115116e1e03952252a50b39225401db50914a0d))
+* **takx:** verify fresh CommonCommo proofs for CoT controls ([#576](https://github.com/jonathanagustin/uds-takserver/issues/576)) ([9b6a75f](https://github.com/jonathanagustin/uds-takserver/commit/9b6a75fe554f9dbcb9de8b31e60abe42b7429311))
+
 ## [0.16.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.1...v0.16.2) (2026-11-14)
 
 

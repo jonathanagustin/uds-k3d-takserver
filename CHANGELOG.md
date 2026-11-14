@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.4](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.3...v0.16.4) (2026-11-14)
+
+
+### Bug Fixes
+
+* bind shared ambient egress lifecycle in identity trials ([#580](https://github.com/jonathanagustin/uds-takserver/issues/580)) ([255e7c1](https://github.com/jonathanagustin/uds-takserver/commit/255e7c16e704b966d6b5910df39ef6b0abd45493))
+
 ## [0.16.3](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.2...v0.16.3) (2026-11-14)
 
 

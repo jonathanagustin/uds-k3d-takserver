@@ -187,6 +187,16 @@ egress Deployment described below. The source-owned local backup node-agent is p
 this application package; it is distinguished from the retained Core Velero server.
 Before removal, cleanup binds exact application persistent volume claim (PVC) UIDs and persistent volume (PV) claim references and
 StatefulSet/chart ownership, stored Helm hooks, and the known certificate generator.
+The upstream Server 5.7-RELEASE-14 database setup post-install hook uses
+`before-hook-creation`, so its completed Job and pod can survive uninstall.
+Before removal, bind the single stored upstream hook to the live completed Job.
+After removal, permit foreground deletion only if the Job's UID, resource version,
+metadata and complete spec are unchanged and all remaining pods are succeeded
+children of that exact Job. Any other pod, Deployment or StatefulSet refuses this
+step. The Job stays available throughout normal operation because startup ordering
+reads its completion status. Its children must disappear before data cleanup;
+completed pods are never waived by the ordinary consumer guard.
+
 After all consumers are gone, only these exact retained objects may be deleted,
 using API UID/resourceVersion preconditions. Unknown or foreign leftovers refuse
 fresh acceptance; no namespace deletion or broad PVC/Secret cleanup is used.

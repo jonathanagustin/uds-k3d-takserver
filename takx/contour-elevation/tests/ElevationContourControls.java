@@ -85,6 +85,48 @@ public final class ElevationContourControls {
             try(var recovered=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,null)){
                 check(recovered.features().size()==result.lines().size(),"conversion recovery failed");
             }
+            Path database=Path.of(args[1]);
+            long storedSet;
+            try(var storedBatch=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,null)){
+                ContourLayer owner=ContourLayer.create("Owned native contour layer",database,storedBatch);
+                storedSet=owner.featureSetId();
+                try{
+                    var layer=owner.layer();
+                    check(layer.getName().equals("Owned native contour layer"),"native layer name differs");
+                    check(layer.getDataStore().queryFeaturesCount(null)==result.lines().size(),"native layer feature count differs");
+                    layer.setVisible(false);check(!layer.isVisible(),"layer visibility false ignored");
+                    layer.setVisible(true);check(layer.isVisible(),"layer visibility true ignored");
+                    int read=0;
+                    try(var cursor=layer.getDataStore().queryFeatures(null)){
+                        while(cursor.moveToNext()){
+                            var feature=cursor.get();var attributes=feature.getAttributes();
+                            try{
+                                check(feature.getFeatureSetId()==storedSet,"stored feature set identity differs");
+                                check(Double.isFinite(attributes.getDoubleAttribute("elevation_hae_m")),"stored elevation metadata absent");
+                                read++;
+                            }finally{attributes.dispose();feature.dispose();}
+                        }
+                    }
+                    check(read==result.lines().size(),"native feature cursor incomplete");
+                    boolean existsRefused=false;
+                    try{ContourLayer.create("Existing must refuse",database,storedBatch);}catch(FileAlreadyExistsException expected){existsRefused=true;}
+                    check(existsRefused,"existing database overwritten");
+                    Path alias=database.resolveSibling("database-alias");Files.createSymbolicLink(alias,database.getParent());
+                    boolean aliasRefused=false;
+                    try{ContourLayer.create("Alias must refuse",alias.resolve("new.sqlite"),storedBatch);}catch(IllegalArgumentException expected){aliasRefused=true;}
+                    finally{Files.delete(alias);}
+                    check(aliasRefused&&!Files.exists(database.resolveSibling("new.sqlite")),"symlink database path followed");
+                }finally{owner.close();owner.close();}
+                rejects(owner::layer,IllegalStateException.class);
+                rejects(owner::featureSetId,IllegalStateException.class);
+                check(storedBatch.features().size()==result.lines().size(),"caller batch was disposed");
+            }
+            var reopened=new com.atakmap.map.layer.feature.datastore.FeatureSetDatabase2(database.toFile());
+            try{
+                check(reopened.queryFeaturesCount(null)==result.lines().size(),"persistent contour readback differs");
+                reopened.deleteFeatureSet(storedSet);
+                check(reopened.queryFeaturesCount(null)==0,"owned feature set cleanup failed");
+            }finally{reopened.dispose();}
             int before=calls.get();var missing=generate("not-the-owned-source",null,null);
             check(!missing.fullySampled()&&missing.sampledPoints()==0&&missing.lines().isEmpty(),"source type filter ignored");
             check(calls.get()==before,"unselected source sampled");

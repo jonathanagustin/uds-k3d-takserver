@@ -51,7 +51,7 @@ typed receipt. It requires the frozen layout's absolute dependency/JDK paths and
 the qualified local compiler environment, rather than a portable native build.
 
 This is project-level provider integration. Complete TAKX 5.8 contour API,
-feature datastore/rendered layer integration, spatial clipping,
+rendered layer integration, spatial clipping,
 client compilation/runtime, private-SDK equivalence and complete renderer/SDK
 acceptance remain open. The existing pure-grid profile's provider flag remains
 false because that profile alone loads no provider. All broad acceptance flags
@@ -84,5 +84,32 @@ and recovery. Receipt:
 `9a77f536567ec4fc1fcec31f1b62c49ad9b72149cb6e14750133bd9bb9181baf`.
 The preceding 275-check provider-only and intermediate native-feature receipts
 remain retained. No native producer source changed. This covers native feature
-construction, not a feature datastore, rendered map layer, GL drawing, label
+construction, at that stage not a feature datastore, rendered map layer, GL drawing, label
 placement, client contour API or complete client runtime. Those gates stay open.
+
+## Owned persistent feature layer
+
+`ContourLayer.create(name, databasePath, batch)` now copies borrowed native
+features into a real `FeatureSetDatabase2` and exposes its `FeatureLayer3`. It
+requires a new database file, refuses symlink ancestors, and creates the file
+with POSIX owner-only permissions. Existing files are never overwritten. The
+input feature batch stays caller-owned. Close the layer owner before releasing
+its datastore; previously borrowed layer/store references are then out of scope.
+Closing is idempotent and leaves the database file for explicit caller retention.
+On construction failure, the owned store is disposed and the new file remains
+available for diagnosis. The wrapper is for single-thread use on the qualified
+POSIX host; cross-platform filesystem behavior remains unqualified.
+
+The latest full-library replay completes 569 assertions with zero strict JNI
+diagnostics. It verifies layer/store queries, native feature-set identity and
+metadata, visibility, existing-file and symlink refusal, caller-batch ownership,
+closed-owner access refusal and persistent readback after closing/reopening the
+synthetic datastore. The test removes only its own feature set after readback
+and fingerprints the retained synthetic database. Receipt:
+`b730cd39a0ae72648d0a3b1b21dd8261bcd99bb5b477d6b6d215598b69e2b1ce`.
+The initial standalone datastore/layer probe passes 15 checks with receipt
+`7336cdf20a0716ed779061b8968a89460858fb6f80bd87385747913b1a526ab1`;
+intermediate feature/layer experiments remain retained separately. No native
+producer source, SQLite provider or private fixture was replaced. This proves
+the scoped datastore/layer CPU path, not rendered pixels, GL drawing, label
+placement, clipping or complete TAKX contour/client runtime acceptance.

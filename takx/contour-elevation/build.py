@@ -13,7 +13,8 @@ import re
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SOURCES = ('java/gov/tak/project/contour/ElevationContours.java',
-           'java/gov/tak/project/contour/ContourFeatures.java', 'tests/ElevationContourControls.java')
+           'java/gov/tak/project/contour/ContourFeatures.java',
+           'java/gov/tak/project/contour/ContourLayer.java', 'tests/ElevationContourControls.java')
 GRID = REPO / 'takx/contour-grid/java/gov/tak/project/contour/ContourGrid.java'
 FLAGS = ('contour_api_implemented', 'layer_runtime_accepted', 'full_client_accepted')
 
@@ -41,7 +42,7 @@ def module(name, path):
 def contract():
     lock = json.loads((HERE / 'inputs.lock.json').read_text())
     require(type(lock['schema']) is int and lock['schema'] == 1 and lock['profile'] == 'public-elevation-contours-v1', 'profile identity differs')
-    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 539, 'closed source/control inventory differs')
+    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 569, 'closed source/control inventory differs')
     require(all(lock[key] is False for key in FLAGS), 'project adapter cannot grant client contour acceptance')
     for name, digest in lock['owned'].items():
         require(sha(HERE / name) == digest, 'owned adapter bytes differ')
@@ -93,7 +94,7 @@ def controls(args):
     commands = [('compile', [jdk / 'bin/javac', '--release', '17', '-proc:none', '-cp', classpath,
                  '-d', classes, GRID, *(HERE / name for name in SOURCES)]),
                 ('runtime', [jdk / 'bin/java', '-Xcheck:jni', '-Xmx256m', '-Djava.awt.headless=true',
-                 '-cp', str(classes) + ':' + classpath, 'ElevationContourControls', native / 'runtime-native.sha256'])]
+                 '-cp', str(classes) + ':' + classpath, 'ElevationContourControls', native / 'runtime-native.sha256', output / 'owned-contours.sqlite'])]
     write()
     try:
         for label, command in commands:
@@ -114,9 +115,10 @@ def controls(args):
                 require(0 < len(products) <= 32, 'compiled product bound differs')
             unchanged()
         text = (output / 'runtime.log').read_text()
-        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=539\b', text) and
+        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=569\b', text) and
                 not diagnostics.strict_jni_failures(text), 'actual elevation controls failed')
-        record.update(completed=True, checks=539, strict_jni_diagnostics=0)
+        record.update(completed=True, checks=569, strict_jni_diagnostics=0,
+                      artifacts={'owned-contours.sqlite': sha(output / 'owned-contours.sqlite')})
         write()
     except BaseException as error:
         record.update(failed=True, failure_type=type(error).__name__)

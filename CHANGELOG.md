@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.5](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.4...v0.16.5) (2026-11-14)
+
+
+### Bug Fixes
+
+* match the pinned Istio waypoint Gateway owner reference ([#582](https://github.com/jonathanagustin/uds-takserver/issues/582)) ([791ee51](https://github.com/jonathanagustin/uds-takserver/commit/791ee517133087146616db28e612aa1853385461))
+
 ## [0.16.4](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.3...v0.16.4) (2026-11-14)
 
 

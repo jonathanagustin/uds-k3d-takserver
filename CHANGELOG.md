@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.16.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.0...v0.16.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **bench:** bind absent optional ConfigMaps in startup snapshots ([4d1af8c](https://github.com/jonathanagustin/uds-takserver/commit/4d1af8cfdf0783fd714043a368e1aee794303084))
+* **bench:** classify failed startup observer commands ([94b3fe6](https://github.com/jonathanagustin/uds-takserver/commit/94b3fe6b10be45f79d0ec2e25cbbf9584f0da956))
+* **bench:** identify rejected startup collector callsites ([f3e9777](https://github.com/jonathanagustin/uds-takserver/commit/f3e9777c3d3b47e61bd65d9df0f8bf913ed993ba))
+* **bench:** identify the rejected JVM observer guard ([feb728a](https://github.com/jonathanagustin/uds-takserver/commit/feb728ac6d50b283b05887ce058ebba025b6d688))
+* **ci:** accept final shared identity application checks ([83d19ae](https://github.com/jonathanagustin/uds-takserver/commit/83d19aef3c03186714bb945a6beb03f7b58bbdca))
+* **ci:** diagnose unclean staged backup completion ([a368243](https://github.com/jonathanagustin/uds-takserver/commit/a3682430788b75011ba8b6bcc6785a1a72c21697))
+* **ci:** retain bounded identity application check failures ([743c76b](https://github.com/jonathanagustin/uds-takserver/commit/743c76b11281e71b9e17918101025be3b3cf9a0b))
+* **deps:** override minimatch to 11.0.8 ([#561](https://github.com/jonathanagustin/uds-takserver/issues/561)) ([4419dc1](https://github.com/jonathanagustin/uds-takserver/commit/4419dc1fab77d75b33b7d4731bc0a4c97860029c))
+* **takx:** collect notices from fresh Cesium producers ([c78e734](https://github.com/jonathanagustin/uds-takserver/commit/c78e73448277d731f88dceb4bfd8148f50bb05eb))
+* **takx:** consume fresh native dependency proofs ([ff09728](https://github.com/jonathanagustin/uds-takserver/commit/ff097282b5e10fa45d27050a4bf4a52e85ad282e))
+* **takx:** fetch pinned libxml2 from its raw Git endpoint ([03ece83](https://github.com/jonathanagustin/uds-takserver/commit/03ece83b26e041ff4be7c411d8e558ee417e9e13))
+* **takx:** preserve source-aware Cesium port patch lines ([446cea7](https://github.com/jonathanagustin/uds-takserver/commit/446cea7ac70933d51e49a83724ae3ae0f059a63e))
+* **takx:** verify fresh Cesium provider ancestry ([c66ccd6](https://github.com/jonathanagustin/uds-takserver/commit/c66ccd6937515acc573dcc502675d407638fb985))
+
 ## [0.16.0](https://github.com/jonathanagustin/uds-takserver/compare/v0.15.0...v0.16.0) (2026-11-13)
 
 

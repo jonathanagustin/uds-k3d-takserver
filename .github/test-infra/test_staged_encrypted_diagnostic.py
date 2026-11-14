@@ -602,6 +602,21 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
         self.assertEqual(shlex.split(command),['uv','run','--no-project','--with','pyyaml==6.0.3','python3',
                                               '.github/test-infra/staged-encrypted-diagnostic.py'])
 
+    def test_first_failure_is_sealed_and_uploaded_before_optional_public_uploads(self):
+        workflow = (AGE.ROOT / '.github/workflows/staged-migrations.yaml').read_text()
+        names = ['Run only the selected staged acceptance', 'Encrypt optional first failure diagnostic',
+                 'Upload only encrypted first failure diagnostic',
+                 'Publish only allowlisted stage evidence, including failures',
+                 'Upload exact-run sanitized acceptance evidence', 'Upload optional passive diagnostic evidence']
+        positions = [workflow.index('- name: ' + name) for name in names]
+        self.assertEqual(positions, sorted(positions))
+        # A refused or failed optional encryption/upload must not skip the
+        # independent public evidence path or turn failed acceptance green.
+        public = workflow.split('- name: Publish only allowlisted stage evidence', 1)[1].split('\n      - name:', 1)[0]
+        self.assertIn('if: always()', public)
+        self.assertNotIn('continue-on-error: true', public)
+        self.assertIn("steps.staged-trial.outcome == 'failure'", workflow)
+
     def test_workflow_only_uploads_ciphertext_after_failed_trial_successful_encryption(self):
         # String checks keep this Unit step stdlib-only.
         workflow = (AGE.ROOT / '.github/workflows/staged-migrations.yaml').read_text()
@@ -610,7 +625,7 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
         encrypt = workflow.split('- name: Encrypt optional first failure diagnostic', 1)[1]
         self.assertIn("steps.staged-trial.outcome == 'failure' && inputs.diagnostic_recipient != ''", encrypt)
         self.assertIn('STAGED_AGE_RECIPIENT: ${{ inputs.diagnostic_recipient }}', encrypt)
-        upload = encrypt.split('- name: Upload only encrypted first failure diagnostic', 1)[1].split('  summary:', 1)[0]
+        upload = encrypt.split('- name: Upload only encrypted first failure diagnostic', 1)[1].split('\n      - name:', 1)[0].split('  summary:', 1)[0]
         self.assertIn("steps.encrypt-first-failure.outcome == 'success'", upload)
         self.assertIn("steps.encrypt-first-failure.outputs.ready == 'true'", upload)
         self.assertIn('path: ${{ runner.temp }}/staged-encrypted-diagnostic/first-failure.age', upload)

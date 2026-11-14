@@ -130,6 +130,83 @@ def save_validation(folder,payload,journal):
 
 
 class EncryptedDiagnosticGuards(unittest.TestCase):
+    def test_input_rejection_reports_only_fixed_reason_without_encrypting(self):
+        cases = {'journal': 'package-journal', 'progress': 'package-progress',
+                 'progress-binding': 'package-binding', 'missing-reference': 'missing-private-reference',
+                 'retained-file': 'retained-file', 'retained-binding': 'retained-binding',
+                 'retained-schema': 'retained-schema', 'source': 'reviewed-source'}
+        for case, expected in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                folder, _output, env, payload, journal, _owner = validation_fixture(root)
+                if case == 'journal':
+                    (folder/'journal.json').write_text('PRIVATE_INVALID_JSON_SENTINEL')
+                elif case == 'progress':
+                    (folder/'journal-progress.json').unlink()
+                elif case == 'progress-binding':
+                    value = json.loads((folder/'journal-progress.json').read_text())
+                    value['journalSHA256'] = 'f'*64
+                    (folder/'journal-progress.json').write_text(json.dumps(value))
+                elif case == 'missing-reference':
+                    journal.pop('firstPrivateFailure')
+                    journal.pop('retainedSourceValidationFailure')
+                    path = folder/'journal.json'
+                    path.write_text(json.dumps(journal))
+                    progress = {'schema': 1, 'guard': journal['guard'], 'journalSHA256': AGE.digest(path.read_bytes())}
+                    (folder/'journal-progress.json').write_text(json.dumps(progress))
+                elif case == 'retained-file':
+                    (folder/AGE.VALIDATION_NAME).unlink()
+                elif case == 'retained-binding':
+                    payload['binding'] = {**payload['binding'], 'runID': '999'}
+                    save_validation(folder, payload, journal)
+                elif case == 'retained-schema':
+                    payload['snapshot']['diagnostic']['hook'] = 'PRIVATE_SCHEMA_SENTINEL'
+                    save_validation(folder, payload, journal)
+                def source(name):
+                    if case == 'source':
+                        raise ValueError('PRIVATE_SOURCE_ERROR_SENTINEL')
+                    return AGE.digest((AGE.ROOT/name).read_bytes())
+                captured = io.StringIO()
+                with patch.dict(os.environ, env, clear=True), patch.object(AGE, 'context'), \
+                        patch.object(AGE, 'reviewed_source_hash', side_effect=source), \
+                        patch.object(AGE, 'acquire_age') as acquire, \
+                        contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                    self.assertEqual(AGE.main(), 1)
+                self.assertEqual(captured.getvalue(), 'Encrypted staged diagnostic omitted: private-input:'+expected+'\n')
+                acquire.assert_not_called()
+                self.assertFalse((root/AGE.OUTPUT_NAME).exists())
+
+    def test_one_eligible_channel_survives_another_rejection(self):
+        for rejected in ('owner', 'package'):
+            with self.subTest(rejected=rejected), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                folder, _output, env, _payload, _journal, owner = package_fixture(root)
+                env.update(SCENARIO='all', IDENTITY_METHOD='combined')
+                if rejected == 'owner':
+                    owner.with_name('journal.json').write_text('PRIVATE_INVALID_OWNER_SENTINEL')
+                    expected = (folder/AGE.PACKAGE_NAME).read_bytes()
+                else:
+                    (folder/'journal.json').write_text('PRIVATE_INVALID_PACKAGE_SENTINEL')
+                    expected = owner.read_bytes()
+                with patch.dict(os.environ, env, clear=True), \
+                        patch.object(AGE, 'reviewed_source_hash', side_effect=lambda name: AGE.digest((AGE.ROOT/name).read_bytes())):
+                    descriptor = AGE.select_private(root)
+                    try:
+                        self.assertEqual(os.read(descriptor, AGE.INPUT_LIMIT+1), expected)
+                    finally:
+                        os.close(descriptor)
+
+    def test_unknown_exception_text_cannot_become_a_reason(self):
+        class PrivateError(Exception):
+            def __str__(self):
+                raise AssertionError('exception text was evaluated')
+        def reject():
+            raise PrivateError('PRIVATE_ERROR_SENTINEL')
+        with self.assertRaises(AGE.InputRejected) as failure:
+            AGE.input_check('package-binding', reject)
+        self.assertEqual(failure.exception.reason, 'package-binding')
+        self.assertEqual(AGE.InputRejected('PRIVATE_REASON_SENTINEL').reason, 'channels-unavailable')
+
     def test_core_validation_is_sealed_and_rejects_raw_or_forged_inventory(self):
         for mutation in ('valid','raw-body','unknown-key','diagnostic','unchanged','operation','kind-alias'):
             with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temporary:

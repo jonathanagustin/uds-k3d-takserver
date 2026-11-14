@@ -28,7 +28,8 @@ public final class JoinedSdkCommo {
     check(names.contains("libcommoncommojni.so")==commonExpected,"CommonCommo load order differs");
   }
   public static void main(String[] args)throws Exception {
-    check(args.length==5&&(args[0].equals("sdk-first")||args[0].equals("common-first")),"explicit order and proof files required");
+    check(args.length==6&&(args[0].equals("sdk-first")||args[0].equals("common-first")),"explicit order and proof files required");
+    check(args[5].equals("baseline")||args[5].equals("reduced-kml"),"explicit qualified SDK profile required");
     Set<String> core=new HashSet<>();
     for(String line:Files.readAllLines(Path.of(args[3])))core.add(line.split(" ",2)[1]);
     check(core.size()==9,"exact nine SDK native resources required");
@@ -44,7 +45,9 @@ public final class JoinedSdkCommo {
     }
     group(maps(),core,true,true);
     check(Path.of(Commo.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath().equals(Path.of(args[2]).toRealPath()),"Commo must originate in verified producer JAR");
-    StockLoaderSmoke.main(new String[]{args[1],"database",args[3],args[4]});
+    String[] sdkArgs={args[1],"database",args[3],args[4]};
+    if(args[5].equals("reduced-kml"))Class.forName("GdalReducedProfileSmoke").getMethod("main",String[].class).invoke(null,(Object)sdkArgs);
+    else StockLoaderSmoke.main(sdkArgs);
     CommonCommoSmoke.main(new String[0]);
     CommonCommoSignalSmoke.main(new String[0]);
     CommonCommoRoutingSmoke.main(new String[0]);

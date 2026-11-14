@@ -66,6 +66,15 @@ class JoinedGuards(unittest.TestCase):
                 B.native_capacity(jar,['libcomponent.so'])
             with self.assertRaises(ValueError):B.native_capacity(jar,['missing.so'])
 
+    def test_sdk_composition_preserves_its_required_control_family(self):
+        self.assertFalse(B.sdk_profile({'owned_runtime_classes':{}}))
+        self.assertTrue(B.sdk_profile({'owned_runtime_classes':{'GdalReducedProfileSmoke.class':{}},
+                                       'composition_driver_absence_runtime_qualified':True}))
+        for value in ({'owned_runtime_classes':{'GdalReducedProfileSmoke.class':{}}},
+                      {'owned_runtime_classes':{},'composition_driver_absence_runtime_qualified':True},
+                      {'owned_runtime_classes':{},'composition_driver_absence_runtime_qualified':0}):
+            with self.subTest(value=value),self.assertRaises(ValueError):B.sdk_profile(value)
+
     def test_native_extraction_data_limit_is_separate_from_log_limit(self):
         code='''import importlib.util, pathlib, resource, sys
 s=importlib.util.spec_from_file_location('joined',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)

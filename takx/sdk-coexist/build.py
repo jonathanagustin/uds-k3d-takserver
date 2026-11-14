@@ -97,6 +97,14 @@ def native_capacity(jar,names):
     return required
 
 
+def sdk_profile(receipt):
+    selected=receipt.get('composition_driver_absence_runtime_qualified',False)
+    require(type(selected) is bool,'SDK composition qualification flag required')
+    owns_control='GdalReducedProfileSmoke.class' in receipt['owned_runtime_classes']
+    require(selected==owns_control,'SDK composition and owned control family differ')
+    return selected
+
+
 def child_limits(seconds):
     resource.setrlimit(resource.RLIMIT_FSIZE,(FILE_CAP,FILE_CAP))
     resource.setrlimit(resource.RLIMIT_CORE,(0,0))
@@ -161,13 +169,14 @@ def run(args):
         common,binding=fresh.verify(bindings,commo/'install',commo/'complete.json',java,args.commoncommo_sha256,out)
         for name in ('java','javac'):
             require(Path(receipt['jdk_tools'][name]['path']).resolve()==(java/'bin'/name).resolve(),'SDK/Common selected JDK differs')
-        source_paths=sdk_builder.runtime_control_sources(False)+[HERE.parent/(name+'.java') for name in
+        selected=sdk_profile(receipt)
+        source_paths=sdk_builder.runtime_control_sources(selected)+[HERE.parent/(name+'.java') for name in
             ('CommonCommoSmoke','CommonCommoSignalSmoke','CommonCommoRoutingSmoke')]+[
             HERE.parent/'native-commoncommo/CommonCommoThrowingLogger.java',HERE/'JoinedSdkCommo.java']
         own=[Path(__file__),HERE.parent/'cot-conformance/fresh_producer.py',HERE.parent/'kernel-regressions/build.py',HERE.parent/'jni_diagnostics.py']
         inputs={str(path):digest(path) for path in [*source_paths,*own,bindings,sdk/'complete.json',commo/'complete.json']}
         record={'schema':1,'scope':'stock public Kernel8.30.5/CommonCommo1.17.2 co-load only','inputs':inputs,
-                'sdk_receipt_sha256':args.sdk_sha256,'commoncommo_binding':binding,'commands':commands,
+                'sdk_receipt_sha256':args.sdk_sha256,'sdk_profile':'reduced-kml' if selected else 'baseline','commoncommo_binding':binding,'commands':commands,
                 'native_compilation':False,'full_sdk':False,'renderer':False,'takx_client':False,
                 'takserver_interoperability':False,'tls_peer_under_co_load':False,'quic_peer':False}
         if args.phase=='inspect':
@@ -200,13 +209,14 @@ def run(args):
             argv=[java/'bin/java','-Xcheck:jni','-Xmx256m','-XX:MaxMetaspaceSize=128m','-XX:ActiveProcessorCount=2',
                   '-Djava.awt.headless=true','-XX:ErrorFile='+str(app/'hs_err_%p.log'),'-Djava.io.tmpdir='+str(app/'tmp'),'-Duser.home='+str(app/'home'),
                   '-DTAK_APP_DATA_PATH='+str(app/'data'),'-Djava.library.path='+str(library)+os.pathsep+str(commo/'install/lib'),
-                  '-cp',os.pathsep.join(map(str,[classes,*cp])),'JoinedSdkCommo',order,jar,common_jar,manifest,resource_file]
+                  '-cp',os.pathsep.join(map(str,[classes,*cp])),'JoinedSdkCommo',order,jar,common_jar,manifest,resource_file,'reduced-kml' if selected else 'baseline']
             text=command(argv,order,90)
             require(not diagnostics.strict_jni_failures(text),'strict JNI/startup diagnostics rejected')
             required=['PASS_JOINED_FIRST_GROUP_'+('SDK' if order=='sdk-first' else 'COMMONCOMMO'),
                       'PASS_JOINED_COMMON_CONSTRUCTOR_PKCS12_SIGNAL_ROUTING_LOGGER',
                       'PASS_JOINED_KERNEL_CONTROLS_AFTER_COMMON','PASS_JOINED_STOCK_SDK_COMMONCOMMO '+order,
                       'PASS_STOCK_ENGINE_RESOURCE_LOADER_SCOPED_COMPONENT']
+            if selected:required.append('PASS_REAL_REDUCED_PROFILE_GDAL_SKIP_INIT_REGISTRY_NO_SUPPRESSION')
             require(all(marker in text for marker in required),'actual joined control marker missing')
             expected={**hosts,str(common_jni):common_hash,**{str(library/name):sha for name,sha in native.items()}}
             actual=mapped(text,expected)

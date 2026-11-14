@@ -23,7 +23,9 @@ python3 -B takx/sdk-coexist/build.py \
 Add `--phase qualify` and choose another fresh output for actual controls. It
 compiles the owned probes against only the assembled SDK, its third-party JARs
 and the verified CommonCommo JAR. Original SDK probe class bytes must match its
-qualification receipt. Production class families remain inside their JARs.
+qualification receipt. Production class families remain inside their JARs. The explicit KML composition
+retains its additional reduced-driver-absence control and must supply its matching
+qualified class family; baseline and composition flags cannot be mixed.
 
 Two fresh checked-JNI JVMs initialize SDK first and CommonCommo first. The actual
 ELF maps must show only the selected first group before the other is initialized.

@@ -575,7 +575,7 @@ class GenuineAgeProof(unittest.TestCase):
             result=dict(exitStatus=3,timedOut=False,stdout='PRIVATE_APPLICATION_STDOUT',stderr='PRIVATE_APPLICATION_STDERR',
                         stdoutTruncated=False,stderrTruncated=False)
             with patch.object(P,'bounded_package_run',return_value=result):
-                with self.assertRaises(ValueError):trial.run_application_check('api-smoke','transition')
+                with self.assertRaises(ValueError):trial.run_application_check('api-smoke','shared')
             plain=(folder/AGE.APPLICATION_NAME).read_bytes()
             subprocess.run([str(keygen),'-o',str(root/'key')],capture_output=True,timeout=10,check=True)
             recipient=subprocess.run([str(keygen),'-y',str(root/'key')],capture_output=True,timeout=10,check=True).stdout.decode().strip()

@@ -429,6 +429,18 @@ class PackageGuards(unittest.TestCase):
                 result['exitStatus']=0
                 self.assertEqual(instance.run_application_check('web-tls','baseline'),'PRIVATE_TOKEN')
 
+    def test_application_check_accepts_every_real_package_phase_including_final_shared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance=P.PackageTrial(Path(directory)/'journal.json',self.bound());instance.guard=lambda:None
+            result={'exitStatus':0,'timedOut':False,'stdout':'passed','stderr':'',
+                    'stdoutTruncated':False,'stderrTruncated':False}
+            with patch.object(P,'bounded_package_run',return_value=result) as run:
+                for phase in ('baseline','transition','strict','rollback','shared','fresh-strict'):
+                    self.assertEqual(instance.run_application_check('web-tls',phase),'passed')
+                self.assertEqual(run.call_count,6)
+                with self.assertRaises(ValueError):instance.run_application_check('web-tls','unknown')
+                self.assertEqual(run.call_count,6)
+
     def test_only_legacy_upstream_chart_uses_client_side_apply_compatibility(self):
         package=yaml.safe_load((ROOT/'common/zarf.yaml').read_text())
         charts=[chart for component in package['components'] for chart in component.get('charts',[])]

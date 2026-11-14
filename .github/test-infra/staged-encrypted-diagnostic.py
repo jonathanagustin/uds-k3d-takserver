@@ -325,7 +325,7 @@ def application_input(folder,journal,expected):
             'stdoutTruncated','stderrTruncated','packageDriverSHA256','driverSHA256'})
     require(type(payload['schema']) is int and payload['schema']==1 and payload['binding']==expected and
             payload['check'] in ('web-tls','api-smoke','flows','cloudtak') and
-            payload['phase'] in ('baseline','transition','strict','rollback','fresh-strict') and
+            payload['phase'] in ('baseline','transition','strict','rollback','shared','fresh-strict') and
             type(payload['exitStatus']) is int and -255<=payload['exitStatus']<=255 and
             type(payload['timedOut']) is bool and (payload['exitStatus']!=0 or payload['timedOut']))
     for stream in ('stdout','stderr'):

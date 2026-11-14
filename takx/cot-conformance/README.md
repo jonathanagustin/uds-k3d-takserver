@@ -28,7 +28,7 @@ python3 takx/cot-conformance/check.py --run \
   --jdk /path/to/jdk17 --output /path/to/new-private-output
 ```
 
-The runner requires the exact accepted JNI/JAR/producer receipt hashes, verifies
+The historical mode requires its exact accepted JNI/JAR/producer receipt hashes, verifies
 the consumed producer schema hashes, checks class origin and actual mapped ELF
 providers, sanitizes Java/loader injection variables, and rehashes inputs after
 execution. Trusted host C/C++ and JDK runtimes are recorded separately. Commands
@@ -87,3 +87,52 @@ its README distinguishes US federal public-domain contributions from licensing
 elsewhere. `THIRDPARTY.md` requires checking individual notices. The MITRE base XSD
 has its own copyright and approved-public-release/distribution-unlimited notice;
 do not describe the complete corpus as uniformly permissively licensed.
+
+
+## Explicit current fresh producer
+
+The historical pins above remain unchanged. A newly completed
+`native-commoncommo/build.py` proof can instead be consumed with explicit input
+roots and its reviewed receipt digest. It must declare fresh dependency, Core and
+JNI builds; stopped, partial, resumed or differently scoped records are refused.
+This does not convert local integrity metadata into publisher authentication.
+The proof root must retain its original source, installed files, tools, logs and
+receipts. A relocated prefix or OCI cache needs its own consumer contract.
+
+Create an external JSON file with all seven absolute directory roots:
+
+```json
+{
+  "source": "/sources/pinned-official-atak",
+  "spatial": "/proofs/kernel-spatial-db",
+  "zlib": "/proofs/native-assimp",
+  "quictls": "/proofs/native-crypto",
+  "tools": "/tools/signed-debian-prefix",
+  "metadata": "/sources/signed-debian-metadata",
+  "cache": "/sources/locked-commoncommo-archives"
+}
+```
+
+Add both options to the `--run` command above:
+
+```sh
+--fresh-bindings /inputs/commoncommo-roots.json \
+--producer-receipt-sha256 <reviewed-complete.json-SHA256>
+```
+
+The reviewed digest is necessary, but does not grant acceptance by itself. The
+verifier checks the current producer recipe and scope, independently reconstructs
+the complete patched CommonCommo source inventory from official Git blobs and the
+owned patches, checks the selected dependency and signed tool proofs, full JDK,
+installed files, generated protobuf, source-built protoc and all five strict
+producer controls. The unchanged protocol-source hashes are also required.
+Inputs are reverified after the actual codec/loopback run. No dependency download,
+native compilation, failed-proof adoption or historical pin replacement occurs.
+
+Verification uses a temporary projection of only the patched source files under
+the new private output and removes it before Java compilation. Output/input
+overlap is refused before creating output. The 90-second total deadline also
+covers proof verification. Normal offline guards verify tampering, scope, path,
+JSON and deadline behavior without loading a native library. Runtime scope stays
+codec/base-XSD/loopback negotiation, with zero JNI warnings required; TAK Server,
+QUIC peer, full SDK and TAKX client acceptance remain separate.

@@ -10,6 +10,30 @@ ROOT=Path(__file__).resolve().parents[1]
 HELPER=ROOT/'.github/scripts/velero-clean-completion.py'
 
 class CleanCompletion(unittest.TestCase):
+    def test_failed_details_commands_keep_redacted_stderr(self):
+        script=(ROOT/'tests/backup-restore.sh').read_text()
+        start=script.index('velero_details() {');end=script.index('\n}\n',start)+3
+        setup=r'''set -euo pipefail
+k() {
+  case "$*" in
+    *describe*) echo 'describe transport failed password=PRIVATE_SENTINEL' >&2; return 1 ;;
+    *backup\ logs*|*restore\ logs*) echo "${LOG_PREFIX}logs transport failed password=PRIVATE_SENTINEL" >&2; return 1 ;;
+    *) return 0 ;;
+  esac
+}
+'''
+        for verb in ('backup','restore'):
+            for prefix in ('','level=error '):
+                with self.subTest(verb=verb,prefix=prefix):
+                    result=subprocess.run(['bash','-c',setup+script[start:end]+f'\nvelero_details {verb}.velero.io reviewed-{verb}'],
+                                          env={**os.environ,'root':str(ROOT),'LOG_PREFIX':prefix},capture_output=True,text=True,check=False)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    self.assertIn('describe transport failed password=[REDACTED]',result.stderr)
+                    self.assertIn(prefix+'logs transport failed password=[REDACTED]',result.stderr)
+                    self.assertIn('velero describe command or redaction failed',result.stderr)
+                    self.assertIn('velero logs command or redaction failed',result.stderr)
+                    self.assertNotIn('PRIVATE_SENTINEL',result.stdout+result.stderr)
+
     def test_real_helper_projects_only_fixed_status_facts(self):
         cases=[({'phase':'Completed'},0),({'phase':'Completed','warnings':2},1),
                ({'phase':'PartiallyFailed'},1),({'phase':'Completed','errors':1},1),

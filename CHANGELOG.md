@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.2](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.1...v0.16.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **bench:** retain startup phase rejection reasons ([#570](https://github.com/jonathanagustin/uds-takserver/issues/570)) ([76750bb](https://github.com/jonathanagustin/uds-takserver/commit/76750bb7ad32ea74e10949af4b4e191c3f6bc72a))
+* **ci:** classify encrypted identity input rejection ([#575](https://github.com/jonathanagustin/uds-takserver/issues/575)) ([291d6fd](https://github.com/jonathanagustin/uds-takserver/commit/291d6fdfc453d9e79596197f1d85198fa7b8bc99))
+* **ci:** retain failed identity diagnostic callsites ([#572](https://github.com/jonathanagustin/uds-takserver/issues/572)) ([88f08a2](https://github.com/jonathanagustin/uds-takserver/commit/88f08a2e733f7cac28dfadf1011aa1efd9480d4f))
+* **ci:** retain redacted Velero diagnostic command errors ([#569](https://github.com/jonathanagustin/uds-takserver/issues/569)) ([40231d1](https://github.com/jonathanagustin/uds-takserver/commit/40231d1e174ac1f5d3a2130fe2d40236a5e69fc2))
+
 ## [0.16.1](https://github.com/jonathanagustin/uds-takserver/compare/v0.16.0...v0.16.1) (2026-11-14)
 
 

@@ -191,10 +191,12 @@ velero_details() {
   # and the logs say which item failed. Neither is in the CR status.
   local filter="${root}/.github/scripts/redact-then-filter.sh"
   if [[ -n "${verb}" ]]; then
-    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details 2>/dev/null \
-      | "${filter}" >&2 || echo "omitted unsanitizable velero describe" >&2
-    k exec -n velero deploy/velero -c velero -- /velero "${verb}" logs "${name}" 2>/dev/null \
-      | "${filter}" --grep 'level=(error|warning)' --tail 40 >&2 || echo "omitted unsanitizable velero log" >&2
+    k exec -n velero deploy/velero -c velero -- /velero "${verb}" describe "${name}" --details 2>&1 \
+      | "${filter}" >&2 || echo "velero describe command or redaction failed" >&2
+    # CLI transport errors need not be structured Velero log records. Keep the
+    # redacted tail of the combined stream so those failures remain diagnosable.
+    k exec -n velero deploy/velero -c velero -- /velero "${verb}" logs "${name}" 2>&1 \
+      | "${filter}" --tail 40 >&2 || echo "velero logs command or redaction failed" >&2
   fi
   k get podvolumebackups.velero.io,podvolumerestores.velero.io -n velero \
     -o custom-columns='KIND:.kind,NAME:.metadata.name,POD:.spec.pod.name,VOLUME:.spec.volume,PHASE:.status.phase,MESSAGE:.status.message' 2>/dev/null \

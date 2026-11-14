@@ -57,3 +57,25 @@ An adjacent project adapter in `../contour-elevation` now exercises this algorit
 with the actual public Kernel elevation registry. It has a separate native
 consumer profile and coverage receipt. It does not change this pure-grid
 profile's source membership or acceptance flags.
+
+## Bounded rectangular clipping
+
+`ContourClip.clip` clips project contour polylines to a finite, non-wrapping
+WGS84 rectangle. It uses straight longitude/latitude segments, matching this
+project grid's interpolation policy rather than claiming geodesic or private
+SDK equivalence. It preserves elevation values, drops point-only contacts,
+handles duplicate vertices, joins cyclic first/last pieces of closed inputs,
+and returns immutable line/point collections. Input/output vertices and input
+line counts are bounded. Cancellation or a progress callback error returns no
+partial result. Boundary clamping also handles subnormal arithmetic at an edge.
+
+The updated source-locked producer runs 865 grid checks and 380 clipping checks,
+1,245 in total, with zero strict JNI diagnostics. Clipping includes all 81
+ordered pairs of a 3×3 endpoint lattice against an independent breakpoint/
+midpoint visibility oracle, plus closed-loop joins, corner contact, duplicates,
+subnormal edge values, invalid inputs, immutability and cancellation/callbacks.
+Receipt:
+`6257d593176ed6775c774982c0228ad9298de4cfcb75a534ccc7e4a9134645d2`.
+Earlier producer receipts and the initial unadopted manual clipping classes are
+retained separately. The mathematical clipping component does not itself prove
+rendered layer, map/client API or elevation-provider acceptance.

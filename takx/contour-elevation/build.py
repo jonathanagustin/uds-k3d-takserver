@@ -16,6 +16,7 @@ SOURCES = ('java/gov/tak/project/contour/ElevationContours.java',
            'java/gov/tak/project/contour/ContourFeatures.java',
            'java/gov/tak/project/contour/ContourLayer.java', 'tests/ElevationContourControls.java')
 GRID = REPO / 'takx/contour-grid/java/gov/tak/project/contour/ContourGrid.java'
+CLIP = REPO / 'takx/contour-grid/java/gov/tak/project/contour/ContourClip.java'
 FLAGS = ('contour_api_implemented', 'layer_runtime_accepted', 'full_client_accepted')
 
 
@@ -42,11 +43,11 @@ def module(name, path):
 def contract():
     lock = json.loads((HERE / 'inputs.lock.json').read_text())
     require(type(lock['schema']) is int and lock['schema'] == 1 and lock['profile'] == 'public-elevation-contours-v1', 'profile identity differs')
-    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 569, 'closed source/control inventory differs')
+    require(set(lock['owned']) == set(SOURCES) and lock['checks'] == 593, 'closed source/control inventory differs')
     require(all(lock[key] is False for key in FLAGS), 'project adapter cannot grant client contour acceptance')
     for name, digest in lock['owned'].items():
         require(sha(HERE / name) == digest, 'owned adapter bytes differ')
-    require(sha(GRID) == lock['grid_sha256'], 'reviewed contour algorithm differs')
+    require(sha(GRID) == lock['grid_sha256'] and sha(CLIP) == lock['clip_sha256'], 'reviewed contour algorithm differs')
     return lock
 
 
@@ -65,7 +66,7 @@ def controls(args):
     inputs, jars, _compiler = consumer.verify_inputs(native, java, jdk)
     for name, digest in lock['elevation_profile'].items():
         inputs[str(profile / name)] = digest
-    paths = [*(HERE / name for name in SOURCES), GRID, HERE / 'inputs.lock.json', Path(__file__).resolve(),
+    paths = [*(HERE / name for name in SOURCES), GRID, CLIP, HERE / 'inputs.lock.json', Path(__file__).resolve(),
              REPO / 'takx/native-commoncommo/runner.py', REPO / 'takx/jni_diagnostics.py']
     for path in paths:
         inputs[str(path)] = sha(path)
@@ -92,7 +93,7 @@ def controls(args):
     env['LC_ALL'] = 'C'
     classpath = ':'.join([str(java / 'classes'), *jars])
     commands = [('compile', [jdk / 'bin/javac', '--release', '17', '-proc:none', '-cp', classpath,
-                 '-d', classes, GRID, *(HERE / name for name in SOURCES)]),
+                 '-d', classes, GRID, CLIP, *(HERE / name for name in SOURCES)]),
                 ('runtime', [jdk / 'bin/java', '-Xcheck:jni', '-Xmx256m', '-Djava.awt.headless=true',
                  '-cp', str(classes) + ':' + classpath, 'ElevationContourControls', native / 'runtime-native.sha256', output / 'owned-contours.sqlite'])]
     write()
@@ -115,9 +116,9 @@ def controls(args):
                 require(0 < len(products) <= 32, 'compiled product bound differs')
             unchanged()
         text = (output / 'runtime.log').read_text()
-        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=569\b', text) and
+        require(re.search(r'ELEVATION_CONTOUR_CONTROLS_PASS checks=593\b', text) and
                 not diagnostics.strict_jni_failures(text), 'actual elevation controls failed')
-        record.update(completed=True, checks=569, strict_jni_diagnostics=0,
+        record.update(completed=True, checks=593, strict_jni_diagnostics=0,
                       artifacts={'owned-contours.sqlite': sha(output / 'owned-contours.sqlite')})
         write()
     except BaseException as error:

@@ -19,6 +19,11 @@ public final class ElevationContours {
     public record Result(List<ContourGrid.Line> lines, int sampledPoints, int totalPoints) {
         public Result { lines = List.copyOf(lines); }
         public boolean fullySampled() { return sampledPoints == totalPoints; }
+        /** Clips geometry while retaining coverage counts from the original sampled grid. */
+        public Result clipped(double west, double south, double east, double north,
+                BooleanSupplier cancelled, IntConsumer progress) {
+            return new Result(ContourClip.clip(lines, west, south, east, north, cancelled, progress), sampledPoints, totalPoints);
+        }
     }
 
     /**

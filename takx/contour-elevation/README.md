@@ -51,7 +51,7 @@ typed receipt. It requires the frozen layout's absolute dependency/JDK paths and
 the qualified local compiler environment, rather than a portable native build.
 
 This is project-level provider integration. Complete TAKX 5.8 contour API,
-rendered layer integration, spatial clipping,
+rendered layer integration,
 client compilation/runtime, private-SDK equivalence and complete renderer/SDK
 acceptance remain open. The existing pure-grid profile's provider flag remains
 false because that profile alone loads no provider. All broad acceptance flags
@@ -101,7 +101,7 @@ On construction failure, the owned store is disposed and the new file remains
 available for diagnosis. The wrapper is for single-thread use on the qualified
 POSIX host; cross-platform filesystem behavior remains unqualified.
 
-The latest full-library replay completes 569 assertions with zero strict JNI
+The preceding full-library replay completes 569 assertions with zero strict JNI
 diagnostics. It verifies layer/store queries, native feature-set identity and
 metadata, visibility, existing-file and symlink refusal, caller-batch ownership,
 closed-owner access refusal and persistent readback after closing/reopening the
@@ -114,3 +114,22 @@ intermediate feature/layer experiments remain retained separately. No native
 producer source, SQLite provider or private fixture was replaced. This proves
 the scoped datastore/layer CPU path, not rendered pixels, GL drawing, label
 placement, clipping or complete TAKX contour/client runtime acceptance.
+
+## Clipping through the native layer path
+
+`ElevationContours.Result.clipped` applies the source-locked `ContourClip`
+component before feature/layer construction. Sample counts continue to describe
+the original sampled grid; clipping geometry does not recompute coverage for
+the smaller extent. The latest native replay verifies clipped analytic vertices
+and stores the clipped styled features in its one owned persistent datastore.
+It passes 593 assertions with zero strict JNI diagnostics, authenticating 5,564
+inputs and 13 compiled products. Receipt:
+`87ef800e03bc0eadee0786327abf567477dc4ad0bd31417101a520b085fc05b6`.
+
+An intermediate two-database experiment exceeded the unchanged 8 MiB aggregate
+output limit. Its receipt, exact authenticated failed source, logs and both
+synthetic databases remain retained; its functional marker alone is not accepted.
+The subsequent experiment consolidated the test into one owned database, keeping
+all existing quotas and ownership guards. Native producer code remains unchanged.
+Rendered pixels, GL drawing, label placement, complete client API/runtime and
+full renderer/cache qualification remain open.

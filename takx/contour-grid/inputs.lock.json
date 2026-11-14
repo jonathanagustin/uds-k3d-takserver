@@ -1,14 +1,20 @@
 {
   "schema": 1,
   "profile": "bounded-contour-grid-v1",
-  "scope": "bounded triangulated elevation-grid contour algorithm only; no elevation provider, TAK layer or complete contour API",
+  "scope": "bounded triangulated elevation-grid contours and rectangular WGS84 polyline clipping only; no elevation provider, rendered TAK layer or complete client contour API",
   "owned": {
     "java/gov/tak/project/contour/ContourGrid.java": "a5a986409258cda81f147dd241f0dc2d9ccca48d5d56c032f12dc325a3f227c5",
-    "tests/ContourGridControls.java": "3e3ede0d85054534f3a320c11b1fd42736f25098667080e4a116c3f07f979b55"
+    "java/gov/tak/project/contour/ContourClip.java": "2c6e0d199cffdc062c3ccff9c28fd9adc0660102cbe54a17f908aad9247c7245",
+    "tests/ContourGridControls.java": "3e3ede0d85054534f3a320c11b1fd42736f25098667080e4a116c3f07f979b55",
+    "tests/ContourClipControls.java": "9551646ee634314cd0ae8c451c29ab1ab55dc92869c0e10307bbde76f0da225a"
   },
-  "checks": 865,
+  "checks": 1245,
   "contour_api_implemented": false,
   "elevation_source_integrated": false,
   "layer_runtime_accepted": false,
-  "full_client_accepted": false
+  "full_client_accepted": false,
+  "control_inventory": {
+    "ContourGridControls": 865,
+    "ContourClipControls": 380
+  }
 }

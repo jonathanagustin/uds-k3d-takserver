@@ -12,7 +12,10 @@ import stat
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SOURCES = ('java/gov/tak/project/contour/ContourGrid.java', 'tests/ContourGridControls.java')
+SOURCES = ('java/gov/tak/project/contour/ContourGrid.java', 'java/gov/tak/project/contour/ContourClip.java',
+           'tests/ContourGridControls.java', 'tests/ContourClipControls.java')
+CONTROLS = {'ContourGridControls': ('controls', 'contour-grid-controls', 865),
+            'ContourClipControls': ('clip-controls', 'contour-clip-controls', 380)}
 FLAGS = ('contour_api_implemented', 'elevation_source_integrated', 'layer_runtime_accepted', 'full_client_accepted')
 
 
@@ -40,7 +43,7 @@ def contract():
     require(lock['schema'] == 1 and lock['profile'] == 'bounded-contour-grid-v1' and
             set(lock['owned']) == set(SOURCES), 'source profile differs')
     require(all(lock[key] is False for key in FLAGS), 'grid controls cannot grant client acceptance')
-    require(lock['checks'] == 865, 'analytic control inventory differs')
+    require(lock['checks'] == 1245 and lock['control_inventory'] == {key: value[2] for key, value in CONTROLS.items()}, 'analytic control inventory differs')
     for name, pin in lock['owned'].items():
         require(sha(HERE / name) == pin, 'owned source bytes differ')
     return lock
@@ -89,8 +92,8 @@ def controls(args):
         commands = [
             ('compile', [java / 'bin/javac', '--release', '17', '-proc:none', '-classpath', classes,
                          '-d', classes, *(HERE / name for name in SOURCES)]),
-            ('controls', [java / 'bin/java', '-Xcheck:jni', '-Xmx256m', '-Djava.awt.headless=true',
-                          '-cp', classes, 'ContourGridControls'])]
+            *[(label, [java / 'bin/java', '-Xcheck:jni', '-Xmx256m', '-Djava.awt.headless=true',
+                       '-cp', classes, name]) for name, (label, _marker, _checks) in CONTROLS.items()]]
         for label, command in commands:
             row = {'label': label, 'argv': list(map(str, command))}
             record['commands'].append(row)
@@ -98,13 +101,14 @@ def controls(args):
             runner.execute(row['argv'], output, label, 30, env, capture=True,
                            disk_limit=8 * 1024**2, log_limit=2 * 1024**2)
             row.update(passed=True, log_sha256=sha(output / (label + '.log')))
-        text = (output / 'controls.log').read_text()
-        require(text.strip() == 'contour-grid-controls passed checks=865' and not diagnostics.strict_jni_failures(text),
-                'contour controls did not pass cleanly')
+        for label, marker, checks in CONTROLS.values():
+            text = (output / (label + '.log')).read_text()
+            require(text.strip() == marker + ' passed checks=' + str(checks) and not diagnostics.strict_jni_failures(text),
+                    'contour controls did not pass cleanly')
         for name, pin in inputs.items():
             require(sha(name) == pin, 'consumed input changed')
         require(contract() == lock, 'source contract changed')
-        record.update(completed=True, checks=865, strict_jni_diagnostics=0,
+        record.update(completed=True, checks=1245, control_inventory=lock['control_inventory'], strict_jni_diagnostics=0,
                       outputs={str(p.relative_to(classes)): sha(p) for p in classes.rglob('*.class')})
         write()
     except BaseException:

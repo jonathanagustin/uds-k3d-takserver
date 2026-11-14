@@ -85,15 +85,17 @@ public final class ElevationContourControls {
             try(var recovered=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,null)){
                 check(recovered.features().size()==result.lines().size(),"conversion recovery failed");
             }
+            var clipped=result.clipped(-.3,-.3,.3,.3,null,null);
+            var storedLines=clipped.lines();
             Path database=Path.of(args[1]);
             long storedSet;
-            try(var storedBatch=ContourFeatures.create(result.lines(),25,0,2,minorColor,majorColor,1,3,null)){
+            try(var storedBatch=ContourFeatures.create(storedLines,25,0,2,minorColor,majorColor,1,3,null)){
                 ContourLayer owner=ContourLayer.create("Owned native contour layer",database,storedBatch);
                 storedSet=owner.featureSetId();
                 try{
                     var layer=owner.layer();
                     check(layer.getName().equals("Owned native contour layer"),"native layer name differs");
-                    check(layer.getDataStore().queryFeaturesCount(null)==result.lines().size(),"native layer feature count differs");
+                    check(layer.getDataStore().queryFeaturesCount(null)==storedLines.size(),"native layer feature count differs");
                     layer.setVisible(false);check(!layer.isVisible(),"layer visibility false ignored");
                     layer.setVisible(true);check(layer.isVisible(),"layer visibility true ignored");
                     int read=0;
@@ -107,7 +109,7 @@ public final class ElevationContourControls {
                             }finally{attributes.dispose();feature.dispose();}
                         }
                     }
-                    check(read==result.lines().size(),"native feature cursor incomplete");
+                    check(read==storedLines.size(),"native feature cursor incomplete");
                     boolean existsRefused=false;
                     try{ContourLayer.create("Existing must refuse",database,storedBatch);}catch(FileAlreadyExistsException expected){existsRefused=true;}
                     check(existsRefused,"existing database overwritten");
@@ -119,14 +121,20 @@ public final class ElevationContourControls {
                 }finally{owner.close();owner.close();}
                 rejects(owner::layer,IllegalStateException.class);
                 rejects(owner::featureSetId,IllegalStateException.class);
-                check(storedBatch.features().size()==result.lines().size(),"caller batch was disposed");
+                check(storedBatch.features().size()==storedLines.size(),"caller batch was disposed");
             }
             var reopened=new com.atakmap.map.layer.feature.datastore.FeatureSetDatabase2(database.toFile());
             try{
-                check(reopened.queryFeaturesCount(null)==result.lines().size(),"persistent contour readback differs");
+                check(reopened.queryFeaturesCount(null)==storedLines.size(),"persistent contour readback differs");
                 reopened.deleteFeatureSet(storedSet);
                 check(reopened.queryFeaturesCount(null)==0,"owned feature set cleanup failed");
             }finally{reopened.dispose();}
+            check(clipped.sampledPoints()==result.sampledPoints()&&clipped.totalPoints()==result.totalPoints(),"clipping rewrote source-grid coverage");
+            check(!clipped.lines().isEmpty(),"clipping removed all analytic contours");
+            for(var line:clipped.lines())for(var point:line.points()){
+                check(point.longitude()>=-.3&&point.longitude()<=.3&&point.latitude()>=-.3&&point.latitude()<=.3,"clipped vertex outside requested extent");
+                check(Math.abs(100*point.longitude()+50*point.latitude()-line.elevationMeters())<1e-8,"clipped vertex off analytic contour");
+            }
             int before=calls.get();var missing=generate("not-the-owned-source",null,null);
             check(!missing.fullySampled()&&missing.sampledPoints()==0&&missing.lines().isEmpty(),"source type filter ignored");
             check(calls.get()==before,"unselected source sampled");

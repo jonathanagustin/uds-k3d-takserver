@@ -1,0 +1,285 @@
+# SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+diff --git a/src/java.desktop/share/native/libfontmanager/HBShaper.c b/src/java.desktop/share/native/libfontmanager/HBShaper.c
+--- a/src/java.desktop/share/native/libfontmanager/HBShaper.c
++++ b/src/java.desktop/share/native/libfontmanager/HBShaper.c
+@@ -209,6 +209,10 @@
+     fi->font2D = font2D;
+     fi->fontStrike = fontStrike;
+     (*env)->GetFloatArrayRegion(env, matrix, 0, 4, fi->matrix);
++    if ((*env)->ExceptionCheck(env)) {
++        free(fi);
++        return NULL;
++    }
+     fi->ptSize = ptSize;
+     fi->xPtSize = euclidianDistance(fi->matrix[0], fi->matrix[1]);
+     fi->yPtSize = euclidianDistance(fi->matrix[2], fi->matrix[3]);
+@@ -270,6 +274,12 @@
+      hbface = (hb_face_t*) jlong_to_ptr(pFace);
+      hbfont = hb_jdk_font_create(hbface, jdkFontInfo, NULL);
+ 
++     if ((*env)->ExceptionCheck(env)) {
++         hb_font_destroy(hbfont);
++         free((void*)jdkFontInfo);
++         return JNI_FALSE;
++     }
++
+      buffer = hb_buffer_create();
+      hb_buffer_set_script(buffer, getHBScriptCode(script));
+      hb_buffer_set_language(buffer,
+@@ -303,7 +313,8 @@
+      glyphInfo = hb_buffer_get_glyph_infos(buffer, 0);
+      glyphPos = hb_buffer_get_glyph_positions(buffer, &buflen);
+ 
+-     ret = storeGVData(env, gvdata, slot, baseIndex, offset, startPt,
++     ret = (*env)->ExceptionCheck(env) ? JNI_FALSE :
++           storeGVData(env, gvdata, slot, baseIndex, offset, startPt,
+                        limit - offset, glyphCount, glyphInfo, glyphPos,
+                        jdkFontInfo->devScale);
+ 
+diff --git a/src/java.desktop/share/native/libfontmanager/freetypeScaler.c b/src/java.desktop/share/native/libfontmanager/freetypeScaler.c
+--- a/src/java.desktop/share/native/libfontmanager/freetypeScaler.c
++++ b/src/java.desktop/share/native/libfontmanager/freetypeScaler.c
+@@ -135,8 +135,17 @@
+ static void invalidateJavaScaler(JNIEnv *env,
+                                  jobject scaler,
+                                  FTScalerInfo* scalerInfo) {
++    jthrowable primary = (*env)->ExceptionOccurred(env);
++    if (primary != NULL) (*env)->ExceptionClear(env);
+     freeNativeResources(env, scalerInfo);
+     (*env)->CallVoidMethod(env, scaler, invalidateScalerMID);
++    if ((*env)->ExceptionCheck(env) && primary != NULL) {
++        (*env)->ExceptionClear(env);
++    }
++    if (primary != NULL) {
++        (*env)->Throw(env, primary);
++        (*env)->DeleteLocalRef(env, primary);
++    }
+ }
+ 
+ /******************* I/O handlers ***************************/
+@@ -181,12 +190,16 @@
+ 
+     /* Large reads will bypass the cache and data copying */
+     if (numBytes > FILEDATACACHESIZE) {
++        if ((*env)->ExceptionCheck(env)) return 0;
+         bBuffer = (*env)->NewDirectByteBuffer(env, destBuffer, numBytes);
++        if ((*env)->ExceptionCheck(env)) return 0;
+         if (bBuffer != NULL) {
+             bread = (*env)->CallIntMethod(env,
+                                           scalerInfo->font2D,
+                                           sunFontIDs.ttReadBlockMID,
+                                           bBuffer, offset, numBytes);
++            (*env)->DeleteLocalRef(env, bBuffer);
++            if ((*env)->ExceptionCheck(env)) return 0;
+             if (bread < 0) {
+                 return 0;
+             } else {
+@@ -206,6 +219,10 @@
+             (*env)->CallObjectMethod(env, scalerInfo->font2D,
+                                      sunFontIDs.ttReadBytesMID,
+                                      offset, numBytes);
++            if ((*env)->ExceptionCheck(env)) {
++                if (byteArray != NULL) (*env)->DeleteLocalRef(env, byteArray);
++                return 0;
++            }
+             /* If there's an OutofMemoryError then byteArray will be null */
+             if (byteArray == NULL) {
+                 return 0;
+@@ -216,6 +233,8 @@
+                 }
+                 (*env)->GetByteArrayRegion(env, byteArray,
+                                            0, numBytes, (jbyte*)destBuffer);
++                (*env)->DeleteLocalRef(env, byteArray);
++                if ((*env)->ExceptionCheck(env)) return 0;
+                 return numBytes;
+             }
+         }
+@@ -230,6 +249,7 @@
+         return numBytes;
+     } else {
+         /* Must fill the cache */
++        if ((*env)->ExceptionCheck(env)) return 0;
+         scalerInfo->fontDataOffset = offset;
+         scalerInfo->fontDataLength =
+                  (offset + FILEDATACACHESIZE > scalerInfo->fileSize) ?
+@@ -239,6 +259,10 @@
+                                       sunFontIDs.ttReadBlockMID,
+                                       bBuffer, offset,
+                                       scalerInfo->fontDataLength);
++        if ((*env)->ExceptionCheck(env)) {
++            scalerInfo->fontDataLength = 0;
++            return 0;
++        }
+         if (bread <= 0) {
+             return 0;
+         } else if ((unsigned long)bread < numBytes) {
+@@ -417,6 +441,7 @@
+                 (*env)->CallVoidMethod(env, font2D,
+                                    sunFontIDs.readFileMID, bBuffer);
+ 
++                if (!(*env)->ExceptionCheck(env))
+                 error = FT_New_Memory_Face(scalerInfo->library,
+                                    scalerInfo->fontData,
+                                    scalerInfo->fontDataLength,
+@@ -630,6 +655,10 @@
+     }
+ 
+     errCode = setupFTContext(env, font2D, scalerInfo, context);
++    if ((*env)->ExceptionCheck(env)) {
++        if (errCode) invalidateJavaScaler(env, scaler, scalerInfo);
++        return NULL;
++    }
+ 
+     if (errCode) {
+         metrics = (*env)->NewObject(env,
+@@ -765,6 +794,7 @@
+                                  env, scaler, font2D,
+                                  pScalerContext, pScaler, glyphCode, JNI_FALSE);
+      info = (GlyphInfo*) jlong_to_ptr(image);
++     if ((*env)->ExceptionCheck(env)) { free(info); return; }
+ 
+      if (info != NULL) {
+          (*env)->SetFloatField(env, metrics, sunFontIDs.xFID, info->advanceX);
+@@ -1462,6 +1492,7 @@
+                                glyphCode,
+                                xpos,
+                                ypos);
++    if ((*env)->ExceptionCheck(env)) return NULL;
+     if (gp == NULL) { /* can be legal */
+         gp = (*env)->NewObject(env,
+                                sunFontIDs.gpClass,
+@@ -1490,6 +1521,7 @@
+     FTScalerInfo* scalerInfo = (FTScalerInfo *) jlong_to_ptr(pScaler);
+ 
+     outline = getFTOutline(env, font2D, context, scalerInfo, glyphCode, 0, 0);
++    if ((*env)->ExceptionCheck(env)) return NULL;
+     if (outline == NULL || outline->n_points == 0) {
+         /* it is legal case, e.g. invisible glyph */
+         bounds = (*env)->NewObject(env,
+@@ -1557,6 +1589,7 @@
+     }
+ 
+     (*env)->GetIntArrayRegion(env, glyphArray, 0, numGlyphs, glyphs);
++    if ((*env)->ExceptionCheck(env)) { free(glyphs); return NULL; }
+ 
+     gpdata.numCoords = 0;
+     for (i=0; i<numGlyphs;i++) {
+@@ -1569,6 +1602,11 @@
+                                scalerInfo,
+                                glyphs[i],
+                                xpos, ypos);
++        if ((*env)->ExceptionCheck(env)) {
++            if (gpdata.numCoords != 0) freeGP(&gpdata);
++            free(glyphs);
++            return NULL;
++        }
+ 
+         if (outline == NULL || outline->n_points == 0) {
+             continue;
+@@ -1642,6 +1680,7 @@
+     FTScalerInfo *scalerInfo = (FTScalerInfo*) jlong_to_ptr(pScaler);
+ 
+     outline = getFTOutline(env, font2D, context, scalerInfo, glyphCode, 0, 0);
++    if ((*env)->ExceptionCheck(env)) return NULL;
+ 
+     if (outline != NULL && outline->n_points > pointNumber) {
+         x =  F26Dot6ToFloat(outline->points[pointNumber].x);
+diff --git a/src/java.desktop/share/native/libfontmanager/hb-jdk-font.cc b/src/java.desktop/share/native/libfontmanager/hb-jdk-font.cc
+--- a/src/java.desktop/share/native/libfontmanager/hb-jdk-font.cc
++++ b/src/java.desktop/share/native/libfontmanager/hb-jdk-font.cc
+@@ -47,6 +47,7 @@
+ 
+     JDKFontInfo *jdkFontInfo = (JDKFontInfo*)font_data;
+     JNIEnv* env = jdkFontInfo->env;
++    if (env->ExceptionCheck()) { return 0; }
+     jobject font2D = jdkFontInfo->font2D;
+     *glyph = (hb_codepoint_t)env->CallIntMethod(
+               font2D, sunFontIDs.f2dCharToGlyphMID, unicode);
+@@ -71,6 +72,7 @@
+ 
+     JDKFontInfo *jdkFontInfo = (JDKFontInfo*)font_data;
+     JNIEnv* env = jdkFontInfo->env;
++    if (env->ExceptionCheck()) { return 0; }
+     jobject font2D = jdkFontInfo->font2D;
+     *glyph = (hb_codepoint_t)env->CallIntMethod(
+               font2D, sunFontIDs.f2dCharToVariationGlyphMID,
+@@ -99,10 +101,15 @@
+ 
+     JDKFontInfo *jdkFontInfo = (JDKFontInfo*)font_data;
+     JNIEnv* env = jdkFontInfo->env;
++    if (env->ExceptionCheck()) { return 0; }
+     jobject fontStrike = jdkFontInfo->fontStrike;
+     jobject pt = env->CallObjectMethod(fontStrike,
+                                        sunFontIDs.getGlyphMetricsMID, glyph);
+ 
++    if (env->ExceptionCheck()) {
++        if (pt != NULL) env->DeleteLocalRef(pt);
++        return 0;
++    }
+     if (pt == NULL) {
+         return 0;
+     }
+@@ -127,10 +134,15 @@
+ 
+     JDKFontInfo *jdkFontInfo = (JDKFontInfo*)font_data;
+     JNIEnv* env = jdkFontInfo->env;
++    if (env->ExceptionCheck()) { return 0; }
+     jobject fontStrike = jdkFontInfo->fontStrike;
+     jobject pt = env->CallObjectMethod(fontStrike,
+                                        sunFontIDs.getGlyphMetricsMID, glyph);
+ 
++    if (env->ExceptionCheck()) {
++        if (pt != NULL) env->DeleteLocalRef(pt);
++        return 0;
++    }
+     if (pt == NULL) {
+         return 0;
+     }
+@@ -222,11 +234,16 @@
+ 
+     JDKFontInfo *jdkFontInfo = (JDKFontInfo*)font_data;
+     JNIEnv* env = jdkFontInfo->env;
++    if (env->ExceptionCheck()) { return 0; }
+     jobject fontStrike = jdkFontInfo->fontStrike;
+     jobject pt = env->CallObjectMethod(fontStrike,
+                                        sunFontIDs.getGlyphPointMID,
+                                        glyph, point_index);
+ 
++    if (env->ExceptionCheck()) {
++        if (pt != NULL) env->DeleteLocalRef(pt);
++        return 0;
++    }
+     if (pt == NULL) {
+         *x = 0; *y = 0;
+         return true;
+@@ -336,19 +353,30 @@
+   if (env == NULL) {
+     return NULL;
+   }
++  if (env->ExceptionCheck()) return NULL;
+   font2D = fontInfo->font2DRef;
+ 
+   jbyteArray tableBytes = (jbyteArray)
+      env->CallObjectMethod(font2D, sunFontIDs.getTableBytesMID, tag);
++  if (env->ExceptionCheck()) {
++      if (tableBytes != NULL) env->DeleteLocalRef(tableBytes);
++      return NULL;
++  }
+   if (tableBytes == NULL) {
+       return NULL;
+   }
+   length = env->GetArrayLength(tableBytes);
+   buffer = calloc(length, sizeof(jbyte));
+   if (buffer == NULL) {
++      env->DeleteLocalRef(tableBytes);
+       return NULL;
+   }
+   env->GetByteArrayRegion(tableBytes, 0, length, (jbyte*)buffer);
++  env->DeleteLocalRef(tableBytes);
++  if (env->ExceptionCheck()) {
++      free(buffer);
++      return NULL;
++  }
+ 
+   return hb_blob_create((const char *)buffer, length,
+                          HB_MEMORY_MODE_WRITABLE,

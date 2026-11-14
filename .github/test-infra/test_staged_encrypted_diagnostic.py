@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -565,6 +566,18 @@ class EncryptedDiagnosticGuards(unittest.TestCase):
             with self.assertRaises(ValueError):
                 AGE.bounded_process([sys.executable, '-c', code], limit=limit, seconds=seconds)
             self.assertLess(time.monotonic() - started, 5)
+
+    def test_encryption_declares_the_retained_validator_dependency(self):
+        source=AGE.ROOT/'tests/workload-identities/retained_state.py'
+        code='import sys,types; p=sys.argv[1]; m=types.ModuleType("retained");m.__file__=p;exec(compile(open(p).read(),p,"exec"),m.__dict__)'
+        result=subprocess.run([sys.executable,'-I','-S','-c',code,str(source)],capture_output=True,timeout=5)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn(b"No module named 'yaml'",result.stderr)
+        workflow=(AGE.ROOT/'.github/workflows/staged-migrations.yaml').read_text()
+        step=workflow.split('- name: Encrypt optional first failure diagnostic',1)[1].split('- name: Upload only encrypted',1)[0]
+        command=next(line.split('run:',1)[1].strip() for line in step.splitlines() if line.lstrip().startswith('run:'))
+        self.assertEqual(shlex.split(command),['uv','run','--no-project','--with','pyyaml==6.0.3','python3',
+                                              '.github/test-infra/staged-encrypted-diagnostic.py'])
 
     def test_workflow_only_uploads_ciphertext_after_failed_trial_successful_encryption(self):
         # String checks keep this Unit step stdlib-only.

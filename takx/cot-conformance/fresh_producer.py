@@ -9,6 +9,7 @@ integrity, not publisher authentication or a registry-cache restore contract.
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import platform
 import re
@@ -93,6 +94,12 @@ def builder():
     return module
 
 
+def patch_environment():
+    env = {key: os.environ[key] for key in ('HOME', 'CODEX_HOME') if key in os.environ}
+    env.update(PATH='/usr/bin:/bin', LC_ALL='C')
+    return env
+
+
 def official_sources(build, root, source, workspace, patch_tool):
     """Reconstruct patched postimages from Git and owned patches, not metadata."""
     pin = build.LOCK['revision']
@@ -130,7 +137,7 @@ def official_sources(build, root, source, workspace, patch_tool):
             subprocess.run([str(patch_tool), '--batch', '--fuzz=0', '--get=0', '--no-backup-if-mismatch',
                             '-p1', '-d', str(stage/'commoncommo' if jni else stage), '-i', str(path)],
                            check=True, timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
+                           env=patch_environment())
         for name in changed:
             path = canonical(stage/name)
             expected[name.removeprefix('commoncommo/')] = {'bytes': path.stat().st_size, 'sha256': digest(path)}

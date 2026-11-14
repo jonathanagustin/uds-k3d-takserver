@@ -20,6 +20,12 @@ F = CHECK.fresh_producer
 
 
 class FreshProducerGuards(unittest.TestCase):
+    def test_patch_environment_preserves_home_without_loader_or_git_injection(self):
+        with patch.dict('os.environ', {'HOME': '/unchanged-home', 'CODEX_HOME': '/unchanged-codex',
+                                     'LD_PRELOAD': 'untrusted', 'GIT_CONFIG_COUNT': '1'}, clear=True):
+            self.assertEqual(F.patch_environment(), {'HOME': '/unchanged-home', 'CODEX_HOME': '/unchanged-codex',
+                                                    'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
+
     def test_explicit_complete_binding_roots_and_unsafe_json(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

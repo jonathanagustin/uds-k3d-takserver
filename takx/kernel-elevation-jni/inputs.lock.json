@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "profile": "public-elevation-query-constructor-v1",
+  "actual_kernel_version": "8.30.5",
+  "official_revision": "9f6893dd657feacc35ec5de03dad721c2e44170e",
+  "scope": "source-only correction of the JNI query-parameter constructor class; no strict elevation or client acceptance",
+  "file": "takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp",
+  "before": "71929be830ee86f6385090aba0ddaaa1b3bbb5fcf83f23bdd1e24797e673df8c",
+  "after": "c4862644cf276258f740d0dd04cd6df064f14bb197d928e1f8600223647477f7",
+  "patch_sha256": "513bf7efcc6edfc6e88556b3c81ffd9380ddb281177587f7936c972fc453c62a",
+  "native_builder_integration": false,
+  "strict_elevation_accepted": false,
+  "full_sdk_accepted": false,
+  "full_client_accepted": false
+}

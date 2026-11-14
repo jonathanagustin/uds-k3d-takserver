@@ -1,0 +1,11 @@
+--- a/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp
++++ b/takkernel/engine/src/main/jni/interop/elevation/ManagedElevationSource.cpp
+@@ -481,7 +481,7 @@
+         ElevationSource_class.removeOnContentChangedListener = env->GetMethodID(ElevationSource_class.id, "removeOnContentChangedListener", "(Lcom/atakmap/map/elevation/ElevationSource$OnContentChangedListener;)V");
+ 
+         ElevationSource_QueryParameters_class.id = ATAKMapEngineJNI_findClass(env, "com/atakmap/map/elevation/ElevationSource$QueryParameters");
+-        ElevationSource_QueryParameters_class.ctor = env->GetMethodID(ElevationSource_class.id, "<init>", "()V");
++        ElevationSource_QueryParameters_class.ctor = env->GetMethodID(ElevationSource_QueryParameters_class.id, "<init>", "()V");
+         ElevationSource_QueryParameters_class.spatialFilter = env->GetFieldID(ElevationSource_QueryParameters_class.id, "spatialFilter", "Lcom/atakmap/map/layer/feature/geometry/Geometry;");
+         ElevationSource_QueryParameters_class.maxResolution = env->GetFieldID(ElevationSource_QueryParameters_class.id, "maxResolution", "D");
+         ElevationSource_QueryParameters_class.minResolution = env->GetFieldID(ElevationSource_QueryParameters_class.id, "minResolution", "D");

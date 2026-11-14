@@ -19,10 +19,11 @@ reads exact blobs from an already cached official Git repository, creates a fres
 4. This Context patch. Its three batch renderer/shader files overlap Texture, so
    the lock records the actual combined images rather than substituting either
    profile's standalone images.
-5. Only the two selected client JNI sections (`interop/feature/Interop.cpp` and
-   `jscenelayer.cpp`), not unrelated client Java policies.
+5. The two selected client JNI sections (`interop/feature/Interop.cpp` and
+   `jscenelayer.cpp`) plus their paired `FeatureLayer3.Options` Java source.
+   The options field and native access must land together.
 
-Every stage checks all 59 selected paths, including required absence of new files.
+Every stage checks all 60 selected paths, including required absence of new files.
 `inputs.lock.json` binds original and intermediate/final Secure Hash Algorithm
 (SHA-256) images. Baseline
 and Texture contracts must match the selected locks. The client profile's full

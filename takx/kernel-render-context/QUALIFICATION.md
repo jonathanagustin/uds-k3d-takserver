@@ -328,3 +328,33 @@ receipt SHA-256:
 A fresh headed replay is running against these exact libraries. This CPU bridge
 result does not qualify fonts, other native bridges, the full lifecycle, a
 renderer, SDK or client.
+
+
+The subsequent owned Xvfb replay completed the functional workload and the JVM
+returned normally: three actual context recreations, three fresh context identities,
+eleven 512-future worker retirements and three terminal renderer/borrowed-owner GC
+controls. All mapped-provider admissions passed. The 7,252,599-byte log stayed
+inside its unchanged 8 MiB limit. Strict acceptance still failed: 2,249 JDK font
+JNI warnings and one pending-exception warning in `GLMapView.getSurfaceBounds`.
+The managed-context/surface bridge warnings are absent. Functional-only receipt:
+`8660d8dda97663f514740445ccf2fdaeff6a64a8ca983714dc893271f65cd8fb`.
+This is not overall renderer or whole-process zero-JNI qualification.
+
+A separate 62-member lookup probe isolated the remaining project mismatch:
+`FeatureLayer3.Options.labelHints` was absent. The canonical client profile already
+adds that field with the native default policy; the renderer composition had
+selected the JNI changes while omitting their paired Java class. The profile now
+selects all three source sections, locks 60 stage paths, and rejects a missing or
+old paired Java image in its offline contract guard. It does not remove the field
+access, invent an API alias or discard requested label flags.
+
+A local control with only the exact paired Java class overlay and the actual
+Native03 JNI library passes all 62 lookups plus typed options/envelope marshaling
+with zero JNI diagnostics (defaults, requested flags, filter, visibility and null
+refusal). Paired-source control receipt:
+`d8f9b6d559eafabf1a34ee9d784f4e12da3268d77350ba285954afbcbd2e91d8`.
+Its scope is an explicit Java contract overlay; it is not a complete variant.
+All five revised source stages reconstruct and ten offline guards pass. A new
+complete Java/native build and direct controls against those classes/libraries
+remain required before a new headed replay. JDK font/global JNI, SDK and client
+gates remain open.

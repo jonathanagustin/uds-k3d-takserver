@@ -18,6 +18,10 @@
   },
   "client_jni": {
     "files": {
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": {
+        "after": "3862556f6b76a00d8b5c228394c773a5428c827af679352c5ff583877a6201a7",
+        "before": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb"
+      },
       "takkernel/engine/src/main/jni/interop/feature/Interop.cpp": {
         "after": "50bab2559f86d4c26cf2e155b245e1ca6015d1cffc3c1afaeedb2ee340a71150",
         "before": "b4850c0df45087e472cb091d684a9bfa44ccf297656e43b4ec4fcaf2a9d60ea1"
@@ -27,7 +31,7 @@
         "before": "75d2b1be18f4f12445704d60464cb8b8d093890628a119c7f73f23a0b084bb0a"
       }
     },
-    "selected_patch_sha256": "3bdc2b515c1b8cc9835e5fc75edce17f33dc4ba9e56c68f487992a2e7cf882a2"
+    "selected_patch_sha256": "6917693ff5aa58cd467deb7cf841298b83dd0b4aab2ab1c71abea00c61505073"
   },
   "context_patch_sha256": "0e9751db156583d545d3ed399ae19f03703501d13e972d3f39df0e09abaf25d8",
   "context_scope_sha256": "c98891062cdff61e7e5929f18fe99432550ffa31e7542d998d74dbf434104b12",
@@ -80,6 +84,7 @@
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java": "20b95759bbc2c2e0193025eb7c72ad659a07299983508281546d00852b5a39c2",
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java": "9f5eb09dae786bdd6bf0a6608dc0e4066d6267764ec9f4d184d66ce41003d273",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java": null,
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": "29d34d8d2d5bba994fc3cb39a12d9ffb27d938ceb50f7bb34c5450aa1a7ba46e",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": null,
       "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java": "433c03ee6a6ea674526e2faed99315e565b722e5edf5822ca512298cd9a85770",
@@ -141,6 +146,7 @@
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java": "5accf704c0b6b922aaa6c4dc33743246d1e6d13b582130e6df0cd84cbac33990",
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java": "72d22d98693387425e32536baac47cfd90dde7eac43104bec5082570a3fee7a2",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java": "e524bb57c1d778c77e988961710a568449250eaa5fdf9b6f0443d9ffd0c9d998",
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": "3862556f6b76a00d8b5c228394c773a5428c827af679352c5ff583877a6201a7",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": "d5cb7d787f6b187b6ba32274d688a5336e9d61c537b17005bab5bde34b758463",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": "63be9ff34dd5ac5523f4fdf9caafc3abce2a83d561e01d3962a4d83490fa8337",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java": "bb17d73f8654cc84ddc47d06d34c543b752b53a33287f813ce597be02dabcf6d",
@@ -202,6 +208,7 @@
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java": "5accf704c0b6b922aaa6c4dc33743246d1e6d13b582130e6df0cd84cbac33990",
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java": "72d22d98693387425e32536baac47cfd90dde7eac43104bec5082570a3fee7a2",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java": "e524bb57c1d778c77e988961710a568449250eaa5fdf9b6f0443d9ffd0c9d998",
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": "d5cb7d787f6b187b6ba32274d688a5336e9d61c537b17005bab5bde34b758463",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": "63be9ff34dd5ac5523f4fdf9caafc3abce2a83d561e01d3962a4d83490fa8337",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java": "bb17d73f8654cc84ddc47d06d34c543b752b53a33287f813ce597be02dabcf6d",
@@ -263,6 +270,7 @@
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java": "20b95759bbc2c2e0193025eb7c72ad659a07299983508281546d00852b5a39c2",
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java": "9f5eb09dae786bdd6bf0a6608dc0e4066d6267764ec9f4d184d66ce41003d273",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java": null,
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": "29d34d8d2d5bba994fc3cb39a12d9ffb27d938ceb50f7bb34c5450aa1a7ba46e",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": null,
       "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java": "433c03ee6a6ea674526e2faed99315e565b722e5edf5822ca512298cd9a85770",
@@ -324,6 +332,7 @@
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImage.java": "20b95759bbc2c2e0193025eb7c72ad659a07299983508281546d00852b5a39c2",
       "takkernel/engine/src/main/java/com/atakmap/android/maps/graphics/GLImageCache.java": "9f5eb09dae786bdd6bf0a6608dc0e4066d6267764ec9f4d184d66ce41003d273",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/control/RenderContextControl.java": null,
+      "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java": "338dba333e6e8cbd01aa1afe5347a49ba0a2d249854481f04de018fd78d8d4cb",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/Style.java": "d5cb7d787f6b187b6ba32274d688a5336e9d61c537b17005bab5bde34b758463",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/feature/style/TextureFillStyle.java": "63be9ff34dd5ac5523f4fdf9caafc3abce2a83d561e01d3962a4d83490fa8337",
       "takkernel/engine/src/main/java/com/atakmap/map/layer/raster/tilereader/opengl/GLQuadTileNode4.java": "433c03ee6a6ea674526e2faed99315e565b722e5edf5822ca512298cd9a85770",

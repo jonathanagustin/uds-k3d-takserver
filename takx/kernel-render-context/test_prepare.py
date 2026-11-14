@@ -4,6 +4,7 @@
 import importlib.util
 import contextlib
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -31,9 +32,24 @@ class SourceGuards(unittest.TestCase):
         lock, data = p.load_contract()
         self.assertEqual(p.digest(data), lock['context_patch_sha256'])
         self.assertEqual(lock['stage_order'], ['official', 'baseline', 'texture', 'context', 'client_jni'])
-        self.assertEqual(len(lock['stages']['official']), 59)
+        self.assertEqual(len(lock['stages']['official']), 60)
         self.assertFalse(lock['native_builder_integration'])
         self.assertFalse(lock['gpu_qualified'])
+
+    def test_client_jni_requires_its_paired_java_options_image(self):
+        original = p.regular
+        for mutation in ('missing-java', 'old-java-image'):
+            with self.subTest(mutation=mutation):
+                lock = json.loads(original(p.HERE/'inputs.lock.json'))
+                name = 'takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java'
+                if mutation == 'missing-java':
+                    del lock['client_jni']['files'][name]
+                else:
+                    lock['stages']['client_jni'][name] = lock['client_jni']['files'][name]['before']
+                def read(path, *args, **kwargs):
+                    return json.dumps(lock).encode() if Path(path).name == 'inputs.lock.json' else original(path, *args, **kwargs)
+                with patch.object(p, 'regular', side_effect=read), self.assertRaisesRegex(ValueError, 'paired client JNI and Java'):
+                    p.load_contract()
 
     def test_stage_before_and_after_cannot_be_substituted(self):
         with tempfile.TemporaryDirectory() as directory:

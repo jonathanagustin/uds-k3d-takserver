@@ -102,6 +102,17 @@ def load_contract():
         raise ValueError('owned source patch/scope differs')
     if scope['patch_sha256'] != lock['context_patch_sha256']:
         raise ValueError('source scope patch differs')
+    required_client = {
+        'takkernel/engine/src/main/jni/interop/feature/Interop.cpp',
+        'takkernel/engine/src/main/jni/jscenelayer.cpp',
+        'takkernel/engine/src/main/java/com/atakmap/map/layer/feature/FeatureLayer3.java',
+    }
+    if set(lock['client_jni']['files']) != required_client:
+        raise ValueError('paired client JNI and Java sources differ')
+    for name, images in lock['client_jni']['files'].items():
+        if (lock['stages']['context'].get(name) != images['before'] or
+                lock['stages']['client_jni'].get(name) != images['after']):
+            raise ValueError('paired client JNI and Java stage images differ')
     names = set(lock['stages']['official'])
     for stage in ORDER:
         if set(lock['stages'][stage]) != names:

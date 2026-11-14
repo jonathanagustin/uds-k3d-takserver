@@ -1,11 +1,17 @@
 # Copyright 2026 uds-takserver authors
 # SPDX-License-Identifier: GPL-3.0-only
 
-# One opt-in application startup pair. Never starts the load tester or tunes flags.
+# Opt-in native application startup pairs. Never starts the load tester or tunes flags.
 name: Startup pair
 
 on:
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: Native architecture for one independent startup pair per selected runner
+        type: choice
+        options: [amd64, arm64, both]
+        default: amd64
 
 permissions:
   contents: read
@@ -14,20 +20,53 @@ permissions:
 
 # Preserve an active experiment; don't overlap another pair on the same runner pool.
 concurrency:
-  group: startup-pair-amd64
+  group: startup-pair
   cancel-in-progress: false
 
 jobs:
-  startup:
+  plan:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      ARCHITECTURE: ${{ inputs.architecture || 'amd64' }}
+      AMD64_RUNNER: ${{ vars.TEST_RUNNER || 'ubuntu-22.04' }}
+    steps:
+      - name: Select only the requested native architectures
+        id: plan
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          selected = os.environ['ARCHITECTURE']
+          runner = os.environ['AMD64_RUNNER']
+          if selected not in ('amd64', 'arm64', 'both') or (selected != 'arm64' and not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', runner)):
+              raise SystemExit('Unsupported startup architecture or runner')
+          rows = []
+          if selected in ('amd64', 'both'):
+              rows.append({'arch': 'amd64', 'runner': runner})
+          if selected in ('arm64', 'both'):
+              rows.append({'arch': 'arm64', 'runner': 'ubuntu-22.04-arm'})
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + json.dumps({'include': rows}) + '\n')
+          PY
+
+  startup:
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
       FLAVOR: upstream
       GH_TOKEN: ${{ github.token }}
       DEV_PACKAGE_WAIT_SECONDS: "0"
       DEV_PACKAGE_SHA: ${{ github.sha }}
-      COHORT: startup-${{ github.run_id }}-${{ github.run_attempt }}
+      STARTUP_ARCH: ${{ matrix.arch }}
+      COHORT: startup-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout exact experiment source
         id: checkout
@@ -35,6 +74,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify native architecture before setup or cluster work
+        run: |
+          set -euo pipefail
+          case "${STARTUP_ARCH}:$(uname -m)" in
+            amd64:x86_64 | arm64:aarch64) ;;
+            *) echo "Startup runner architecture mismatch" >&2; exit 1 ;;
+          esac
       - name: Install pinned client tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
@@ -68,7 +114,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(uname -m)" = x86_64
           sudo sysctl -w fs.inotify.max_user_instances=1280 fs.inotify.max_user_watches=655360
           ./.github/scripts/trim-runner.sh
           ./.github/scripts/add-runner-swap.sh
@@ -155,7 +200,7 @@ jobs:
         timeout-minutes: 2
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: startup-pair-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: startup-pair-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/startup-pair/bindings.json
             ${{ runner.temp }}/startup-pair/cold-begin.json

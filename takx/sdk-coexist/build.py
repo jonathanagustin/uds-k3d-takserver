@@ -177,6 +177,11 @@ def run(args):
             for item in receipt['manifest']['runtime_resources']['source_inventory']))
         for name,sha in common['runtime_closure'].items():
             require(name not in hosts or hosts[name]==sha,'conflicting host provider');hosts[name]=sha
+        for path in (java/'lib').rglob('*.so'):
+            canonical=path.resolve();sha=digest(canonical)
+            require(str(canonical) not in hosts or hosts[str(canonical)]==sha,'conflicting qualified JDK provider')
+            hosts[str(canonical)]=sha
+        record['trusted_host_runtime_inputs']=dict(hosts)
         common_jni=(commo/'install/lib/libcommoncommojni.so').resolve();common_hash=digest(common_jni)
         outcomes={}
         for order in ('sdk-first','common-first'):
@@ -200,7 +205,7 @@ def run(args):
                     actual.get(str(common_jni))==common_hash,'complete co-loaded production groups required')
             outcomes[order]={'mapped_elfs':actual,'strict_jni_warnings':0,'required_controls':required}
         _common,again=fresh.verify(bindings,commo/'install',commo/'complete.json',java,args.commoncommo_sha256,out)
-        formats.inspect(sdk,args.sdk_sha256);require(again==binding and receipt['recipe']==sdk_builder.recipe(),'producer binding changed')
+        formats.inspect(sdk,args.sdk_sha256);require(all(digest(path)==sha for path,sha in hosts.items()),'qualified host provider changed');require(again==binding and receipt['recipe']==sdk_builder.recipe(),'producer binding changed')
         require(all(digest(path)==sha for path,sha in inputs.items()),'consumed source/input changed')
         record.update(stock_sdk_commoncommo_co_load_controls_passed=True,outcomes=outcomes,
                       classes={str(path.relative_to(classes)):digest(path) for path in classes.rglob('*.class')})

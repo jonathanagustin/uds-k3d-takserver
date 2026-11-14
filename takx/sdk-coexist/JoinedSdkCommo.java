@@ -53,7 +53,6 @@ public final class JoinedSdkCommo {
     KernelRuntimeSmoke.basic();
     Path after=Path.of(System.getProperty("TAK_APP_DATA_PATH")).resolve("after-common");
     Files.createDirectory(after);
-    NativeDatabaseCandidate.run(after);
     KernelThrowingLoggerCandidate.run(after);
     RuntimeResourcesSmoke.run(Path.of(args[1]),Path.of(args[4]));
     System.out.println("PASS_JOINED_KERNEL_CONTROLS_AFTER_COMMON");

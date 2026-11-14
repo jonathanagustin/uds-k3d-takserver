@@ -29,6 +29,44 @@ class Unavailable(Exception):
     """Only fixed internal reason codes may escape a collector boundary."""
 
 
+COMMAND_OPERATIONS = frozenset(('namespace','nodes','deployment','pods','configmap','secret','events','logs','exec','other'))
+COMMAND_CATEGORIES = frozenset(('not-found','forbidden','unauthorized','connection','tls','invalid-arguments','unknown'))
+
+
+def command_operation(args):
+    if args and args[0] in ('logs','exec'):return args[0]
+    if len(args)>1 and args[0]=='get':
+        return {'namespace':'namespace','nodes':'nodes','deployment':'deployment','pods':'pods',
+                'configmap':'configmap','secret':'secret','events':'events'}.get(args[1],'other')
+    return 'other'
+
+
+def command_category(stderr):
+    text=stderr.lower()
+    for category,patterns in (
+            ('not-found',(b'(notfound)',b'not found',b'does not exist')),
+            ('forbidden',(b'(forbidden)',)),('unauthorized',(b'(unauthorized)',b'you must be logged in')),
+            ('connection',(b'connection refused',b'no route to host',b'i/o timeout',b'no such host',b'unable to connect')),
+            ('tls',(b'x509:',b'tls handshake')),
+            ('invalid-arguments',(b'unknown flag:',b'unknown command',b'unknown shorthand flag'))):
+        if any(pattern in text for pattern in patterns):return category
+    return 'unknown'
+
+
+class CommandFailure(Unavailable):
+    """Fixed command facts only; never retain argv, output or exception text."""
+    def __init__(self,operation,category,status):
+        super().__init__('command_failed')
+        self.operation=operation if isinstance(operation,str) and operation in COMMAND_OPERATIONS else 'other'
+        self.category=category if isinstance(category,str) and category in COMMAND_CATEGORIES else 'unknown'
+        self.status=status if type(status) is int and -255<=status<=255 else None
+
+    def diagnostic(self):
+        return {'operation':self.operation if isinstance(self.operation,str) and self.operation in COMMAND_OPERATIONS else 'other',
+                'category':self.category if isinstance(self.category,str) and self.category in COMMAND_CATEGORIES else 'unknown',
+                'exit_status':self.status if type(self.status) is int and -255<=self.status<=255 else None}
+
+
 def require(condition, reason):
     if not condition:
         raise Unavailable(reason)
@@ -123,28 +161,33 @@ class Commands:
         require(remaining > 0.1, 'deadline')
         child = None
         body = bytearray()
+        stderr = bytearray()
         end = min(self.deadline-0.1, time.monotonic()+2.9)
         try:
             context_args = ['--context', self.context] if use_context else []
             child = subprocess.Popen([*self.prefix, *context_args, '--request-timeout=2s', *args],
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
-            os.set_blocking(child.stdout.fileno(), False)
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
             with selectors.DefaultSelector() as selector:
-                selector.register(child.stdout, selectors.EVENT_READ)
-                complete = False
-                while not complete:
-                    budget = end-time.monotonic()
-                    require(budget > 0, 'command_timeout')
-                    if not selector.select(budget):
-                        raise Unavailable('command_timeout')
-                    chunk = os.read(child.stdout.fileno(), min(65536, limit+1-len(body)))
-                    if not chunk:
-                        complete = True
-                    else:
-                        body.extend(chunk)
-                        require(len(body) <= limit, 'output_size')
-                child.wait(timeout=max(0.001, end-time.monotonic()))
-            require(child.returncode == 0, 'command_failed')
+                for pipe in (child.stdout,child.stderr):
+                    os.set_blocking(pipe.fileno(),False)
+                    selector.register(pipe,selectors.EVENT_READ)
+                while selector.get_map():
+                    budget=end-time.monotonic()
+                    require(budget>0,'command_timeout')
+                    events=selector.select(budget)
+                    require(bool(events),'command_timeout')
+                    for key,_ in events:
+                        output=key.fileobj is child.stdout
+                        chunk=os.read(key.fileobj.fileno(),min(65536,limit+1-len(body)) if output else 4096)
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                        elif output:
+                            body.extend(chunk);require(len(body)<=limit,'output_size')
+                        else:
+                            stderr.extend(chunk);del stderr[:-4096]
+                child.wait(timeout=max(0.001,end-time.monotonic()))
+            if child.returncode!=0:
+                raise CommandFailure(command_operation(args),command_category(stderr),child.returncode)
             return bytes(body)
         except (OSError, subprocess.SubprocessError):
             raise Unavailable('command_unavailable') from None
@@ -161,6 +204,7 @@ class Commands:
                     raise Unavailable('cleanup_deadline') from None
                 finally:
                     child.stdout.close()
+                    child.stderr.close()
 
     def pod(self, args):
         try:

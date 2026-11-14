@@ -110,6 +110,11 @@ class StartupTrials(unittest.TestCase):
         self.assertNotIn('observer_reason',trial.failure_diagnostic(jvm.Unavailable('PRIVATE_SENTINEL')))
         self.assertNotIn('PRIVATE',json.dumps(trial.failure_diagnostic(jvm.Unavailable('PRIVATE_SENTINEL'))))
 
+    def test_failed_command_diagnostic_does_not_export_raw_values(self):
+        value=trial.failure_diagnostic(jvm.CommandFailure('secret','forbidden',1))
+        self.assertEqual(value['command'],{'operation':'secret','category':'forbidden','exit_status':1})
+        self.assertNotIn('PRIVATE',json.dumps(trial.failure_diagnostic(jvm.CommandFailure('PRIVATE','PRIVATE',True))))
+
     def test_actual_capture_path_uses_numeric_existing_observer_and_new_incarnations(self):
         cold, warm = pair(); verdict = trial.validate_pair(cold, warm)
         self.assertTrue(verdict['accepted']); self.assertEqual(warm['warm_s'], 6)

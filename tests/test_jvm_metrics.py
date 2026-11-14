@@ -223,7 +223,7 @@ class CommandBoundsTests(unittest.TestCase):
                       +"Path("+repr(str(ready))+").touch()\n"
                       +"while not Path("+repr(str(go))+").exists(): time.sleep(0.001)\n"+code)
             child = subprocess.Popen([sys.executable, '-c', source], stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, start_new_session=True)
+                                     stderr=subprocess.PIPE, start_new_session=True)
             try:
                 deadline = time.monotonic()+20
                 while not ready.exists():
@@ -241,6 +241,20 @@ class CommandBoundsTests(unittest.TestCase):
                 except ProcessLookupError: pass
                 child.wait(timeout=5)
                 child.stdout.close()
+                child.stderr.close()
+
+    def test_failed_command_emits_only_fixed_operation_category_and_status(self):
+        code="sys.stdout.write('PRIVATE_STDOUT');sys.stderr.write('x'*20000+'Error from server (NotFound): PRIVATE_NAME PRIVATE_URL');sys.exit(7)"
+        with self.prepared(code) as command:
+            with self.assertRaises(jvm.CommandFailure) as caught:
+                command.run(['get','configmap','PRIVATE_NAME'],65536)
+        self.assertEqual(str(caught.exception),'command_failed')
+        self.assertEqual(caught.exception.diagnostic(),{'operation':'configmap','category':'not-found','exit_status':7})
+        self.assertNotIn('PRIVATE',json.dumps(caught.exception.diagnostic()))
+        bad=jvm.CommandFailure('PRIVATE_OPERATION','PRIVATE_CATEGORY',True)
+        self.assertEqual(bad.diagnostic(),{'operation':'other','category':'unknown','exit_status':None})
+        bad.operation=[];bad.category={};bad.status='PRIVATE'
+        self.assertEqual(bad.diagnostic(),{'operation':'other','category':'unknown','exit_status':None})
 
     def test_complete_stream_size_limit_and_raw_stderr_suppression(self):
         with self.prepared("sys.stdout.write('x'*65537);sys.stderr.write('SENTINEL')") as command:

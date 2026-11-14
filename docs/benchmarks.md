@@ -152,3 +152,11 @@ margin is not evidence that a larger load fits.
 
 The collector bounds its stored identities and retains aggregates, not a
 time-series dump. It changes neither client-count defaults nor workload limits.
+
+Startup command-failure diagnostics publish only a fixed Kubernetes operation,
+a fixed error-pattern category and bounded numeric exit status. The collector
+keeps at most 4 KiB of stderr in memory for classification and discards its raw
+bytes. Arguments, resource names, URLs, command output and exception values are
+not published. The original request, stream, process-group and total deadline
+bounds remain enforced. Pattern categories are observations, not causal proof or
+accepted startup timing.

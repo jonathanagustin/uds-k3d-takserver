@@ -12,7 +12,7 @@
       "expanded_bytes": 19708717
     },
     "libxml2": {
-      "url": "https://media.githubusercontent.com/media/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libxml2.tar.xz",
+      "url": "https://raw.githubusercontent.com/TAK-Product-Center/atak-civ/9f6893dd657feacc35ec5de03dad721c2e44170e/takthirdparty/distfiles/libxml2.tar.xz",
       "sha256": "0805d7c180cf09caad71666c7a458a74f041561a532902454da5047d83948138",
       "bytes": 2581308,
       "root": "libxml2-2.13.3",

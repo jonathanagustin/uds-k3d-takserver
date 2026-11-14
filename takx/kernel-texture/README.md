@@ -70,7 +70,8 @@ observable error, not an accepted fallback.
 
 No ordinary server build, package or CI workflow enables this feature.
 
-Source preparation and offline guards:
+The Unit tests workflow runs the six offline source guards without compiling
+or loading the native feature. Source preparation and offline guards:
 
 ```sh
 python3 -B -m unittest discover -s takx/kernel-texture -p test_prepare.py -v

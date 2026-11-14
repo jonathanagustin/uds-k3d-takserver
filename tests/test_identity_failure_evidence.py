@@ -33,6 +33,48 @@ def mocked_git(argv, **_kwargs):
 
 
 class FailureEvidenceTests(unittest.TestCase):
+    def test_retained_diagnostic_failure_is_separate_from_primary_and_revalidated(self):
+        environment={**ENV,'SCENARIO':'identities','IDENTITY_METHOD':'package'}
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ,environment,clear=True), \
+                patch.object(F.subprocess,'run',side_effect=mocked_git):
+            root=Path(directory);folder=root/'package-identity';folder.mkdir(mode=0o700)
+            bound={key:'a'*64 for key in ('archiveSHA256','planSHA256','configSHA256')}
+            bound.update(chartBinding={'chartOverridesSHA256':'b'*64},
+                         phaseValues={phase:{'sha256':'c'*64} for phase in P.D.PHASES})
+            trial=P.PackageTrial(folder/'journal.json',bound)
+            trial.state['guard']={key:ENV[env] for key,env in
+                [('sourceSHA','GITHUB_SHA'),('runID','GITHUB_RUN_ID'),('runAttempt','GITHUB_RUN_ATTEMPT')]}
+            trial.state['coreSnapshot']={'namespace/kube-system':'original-uid'}
+            trial.core_snapshot=lambda:{'namespace/kube-system':'replacement-uid'}
+            def failed_capture(*args,**kwargs):
+                raise PermissionError('PRIVATE_DIAGNOSTIC_SENTINEL')
+            trial.capture_retained_validation=failed_capture
+            try:
+                trial.core_unchanged()
+            except ValueError as error:
+                self.assertEqual(str(error),'retained Core identity/config changed')
+                F.write(folder,error)
+            else:self.fail('Core drift must fail')
+            secondary=folder/'retained-diagnostic-callsite'/F.NAME
+            original=secondary.read_bytes()
+            self.assertEqual(secondary.stat().st_mode & 0o777,0o600)
+            self.assertEqual(F.public(folder)['exceptionType'],'ValueError')
+            self.assertEqual(F.public(secondary.parent)['exceptionType'],'PermissionError')
+            result=S.failure_categories(root,{'ownerSteps':[]})
+            self.assertEqual(result['identityFailures'][0]['category'],'guard-rejection')
+            self.assertEqual(result['identityDiagnosticFailures'][0]['category'],'filesystem')
+            self.assertNotIn('PRIVATE_DIAGNOSTIC_SENTINEL',json.dumps(result))
+            self.assertIs(trial.state['accepted'],False)
+            with self.assertRaises(ValueError):trial.core_unchanged()
+            self.assertEqual(secondary.read_bytes(),original)
+            payload=json.loads(original);payload['frames'][0]['sourceSHA256']='0'*64
+            secondary.write_text(json.dumps(payload))
+            self.assertNotIn('identityDiagnosticFailures',S.failure_categories(root,{'ownerSteps':[]}))
+            self.assertEqual(F.public(folder)['exceptionType'],'ValueError')
+            with patch.object(F,'write',side_effect=RuntimeError('PRIVATE_SECONDARY_SENTINEL')):
+                with self.assertRaisesRegex(ValueError,'retained Core identity/config changed'):
+                    trial.core_unchanged()
+
     def error(self):
         try:
             P.D.require(False, 'SECRET_SENTINEL https://private/?sig=SECRET_SENTINEL')

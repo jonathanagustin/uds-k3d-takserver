@@ -592,7 +592,7 @@ def identity_progress(directory):
     return result
 
 
-def identity_failure_callsites(directory):
+def identity_failure_callsites(directory, diagnostic=False):
     """Only reviewed path/line/source hashes; never exception text or values."""
     import importlib.util
     spec = importlib.util.spec_from_file_location('identity_failure_evidence', ROOT / 'tests/workload-identities/failure_evidence.py')
@@ -601,7 +601,10 @@ def identity_failure_callsites(directory):
     result = []
     for method in identity_methods():
         try:
-            value = capture.public(directory / ('identity' if method == 'manual' else 'package-identity'))
+            folder = directory / ('identity' if method == 'manual' else 'package-identity')
+            if diagnostic:
+                folder = folder / 'retained-diagnostic-callsite'
+            value = capture.public(folder)
             kind = value['exceptionType']
             category = ('guard-rejection' if kind in ('ValueError', 'EvidenceError') else
                         'schema' if kind in ('KeyError', 'TypeError', 'AttributeError', 'JSONDecodeError') else
@@ -628,6 +631,9 @@ def failure_categories(directory, progress):
     if 'identities' in SCENARIOS.get(os.environ.get('SCENARIO'), []):
         calls = identity_failure_callsites(directory)
         result['identityFailures'] = calls
+        diagnostic_calls = identity_failure_callsites(directory, diagnostic=True)
+        if diagnostic_calls:
+            result['identityDiagnosticFailures'] = diagnostic_calls
         if calls:
             result['scope'] = 'reviewed-callsite-only'
             result['status'] = 'captured'

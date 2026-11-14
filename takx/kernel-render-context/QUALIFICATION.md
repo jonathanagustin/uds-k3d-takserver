@@ -260,3 +260,24 @@ controls, but hit the unchanged 8 MiB command log quota while emitting JNI warni
 Its complete bounded output is retained; quota failure is not lifecycle acceptance.
 No diagnostics were filtered and no quota was raised. Whole-process completion,
 terminal GC results and global JNI cleanliness remain unqualified.
+
+
+A separate headless font probe loads no Kernel, JOGL or project native libraries.
+On the qualified Temurin 17.0.21+9 it completed with 96 JNI warnings; the same
+class completed on system OpenJDK 21.0.13 with 39. This isolates an independent
+runtime font diagnostic problem; it does not excuse project bridge warnings or
+qualify a replacement JDK. The standalone receipt SHA-256 is
+`1faeb99506ab83bfc41c1e8910a32f915a55415f4e9fea9874a0229baea250ee`.
+The bounded lifecycle log separately contains unchecked managed context/surface
+callbacks and a pending-exception warning in `GLMapView.getSurfaceBounds`.
+
+Reproduce the font isolation in a fresh temporary directory (each runtime result
+must retain its own complete bounded log and exact JDK identity):
+
+```bash
+javac -d "$FONT_PROBE_OUT" takx/kernel-render-context/tests/FontJniProbe.java
+java -Xcheck:jni -Djava.awt.headless=true -cp "$FONT_PROBE_OUT" FontJniProbe
+```
+
+`FONT_PROBE_COMPLETED` establishes that this font workload returned normally;
+it does not override diagnostics or establish renderer acceptance.

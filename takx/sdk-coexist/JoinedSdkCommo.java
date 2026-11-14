@@ -51,8 +51,10 @@ public final class JoinedSdkCommo {
     CommonCommoThrowingLogger.main(new String[0]);
     System.out.println("PASS_JOINED_COMMON_CONSTRUCTOR_PKCS12_SIGNAL_ROUTING_LOGGER");
     KernelRuntimeSmoke.basic();
-    NativeDatabaseCandidate.run(Path.of(System.getProperty("TAK_APP_DATA_PATH")));
-    KernelThrowingLoggerCandidate.run(Path.of(System.getProperty("TAK_APP_DATA_PATH")));
+    Path after=Path.of(System.getProperty("TAK_APP_DATA_PATH")).resolve("after-common");
+    Files.createDirectory(after);
+    NativeDatabaseCandidate.run(after);
+    KernelThrowingLoggerCandidate.run(after);
     RuntimeResourcesSmoke.run(Path.of(args[1]),Path.of(args[4]));
     System.out.println("PASS_JOINED_KERNEL_CONTROLS_AFTER_COMMON");
     group(maps(),core,true,true);
